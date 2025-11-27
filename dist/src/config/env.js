@@ -1,7 +1,7 @@
 export const env = {
     PORT: process.env.PORT || 3000,
     NODE_ENV: process.env.NODE_ENV || "development",
-    ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS || "http://localhost:5173,http://localhost:3000",
+    ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS || "http://localhost:5173,http://localhost:8080",
     INTER_API_URL: process.env.INTER_API_URL,
     INTER_CLIENT_ID: process.env.INTER_CLIENT_ID,
     INTER_CLIENT_SECRET: process.env.INTER_CLIENT_SECRET,
