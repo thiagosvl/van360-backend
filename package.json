@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
-    "build": "tsc"
+    "build": "tsc",
+    "convert-certs": "node scripts/converter-certificados-base64.js"
   },
   "keywords": [],
   "author": "",

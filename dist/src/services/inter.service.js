@@ -10,13 +10,57 @@ const INTER_PIX_KEY = env.INTER_PIX_KEY;
 const INTER_CLIENT_ID = env.INTER_CLIENT_ID;
 const INTER_CLIENT_SECRET = env.INTER_CLIENT_SECRET;
 const INTER_MOCK_MODE = env.INTER_MOCK_MODE === "true";
-const CERT_PATH = path.resolve(env.INTER_CERT_PATH || "");
-const KEY_PATH = path.resolve(env.INTER_KEY_PATH || "");
-const httpsAgent = new https.Agent({
-    cert: fs.readFileSync(CERT_PATH),
-    key: fs.readFileSync(KEY_PATH),
-    rejectUnauthorized: true,
-});
+// Função para obter certificados (suporta Base64 via env ou arquivos)
+function getCertificates() {
+    // Prioridade 1: Variáveis de ambiente com Base64 (Vercel/Produção)
+    const certBase64 = process.env.INTER_CERT_BASE64;
+    const keyBase64 = process.env.INTER_KEY_BASE64;
+    if (certBase64 && keyBase64) {
+        logger.info("Usando certificados via variáveis de ambiente (Base64)");
+        return {
+            cert: Buffer.from(certBase64, "base64").toString("utf-8"),
+            key: Buffer.from(keyBase64, "base64").toString("utf-8"),
+        };
+    }
+    // Prioridade 2: Caminhos de arquivo (Desenvolvimento local)
+    const certPath = env.INTER_CERT_PATH;
+    const keyPath = env.INTER_KEY_PATH;
+    if (certPath && keyPath) {
+        try {
+            const resolvedCertPath = path.resolve(certPath);
+            const resolvedKeyPath = path.resolve(keyPath);
+            logger.info({ certPath: resolvedCertPath, keyPath: resolvedKeyPath }, "Usando certificados via arquivos");
+            return {
+                cert: fs.readFileSync(resolvedCertPath),
+                key: fs.readFileSync(resolvedKeyPath),
+            };
+        }
+        catch (error) {
+            logger.error({ error, certPath, keyPath }, "Erro ao ler certificados do sistema de arquivos");
+            throw new Error(`Erro ao ler certificados: ${error instanceof Error ? error.message : "Unknown error"}`);
+        }
+    }
+    throw new Error("Certificados não configurados. Configure INTER_CERT_BASE64 e INTER_KEY_BASE64 (Base64) ou INTER_CERT_PATH e INTER_KEY_PATH (caminhos de arquivo)");
+}
+// Criar httpsAgent de forma lazy (só quando necessário)
+let httpsAgentInstance = null;
+function getHttpsAgent() {
+    if (!httpsAgentInstance) {
+        try {
+            const { cert, key } = getCertificates();
+            httpsAgentInstance = new https.Agent({
+                cert,
+                key,
+                rejectUnauthorized: true,
+            });
+        }
+        catch (error) {
+            logger.error({ error }, "Erro ao criar httpsAgent");
+            throw error;
+        }
+    }
+    return httpsAgentInstance;
+}
 function gerarTxid(cobrancaId) {
     const txid = cobrancaId.replace(/-/g, "");
     if (!/^[a-zA-Z0-9]{26,35}$/.test(txid)) {
@@ -44,7 +88,7 @@ async function getValidInterToken(adminClient) {
     body.append("scope", scope);
     const tokenResponse = await axios.post(`${INTER_API_URL}/oauth/v2/token`, body, {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        httpsAgent,
+        httpsAgent: getHttpsAgent(),
     });
     const tokenData = tokenResponse.data;
     const newAccessToken = tokenData.access_token;
@@ -80,7 +124,7 @@ async function criarCobrancaPix(adminClient, params) {
         logger.info({ url: createUrl, txid }, "Criando cobrança PIX");
         const { data } = await axios.put(createUrl, cobPayload, {
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-            httpsAgent,
+            httpsAgent: getHttpsAgent(),
         });
         const locId = data?.loc?.id;
         const pixCopiaECola = data?.pixCopiaECola;
@@ -103,7 +147,7 @@ async function consultarWebhookPix(adminClient) {
     try {
         const { data } = await axios.get(url, {
             headers: { Authorization: `Bearer ${token}` },
-            httpsAgent,
+            httpsAgent: getHttpsAgent(),
         });
         return data;
     }
@@ -130,7 +174,7 @@ async function registrarWebhookPix(adminClient, webhookUrl) {
         const payload = { webhookUrl, tipoWebhook: "PIX_RECEBIDO" };
         await axios.put(url, payload, {
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-            httpsAgent,
+            httpsAgent: getHttpsAgent(),
         });
         await adminClient
             .from("configuracao_interna")
