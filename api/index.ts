@@ -3,18 +3,20 @@
 // NOTA: Na Vercel, as variáveis de ambiente são injetadas automaticamente
 // Não precisa usar dotenv aqui, apenas process.env
 import fastifyCors from "@fastify/cors";
-import Fastify from "fastify";
+import Fastify, { FastifyInstance } from "fastify";
 import routes from "../src/api/routes.js";
+import { IncomingMessage, ServerResponse } from "http";
 
-let app: Fastify.FastifyInstance | null = null;
+let app: FastifyInstance | null = null;
 
-async function createApp() {
+async function createApp(): Promise<FastifyInstance> {
   if (app) return app;
 
   app = Fastify({
     logger: {
       level: process.env.LOG_LEVEL || "info",
     },
+    disableRequestLogging: false,
   });
 
   // Configuração de CORS para aceitar domínios específicos
@@ -51,12 +53,56 @@ async function createApp() {
   return app;
 }
 
-// Exportar handler para Vercel
-// A Vercel passa req e res do Node.js padrão
-export default async (req: any, res: any) => {
-  const fastifyApp = await createApp();
-  
-  // Converter req/res do Node.js para o formato do Fastify
-  fastifyApp.server.emit('request', req, res);
-};
+// Handler para Vercel Serverless Functions
+// A Vercel espera uma função que recebe req e res do Node.js padrão
+// O Fastify precisa processar através do seu servidor HTTP interno
+export default async function handler(
+  req: IncomingMessage,
+  res: ServerResponse
+): Promise<void> {
+  try {
+    const fastifyApp = await createApp();
+    
+    // O Fastify precisa processar a requisição através do seu servidor HTTP
+    // Usamos o método routing() que processa req/res do Node.js
+    await new Promise<void>((resolve, reject) => {
+      // Verificar se a resposta já foi enviada
+      if (res.headersSent) {
+        resolve();
+        return;
+      }
+
+      // Processar a requisição através do servidor do Fastify
+      if (fastifyApp.server) {
+        fastifyApp.server.emit('request', req, res);
+        
+        // Aguardar a resposta ser enviada
+        res.once('finish', resolve);
+        res.once('close', resolve);
+        
+        // Timeout de segurança
+        setTimeout(() => {
+          if (!res.headersSent) {
+            reject(new Error('Request timeout'));
+          } else {
+            resolve();
+          }
+        }, 30000); // 30 segundos
+      } else {
+        reject(new Error('Fastify server not initialized'));
+      }
+    });
+  } catch (error) {
+    console.error('Error in handler:', error);
+    if (!res.headersSent) {
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ 
+        error: 'Internal Server Error',
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.stack : undefined) : undefined
+      }));
+    }
+  }
+}
 
