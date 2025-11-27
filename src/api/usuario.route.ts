@@ -1,8 +1,8 @@
 import { FastifyInstance } from "fastify";
-import { logger } from "../config/logger";
-import { supabaseAdmin } from "../config/supabase";
-import { passageiroService } from "../services/passageiro.service";
-import { cancelarAssinatura, confirmarDowngradeComSelecao, criarAssinaturaCompletoPersonalizado, desistirCancelarAssinatura, downgradePlano, gerarPixAposSelecaoManual, iniciaRegistroPlanoEssencial, iniciaRegistroPlanoGratuito, iniciarRegistroPlanoCompleto, trocarSubplano, upgradePlano } from "../services/usuario.service";
+import { logger } from "../config/logger.js";
+import { supabaseAdmin } from "../config/supabase.js";
+import { passageiroService } from "../services/passageiro.service.js";
+import { cancelarAssinatura, confirmarDowngradeComSelecao, criarAssinaturaCompletoPersonalizado, desistirCancelarAssinatura, downgradePlano, gerarPixAposSelecaoManual, iniciaRegistroPlanoEssencial, iniciaRegistroPlanoGratuito, iniciarRegistroPlanoCompleto, trocarSubplano, upgradePlano } from "../services/usuario.service.js";
 
 interface RegisterPayload {
     nome: string;
@@ -546,11 +546,11 @@ export default async function usuarioRoute(app: FastifyInstance) {
                             const pixData = await gerarPixAposSelecaoManual(
                                 usuarioId,
                                 tipo,
+                                precoAplicado,
+                                precoOrigem || "personalizado",
                                 planoId,
                                 subplanoId,
                                 quantidadePersonalizada,
-                                precoAplicado,
-                                precoOrigem || "personalizado",
                                 cobrancaId
                             );
                             

@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
-import { gastoService } from "../services/gasto.service";
+import { gastoService } from "../services/gasto.service.js";
 
 const gastoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     // app.addHook("preHandler", verifySupabaseJWT);

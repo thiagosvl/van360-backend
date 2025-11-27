@@ -1,5 +1,5 @@
-import { supabaseAdmin } from "../config/supabase";
-import { cleanString } from "../utils/utils";
+import { supabaseAdmin } from "../config/supabase.js";
+import { cleanString } from "../utils/utils.js";
 
 export const veiculoService = {
     async createVeiculo(data: any): Promise<any> {
@@ -117,7 +117,7 @@ export const veiculoService = {
 
         if (error) throw error;
 
-        return (data || []).map(veiculo => ({
+        return (data || []).map((veiculo: any) => ({
             ...veiculo,
             passageiros_ativos_count: veiculo.passageiros[0]?.count || 0,
         }));

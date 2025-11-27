@@ -1,7 +1,7 @@
-import { PLANO_COMPLETO } from "../config/contants";
-import { supabaseAdmin } from "../config/supabase";
-import { cleanString, moneyToNumber, onlyDigits, toLocalDateString } from "../utils/utils";
-import { cobrancaService } from "./cobranca.service";
+import { PLANO_COMPLETO } from "../config/contants.js";
+import { supabaseAdmin } from "../config/supabase.js";
+import { cleanString, moneyToNumber, onlyDigits, toLocalDateString } from "../utils/utils.js";
+import { cobrancaService } from "./cobranca.service.js";
 
 // Métodos privados auxiliares
 const _preparePassageiroData = (data: any, usuarioId: string, ativoDefault: boolean = true): any => {

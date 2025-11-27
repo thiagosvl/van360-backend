@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
-import { prePassageiroService } from "../services/pre-passageiro.service";
+import { prePassageiroService } from "../services/pre-passageiro.service.js";
 
 const prePassageiroRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 

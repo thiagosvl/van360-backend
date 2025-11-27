@@ -1,8 +1,8 @@
-import { logger } from "../config/logger";
-import { supabaseAdmin } from "../config/supabase";
-import { interService } from "./inter.service";
-import { passageiroService } from "./passageiro.service";
-import { PLANO_COMPLETO } from "../config/contants";
+import { logger } from "../config/logger.js";
+import { supabaseAdmin } from "../config/supabase.js";
+import { interService } from "./inter.service.js";
+import { passageiroService } from "./passageiro.service.js";
+import { PLANO_COMPLETO } from "../config/contants.js";
 
 export const assinaturaCobrancaService = {
     async getAssinaturaCobranca(id: string): Promise<any> {

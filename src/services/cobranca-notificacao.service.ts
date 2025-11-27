@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "../config/supabase";
+import { supabaseAdmin } from "../config/supabase.js";
 
 export const cobrancaNotificacaoService = {
     async listByCobrancaId(cobrancaId: string) {

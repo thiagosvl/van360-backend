@@ -1,5 +1,5 @@
-import { supabaseAdmin } from "../config/supabase";
-import { moneyToNumber } from "../utils/utils";
+import { supabaseAdmin } from "../config/supabase.js";
+import { moneyToNumber } from "../utils/utils.js";
 
 export const cobrancaService = {
   async createCobranca(data: any): Promise<any> {

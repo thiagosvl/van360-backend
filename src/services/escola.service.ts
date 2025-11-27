@@ -1,5 +1,5 @@
-import { supabaseAdmin } from "../config/supabase";
-import { cleanString } from "../utils/utils";
+import { supabaseAdmin } from "../config/supabase.js";
+import { cleanString } from "../utils/utils.js";
 
 export const escolaService = {
     async createEscola(data: any): Promise<any> {

@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
-import { veiculoService } from "../services/veiculo.service";
+import { veiculoService } from "../services/veiculo.service.js";
 
 const veiculoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     // app.addHook("preHandler", verifySupabaseJWT);

@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
-import { supabaseAdmin } from "../config/supabase";
-import { interService } from "../services/inter.service";
+import { supabaseAdmin } from "../config/supabase.js";
+import { interService } from "../services/inter.service.js";
 
 const interRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post("/pix", async (req, reply) => {

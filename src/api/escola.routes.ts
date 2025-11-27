@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
-import { escolaService } from "../services/escola.service";
+import { escolaService } from "../services/escola.service.js";
 
 const escolaRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     // app.addHook("preHandler", verifySupabaseJWT);

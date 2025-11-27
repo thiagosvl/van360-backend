@@ -1,0 +1,141 @@
+import { supabaseAdmin } from "../config/supabase.js";
+import { cleanString } from "../utils/utils.js";
+export const escolaService = {
+    async createEscola(data) {
+        if (!data.usuario_id)
+            throw new Error("Usuário obrigatório");
+        if (!data.nome)
+            throw new Error("Nome da escola é obrigatório");
+        const escolaData = {
+            ...data,
+            nome: cleanString(data.nome, true),
+            logradouro: data.logradouro ? cleanString(data.logradouro, true) : null,
+            numero: data.numero || null,
+            bairro: data.bairro ? cleanString(data.bairro, true) : null,
+            cidade: data.cidade ? cleanString(data.cidade, true) : null,
+            estado: data.estado ? cleanString(data.estado, true) : null,
+            cep: data.cep ? cleanString(data.cep) : null,
+            referencia: data.referencia ? cleanString(data.referencia, true) : null,
+            ativo: true,
+        };
+        const { data: inserted, error } = await supabaseAdmin
+            .from("escolas")
+            .insert([escolaData])
+            .select()
+            .single();
+        if (error)
+            throw error;
+        return inserted;
+    },
+    async updateEscola(id, data) {
+        if (!id)
+            throw new Error("ID da escola é obrigatório");
+        const escolaData = { ...data };
+        if (data.nome)
+            escolaData.nome = cleanString(data.nome, true);
+        if (data.logradouro)
+            escolaData.logradouro = cleanString(data.logradouro, true);
+        if (data.bairro)
+            escolaData.bairro = cleanString(data.bairro, true);
+        if (data.cidade)
+            escolaData.cidade = cleanString(data.cidade, true);
+        if (data.estado)
+            escolaData.estado = cleanString(data.estado, true);
+        if (data.referencia)
+            escolaData.referencia = cleanString(data.referencia, true);
+        const { data: updated, error } = await supabaseAdmin
+            .from("escolas")
+            .update(escolaData)
+            .eq("id", id)
+            .select()
+            .single();
+        if (error)
+            throw error;
+        return updated;
+    },
+    async deleteEscola(id) {
+        if (!id)
+            throw new Error("ID da escola é obrigatório");
+        const escola = await this.getEscola(id);
+        if (escola?.id) {
+            const { error } = await supabaseAdmin.from("escolas").delete().eq("id", id);
+            if (error)
+                throw error;
+        }
+    },
+    async getEscola(id) {
+        const { data, error } = await supabaseAdmin
+            .from("escolas")
+            .select("*")
+            .eq("id", id)
+            .single();
+        if (error)
+            throw error;
+        return data;
+    },
+    async listEscolas(usuarioId, filtros) {
+        if (!usuarioId)
+            throw new Error("Usuário obrigatório");
+        let query = supabaseAdmin
+            .from("escolas")
+            .select("*")
+            .eq("usuario_id", usuarioId)
+            .order("nome", { ascending: true });
+        if (filtros?.search) {
+            query = query.or(`nome.ilike.%${filtros.search}%,cidade.ilike.%${filtros.search}%,estado.ilike.%${filtros.search}%`);
+        }
+        if (filtros?.nome)
+            query = query.eq("nome", filtros.nome);
+        if (filtros?.cidade)
+            query = query.eq("cidade", filtros.cidade);
+        if (filtros?.estado)
+            query = query.eq("estado", filtros.estado);
+        if (filtros?.ativo !== undefined && filtros?.includeId) {
+            query = query.or(`ativo.eq.${filtros.ativo === "true"},id.eq.${filtros.includeId}`);
+        }
+        else if (filtros?.ativo !== undefined) {
+            query = query.eq("ativo", filtros.ativo === "true");
+        }
+        else if (filtros?.includeId) {
+            query = query.eq("id", filtros.includeId);
+        }
+        const { data, error } = await query;
+        if (error)
+            throw error;
+        return data || [];
+    },
+    async listEscolasComContagemAtivos(usuarioId) {
+        if (!usuarioId)
+            throw new Error("Usuário obrigatório");
+        const { data, error } = await supabaseAdmin
+            .from("escolas")
+            .select(`*, passageiros(count)`)
+            .eq("usuario_id", usuarioId)
+            .eq("passageiros.ativo", true)
+            .order("nome", { ascending: true });
+        if (error)
+            throw error;
+        return (data || []).map(escola => ({
+            ...escola,
+            passageiros_ativos_count: escola.passageiros[0]?.count || 0,
+        }));
+    },
+    async toggleAtivo(escolaId, novoStatus) {
+        const { error } = await supabaseAdmin
+            .from("escolas")
+            .update({ ativo: novoStatus })
+            .eq("id", escolaId);
+        if (error)
+            throw new Error(`Falha ao ${novoStatus ? "ativar" : "desativar"} a escola.`);
+        return novoStatus;
+    },
+    async countListEscolasByUsuario(usuarioId) {
+        const { count, error } = await supabaseAdmin
+            .from("escolas")
+            .select("id", { count: "exact", head: true })
+            .eq("usuario_id", usuarioId);
+        if (error)
+            throw new Error(error.message || "Erro ao contar escolas");
+        return count || 0;
+    },
+};

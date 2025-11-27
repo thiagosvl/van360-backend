@@ -1,5 +1,5 @@
-import { supabaseAdmin } from "../config/supabase";
-import { cleanString, moneyToNumber } from "../utils/utils";
+import { supabaseAdmin } from "../config/supabase.js";
+import { cleanString, moneyToNumber } from "../utils/utils.js";
 
 export const gastoService = {
     async createGasto(data: any): Promise<any> {

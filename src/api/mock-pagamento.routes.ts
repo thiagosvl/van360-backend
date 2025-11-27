@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
-import { logger } from "../config/logger";
-import { supabaseAdmin } from "../config/supabase";
-import { processarPagamentoCobranca } from "../services/processar-pagamento.service";
+import { logger } from "../config/logger.js";
+import { supabaseAdmin } from "../config/supabase.js";
+import { processarPagamentoCobranca } from "../services/processar-pagamento.service.js";
 
 const mockPagamentoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post("/mock-pagamento", async (request, reply) => {

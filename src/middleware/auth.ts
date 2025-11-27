@@ -1,5 +1,5 @@
 import { FastifyReply, FastifyRequest } from "fastify";
-import { supabaseAdmin } from "../config/supabase";
+import { supabaseAdmin } from "../config/supabase.js";
 
 export async function verifySupabaseJWT(
   request: FastifyRequest,

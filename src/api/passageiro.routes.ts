@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
-import { cobrancaService } from "../services/cobranca.service";
-import { passageiroService } from "../services/passageiro.service";
+import { cobrancaService } from "../services/cobranca.service.js";
+import { passageiroService } from "../services/passageiro.service.js";
 
 const passageiroRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     // app.addHook("preHandler", verifySupabaseJWT);

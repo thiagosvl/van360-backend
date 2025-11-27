@@ -1,13 +1,13 @@
-import { logger } from "../config/logger";
-import { supabaseAdmin } from "../config/supabase";
-import { passageiroService } from "./passageiro.service";
+import { logger } from "../config/logger.js";
+import { supabaseAdmin } from "../config/supabase.js";
+import { passageiroService } from "./passageiro.service.js";
 import {
   ASSINATURA_COBRANCA_STATUS_PAGO,
   ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
   ASSINATURA_COBRANCA_STATUS_CANCELADA,
   ASSINATURA_COBRANCA_TIPO_PAGAMENTO_PIX,
   PLANO_COMPLETO,
-} from "../config/contants";
+} from "../config/contants.js";
 
 interface DadosPagamento {
   valor: number;
@@ -326,7 +326,7 @@ async function desativarOutrasAssinaturas(cobranca: Cobranca, logContext: Contex
       .neq("id", cobranca.assinatura_usuario_id);
 
     if (outrasAtivas && outrasAtivas.length > 0) {
-      const outrasAssinaturaIds = outrasAtivas.map((a) => a.id);
+      const outrasAssinaturaIds = outrasAtivas.map((a: any) => a.id);
 
       logger.info({ ...logContext, outrasAssinaturas: outrasAssinaturaIds }, "Desativando outras assinaturas ativas");
 

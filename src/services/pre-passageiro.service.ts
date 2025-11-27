@@ -1,5 +1,5 @@
-import { supabaseAdmin } from "../config/supabase";
-import { cleanString, onlyDigits } from "../utils/utils";
+import { supabaseAdmin } from "../config/supabase.js";
+import { cleanString, onlyDigits } from "../utils/utils.js";
 
 export const prePassageiroService = {
   async listPrePassageiros(usuarioId: string, search?: string) {

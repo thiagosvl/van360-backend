@@ -1,16 +1,16 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
-import assinaturaCobrancaRoute from "./assinatura-cobranca.route";
-import cobrancaRoute from "./cobranca.routes";
-import escolaRoute from "./escola.routes";
-import gastoRoute from "./gasto.route";
-import interRoutes from "./inter.routes";
-import mockPagamentoRoute from "./mock-pagamento.routes";
-import passageiroRoute from "./passageiro.routes";
-import planoRoute from "./plano.routes";
-import prePassageiroRoute from "./pre-passageiro.routes";
-import usuarioRoute from "./usuario.route";
-import veiculoRoute from "./veiculo.routes";
-import webhookInterRoute from "./webhook-inter.route";
+import assinaturaCobrancaRoute from "./assinatura-cobranca.route.js";
+import cobrancaRoute from "./cobranca.routes.js";
+import escolaRoute from "./escola.routes.js";
+import gastoRoute from "./gasto.route.js";
+import interRoutes from "./inter.routes.js";
+import mockPagamentoRoute from "./mock-pagamento.routes.js";
+import passageiroRoute from "./passageiro.routes.js";
+import planoRoute from "./plano.routes.js";
+import prePassageiroRoute from "./pre-passageiro.routes.js";
+import usuarioRoute from "./usuario.route.js";
+import veiculoRoute from "./veiculo.routes.js";
+import webhookInterRoute from "./webhook-inter.route.js";
 
 const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.register(usuarioRoute, { prefix: "/api/usuarios" });

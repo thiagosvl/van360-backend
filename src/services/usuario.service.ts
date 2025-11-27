@@ -1,9 +1,9 @@
-import { ASSINATURA_COBRANCA_STATUS_CANCELADA, ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_ATIVA, ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_TRIAL, PLANO_COMPLETO, PLANO_ESSENCIAL, PLANO_GRATUITO } from "../config/contants";
-import { logger } from "../config/logger";
-import { supabaseAdmin } from "../config/supabase";
-import { cleanString, onlyDigits } from "../utils/utils";
-import { interService } from "./inter.service";
-import { passageiroService } from "./passageiro.service";
+import { ASSINATURA_COBRANCA_STATUS_CANCELADA, ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_ATIVA, ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_TRIAL, PLANO_COMPLETO, PLANO_ESSENCIAL, PLANO_GRATUITO } from "../config/contants.js";
+import { logger } from "../config/logger.js";
+import { supabaseAdmin } from "../config/supabase.js";
+import { cleanString, onlyDigits } from "../utils/utils.js";
+import { interService } from "./inter.service.js";
+import { passageiroService } from "./passageiro.service.js";
 
 export interface UsuarioPayload {
   nome: string;
@@ -742,6 +742,7 @@ export interface CriarAssinaturaPersonalizadaResult {
   ativados?: number;
   precoAplicado?: number;
   precoOrigem?: string;
+  quantidadePersonalizada?: number;
 }
 
 /**
@@ -769,7 +770,7 @@ async function getAssinaturaAtiva(usuarioId: string) {
 
   // Se houver múltiplas, pegar a mais recente
   const assinatura = assinaturas.length > 1 
-    ? assinaturas.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+    ? assinaturas.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
     : assinaturas[0];
 
   return assinatura;
@@ -1946,7 +1947,7 @@ export async function confirmarDowngradeComSelecao(
       throw new Error("Erro ao validar passageiros: " + passageirosError.message);
     }
     
-    const idsValidos = todosPassageiros?.map(p => p.id) || [];
+    const idsValidos = todosPassageiros?.map((p: any) => p.id) || [];
     const idsInvalidos = passageiroIds.filter(id => !idsValidos.includes(id));
     
     if (idsInvalidos.length > 0) {
@@ -2004,11 +2005,11 @@ export async function confirmarDowngradeComSelecao(
 export async function gerarPixAposSelecaoManual(
   usuarioId: string,
   tipo: "upgrade" | "downgrade",
+  precoAplicado: number,
+  precoOrigem: string,
   planoId?: string,
   subplanoId?: string,
   quantidadePersonalizada?: number,
-  precoAplicado: number,
-  precoOrigem: string,
   cobrancaId?: string
 ): Promise<{ qrCodePayload: string; location: string; inter_txid: string; cobrancaId: string }> {
   try {

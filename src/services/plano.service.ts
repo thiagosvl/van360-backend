@@ -1,5 +1,5 @@
-import { PLANO_COMPLETO } from "../config/contants";
-import { supabaseAdmin } from "../config/supabase";
+import { PLANO_COMPLETO } from "../config/contants.js";
+import { supabaseAdmin } from "../config/supabase.js";
 
 // Helper para buscar configurações da tabela configuracao_interna com fallbacks
 async function getConfiguracao(

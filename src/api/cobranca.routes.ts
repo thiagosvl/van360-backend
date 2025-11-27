@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
-import { cobrancaNotificacaoService } from "../services/cobranca-notificacao.service";
-import { cobrancaService } from "../services/cobranca.service";
+import { cobrancaNotificacaoService } from "../services/cobranca-notificacao.service.js";
+import { cobrancaService } from "../services/cobranca.service.js";
 
 const cobrancaRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     app.post("/", async (request: any, reply) => {

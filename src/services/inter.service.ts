@@ -3,9 +3,9 @@ import axios from "axios";
 import fs from "fs";
 import https from "https";
 import path from "path";
-import { env } from "../config/env";
-import { logger } from "../config/logger";
-import { onlyDigits } from "../utils/utils";
+import { env } from "../config/env.js";
+import { logger } from "../config/logger.js";
+import { onlyDigits } from "../utils/utils.js";
 
 const INTER_API_URL = env.INTER_API_URL!;
 const INTER_PIX_KEY = env.INTER_PIX_KEY!;

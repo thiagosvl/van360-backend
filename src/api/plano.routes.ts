@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
-import { planoService } from "../services/plano.service";
+import { planoService } from "../services/plano.service.js";
 
 const planoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     // app.addHook("preHandler", verifySupabaseJWT);

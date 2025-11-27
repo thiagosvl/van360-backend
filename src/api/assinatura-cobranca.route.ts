@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
-import { logger } from "../config/logger";
-import { assinaturaCobrancaService } from "../services/assinatura-cobranca.service";
+import { logger } from "../config/logger.js";
+import { assinaturaCobrancaService } from "../services/assinatura-cobranca.service.js";
 
 const assinaturaCobrancaRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     app.get("/:id", async (request: any, reply) => {
