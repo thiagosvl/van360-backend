@@ -15,36 +15,96 @@ export default async function handler(
   try {
     // Singleton: reutilizar instância do Fastify entre requisições
     if (!app) {
-      app = await createApp();
+      console.log("[Vercel Handler] Inicializando Fastify app...");
+      try {
+        app = await createApp();
+        console.log("[Vercel Handler] Fastify app inicializado com sucesso");
+      } catch (initError) {
+        console.error("[Vercel Handler] Erro ao inicializar app:", initError);
+        throw initError;
+      }
+    }
+
+    // Verificar se o app foi inicializado corretamente
+    if (!app || !app.server) {
+      throw new Error("Fastify server not initialized");
     }
 
     // Processar a requisição através do servidor HTTP do Fastify
-    await new Promise<void>((resolve, reject) => {
+    // O Fastify precisa processar req/res do Node.js padrão
+    return new Promise<void>((resolve, reject) => {
+      // Verificar se a resposta já foi enviada
       if (res.headersSent) {
         resolve();
         return;
       }
 
-      if (app?.server) {
-        app.server.emit("request", req, res);
+      let resolved = false;
+      const cleanup = () => {
+        if (resolved) return;
+        resolved = true;
+        res.removeListener("finish", onFinish);
+        res.removeListener("close", onClose);
+        res.removeListener("error", onError);
+      };
 
-        res.once("finish", resolve);
-        res.once("close", resolve);
+      const onFinish = () => {
+        cleanup();
+        resolve();
+      };
 
-        // Timeout de segurança (30 segundos)
-        setTimeout(() => {
-          if (!res.headersSent) {
-            reject(new Error("Request timeout"));
-          } else {
-            resolve();
-          }
-        }, 30000);
-      } else {
-        reject(new Error("Fastify server not initialized"));
+      const onClose = () => {
+        cleanup();
+        resolve();
+      };
+
+      const onError = (err: Error) => {
+        cleanup();
+        reject(err);
+      };
+
+      res.once("finish", onFinish);
+      res.once("close", onClose);
+      res.once("error", onError);
+
+      // Timeout de segurança (25 segundos - Vercel tem limite de 30s)
+      const timeout = setTimeout(() => {
+        cleanup();
+        if (!res.headersSent) {
+          res.statusCode = 504;
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ error: "Request timeout" }));
+        }
+        resolve();
+      }, 25000);
+
+      // Processar a requisição através do servidor HTTP do Fastify
+      // O método routing() do Fastify processa req/res do Node.js
+      try {
+        // Usar o servidor HTTP interno do Fastify para processar a requisição
+        if (!app) {
+          clearTimeout(timeout);
+          cleanup();
+          throw new Error("Fastify app not initialized");
+        }
+        
+        if (app.server) {
+          app.server.emit("request", req, res);
+        } else {
+          clearTimeout(timeout);
+          cleanup();
+          throw new Error("Fastify server instance not available");
+        }
+      } catch (err) {
+        clearTimeout(timeout);
+        cleanup();
+        throw err;
       }
     });
   } catch (error) {
-    console.error("Error in handler:", error);
+    console.error("[Vercel Handler] Erro:", error);
+    console.error("[Vercel Handler] Stack:", error instanceof Error ? error.stack : "No stack");
+    
     if (!res.headersSent) {
       res.statusCode = 500;
       res.setHeader("Content-Type", "application/json");
@@ -52,6 +112,10 @@ export default async function handler(
         JSON.stringify({
           error: "Internal Server Error",
           message: error instanceof Error ? error.message : "Unknown error",
+          // Em desenvolvimento, incluir stack trace
+          ...(process.env.NODE_ENV !== "production" && error instanceof Error
+            ? { stack: error.stack }
+            : {}),
         })
       );
     }
