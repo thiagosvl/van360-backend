@@ -26,6 +26,7 @@ export async function createApp(): Promise<FastifyInstance> {
 
     await app.register(fastifyCors, {
       origin: (origin, callback) => {
+        console.log("ORIGIN RECEBIDA:", origin);
         // Permitir requisições sem origin (mobile apps, Postman, etc)
         if (!origin) return callback(null, true);
 
