@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "../config/supabase.js";
-import { cleanString, onlyDigits } from "../utils/utils.js";
+import { cleanString, moneyToNumber, onlyDigits } from "../utils/utils.js";
 
 export const prePassageiroService = {
   async listPrePassageiros(usuarioId: string, search?: string) {
@@ -21,14 +21,30 @@ export const prePassageiroService = {
     return data || [];
   },
 
-  async createPrePassageiro(payload: {
-    usuario_id: string;
-    nome: string;
-    nome_responsavel: string;
-    email_responsavel: string;
-    cpf_responsavel: string;
-    telefone_responsavel: string;
-  }) {
+  async createPrePassageiro(payload: any) {
+    // Processa valor_cobranca: converte string para number se necessário (mesma lógica do serviço de passageiros)
+    let valorCobranca = null;
+    if (payload.valor_cobranca !== undefined && payload.valor_cobranca !== null && payload.valor_cobranca !== "") {
+      valorCobranca = typeof payload.valor_cobranca === "string" 
+        ? moneyToNumber(payload.valor_cobranca)
+        : Number(payload.valor_cobranca);
+      
+      // Valida se é um número válido e maior que zero
+      if (isNaN(valorCobranca) || valorCobranca <= 0) {
+        valorCobranca = null;
+      }
+    }
+
+    // Processa dia_vencimento: valida se está entre 1 e 31
+    let diaVencimento = null;
+    if (payload.dia_vencimento !== undefined && payload.dia_vencimento !== null && payload.dia_vencimento !== "") {
+      diaVencimento = Number(payload.dia_vencimento);
+      // Valida se é um número válido entre 1 e 31
+      if (isNaN(diaVencimento) || diaVencimento < 1 || diaVencimento > 31) {
+        diaVencimento = null;
+      }
+    }
+
     const prePassageiroData = {
       ...payload,
       nome: cleanString(payload.nome, true),
@@ -37,8 +53,8 @@ export const prePassageiroService = {
       cpf_responsavel: onlyDigits(payload.cpf_responsavel),
       telefone_responsavel: onlyDigits(payload.telefone_responsavel),
       escola_id: null,
-      valor_cobranca: null,
-      dia_vencimento: null,
+      valor_cobranca: valorCobranca,
+      dia_vencimento: diaVencimento,
     };
 
     const { data, error } = await supabaseAdmin
