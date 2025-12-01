@@ -52,7 +52,8 @@ export const prePassageiroService = {
       email_responsavel: cleanString(payload.email_responsavel),
       cpf_responsavel: onlyDigits(payload.cpf_responsavel),
       telefone_responsavel: onlyDigits(payload.telefone_responsavel),
-      escola_id: null,
+      escola_id: payload.escola_id,
+      periodo: payload.periodo,
       valor_cobranca: valorCobranca,
       dia_vencimento: diaVencimento,
     };
