@@ -50,7 +50,7 @@ const _createCobrancaMesAtual = async (
         data_vencimento: toLocalDateString(dataVencimento),
         status: "pendente",
         usuario_id: usuarioId,
-        origem: "automatica",
+        origem: "manual",
     });
 };
 
