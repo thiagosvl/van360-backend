@@ -7,7 +7,7 @@ export const prePassageiroService = {
       .from("pre_passageiros")
       .select("*")
       .eq("usuario_id", usuarioId)
-      .order("nome");
+      .order("created_at");
 
     if (search?.trim().length) {
       query = query.or(
