@@ -11,6 +11,7 @@ export const gastoService = {
             descricao: cleanString(data.descricao, true),
             categoria: data.categoria,
             usuario_id: data.usuario_id,
+            veiculo_id: data.veiculo_id === "none" ? null : data.veiculo_id,
         };
 
         const { data: inserted, error } = await supabaseAdmin
@@ -31,6 +32,9 @@ export const gastoService = {
         if (data.data) gastoData.data = data.data;
         if (data.categoria) gastoData.categoria = data.categoria;
         if (data.descricao) gastoData.descricao = cleanString(data.descricao, true);
+        if (data.veiculo_id !== undefined) {
+            gastoData.veiculo_id = data.veiculo_id === "none" ? null : data.veiculo_id;
+        }
 
         const { data: updated, error } = await supabaseAdmin
             .from("gastos")
@@ -69,19 +73,24 @@ export const gastoService = {
             mes?: string;
             ano?: string;
             categoria?: string;
+            veiculoId?: string;
         }
     ): Promise<any[]> {
         if (!usuarioId) throw new Error("Usuário obrigatório");
 
         let query = supabaseAdmin
             .from("gastos")
-            .select("*")
+            .select("*, veiculo:veiculos(id, placa)")
             .eq("usuario_id", usuarioId)
             .order("data", { ascending: false })
             .order("categoria", { ascending: false });
 
         if (filtros && filtros.categoria) {
             query = query.eq('categoria', filtros.categoria);
+        }
+
+        if (filtros && filtros.veiculoId) {
+            query = query.eq('veiculo_id', filtros.veiculoId);
         }
 
         if (filtros && filtros.mes && filtros.ano) {
