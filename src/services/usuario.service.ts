@@ -880,10 +880,12 @@ function isUpgrade(slugAtual: string, slugNovo: string): boolean {
  * @param quantidade - Quantidade de cobranças desejada (mínimo: franquia do maior subplano + 1)
  * @returns Objeto com precoCalculado e quantidadeMinima
  */
-async function calcularPrecoPersonalizado(quantidade: number): Promise<{
+export async function calcularPrecoPersonalizado(quantidade: number, ignorarMinimo: boolean = false): Promise<{
   precoCalculado: number;
   quantidadeMinima: number;
 }> {
+  console.log("DEBUG: calcularPrecoPersonalizado chamado", { quantidade, ignorarMinimo });
+
   // Buscar o plano base Completo
   const { data: planoCompletoBase, error: planoBaseError } = await supabaseAdmin
     .from("planos")
@@ -896,41 +898,61 @@ async function calcularPrecoPersonalizado(quantidade: number): Promise<{
     throw new Error("Plano Completo não encontrado.");
   }
 
-  // Buscar o maior subplano para usar como base
+  // Buscar TODOS os subplanos para encontrar o melhor encaixe
   const { data: subplanos, error: subplanosError } = await supabaseAdmin
     .from("planos")
     .select("id, preco, preco_promocional, promocao_ativa, franquia_cobrancas_mes")
     .eq("parent_id", planoCompletoBase.id)
     .eq("tipo", "sub")
-    .order("franquia_cobrancas_mes", { ascending: false })
-    .limit(1);
+    .order("franquia_cobrancas_mes", { ascending: false });
 
   if (subplanosError || !subplanos || subplanos.length === 0) {
     throw new Error("Subplanos do Completo não encontrados.");
   }
 
-  const maiorSubplano = subplanos[0];
-  const franquiaBase = maiorSubplano.franquia_cobrancas_mes || 0;
-  const quantidadeMinima = franquiaBase + 1; // Mínimo = maior subplano + 1
+  // Identificar o maior subplano para validação de mínimo (limite do sistema para cadastro)
+  const maiorSubplano = subplanos[0]; // Ordenado DESC
+  const franquiaMaior = maiorSubplano.franquia_cobrancas_mes || 0;
+  const quantidadeMinima = franquiaMaior + 1;
 
-  // Validar quantidade mínima
-  if (quantidade < quantidadeMinima) {
-    throw new Error(`A quantidade mínima é ${quantidadeMinima} cobranças (maior subplano: ${franquiaBase} + 1).`);
+  // Validação de Mínimo: só aplica se !ignorarMinimo (Cadastro)
+  if (!ignorarMinimo && quantidade < quantidadeMinima) {
+      throw new Error(`A quantidade mínima é ${quantidadeMinima} cobranças (maior subplano: ${franquiaMaior} + 1).`);
   }
+
+  // Lógica "Best Fit": Encontrar o plano mais adequado para usar como base de cálculo
+  // Procura o maior plano que seja menor ou igual à quantidade solicitada
+  // Ex: Qtd=15. Planos=[20, 10]. 20 <= 15 False. 10 <= 15 True. Referência = 10.
+  let planoReferencia = subplanos.find(p => (p.franquia_cobrancas_mes || 0) <= quantidade);
   
-  // Preço do maior subplano (usar promocional se ativo)
-  const precoBase = Number(
-    maiorSubplano.promocao_ativa 
-      ? (maiorSubplano.preco_promocional ?? maiorSubplano.preco)
-      : maiorSubplano.preco
+  // Se não encontrar (Qtd < Menor Plano), usa o menor plano (último da lista)
+  if (!planoReferencia) {
+      planoReferencia = subplanos[subplanos.length - 1];
+  }
+
+  const franquiaRef = planoReferencia.franquia_cobrancas_mes || 0;
+  const precoRef = Number(
+    planoReferencia.promocao_ativa 
+      ? (planoReferencia.preco_promocional ?? planoReferencia.preco)
+      : planoReferencia.preco
   );
 
-  // Calcular preço: base + (quantidade - franquia_base) * base
-  const cobrancasAdicionais = quantidade - franquiaBase;
-  const precoCalculado = precoBase + (cobrancasAdicionais * precoBase);
+  // Calcular Valor Unitário baseado apenas na referência
+  const valorUnitario = precoRef / franquiaRef;
+  
+  // Calcular Preço Final Total: Quantidade * Valor Unitário
+  // Isso garante que o valor seja sempre proporcional e positivo
+  const precoCalculado = quantidade * valorUnitario;
+
+  console.log("DEBUG: Calculo Finalizado", { 
+      planoReferenciaFranquia: franquiaRef, 
+      precoRef, 
+      valorUnitario, 
+      precoCalculado 
+  });
 
   return {
-    precoCalculado: Math.round(precoCalculado * 100) / 100, // Arredondar para 2 casas decimais
+    precoCalculado: Math.round(precoCalculado * 100) / 100,
     quantidadeMinima,
   };
 }
@@ -956,6 +978,42 @@ function calcularPrecosEFranquia(plano: any): {
     precoOrigem,
     franquiaContratada,
   };
+}
+
+/**
+ * Helper: Calcula valor pro-rata baseado na data de vencimento (vigencia_fim)
+ * @param valorMensal - Valor mensal integral a ser considerado (ou diferença mensal)
+ * @param dataVencimento - Data de fim da vigência atual
+ * @returns Objeto com valorCobrar e diasRestantes
+ */
+function calcularValorProRata(valorMensal: number, dataVencimento?: string): { valorCobrar: number, diasRestantes: number } {
+  if (!dataVencimento || valorMensal <= 0) {
+    return { valorCobrar: valorMensal > 0 ? valorMensal : 0, diasRestantes: 30 };
+  }
+
+  const hoje = new Date();
+  const vencimento = new Date(dataVencimento);
+  
+  // Diferença em milissegundos
+  const diffTime = vencimento.getTime() - hoje.getTime();
+  
+  // Converter para dias (arredondando para cima para cobrar o dia atual se houver fração)
+  let diasRestantes = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  // Limites: mín 1 dia, máx 30 dias (ciclo padrão)
+  // Se for negativo (vencido), assume 0 ou cobra cheio? 
+  // Se está vencido, o sistema provavelmente deveria ter renovado ou bloqueado. 
+  // Assumindo upgrade durante vigência válida.
+  if (diasRestantes < 0) diasRestantes = 0;
+  if (diasRestantes > 30) diasRestantes = 30;
+
+  // Calculo Pro-rata: (Valor / 30) * Dias
+  const valorProRata = (valorMensal / 30) * diasRestantes;
+  
+  // Arredondar para 2 casas decimais
+  const valorCobrar = Math.round(valorProRata * 100) / 100;
+
+  return { valorCobrar, diasRestantes };
 }
 
 /**
@@ -1390,11 +1448,18 @@ export async function trocarSubplano(
     // Calcular preços e franquia do novo subplano (uma única vez)
     const { precoAplicado, precoOrigem, franquiaContratada } = calcularPrecosEFranquia(novoSubplano);
 
-    // Calcular diferença (usuário já está no Completo)
+    // Calcular diferença (usuário já está no Completo) usando Pro-rata
     const precoAtual = Number(assinaturaAtual.preco_aplicado || 0);
-    const diferenca = precoAplicado - precoAtual;
+    const diferencaMensal = precoAplicado - precoAtual;
     const franquiaAtual = assinaturaAtual.franquia_contratada_cobrancas || 0;
-    const isDowngrade = diferenca < 0 || (diferenca === 0 && franquiaContratada < franquiaAtual);
+    const isDowngrade = diferencaMensal < 0 || (diferencaMensal === 0 && franquiaContratada < franquiaAtual);
+
+    // Calcular valor a cobrar (Pro-rata)
+    const { valorCobrar: diferenca, diasRestantes } = calcularValorProRata(
+      diferencaMensal,
+      assinaturaAtual.vigencia_fim
+    );
+
 
     // Se for downgrade, verificar ANTES de fazer qualquer alteração se precisa seleção manual
     if (isDowngrade) {
@@ -1660,11 +1725,13 @@ export async function trocarSubplano(
  */
 export async function criarAssinaturaCompletoPersonalizado(
   usuarioId: string,
-  quantidade: number
+  quantidade: number,
+  targetPassengerId?: string
 ): Promise<CriarAssinaturaPersonalizadaResult> {
   try {
     // Calcular preço (já valida quantidade mínima internamente)
-    const { precoCalculado } = await calcularPrecoPersonalizado(quantidade);
+    // Passamos ignorarMinimo=true para permitir upgrades flexíveis (ex: 15 passageiros)
+    const { precoCalculado } = await calcularPrecoPersonalizado(quantidade, true);
 
     // Buscar assinatura ativa (se houver)
     let assinaturaAtual = null;
@@ -1769,49 +1836,65 @@ export async function criarAssinaturaCompletoPersonalizado(
     // Criar cobrança
     // Se já tem assinatura ativa, é upgrade; senão, é subscription (novo usuário)
     const billingType = assinaturaAtual ? "upgrade" : "subscription";
+    
+    // Se for upgrade, calcular pro-rata
+    let valorCobranca = precoCalculado;
+    if (assinaturaAtual) {
+      const precoAtual = Number(assinaturaAtual.preco_aplicado || 0);
+
+      // CORREÇÃO: Se o plano atual for Gratuito (0.00) ou Trial, tratar como novo ciclo (cobrança cheia)
+      if (precoAtual <= 0) {
+        valorCobranca = precoCalculado;
+      } else {
+        const diferencaMensal = precoCalculado - precoAtual;
+        const { valorCobrar } = calcularValorProRata(diferencaMensal, assinaturaAtual.vigencia_fim);
+        valorCobranca = valorCobrar; // Cobra apenas a diferença pro-rata
+      }
+    }
+
     const hoje = new Date();
     const { data: cobranca, error: cobrancaError } = await supabaseAdmin
       .from("assinaturas_cobrancas")
       .insert({
         usuario_id: usuarioId,
         assinatura_usuario_id: novaAssinatura.id,
-        valor: precoCalculado,
+        valor: valorCobranca,
         status: ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
         data_vencimento: hoje.toISOString().split("T")[0],
         origem: "inter",
         billing_type: billingType,
+        selecao_passageiros_pendente: targetPassengerId 
+          ? { passageiroIds: [targetPassengerId], tipo: billingType, franquia: quantidade }
+          : null,
       })
       .select()
       .single();
 
     if (cobrancaError) throw cobrancaError;
 
-    // Verificar se precisa seleção manual ANTES de gerar PIX
+    // Verificar se precisa seleção manual (apenas informativo para o frontend)
     const calculo = await passageiroService.calcularPassageirosDisponiveis(usuarioId, quantidade);
     
-    if (calculo.precisaSelecaoManual) {
-      return {
-        success: true,
-        precisaSelecaoManual: true,
-        tipo: "upgrade" as const,
-        franquia: quantidade,
-        quantidadePersonalizada: quantidade,
-        precoAplicado: precoCalculado,
-        precoOrigem: "personalizado",
-        cobrancaId: cobranca.id,
-      };
-    }
-
-    // Se não precisa seleção manual, gerar PIX normalmente
+    // Gerar PIX normalmente independente de precisar de seleção manual
+    // PARA UPGRADES: Geramos o PIX SEMPRE. A seleção manual (se necessária) é feita após o pagamento ou fica pendente.
+    
     const usuario = await getUsuarioData(usuarioId);
     const cpf = onlyDigits(usuario.cpfcnpj);
 
+    console.log("DEBUG: Passo 1 - Calculo Passageiros", calculo);
+
+
+    
+    console.log("DEBUG: Passo 2 - Gerando PIX para", { nome: usuario.nome, valor: valorCobranca });
+
     const pixData = await interService.criarCobrancaPix(supabaseAdmin, {
       cobrancaId: cobranca.id,
-      valor: precoCalculado,
+      valor: valorCobranca,
       cpf,
       nome: usuario.nome,
     });
+    
+    console.log("DEBUG: Passo 3 - PIX Gerado", pixData);
 
     await supabaseAdmin
       .from("assinaturas_cobrancas")
@@ -1829,7 +1912,7 @@ export async function criarAssinaturaCompletoPersonalizado(
       inter_txid: pixData.interTransactionId,
       cobrancaId: cobranca.id,
       success: true,
-      precisaSelecaoManual: false,
+      precisaSelecaoManual: calculo.precisaSelecaoManual,
     };
 
   } catch (err: any) {

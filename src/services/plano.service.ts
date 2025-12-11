@@ -1,5 +1,5 @@
-import { PLANO_COMPLETO } from "../config/contants.js";
 import { supabaseAdmin } from "../config/supabase.js";
+import { calcularPrecoPersonalizado } from "./usuario.service.js";
 
 // Helper para buscar configurações da tabela configuracao_interna com fallbacks
 async function getConfiguracao(
@@ -60,7 +60,8 @@ export const planoService = {
      * @param quantidade - Quantidade de cobranças desejada
      * @returns Objeto com preçoTotal, valorPorCobranca, ou null se a quantidade for inválida
      */
-    async calcularPrecoPreview(quantidade: number): Promise<{
+    async calcularPrecoPreview(quantidade: number, ignorarMinimo: boolean = false): Promise<{
+        preco: number;
         precoTotal: number;
         valorPorCobranca: number;
     } | null> {
@@ -69,54 +70,14 @@ export const planoService = {
         }
 
         try {
-            // Buscar maior subplano do Plano Completo
-            const { data: planosCompleto, error: planoError } = await supabaseAdmin
-                .from("planos")
-                .select("id, slug")
-                .eq("slug", PLANO_COMPLETO)
-                .eq("tipo", "base")
-                .eq("ativo", true)
-                .maybeSingle();
-
-            if (planoError || !planosCompleto) {
-                throw new Error("Plano Completo não encontrado");
-            }
-
-            const { data: subPlanos, error: subPlanosError } = await supabaseAdmin
-                .from("planos")
-                .select("*")
-                .eq("parent_id", planosCompleto.id)
-                .eq("tipo", "sub")
-                .eq("ativo", true)
-                .order("franquia_cobrancas_mes", { ascending: false });
-
-            if (subPlanosError || !subPlanos || subPlanos.length === 0) {
-                throw new Error("Sub-planos do Completo não encontrados");
-            }
-
-            // Maior subplano (maior franquia)
-            const maiorSubplano = subPlanos[0];
-
-            const quantidadeMinima = maiorSubplano.franquia_cobrancas_mes + 1;
-            if (quantidade < quantidadeMinima) {
-                return null;
-            }
-
-            // Preço base (com promoção se ativa)
-            const precoBase = maiorSubplano.promocao_ativa
-                ? maiorSubplano.preco_promocional ?? maiorSubplano.preco
-                : maiorSubplano.preco;
-
-            const franquiaBase = maiorSubplano.franquia_cobrancas_mes;
-            const cobrancasAdicionais = quantidade - franquiaBase;
-            const precoCalculado =
-                precoBase + cobrancasAdicionais * precoBase;
-
-            // Calcular valor por cobrança (média do preço total dividido pela quantidade)
+            const { precoCalculado } = await calcularPrecoPersonalizado(quantidade, ignorarMinimo);
+            
+            // Calculate unit price for consistency with interface
             const valorPorCobranca = precoCalculado / quantidade;
 
             return {
-                precoTotal: Math.round(precoCalculado * 100) / 100,
+                preco: precoCalculado, // Frontend espera 'preco'
+                precoTotal: precoCalculado,
                 valorPorCobranca: Math.round(valorPorCobranca * 100) / 100,
             };
         } catch (error: any) {

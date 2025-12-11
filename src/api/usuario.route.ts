@@ -271,7 +271,7 @@ export default async function usuarioRoute(app: FastifyInstance) {
 
     app.post("/criar-assinatura-completo-personalizado", async (request: any, reply) => {
         const authUid = request.user?.id;
-        const { quantidade, usuario_id } = request.body as { quantidade: number; usuario_id?: string };
+        const { quantidade, usuario_id, targetPassengerId } = request.body as { quantidade: number; usuario_id?: string; targetPassengerId?: string };
 
         if (!quantidade || quantidade < 1) {
             return reply.status(400).send({ error: "Quantidade inválida." });
@@ -299,7 +299,7 @@ export default async function usuarioRoute(app: FastifyInstance) {
         }
 
         try {
-            const result = await criarAssinaturaCompletoPersonalizado(usuarioId, quantidade);
+            const result = await criarAssinaturaCompletoPersonalizado(usuarioId, quantidade, targetPassengerId);
             return reply.status(200).send(result);
         } catch (err: any) {
             logger.error(

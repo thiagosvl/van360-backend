@@ -16,7 +16,7 @@ const planoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
     app.post("/calcular-preco-preview", async (request: any, reply) => {
         try {
-            const { quantidade } = request.body;
+            const { quantidade, ignorarMinimo } = request.body;
 
             if (!quantidade || typeof quantidade !== "number") {
                 return reply.status(400).send({
@@ -24,7 +24,7 @@ const planoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
                 });
             }
 
-            const resultado = await planoService.calcularPrecoPreview(quantidade);
+            const resultado = await planoService.calcularPrecoPreview(quantidade, ignorarMinimo);
             return reply.status(200).send(resultado ? { preco: resultado.precoTotal, valorPorCobranca: resultado.valorPorCobranca } : { preco: null });
         } catch (err: any) {
             return reply.status(500).send({ error: err.message });

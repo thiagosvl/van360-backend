@@ -1,13 +1,13 @@
+import {
+    ASSINATURA_COBRANCA_STATUS_CANCELADA,
+    ASSINATURA_COBRANCA_STATUS_PAGO,
+    ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
+    ASSINATURA_COBRANCA_TIPO_PAGAMENTO_PIX,
+    PLANO_COMPLETO,
+} from "../config/contants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { passageiroService } from "./passageiro.service.js";
-import {
-  ASSINATURA_COBRANCA_STATUS_PAGO,
-  ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
-  ASSINATURA_COBRANCA_STATUS_CANCELADA,
-  ASSINATURA_COBRANCA_TIPO_PAGAMENTO_PIX,
-  PLANO_COMPLETO,
-} from "../config/contants.js";
 
 interface DadosPagamento {
   valor: number;
@@ -104,6 +104,7 @@ export async function processarPagamentoCobranca(
     await ativarUsuario(cobranca, logContext);
 
     // 8. Aplicar seleção de passageiros (se houver) ou ativar automaticamente
+    // 8. Aplicar seleção de passageiros (se houver)
     if (selecaoSalva?.passageiroIds && selecaoSalva.passageiroIds.length > 0) {
       // Aplicar seleção salva
       try {
@@ -139,17 +140,19 @@ export async function processarPagamentoCobranca(
         );
         // Não lançar erro aqui - a ativação da assinatura já foi feita
       }
-    } else {
-      // Se não há seleção salva, verificar se precisa seleção manual
-      const { precisaSelecaoManual, assinaturaPendente } = await verificarSelecaoManualNecessaria(
-        cobranca,
-        logContext
-      );
+    }
 
-      // Se não precisa seleção manual, ativar automaticamente
-      if (!precisaSelecaoManual && assinaturaPendente) {
-        await ativarPassageirosAutomaticamente(cobranca, assinaturaPendente, logContext);
-      }
+    // 9. Preencher slots restantes automaticamente (Auto-Fill)
+    // Busca informações da assinatura para determinar franquia e plano
+    const { assinaturaPendente } = await verificarSelecaoManualNecessaria(
+      cobranca,
+      logContext
+    );
+
+    // Se há assinatura pendente, tentar ativar passageiros automaticamente até atingir a franquia
+    // (Isso preenche tanto o caso onde não houve seleção, quanto o restante após uma seleção parcial)
+    if (assinaturaPendente) {
+      await ativarPassageirosAutomaticamente(cobranca, assinaturaPendente, logContext);
     }
 
     logger.info({ ...logContext }, "Fluxo completo para pagamento confirmado");
