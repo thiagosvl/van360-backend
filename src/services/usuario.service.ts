@@ -165,7 +165,7 @@ export async function criarUsuario(data: UsuarioPayload) {
       cpfcnpj: onlyDigits(cpfcnpj),
       telefone: onlyDigits(telefone),
       ativo,
-      role: "motorista",
+      // role removido pois a coluna será depreciada
     }])
     .select("id, auth_uid")
     .single();
@@ -187,7 +187,8 @@ export async function criarUsuarioAuth(
     email,
     password: senha,
     email_confirm: true,
-    user_metadata: { role: "motorista", usuario_id },
+    user_metadata: { usuario_id }, // Role movida para app_metadata
+    app_metadata: { role: "motorista" } // Strict Source of Truth
   });
 
   if (authError || !authData?.user) {
