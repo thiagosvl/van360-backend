@@ -8,7 +8,7 @@ export const gastoService = {
         const gastoData: any = {
             valor: typeof data.valor === "string" ? moneyToNumber(data.valor) : data.valor,
             data: data.data,
-            descricao: cleanString(data.descricao, true),
+            descricao: cleanString(data.descricao),
             categoria: data.categoria,
             usuario_id: data.usuario_id,
             veiculo_id: data.veiculo_id === "none" ? null : data.veiculo_id,
@@ -31,7 +31,7 @@ export const gastoService = {
         if (typeof data.valor === "string") gastoData.valor = moneyToNumber(data.valor);
         if (data.data) gastoData.data = data.data;
         if (data.categoria) gastoData.categoria = data.categoria;
-        if (data.descricao) gastoData.descricao = cleanString(data.descricao, true);
+        if (data.descricao) gastoData.descricao = cleanString(data.descricao);
         if (data.veiculo_id !== undefined) {
             gastoData.veiculo_id = data.veiculo_id === "none" ? null : data.veiculo_id;
         }
