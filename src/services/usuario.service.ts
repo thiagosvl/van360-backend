@@ -1030,14 +1030,22 @@ export async function upgradePlano(
   novoPlanoId: string
 ): Promise<UpgradePlanoResult> {
   try {
-    // Buscar assinatura ativa
-    const assinaturaAtual = await getAssinaturaAtiva(usuarioId);
-    const planoAtual = assinaturaAtual.planos as any;
+    // Buscar assinatura ativa ou falhar graciosamente
+    let assinaturaAtual: any = null;
+    try {
+      assinaturaAtual = await getAssinaturaAtiva(usuarioId);
+    } catch (e) {
+      // Se não tem assinatura ativa, assumir status de "Plano Gratuito" / "Sem Plano"
+      // Isso permite que usuários sem plano ou com plano cancelado façam "upgrade" (reativação/nova compra)
+      logger.info({ usuarioId }, "Upgrade iniciado sem assinatura ativa: assumindo origem Gratuito/Inativo.");
+    }
 
-    // Buscar novo plano
+    const planoAtual = assinaturaAtual?.planos; // Pode ser undefined
+    
+    // Buscar novo plano com parent para identificar slug base
     const { data: novoPlano, error: planoError } = await supabaseAdmin
       .from("planos")
-      .select("id, slug, nome, preco, preco_promocional, promocao_ativa, franquia_cobrancas_mes")
+      .select("id, slug, nome, preco, preco_promocional, promocao_ativa, franquia_cobrancas_mes, parent:parent_id(slug)")
       .eq("id", novoPlanoId)
       .single();
 
@@ -1046,10 +1054,16 @@ export async function upgradePlano(
     }
 
     // Se o plano atual é um subplano (tem parent), usar o slug do parent para comparação
-    const slugAtual = (planoAtual.parent as any)?.slug || planoAtual.slug;
+    // Se não tem plano atual, usar PLANO_GRATUITO como base
+    const slugAtual = planoAtual 
+      ? ((planoAtual.parent as any)?.slug || planoAtual.slug) 
+      : PLANO_GRATUITO;
+
+    // Se o NOVO plano é um subplano (tem parent), usar o slug do parent para comparação
+    const slugNovo = (novoPlano.parent as any)?.slug || novoPlano.slug;
 
     // Validar que é upgrade
-    if (!isUpgrade(slugAtual, novoPlano.slug)) {
+    if (!isUpgrade(slugAtual, slugNovo)) {
       throw new Error("Esta operação não é um upgrade. Use o endpoint de downgrade.");
     }
 
@@ -1059,11 +1073,16 @@ export async function upgradePlano(
     // Calcular preços e franquia do novo plano
     const { precoAplicado, precoOrigem, franquiaContratada } = calcularPrecosEFranquia(novoPlano);
 
-    // Manter vigência original (incluindo vigencia_fim)
-    const anchorDate = assinaturaAtual.anchor_date || new Date().toISOString().split("T")[0];
-    const vigenciaFim = assinaturaAtual.vigencia_fim || null;
+    // Se tinha assinatura, tentar manter a data base (anchor_date)
+    // Se não tinha (ou estava inativa/gratuito), a data base é hoje (início de novo ciclo)
+    const hoje = new Date();
+    const anchorDate = assinaturaAtual?.anchor_date || hoje.toISOString().split("T")[0];
+    
+    // Vigência fim: se não tinha assinatura, será calculada após o pagamento (null por enquanto)
+    // Se tinha, mantém a atual (para pro-rata ou continuidade), mas no caso de "sem assinatura ativa", é null
+    const vigenciaFim = assinaturaAtual?.vigencia_fim || null;
 
-    // NÃO desativar assinatura atual - ela permanece ativa até o pagamento ser confirmado
+    // NÃO desativar assinatura atual (se existir) - ela permanece ativa até o pagamento ser confirmado
 
     // Criar nova assinatura (inativa até pagamento)
     const { data: novaAssinatura, error: assinaturaError } = await supabaseAdmin
@@ -1086,7 +1105,14 @@ export async function upgradePlano(
     if (assinaturaError) throw assinaturaError;
 
     // Criar cobrança
-    const hoje = new Date();
+    // Se não tinha assinatura ativa, o valor é cheio (precoAplicado)
+    // Se tinha, calcular pro-rata? 
+    // OBS: A lógica original de upgradePlano SEMPRE cobrava 'precoAplicado' (cheio) no código anterior:
+    // "valor: precoAplicado" (linha 1095 original).
+    // O pro-rata só era calculado na troca de subplano. 
+    // Para upgrades entre planos diferentes, a regra de negócio parece ser cobrar o valor cheio do novo plano imediatamente.
+    // Manterei essa lógica.
+
     const { data: cobranca, error: cobrancaError } = await supabaseAdmin
       .from("assinaturas_cobrancas")
       .insert({
@@ -1153,14 +1179,6 @@ export async function upgradePlano(
       success: true,
       precisaSelecaoManual: false,
     };
-
-      return {
-        qrCodePayload: pixData.qrCodePayload,
-        location: pixData.location,
-        inter_txid: pixData.interTransactionId,
-        cobrancaId: cobranca.id,
-        success: true,
-      };
 
   } catch (err: any) {
     logger.error({ error: err.message, usuarioId, novoPlanoId }, "Falha no upgrade de plano.");
@@ -1272,6 +1290,17 @@ export async function downgradePlano(
         }
       }, "Erro ao inserir assinatura no downgrade de plano");
       throw assinaturaError;
+    }
+
+    // Desativar automação de passageiros (Regra de Negócio: Downgrade remove automação)
+    if (slugAtual === PLANO_COMPLETO || (planoAtual.parent as any)?.slug === PLANO_COMPLETO) {
+        try {
+            const desativados = await passageiroService.desativarAutomacaoTodosPassageiros(usuarioId);
+            logger.info({ usuarioId, desativados }, "Automação de passageiros desativada devido ao downgrade");
+        } catch (autoError: any) {
+            logger.error({ usuarioId, error: autoError.message }, "Erro ao desativar automação de passageiros no downgrade (inconsistência possível)");
+            // Não falhar o downgrade por isso, mas logar erro crítico
+        }
     }
 
     // Log detalhado DEPOIS do insert

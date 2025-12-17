@@ -566,4 +566,32 @@ export const passageiroService = {
         };
     },
 
+    async desativarAutomacaoTodosPassageiros(usuarioId: string): Promise<number> {
+        if (!usuarioId) throw new Error("Usuário obrigatório");
+
+        const { data: passageiros, error: findError } = await supabaseAdmin
+            .from("passageiros")
+            .select("id")
+            .eq("usuario_id", usuarioId)
+            .eq("enviar_cobranca_automatica", true);
+
+        if (findError) throw findError;
+
+        if (!passageiros || passageiros.length === 0) return 0;
+
+        const ids = passageiros.map(p => p.id);
+
+        const { error: updateError } = await supabaseAdmin
+            .from("passageiros")
+            .update({
+                enviar_cobranca_automatica: false,
+                motivo_desativacao: "automatico", // Indicar que foi pelo sistema
+            })
+            .in("id", ids);
+
+        if (updateError) throw new Error("Erro ao desativar automação: " + updateError.message);
+
+        return ids.length;
+    },
+
 };
