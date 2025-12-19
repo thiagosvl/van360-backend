@@ -138,7 +138,7 @@ async function criarCobrancaPix(
     return {
       qrCodePayload: "00020101021226...MOCK",
       location: "https://mock.inter/pix",
-      interTransactionId: "MOCK-TXID-123",
+      interTransactionId: `MOCK-TXID-${Date.now()}`,
     };
   }
 
@@ -174,6 +174,69 @@ async function criarCobrancaPix(
   } catch (err: any) {
     logger.error({ err: err.response?.data || err.message, txid }, "Falha na criação de PIX");
     throw new Error("Falha ao criar cobrança PIX no Inter");
+  }
+
+}
+
+interface CriarCobrancaComVencimentoParams {
+  cobrancaId: string;
+  valor: number;
+  cpf: string;
+  nome: string;
+  dataVencimento: string; // YYYY-MM-DD
+  validadeAposVencimentoDias?: number;
+}
+
+async function criarCobrancaComVencimentoPix(
+  adminClient: SupabaseClient,
+  params: CriarCobrancaComVencimentoParams
+): Promise<{ qrCodePayload: string; location: string; interTransactionId: string }> {
+  const txid = gerarTxid(params.cobrancaId);
+
+  if (INTER_MOCK_MODE) {
+    logger.warn("MOCK INTER ATIVO: Simulando PIX (COBV)");
+    return {
+      qrCodePayload: "00020101021226...MOCK-COBV",
+      location: "https://mock.inter/pix-cobv",
+      interTransactionId: `MOCK-TXID-COBV-${Date.now()}`,
+    };
+  }
+
+  const token = await getValidInterToken(adminClient);
+
+  const cobvPayload = {
+    calendario: { 
+        dataDeVencimento: params.dataVencimento,
+        validadeAposVencimento: params.validadeAposVencimentoDias || 30 // Default 30 dias de tolerância
+    },
+    devedor: { cpf: onlyDigits(params.cpf), nome: params.nome },
+    valor: { original: params.valor.toFixed(2) },
+    chave: INTER_PIX_KEY,
+    solicitacaoPagador: "Assinatura Van360 (Vencimento)",
+    infoAdicionais: [{ nome: "cobrancaId", valor: params.cobrancaId }],
+  };
+
+  try {
+    const createUrl = `${INTER_API_URL}/pix/v2/cobv/${txid}`;
+    logger.info({ url: createUrl, txid, vencimento: params.dataVencimento }, "Criando cobrança PIX com Vencimento (cobv)");
+
+    const { data } = await axios.put(createUrl, cobvPayload, {
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      httpsAgent: getHttpsAgent(),
+    });
+
+    const locId = data?.loc?.id;
+    const pixCopiaECola = data?.pixCopiaECola;
+    if (!locId || !pixCopiaECola) throw new Error("Resposta de PIX (cobv) incompleta.");
+
+    return {
+      qrCodePayload: pixCopiaECola,
+      location: data.loc?.location || data.location,
+      interTransactionId: txid,
+    };
+  } catch (err: any) {
+    logger.error({ err: err.response?.data || err.message, txid }, "Falha na criação de PIX com Vencimento");
+    throw new Error("Falha ao criar cobrança PIX (cobv) no Inter");
   }
 }
 
@@ -260,6 +323,7 @@ async function registrarWebhookPix(adminClient: SupabaseClient, webhookUrl: stri
 
 export const interService = {
   criarCobrancaPix,
+  criarCobrancaComVencimentoPix,
   registrarWebhookPix,
   consultarWebhookPix,
 };

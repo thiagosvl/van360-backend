@@ -1,8 +1,9 @@
 import { FastifyInstance } from "fastify";
+import { PLANO_PROFISSIONAL } from "../config/contants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { passageiroService } from "../services/passageiro.service.js";
-import { cancelarAssinatura, confirmarDowngradeComSelecao, criarAssinaturaCompletoPersonalizado, desistirCancelarAssinatura, downgradePlano, gerarPixAposSelecaoManual, iniciaRegistroPlanoEssencial, iniciaRegistroPlanoGratuito, iniciarRegistroPlanoCompleto, trocarSubplano, upgradePlano } from "../services/usuario.service.js";
+import { cancelarAssinatura, confirmarDowngradeComSelecao, criarAssinaturaProfissionalPersonalizado, desistirCancelarAssinatura, downgradePlano, gerarPixAposSelecaoManual, iniciaRegistroPlanoEssencial, iniciaRegistroPlanoGratuito, iniciarRegistroplanoProfissional, trocarSubplano, upgradePlano } from "../services/usuario.service.js";
 
 interface RegisterPayload {
     nome: string;
@@ -69,7 +70,7 @@ export default async function usuarioRoute(app: FastifyInstance) {
         }
     });
 
-    app.post("/registrar-plano-completo", async (request, reply) => {
+    app.post("/registrar-plano-profissional", async (request, reply) => {
         const payload = request.body as RegisterPayload;
 
         if (!payload.email || !payload.senha || !payload.plano_id) {
@@ -77,13 +78,13 @@ export default async function usuarioRoute(app: FastifyInstance) {
         }
 
         try {
-            const result = await iniciarRegistroPlanoCompleto(payload);
+            const result = await iniciarRegistroplanoProfissional(payload);
 
             return reply.status(200).send(result);
         } catch (err: any) {
             logger.error(
                 { error: err.message, payload: { email: payload.email, plano: payload.plano_id } },
-                "Falha no Endpoint de Cadastro no Plano Completo."
+                "Falha no Endpoint de Cadastro no Plano Profissional."
             );
 
             const status = err.message.includes("já está em uso") ? 409 : 400;
@@ -269,7 +270,7 @@ export default async function usuarioRoute(app: FastifyInstance) {
         }
     });
 
-    app.post("/criar-assinatura-completo-personalizado", async (request: any, reply) => {
+    app.post("/criar-assinatura-profissional-personalizado", async (request: any, reply) => {
         const authUid = request.user?.id;
         const { quantidade, usuario_id, targetPassengerId } = request.body as { quantidade: number; usuario_id?: string; targetPassengerId?: string };
 
@@ -299,7 +300,7 @@ export default async function usuarioRoute(app: FastifyInstance) {
         }
 
         try {
-            const result = await criarAssinaturaCompletoPersonalizado(usuarioId, quantidade, targetPassengerId);
+            const result = await criarAssinaturaProfissionalPersonalizado(usuarioId, quantidade, targetPassengerId);
             return reply.status(200).send(result);
         } catch (err: any) {
             logger.error(
@@ -372,8 +373,8 @@ export default async function usuarioRoute(app: FastifyInstance) {
             const plano = assinaturaPendente.planos as any;
             const slugBase = plano.parent?.slug ?? plano.slug;
 
-            // Só verificar se for plano Completo
-            if (slugBase !== "completo") {
+            // Só verificar se for plano Profissional
+            if (slugBase !== PLANO_PROFISSIONAL) {
                 return reply.status(200).send({ precisaSelecaoManual: false });
             }
 

@@ -1,8 +1,8 @@
+import { PLANO_PROFISSIONAL } from "../config/contants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { interService } from "./inter.service.js";
 import { passageiroService } from "./passageiro.service.js";
-import { PLANO_COMPLETO } from "../config/contants.js";
 
 export const assinaturaCobrancaService = {
     async getAssinaturaCobranca(id: string): Promise<any> {
@@ -56,6 +56,7 @@ export const assinaturaCobrancaService = {
             .select(`
                 id,
                 valor,
+                created_at,
                 status,
                 qr_code_payload,
                 inter_txid,
@@ -63,6 +64,8 @@ export const assinaturaCobrancaService = {
                 usuario_id,
                 assinatura_usuario_id,
                 selecao_passageiros_pendente,
+                billing_type,
+                data_vencimento,
                 usuarios:usuario_id (cpfcnpj, nome),
                 assinatura_usuarios:assinatura_usuario_id (
                     id,
@@ -86,15 +89,43 @@ export const assinaturaCobrancaService = {
             throw new Error("Esta cobrança não está pendente de pagamento.");
         }
 
-        // Se já existe PIX válido, retornar dados existentes (não precisa verificar seleção manual novamente)
+        // DECISÃO DE ESTRATÉGIA (COB vs COBV)
+        const isCobrancaComVencimento = 
+            cobranca.billing_type === "subscription" || 
+            cobranca.billing_type === "school_fee";
+
+        // VERIFICAÇÃO DE CACHE E EXPIRAÇÃO
         if (cobranca.qr_code_payload && cobranca.inter_txid) {
-            logger.info({ cobrancaId }, "Reutilizando PIX existente para cobrança");
-            return {
-                qrCodePayload: cobranca.qr_code_payload,
-                location: cobranca.location_url || "",
-                inter_txid: cobranca.inter_txid,
-                cobrancaId: cobranca.id,
-            };
+            // Se for cobrança imediata (upgrade), verificar se expirou (1h / 3600s)
+            if (!isCobrancaComVencimento) {
+                const createdAt = new Date(cobranca.created_at).getTime();
+                const now = Date.now();
+                const diffSeconds = (now - createdAt) / 1000;
+
+                // Se passou de 3500 segundos (margem de segurança antes de 3600), regenerar
+                if (diffSeconds > 3500) {
+                    logger.info({ cobrancaId, diffSeconds }, "PIX imediato expirado. Regenerando...");
+                    // Prosseguir para gerar novo PIX (ignora o return de cache)
+                } else {
+                    logger.info({ cobrancaId }, "Reutilizando PIX imediato válido");
+                    return {
+                        qrCodePayload: cobranca.qr_code_payload,
+                        location: cobranca.location_url || "",
+                        inter_txid: cobranca.inter_txid,
+                        cobrancaId: cobranca.id,
+                    };
+                }
+            } else {
+                // Se for Cobrança com Vencimento (COBV), reutilizar sempre (o QR Code é durável)
+                // TODO: Opcionalmente verificar se já passou da data de vencimento + tolerância
+                logger.info({ cobrancaId }, "Reutilizando PIX com vencimento (cobv)");
+                return {
+                    qrCodePayload: cobranca.qr_code_payload,
+                    location: cobranca.location_url || "",
+                    inter_txid: cobranca.inter_txid,
+                    cobrancaId: cobranca.id,
+                };
+            }
         }
 
         // Verificar se já há seleção salva na cobrança
@@ -111,8 +142,8 @@ export const assinaturaCobrancaService = {
                 const plano = assinatura.planos as any;
                 const slugBase = plano.parent?.slug ?? plano.slug;
                 
-                // Verificar se é plano Completo e se precisa seleção manual
-                if (slugBase === PLANO_COMPLETO) {
+                // Verificar se é plano Profissional e se precisa seleção manual
+                if (slugBase === PLANO_PROFISSIONAL) {
                     const franquia = assinatura.franquia_contratada_cobrancas || 0;
                     const calculo = await passageiroService.calcularPassageirosDisponiveis(cobranca.usuario_id, franquia);
                     
@@ -125,8 +156,6 @@ export const assinaturaCobrancaService = {
                             jaAtivos: calculo.jaAtivos
                         }, "Tentativa de gerar PIX mas precisa seleção manual - retornando flag");
                         
-                        // Retornar flag indicando que precisa seleção manual
-                        // O frontend deve mostrar o dialog de seleção primeiro
                         return {
                             qrCodePayload: "",
                             location: "",
@@ -147,15 +176,34 @@ export const assinaturaCobrancaService = {
             throw new Error("Dados do usuário incompletos para gerar PIX.");
         }
 
-        // Gerar novo PIX
-        logger.info({ cobrancaId, usuarioId: cobranca.usuario_id }, "Gerando novo PIX para cobrança");
+        let pixData;
 
-        const pixData = await interService.criarCobrancaPix(supabaseAdmin, {
-            cobrancaId: cobranca.id,
-            valor: Number(cobranca.valor),
-            cpf: usuario.cpfcnpj,
-            nome: usuario.nome,
-        });
+        // GERAÇÃO DO PIX NO INTER (COB ou COBV)
+        if (isCobrancaComVencimento) {
+             logger.info({ cobrancaId, billingType: cobranca.billing_type }, "Gerando PIX com Vencimento (cobv)");
+             
+             // Definir vencimento (se não tiver na cobrança, usar hoje + 3 dias como fallback seguro, ou tratar erro)
+             const dataVencimento = cobranca.data_vencimento || new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+             pixData = await interService.criarCobrancaComVencimentoPix(supabaseAdmin, {
+                cobrancaId: cobranca.id,
+                valor: Number(cobranca.valor),
+                cpf: usuario.cpfcnpj,
+                nome: usuario.nome,
+                dataVencimento: dataVencimento,
+                validadeAposVencimentoDias: 30 // Pode virar config no futuro
+             });
+
+        } else {
+            logger.info({ cobrancaId, billingType: cobranca.billing_type }, "Gerando PIX Imediato (cob)");
+            
+            pixData = await interService.criarCobrancaPix(supabaseAdmin, {
+                cobrancaId: cobranca.id,
+                valor: Number(cobranca.valor),
+                cpf: usuario.cpfcnpj,
+                nome: usuario.nome,
+            });
+        }
 
         // Atualizar cobrança com dados do PIX
         const { error: updateError } = await supabaseAdmin

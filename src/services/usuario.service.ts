@@ -1,4 +1,4 @@
-import { ASSINATURA_COBRANCA_STATUS_CANCELADA, ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_ATIVA, ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_TRIAL, PLANO_COMPLETO, PLANO_ESSENCIAL, PLANO_GRATUITO } from "../config/contants.js";
+import { ASSINATURA_COBRANCA_STATUS_CANCELADA, ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_ATIVA, ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_TRIAL, PLANO_ESSENCIAL, PLANO_GRATUITO, PLANO_PROFISSIONAL } from "../config/contants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { cleanString, onlyDigits } from "../utils/utils.js";
@@ -46,7 +46,7 @@ export interface RegistroPayload {
   telefone: string;
   plano_id?: string;
   sub_plano_id?: string;
-  quantidade_personalizada?: number; // Para plano Completo personalizado
+  quantidade_personalizada?: number; // Para plano Profissional personalizado
   ativo?: boolean;
 }
 
@@ -407,7 +407,7 @@ export async function iniciaRegistroPlanoEssencial(
 
     // Na contratação inicial, data de vencimento depende se tem trial:
     // - Se tem trial (Plano Essencial): data_vencimento = anchor_date + trial_days (fim do trial)
-    // - Se não tem trial (Plano Completo): data_vencimento = anchor_date (hoje)
+    // - Se não tem trial (Plano Profissional): data_vencimento = anchor_date (hoje)
     const dataVencimentoCobranca = trialEndAt 
       ? trialEndAt.split("T")[0] // Usar fim do trial como data de vencimento
       : anchorDate; // Sem trial, usar data de contratação
@@ -438,7 +438,7 @@ export async function iniciaRegistroPlanoEssencial(
   }
 }
 
-export async function iniciarRegistroPlanoCompleto(
+export async function iniciarRegistroplanoProfissional(
   payload: RegistroPayload
 ): Promise<RegistroAutomaticoResult> {
   let usuarioId: string | null = null;
@@ -480,19 +480,18 @@ export async function iniciarRegistroPlanoCompleto(
     let planoBaseId: string;
 
     if (payload.quantidade_personalizada) {
-      // Buscar o plano base Completo
-      const { data: planoCompletoBase, error: planoBaseError } = await supabaseAdmin
+      const { data: planoProfissionalBase, error: planoBaseError } = await supabaseAdmin
         .from("planos")
         .select("id")
-        .eq("slug", PLANO_COMPLETO)
+        .eq("slug", PLANO_PROFISSIONAL)
         .eq("tipo", "base")
         .single();
 
-      if (planoBaseError || !planoCompletoBase) {
-        throw new Error("Plano Completo não encontrado.");
+      if (planoBaseError || !planoProfissionalBase) {
+        throw new Error("Plano Profissional não encontrado.");
       }
 
-      planoBaseId = planoCompletoBase.id;
+      planoBaseId = planoProfissionalBase.id;
       const { precoCalculado, quantidadeMinima } = await calcularPrecoPersonalizado(payload.quantidade_personalizada);
       
       precoAplicado = precoCalculado;
@@ -865,7 +864,7 @@ function isUpgrade(slugAtual: string, slugNovo: string): boolean {
   const ordem: Record<string, number> = {
     [PLANO_GRATUITO]: 1,
     [PLANO_ESSENCIAL]: 2,
-    [PLANO_COMPLETO]: 3,
+    [PLANO_PROFISSIONAL]: 3,
   };
 
   const ordemAtual = ordem[slugAtual] || 0;
@@ -875,7 +874,7 @@ function isUpgrade(slugAtual: string, slugNovo: string): boolean {
 }
 
 /**
- * Calcula o preço para um plano Completo personalizado
+ * Calcula o preço para um plano Profissional personalizado
  * Fórmula: Preço do maior subplano + (Quantidade - franquia_maior_subplano) * preço do maior subplano
  * 
  * @param quantidade - Quantidade de cobranças desejada (mínimo: franquia do maior subplano + 1)
@@ -887,28 +886,27 @@ export async function calcularPrecoPersonalizado(quantidade: number, ignorarMini
 }> {
   console.log("DEBUG: calcularPrecoPersonalizado chamado", { quantidade, ignorarMinimo });
 
-  // Buscar o plano base Completo
-  const { data: planoCompletoBase, error: planoBaseError } = await supabaseAdmin
+  const { data: planoProfissionalBase, error: planoBaseError } = await supabaseAdmin
     .from("planos")
     .select("id")
-    .eq("slug", PLANO_COMPLETO)
+    .eq("slug", PLANO_PROFISSIONAL)
     .eq("tipo", "base")
     .single();
 
-  if (planoBaseError || !planoCompletoBase) {
-    throw new Error("Plano Completo não encontrado.");
+  if (planoBaseError || !planoProfissionalBase) {
+    throw new Error("Plano Profissional não encontrado.");
   }
 
   // Buscar TODOS os subplanos para encontrar o melhor encaixe
   const { data: subplanos, error: subplanosError } = await supabaseAdmin
     .from("planos")
     .select("id, preco, preco_promocional, promocao_ativa, franquia_cobrancas_mes")
-    .eq("parent_id", planoCompletoBase.id)
+    .eq("parent_id", planoProfissionalBase.id)
     .eq("tipo", "sub")
     .order("franquia_cobrancas_mes", { ascending: false });
 
   if (subplanosError || !subplanos || subplanos.length === 0) {
-    throw new Error("Subplanos do Completo não encontrados.");
+    throw new Error("Subplanos do Plano Profissional não encontrados.");
   }
 
   // Identificar o maior subplano para validação de mínimo (limite do sistema para cadastro)
@@ -1062,7 +1060,7 @@ export async function upgradePlano(
     // Se o NOVO plano é um subplano (tem parent), usar o slug do parent para comparação
     const slugNovo = (novoPlano.parent as any)?.slug || novoPlano.slug;
 
-    // Validar que é upgrade
+    // Validar que é upgrade (hierarquia de planos)
     if (!isUpgrade(slugAtual, slugNovo)) {
       throw new Error("Esta operação não é um upgrade. Use o endpoint de downgrade.");
     }
@@ -1093,7 +1091,7 @@ export async function upgradePlano(
         franquia_contratada_cobrancas: franquiaContratada,
         ativo: false,
         status: ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO,
-        billing_mode: novoPlano.slug === PLANO_COMPLETO ? "automatico" : "manual",
+        billing_mode: novoPlano.slug === PLANO_PROFISSIONAL ? "automatico" : "manual",
         preco_aplicado: precoAplicado,
         preco_origem: precoOrigem,
         anchor_date: anchorDate,
@@ -1131,7 +1129,7 @@ export async function upgradePlano(
 
     // Verificar se precisa seleção manual ANTES de gerar PIX
     let precisaSelecaoManual = false;
-    if (novoPlano.slug === PLANO_COMPLETO) {
+    if (novoPlano.slug === PLANO_PROFISSIONAL) {
       const calculo = await passageiroService.calcularPassageirosDisponiveis(usuarioId, franquiaContratada);
       precisaSelecaoManual = calculo.precisaSelecaoManual;
     }
@@ -1202,7 +1200,7 @@ export async function downgradePlano(
     const assinaturaAtual = await getAssinaturaAtiva(usuarioId);
     const planoAtual = assinaturaAtual.planos as any;
 
-    // Buscar novo plano (incluir franquia_cobrancas_mes para planos Completo)
+    // Buscar novo plano (incluir franquia_cobrancas_mes para planos Profissional)
     const { data: novoPlano, error: planoError } = await supabaseAdmin
       .from("planos")
       .select("id, slug, nome, preco, preco_promocional, promocao_ativa, franquia_cobrancas_mes")
@@ -1268,7 +1266,7 @@ export async function downgradePlano(
         franquia_contratada_cobrancas: franquiaContratada,
         ativo: true,
         status: statusNovo,
-        billing_mode: novoPlano.slug === PLANO_COMPLETO ? "automatico" : "manual",
+        billing_mode: novoPlano.slug === PLANO_PROFISSIONAL ? "automatico" : "manual",
         preco_aplicado: precoAplicado,
         preco_origem: precoOrigem,
         anchor_date: anchorDate,
@@ -1293,7 +1291,7 @@ export async function downgradePlano(
     }
 
     // Desativar automação de passageiros (Regra de Negócio: Downgrade remove automação)
-    if (slugAtual === PLANO_COMPLETO || (planoAtual.parent as any)?.slug === PLANO_COMPLETO) {
+    if (slugAtual === PLANO_PROFISSIONAL || (planoAtual.parent as any)?.slug === PLANO_PROFISSIONAL) {
         try {
             const desativados = await passageiroService.desativarAutomacaoTodosPassageiros(usuarioId);
             logger.info({ usuarioId, desativados }, "Automação de passageiros desativada devido ao downgrade");
@@ -1327,12 +1325,12 @@ export async function downgradePlano(
 }
 
 /**
- * Troca de subplano (dentro do mesmo plano Completo)
+ * Troca de subplano (dentro do mesmo plano Profissional)
  * - Se maior: gera cobrança da diferença
  * - Se menor: não gera cobrança (próxima fatura virá com valor reduzido)
  * - Cancela cobrança pendente se existir
  * - Mantém vigência original
- * - Se o usuário não estiver no Completo, faz upgrade para o Completo com o subplano escolhido
+ * - Se o usuário não estiver no Profissional, faz upgrade para o Profissional com o subplano escolhido
  */
 export async function trocarSubplano(
   usuarioId: string,
@@ -1343,10 +1341,10 @@ export async function trocarSubplano(
     const assinaturaAtual = await getAssinaturaAtiva(usuarioId);
     const planoAtual = assinaturaAtual.planos as any;
 
-    // Verificar se está no plano Completo (pode ser o plano base ou um subplano)
-    const isCompletoBase = planoAtual.slug === PLANO_COMPLETO;
-    const isCompletoSub = !!planoAtual.parent_id;
-    const estaNoCompleto = isCompletoBase || isCompletoSub;
+    // Verificar se está no plano Profissional (pode ser o plano base ou um subplano)
+    const isProfissionalBase = planoAtual.slug === PLANO_PROFISSIONAL;
+    const isProfissionalSub = !!planoAtual.parent_id;
+    const estaNoProfissional = isProfissionalBase || isProfissionalSub;
 
     // Buscar novo subplano
     const { data: novoSubplano, error: planoError } = await supabaseAdmin
@@ -1359,27 +1357,27 @@ export async function trocarSubplano(
       throw new Error("Subplano selecionado não encontrado.");
     }
 
-    // Validar que é subplano do Completo
-    // Buscar o plano base Completo
-    const { data: planoCompletoBase, error: planoBaseError } = await supabaseAdmin
+    // Validar que é subplano do Profissional
+    // Buscar o plano base Profissional
+    const { data: planoProfissionalBase, error: planoBaseError } = await supabaseAdmin
       .from("planos")
       .select("id")
-      .eq("slug", PLANO_COMPLETO)
+      .eq("slug", PLANO_PROFISSIONAL)
       .eq("tipo", "base")
       .single();
 
-    if (planoBaseError || !planoCompletoBase) {
-      throw new Error("Plano Completo não encontrado.");
+    if (planoBaseError || !planoProfissionalBase) {
+      throw new Error("Plano Profissional não encontrado.");
     }
 
-    // Validar que o novo subplano pertence ao plano Completo
-    if (novoSubplano.parent_id !== planoCompletoBase.id) {
-      throw new Error("Subplano inválido. Deve pertencer ao plano Completo.");
+    // Validar que o novo subplano pertence ao plano Profissional
+    if (novoSubplano.parent_id !== planoProfissionalBase.id) {
+      throw new Error("Subplano inválido. Deve pertencer ao plano Profissional.");
     }
 
-    // Se o usuário não está no Completo, fazer upgrade para o Completo com o subplano escolhido
-    if (!estaNoCompleto) {
-      // Fazer upgrade para o Completo com o subplano escolhido
+    // Se o usuário não está no Profissional, fazer upgrade para o Profissional com o subplano escolhido
+    if (!estaNoProfissional) {
+      // Fazer upgrade para o Profissional com o subplano escolhido
       // Limpar assinaturas pendentes antigas
       await limparAssinaturasPendentes(usuarioId);
 
@@ -1478,7 +1476,7 @@ export async function trocarSubplano(
     // Calcular preços e franquia do novo subplano (uma única vez)
     const { precoAplicado, precoOrigem, franquiaContratada } = calcularPrecosEFranquia(novoSubplano);
 
-    // Calcular diferença (usuário já está no Completo) usando Pro-rata
+    // Calcular diferença (usuário já está no Profissional) usando Pro-rata
     const precoAtual = Number(assinaturaAtual.preco_aplicado || 0);
     const diferencaMensal = precoAplicado - precoAtual;
     const franquiaAtual = assinaturaAtual.franquia_contratada_cobrancas || 0;
@@ -1740,7 +1738,7 @@ export async function trocarSubplano(
 }
 
 /**
- * Cria assinatura do plano Completo com quantidade personalizada de cobranças
+ * Cria assinatura do plano Profissional com quantidade personalizada de cobranças
  * - Calcula preço baseado na quantidade
  * - Limpa assinaturas pendentes antigas
  * - Cria nova assinatura (ativa = false até pagamento)
@@ -1748,12 +1746,12 @@ export async function trocarSubplano(
  * - Mantém vigência original se houver assinatura atual
  */
 /**
- * Cria ou atualiza assinatura do plano Completo com quantidade personalizada de cobranças
+ * Cria ou atualiza assinatura do plano Profissional com quantidade personalizada de cobranças
  * - Se for redução (downgrade): atualiza assinatura atual sem gerar cobrança
  * - Se for aumento (upgrade) ou novo usuário: gera cobrança PIX
  * - Mantém vigência original se houver assinatura atual
  */
-export async function criarAssinaturaCompletoPersonalizado(
+export async function criarAssinaturaProfissionalPersonalizado(
   usuarioId: string,
   quantidade: number,
   targetPassengerId?: string
@@ -1785,16 +1783,16 @@ export async function criarAssinaturaCompletoPersonalizado(
       // Não tem assinatura ativa, continuar normalmente (será novo usuário)
     }
 
-    // Buscar o plano base Completo
-    const { data: planoCompletoBase, error: planoBaseError } = await supabaseAdmin
+    // Buscar o plano base Profissional
+    const { data: planoProfissionalBase, error: planoBaseError } = await supabaseAdmin
       .from("planos")
       .select("id")
-      .eq("slug", PLANO_COMPLETO)
+      .eq("slug", PLANO_PROFISSIONAL)
       .eq("tipo", "base")
       .single();
 
-    if (planoBaseError || !planoCompletoBase) {
-      throw new Error("Plano Completo não encontrado.");
+    if (planoBaseError || !planoProfissionalBase) {
+      throw new Error("Plano Profissional não encontrado.");
     }
 
     // Se for downgrade, verificar ANTES de fazer qualquer alteração se precisa seleção manual
@@ -1843,12 +1841,12 @@ export async function criarAssinaturaCompletoPersonalizado(
     const vigenciaFim = assinaturaAtual?.vigencia_fim || null;
 
     // Criar nova assinatura (inativa até pagamento)
-    // Usar o plano Completo base como plano_id, mas com franquia_contratada_cobrancas personalizada
+    // Usar o plano Profissional base como plano_id, mas com franquia_contratada_cobrancas personalizada
     const { data: novaAssinatura, error: assinaturaError } = await supabaseAdmin
       .from("assinaturas_usuarios")
       .insert({
         usuario_id: usuarioId,
-        plano_id: planoCompletoBase.id, // Plano Completo base
+        plano_id: planoProfissionalBase.id, // Plano Profissional base
         franquia_contratada_cobrancas: quantidade, // Quantidade personalizada
         ativo: false,
         status: ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO,
@@ -2223,23 +2221,23 @@ export async function gerarPixAposSelecaoManual(
     let franquiaContratada: number;
     
     if (quantidadePersonalizada) {
-      const { data: planoCompletoBase, error: planoCompletoError } = await supabaseAdmin
+      const { data: planoProfissionalBase, error: planoProfissionalError } = await supabaseAdmin
         .from("planos")
         .select("id")
-        .eq("slug", PLANO_COMPLETO)
+        .eq("slug", PLANO_PROFISSIONAL)
         .is("parent_id", null)
         .single();
       
-      if (planoCompletoError || !planoCompletoBase) {
+      if (planoProfissionalError || !planoProfissionalBase) {
         logger.error({ 
-          error: planoCompletoError?.message, 
+          error: planoProfissionalError?.message, 
           usuarioId, 
           quantidadePersonalizada 
-        }, "Erro do sistema: Plano Completo não encontrado ao gerar PIX após seleção manual");
-        throw new Error("Erro do sistema: Plano Completo não encontrado. Por favor, entre em contato com o suporte.");
+        }, "Erro do sistema: Plano Profissional não encontrado ao gerar PIX após seleção manual");
+        throw new Error("Erro do sistema: Plano Profissional não encontrado. Por favor, entre em contato com o suporte.");
       }
       
-      planoIdFinal = planoCompletoBase.id;
+      planoIdFinal = planoProfissionalBase.id;
       franquiaContratada = quantidadePersonalizada;
     } else if (subplanoId) {
       planoIdFinal = subplanoId;

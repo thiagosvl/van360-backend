@@ -1,6 +1,6 @@
 export const PLANO_GRATUITO = "gratuito";
 export const PLANO_ESSENCIAL = "essencial";
-export const PLANO_COMPLETO = "completo"; 
+export const PLANO_PROFISSIONAL = "profissional"; 
 
 export const ASSINATURA_COBRANCA_STATUS_PAGO = "pago";
 export const ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO = "pendente_pagamento";

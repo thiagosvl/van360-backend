@@ -56,7 +56,7 @@ export const planoService = {
     },
 
     /**
-     * Calcula o preço preview para quantidade personalizada do Plano Completo
+     * Calcula o preço preview para quantidade personalizada do Plano Profissional
      * @param quantidade - Quantidade de cobranças desejada
      * @returns Objeto com preçoTotal, valorPorCobranca, ou null se a quantidade for inválida
      */

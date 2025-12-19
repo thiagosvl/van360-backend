@@ -1,9 +1,9 @@
 import {
-    ASSINATURA_COBRANCA_STATUS_CANCELADA,
-    ASSINATURA_COBRANCA_STATUS_PAGO,
-    ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
-    ASSINATURA_COBRANCA_TIPO_PAGAMENTO_PIX,
-    PLANO_COMPLETO,
+  ASSINATURA_COBRANCA_STATUS_CANCELADA,
+  ASSINATURA_COBRANCA_STATUS_PAGO,
+  ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
+  ASSINATURA_COBRANCA_TIPO_PAGAMENTO_PIX,
+  PLANO_PROFISSIONAL,
 } from "../config/contants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
@@ -388,7 +388,7 @@ async function verificarSelecaoManualNecessaria(
       "Verificando se precisa seleção manual de passageiros"
     );
 
-    if (slugBase === PLANO_COMPLETO) {
+    if (slugBase === PLANO_PROFISSIONAL) {
       const franquia = assinaturaPendente.franquia_contratada_cobrancas || 0;
       const calculo = await passageiroService.calcularPassageirosDisponiveis(cobranca.usuario_id, franquia);
       precisaSelecaoManual = calculo.precisaSelecaoManual;
@@ -429,7 +429,7 @@ async function verificarSelecaoManualNecessaria(
         );
       }
     } else {
-      logger.info({ ...logContext, slugBase }, "Não é plano Completo - não precisa verificar seleção manual");
+      logger.info({ ...logContext, slugBase }, "Não é plano Profissional - não precisa verificar seleção manual");
     }
   } else {
     logger.warn(
@@ -500,7 +500,7 @@ async function ativarUsuario(cobranca: Cobranca, logContext: ContextoLog): Promi
 }
 
 /**
- * Ativa passageiros automaticamente se for plano Completo e não precisar seleção manual
+ * Ativa passageiros automaticamente se for plano Profissional e não precisar seleção manual
  */
 async function ativarPassageirosAutomaticamente(
   cobranca: Cobranca,
@@ -515,12 +515,12 @@ async function ativarPassageirosAutomaticamente(
       ...logContext,
       slugBase,
       precisaSelecaoManual: false,
-      isCompleto: slugBase === PLANO_COMPLETO,
+      isProfissional: slugBase === PLANO_PROFISSIONAL,
     },
     "Verificando se deve ativar passageiros automaticamente"
   );
 
-  if (slugBase === PLANO_COMPLETO) {
+  if (slugBase === PLANO_PROFISSIONAL) {
     const franquia = assinaturaPendente.franquia_contratada_cobrancas || 0;
     logger.info({ ...logContext, usuarioId: cobranca.usuario_id, franquia }, "Chamando ativarPassageirosAutomaticamente");
 
@@ -546,7 +546,7 @@ async function ativarPassageirosAutomaticamente(
       // Não lançar erro aqui - a ativação da assinatura já foi feita
     }
   } else {
-    logger.info({ ...logContext, slugBase }, "Não é plano Completo - não ativando passageiros automaticamente");
+    logger.info({ ...logContext, slugBase }, "Não é plano Profissional - não ativando passageiros automaticamente");
   }
 }
 

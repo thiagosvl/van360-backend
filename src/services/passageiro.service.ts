@@ -1,4 +1,4 @@
-import { PLANO_COMPLETO } from "../config/contants.js";
+import { PLANO_PROFISSIONAL } from "../config/contants.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { cleanString, moneyToNumber, onlyDigits, toLocalDateString } from "../utils/utils.js";
 import { cobrancaService } from "./cobranca.service.js";
@@ -171,7 +171,7 @@ export const passageiroService = {
         
         // Validar se pode ativar cobranças automáticas
         if (data.enviar_cobranca_automatica !== undefined) {
-            // Se tentando ativar, validar se tem plano Completo
+            // Se tentando ativar, validar se tem plano Profissional
             if (data.enviar_cobranca_automatica === true) {
                 // Buscar assinatura ativa do usuário
                 const { data: assinaturas, error: assinaturaError } = await supabaseAdmin
@@ -186,14 +186,14 @@ export const passageiroService = {
                     .single();
                 
                 if (assinaturaError || !assinaturas) {
-                    throw new Error("Cobranças automáticas estão disponíveis apenas no plano Completo");
+                    throw new Error("Cobranças automáticas estão disponíveis apenas no plano Profissional");
                 }
                 
                 const plano = assinaturas.planos as any;
                 const slugPlano = plano?.parent?.slug || plano?.slug;
                 
-                if (slugPlano !== PLANO_COMPLETO) {
-                    throw new Error("Cobranças automáticas estão disponíveis apenas no plano Completo");
+                if (slugPlano !== PLANO_PROFISSIONAL) {
+                    throw new Error("Cobranças automáticas estão disponíveis apenas no plano Profissional");
                 }
                 
                 // Validar se ativar este passageiro excederia a franquia
@@ -310,6 +310,55 @@ export const passageiroService = {
     },
 
     async toggleAtivo(passageiroId: string, novoStatus: boolean): Promise<boolean> {
+        // Se estiver ativando, precisamos verificar limites se a automação estiver ligada
+        if (novoStatus === true) {
+            const passageiro = await this.getPassageiro(passageiroId);
+            
+            if (passageiro?.enviar_cobranca_automatica === true) {
+                // Verificar permissões e limites (lógica similar ao update)
+                const { data: assinaturas, error: assinaturaError } = await supabaseAdmin
+                    .from("assinaturas_usuarios")
+                    .select(`
+                        *,
+                        planos:plano_id (*, parent:parent_id (*))
+                    `)
+                    .eq("usuario_id", passageiro.usuario_id)
+                    .eq("ativo", true)
+                    .limit(1)
+                    .single();
+
+                // Se não tiver assinatura ou erro, bloqueia (automação requer pro)
+                if (assinaturaError || !assinaturas) {
+                     throw new Error("LIMIT_EXCEEDED_AUTOMATION: Cobrança automática requer plano Profissional ativo.");
+                }
+
+                const plano = assinaturas.planos as any;
+                const slugPlano = plano?.parent?.slug || plano?.slug;
+                
+                if (slugPlano !== PLANO_PROFISSIONAL) {
+                     throw new Error("LIMIT_EXCEEDED_AUTOMATION: Cobrança automática requer plano Profissional.");
+                }
+
+                const franquiaContratada = assinaturas.franquia_contratada_cobrancas || 0;
+                
+                 // Contar quantos passageiros JÁ têm cobranças automáticas ativas
+                // IMPORTANTE: O passageiro atual está INATIVO, então ele não está nessa conta ainda.
+                const { count: passageirosAtivosCount } = await supabaseAdmin
+                    .from("passageiros")
+                    .select("id", { count: "exact", head: true })
+                    .eq("usuario_id", passageiro.usuario_id)
+                    .eq("ativo", true)
+                    .eq("enviar_cobranca_automatica", true);
+                
+                const quantidadeJaAtiva = passageirosAtivosCount || 0;
+
+                // Se ativar esse, vai para quantidadeJaAtiva + 1
+                if (quantidadeJaAtiva + 1 > franquiaContratada) {
+                     // ERRO ESPECÍFICO PARA O FRONTEND INTERCEPTAR
+                     throw new Error("LIMIT_EXCEEDED_AUTOMATION");
+                }
+            }
+        }
 
         const { error } = await supabaseAdmin
             .from("passageiros")
