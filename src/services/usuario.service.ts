@@ -1075,6 +1075,49 @@ export async function upgradePlano(
     // Se não tinha (ou estava inativa/gratuito), a data base é hoje (início de novo ciclo)
     const hoje = new Date();
     const anchorDate = assinaturaAtual?.anchor_date || hoje.toISOString().split("T")[0];
+
+    // Lógica de Trial (Gratuito -> Essencial)
+    // Conforme solicitado: 7 dias grátis, sem verificação de histórico anterior
+    if (slugAtual === PLANO_GRATUITO && slugNovo === PLANO_ESSENCIAL) {
+        const trialDays = 7;
+        const trialEnd = new Date();
+        trialEnd.setDate(trialEnd.getDate() + trialDays);
+        
+        // Criar assinatura JÁ ATIVA em modo Trial
+        const { data: novaAssinatura, error: assinaturaError } = await supabaseAdmin
+          .from("assinaturas_usuarios")
+          .insert({
+            usuario_id: usuarioId,
+            plano_id: novoPlano.id,
+            franquia_contratada_cobrancas: franquiaContratada,
+            ativo: true, // Ativa imediatamente
+            status: 'ativo', // Status ativo para liberar acesso
+            billing_mode: "manual",
+            preco_aplicado: precoAplicado,
+            preco_origem: precoOrigem,
+            anchor_date: anchorDate,
+            vigencia_fim: null, // Ciclo de pagamento só começa após o primeiro pagamento
+            trial_end_at: trialEnd.toISOString() // Marca o fim do trial
+          })
+          .select()
+          .single();
+
+        if (assinaturaError) throw assinaturaError;
+
+        logger.info({ usuarioId, plano: novoPlano.slug }, "Upgrade com Trial de 7 dias ativado com sucesso.");
+
+        return {
+            success: true,
+            tipo: "upgrade",
+            franquia: franquiaContratada,
+            planoId: novoPlano.id,
+            precoAplicado,
+            precoOrigem,
+            // Não retorna cobrancaId pois não gerou cobrança
+        };
+    }
+    
+    // ... Lógica padrão (Cobrança imediata) para outros casos ...
     
     // Vigência fim: se não tinha assinatura, será calculada após o pagamento (null por enquanto)
     // Se tinha, mantém a atual (para pro-rata ou continuidade), mas no caso de "sem assinatura ativa", é null
