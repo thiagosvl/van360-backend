@@ -7,7 +7,7 @@ const webhookInterRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post("/receber-pix-usuario", async (req, reply) => {
     try {
       const body = req.body as any;
-      console.log("=== Webhook recebido do Inter (V2 - Flat/List Support) ===");
+      console.log("=== Webhook recebido do Inter (V3 - Retry Deploy) ===");
       console.dir(body, { depth: 10 });
 
       // Validate payload
