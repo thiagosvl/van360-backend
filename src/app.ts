@@ -59,3 +59,10 @@ export async function createApp(): Promise<FastifyInstance> {
   }
 }
 
+// Export default to satisfy Vercel builder if it mistakenly treats this as an entry point
+export default async function (req: any, res: any) {
+  const app = await createApp();
+  await app.ready();
+  app.server.emit('request', req, res);
+}
+
