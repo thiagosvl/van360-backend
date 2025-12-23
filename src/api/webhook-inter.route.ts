@@ -25,56 +25,52 @@ const webhookInterRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
         return;
       }
 
-      // Payload looks good — reply 200 immediately and process in background
-      reply.status(200).send({ received: true });
+      // Process inside the request lifecycle for Vercel stability
+      for (const pagamento of pixList) {
+        try {
+          const { txid, valor, horario } = pagamento;
+          logger.info({ txid, valor, horario }, "Processando pagamento PIX");
 
-      // Process asynchronously (fire-and-forget)
-      (async () => {
-        for (const pagamento of pixList) {
-          try {
-            const { txid, valor, horario } = pagamento;
-            logger.info({ txid, valor, horario }, "Processando pagamento PIX");
+          const { data: cobranca, error: findError } = await supabaseAdmin
+            .from("assinaturas_cobrancas")
+            .select("id, usuario_id, assinatura_usuario_id, status, data_vencimento, billing_type")
+            .eq("inter_txid", txid)
+            .maybeSingle();
 
-            const { data: cobranca, error: findError } = await supabaseAdmin
-              .from("assinaturas_cobrancas")
-              .select("id, usuario_id, assinatura_usuario_id, status, data_vencimento, billing_type")
-              .eq("inter_txid", txid)
-              .maybeSingle();
-
-            if (findError) {
-              logger.error({ txid, findError }, "Erro ao buscar cobrança");
-              continue;
-            }
-            if (!cobranca) {
-              logger.warn({ txid }, "Cobrança não encontrada");
-              continue;
-            }
-
-            logger.info({ cobranca }, "Cobrança encontrada antes do update");
-
-            // Processar pagamento usando serviço compartilhado
-            await processarPagamentoCobranca(
-              cobranca,
-              {
-                valor,
-                dataPagamento: horario || new Date().toISOString(),
-                txid,
-              },
-              { txid }
-            );
-          } catch (innerErr: any) {
-            logger.error({ innerErr }, "Erro processando um pagamento PIX");
+          if (findError) {
+            logger.error({ txid, findError }, "Erro ao buscar cobrança no banco");
+            continue;
           }
+          
+          if (!cobranca) {
+            logger.warn({ txid }, "Cobrança não encontrada no banco com este txid");
+            continue;
+          }
+
+          logger.info({ cobrancaId: cobranca.id, statusAtual: cobranca.status }, "Cobrança encontrada, iniciando processamento");
+
+          // Processar pagamento usando serviço compartilhado
+          await processarPagamentoCobranca(
+            cobranca,
+            {
+              valor,
+              dataPagamento: horario || new Date().toISOString(),
+              txid,
+            },
+            { txid }
+          );
+          
+          logger.info({ txid }, "Pagamento PIX processado com sucesso");
+        } catch (innerErr: any) {
+          logger.error({ innerErr, txid: pagamento?.txid }, "Erro processando um pagamento PIX específico");
         }
-      })().catch((bgErr) => logger.error({ bgErr }, "Erro no processamento background do webhook"));
+      }
+
+      // Final response only after all processing is done
+      reply.status(200).send({ received: true });
     } catch (err: any) {
       logger.error({ err }, "Erro geral no Webhook Inter");
-      // If we haven't replied yet, send 500
-      try {
-        if (!reply.sent) reply.status(500).send({ received: false, error: "Erro interno" });
-      } catch (e) {
-        // ignore
-      }
+      if (!reply.sent) reply.status(500).send({ received: false, error: "Erro interno" });
     }
   });
 };
