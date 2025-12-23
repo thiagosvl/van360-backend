@@ -26,6 +26,28 @@ const interRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
       return reply.status(500).send({ error: err.message });
     }
   });
+
+  app.get("/callbacks", async (req, reply) => {
+    const { dataInicio, dataFim } = req.query as { dataInicio: string; dataFim: string };
+    if (!dataInicio || !dataFim) {
+        // Default: Last 1 hour
+        const now = new Date();
+        const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+        return reply.status(200).send(await interService.consultarCallbacks(
+            supabaseAdmin, 
+            oneHourAgo.toISOString(), 
+            now.toISOString()
+        ));
+    }
+
+    try {
+      const result = await interService.consultarCallbacks(supabaseAdmin, dataInicio, dataFim);
+      return reply.status(200).send(result);
+    } catch (err: any) {
+      app.log.error(err, "Falha ao consultar callbacks PIX");
+      return reply.status(500).send({ error: err.message });
+    }
+  });
 };
 
 export default interRoutes;

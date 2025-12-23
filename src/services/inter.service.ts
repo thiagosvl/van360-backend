@@ -321,9 +321,27 @@ async function registrarWebhookPix(adminClient: SupabaseClient, webhookUrl: stri
   }
 }
 
+async function consultarCallbacks(adminClient: SupabaseClient, dataInicio: string, dataFim: string) {
+  const token = await getValidInterToken(adminClient);
+  const url = `${INTER_API_URL}/pix/v2/webhook/callbacks`;
+
+  try {
+    const { data } = await axios.get(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      httpsAgent: getHttpsAgent(),
+      params: { dataInicio, dataFim },
+    });
+    return data;
+  } catch (err: any) {
+    logger.error({ err: err.response?.data || err.message }, "Erro ao consultar callbacks PIX");
+    throw new Error("Falha ao consultar histórico de callbacks no Inter");
+  }
+}
+
 export const interService = {
   criarCobrancaPix,
   criarCobrancaComVencimentoPix,
   registrarWebhookPix,
   consultarWebhookPix,
+  consultarCallbacks,
 };

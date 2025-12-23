@@ -10,9 +10,17 @@ const webhookInterRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
       console.log("=== Webhook recebido do Inter ===");
       console.dir(body, { depth: 10 });
 
-      // Validate payload first: if invalid, return 400 and stop
-      if (!body?.pix || !Array.isArray(body.pix)) {
-        logger.error({ body }, "Payload PIX inválido");
+      // Validate payload
+      let pixList: any[] = [];
+      
+      if (body?.pix && Array.isArray(body.pix)) {
+        pixList = body.pix;
+      } else if (body?.txid && body?.valor) {
+        // Handle "Validar Webhook" Tool format (Flat object)
+        pixList = [body];
+        logger.info("Payload recebido no formato Flat (Test Tool)");
+      } else {
+        logger.error({ body }, "Payload PIX inválido ou formato desconhecido");
         reply.status(400).send({ received: false, error: "Payload PIX inválido" });
         return;
       }
@@ -22,7 +30,7 @@ const webhookInterRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
       // Process asynchronously (fire-and-forget)
       (async () => {
-        for (const pagamento of body.pix) {
+        for (const pagamento of pixList) {
           try {
             const { txid, valor, horario } = pagamento;
             logger.info({ txid, valor, horario }, "Processando pagamento PIX");
