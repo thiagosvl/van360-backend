@@ -1078,11 +1078,22 @@ export async function upgradePlano(
 
     // Lógica de Trial (Gratuito -> Essencial)
     // Conforme solicitado: 7 dias grátis, sem verificação de histórico anterior
-    if (slugAtual === PLANO_GRATUITO && slugNovo === PLANO_ESSENCIAL) {
+    // CORREÇÃO: Permitir também se slugAtual for ESSENCIAL (ex: tentativa anterior falhou/pendente)
+    // Desde que não seja um downgrade do Profissional
+    if (slugNovo === PLANO_ESSENCIAL && slugAtual !== PLANO_PROFISSIONAL) {
         const trialDays = 7;
         const trialEnd = new Date();
         trialEnd.setDate(trialEnd.getDate() + trialDays);
         
+        // CORREÇÃO: Desativar assinatura atual antes de ativar a nova (Trial)
+        // O banco impede duas assinaturas ativas simultâneas (constraint unique)
+        if (assinaturaAtual) {
+            await supabaseAdmin
+              .from("assinaturas_usuarios")
+              .update({ ativo: false })
+              .eq("id", assinaturaAtual.id);
+        }
+
         // Criar assinatura JÁ ATIVA em modo Trial
         const { data: novaAssinatura, error: assinaturaError } = await supabaseAdmin
           .from("assinaturas_usuarios")
@@ -1091,7 +1102,7 @@ export async function upgradePlano(
             plano_id: novoPlano.id,
             franquia_contratada_cobrancas: franquiaContratada,
             ativo: true, // Ativa imediatamente
-            status: 'ativo', // Status ativo para liberar acesso
+            status: ASSINATURA_USUARIO_STATUS_TRIAL, // Status trial para consistência com cadastro
             billing_mode: "manual",
             preco_aplicado: precoAplicado,
             preco_origem: precoOrigem,
@@ -1106,6 +1117,26 @@ export async function upgradePlano(
 
         logger.info({ usuarioId, plano: novoPlano.slug }, "Upgrade com Trial de 7 dias ativado com sucesso.");
 
+        // Criar cobrança pendente para o final do trial (igual ao registro)
+        const { data: cobranca, error: cobrancaError } = await supabaseAdmin
+          .from("assinaturas_cobrancas")
+          .insert({
+            usuario_id: usuarioId,
+            assinatura_usuario_id: novaAssinatura.id,
+            valor: precoAplicado,
+            status: ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
+            data_vencimento: trialEnd.toISOString().split("T")[0],
+            origem: "inter",
+            billing_type: "upgrade", // CORREÇÃO: Usar 'upgrade' ou 'subscription' para satisfazer constraint do banco
+          })
+          .select()
+          .single();
+
+        if (cobrancaError) {
+             logger.error({ error: cobrancaError, usuarioId }, "Erro ao criar cobrança para trial no upgrade");
+             // Não falhar o upgrade, mas logar erro crítico
+        }
+
         return {
             success: true,
             tipo: "upgrade",
@@ -1113,7 +1144,7 @@ export async function upgradePlano(
             planoId: novoPlano.id,
             precoAplicado,
             precoOrigem,
-            // Não retorna cobrancaId pois não gerou cobrança
+            cobrancaId: cobranca?.id
         };
     }
     
