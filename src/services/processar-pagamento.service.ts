@@ -1,9 +1,9 @@
 import {
-  ASSINATURA_COBRANCA_STATUS_CANCELADA,
-  ASSINATURA_COBRANCA_STATUS_PAGO,
-  ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
-  ASSINATURA_COBRANCA_TIPO_PAGAMENTO_PIX,
-  PLANO_PROFISSIONAL,
+    ASSINATURA_COBRANCA_STATUS_CANCELADA,
+    ASSINATURA_COBRANCA_STATUS_PAGO,
+    ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
+    ASSINATURA_COBRANCA_TIPO_PAGAMENTO_PIX,
+    PLANO_PROFISSIONAL,
 } from "../config/contants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
@@ -209,8 +209,9 @@ async function calcularVigenciaFimEAnchorDate(
   let vigenciaFim: Date;
   let novoAnchorDate: string | null = null;
   const billingType = cobranca.billing_type || "subscription";
+  const isSpecialBilling = ["upgrade", "upgrade_plan", "activation", "expansion"].includes(billingType);
 
-  if (billingType === "upgrade") {
+  if (isSpecialBilling) {
     novoAnchorDate = dataPagamentoStr;
     vigenciaFim = new Date(dataPagamentoDate);
     vigenciaFim.setMonth(vigenciaFim.getMonth() + 1);
@@ -278,8 +279,9 @@ async function calcularVigenciaFimEAnchorDate(
  */
 async function cancelarCobrancasConflitantes(cobranca: Cobranca, logContext: ContextoLog): Promise<void> {
   const billingType = cobranca.billing_type || "subscription";
+  const isSpecialBilling = ["upgrade", "upgrade_plan", "activation", "expansion"].includes(billingType);
 
-  if (billingType === "upgrade") {
+  if (isSpecialBilling) {
     const { error: cancelSubscriptionError } = await supabaseAdmin
       .from("assinaturas_cobrancas")
       .update({ status: ASSINATURA_COBRANCA_STATUS_CANCELADA })
@@ -299,7 +301,7 @@ async function cancelarCobrancasConflitantes(cobranca: Cobranca, logContext: Con
       .update({ status: ASSINATURA_COBRANCA_STATUS_CANCELADA })
       .eq("usuario_id", cobranca.usuario_id)
       .eq("status", ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO)
-      .eq("billing_type", "upgrade")
+      .in("billing_type", ["upgrade", "upgrade_plan", "activation", "expansion"])
       .neq("id", cobranca.id);
 
     if (cancelUpgradeError) {

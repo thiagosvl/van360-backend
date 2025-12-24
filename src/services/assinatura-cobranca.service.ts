@@ -92,7 +92,10 @@ export const assinaturaCobrancaService = {
         // DECISÃO DE ESTRATÉGIA (COB vs COBV)
         const isCobrancaComVencimento = 
             cobranca.billing_type === "subscription" || 
-            cobranca.billing_type === "school_fee";
+            cobranca.billing_type === "school_fee" ||
+            (cobranca.billing_type === "activation" && 
+             cobranca.data_vencimento && 
+             new Date(cobranca.data_vencimento + 'T12:00:00') > new Date());
 
         // VERIFICAÇÃO DE CACHE E EXPIRAÇÃO
         if (cobranca.qr_code_payload && cobranca.inter_txid) {

@@ -55,6 +55,7 @@ export interface RegistroAutomaticoResult {
   location: string;
   inter_txid: string;
   cobrancaId: string;
+  valor: number;
   session: {
     access_token: string;
     refresh_token: string;
@@ -421,7 +422,8 @@ export async function iniciaRegistroPlanoEssencial(
         status: ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
         data_vencimento: dataVencimentoCobranca,
         origem: "inter",
-        billing_type: "upgrade",
+        billing_type: "activation",
+        descricao: `Ativação de Assinatura - Plano Essencial`,
       })
       .select()
       .single();
@@ -477,12 +479,12 @@ export async function iniciarRegistroplanoProfissional(
     let precoAplicado: number;
     let precoOrigem: string;
     let franquiaContratada: number;
-    let planoBaseId: string;
+    let planoSelecionado: any = null;
 
     if (payload.quantidade_personalizada) {
       const { data: planoProfissionalBase, error: planoBaseError } = await supabaseAdmin
         .from("planos")
-        .select("id")
+        .select("id, nome")
         .eq("slug", PLANO_PROFISSIONAL)
         .eq("tipo", "base")
         .single();
@@ -491,13 +493,13 @@ export async function iniciarRegistroplanoProfissional(
         throw new Error("Plano Profissional não encontrado.");
       }
 
-      planoBaseId = planoProfissionalBase.id;
-      const { precoCalculado, quantidadeMinima } = await calcularPrecoPersonalizado(payload.quantidade_personalizada);
+      planoSelecionadoId = planoProfissionalBase.id;
+      planoSelecionado = planoProfissionalBase;
+      const { precoCalculado } = await calcularPrecoPersonalizado(payload.quantidade_personalizada);
       
       precoAplicado = precoCalculado;
       precoOrigem = "personalizado";
       franquiaContratada = payload.quantidade_personalizada;
-      planoSelecionadoId = planoBaseId;
     } else {
       planoSelecionadoId = payload.sub_plano_id || payload.plano_id || "";
       const { data: plano, error: planoError } = await supabaseAdmin
@@ -509,6 +511,8 @@ export async function iniciarRegistroplanoProfissional(
         .single();
 
       if (planoError || !plano) throw new Error("Erro ao encontrar o plano selecionado.");
+      
+      planoSelecionado = plano;
 
       precoAplicado = Number(
         plano.promocao_ativa ? plano.preco_promocional ?? plano.preco : plano.preco
@@ -558,7 +562,8 @@ export async function iniciarRegistroplanoProfissional(
         status: ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
         data_vencimento: dataVencimentoCobranca,
         origem: "inter",
-        billing_type: "upgrade",
+        billing_type: "activation",
+        descricao: `Ativação de Assinatura - Plano ${planoSelecionado.nome}`,
       })
       .select()
       .single();
@@ -586,6 +591,7 @@ export async function iniciarRegistroplanoProfissional(
       location: pixData.location,
       cobrancaId: cobranca.id,
       inter_txid: pixData.interTransactionId,
+      valor: precoAplicado,
       session,
     };
 
@@ -1000,9 +1006,6 @@ function calcularValorProRata(valorMensal: number, dataVencimento?: string): { v
   let diasRestantes = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   
   // Limites: mín 1 dia, máx 30 dias (ciclo padrão)
-  // Se for negativo (vencido), assume 0 ou cobra cheio? 
-  // Se está vencido, o sistema provavelmente deveria ter renovado ou bloqueado. 
-  // Assumindo upgrade durante vigência válida.
   if (diasRestantes < 0) diasRestantes = 0;
   if (diasRestantes > 30) diasRestantes = 30;
 
@@ -1010,7 +1013,12 @@ function calcularValorProRata(valorMensal: number, dataVencimento?: string): { v
   const valorProRata = (valorMensal / 30) * diasRestantes;
   
   // Arredondar para 2 casas decimais
-  const valorCobrar = Math.round(valorProRata * 100) / 100;
+  let valorCobrar = Math.round(valorProRata * 100) / 100;
+
+  // GARANTIA: Se o valor mensal é positivo, cobrar no mínimo 0.01 para não quebrar o Inter
+  if (valorMensal > 0 && valorCobrar < 0.01) {
+    valorCobrar = 0.01;
+  }
 
   return { valorCobrar, diasRestantes };
 }
@@ -1127,7 +1135,8 @@ export async function upgradePlano(
             status: ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
             data_vencimento: trialEnd.toISOString().split("T")[0],
             origem: "inter",
-            billing_type: "upgrade", // CORREÇÃO: Usar 'upgrade' ou 'subscription' para satisfazer constraint do banco
+            billing_type: "upgrade_plan",
+            descricao: `Upgrade de Plano: ${planoAtual?.slug === PLANO_ESSENCIAL ? "Essencial" : "Grátis"} → ${novoPlano.nome} (Período de Testes)`,
           })
           .select()
           .single();
@@ -1194,7 +1203,8 @@ export async function upgradePlano(
         status: ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
         data_vencimento: hoje.toISOString().split("T")[0],
         origem: "inter",
-        billing_type: "upgrade",
+        billing_type: "upgrade_plan",
+        descricao: `Upgrade de Plano: ${planoAtual?.slug === PLANO_ESSENCIAL ? "Essencial" : "Grátis"} → ${novoPlano.nome}`,
       })
       .select()
       .single();
@@ -1208,21 +1218,11 @@ export async function upgradePlano(
       precisaSelecaoManual = calculo.precisaSelecaoManual;
     }
 
-    // Se precisa seleção manual, retornar sem gerar PIX
-    if (precisaSelecaoManual) {
-      return {
-        success: true,
-        precisaSelecaoManual: true,
-        tipo: "upgrade" as const,
-        franquia: franquiaContratada,
-        planoId: novoPlano.id,
-        precoAplicado,
-        precoOrigem,
-        cobrancaId: cobranca.id,
-      };
-    }
-
-    // Se não precisa seleção manual, gerar PIX normalmente
+    // Se precisa seleção manual, retornar sem gerar PIX (SOMENTE PARA DOWNGRADES OU OUTROS CASOS)
+    // PARA PROFISSIONAL: Sempre geramos o PIX. A seleção manual (se necessária) é feita após o pagamento.
+    // Assim o usuário paga logo e libera o fluxo.
+    
+    // Se não precisa seleção manual OU se for Profissional (sempre gera PIX), gerar PIX normalmente
     const usuario = await getUsuarioData(usuarioId);
     const cpf = onlyDigits(usuario.cpfcnpj);
 
@@ -1249,7 +1249,7 @@ export async function upgradePlano(
       inter_txid: pixData.interTransactionId,
       cobrancaId: cobranca.id,
       success: true,
-      precisaSelecaoManual: false,
+      precisaSelecaoManual, // Passamos a flag para o frontend saber se vai precisar abrir a seleção DEPOIS do PIX
     };
 
   } catch (err: any) {
@@ -1493,7 +1493,8 @@ export async function trocarSubplano(
           status: ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
           data_vencimento: hoje.toISOString().split("T")[0],
           origem: "inter",
-          billing_type: "upgrade",
+          billing_type: "upgrade_plan",
+        descricao: `Upgrade de Plano: ${planoAtual.nome} → ${novoSubplano.nome}`,
         })
         .select()
         .single();
@@ -1659,30 +1660,19 @@ export async function trocarSubplano(
           status: ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
           data_vencimento: hoje.toISOString().split("T")[0],
           origem: "inter",
-          billing_type: "upgrade",
+          billing_type: "expansion",
+          descricao: `Expansão de Limite: ${assinaturaAtual.franquia_contratada_cobrancas} → ${franquiaContratada} passageiros`,
         })
         .select()
         .single();
 
       if (cobrancaError) throw cobrancaError;
 
-      // Verificar se precisa seleção manual ANTES de gerar PIX
+      // Verificar se precisa seleção manual
       const calculo = await passageiroService.calcularPassageirosDisponiveis(usuarioId, franquiaContratada);
+      const precisaSelecaoManual = calculo.precisaSelecaoManual;
       
-      if (calculo.precisaSelecaoManual) {
-        return {
-          success: true,
-          precisaSelecaoManual: true,
-          tipo: "upgrade" as const,
-          franquia: franquiaContratada,
-          subplanoId: novoSubplano.id,
-          precoAplicado,
-          precoOrigem,
-          cobrancaId: cobranca.id,
-        };
-      }
-
-      // Se não precisa seleção manual, gerar PIX normalmente
+      // PARA UPGRADES: Geramos o PIX SEMPRE. A seleção manual (se necessária) é feita após o pagamento.
       const usuario = await getUsuarioData(usuarioId);
       const cpf = onlyDigits(usuario.cpfcnpj);
 
@@ -1709,7 +1699,7 @@ export async function trocarSubplano(
         inter_txid: pixData.interTransactionId,
         cobrancaId: cobranca.id,
         success: true,
-        precisaSelecaoManual: false,
+        precisaSelecaoManual,
       };
     } else {
       // Downgrade de subplano: não gerar cobrança, ativar imediatamente
@@ -1964,7 +1954,10 @@ export async function criarAssinaturaProfissionalPersonalizado(
         status: ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
         data_vencimento: hoje.toISOString().split("T")[0],
         origem: "inter",
-        billing_type: billingType,
+        billing_type: billingType === "subscription" ? "activation" : "expansion",
+        descricao: billingType === "subscription" 
+          ? `Ativação de Plano Profissional (${quantidade} passageiros)`
+          : `Expansão de Limite: ${assinaturaAtual.franquia_contratada_cobrancas} → ${quantidade} passageiros`,
         selecao_passageiros_pendente: targetPassengerId 
           ? { passageiroIds: [targetPassengerId], tipo: billingType, franquia: quantidade }
           : null,
@@ -2293,6 +2286,7 @@ export async function gerarPixAposSelecaoManual(
     // Determinar plano_id e franquia
     let planoIdFinal: string;
     let franquiaContratada: number;
+    let planoSelecionado: any = null;
     
     if (quantidadePersonalizada) {
       const { data: planoProfissionalBase, error: planoProfissionalError } = await supabaseAdmin
@@ -2313,11 +2307,18 @@ export async function gerarPixAposSelecaoManual(
       
       planoIdFinal = planoProfissionalBase.id;
       franquiaContratada = quantidadePersonalizada;
+      // Buscar nome do plano profissional para a descrição
+      const { data: planoData } = await supabaseAdmin
+        .from("planos")
+        .select("nome")
+        .eq("id", planoIdFinal)
+        .single();
+      planoSelecionado = planoData;
     } else if (subplanoId) {
       planoIdFinal = subplanoId;
       const { data: subplano, error: subplanoError } = await supabaseAdmin
         .from("planos")
-        .select("franquia_cobrancas_mes")
+        .select("nome, franquia_cobrancas_mes")
         .eq("id", subplanoId)
         .single();
       
@@ -2330,16 +2331,17 @@ export async function gerarPixAposSelecaoManual(
         throw new Error("Erro do sistema: Subplano não encontrado. Por favor, entre em contato com o suporte.");
       }
       
+      planoSelecionado = subplano;
       franquiaContratada = subplano.franquia_cobrancas_mes || 0;
     } else if (planoId) {
       planoIdFinal = planoId;
-      const { data: plano, error: planoError } = await supabaseAdmin
+      const { data: planoData, error: planoError } = await supabaseAdmin
         .from("planos")
-        .select("franquia_cobrancas_mes")
+        .select("id, nome, franquia_cobrancas_mes")
         .eq("id", planoId)
         .single();
       
-      if (planoError || !plano) {
+      if (planoError || !planoData) {
         logger.error({ 
           error: planoError?.message, 
           usuarioId, 
@@ -2348,7 +2350,8 @@ export async function gerarPixAposSelecaoManual(
         throw new Error("Erro do sistema: Plano não encontrado. Por favor, entre em contato com o suporte.");
       }
       
-      franquiaContratada = plano.franquia_cobrancas_mes || 0;
+      planoSelecionado = planoData;
+      franquiaContratada = planoSelecionado.franquia_cobrancas_mes || 0;
     } else {
       logger.error({ 
         usuarioId, 
@@ -2391,7 +2394,10 @@ export async function gerarPixAposSelecaoManual(
         status: ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
         data_vencimento: hoje.toISOString().split("T")[0],
         origem: "inter",
-        billing_type: "upgrade",
+        billing_type: tipo === "upgrade" ? "upgrade_plan" : "activation",
+        descricao: tipo === "upgrade" 
+          ? `Upgrade de Plano: ${planoSelecionado?.nome || "Profissional"}`
+          : `Ativação de Plano: ${planoSelecionado?.nome || "Profissional"}`,
       })
       .select()
       .single();
