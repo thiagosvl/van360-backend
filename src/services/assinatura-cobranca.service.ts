@@ -1,8 +1,6 @@
-import { PLANO_PROFISSIONAL } from "../config/contants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { interService } from "./inter.service.js";
-import { passageiroService } from "./passageiro.service.js";
 
 export const assinaturaCobrancaService = {
     async getAssinaturaCobranca(id: string): Promise<any> {
@@ -46,7 +44,6 @@ export const assinaturaCobrancaService = {
         location: string;
         inter_txid: string;
         cobrancaId: string;
-        precisaSelecaoManual?: boolean;
         tipo?: "upgrade" | "downgrade";
         franquia?: number;
     }> {
@@ -138,40 +135,7 @@ export const assinaturaCobrancaService = {
             franquia?: number;
         } | null;
 
-        // Se não há seleção salva, verificar se precisa seleção manual
-        if (!selecaoSalva || !selecaoSalva.passageiroIds || selecaoSalva.passageiroIds.length === 0) {
-            const assinatura = cobranca.assinatura_usuarios as any;
-            if (assinatura) {
-                const plano = assinatura.planos as any;
-                const slugBase = plano.parent?.slug ?? plano.slug;
-                
-                // Verificar se é plano Profissional e se precisa seleção manual
-                if (slugBase === PLANO_PROFISSIONAL) {
-                    const franquia = assinatura.franquia_contratada_cobrancas || 0;
-                    const calculo = await passageiroService.calcularPassageirosDisponiveis(cobranca.usuario_id, franquia);
-                    
-                    if (calculo.precisaSelecaoManual) {
-                        logger.warn({ 
-                            cobrancaId, 
-                            usuarioId: cobranca.usuario_id,
-                            franquia,
-                            totalPossivel: calculo.totalPossivel,
-                            jaAtivos: calculo.jaAtivos
-                        }, "Tentativa de gerar PIX mas precisa seleção manual - retornando flag");
-                        
-                        return {
-                            qrCodePayload: "",
-                            location: "",
-                            inter_txid: "",
-                            cobrancaId: cobranca.id,
-                            precisaSelecaoManual: true,
-                            tipo: "upgrade" as const,
-                            franquia,
-                        };
-                    }
-                }
-            }
-        }
+
 
         // Buscar dados do usuário
         const usuario = cobranca.usuarios as any;

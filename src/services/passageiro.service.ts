@@ -409,48 +409,7 @@ export const passageiroService = {
         return count || 0;
     },
 
-    async calcularPassageirosDisponiveis(
-        usuarioId: string,
-        franquiaNova: number
-    ): Promise<{
-        jaAtivos: number;
-        disponiveisParaAtivar: number;
-        totalPossivel: number;
-        precisaSelecaoManual: boolean;
-    }> {
-        const { count: jaAtivos } = await supabaseAdmin
-            .from("passageiros")
-            .select("*", { count: "exact", head: true })
-            .eq("usuario_id", usuarioId)
-            .eq("ativo", true)
-            .eq("enviar_cobranca_automatica", true);
 
-        const { count: disponiveis } = await supabaseAdmin
-            .from("passageiros")
-            .select("*", { count: "exact", head: true })
-            .eq("usuario_id", usuarioId)
-            .eq("ativo", true)
-            .eq("enviar_cobranca_automatica", false)
-            .or("motivo_desativacao.is.null,motivo_desativacao.neq.manual");
-
-        const jaAtivosCount = jaAtivos || 0;
-        const disponiveisCount = disponiveis || 0;
-        const totalPossivel = jaAtivosCount + disponiveisCount;
-        
-        // Só precisa seleção manual se o total de passageiros que PODEM ter cobrança automática
-        // for MAIOR que a franquia. Se for igual ou menor, não precisa seleção manual.
-        // Exemplo: franquia 10, já ativos 9, disponíveis 2 = total 11 > 10 = precisa seleção
-        // Exemplo: franquia 10, já ativos 9, disponíveis 1 = total 10 = 10 = NÃO precisa seleção
-        // Exemplo: franquia 10, já ativos 10, disponíveis 0 = total 10 = 10 = NÃO precisa seleção
-        const precisaSelecaoManual = totalPossivel > franquiaNova;
-
-        return {
-            jaAtivos: jaAtivosCount,
-            disponiveisParaAtivar: disponiveisCount,
-            totalPossivel,
-            precisaSelecaoManual,
-        };
-    },
 
     async ativarPassageirosAutomaticamente(
         usuarioId: string,
@@ -521,99 +480,9 @@ export const passageiroService = {
         };
     },
 
-    async listarPassageirosParaSelecao(
-        usuarioId: string,
-        tipo: "upgrade" | "downgrade",
-        franquia: number
-    ): Promise<any[]> {
-        if (tipo === "upgrade") {
-            const { data } = await supabaseAdmin
-                .from("passageiros")
-                .select("id, nome, nome_responsavel, email_responsavel, telefone_responsavel, enviar_cobranca_automatica")
-                .eq("usuario_id", usuarioId)
-                .eq("ativo", true)
-                .or("motivo_desativacao.is.null,motivo_desativacao.neq.manual")
-                .order("nome", { ascending: true });
 
-            return data?.map((p) => ({
-                ...p,
-                selecionado: p.enviar_cobranca_automatica === true,
-            })) || [];
-        } else {
-            const { data } = await supabaseAdmin
-                .from("passageiros")
-                .select("id, nome, nome_responsavel, email_responsavel, telefone_responsavel, enviar_cobranca_automatica")
-                .eq("usuario_id", usuarioId)
-                .eq("ativo", true)
-                .eq("enviar_cobranca_automatica", true)
-                .order("nome", { ascending: true });
 
-            return data?.map((p) => ({
-                ...p,
-                selecionado: true,
-            })) || [];
-        }
-    },
 
-    async confirmarSelecaoPassageiros(
-        usuarioId: string,
-        passageiroIds: string[],
-        franquia: number
-    ): Promise<{ ativados: number; desativados: number }> {
-        // Validações prévias
-        if (passageiroIds.length > franquia) {
-            throw new Error("Quantidade de passageiros selecionados excede a franquia");
-        }
-
-        const { data: todosPassageiros, error: passageirosError } = await supabaseAdmin
-            .from("passageiros")
-            .select("id, enviar_cobranca_automatica")
-            .eq("usuario_id", usuarioId)
-            .eq("ativo", true);
-
-        if (passageirosError) {
-            throw new Error("Erro ao buscar passageiros: " + passageirosError.message);
-        }
-
-        // Validar que todos os IDs passados pertencem ao usuário e estão ativos
-        const idsValidos = todosPassageiros?.map(p => p.id) || [];
-        const idsInvalidos = passageiroIds.filter(id => !idsValidos.includes(id));
-        
-        if (idsInvalidos.length > 0) {
-            throw new Error(`Passageiros inválidos ou não pertencem ao usuário: ${idsInvalidos.join(", ")}`);
-        }
-
-        const idsParaAtivar = passageiroIds;
-        const idsParaDesativar = todosPassageiros
-            ?.filter((p) => !idsParaAtivar.includes(p.id) && p.enviar_cobranca_automatica === true)
-            .map((p) => p.id) || [];
-
-        if (idsParaAtivar.length > 0) {
-            await supabaseAdmin
-                .from("passageiros")
-                .update({
-                    enviar_cobranca_automatica: true,
-                    motivo_desativacao: null,
-                })
-                .in("id", idsParaAtivar)
-                .neq("motivo_desativacao", "manual");
-        }
-
-        if (idsParaDesativar.length > 0) {
-            await supabaseAdmin
-                .from("passageiros")
-                .update({
-                    enviar_cobranca_automatica: false,
-                    motivo_desativacao: "automatico",
-                })
-                .in("id", idsParaDesativar);
-        }
-
-        return {
-            ativados: idsParaAtivar.length,
-            desativados: idsParaDesativar.length,
-        };
-    },
 
     async desativarAutomacaoTodosPassageiros(usuarioId: string): Promise<number> {
         if (!usuarioId) throw new Error("Usuário obrigatório");

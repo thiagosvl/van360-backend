@@ -83,19 +83,7 @@ export async function processarPagamentoCobranca(
     // 4. Desativar outras assinaturas ativas (se necessário)
     await desativarOutrasAssinaturas(cobranca, logContext);
 
-    // 5. Verificar se há seleção de passageiros salva na cobrança
-    const { data: cobrancaCompleta } = await supabaseAdmin
-      .from("assinaturas_cobrancas")
-      .select("selecao_passageiros_pendente")
-      .eq("id", cobranca.id)
-      .single();
 
-    const selecaoSalva = cobrancaCompleta?.selecao_passageiros_pendente as {
-      passageiroIds?: string[];
-      tipo?: "upgrade" | "downgrade";
-      franquia?: number;
-      criadoEm?: string;
-    } | null;
 
     // 6. Ativar assinatura
     await ativarAssinatura(cobranca, vigenciaFim, novoAnchorDate, logContext);
@@ -103,54 +91,26 @@ export async function processarPagamentoCobranca(
     // 7. Ativar usuário
     await ativarUsuario(cobranca, logContext);
 
-    // 8. Aplicar seleção de passageiros (se houver) ou ativar automaticamente
-    // 8. Aplicar seleção de passageiros (se houver)
-    if (selecaoSalva?.passageiroIds && selecaoSalva.passageiroIds.length > 0) {
-      // Aplicar seleção salva
-      try {
-        const resultado = await passageiroService.confirmarSelecaoPassageiros(
-          cobranca.usuario_id,
-          selecaoSalva.passageiroIds,
-          selecaoSalva.franquia || 0
-        );
-        
-        logger.info(
-          {
-            ...logContext,
-            ativados: resultado.ativados,
-            desativados: resultado.desativados,
-            passageirosSelecionados: selecaoSalva.passageiroIds.length,
-          },
-          "Seleção de passageiros aplicada após confirmação do pagamento"
-        );
 
-        // Limpar seleção da cobrança
-        await supabaseAdmin
-          .from("assinaturas_cobrancas")
-          .update({ selecao_passageiros_pendente: null })
-          .eq("id", cobranca.id);
-      } catch (selecaoError: any) {
-        logger.error(
-          {
-            ...logContext,
-            error: selecaoError.message,
-            stack: selecaoError.stack,
-          },
-          "Erro ao aplicar seleção de passageiros salva"
-        );
-        // Não lançar erro aqui - a ativação da assinatura já foi feita
-      }
-    }
 
     // 9. Preencher slots restantes automaticamente (Auto-Fill)
     // Busca informações da assinatura para determinar franquia e plano
-    const { assinaturaPendente } = await verificarSelecaoManualNecessaria(
-      cobranca,
-      logContext
-    );
-
+    const { data: assinaturaPendente } = await supabaseAdmin
+        .from("assinaturas_usuarios")
+        .select(`
+            id,
+            franquia_contratada_cobrancas,
+            planos:plano_id (
+                slug,
+                parent:parent_id (
+                    slug
+                )
+            )
+        `)
+        .eq("id", cobranca.assinatura_usuario_id)
+        .single();
+    
     // Se há assinatura pendente, tentar ativar passageiros automaticamente até atingir a franquia
-    // (Isso preenche tanto o caso onde não houve seleção, quanto o restante após uma seleção parcial)
     if (assinaturaPendente) {
       await ativarPassageirosAutomaticamente(cobranca, assinaturaPendente, logContext);
     }
@@ -353,99 +313,7 @@ async function desativarOutrasAssinaturas(cobranca: Cobranca, logContext: Contex
   }
 }
 
-/**
- * Verifica se precisa seleção manual de passageiros antes de ativar a assinatura
- */
-async function verificarSelecaoManualNecessaria(
-  cobranca: Cobranca,
-  logContext: ContextoLog
-): Promise<{ precisaSelecaoManual: boolean; assinaturaPendente: any }> {
-  const { data: assinaturaPendente, error: assinaturaPendenteError } = await supabaseAdmin
-    .from("assinaturas_usuarios")
-    .select(`
-      id,
-      franquia_contratada_cobrancas,
-      planos:plano_id (
-        slug,
-        parent:parent_id (
-          slug
-        )
-      )
-    `)
-    .eq("id", cobranca.assinatura_usuario_id)
-    .single();
 
-  let precisaSelecaoManual = false;
-
-  if (!assinaturaPendenteError && assinaturaPendente) {
-    const plano = assinaturaPendente.planos as any;
-    const slugBase = plano.parent?.slug ?? plano.slug;
-
-    logger.info(
-      {
-        ...logContext,
-        slugBase,
-        franquia: assinaturaPendente.franquia_contratada_cobrancas,
-      },
-      "Verificando se precisa seleção manual de passageiros"
-    );
-
-    if (slugBase === PLANO_PROFISSIONAL) {
-      const franquia = assinaturaPendente.franquia_contratada_cobrancas || 0;
-      const calculo = await passageiroService.calcularPassageirosDisponiveis(cobranca.usuario_id, franquia);
-      precisaSelecaoManual = calculo.precisaSelecaoManual;
-
-      logger.info(
-        {
-          ...logContext,
-          usuarioId: cobranca.usuario_id,
-          franquia,
-          jaAtivos: calculo.jaAtivos,
-          disponiveisParaAtivar: calculo.disponiveisParaAtivar,
-          totalPossivel: calculo.totalPossivel,
-          precisaSelecaoManual,
-        },
-        "Resultado do cálculo de passageiros disponíveis"
-      );
-
-      if (precisaSelecaoManual) {
-        logger.warn(
-          {
-            ...logContext,
-            usuarioId: cobranca.usuario_id,
-            franquia,
-            totalPossivel: calculo.totalPossivel,
-            jaAtivos: calculo.jaAtivos,
-          },
-          "Pagamento confirmado mas precisa seleção manual - ativando assinatura mas não passageiros"
-        );
-      } else {
-        logger.info(
-          {
-            ...logContext,
-            usuarioId: cobranca.usuario_id,
-            franquia,
-            totalPossivel: calculo.totalPossivel,
-          },
-          "Não precisa seleção manual - passageiros serão ativados automaticamente após ativação da assinatura"
-        );
-      }
-    } else {
-      logger.info({ ...logContext, slugBase }, "Não é plano Profissional - não precisa verificar seleção manual");
-    }
-  } else {
-    logger.warn(
-      {
-        ...logContext,
-        assinaturaPendenteError: assinaturaPendenteError?.message,
-        temAssinaturaPendente: !!assinaturaPendente,
-      },
-      "Erro ao buscar assinatura pendente ou assinatura não encontrada"
-    );
-  }
-
-  return { precisaSelecaoManual, assinaturaPendente };
-}
 
 /**
  * Ativa a assinatura do usuário
@@ -516,7 +384,6 @@ async function ativarPassageirosAutomaticamente(
     {
       ...logContext,
       slugBase,
-      precisaSelecaoManual: false,
       isProfissional: slugBase === PLANO_PROFISSIONAL,
     },
     "Verificando se deve ativar passageiros automaticamente"

@@ -2,6 +2,7 @@ import { ASSINATURA_COBRANCA_STATUS_CANCELADA, ASSINATURA_COBRANCA_STATUS_PENDEN
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { cleanString, onlyDigits } from "../utils/utils.js";
+import { getBillingConfig } from "./configuracao.service.js";
 import { interService } from "./inter.service.js";
 import { passageiroService } from "./passageiro.service.js";
 
@@ -708,7 +709,7 @@ export interface UpgradePlanoResult {
   inter_txid?: string;
   cobrancaId?: string;
   success?: boolean;
-  precisaSelecaoManual?: boolean;
+
   tipo?: "upgrade" | "downgrade";
   franquia?: number;
   ativados?: number;
@@ -727,7 +728,7 @@ export interface TrocaSubplanoResult {
   inter_txid?: string;
   cobrancaId?: string;
   success: boolean;
-  precisaSelecaoManual?: boolean;
+
   tipo?: "upgrade" | "downgrade";
   franquia?: number;
   ativados?: number;
@@ -742,7 +743,7 @@ export interface CriarAssinaturaPersonalizadaResult {
   inter_txid?: string;
   cobrancaId?: string;
   success?: boolean;
-  precisaSelecaoManual?: boolean;
+
   tipo?: "upgrade" | "downgrade";
   franquia?: number;
   ativados?: number;
@@ -892,22 +893,26 @@ export async function calcularPrecoPersonalizado(quantidade: number, ignorarMini
 }> {
   console.log("DEBUG: calcularPrecoPersonalizado chamado", { quantidade, ignorarMinimo });
 
-  const { data: planoProfissionalBase, error: planoBaseError } = await supabaseAdmin
+  // Buscar configurações de billing (apenas valores de blocos agora)
+  const billingConfig = await getBillingConfig();
+
+  // 1. Buscar o Plano Profissional (Pai)
+  const { data: planoPai, error: planoPaiError } = await supabaseAdmin
     .from("planos")
     .select("id")
     .eq("slug", PLANO_PROFISSIONAL)
     .eq("tipo", "base")
     .single();
 
-  if (planoBaseError || !planoProfissionalBase) {
-    throw new Error("Plano Profissional não encontrado.");
+  if (planoPaiError || !planoPai) {
+    throw new Error("Plano Profissional base não encontrado.");
   }
 
-  // Buscar TODOS os subplanos para encontrar o melhor encaixe
+  // 2. Buscar TODOS os subplanos ordenados por franquia (Maior -> Menor)
   const { data: subplanos, error: subplanosError } = await supabaseAdmin
     .from("planos")
     .select("id, preco, preco_promocional, promocao_ativa, franquia_cobrancas_mes")
-    .eq("parent_id", planoProfissionalBase.id)
+    .eq("parent_id", planoPai.id)
     .eq("tipo", "sub")
     .order("franquia_cobrancas_mes", { ascending: false });
 
@@ -915,23 +920,62 @@ export async function calcularPrecoPersonalizado(quantidade: number, ignorarMini
     throw new Error("Subplanos do Plano Profissional não encontrados.");
   }
 
-  // Identificar o maior subplano para validação de mínimo (limite do sistema para cadastro)
-  const maiorSubplano = subplanos[0]; // Ordenado DESC
-  const franquiaMaior = maiorSubplano.franquia_cobrancas_mes || 0;
-  const quantidadeMinima = franquiaMaior + 1;
+  // 3. Determinar o Plano Base para Enterprise (O maior disponível)
+  const planoBaseEnterprise = subplanos[0]; // Como ordenamos DESC, o primeiro é o maior
+  const franquiaBase = planoBaseEnterprise.franquia_cobrancas_mes || 0;
+  
+  // -- LÓGICA ENTERPRISE (Acima da franquia do maior plano) --
+  if (quantidade > franquiaBase) {
+      console.log("DEBUG: Lógica Enterprise Ativada (Dinâmica)", { quantidade, franquiaBase, planoBaseId: planoBaseEnterprise.id });
+      
+      const precoBase = Number(
+        planoBaseEnterprise.promocao_ativa 
+          ? (planoBaseEnterprise.preco_promocional ?? planoBaseEnterprise.preco)
+          : planoBaseEnterprise.preco
+      );
 
-  // Validação de Mínimo: só aplica se !ignorarMinimo (Cadastro)
-  if (!ignorarMinimo && quantidade < quantidadeMinima) {
-      throw new Error(`A quantidade mínima é ${quantidadeMinima} cobranças (maior subplano: ${franquiaMaior} + 1).`);
+      const excedente = quantidade - franquiaBase;
+      const blocosAdicionais = Math.ceil(excedente / billingConfig.tamanhoBloco);
+      const precoAdicional = blocosAdicionais * billingConfig.incrementoBloco;
+      // Preço Final = Preço do Maior Plano + Adicionais
+      const precoCalculado = precoBase + precoAdicional;
+      
+      return {
+          precoCalculado: Math.round(precoCalculado * 100) / 100,
+          quantidadeMinima: franquiaBase + 1
+      };
   }
 
-  // Lógica "Best Fit": Encontrar o plano mais adequado para usar como base de cálculo
-  // Procura o maior plano que seja menor ou igual à quantidade solicitada
-  // Ex: Qtd=15. Planos=[20, 10]. 20 <= 15 False. 10 <= 15 True. Referência = 10.
-  let planoReferencia = subplanos.find(p => (p.franquia_cobrancas_mes || 0) <= quantidade);
+  //-- LÓGICA PADRÃO (Encaixe nos Subplanos existentes) --
+
+  // Identificar limite mínimo do sistema
+  // Como subplanos[0] é o maior, a lógica de minimo geral segue a mesma: maior + 1 (para ser enterprise)
+  // Mas para planos menores, validamos se existe algum plano que atenda.
+  const quantidadeMinima = franquiaBase + 1; // Para fins de "Enterprise", mas aqui estamos no flow padrão
+
+  // Validação de Mínimo apenas se for estritamente um pedido Enterprise invalido
+  // Se q=20 e planos=[90, 60, 25], 20 < 91 ok.
+
+  // Lógica "Best Fit": Encontrar o plano mais adequado
+  // Procura o MENOR plano que suporte a quantidade.
+  // Ordenação atual: [90, 60, 25].
+  // Queremos Q=50. 
+  // 90 >= 50 (cand). 60 >= 50 (cand). 25 >= 50 (nao).
+  // Dentre os candidatos, pegamos o último (menor franquia que atende).
   
-  // Se não encontrar (Qtd < Menor Plano), usa o menor plano (último da lista)
-  if (!planoReferencia) {
+  // Revertemos para ASC para facilitar "find" do menor que serve, ou usamos findLast em array DESC
+  // Vamos filtrar os que servem e pegar o menor (menor preço/franquia)
+  const candidatos = subplanos.filter(p => (p.franquia_cobrancas_mes || 0) >= quantidade);
+  
+  let planoReferencia;
+  
+  if (candidatos.length > 0) {
+      // O último candidato é o menor plano que ainda suporta a quantidade (pois array original é DESC)
+      planoReferencia = candidatos[candidatos.length - 1];
+  } else {
+      // Se ninguem suporta, seria Enterprise. Mas já passou pelo if (quantidade > franquiaBase).
+      // Então teoricamente impossivel chegar aqui, salvo se quantidade < 0.
+      // Fallback para o menor plano absoluto
       planoReferencia = subplanos[subplanos.length - 1];
   }
 
@@ -942,19 +986,8 @@ export async function calcularPrecoPersonalizado(quantidade: number, ignorarMini
       : planoReferencia.preco
   );
 
-  // Calcular Valor Unitário baseado apenas na referência
   const valorUnitario = precoRef / franquiaRef;
-  
-  // Calcular Preço Final Total: Quantidade * Valor Unitário
-  // Isso garante que o valor seja sempre proporcional e positivo
   const precoCalculado = quantidade * valorUnitario;
-
-  console.log("DEBUG: Calculo Finalizado", { 
-      planoReferenciaFranquia: franquiaRef, 
-      precoRef, 
-      valorUnitario, 
-      precoCalculado 
-  });
 
   return {
     precoCalculado: Math.round(precoCalculado * 100) / 100,
@@ -991,9 +1024,26 @@ function calcularPrecosEFranquia(plano: any): {
  * @param dataVencimento - Data de fim da vigência atual
  * @returns Objeto com valorCobrar e diasRestantes
  */
-function calcularValorProRata(valorMensal: number, dataVencimento?: string): { valorCobrar: number, diasRestantes: number } {
+/**
+ * Helper: Calcula valor pro-rata baseado na data de vencimento (vigencia_fim)
+ * @param valorMensal - Valor mensal integral a ser considerado (ou diferença mensal)
+ * @param dataVencimento - Data de fim da vigência atual
+ * @param options - Opções extras (valorMinimo, diasBase)
+ * @returns Objeto com valorCobrar e diasRestantes
+ */
+function calcularValorProRata(
+  valorMensal: number, 
+  dataVencimento?: string,
+  options?: { valorMinimo?: number, diasBase?: number }
+): { valorCobrar: number, diasRestantes: number } {
+  const diasBase = options?.diasBase || 30;
+  const valorMinimo = options?.valorMinimo ?? 0.01;
+
   if (!dataVencimento || valorMensal <= 0) {
-    return { valorCobrar: valorMensal > 0 ? valorMensal : 0, diasRestantes: 30 };
+    // Se valorMensal for 0 mas houver um mínimo configurado (para expansão), retornar o mínimo se for exigido externamente
+    // Mas aqui é apenas cálculo matemático. A imposição do mínimo ocorre baseada na lógica de negócio.
+    // Retornamos 0 aqui se valorMensal for 0.
+    return { valorCobrar: valorMensal > 0 ? valorMensal : 0, diasRestantes: diasBase };
   }
 
   const hoje = new Date();
@@ -1005,19 +1055,19 @@ function calcularValorProRata(valorMensal: number, dataVencimento?: string): { v
   // Converter para dias (arredondando para cima para cobrar o dia atual se houver fração)
   let diasRestantes = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   
-  // Limites: mín 1 dia, máx 30 dias (ciclo padrão)
+  // Limites: mín 1 dia, máx diasBase
   if (diasRestantes < 0) diasRestantes = 0;
-  if (diasRestantes > 30) diasRestantes = 30;
+  if (diasRestantes > diasBase) diasRestantes = diasBase;
 
-  // Calculo Pro-rata: (Valor / 30) * Dias
-  const valorProRata = (valorMensal / 30) * diasRestantes;
+  // Calculo Pro-rata: (Valor / diasBase) * Dias
+  const valorProRata = (valorMensal / diasBase) * diasRestantes;
   
   // Arredondar para 2 casas decimais
   let valorCobrar = Math.round(valorProRata * 100) / 100;
 
-  // GARANTIA: Se o valor mensal é positivo, cobrar no mínimo 0.01 para não quebrar o Inter
-  if (valorMensal > 0 && valorCobrar < 0.01) {
-    valorCobrar = 0.01;
+  // GARANTIA: Se valorMensal > 0 e deu centavos, cobrar mínimo
+  if (valorMensal > 0 && valorCobrar < valorMinimo) {
+    valorCobrar = valorMinimo;
   }
 
   return { valorCobrar, diasRestantes };
@@ -1211,17 +1261,6 @@ export async function upgradePlano(
 
     if (cobrancaError) throw cobrancaError;
 
-    // Verificar se precisa seleção manual ANTES de gerar PIX
-    let precisaSelecaoManual = false;
-    if (novoPlano.slug === PLANO_PROFISSIONAL) {
-      const calculo = await passageiroService.calcularPassageirosDisponiveis(usuarioId, franquiaContratada);
-      precisaSelecaoManual = calculo.precisaSelecaoManual;
-    }
-
-    // Se precisa seleção manual, retornar sem gerar PIX (SOMENTE PARA DOWNGRADES OU OUTROS CASOS)
-    // PARA PROFISSIONAL: Sempre geramos o PIX. A seleção manual (se necessária) é feita após o pagamento.
-    // Assim o usuário paga logo e libera o fluxo.
-    
     // Se não precisa seleção manual OU se for Profissional (sempre gera PIX), gerar PIX normalmente
     const usuario = await getUsuarioData(usuarioId);
     const cpf = onlyDigits(usuario.cpfcnpj);
@@ -1249,7 +1288,6 @@ export async function upgradePlano(
       inter_txid: pixData.interTransactionId,
       cobrancaId: cobranca.id,
       success: true,
-      precisaSelecaoManual, // Passamos a flag para o frontend saber se vai precisar abrir a seleção DEPOIS do PIX
     };
 
   } catch (err: any) {
@@ -1501,20 +1539,12 @@ export async function trocarSubplano(
 
       if (cobrancaError) throw cobrancaError;
 
-      // Verificar se precisa seleção manual ANTES de gerar PIX
-      const calculo = await passageiroService.calcularPassageirosDisponiveis(usuarioId, franquiaContratada);
-      
-      if (calculo.precisaSelecaoManual) {
-        return {
-          success: true,
-          precisaSelecaoManual: true,
-          tipo: "upgrade" as const,
-          franquia: franquiaContratada,
-          subplanoId: novoSubplano.id,
-          precoAplicado,
-          precoOrigem,
-          cobrancaId: cobranca.id,
-        };
+      // Validar que a nova franquia é MAIOR ou IGUAL a atual (Regra de Negócio: Não permite downgrade de franquia)
+      // Exception: Se franquia for igual (ex: troca de ciclo ou ajuste de preço), permitimos? Assumimos que trocarSubplano é para mudar franquia.
+      // Se nova < atual => Erro.
+      const franquiaAtual = assinaturaAtual.franquia_contratada_cobrancas || 0;
+      if (franquiaContratada < franquiaAtual) {
+         throw new Error("Não é permitido reduzir a franquia do plano Profissional. Entre em contato com o suporte.");
       }
 
       // Se não precisa seleção manual, gerar PIX normalmente
@@ -1544,40 +1574,42 @@ export async function trocarSubplano(
         inter_txid: pixData.interTransactionId,
         cobrancaId: cobranca.id,
         success: true,
-        precisaSelecaoManual: false,
       };
     }
 
     // Calcular preços e franquia do novo subplano (uma única vez)
     const { precoAplicado, precoOrigem, franquiaContratada } = calcularPrecosEFranquia(novoSubplano);
 
+    // Buscar configs de billing
+    const billingConfig = await getBillingConfig();
+
     // Calcular diferença (usuário já está no Profissional) usando Pro-rata
     const precoAtual = Number(assinaturaAtual.preco_aplicado || 0);
     const diferencaMensal = precoAplicado - precoAtual;
     const franquiaAtual = assinaturaAtual.franquia_contratada_cobrancas || 0;
-    const isDowngrade = diferencaMensal < 0 || (diferencaMensal === 0 && franquiaContratada < franquiaAtual);
+    
+    // CORREÇÃO: Upgrade considera AUMENTO DE FRANQUIA, mesmo que preço seja igual (diferencaMensal == 0)
+    // Se diff < 0 é downgrade. Se diff > 0 é upgrade. Se diff == 0, desempata pela franquia.
+    const isDowngrade = diferencaMensal < 0 || (diferencaMensal === 0 && franquiaContratada <= franquiaAtual);
 
     // Calcular valor a cobrar (Pro-rata)
-    const { valorCobrar: diferenca, diasRestantes } = calcularValorProRata(
+    let { valorCobrar: diferenca, diasRestantes } = calcularValorProRata(
       diferencaMensal,
-      assinaturaAtual.vigencia_fim
+      assinaturaAtual.vigencia_fim,
+      { valorMinimo: billingConfig.valorMinimoProRata, diasBase: billingConfig.diasProRata }
     );
+    
+    // CORREÇÃO CRÍTICA: Se for Upgrade de Franquia com Diferença Zero (teste ou brinde), cobrar MÍNIMO SIMBÓLICO
+    // para garantir geração de fluxo de PIX.
+    if (!isDowngrade && diferenca < billingConfig.valorMinimoProRata) {
+        diferenca = billingConfig.valorMinimoProRata;
+    }
 
 
     // Se for downgrade, verificar ANTES de fazer qualquer alteração se precisa seleção manual
-    if (isDowngrade) {
-      const calculo = await passageiroService.calcularPassageirosDisponiveis(usuarioId, franquiaContratada);
-      
-      // Se tem mais passageiros ativos do que a nova franquia, precisa seleção manual
-      if (calculo.jaAtivos > franquiaContratada) {
-        return {
-          success: true,
-          precisaSelecaoManual: true,
-          tipo: "downgrade" as const,
-          franquia: franquiaContratada,
-          subplanoId: novoSubplano.id, // Informação necessária para fazer o downgrade depois
-        };
-      }
+    // Se for downgrade (franquia menor), disparar ERRO
+    if (franquiaContratada < franquiaAtual) {
+       throw new Error("Não é permitido reduzir a franquia do plano Profissional. Entre em contato com o suporte.");
     }
 
     // Manter vigência original (incluindo vigencia_fim)
@@ -1668,11 +1700,8 @@ export async function trocarSubplano(
 
       if (cobrancaError) throw cobrancaError;
 
-      // Verificar se precisa seleção manual
-      const calculo = await passageiroService.calcularPassageirosDisponiveis(usuarioId, franquiaContratada);
-      const precisaSelecaoManual = calculo.precisaSelecaoManual;
-      
-      // PARA UPGRADES: Geramos o PIX SEMPRE. A seleção manual (se necessária) é feita após o pagamento.
+
+      // PARA UPGRADES: Geramos o PIX SEMPRE.
       const usuario = await getUsuarioData(usuarioId);
       const cpf = onlyDigits(usuario.cpfcnpj);
 
@@ -1699,7 +1728,6 @@ export async function trocarSubplano(
         inter_txid: pixData.interTransactionId,
         cobrancaId: cobranca.id,
         success: true,
-        precisaSelecaoManual,
       };
     } else {
       // Downgrade de subplano: não gerar cobrança, ativar imediatamente
@@ -1792,7 +1820,7 @@ export async function trocarSubplano(
       // Não precisa fazer nada com passageiros (já verificamos que não excede)
       return {
         success: true,
-        precisaSelecaoManual: false,
+
       };
     }
   } catch (err: any) {
@@ -1801,14 +1829,6 @@ export async function trocarSubplano(
   }
 }
 
-/**
- * Cria assinatura do plano Profissional com quantidade personalizada de cobranças
- * - Calcula preço baseado na quantidade
- * - Limpa assinaturas pendentes antigas
- * - Cria nova assinatura (ativa = false até pagamento)
- * - Gera cobrança PIX
- * - Mantém vigência original se houver assinatura atual
- */
 /**
  * Cria ou atualiza assinatura do plano Profissional com quantidade personalizada de cobranças
  * - Se for redução (downgrade): atualiza assinatura atual sem gerar cobrança
@@ -1859,41 +1879,9 @@ export async function criarAssinaturaProfissionalPersonalizado(
       throw new Error("Plano Profissional não encontrado.");
     }
 
-    // Se for downgrade, verificar ANTES de fazer qualquer alteração se precisa seleção manual
+    // Regra de negócio: não permitir downgrade
     if (isDowngrade && assinaturaAtual) {
-      const calculo = await passageiroService.calcularPassageirosDisponiveis(usuarioId, quantidade);
-      
-      // Se tem mais passageiros ativos do que a nova franquia, precisa seleção manual
-      if (calculo.jaAtivos > quantidade) {
-        return {
-          success: true,
-          precisaSelecaoManual: true,
-          tipo: "downgrade" as const,
-          franquia: quantidade,
-          quantidadePersonalizada: quantidade, // Informação necessária para fazer o downgrade depois
-        };
-      }
-
-      // Se não precisa seleção manual, fazer o downgrade agora
-      // Cancelar cobranças pendentes
-      await cancelarCobrancaPendente(usuarioId);
-
-      // Atualizar assinatura atual com nova quantidade e preço
-      await supabaseAdmin
-        .from("assinaturas_usuarios")
-        .update({
-          franquia_contratada_cobrancas: quantidade,
-          preco_aplicado: precoCalculado,
-          preco_origem: "personalizado",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", assinaturaAtual.id);
-
-      // Não precisa fazer nada com passageiros (já verificamos que não excede)
-      return {
-        success: true,
-        precisaSelecaoManual: false,
-      };
+      throw new Error("Não é permitido reduzir a franquia do plano Profissional. Entre em contato com o suporte.");
     }
 
     // Se for upgrade ou novo usuário, criar assinatura e cobrança primeiro
@@ -1938,9 +1926,20 @@ export async function criarAssinaturaProfissionalPersonalizado(
       if (precoAtual <= 0) {
         valorCobranca = precoCalculado;
       } else {
+        // Buscar configs
+        const config = await getBillingConfig();
         const diferencaMensal = precoCalculado - precoAtual;
-        const { valorCobrar } = calcularValorProRata(diferencaMensal, assinaturaAtual.vigencia_fim);
-        valorCobranca = valorCobrar; // Cobra apenas a diferença pro-rata
+        const { valorCobrar } = calcularValorProRata(
+          diferencaMensal, 
+          assinaturaAtual.vigencia_fim,
+          { valorMinimo: config.valorMinimoProRata, diasBase: config.diasProRata }
+        );
+        valorCobranca = valorCobrar;
+        
+        // Aplica mínimo se for expansão positiva
+        if (diferencaMensal >= 0 && valorCobranca < config.valorMinimoProRata) {
+            valorCobranca = config.valorMinimoProRata;
+        }
       }
     }
 
@@ -1967,20 +1966,10 @@ export async function criarAssinaturaProfissionalPersonalizado(
 
     if (cobrancaError) throw cobrancaError;
 
-    // Verificar se precisa seleção manual (apenas informativo para o frontend)
-    const calculo = await passageiroService.calcularPassageirosDisponiveis(usuarioId, quantidade);
-    
-    // Gerar PIX normalmente independente de precisar de seleção manual
-    // PARA UPGRADES: Geramos o PIX SEMPRE. A seleção manual (se necessária) é feita após o pagamento ou fica pendente.
-    
+
+    // Gerar PIX normalmente
     const usuario = await getUsuarioData(usuarioId);
     const cpf = onlyDigits(usuario.cpfcnpj);
-
-    console.log("DEBUG: Passo 1 - Calculo Passageiros", calculo);
-
-
-    
-    console.log("DEBUG: Passo 2 - Gerando PIX para", { nome: usuario.nome, valor: valorCobranca });
 
     const pixData = await interService.criarCobrancaPix(supabaseAdmin, {
       cobrancaId: cobranca.id,
@@ -1988,8 +1977,6 @@ export async function criarAssinaturaProfissionalPersonalizado(
       cpf,
       nome: usuario.nome,
     });
-    
-    console.log("DEBUG: Passo 3 - PIX Gerado", pixData);
 
     await supabaseAdmin
       .from("assinaturas_cobrancas")
@@ -2007,7 +1994,6 @@ export async function criarAssinaturaProfissionalPersonalizado(
       inter_txid: pixData.interTransactionId,
       cobrancaId: cobranca.id,
       success: true,
-      precisaSelecaoManual: calculo.precisaSelecaoManual,
     };
 
   } catch (err: any) {
@@ -2016,422 +2002,36 @@ export async function criarAssinaturaProfissionalPersonalizado(
   }
 }
 
-/**
- * Função interna para fazer downgrade de subplano sem verificação de seleção manual
- */
-async function fazerDowngradeSubplanoInterno(
-  usuarioId: string,
-  subplanoId: string
-): Promise<void> {
-  const assinaturaAtual = await getAssinaturaAtiva(usuarioId);
-  
-  // Buscar novo subplano
-  const { data: novoSubplano, error: planoError } = await supabaseAdmin
-    .from("planos")
-    .select("id, slug, nome, preco, preco_promocional, promocao_ativa, franquia_cobrancas_mes, parent_id")
-    .eq("id", subplanoId)
-    .single();
 
-  if (planoError || !novoSubplano) {
-    throw new Error("Subplano selecionado não encontrado.");
-  }
-  
-  // Cancelar cobranças pendentes
-  await cancelarCobrancaPendente(usuarioId);
 
-  // Desativar assinatura atual
-  await supabaseAdmin
-    .from("assinaturas_usuarios")
-    .update({ ativo: false })
-    .eq("id", assinaturaAtual.id);
 
-  // Manter vigência original
-  const anchorDate = assinaturaAtual.anchor_date || new Date().toISOString().split("T")[0];
-  const vigenciaFim = assinaturaAtual.vigencia_fim || null;
+// -- Atualização Cadastral --
+export async function atualizarUsuario(usuarioId: string, payload: { 
+    nome?: string; 
+    apelido?: string; 
+    telefone?: string; 
+    chave_pix?: string; 
+    tipo_chave_pix?: string; 
+}) {
+    if (!usuarioId) throw new Error("ID do usuário é obrigatório.");
 
-  // Calcular preços e franquia do novo subplano
-  const { precoAplicado, precoOrigem, franquiaContratada } = calcularPrecosEFranquia(novoSubplano);
-
-  // Criar nova assinatura (ativa imediatamente)
-  const { data: novaAssinatura, error: assinaturaError } = await supabaseAdmin
-    .from("assinaturas_usuarios")
-    .insert({
-      usuario_id: usuarioId,
-      plano_id: novoSubplano.id,
-      franquia_contratada_cobrancas: franquiaContratada,
-      ativo: true,
-      status: ASSINATURA_USUARIO_STATUS_ATIVA,
-      billing_mode: "automatico",
-      preco_aplicado: precoAplicado,
-      preco_origem: precoOrigem,
-      anchor_date: anchorDate,
-      vigencia_fim: vigenciaFim,
-    })
-    .select()
-    .single();
-
-  if (assinaturaError) {
-    throw assinaturaError;
-  }
-}
-
-/**
- * Função interna para fazer downgrade de quantidade personalizada sem verificação de seleção manual
- */
-async function fazerDowngradePersonalizadoInterno(
-  usuarioId: string,
-  quantidade: number
-): Promise<void> {
-  const { precoCalculado } = await calcularPrecoPersonalizado(quantidade);
-  const assinaturaAtual = await getAssinaturaAtiva(usuarioId);
-
-  // Cancelar cobranças pendentes
-  await cancelarCobrancaPendente(usuarioId);
-
-  // Atualizar assinatura atual com nova quantidade e preço
-  await supabaseAdmin
-    .from("assinaturas_usuarios")
-    .update({
-      franquia_contratada_cobrancas: quantidade,
-      preco_aplicado: precoCalculado,
-      preco_origem: "personalizado",
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", assinaturaAtual.id);
-}
-
-/**
- * Confirma downgrade com seleção manual de passageiros
- * Faz o downgrade E atualiza os passageiros de uma vez (atomicidade)
- */
-export async function confirmarDowngradeComSelecao(
-  usuarioId: string,
-  passageiroIds: string[],
-  franquia: number,
-  tipoDowngrade: "subplano" | "personalizado",
-  subplanoId?: string,
-  quantidadePersonalizada?: number
-): Promise<{ ativados: number; desativados: number }> {
-  try {
-    // Validações prévias ANTES de fazer qualquer alteração no banco
-    // 1. Validar que todos os passageiros pertencem ao usuário e estão ativos
-    const { data: todosPassageiros, error: passageirosError } = await supabaseAdmin
-      .from("passageiros")
-      .select("id")
-      .eq("usuario_id", usuarioId)
-      .eq("ativo", true);
+    const updates: any = { updated_at: new Date().toISOString() };
+    if (payload.nome) updates.nome = cleanString(payload.nome, true);
+    if (payload.apelido) updates.apelido = cleanString(payload.apelido, true);
+    if (payload.telefone) updates.telefone = onlyDigits(payload.telefone);
     
-    if (passageirosError) {
-      throw new Error("Erro ao validar passageiros: " + passageirosError.message);
-    }
-    
-    const idsValidos = todosPassageiros?.map((p: any) => p.id) || [];
-    const idsInvalidos = passageiroIds.filter(id => !idsValidos.includes(id));
-    
-    if (idsInvalidos.length > 0) {
-      throw new Error(`Passageiros inválidos ou não pertencem ao usuário: ${idsInvalidos.join(", ")}`);
-    }
-    
-    // 2. Validar que a quantidade de passageiros selecionados não excede a franquia
-    if (passageiroIds.length > franquia) {
-      throw new Error(`Quantidade de passageiros selecionados (${passageiroIds.length}) excede a franquia (${franquia})`);
-    }
-    
-    // 3. Validar que o tipo de downgrade e informações estão corretas
-    if (tipoDowngrade === "subplano" && !subplanoId) {
-      throw new Error("Subplano ID é obrigatório para downgrade de subplano");
-    }
-    
-    if (tipoDowngrade === "personalizado" && !quantidadePersonalizada) {
-      throw new Error("Quantidade personalizada é obrigatória para downgrade personalizado");
-    }
-    
-    // 4. Validar que a assinatura atual existe
-    const assinaturaAtual = await getAssinaturaAtiva(usuarioId);
-    if (!assinaturaAtual) {
-      throw new Error("Usuário não possui assinatura ativa");
-    }
-    
-    // Agora que todas as validações passaram, executar as operações
-    // Primeiro, fazer o downgrade (sem verificação de seleção manual)
-    if (tipoDowngrade === "subplano" && subplanoId) {
-      await fazerDowngradeSubplanoInterno(usuarioId, subplanoId);
-    } else if (tipoDowngrade === "personalizado" && quantidadePersonalizada) {
-      await fazerDowngradePersonalizadoInterno(usuarioId, quantidadePersonalizada);
-    } else {
-      throw new Error("Tipo de downgrade inválido ou informações faltando");
+    // Atualização de PIX
+    if (payload.chave_pix !== undefined) updates.chave_pix = payload.chave_pix;
+    if (payload.tipo_chave_pix !== undefined) updates.tipo_chave_pix = payload.tipo_chave_pix;
+
+    const { error } = await supabaseAdmin
+        .from("usuarios")
+        .update(updates)
+        .eq("id", usuarioId);
+
+    if (error) {
+        throw new Error(`Erro ao atualizar usuário: ${error.message}`);
     }
 
-    // Depois, atualizar os passageiros
-    const resultado = await passageiroService.confirmarSelecaoPassageiros(
-      usuarioId,
-      passageiroIds,
-      franquia
-    );
-
-    return resultado;
-  } catch (err: any) {
-    logger.error({ error: err.message, usuarioId, tipoDowngrade }, "Falha ao confirmar downgrade com seleção.");
-    throw new Error(err.message || "Erro desconhecido ao confirmar downgrade com seleção.");
-  }
-}
-
-/**
- * Gera PIX após confirmação de seleção manual de passageiros
- * Cria assinatura pendente, cobrança e gera PIX
- */
-export async function gerarPixAposSelecaoManual(
-  usuarioId: string,
-  tipo: "upgrade" | "downgrade",
-  precoAplicado: number,
-  precoOrigem: string,
-  planoId?: string,
-  subplanoId?: string,
-  quantidadePersonalizada?: number,
-  cobrancaId?: string
-): Promise<{ qrCodePayload: string; location: string; inter_txid: string; cobrancaId: string }> {
-  try {
-    // Se cobrancaId foi fornecido, usar a cobrança existente
-    if (cobrancaId) {
-      // Verificar se a cobrança existe e está pendente
-      const { data: cobranca, error: cobrancaError } = await supabaseAdmin
-        .from("assinaturas_cobrancas")
-        .select("id, status, valor, usuario_id, qr_code_payload, inter_txid")
-        .eq("id", cobrancaId)
-        .eq("usuario_id", usuarioId)
-        .eq("status", "pendente_pagamento")
-        .single();
-
-      if (cobrancaError || !cobranca) {
-        throw new Error("Cobrança não encontrada ou não está pendente.");
-      }
-
-      // Se já tem PIX gerado, retornar dados existentes
-      if (cobranca.qr_code_payload && cobranca.inter_txid) {
-        return {
-          qrCodePayload: cobranca.qr_code_payload,
-          location: "",
-          inter_txid: cobranca.inter_txid,
-          cobrancaId: cobranca.id,
-        };
-      }
-
-      // Gerar PIX para a cobrança existente
-      const usuario = await getUsuarioData(usuarioId);
-      const cpf = onlyDigits(usuario.cpfcnpj);
-
-      const pixData = await interService.criarCobrancaPix(supabaseAdmin, {
-        cobrancaId: cobranca.id,
-        valor: Number(cobranca.valor),
-        cpf,
-        nome: usuario.nome,
-      });
-
-      await supabaseAdmin
-        .from("assinaturas_cobrancas")
-        .update({
-          inter_txid: pixData.interTransactionId,
-          qr_code_payload: pixData.qrCodePayload,
-          location_url: pixData.location,
-        })
-        .eq("id", cobranca.id);
-
-      return {
-        qrCodePayload: pixData.qrCodePayload,
-        location: pixData.location,
-        inter_txid: pixData.interTransactionId,
-        cobrancaId: cobranca.id,
-      };
-    }
-
-    // Se não tem cobrancaId, criar nova (comportamento antigo - mantido para compatibilidade)
-    // Buscar assinatura (ativa ou pendente) - se não houver, prosseguir (novo usuário)
-    let assinaturaAtual;
-    let assinaturaJaAtiva = false;
-    try {
-      assinaturaAtual = await getAssinaturaAtiva(usuarioId);
-      assinaturaJaAtiva = true;
-      
-      // Se a assinatura já está ativa, não gerar PIX (pagamento já foi confirmado)
-      throw new Error("Assinatura já está ativa. O pagamento já foi confirmado. Não é necessário gerar novo PIX.");
-    } catch (error: any) {
-      // Se o erro for sobre assinatura já ativa, propagar
-      if (error.message.includes("já está ativa")) {
-        throw error;
-      }
-      
-      // Se não houver assinatura ativa, buscar pendente
-      const { data: assinaturasPendentes } = await supabaseAdmin
-        .from("assinaturas_usuarios")
-        .select("*")
-        .eq("usuario_id", usuarioId)
-        .eq("status", ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO)
-        .order("created_at", { ascending: false })
-        .limit(1);
-      
-      if (assinaturasPendentes && assinaturasPendentes.length > 0) {
-        assinaturaAtual = assinaturasPendentes[0];
-      } else {
-        assinaturaAtual = null;
-      }
-    }
-    
-    // Limpar assinaturas pendentes antigas
-    await limparAssinaturasPendentes(usuarioId);
-    
-    // Manter vigência original se houver assinatura anterior
-    const anchorDate = assinaturaAtual?.anchor_date || new Date().toISOString().split("T")[0];
-    const vigenciaFim = assinaturaAtual?.vigencia_fim || null;
-    
-    // Determinar plano_id e franquia
-    let planoIdFinal: string;
-    let franquiaContratada: number;
-    let planoSelecionado: any = null;
-    
-    if (quantidadePersonalizada) {
-      const { data: planoProfissionalBase, error: planoProfissionalError } = await supabaseAdmin
-        .from("planos")
-        .select("id")
-        .eq("slug", PLANO_PROFISSIONAL)
-        .is("parent_id", null)
-        .single();
-      
-      if (planoProfissionalError || !planoProfissionalBase) {
-        logger.error({ 
-          error: planoProfissionalError?.message, 
-          usuarioId, 
-          quantidadePersonalizada 
-        }, "Erro do sistema: Plano Profissional não encontrado ao gerar PIX após seleção manual");
-        throw new Error("Erro do sistema: Plano Profissional não encontrado. Por favor, entre em contato com o suporte.");
-      }
-      
-      planoIdFinal = planoProfissionalBase.id;
-      franquiaContratada = quantidadePersonalizada;
-      // Buscar nome do plano profissional para a descrição
-      const { data: planoData } = await supabaseAdmin
-        .from("planos")
-        .select("nome")
-        .eq("id", planoIdFinal)
-        .single();
-      planoSelecionado = planoData;
-    } else if (subplanoId) {
-      planoIdFinal = subplanoId;
-      const { data: subplano, error: subplanoError } = await supabaseAdmin
-        .from("planos")
-        .select("nome, franquia_cobrancas_mes")
-        .eq("id", subplanoId)
-        .single();
-      
-      if (subplanoError || !subplano) {
-        logger.error({ 
-          error: subplanoError?.message, 
-          usuarioId, 
-          subplanoId 
-        }, "Erro do sistema: Subplano não encontrado ao gerar PIX após seleção manual");
-        throw new Error("Erro do sistema: Subplano não encontrado. Por favor, entre em contato com o suporte.");
-      }
-      
-      planoSelecionado = subplano;
-      franquiaContratada = subplano.franquia_cobrancas_mes || 0;
-    } else if (planoId) {
-      planoIdFinal = planoId;
-      const { data: planoData, error: planoError } = await supabaseAdmin
-        .from("planos")
-        .select("id, nome, franquia_cobrancas_mes")
-        .eq("id", planoId)
-        .single();
-      
-      if (planoError || !planoData) {
-        logger.error({ 
-          error: planoError?.message, 
-          usuarioId, 
-          planoId 
-        }, "Erro do sistema: Plano não encontrado ao gerar PIX após seleção manual");
-        throw new Error("Erro do sistema: Plano não encontrado. Por favor, entre em contato com o suporte.");
-      }
-      
-      planoSelecionado = planoData;
-      franquiaContratada = planoSelecionado.franquia_cobrancas_mes || 0;
-    } else {
-      logger.error({ 
-        usuarioId, 
-        tipo, 
-        planoId, 
-        subplanoId, 
-        quantidadePersonalizada 
-      }, "Erro do sistema: Informações de plano insuficientes ao gerar PIX após seleção manual");
-      throw new Error("Erro do sistema: Informações de plano insuficientes. Por favor, entre em contato com o suporte.");
-    }
-    
-    // Criar nova assinatura (inativa até pagamento)
-    const { data: novaAssinatura, error: assinaturaError } = await supabaseAdmin
-      .from("assinaturas_usuarios")
-      .insert({
-        usuario_id: usuarioId,
-        plano_id: planoIdFinal,
-        franquia_contratada_cobrancas: franquiaContratada,
-        ativo: false,
-        status: ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO,
-        billing_mode: "automatico",
-        preco_aplicado: precoAplicado,
-        preco_origem: precoOrigem,
-        anchor_date: anchorDate,
-        vigencia_fim: vigenciaFim,
-      })
-      .select()
-      .single()
-    
-    if (assinaturaError) throw assinaturaError;
-    
-    // Criar cobrança
-    const hoje = new Date();
-    const { data: cobranca, error: cobrancaError } = await supabaseAdmin
-      .from("assinaturas_cobrancas")
-      .insert({
-        usuario_id: usuarioId,
-        assinatura_usuario_id: novaAssinatura.id,
-        valor: precoAplicado,
-        status: ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
-        data_vencimento: hoje.toISOString().split("T")[0],
-        origem: "inter",
-        billing_type: tipo === "upgrade" ? "upgrade_plan" : "activation",
-        descricao: tipo === "upgrade" 
-          ? `Upgrade de Plano: ${planoSelecionado?.nome || "Profissional"}`
-          : `Ativação de Plano: ${planoSelecionado?.nome || "Profissional"}`,
-      })
-      .select()
-      .single();
-    
-    if (cobrancaError) throw cobrancaError;
-    
-    // Gerar PIX
-    const usuario = await getUsuarioData(usuarioId);
-    const cpf = onlyDigits(usuario.cpfcnpj);
-    
-    const pixData = await interService.criarCobrancaPix(supabaseAdmin, {
-      cobrancaId: cobranca.id,
-      valor: precoAplicado,
-      cpf,
-      nome: usuario.nome,
-    });
-    
-    await supabaseAdmin
-      .from("assinaturas_cobrancas")
-      .update({
-        inter_txid: pixData.interTransactionId,
-        qr_code_payload: pixData.qrCodePayload,
-        location_url: pixData.location,
-      })
-      .eq("id", cobranca.id);
-    
-    return {
-      qrCodePayload: pixData.qrCodePayload,
-      location: pixData.location,
-      inter_txid: pixData.interTransactionId,
-      cobrancaId: cobranca.id,
-    };
-  } catch (err: any) {
-    logger.error({ error: err.message, usuarioId, tipo }, "Falha ao gerar PIX após seleção manual.");
-    throw new Error(err.message || "Erro desconhecido ao gerar PIX após seleção manual.");
-  }
+    return { success: true };
 }
