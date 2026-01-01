@@ -13,3 +13,14 @@ export const ASSINATURA_USUARIO_STATUS_TRIAL = "trial";
 export const ASSINATURA_USUARIO_STATUS_SUSPENSA = "suspensa";
 export const ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO = "pendente_pagamento";
 export const ASSINATURA_USUARIO_STATUS_CANCELADA = "cancelada";
+
+// PIX Constants
+export const TipoChavePix = {
+    CPF: "CPF",
+    CNPJ: "CNPJ",
+    TELEFONE: "TELEFONE",
+    EMAIL: "EMAIL",
+    ALEATORIA: "ALEATORIA"
+} as const;
+
+export const TIPOS_CHAVE_PIX_VALIDOS = Object.values(TipoChavePix);

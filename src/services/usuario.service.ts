@@ -1,4 +1,4 @@
-import { ASSINATURA_COBRANCA_STATUS_CANCELADA, ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_ATIVA, ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_TRIAL, PLANO_ESSENCIAL, PLANO_GRATUITO, PLANO_PROFISSIONAL } from "../config/contants.js";
+import { ASSINATURA_COBRANCA_STATUS_CANCELADA, ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_ATIVA, ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_TRIAL, PLANO_ESSENCIAL, PLANO_GRATUITO, PLANO_PROFISSIONAL, TIPOS_CHAVE_PIX_VALIDOS, TipoChavePix } from "../config/contants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { cleanString, onlyDigits } from "../utils/utils.js";
@@ -2020,9 +2020,26 @@ export async function atualizarUsuario(usuarioId: string, payload: {
     if (payload.apelido) updates.apelido = cleanString(payload.apelido, true);
     if (payload.telefone) updates.telefone = onlyDigits(payload.telefone);
     
-    // Atualização de PIX
-    if (payload.chave_pix !== undefined) updates.chave_pix = payload.chave_pix;
-    if (payload.tipo_chave_pix !== undefined) updates.tipo_chave_pix = payload.tipo_chave_pix;
+    // Atualização de PIX com Sanitização Obrigatória
+    if (payload.tipo_chave_pix !== undefined) {
+        // Validação estrita do ENUM
+        if (!TIPOS_CHAVE_PIX_VALIDOS.includes(payload.tipo_chave_pix as any)) {
+             throw new Error("Tipo de chave PIX inválido.");
+        }
+        updates.tipo_chave_pix = payload.tipo_chave_pix;
+    }
+    
+    if (payload.chave_pix !== undefined) {
+        const tipoConsiderado = payload.tipo_chave_pix; // Usa o tipo enviado no payload (idealmente, deveria checar do banco se não enviado, mas assumimos envio conjunto ou tipo opcional)
+        
+        // Se temos o tipo e é um dos numéricos, remover formatação
+        if (tipoConsiderado && [TipoChavePix.CPF, TipoChavePix.CNPJ, TipoChavePix.TELEFONE].includes(tipoConsiderado as any)) {
+            updates.chave_pix = onlyDigits(payload.chave_pix);
+        } else {
+            // Para E-mail, Aleatória ou se não temos o tipo (fallback), apenas limpar espaços
+            updates.chave_pix = cleanString(payload.chave_pix);
+        }
+    }
 
     const { error } = await supabaseAdmin
         .from("usuarios")
