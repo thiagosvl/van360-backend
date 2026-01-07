@@ -433,6 +433,65 @@ async function realizarPagamentoPix(
   }
 }
 
+
+/**
+ * Wrapper específico para Repasse a Motoristas (Banking API)
+ */
+async function realizarPixRepasse(
+  adminClient: SupabaseClient,
+  params: PagamentoPixParams
+): Promise<{ endToEndId: string; status: string }> {
+  logger.info({ params }, "Iniciando Repasse PIX para Motorista");
+  // Reutiliza a função de pagamento bancário, mas com log contextual
+  try {
+      return await realizarPagamentoPix(adminClient, params);
+  } catch (error) {
+      throw error;
+  }
+}
+
+/**
+ * Cancela uma cobrança PIX imediata (cob) ou com vencimento (cobv).
+ * Endpoint: PATCH /pix/v2/cob/{txid} ou /pix/v2/cobv/{txid}
+ * Status: REMOVIDA_PELO_USUARIO_RECEBEDOR
+ */
+async function cancelarCobrancaPix(
+  adminClient: SupabaseClient,
+  txid: string,
+  tipo: "cob" | "cobv" = "cobv"
+): Promise<boolean> {
+  const token = await getValidInterToken(adminClient);
+  // Endpoint depende do tipo (imediatas ou com vencimento)
+  const url = `${INTER_API_URL}/pix/v2/${tipo}/${txid}`;
+
+  const payload = {
+    status: "REMOVIDA_PELO_USUARIO_RECEBEDOR"
+  };
+
+  try {
+    logger.info({ txid, tipo }, "Solicitando cancelamento de PIX no Inter");
+    
+    await axios.patch(url, payload, {
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      httpsAgent: getHttpsAgent(),
+    });
+
+    logger.info({ txid }, "PIX Cancelado com sucesso no Inter");
+    return true;
+
+  } catch (err: any) {
+    // Se der 404, já não existe, então "sucesso" no cancelamento reativo
+    if (err.response?.status === 404) {
+        logger.warn({ txid }, "Tentativa de cancelar PIX inexistente ou já removido (404)");
+        return true; 
+    }
+    
+    // Se já estiver concluída ou removida, pode dar 409 ou erro específico
+    logger.error({ err: err.response?.data || err.message, txid }, "Erro ao cancelar PIX");
+    return false;
+  }
+}
+
 export const interService = {
   getValidInterToken,
   criarCobrancaPix,
@@ -441,5 +500,7 @@ export const interService = {
   registrarWebhookPix,
   consultarCallbacks,
   consultarPix,
-  realizarPagamentoPix
+  realizarPagamentoPix,
+  realizarPixRepasse,
+  cancelarCobrancaPix
 };

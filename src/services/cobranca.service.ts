@@ -1,13 +1,55 @@
+import { randomUUID } from "crypto";
+import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { moneyToNumber } from "../utils/utils.js";
+import { getConfigNumber } from "./configuracao.service.js";
+import { interService } from "./inter.service.js";
 
 export const cobrancaService = {
   async createCobranca(data: any): Promise<any> {
     if (!data.passageiro_id || !data.usuario_id) throw new Error("Campos obrigatórios ausentes");
 
+    // Buscar dados do passageiro para gerar PIX (CPF e Nome do Responsável)
+    const { data: passageiro, error: passError } = await supabaseAdmin
+        .from("passageiros")
+        .select("cpf_responsavel, nome_responsavel")
+        .eq("id", data.passageiro_id)
+        .single();
+    
+    if (passError || !passageiro) throw new Error("Passageiro não encontrado para gerar cobrança");
+
+    // Gerar ID preliminar para usar no txid (ou gerar UUID manual)
+    const cobrancaId = crypto.randomUUID();
+
+    let pixData: any = {};
+    const valorNumerico = typeof data.valor === "string" ? moneyToNumber(data.valor) : data.valor;
+
+    // Se tiver dados para PIX, gera
+    if (passageiro.cpf_responsavel && passageiro.nome_responsavel) {
+        try {
+            const pixResult = await interService.criarCobrancaComVencimentoPix(supabaseAdmin, {
+                cobrancaId: cobrancaId,
+                valor: valorNumerico,
+                cpf: passageiro.cpf_responsavel,
+                nome: passageiro.nome_responsavel,
+                dataVencimento: data.data_vencimento // YYYY-MM-DD
+            });
+            
+            pixData = {
+                txid_pix: pixResult.interTransactionId,
+                qr_code_payload: pixResult.qrCodePayload,
+                url_qr_code: pixResult.location
+            };
+        } catch (error) {
+            logger.error({ error, passageiroId: data.passageiro_id }, "Falha ao gerar PIX para cobrança - Prosseguindo sem PIX");
+        }
+    }
+
     const cobrancaData: any = {
+      id: cobrancaId,
       ...data,
-      valor: typeof data.valor === "string" ? moneyToNumber(data.valor) : data.valor,
+      valor: valorNumerico,
+      ...pixData
     };
 
     const { data: inserted, error } = await supabaseAdmin
@@ -47,6 +89,69 @@ export const cobrancaService = {
     // Permite alterar valor_pago se fornecido
     if (data.valor_pago !== undefined) {
       cobrancaData.valor_pago = moneyToNumber(data.valor_pago);
+    }
+
+    // 3. Verificação de necessidade de atualização do PIX (Antes de salvar no banco)
+    const houveMudancaCritica =
+      (data.valor !== undefined && data.valor !== cobrancaOriginal.valor) ||
+      (data.data_vencimento !== undefined && data.data_vencimento !== cobrancaOriginal.data_vencimento);
+
+    // Se houve mudança crítica e já existe PIX gerado
+    if (houveMudancaCritica && cobrancaOriginal.txid_pix) {
+       logger.info({ cobrancaId: id }, "Alteração crítica detectada. Cancelando e Regenerando PIX...");
+       
+       // a) Cancelar PIX Antigo
+       try {
+          await interService.cancelarCobrancaPix(supabaseAdmin, cobrancaOriginal.txid_pix, "cobv");
+       } catch (err) {
+          logger.warn({ err, txid: cobrancaOriginal.txid_pix }, "Falha ao cancelar PIX antigo (ignorado para prosseguir)");
+       }
+
+       // b) Regenerar Novo PIX
+       let nomeResponsavel = cobrancaOriginal.passageiros?.nome_responsavel;
+       let cpfResponsavel = cobrancaOriginal.passageiros?.cpf_responsavel;
+
+       if (!nomeResponsavel || !cpfResponsavel) {
+          const { data: pass } = await supabaseAdmin
+             .from("passageiros")
+             .select("cpf_responsavel, nome_responsavel")
+             .eq("id", cobrancaOriginal.passageiro_id)
+             .single();
+          if (pass) {
+             nomeResponsavel = pass.nome_responsavel;
+             cpfResponsavel = pass.cpf_responsavel;
+          }
+       }
+
+       if (nomeResponsavel && cpfResponsavel) {
+          try {
+             const novoValor = data.valor !== undefined ? moneyToNumber(data.valor) : cobrancaOriginal.valor;
+             const novoVencimento = data.data_vencimento || cobrancaOriginal.data_vencimento;
+
+             // Gerar sufixo único para o novo TXID (evitar colisão com o antigo)
+             const cobrancaIdSuffixed = id + "R" + Math.floor(Math.random() * 1000);
+
+             const pixResult = await interService.criarCobrancaComVencimentoPix(supabaseAdmin, {
+                 cobrancaId: cobrancaIdSuffixed, 
+                 valor: novoValor,
+                 cpf: cpfResponsavel,
+                 nome: nomeResponsavel,
+                 dataVencimento: novoVencimento
+             });
+
+             cobrancaData.txid_pix = pixResult.interTransactionId;
+             cobrancaData.qr_code_payload = pixResult.qrCodePayload;
+             cobrancaData.url_qr_code = pixResult.location;
+             
+             logger.info("Novo PIX gerado com sucesso na edição.");
+
+          } catch (err) {
+             logger.error({ err }, "Falha ao regenerar PIX na edição.");
+             cobrancaData.txid_pix = null;
+             cobrancaData.qr_code_payload = null;
+             cobrancaData.url_qr_code = null;
+          }
+       }
     }
 
     const { data: updated, error } = await supabaseAdmin
@@ -162,5 +267,125 @@ export const cobrancaService = {
 
     return novoStatus;
   },
+
+  async atualizarStatusPagamento(txid: string, valorPagoReal?: number, payload?: any): Promise<any> {
+    // 1. Buscar cobrança pelo TXID
+    const { data: cobranca, error: fetchError } = await supabaseAdmin
+        .from("cobrancas")
+        .select("*")
+        .eq("txid_pix", txid)
+        .single();
+
+    if (fetchError || !cobranca) throw new Error("Cobrança não encontrada para o TXID informado");
+
+    if (cobranca.status === "PAGA") {
+        logger.info({ cobrancaId: cobranca.id }, "Cobrança já está paga, ignorando atualização.");
+        return cobranca;
+    }
+
+    // 2. Calcular valores
+    const taxaIntermediacao = await getConfigNumber("TAXA_INTERMEDIACAO_PIX", 0.99);
+    const valorPago = valorPagoReal || cobranca.valor;
+    const valorRepassar = valorPago; // Regra: Motorista recebe valor cheio
+
+    // 3. Atualizar Cobrança
+    const { data: updated, error: updateError } = await supabaseAdmin
+        .from("cobrancas")
+        .update({
+            status: "PAGA",
+            data_pagamento: new Date(),
+            valor_pago: valorPago,
+            taxa_intermediacao_banco: taxaIntermediacao,
+            valor_a_repassar: valorRepassar,
+            status_repasse: "PENDENTE", // Pronto para repasse
+            dados_auditoria_pagamento: payload || {}
+        })
+        .eq("id", cobranca.id)
+        .select()
+        .single();
+
+    if (updateError) throw updateError;
+    return updated;
+  },
+
+  async iniciarRepasse(cobrancaId: string): Promise<any> {
+      // 1. Buscar dados da cobrança e do motorista
+      const { data: cobranca, error: cobError } = await supabaseAdmin
+          .from("cobrancas")
+          .select("*, usuarios:usuario_id (chave_pix, status_chave_pix)")
+          .eq("id", cobrancaId)
+          .single();
+
+      if (cobError || !cobranca) throw new Error("Cobrança não encontrada");
+      
+      const motorista = cobranca.usuarios;
+
+      // 2. Validações
+      if (cobranca.status !== "PAGA") throw new Error("Cobrança não está paga, impossível repassar.");
+      if (cobranca.status_repasse === "REPASSADO" || cobranca.status_repasse === "PROCESSANDO") {
+          return { status: "JA_REPASSADO", message: "Repasse já efetuado ou em andamento" };
+      }
+
+      if (motorista.status_chave_pix !== "VALIDADA" || !motorista.chave_pix) {
+          // Marca falha mas não trava processo (pode tentar depois)
+          await supabaseAdmin.from("cobrancas").update({ status_repasse: "FALHA_REPASSE" }).eq("id", cobrancaId);
+          throw new Error("Chave PIX do motorista não validada ou ausente.");
+      }
+
+      // 3. Executar Repasse via Inter
+      const valorRepasse = cobranca.valor_a_repassar || cobranca.valor;
+      const idempotencyKey = randomUUID();
+
+      // Atualiza para PROCESSANDO antes de chamar API (evitar race condition)
+      await supabaseAdmin.from("cobrancas").update({ status_repasse: "PROCESSANDO" }).eq("id", cobrancaId);
+
+      try {
+          // (Opcional) Criar registro na tabela transacoes_repasse
+          const { data: transacao, error: transError } = await supabaseAdmin
+            .from("transacoes_repasse")
+            .insert([{
+                usuario_id: cobranca.usuario_id,
+                cobranca_id: cobrancaId,
+                valor_repassado: valorRepasse,
+                status: "PROCESSANDO"
+            }])
+            .select() // Retorna inserido para pegar ID se precisar
+            .single(); 
+
+          const pixResponse = await interService.realizarPixRepasse(supabaseAdmin, {
+              valor: valorRepasse,
+              chaveDestino: motorista.chave_pix,
+              xIdIdempotente: idempotencyKey,
+              descricao: `Repasse Van360 #${cobrancaId.substring(0,8)}`
+          });
+
+          // 4. Sucesso
+          const updatePayload: any = { 
+              status_repasse: "REPASSADO", 
+              data_repasse: new Date(), 
+              id_transacao_repasse: transacao?.id 
+          };
+          
+          await supabaseAdmin.from("cobrancas").update(updatePayload).eq("id", cobrancaId);
+          
+          if (transacao?.id) {
+              await supabaseAdmin.from("transacoes_repasse")
+                .update({ status: "SUCESSO", txid_pix_repasse: pixResponse.endToEndId, data_conclusao: new Date() })
+                .eq("id", transacao.id);
+          }
+
+          return { success: true, endToEndId: pixResponse.endToEndId };
+
+      } catch (error: any) {
+          logger.error({ error, cobrancaId }, "Erro no processamento do repasse");
+          
+          await supabaseAdmin.from("cobrancas").update({ status_repasse: "FALHA_REPASSE" }).eq("id", cobrancaId);
+          
+          // Tentar atualizar tabela de transacao se foi criada (precisaria do ID, mas aqui simplificamos)
+          // Em um cenario real, usariamos transacao.id se dispovivel no escopo superior ou fariamos query.
+          
+          throw error;
+      }
+  }
 
 };

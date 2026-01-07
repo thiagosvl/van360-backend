@@ -1,12 +1,13 @@
 import {
-    ASSINATURA_COBRANCA_STATUS_CANCELADA,
-    ASSINATURA_COBRANCA_STATUS_PAGO,
-    ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
-    ASSINATURA_COBRANCA_TIPO_PAGAMENTO_PIX,
-    PLANO_PROFISSIONAL,
+  ASSINATURA_COBRANCA_STATUS_CANCELADA,
+  ASSINATURA_COBRANCA_STATUS_PAGO,
+  ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
+  ASSINATURA_COBRANCA_TIPO_PAGAMENTO_PIX,
+  PLANO_PROFISSIONAL,
 } from "../config/contants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
+import { getConfigNumber } from "./configuracao.service.js";
 import { passageiroService } from "./passageiro.service.js";
 
 interface DadosPagamento {
@@ -44,7 +45,10 @@ export async function processarPagamentoCobranca(
   const logContext = txid ? { txid } : { cobrancaId };
 
   try {
-    // 1. Atualizar status da cobrança para pago
+    // 0. Buscar taxa de intermediação vigente
+    const taxaIntermediacao = await getConfigNumber("TAXA_INTERMEDIACAO_PIX", 0.99);
+
+    // 1. Atualizar status da cobrança para pago e registrar taxa
     const { error: updateCobrancaError, data: updatedCobranca } = await supabaseAdmin
       .from("assinaturas_cobrancas")
       .update({
@@ -52,6 +56,7 @@ export async function processarPagamentoCobranca(
         data_pagamento: dadosPagamento.dataPagamento,
         valor_pago: dadosPagamento.valor,
         tipo_pagamento: ASSINATURA_COBRANCA_TIPO_PAGAMENTO_PIX,
+        taxa_intermediacao_banco: taxaIntermediacao // Registro para auditoria
       })
       .eq("id", cobranca.id)
       .select();

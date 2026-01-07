@@ -4,7 +4,8 @@ import { supabaseAdmin } from "../config/supabase.js";
 export const CONFIG_KEYS = {
   PRO_RATA_DIAS_MES: "PRO_RATA_DIAS_MES",
   PRO_RATA_VALOR_MINIMO: "PRO_RATA_VALOR_MINIMO",
-  VALOR_INCREMENTO_PASSAGEIRO_EXCESSO: "VALOR_INCREMENTO_PASSAGEIRO_EXCESSO"
+  VALOR_INCREMENTO_PASSAGEIRO_EXCESSO: "VALOR_INCREMENTO_PASSAGEIRO_EXCESSO",
+  TAXA_INTERMEDIACAO_PIX: "TAXA_INTERMEDIACAO_PIX"
 } as const;
 
 export type ConfigKey = keyof typeof CONFIG_KEYS;
@@ -54,10 +55,12 @@ export async function getBillingConfig() {
     diasProRata,
     valorMinimoProRata,
     incrementoBloco,
+    taxaIntermediacaoPix
   ] = await Promise.all([
     getConfigNumber("PRO_RATA_DIAS_MES", 30),
     getConfigNumber("PRO_RATA_VALOR_MINIMO", 0.01),
-    getConfigNumber("VALOR_INCREMENTO_PASSAGEIRO_EXCESSO", 2.50)
+    getConfigNumber("VALOR_INCREMENTO_PASSAGEIRO_EXCESSO", 2.50),
+    getConfigNumber("TAXA_INTERMEDIACAO_PIX", 0.99)
   ]);
 
   /* Recycled variable for the new logic */
@@ -68,5 +71,6 @@ export async function getBillingConfig() {
     valorMinimoProRata,
     planoBaseId: null, 
     valorIncrementoPassageiro,
+    taxaIntermediacaoPix
   };
 }

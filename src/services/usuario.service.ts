@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { ASSINATURA_COBRANCA_STATUS_CANCELADA, ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_ATIVA, ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_TRIAL, PLANO_ESSENCIAL, PLANO_GRATUITO, PLANO_PROFISSIONAL, TIPOS_CHAVE_PIX_VALIDOS, TipoChavePix } from "../config/contants.js";
+import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { cleanString, onlyDigits } from "../utils/utils.js";
@@ -1025,12 +1026,6 @@ function calcularPrecosEFranquia(plano: any): {
  * Helper: Calcula valor pro-rata baseado na data de vencimento (vigencia_fim)
  * @param valorMensal - Valor mensal integral a ser considerado (ou diferença mensal)
  * @param dataVencimento - Data de fim da vigência atual
- * @returns Objeto com valorCobrar e diasRestantes
- */
-/**
- * Helper: Calcula valor pro-rata baseado na data de vencimento (vigencia_fim)
- * @param valorMensal - Valor mensal integral a ser considerado (ou diferença mensal)
- * @param dataVencimento - Data de fim da vigência atual
  * @param options - Opções extras (valorMinimo, diasBase)
  * @returns Objeto com valorCobrar e diasRestantes
  */
@@ -1075,7 +1070,6 @@ function calcularValorProRata(
 
   return { valorCobrar, diasRestantes };
 }
-
 /**
  * Upgrade de plano
  * - Cancela cobrança pendente
@@ -2023,25 +2017,37 @@ export async function atualizarUsuario(usuarioId: string, payload: {
     if (payload.apelido) updates.apelido = cleanString(payload.apelido, true);
     if (payload.telefone) updates.telefone = onlyDigits(payload.telefone);
     
-    // Atualização de PIX com Sanitização Obrigatória
-    if (payload.tipo_chave_pix !== undefined) {
+    // Atualização de PIX com Sanitização Obrigatória e TRIGGER DE VALIDAÇÃO
+    if (payload.chave_pix !== undefined) {
         // Validação estrita do ENUM
-        if (!TIPOS_CHAVE_PIX_VALIDOS.includes(payload.tipo_chave_pix as any)) {
+        if (payload.tipo_chave_pix && !TIPOS_CHAVE_PIX_VALIDOS.includes(payload.tipo_chave_pix as any)) {
              throw new Error("Tipo de chave PIX inválido.");
         }
-        updates.tipo_chave_pix = payload.tipo_chave_pix;
-    }
-    
-    if (payload.chave_pix !== undefined) {
-        const tipoConsiderado = payload.tipo_chave_pix; // Usa o tipo enviado no payload (idealmente, deveria checar do banco se não enviado, mas assumimos envio conjunto ou tipo opcional)
+
+        const tipoConsiderado = payload.tipo_chave_pix || undefined; // Se não enviado, assume que o usuário mantém o tipo (mas idealmente deve enviar junto)
+        // OBS: Se o usuário mudar a chave, o frontend DEVE enviar o tipo.
+        
+        let chaveSanitizada = "";
         
         // Se temos o tipo e é um dos numéricos, remover formatação
         if (tipoConsiderado && [TipoChavePix.CPF, TipoChavePix.CNPJ, TipoChavePix.TELEFONE].includes(tipoConsiderado as any)) {
-            updates.chave_pix = onlyDigits(payload.chave_pix);
+            chaveSanitizada = onlyDigits(payload.chave_pix);
         } else {
             // Para E-mail, Aleatória ou se não temos o tipo (fallback), apenas limpar espaços
-            updates.chave_pix = cleanString(payload.chave_pix);
+            chaveSanitizada = cleanString(payload.chave_pix);
         }
+
+        updates.chave_pix = chaveSanitizada;
+        if (payload.tipo_chave_pix) updates.tipo_chave_pix = payload.tipo_chave_pix;
+        
+        // RESETAR STATUS E INICIAR VALIDAÇÃO
+        updates.status_chave_pix = "PENDENTE_VALIDACAO";
+        updates.chave_pix_validada_em = null;
+        updates.nome_titular_pix_validado = null;
+        updates.cpf_cnpj_titular_pix_validado = null;
+    } else {
+        // Se não está atualizando chave pix, mas está atualizando outros dados...
+        // Nada a fazer com PIX.
     }
 
     const { error } = await supabaseAdmin
@@ -2051,6 +2057,16 @@ export async function atualizarUsuario(usuarioId: string, payload: {
 
     if (error) {
         throw new Error(`Erro ao atualizar usuário: ${error.message}`);
+    }
+
+    // TRIGGER ASYNC VALIDATION (Se houve alteração de PIX)
+    if (payload.chave_pix !== undefined) {
+        // Disparar validação em background
+        // O valor já foi sanitizado e salvo em `updates.chave_pix`
+        iniciarValidacaoPix(usuarioId, updates.chave_pix)
+            .catch(err => {
+                logger.error({ error: err.message, usuarioId }, "Falha silenciosa ao iniciar validação PIX (background) após update.");
+            });
     }
 
     return { success: true };
@@ -2134,6 +2150,30 @@ async function iniciarValidacaoPix(usuarioId: string, chavePix: string) {
       });
 
       logger.info({ usuarioId, xIdIdempotente }, "Micro-pagamento de validação PIX enviado com sucesso.");
+
+      // BLOCK MOCK: Auto-validar se estiver em ambiente de teste
+      if (env.INTER_MOCK_MODE === "true" || (env.INTER_MOCK_MODE as any) === true) {
+          logger.warn({ usuarioId }, "MOCK MODE: Auto-validando chave PIX em 3 segundos...");
+          
+          setTimeout(async () => {
+              try {
+                  await supabaseAdmin.from("usuarios").update({
+                      status_chave_pix: "VALIDADA",
+                      chave_pix_validada_em: new Date().toISOString(),
+                      nome_titular_pix_validado: "MOCK USER AUTO",
+                      cpf_cnpj_titular_pix_validado: chavePix
+                  }).eq("id", usuarioId);
+
+                  await supabaseAdmin.from("pix_validacao_pendente")
+                      .delete()
+                      .eq("x_id_idempotente", xIdIdempotente);
+                      
+                  logger.info({ usuarioId }, "MOCK MODE: Chave PIX auto-validada com sucesso.");
+              } catch (mockErr) {
+                  logger.error({ mockErr }, "Erro ao auto-validar em MOCK MODE");
+              }
+          }, 3000);
+      }
 
   } catch (err: any) {
       // Falha Imediata (ex: chave inválida na hora do envio)
