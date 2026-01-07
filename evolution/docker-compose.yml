@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   evolution-api:
     container_name: evolution_api
@@ -8,25 +6,34 @@ services:
     ports:
       - "8081:8080"
     environment:
-      # Core
       - SERVER_URL=http://localhost:8081
       - DOCKER_ENV=true
-      - LOG_LEVEL=ERROR
-
-      # Auth
       - AUTHENTICATION_API_KEY=B6D711FCDE4D4FD5936544120E713976
       - AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=true
+      - LOG_LEVEL=ERROR  # Mudado de INFO para ERROR para reduzir I/O de disco e CPU durante loops
 
       # Database
       - DATABASE_ENABLED=true
       - DATABASE_PROVIDER=postgresql
       - DATABASE_CONNECTION_URI=postgresql://evolution:evolution@postgres_evolution:5432/evolution
       - DATABASE_CLIENT_NAME=evolution_exchange
+      - DATABASE_SAVE_DATA_INSTANCE=true
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=true
 
-      # Redis
+      # Redis (Configuração Unificada para Cache e Fila)
       - REDIS_ENABLED=true
       - REDIS_URI=redis://redis_evolution:6379/1
       - REDIS_PREFIX_KEY=evolution
+      # Adicione estas linhas para forçar o cache de sessão no Redis (MUITO IMPORTANTE)
+      - CACHE_REDIS_ENABLED=true
+      - CACHE_REDIS_URI=redis://redis_evolution:6379/1
+      - CACHE_REDIS_PREFIX_KEY=evolution_cache
+      - CACHE_LOCAL_ENABLED=false
+
+      # Configurações de Resiliência (EVITA O LOOP DE CPU)
+      - WARN_ON_CONNECTION_LOST=false
+      - RECONNECT_INTERVAL=5000 # Espera 5s antes de tentar reconectar (Salva CPU)
+      - MAX_RECONNECT_RETRIES=5
 
     volumes:
       - evolution_instances:/evolution/instances
@@ -39,12 +46,12 @@ services:
     container_name: postgres_evolution
     image: postgres:15
     restart: always
-    environment:
-      - POSTGRES_DB=evolution
-      - POSTGRES_USER=evolution
-      - POSTGRES_PASSWORD=evolution
     ports:
       - "5433:5432"
+    environment:
+      - POSTGRES_USER=evolution
+      - POSTGRES_PASSWORD=evolution
+      - POSTGRES_DB=evolution
     volumes:
       - evolution_postgres_data:/var/lib/postgresql/data
 
@@ -52,8 +59,7 @@ services:
     container_name: redis_evolution
     image: redis:7
     restart: always
-    ports:
-      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - evolution_redis_data:/data
 
