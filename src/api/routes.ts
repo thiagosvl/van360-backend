@@ -4,7 +4,7 @@ import cobrancaRoute from "./cobranca.routes.js";
 import escolaRoute from "./escola.routes.js";
 import gastoRoute from "./gasto.route.js";
 import interRoutes from "./inter.routes.js";
-import jobsRoute from "./jobs.route.js";
+import { jobsRoute } from "./jobs.route.js";
 import mockPagamentoRoute from "./mock-pagamento.routes.js";
 import passageiroRoute from "./passageiro.routes.js";
 import planoRoute from "./plano.routes.js";
@@ -37,8 +37,12 @@ const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.register(gastoRoute, { prefix: "/api/gastos" });
 
   app.register(assinaturaCobrancaRoute, { prefix: "/api/assinatura-cobrancas" });
+  
 
-  app.register(jobsRoute, { prefix: "/api" }); // jobs already has /jobs prefix in the route file ideally, or I add it here? The route file has /jobs/gerar... so prefix /api makes /api/jobs/gerar
+
+  // Rotas de Jobs (Automação)
+  // Prefix /api/jobs -> endpoints serão /api/jobs/generate-monthly-charges
+  app.register(jobsRoute, { prefix: "/api/jobs" }); 
 };
 
 export default routes;

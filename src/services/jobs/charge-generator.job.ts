@@ -2,6 +2,7 @@ import { PLANO_ESSENCIAL, PLANO_PROFISSIONAL } from "../../config/contants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
 import { cobrancaService } from "../cobranca.service.js";
+import { getConfigNumber } from "../configuracao.service.js";
 
 interface JobResult {
     processedDrivers: number;
@@ -12,7 +13,9 @@ interface JobResult {
 }
 
 export const chargeGeneratorJob = {
-    async execute(params: { targetMonth?: number; targetYear?: number } = {}): Promise<JobResult> {
+    async run(params: { targetMonth?: number; targetYear?: number; force?: boolean } = {}): Promise<JobResult> {
+        const result: JobResult = { processedDrivers: 0, createdCharges: 0, skippedCharges: 0, errors: 0, details: [] };
+
         // 1. Definir Data Alvo (Próximo Mês por padrão)
         const now = new Date();
         // Se hoje for Jan (0), targetMonth Default = Feb (1). 
@@ -22,15 +25,30 @@ export const chargeGeneratorJob = {
         let targetYear = params.targetYear;
 
         if (!targetMonth || !targetYear) {
+            // Modo Automático: Verificar se hoje é dia de gerar
+            const diaGeracao = await getConfigNumber("DIA_GERACAO_MENSALIDADES", 25);
+            const hoje = now.getDate();
+
+            if (hoje < diaGeracao && !params.force) {
+                logger.info({ hoje, diaGeracao }, "Job ignorado: Ainda não é dia de gerar mensalidades.");
+                return result; // Retorna vazio, não é erro
+            }
+            
+            if (params.force) {
+                logger.info("FORCE MODE: Ignorando verificação de dia de geração.");
+            }
+
             // Default: Mês seguinte ao atual
             const nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
             targetMonth = nextMonthDate.getMonth() + 1; // 1-12
             targetYear = nextMonthDate.getFullYear();
+            
+            logger.info({ targetMonth, targetYear, diaGeracao }, "Automático: Data atingida, iniciando geração...");
         }
 
         logger.info({ targetMonth, targetYear }, "Iniciando Job de Geração de Mensalidades");
 
-        const result: JobResult = { processedDrivers: 0, createdCharges: 0, skippedCharges: 0, errors: 0, details: [] };
+
 
         try {
             // 2. Buscar IDs dos Planos (Essencial e Profissional)

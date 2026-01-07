@@ -11,4 +11,7 @@ export const env = {
   INTER_MOCK_MODE: process.env.INTER_MOCK_MODE || "false",
   SUPABASE_URL: process.env.SUPABASE_URL!,
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  EVOLUTION_API_URL: process.env.EVOLUTION_API_URL || "http://localhost:8081",
+  EVOLUTION_API_KEY: process.env.EVOLUTION_API_KEY!,
+  CRON_SECRET: process.env.CRON_SECRET || "super_secret_cron_key",
 };

@@ -1,58 +1,108 @@
-
 import axios from "axios";
+import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 
-// Configuração fixa para o ambiente local/docker criado
-const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || "http://localhost:8081";
-const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || "B6D711FCDE4D4FD5936544120E713976";
-const INSTANCE_NAME = "van360-main";
+const EVO_URL = env.EVOLUTION_API_URL;
+const EVO_KEY = env.EVOLUTION_API_KEY;
+const INSTANCE_NAME = "Van360"; // Nome da instância no Evolution
 
-export const whatsappService = {
-  /**
-   * Verifica se a instância está conectada
-   */
-  async checkConnection(): Promise<boolean> {
-    try {
-      const url = `${EVOLUTION_API_URL}/instance/connectionState/${INSTANCE_NAME}`;
-      const { data } = await axios.get(url, {
-        headers: { apikey: EVOLUTION_API_KEY }
-      });
-      return data?.instance?.state === "open";
-    } catch (error) {
-      logger.error({ error }, "Falha ao verificar conexão com WhatsApp");
-      return false;
-    }
-  },
+// Interface para resposta da API (simplificada)
+interface EvolutionResponse {
+  key: {
+    remoteJid: string;
+    fromMe: boolean;
+    id: string;
+  };
+  message: any;
+}
 
+class WhatsappService {
+  
   /**
    * Envia mensagem de texto simples
    */
-  async sendText(phone: string, message: string): Promise<any> {
-    try {
-      const url = `${EVOLUTION_API_URL}/message/sendText/${INSTANCE_NAME}`;
-      const body = {
-        number: phone,
-        options: {
-          delay: 1200,
-          presence: "composing",
-        },
-        textMessage: {
-          text: message
-        }
-      };
+  async sendText(number: string, text: string): Promise<boolean> {
+    // Formata número (apenas dígitos)
+    const cleanNumber = number.replace(/\D/g, "");
+    
+    // Adiciona 55 se não tiver (assumindo BR)
+    const finalNumber = cleanNumber.length <= 11 ? `55${cleanNumber}` : cleanNumber;
 
-      const { data } = await axios.post(url, body, {
-        headers: { 
-            apikey: EVOLUTION_API_KEY,
-            "Content-Type": "application/json"
+    const url = `${EVO_URL}/message/sendText/${INSTANCE_NAME}`;
+    
+    try {
+      logger.info({ number: finalNumber }, "Enviando mensagem WhatsApp...");
+
+      const { data } = await axios.post(url, {
+        number: finalNumber,
+        text: text
+      }, {
+        headers: {
+          "apikey": EVO_KEY,
+          "Content-Type": "application/json"
         }
       });
-      
-      logger.info({ phone }, "Mensagem WhatsApp enviada com sucesso");
-      return data;
+
+      logger.info({ messageId: data?.key?.id }, "Mensagem WhatsApp enviada com sucesso.");
+      return true;
+
     } catch (error: any) {
-      logger.error({ error: error.response?.data || error.message, phone }, "Erro ao enviar mensagem WhatsApp");
-      throw new Error("Falha no envio de WhatsApp");
+      logger.error({ 
+        error: error.response?.data || error.message,
+        number: finalNumber 
+      }, "Falha ao enviar mensagem WhatsApp");
+      return false; // Não quebra o fluxo, apenas loga erro
     }
   }
-};
+
+  /**
+   * Envia Imagem (Base64)
+   */
+  async sendImage(number: string, base64: string, caption?: string): Promise<boolean> {
+    const cleanNumber = number.replace(/\D/g, "");
+    const finalNumber = cleanNumber.length <= 11 ? `55${cleanNumber}` : cleanNumber;
+    const url = `${EVO_URL}/message/sendMedia/${INSTANCE_NAME}`;
+
+    try {
+      logger.info({ number: finalNumber }, "Enviando Imagem WhatsApp...");
+
+      const { data } = await axios.post(url, {
+        number: finalNumber,
+        media: base64,       // Base64 puro
+        mediatype: "image",
+        caption: caption || ""
+      }, {
+        headers: {
+          "apikey": EVO_KEY,
+          "Content-Type": "application/json"
+        }
+      });
+
+      logger.info({ messageId: data?.key?.id }, "Imagem WhatsApp enviada com sucesso.");
+      return true;
+    } catch (error: any) {
+      logger.error({ 
+        error: error.response?.data || error.message,
+        number: finalNumber 
+      }, "Falha ao enviar Imagem WhatsApp");
+      return false;
+    }
+  }
+
+  /**
+   * Verifica se a instância está conectada
+   */
+  async checkInstanceStatus(): Promise<string> {
+    try {
+      const url = `${EVO_URL}/instance/connectionState/${INSTANCE_NAME}`;
+      const { data } = await axios.get(url, {
+        headers: { "apikey": EVO_KEY }
+      });
+      return data?.instance?.state || "UNKNOWN";
+    } catch (error) {
+      return "ERROR";
+    }
+  }
+}
+
+export const whatsappService = new WhatsappService();
