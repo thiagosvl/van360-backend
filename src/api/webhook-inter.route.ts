@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { processarPagamentoCobranca } from "../services/processar-pagamento.service.js";
+import { processarRetornoValidacaoPix } from "../services/usuario.service.js";
 
 const webhookInterRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post("/receber-pix-usuario", async (req, reply) => {
@@ -43,7 +44,31 @@ const webhookInterRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
           }
           
           if (!cobranca) {
-            logger.warn({ txid }, "Cobrança não encontrada no banco com este txid");
+            // Se não é cobrança, pode ser o retorno de uma VALIDACAO DE PIX (micro-transacao enviada)
+            // Webhook de pagamento enviado (saída) geralmente tem endToEndId e valor.
+            // Para validação, o valor é 0.01.
+            // Se tiver 'endToEndId' e valor '0.01', tentamos processar como validação.
+            
+            // O payload do Inter para PIX Enviado/Pago pode variar, mas geralmente tem endToEndId.
+            // O loop usa 'pagamento' que desestruturamos { txid, valor, horario }.
+            // Se for PIX Enviado, pode não ter 'txid' mas tem 'endToEndId'.
+            const e2eId = pagamento.endToEndId || pagamento.endToEndId; // Garantir campo
+            
+            // Verificação Flexível: Se valor for 0.01 OU se tiver e2eId, verificar na tabela de validação
+            if (e2eId) {
+                logger.info({ e2eId, valor }, "Txid não encontrado em cobranças. Verificando se é Validação PIX...");
+                
+                const resultado = await processarRetornoValidacaoPix({ e2eId });
+                if (resultado.success) {
+                    logger.info({ e2eId }, "Webhook processado como Validação PIX.");
+                    continue;
+                } else if (resultado.reason !== "nao_encontrado") {
+                    // Se encontrou mas deu erro, já logou. Se não encontrou, segue o erro original.
+                    logger.warn({ e2eId, reason: resultado.reason }, "Tentativa de processar validação falhou ou não era validação.");
+                }
+            }
+
+            logger.warn({ txid: pagamento.txid, e2eId }, "Cobrança não encontrada no banco (e não é validação conhecida)");
             continue;
           }
 

@@ -338,10 +338,108 @@ async function consultarCallbacks(adminClient: SupabaseClient, dataInicio: strin
   }
 }
 
+
+
+async function consultarPix(adminClient: SupabaseClient, e2eId: string) {
+  if (INTER_MOCK_MODE) {
+    return {
+      endToEndId: e2eId,
+      valor: "0.01",
+      recebedor: {
+        nome: "MOCK USER",
+        cpfCnpj: "00000000000"
+      }
+    };
+  }
+
+  const token = await getValidInterToken(adminClient);
+  const url = `${INTER_API_URL}/pix/v2/pix/${e2eId}`;
+
+  try {
+    // Escopo necessário: pix.read
+    const { data } = await axios.get(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      httpsAgent: getHttpsAgent(),
+    });
+    return data;
+  } catch (err: any) {
+    logger.error({ err: err.response?.data || err.message, e2eId }, "Erro ao consultar PIX individual");
+    throw new Error("Falha ao consultar detalhes do PIX no Inter");
+  }
+}
+
+interface PagamentoPixParams {
+  valor: number;
+  chaveDestino: string;
+  descricao?: string;
+  xIdIdempotente: string;
+}
+
+/**
+ * Realiza um PIX (Transferência) para uma chave específica via Banking API.
+ * Usado para validação de chave (micro-transação).
+ */
+async function realizarPagamentoPix(
+  adminClient: SupabaseClient,
+  params: PagamentoPixParams
+): Promise<{ endToEndId: string; status: string }> {
+  if (INTER_MOCK_MODE) {
+    logger.warn({ params }, "MOCK INTER ATIVO: Simulando Pagamento PIX");
+    return {
+      endToEndId: `MOCK-E2E-${Date.now()}`,
+      status: "PAGO"
+    };
+  }
+
+  const token = await getValidInterToken(adminClient);
+  
+  // Endpoint de Banking para realizar pagamento PIX
+  // NOTA: Certifique-se que o escopo 'pagamento-pix.write' está ativo
+  const url = `${INTER_API_URL}/banking/v2/pix`;
+
+  const payload = {
+    valor: params.valor,
+    destinatario: {
+      chave: params.chaveDestino,
+      tipo: "CHAVE" // Inter infere o tipo, mas 'CHAVE' é o padrão para endereçamento
+    },
+    descricao: params.descricao || "Validacao Chave PIX"
+  };
+
+  try {
+    const { data } = await axios.post(url, payload, {
+      headers: { 
+        Authorization: `Bearer ${token}`, 
+        "Content-Type": "application/json",
+        "x-id-idempotente": params.xIdIdempotente // Fundamental para segurança
+      },
+      httpsAgent: getHttpsAgent(),
+    });
+
+    // O retorno de sucesso geralmente contém o endToEndId e status
+    // Se for agendamento, status pode ser 'AGENDADO'
+    return {
+      endToEndId: data.endToEndId,
+      status: data.status || "PROCESSAMENTO"
+    };
+
+  } catch (err: any) {
+    logger.error({ 
+      err: err.response?.data || err.message, 
+      payload, 
+      url 
+    }, "Falha ao realizar pagamento PIX");
+    throw new Error("Falha ao processar pagamento PIX no Inter");
+  }
+}
+
 export const interService = {
+  getValidInterToken,
   criarCobrancaPix,
   criarCobrancaComVencimentoPix,
-  registrarWebhookPix,
   consultarWebhookPix,
+  registrarWebhookPix,
   consultarCallbacks,
+  consultarPix,
+  realizarPagamentoPix
 };

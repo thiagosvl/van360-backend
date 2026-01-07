@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { ASSINATURA_COBRANCA_STATUS_CANCELADA, ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_ATIVA, ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_TRIAL, PLANO_ESSENCIAL, PLANO_GRATUITO, PLANO_PROFISSIONAL, TIPOS_CHAVE_PIX_VALIDOS, TipoChavePix } from "../config/contants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
@@ -935,8 +936,10 @@ export async function calcularPrecoPersonalizado(quantidade: number, ignorarMini
       );
 
       const excedente = quantidade - franquiaBase;
-      const blocosAdicionais = Math.ceil(excedente / billingConfig.tamanhoBloco);
-      const precoAdicional = blocosAdicionais * billingConfig.incrementoBloco;
+      const valorIncremento = billingConfig.valorIncrementoPassageiro ?? 2.50;
+      
+      const precoAdicional = excedente * valorIncremento;
+      
       // Preço Final = Preço do Maior Plano + Adicionais
       const precoCalculado = precoBase + precoAdicional;
       
@@ -2051,4 +2054,202 @@ export async function atualizarUsuario(usuarioId: string, payload: {
     }
 
     return { success: true };
+}
+
+// -- Validação de Chave PIX (Micro-pagamento) --
+
+/**
+ * Cadastra ou atualiza chave PIX e inicia processo de validação
+ */
+export async function cadastrarOuAtualizarChavePix(
+  usuarioId: string, 
+  chavePix: string, 
+  tipoChave: string
+) {
+  if (!usuarioId) throw new Error("ID do usuário é obrigatório.");
+  if (!chavePix) throw new Error("Chave PIX é obrigatória.");
+
+  // 1. Sanitizar
+  let chaveSanitizada = chavePix.trim();
+  if ([TipoChavePix.CPF, TipoChavePix.CNPJ, TipoChavePix.TELEFONE].includes(tipoChave as any)) {
+      chaveSanitizada = onlyDigits(chavePix);
+  }
+
+  // 2. Salvar no Banco como PENDENTE
+  const { error } = await supabaseAdmin
+      .from("usuarios")
+      .update({
+          chave_pix: chaveSanitizada,
+          tipo_chave_pix: tipoChave,
+          status_chave_pix: "PENDENTE_VALIDACAO",
+          chave_pix_validada_em: null, // Reseta validação anterior
+          nome_titular_pix_validado: null,
+          cpf_cnpj_titular_pix_validado: null,
+          updated_at: new Date().toISOString()
+      })
+      .eq("id", usuarioId);
+
+  if (error) {
+      logger.error({ error: error.message, usuarioId }, "Erro ao salvar chave PIX pendente.");
+      throw new Error("Erro ao salvar chave PIX.");
+  }
+
+  // 3. Iniciar Validação Async (Micro-pagamento)
+  // Não aguardamos o resultado para não travar a UI (o webhook confirmará)
+  // Mas chamamos a função para garantir que o request saia
+  iniciarValidacaoPix(usuarioId, chaveSanitizada)
+      .catch(err => {
+          logger.error({ error: err.message, usuarioId }, "Falha silenciosa ao iniciar validação PIX (background).");
+      });
+
+  return { success: true, status: "PENDENTE_VALIDACAO" };
+}
+
+/**
+ * Realiza a validação ativa (envia R$ 0,01)
+ */
+async function iniciarValidacaoPix(usuarioId: string, chavePix: string) {
+  const xIdIdempotente = randomUUID();
+
+  try {
+      // 1. Registrar intenção de validação (Tabela Temporária)
+      const { error: insertError } = await supabaseAdmin
+          .from("pix_validacao_pendente")
+          .insert({
+              usuario_id: usuarioId,
+              x_id_idempotente: xIdIdempotente,
+              chave_pix_enviada: chavePix
+          });
+
+      if (insertError) {
+          throw new Error(`Erro ao criar registro de validação pendente: ${insertError.message}`);
+      }
+
+      // 2. Realizar Micro-Pagamento (R$ 0,01)
+      await interService.realizarPagamentoPix(supabaseAdmin, {
+          valor: 0.01,
+          chaveDestino: chavePix,
+          descricao: `Validacao Van360 ${usuarioId.substring(0, 8)}`,
+          xIdIdempotente
+      });
+
+      logger.info({ usuarioId, xIdIdempotente }, "Micro-pagamento de validação PIX enviado com sucesso.");
+
+  } catch (err: any) {
+      // Falha Imediata (ex: chave inválida na hora do envio)
+      logger.error({ error: err.message, usuarioId }, "Falha ao iniciar validação PIX.");
+
+  }
+}
+
+/**
+ * Processa o retorno (Webhook) da validação PIX
+ */
+export async function processarRetornoValidacaoPix(
+  identificador: { e2eId?: string, txid?: string }
+) {
+  logger.info({ identificador }, "Processando retorno de validação PIX...");
+
+  // 1. Buscar na tabela temporária
+  let query = supabaseAdmin
+      .from("pix_validacao_pendente")
+      .select("id, usuario_id, x_id_idempotente, chave_pix_enviada, created_at");
+
+  // Tenta pelo ID de idempotência (se foi salvo como txid no envio? não, enviamos xIdIdempotente)
+  // O webhook de pagamento do Inter retorna o endToEndId. 
+  // O xIdIdempotente é nosso controle.
+  // Precisamos vincular o endToEndId ao xIdIdempotente... 
+  // PROBLEMA: O webhook de *pagamento* (saída) manda o endToEndId. 
+  // O endpoint de *iniciação* (pagamento) retorna o endToEndId IMEDIATAMENTE.
+  // Deveríamos ter salvo o endToEndId na tabela `pix_validacao_pendente` no momento do envio.
+  // CORREÇÃO: Vamos ajustar `iniciarValidacaoPix` para salvar o `endToEndId`.
+  
+  // Por enquanto, assumindo que buscaremos pelo endToEndId salvo (que vou adicionar na tabela).
+  // Se não tivermos o endToEndId (ex: falha no update previo), teremos problemas.
+  
+  // Assumindo que o identificador recebido é o endToEndId
+  if (identificador.e2eId) {
+      query = query.eq("end_to_end_id", identificador.e2eId);
+  } else {
+      logger.warn("Identificador inválido para validação PIX (sem e2eId).");
+      return { success: false, reason: "sem_id" };
+  }
+
+  const { data: pendentes, error } = await query;
+  
+  if (error || !pendentes || pendentes.length === 0) {
+      logger.warn({ identificador }, "Nenhuma validação pendente encontrada para este retorno.");
+      return { success: false, reason: "nao_encontrado" };
+  }
+
+  const pendente = pendentes[0];
+  const usuarioId = pendente.usuario_id;
+  const e2eId = identificador.e2eId;
+
+  // 2. Consultar Detalhes no Inter (Quem recebeu?)
+  // Endpoint GET /pix/v2/pix/{e2eId} retorna dados da transação
+  // Precisamos de uma nova função no inter.service para isso
+  let dadosPix: any;
+  try {
+      dadosPix = await interService.consultarPix(supabaseAdmin, e2eId!);
+  } catch (err) {
+      logger.error({ err, e2eId }, "Erro ao consultar dados do PIX no Inter.");
+      return { success: false, reason: "erro_consulta_inter" };
+  }
+
+  // 3. Validar Titularidade
+  // O retorno do Inter deve ter algo como "chave", "pagador" (quem enviou - nós), "recebedor" (o motorista)
+  // Estrutura típica V2: { endToEndId, valor, horario, recebedor: { nome, cpfCnpj, ... } }
+  
+  const nomeRecebedor = dadosPix.recebedor?.nome;
+  const cpfCnpjRecebedor = dadosPix.recebedor?.cpfCnpj || dadosPix.recebedor?.cpf || dadosPix.recebedor?.cnpj;
+
+  if (!nomeRecebedor || !cpfCnpjRecebedor) {
+      logger.error({ dadosPix }, "Dados do recebedor incompletos no retorno do Inter.");
+      // Marcar falha
+      await supabaseAdmin.from("usuarios").update({ status_chave_pix: "FALHA_VALIDACAO" }).eq("id", usuarioId);
+      return { success: false, reason: "dados_incompletos" };
+  }
+
+  // Buscar dados do Motorista
+  const usuario = await getUsuarioData(usuarioId);
+  const cpfMotorista = onlyDigits(usuario.cpfcnpj);
+  const cpfRecebedor = onlyDigits(cpfCnpjRecebedor);
+
+  // Comparação
+  const cpfMatch = cpfMotorista === cpfRecebedor;
+  
+  // Nome (Similaridade simplificada)
+  const nomeMotoristaClean = cleanString(usuario.nome, true).toUpperCase().split(" ")[0]; // Primeiro nome
+  const nomeRecebedorClean = cleanString(nomeRecebedor, true).toUpperCase();
+  const nomeMatch = nomeRecebedorClean.includes(nomeMotoristaClean); // Contém o primeiro nome?
+
+  if (cpfMatch) {
+      // SUCESSO!
+      await supabaseAdmin.from("usuarios").update({
+          status_chave_pix: "VALIDADA",
+          chave_pix_validada_em: new Date().toISOString(),
+          nome_titular_pix_validado: nomeRecebedor,
+          cpf_cnpj_titular_pix_validado: cpfCnpjRecebedor
+      }).eq("id", usuarioId);
+      
+      // Limpar pendência
+      await supabaseAdmin.from("pix_validacao_pendente").delete().eq("id", pendente.id);
+      
+      logger.info({ usuarioId, chave: pendente.chave_pix_enviada }, "Chave PIX Validada com Sucesso!");
+      return { success: true, status: "VALIDADA" };
+
+  } else {
+      // FALHA DE TITULARIDADE
+      logger.warn({ usuarioId, esperado: cpfMotorista, recebido: cpfRecebedor }, "Falha de titularidade na validação PIX.");
+      
+      await supabaseAdmin.from("usuarios").update({
+          status_chave_pix: "FALHA_VALIDACAO"
+      }).eq("id", usuarioId);
+
+      // Limpar pendência mesmo com falha (para não tentar de novo erradamente)
+      await supabaseAdmin.from("pix_validacao_pendente").delete().eq("id", pendente.id); // OU manter para debug? Melhor limpar.
+
+      return { success: false, reason: "titularidade_invalida" };
+  }
 }

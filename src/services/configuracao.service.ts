@@ -4,9 +4,7 @@ import { supabaseAdmin } from "../config/supabase.js";
 export const CONFIG_KEYS = {
   PRO_RATA_DIAS_MES: "PRO_RATA_DIAS_MES",
   PRO_RATA_VALOR_MINIMO: "PRO_RATA_VALOR_MINIMO",
-  ENTERPRISE_PLANO_BASE_ID: "ENTERPRISE_PLANO_BASE_ID",
-  ENTERPRISE_INCREMENTO_BLOCO: "ENTERPRISE_INCREMENTO_BLOCO",
-  ENTERPRISE_TAMANHO_BLOCO: "ENTERPRISE_TAMANHO_BLOCO",
+  VALOR_INCREMENTO_PASSAGEIRO_EXCESSO: "VALOR_INCREMENTO_PASSAGEIRO_EXCESSO"
 } as const;
 
 export type ConfigKey = keyof typeof CONFIG_KEYS;
@@ -39,12 +37,12 @@ export async function getConfigNumber(key: ConfigKey, defaultValue: number): Pro
   // Substituir vírgula por ponto para garantir compatibilidade
   const valorFormatado = valor.replace(",", ".");
   const numero = Number(valorFormatado);
-  
+
   if (isNaN(numero)) {
     logger.error({ key, valor, defaultValue }, "Valor de configuração inválido para número.");
     return defaultValue;
   }
-  
+
   return numero;
 }
 
@@ -56,19 +54,19 @@ export async function getBillingConfig() {
     diasProRata,
     valorMinimoProRata,
     incrementoBloco,
-    tamanhoBloco
   ] = await Promise.all([
     getConfigNumber("PRO_RATA_DIAS_MES", 30),
     getConfigNumber("PRO_RATA_VALOR_MINIMO", 0.01),
-    getConfigNumber("ENTERPRISE_INCREMENTO_BLOCO", 70.00),
-    getConfigNumber("ENTERPRISE_TAMANHO_BLOCO", 30)
+    getConfigNumber("VALOR_INCREMENTO_PASSAGEIRO_EXCESSO", 2.50)
   ]);
+
+  /* Recycled variable for the new logic */
+  const valorIncrementoPassageiro = incrementoBloco; 
 
   return {
     diasProRata,
     valorMinimoProRata,
-    planoBaseId: null, // Legacy: Removido em favor de discovery dinâmico
-    incrementoBloco,
-    tamanhoBloco
+    planoBaseId: null, 
+    valorIncrementoPassageiro,
   };
 }
