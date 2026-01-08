@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { COBRANCA_STATUS_PAGA, CONFIG_KEY_TAXA_INTERMEDIACAO_PIX, STATUS_CHAVE_PIX_VALIDADA, STATUS_REPASSE_FALHA, STATUS_REPASSE_PENDENTE, STATUS_REPASSE_PROCESSANDO, STATUS_REPASSE_REPASSADO, STATUS_TRANSACAO_PROCESSANDO, STATUS_TRANSACAO_SUCESSO } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { moneyToNumber } from "../utils/utils.js";
@@ -40,8 +41,9 @@ export const cobrancaService = {
                 qr_code_payload: pixResult.qrCodePayload,
                 url_qr_code: pixResult.location
             };
-        } catch (error) {
-            logger.error({ error, passageiroId: data.passageiro_id }, "Falha ao gerar PIX para cobrança - Prosseguindo sem PIX");
+        } catch (error: any) {
+            logger.error({ error: error.message, passageiroId: data.passageiro_id }, "Falha Crítica ao gerar PIX. Abortando criação da cobrança.");
+            throw new Error(`Falha ao gerar PIX: ${error.message}`);
         }
     }
 
@@ -284,7 +286,7 @@ export const cobrancaService = {
     }
 
     // 2. Calcular valores
-    const taxaIntermediacao = await getConfigNumber("TAXA_INTERMEDIACAO_PIX", 0.99);
+    const taxaIntermediacao = await getConfigNumber(CONFIG_KEY_TAXA_INTERMEDIACAO_PIX, 0.99);
     const valorPago = valorPagoReal || cobranca.valor;
     const valorRepassar = valorPago; // Regra: Motorista recebe valor cheio
 
@@ -297,7 +299,7 @@ export const cobrancaService = {
             valor_pago: valorPago,
             taxa_intermediacao_banco: taxaIntermediacao,
             valor_a_repassar: valorRepassar,
-            status_repasse: "PENDENTE", // Pronto para repasse
+            status_repasse: STATUS_REPASSE_PENDENTE, // Pronto para repasse
             dados_auditoria_pagamento: payload || {}
         })
         .eq("id", cobranca.id)
@@ -321,14 +323,14 @@ export const cobrancaService = {
       const motorista = cobranca.usuarios;
 
       // 2. Validações
-      if (cobranca.status !== "PAGA") throw new Error("Cobrança não está paga, impossível repassar.");
-      if (cobranca.status_repasse === "REPASSADO" || cobranca.status_repasse === "PROCESSANDO") {
+      if (cobranca.status !== COBRANCA_STATUS_PAGA) throw new Error("Cobrança não está paga, impossível repassar.");
+      if (cobranca.status_repasse === STATUS_REPASSE_REPASSADO || cobranca.status_repasse === STATUS_REPASSE_PROCESSANDO) {
           return { status: "JA_REPASSADO", message: "Repasse já efetuado ou em andamento" };
       }
 
-      if (motorista.status_chave_pix !== "VALIDADA" || !motorista.chave_pix) {
+      if (motorista.status_chave_pix !== STATUS_CHAVE_PIX_VALIDADA || !motorista.chave_pix) {
           // Marca falha mas não trava processo (pode tentar depois)
-          await supabaseAdmin.from("cobrancas").update({ status_repasse: "FALHA_REPASSE" }).eq("id", cobrancaId);
+          await supabaseAdmin.from("cobrancas").update({ status_repasse: STATUS_REPASSE_FALHA }).eq("id", cobrancaId);
           throw new Error("Chave PIX do motorista não validada ou ausente.");
       }
 
@@ -337,7 +339,7 @@ export const cobrancaService = {
       const idempotencyKey = randomUUID();
 
       // Atualiza para PROCESSANDO antes de chamar API (evitar race condition)
-      await supabaseAdmin.from("cobrancas").update({ status_repasse: "PROCESSANDO" }).eq("id", cobrancaId);
+      await supabaseAdmin.from("cobrancas").update({ status_repasse: STATUS_REPASSE_PROCESSANDO }).eq("id", cobrancaId);
 
       try {
           // (Opcional) Criar registro na tabela transacoes_repasse
@@ -347,7 +349,7 @@ export const cobrancaService = {
                 usuario_id: cobranca.usuario_id,
                 cobranca_id: cobrancaId,
                 valor_repassado: valorRepasse,
-                status: "PROCESSANDO"
+                status: STATUS_TRANSACAO_PROCESSANDO
             }])
             .select() // Retorna inserido para pegar ID se precisar
             .single(); 
@@ -361,7 +363,7 @@ export const cobrancaService = {
 
           // 4. Sucesso
           const updatePayload: any = { 
-              status_repasse: "REPASSADO", 
+              status_repasse: STATUS_REPASSE_REPASSADO, 
               data_repasse: new Date(), 
               id_transacao_repasse: transacao?.id 
           };
@@ -370,7 +372,7 @@ export const cobrancaService = {
           
           if (transacao?.id) {
               await supabaseAdmin.from("transacoes_repasse")
-                .update({ status: "SUCESSO", txid_pix_repasse: pixResponse.endToEndId, data_conclusao: new Date() })
+                .update({ status: STATUS_TRANSACAO_SUCESSO, txid_pix_repasse: pixResponse.endToEndId, data_conclusao: new Date() })
                 .eq("id", transacao.id);
           }
 
@@ -379,7 +381,7 @@ export const cobrancaService = {
       } catch (error: any) {
           logger.error({ error, cobrancaId }, "Erro no processamento do repasse");
           
-          await supabaseAdmin.from("cobrancas").update({ status_repasse: "FALHA_REPASSE" }).eq("id", cobrancaId);
+          await supabaseAdmin.from("cobrancas").update({ status_repasse: STATUS_REPASSE_FALHA }).eq("id", cobrancaId);
           
           // Tentar atualizar tabela de transacao se foi criada (precisaria do ID, mas aqui simplificamos)
           // Em um cenario real, usariamos transacao.id se dispovivel no escopo superior ou fariamos query.

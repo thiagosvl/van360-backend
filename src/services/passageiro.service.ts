@@ -1,4 +1,4 @@
-import { PLANO_PROFISSIONAL } from "../config/contants.js";
+import { PLANO_PROFISSIONAL } from "../config/constants.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { cleanString, moneyToNumber, onlyDigits, toLocalDateString } from "../utils/utils.js";
 import { cobrancaService } from "./cobranca.service.js";

@@ -16,6 +16,13 @@ interface EvolutionResponse {
   message: any;
 }
 
+export interface CompositeMessagePart {
+  type: "text" | "image";
+  content?: string;  // Para texto ou legenda
+  mediaBase64?: string; // Para imagem
+  delayMs?: number; // Delay opcional antes de enviar
+}
+
 class WhatsappService {
   
   /**
@@ -87,6 +94,37 @@ class WhatsappService {
       }, "Falha ao enviar Imagem WhatsApp");
       return false;
     }
+  }
+
+  /**
+   * Envia Mensagem Composta (Lego)
+   * Sequencia de textos e imagens com delay opcional
+   */
+  async sendCompositeMessage(number: string, parts: CompositeMessagePart[]): Promise<boolean> {
+    const cleanNumber = number.replace(/\D/g, "");
+    const finalNumber = cleanNumber.length <= 11 ? `55${cleanNumber}` : cleanNumber;
+
+    logger.info({ number: finalNumber, partsCount: parts.length }, "Iniciando envio de Mensagem Composta (Lego)");
+
+    let success = true;
+
+    for (const part of parts) {
+      // Delay Opcional
+      if (part.delayMs) {
+        await new Promise(resolve => setTimeout(resolve, part.delayMs));
+      }
+
+      if (part.type === "text" && part.content) {
+         const sent = await this.sendText(finalNumber, part.content);
+         if (!sent) success = false;
+      } 
+      else if (part.type === "image" && part.mediaBase64) {
+         const sent = await this.sendImage(finalNumber, part.mediaBase64, part.content);
+         if (!sent) success = false;
+      }
+    }
+
+    return success;
   }
 
   /**

@@ -1,3 +1,12 @@
+import {
+    COBRANCA_STATUS_PENDENTE,
+    CONFIG_KEY_DIAS_ANTECEDENCIA_AVISO_VENCIMENTO,
+    JOB_ORIGIN_DAILY,
+    JOB_ORIGIN_FORCE,
+    PASSENGER_EVENT_DUE_SOON,
+    PASSENGER_EVENT_DUE_TODAY,
+    PASSENGER_EVENT_OVERDUE
+} from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
 import { getConfigNumber } from "../configuracao.service.js";
@@ -20,7 +29,7 @@ export const dailyChargeMonitorJob = {
             logger.info("Iniciando Job Diário de Monitoramento de Cobranças");
 
             // 1. Configurações
-            const diasAntecedencia = params.diasAntecedenciaOverride ?? await getConfigNumber("DIAS_ANTECEDENCIA_AVISO_VENCIMENTO", 2);
+            const diasAntecedencia = params.diasAntecedenciaOverride ?? await getConfigNumber(CONFIG_KEY_DIAS_ANTECEDENCIA_AVISO_VENCIMENTO, 2);
             
             // Calculando Datas Chaves
             
@@ -33,11 +42,6 @@ export const dailyChargeMonitorJob = {
             // hojeStr ja temos
 
             // C) Atrasados (Regra: 1 dia, 3 dias, 5 dias após vencimento)
-            // Vamos buscar cobranças que venceram nessas datas especifícas para notificar
-            // Ex: Se hoje é dia 10. 
-            // Venceu dia 9 (1 dia atraso) -> Notificar
-            // Venceu dia 7 (3 dias atraso) -> Notificar
-            // Venceu dia 5 (5 dias atraso) -> Notificar
             const atraso1d = new Date(); atraso1d.setDate(hoje.getDate() - 1);
             const atraso3d = new Date(); atraso3d.setDate(hoje.getDate() - 3);
             const atraso5d = new Date(); atraso5d.setDate(hoje.getDate() - 5);
@@ -52,7 +56,6 @@ export const dailyChargeMonitorJob = {
             const datasDeInteresse = [dataAvisoStr, hojeStr, ...datasAtraso];
             
             // Query única filtrando pelas datas de interesse
-            // Obs: in('data_vencimento', [...])
             const { data: cobrancas, error: cobError } = await supabaseAdmin
                 .from("cobrancas")
                 .select(`
@@ -62,7 +65,7 @@ export const dailyChargeMonitorJob = {
                     ),
                     usuarios ( nome )
                 `)
-                .eq("status", "pendente")
+                .eq("status", COBRANCA_STATUS_PENDENTE)
                 .in("data_vencimento", datasDeInteresse);
 
             if (cobError) throw cobError;
@@ -80,32 +83,27 @@ export const dailyChargeMonitorJob = {
                 if (!passageiro?.telefone_responsavel) continue;
 
                 // Definir Contexto
-                let context: "DUE_SOON" | "DUE_TODAY" | "OVERDUE" | null = null;
+                let context: string | null = null;
                 const vecimentoStr = cobranca.data_vencimento;
 
                 if (vecimentoStr === dataAvisoStr) {
-                    context = "DUE_SOON";
+                    context = PASSENGER_EVENT_DUE_SOON;
                 } else if (vecimentoStr === hojeStr) {
-                    context = "DUE_TODAY";
+                    context = PASSENGER_EVENT_DUE_TODAY;
                 } else if (vecimentoStr < hojeStr) {
-                    context = "OVERDUE";
+                    context = PASSENGER_EVENT_OVERDUE;
                 }
 
                 if (!context) continue;
 
                 // 4. Verificar se JÁ ENVIAMOS hoje (Idempotência Diária)
-                // Evita que se rodar o job 2x, mande 2x msg
                 if (!params.force) {
                     const { count } = await supabaseAdmin
                         .from("cobranca_notificacoes")
                         .select("id", { count: "exact", head: true })
                         .eq("cobranca_id", cobranca.id)
-                        .eq("tipo_evento", context) // Só evita o MESMO tipo hoje. Se mandou DUE_SOON ontem, hoje pode mandar DUE_TODAY? Sim.
-                        .gte("data_envio", hojeStr + "T00:00:00"); // Enviado HOJE?
-
-                    // Regra Extra: Para DUE_SOON, verificamos se já mandou ALGUMA vez esse evento para essa cobrança?
-                    // Geralmente DUE_SOON é 1x só. DUE_TODAY 1x só.
-                    // Atraso pode ser várias, mas limitamos 1 por dia.
+                        .eq("tipo_evento", context)
+                        .gte("data_envio", hojeStr + "T00:00:00"); 
                     
                     if (count && count > 0) {
                         continue; // Já processado hoje
@@ -116,18 +114,18 @@ export const dailyChargeMonitorJob = {
                 try {
                     const enviou = await notificationService.notifyPassenger(
                         passageiro.telefone_responsavel,
-                        context,
+                        context as any,
                         {
                             nomeResponsavel: passageiro.nome_responsavel || "Responsável",
                             nomePassageiro: passageiro.nome || "Aluno",
                             nomeMotorista: motorista.nome || "Motorista",
                             valor: cobranca.valor,
                             dataVencimento: cobranca.data_vencimento,
-                            diasAntecedencia: context === "DUE_SOON" ? diasAntecedencia : undefined,
+                            diasAntecedencia: context === PASSENGER_EVENT_DUE_SOON ? diasAntecedencia : undefined,
                             pixPayload: cobranca.qr_code_payload,
                             
                             // Calculo de dias de atraso se for overdue
-                            diasAtraso: context === "OVERDUE" ? Math.floor((new Date().getTime() - new Date(cobranca.data_vencimento).getTime()) / (1000 * 3600 * 24)) : undefined
+                            diasAtraso: context === PASSENGER_EVENT_OVERDUE ? Math.floor((new Date().getTime() - new Date(cobranca.data_vencimento).getTime()) / (1000 * 3600 * 24)) : undefined
                         }
                     );
 
@@ -135,7 +133,7 @@ export const dailyChargeMonitorJob = {
                         await supabaseAdmin.from("cobranca_notificacoes").insert({
                             cobranca_id: cobranca.id,
                             tipo_evento: context,
-                            tipo_origem: params.force ? "JOB_FORCE" : "JOB_DAILY",
+                            tipo_origem: params.force ? JOB_ORIGIN_FORCE : JOB_ORIGIN_DAILY,
                             canal: "WHATSAPP",
                             data_envio: new Date().toISOString()
                         });

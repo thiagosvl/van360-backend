@@ -12,6 +12,40 @@
       "source": "/(.*)",
       "destination": "/api/index.ts"
     }
+  ],
+  "crons": [
+    {
+      "path": "/jobs/passenger-monitor",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/jobs/driver-monitor",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/jobs/generate-monthly-charges",
+      "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/jobs/subscription-generator",
+      "schedule": "0 11 * * *" 
+    },
+    {
+      "path": "/jobs/pix-validation-monitor",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/jobs/repasse-retry",
+      "schedule": "15 * * * *"
+    },
+    {
+      "path": "/jobs/repasse-monitor",
+      "schedule": "30 * * * *"
+    },
+    {
+      "path": "/jobs/reconciliacao-entrada",
+      "schedule": "0 6 * * *"
+    }
   ]
 }
 

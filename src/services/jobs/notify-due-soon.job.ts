@@ -1,3 +1,4 @@
+import { CONFIG_KEY_DIAS_ANTECEDENCIA_AVISO_VENCIMENTO } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
 import { getConfigNumber } from "../configuracao.service.js";
@@ -17,7 +18,7 @@ export const notifyDueSoonJob = {
         try {
             // 1. Configuração: Dias de antecedência
             // Se passar override (teste manual), usa ele. Senão busca do banco.
-            const diasAntecedencia = params.diasAntecedenciaOverride ?? await getConfigNumber("DIAS_ANTECEDENCIA_AVISO_VENCIMENTO", 2);
+            const diasAntecedencia = params.diasAntecedenciaOverride ?? await getConfigNumber(CONFIG_KEY_DIAS_ANTECEDENCIA_AVISO_VENCIMENTO, 2);
             
             // 2. Calcular Data Alvo (Hoje + N dias)
             const hoje = new Date();

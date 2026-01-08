@@ -1,11 +1,12 @@
 import { randomUUID } from "crypto";
-import { ASSINATURA_COBRANCA_STATUS_CANCELADA, ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_ATIVA, ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_TRIAL, PLANO_ESSENCIAL, PLANO_GRATUITO, PLANO_PROFISSIONAL, TIPOS_CHAVE_PIX_VALIDOS, TipoChavePix } from "../config/contants.js";
+import { ASSINATURA_COBRANCA_STATUS_CANCELADA, ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_ATIVA, ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_TRIAL, DRIVER_EVENT_ACTIVATION, DRIVER_EVENT_UPGRADE, PLANO_ESSENCIAL, PLANO_GRATUITO, PLANO_PROFISSIONAL, TIPOS_CHAVE_PIX_VALIDOS, TipoChavePix } from "../config/constants.js";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { cleanString, onlyDigits } from "../utils/utils.js";
 import { getBillingConfig } from "./configuracao.service.js";
 import { interService } from "./inter.service.js";
+import { notificationService } from "./notifications/notification.service.js";
 import { passageiroService } from "./passageiro.service.js";
 
 export interface UsuarioPayload {
@@ -855,7 +856,7 @@ async function limparAssinaturasPendentes(usuarioId: string) {
 async function getUsuarioData(usuarioId: string) {
   const { data: usuario, error } = await supabaseAdmin
     .from("usuarios")
-    .select("id, nome, cpfcnpj")
+    .select("id, nome, cpfcnpj, telefone")
     .eq("id", usuarioId)
     .single();
 
@@ -1206,11 +1207,44 @@ export async function upgradePlano(
     
     // ... Lógica padrão (Cobrança imediata) para outros casos ...
     
-    // Vigência fim: se não tinha assinatura, será calculada após o pagamento (null por enquanto)
-    // Se tinha, mantém a atual (para pro-rata ou continuidade), mas no caso de "sem assinatura ativa", é null
-    const vigenciaFim = assinaturaAtual?.vigencia_fim || null;
+    // Determinar Estratégia de Cobrança (Pro-Rata vs Novo Ciclo)
+    let billingType = "activation"; // Default: Novo Ciclo
+    let valorCobrar = precoAplicado;
+    let vigenciaFimInsert: string | null = null;
+    let descricaoCobranca = `Upgrade de Plano: ${planoAtual?.slug === PLANO_ESSENCIAL ? "Essencial" : "Grátis"} → ${novoPlano.nome}`;
 
-    // NÃO desativar assinatura atual (se existir) - ela permanece ativa até o pagamento ser confirmado
+    if (assinaturaAtual && assinaturaAtual.vigencia_fim) {
+        // Se tem assinatura ativa com vigência definida -> Pro-Rata
+        const billingConfig = await getBillingConfig();
+        const precoAtual = Number(assinaturaAtual.preco_aplicado || 0);
+        const diferencaMensal = precoAplicado - precoAtual;
+
+        // Calcular Pro-Rata
+        const { valorCobrar: valorPR, diasRestantes } = calcularValorProRata(
+            diferencaMensal,
+            assinaturaAtual.vigencia_fim,
+            { valorMinimo: billingConfig.valorMinimoProRata, diasBase: billingConfig.diasProRata }
+        );
+
+        valorCobrar = valorPR;
+        billingType = "upgrade_plan"; // Sinaliza para o processador manter o ciclo
+        vigenciaFimInsert = assinaturaAtual.vigencia_fim;
+        descricaoCobranca += ` (Pro-Rata: ${diasRestantes} dias)`;
+
+        logger.info({ 
+            usuarioId, 
+            valorCobrar, 
+            diasRestantes, 
+            vigenciaFim: vigenciaFimInsert 
+        }, "Upgrade Pro-Rata calculado com sucesso.");
+    } else {
+        // Se não tem assinatura ativa (Inativo/Cancelado) -> Ativação (Novo Ciclo Completo)
+        billingType = "activation";
+        valorCobrar = precoAplicado;
+        vigenciaFimInsert = null; // Será calculado no pagamento (Data Pagamento + 1 Mês)
+        
+        logger.info({ usuarioId, valorCobrar }, "Upgrade sem assinatura ativa: Iniciando como Ativação (Novo Ciclo).");
+    }
 
     // Criar nova assinatura (inativa até pagamento)
     const { data: novaAssinatura, error: assinaturaError } = await supabaseAdmin
@@ -1222,36 +1256,27 @@ export async function upgradePlano(
         ativo: false,
         status: ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO,
         billing_mode: novoPlano.slug === PLANO_PROFISSIONAL ? "automatico" : "manual",
-        preco_aplicado: precoAplicado,
+        preco_aplicado: precoAplicado, // Preço base do plano (para renovações futuras)
         preco_origem: precoOrigem,
         anchor_date: anchorDate,
-        vigencia_fim: vigenciaFim,
+        vigencia_fim: vigenciaFimInsert,
       })
       .select()
       .single();
 
     if (assinaturaError) throw assinaturaError;
 
-    // Criar cobrança
-    // Se não tinha assinatura ativa, o valor é cheio (precoAplicado)
-    // Se tinha, calcular pro-rata? 
-    // OBS: A lógica original de upgradePlano SEMPRE cobrava 'precoAplicado' (cheio) no código anterior:
-    // "valor: precoAplicado" (linha 1095 original).
-    // O pro-rata só era calculado na troca de subplano. 
-    // Para upgrades entre planos diferentes, a regra de negócio parece ser cobrar o valor cheio do novo plano imediatamente.
-    // Manterei essa lógica.
-
     const { data: cobranca, error: cobrancaError } = await supabaseAdmin
       .from("assinaturas_cobrancas")
       .insert({
         usuario_id: usuarioId,
         assinatura_usuario_id: novaAssinatura.id,
-        valor: precoAplicado,
+        valor: valorCobrar,
         status: ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
         data_vencimento: hoje.toISOString().split("T")[0],
         origem: "inter",
-        billing_type: "upgrade_plan",
-        descricao: `Upgrade de Plano: ${planoAtual?.slug === PLANO_ESSENCIAL ? "Essencial" : "Grátis"} → ${novoPlano.nome}`,
+        billing_type: billingType,
+        descricao: descricaoCobranca,
       })
       .select()
       .single();
@@ -1277,6 +1302,24 @@ export async function upgradePlano(
         location_url: pixData.location,
       })
       .eq("id", cobranca.id);
+
+
+    // Envio Imediato do PIX via WhatsApp (Garantia de Entrega)
+    try {
+        if (usuario.telefone) {
+            const eventType = billingType === "activation" ? DRIVER_EVENT_ACTIVATION : DRIVER_EVENT_UPGRADE;
+            
+            notificationService.notifyDriver(usuario.telefone, eventType, {
+                nomeMotorista: usuario.nome,
+                nomePlano: novoPlano.nome,
+                valor: precoAplicado,
+                dataVencimento: hoje.toISOString().split("T")[0],
+                pixPayload: pixData.qrCodePayload
+            }).catch(err => logger.error({ err }, "Falha ao enviar PIX imediato no upgrade"));
+        }
+    } catch (notifErr) {
+        logger.error({ notifErr }, "Erro no bloco de notificação imediata");
+    }
 
     // Não ativar passageiros aqui - será feito no webhook após confirmação do pagamento
     return {

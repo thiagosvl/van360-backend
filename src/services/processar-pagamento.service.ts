@@ -1,10 +1,11 @@
 import {
-  ASSINATURA_COBRANCA_STATUS_CANCELADA,
-  ASSINATURA_COBRANCA_STATUS_PAGO,
-  ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
-  ASSINATURA_COBRANCA_TIPO_PAGAMENTO_PIX,
-  PLANO_PROFISSIONAL,
-} from "../config/contants.js";
+    ASSINATURA_COBRANCA_STATUS_CANCELADA,
+    ASSINATURA_COBRANCA_STATUS_PAGO,
+    ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
+    ASSINATURA_COBRANCA_TIPO_PAGAMENTO_PIX,
+    CONFIG_KEY_TAXA_INTERMEDIACAO_PIX,
+    PLANO_PROFISSIONAL,
+} from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { getConfigNumber } from "./configuracao.service.js";
@@ -46,7 +47,7 @@ export async function processarPagamentoCobranca(
 
   try {
     // 0. Buscar taxa de intermediação vigente
-    const taxaIntermediacao = await getConfigNumber("TAXA_INTERMEDIACAO_PIX", 0.99);
+    const taxaIntermediacao = await getConfigNumber(CONFIG_KEY_TAXA_INTERMEDIACAO_PIX, 0.99);
 
     // 1. Atualizar status da cobrança para pago e registrar taxa
     const { error: updateCobrancaError, data: updatedCobranca } = await supabaseAdmin
@@ -174,9 +175,13 @@ async function calcularVigenciaFimEAnchorDate(
   let vigenciaFim: Date;
   let novoAnchorDate: string | null = null;
   const billingType = cobranca.billing_type || "subscription";
-  const isSpecialBilling = ["upgrade", "upgrade_plan", "activation", "expansion"].includes(billingType);
 
-  if (isSpecialBilling) {
+  // Identificar estratégias
+  const isActivation = ["activation", "expansion"].includes(billingType);
+  const isProRataUpgrade = ["upgrade_plan", "upgrade"].includes(billingType);
+
+  if (isActivation) {
+    // START NEW CYCLE: Data Pagamento + 1 Mês
     novoAnchorDate = dataPagamentoStr;
     vigenciaFim = new Date(dataPagamentoDate);
     vigenciaFim.setMonth(vigenciaFim.getMonth() + 1);
@@ -187,11 +192,38 @@ async function calcularVigenciaFimEAnchorDate(
         dataPagamento: dataPagamentoStr,
         novoAnchorDate,
         vigenciaFimNova: vigenciaFim.toISOString().split("T")[0],
+        billingType
       },
-      "Upgrade: atualizando anchor_date e vigencia_fim baseado em data_pagamento"
+      "Activation/Expansion: Novo ciclo iniciado (Data Pagamento + 1 Mês)"
     );
+  } else if (isProRataUpgrade) {
+    // PRESERVE CYCLE: Mantém vigência fim da assinatura (já inserida com data correta)
+    // Se a assinatura não tiver vigência (ex: upgrade de trial ou manual), calculamos +1 mês como fallback
+    if (assinaturaAtual?.vigencia_fim) {
+        vigenciaFim = new Date(assinaturaAtual.vigencia_fim);
+        // Não altera anchor_date
+        
+        logger.info(
+            {
+              ...logContext,
+              vigenciaFimPreservada: vigenciaFim.toISOString().split("T")[0],
+              billingType
+            },
+            "Upgrade Pro-Rata: Ciclo preservado (Mantendo vigencia_fim)"
+        );
+    } else {
+        // Fallback: Se não tem vigência (upgrade de inativo ou erro), inicia ciclo
+        novoAnchorDate = dataPagamentoStr;
+        vigenciaFim = new Date(dataPagamentoDate);
+        vigenciaFim.setMonth(vigenciaFim.getMonth() + 1);
+        
+        logger.warn(
+            { ...logContext, billingType },
+            "Upgrade sem vigência anterior definida: Iniciando novo ciclo como fallback"
+        );
+    }
   } else {
-    // Para subscription
+    // SUBSCRIPTION (Renovação Mensal)
     if (isPrimeiraCobrancaTrial) {
       novoAnchorDate = dataPagamentoStr;
       vigenciaFim = new Date(dataPagamentoDate);

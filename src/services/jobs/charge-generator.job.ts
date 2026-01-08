@@ -1,4 +1,4 @@
-import { PLANO_ESSENCIAL, PLANO_PROFISSIONAL } from "../../config/contants.js";
+import { ASSINATURA_USUARIO_STATUS_ATIVA, COBRANCA_STATUS_PENDENTE, CONFIG_KEY_DIA_GERACAO_MENSALIDADES, PLANO_ESSENCIAL, PLANO_PROFISSIONAL } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
 import { cobrancaService } from "../cobranca.service.js";
@@ -26,7 +26,7 @@ export const chargeGeneratorJob = {
 
         if (!targetMonth || !targetYear) {
             // Modo Automático: Verificar se hoje é dia de gerar
-            const diaGeracao = await getConfigNumber("DIA_GERACAO_MENSALIDADES", 25);
+            const diaGeracao = await getConfigNumber(CONFIG_KEY_DIA_GERACAO_MENSALIDADES, 25);
             const hoje = now.getDate();
 
             if (hoje < diaGeracao && !params.force) {
@@ -72,7 +72,7 @@ export const chargeGeneratorJob = {
             const { data: assinaturas, error: subError } = await supabaseAdmin
                 .from("assinaturas_usuarios")
                 .select("usuario_id, status, plano_id, usuarios(id, nome)") // plano_id correto
-                .eq("status", "ativa") // Campo 'status' é texto segundo o print ou boolean/enum
+                .eq("status", ASSINATURA_USUARIO_STATUS_ATIVA) // Campo 'status' é texto segundo o print ou boolean/enum
                                        // No print parece varchar. No constants.ts temos status "ativa"
                 .in("plano_id", planIds);
 
@@ -154,7 +154,7 @@ export const chargeGeneratorJob = {
                             ano: targetYear,
                             valor: valorCobranca,
                             data_vencimento: dataVencimentoStr,
-                            status: "pendente",
+                            status: COBRANCA_STATUS_PENDENTE,
                             origem: "automatico-job"
                         });
 

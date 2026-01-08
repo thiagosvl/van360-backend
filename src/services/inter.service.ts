@@ -338,6 +338,28 @@ async function consultarCallbacks(adminClient: SupabaseClient, dataInicio: strin
   }
 }
 
+async function listarPixRecebidos(adminClient: SupabaseClient, dataInicio: string, dataFim: string) {
+  const token = await getValidInterToken(adminClient);
+  const url = `${INTER_API_URL}/pix/v2/pix`;
+
+  try {
+    const { data } = await axios.get(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      httpsAgent: getHttpsAgent(),
+      params: { 
+          inicio: dataInicio, 
+          fim: dataFim,
+          status: "CONCLUIDA" // Retorna apenas os pagos
+      },
+    });
+    // A API retorna { parametros: {...}, cobrancas: [...] }
+    return data.cobrancas || [];
+  } catch (err: any) {
+    logger.error({ err: err.response?.data || err.message }, "Erro ao listar PIX recebidos");
+    throw new Error("Falha ao consultar extrato de PIX recebidos no Inter");
+  }
+}
+
 
 
 async function consultarPix(adminClient: SupabaseClient, e2eId: string) {
@@ -499,6 +521,7 @@ export const interService = {
   consultarWebhookPix,
   registrarWebhookPix,
   consultarCallbacks,
+  listarPixRecebidos,
   consultarPix,
   realizarPagamentoPix,
   realizarPixRepasse,
