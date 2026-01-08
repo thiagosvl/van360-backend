@@ -49,7 +49,7 @@ export const notificationService = {
     async notifyPassenger(
         to: string, 
         type: PassengerEventType, 
-        ctx: PassengerContext & { pixPayload?: string }
+        ctx: PassengerContext & { pixPayload?: string, reciboUrl?: string }
     ): Promise<boolean> {
         
         let message = "";
@@ -61,7 +61,7 @@ export const notificationService = {
             case PASSENGER_EVENT_PAYMENT_RECEIVED: message = PassengerTemplates.paymentReceived(ctx); break;
         }
 
-        return await this._sendWithOptionalMedia(to, message, ctx.pixPayload);
+        return await this._sendWithOptionalMedia(to, message, ctx.pixPayload, ctx.reciboUrl);
     },
 
     /**
@@ -70,7 +70,7 @@ export const notificationService = {
     async notifyDriver(
         to: string, 
         type: DriverEventType, 
-        ctx: DriverContext & { pixPayload?: string, nomePagador?: string, nomeAluno?: string, diasAtraso?: number }
+        ctx: DriverContext & { pixPayload?: string, nomePagador?: string, nomeAluno?: string, diasAtraso?: number, reciboUrl?: string }
     ): Promise<boolean> {
 
         let message = "";
@@ -91,54 +91,63 @@ export const notificationService = {
             case DRIVER_EVENT_REPASSE_FAILED: message = DriverTemplates.repasseFailed(ctx); break;
         }
 
-        return await this._sendWithOptionalMedia(to, message, ctx.pixPayload);
+        return await this._sendWithOptionalMedia(to, message, ctx.pixPayload, ctx.reciboUrl);
     },
 
     /**
      * Lógica interna de envio (Texto + Imagem Opcional + Pix Opcional)
      */
     /**
-     * Lógica interna de envio (Texto + Imagem Opcional + Pix Opcional)
+     * Lógica interna de envio (Texto + Imagem Opcional + Pix Opcional + Recibo Opcional)
      * Refatorado para usar o padrão Composite (Lego)
      */
-    async _sendWithOptionalMedia(to: string, message: string, pixPayload?: string): Promise<boolean> {
+    async _sendWithOptionalMedia(to: string, message: string, pixPayload?: string, reciboUrl?: string): Promise<boolean> {
         try {
             const parts: CompositeMessagePart[] = [];
             
-            let imageBase64 = null;
-            
-            // 1. Gerar Imagem do QR Code se tiver payload
-            if (pixPayload) {
-                try {
-                    const fullBase64 = await QRCode.toDataURL(pixPayload);
-                    imageBase64 = fullBase64.replace(/^data:image\/[a-z]+;base64,/, "");
-                } catch (e) {
-                    logger.error({ error: e }, "Erro ao gerar QR Code");
+            // 1. Priorizar Recibo se houver (Imagem do Comprovante)
+            if (reciboUrl) {
+                parts.push({
+                    type: "image",
+                    mediaBase64: reciboUrl, // O WhatsappService.sendImage aceita URL se a Evolution suportar, ou precisamos baixar.
+                    content: message // Usa a mensagem como legenda do recibo
+                });
+            } 
+            else {
+                // ... lógica existente de QR Code ou apenas Texto
+                let imageBase64 = null;
+                
+                // 1. Gerar Imagem do QR Code se tiver payload
+                if (pixPayload) {
+                    try {
+                        const fullBase64 = await QRCode.toDataURL(pixPayload);
+                        imageBase64 = fullBase64.replace(/^data:image\/[a-z]+;base64,/, "");
+                    } catch (e) {
+                        logger.error({ error: e }, "Erro ao gerar QR Code");
+                    }
+                }
+
+                // 2. Montar Peças do Lego
+                if (imageBase64) {
+                    parts.push({
+                        type: "image",
+                        mediaBase64: imageBase64,
+                        content: message
+                    });
+                } else {
+                    parts.push({
+                        type: "text",
+                        content: message
+                    });
                 }
             }
 
-            // 2. Montar Peças do Lego
-            if (imageBase64) {
-                // Peça 1: Imagem com Legenda
-                parts.push({
-                    type: "image",
-                    mediaBase64: imageBase64,
-                    content: message
-                });
-            } else {
-                // Peça 1: Apenas Texto
-                parts.push({
-                    type: "text",
-                    content: message
-                });
-            }
-
-            // Peça 2: Payload PIX (se houver)
-            if (pixPayload) {
+            // Peça Extra: Payload PIX (se houver e não for recibo - recibo já confirma o pagamento)
+            if (pixPayload && !reciboUrl) {
                 parts.push({
                     type: "text",
                     content: pixPayload,
-                    delayMs: 1500 // Pequeno delay para chegar depois da imagem
+                    delayMs: 1500
                 });
             }
 

@@ -155,7 +155,7 @@ export const chargeGeneratorJob = {
                             valor: valorCobranca,
                             data_vencimento: dataVencimentoStr,
                             status: COBRANCA_STATUS_PENDENTE,
-                            origem: "automatico-job"
+                            origem: "automatica" // Alinhado com DB check constraint
                         });
 
                         result.createdCharges++;

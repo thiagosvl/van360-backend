@@ -1,6 +1,4 @@
-/**
- * Templates de Mensagem para Passageiros/Responsáveis
- */
+import { formatCurrency, getFirstName } from "../../../utils/format.js";
 
 export interface PassengerContext {
     nomeResponsavel: string;
@@ -11,12 +9,19 @@ export interface PassengerContext {
     diasAntecedencia?: number;
     diasAtraso?: number;
     linkPagamento?: string; // Futuro
+    mes?: number;
+    ano?: number;
 }
 
-const formatCurrency = (val: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
 const formatDate = (dateStr: string) => {
     const [y, m, d] = dateStr.split("-");
     return `${d}/${m}/${y}`;
+};
+
+const getMeshName = (mes?: number) => {
+    if (!mes) return "";
+    const names = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+    return names[mes - 1] || "";
 };
 
 export const PassengerTemplates = {
@@ -27,11 +32,13 @@ export const PassengerTemplates = {
     dueSoon: (ctx: PassengerContext) => {
         const valor = formatCurrency(ctx.valor);
         const data = formatDate(ctx.dataVencimento);
-        const diasMsg = ctx.diasAntecedencia ? `(Daqui a ${ctx.diasAntecedencia} dia(s))` : "";
+        const diasMsg = ctx.diasAntecedencia ? ` (Daqui a ${ctx.diasAntecedencia} dia(s))` : "";
+        const nomeResp = getFirstName(ctx.nomeResponsavel);
+        const nomeMotorista = getFirstName(ctx.nomeMotorista);
 
-        return `Olá *${ctx.nomeResponsavel}*, lembrete da Van 360 do Tio(a) *${ctx.nomeMotorista}*: 🚌
+        return `Olá *${nomeResp}*, lembrete da Van 360 do Tio(a) *${nomeMotorista}*: 🚌
 
-A mensalidade de *${ctx.nomePassageiro}* no valor de *${valor}* vence em *${data}* ${diasMsg}.
+A mensalidade de *${getFirstName(ctx.nomePassageiro)}* no valor de *${valor}* vence em *${data}*${diasMsg}.
 
 Segue abaixo o código Pix Copia e Cola. 👇`;
     },
@@ -41,8 +48,9 @@ Segue abaixo o código Pix Copia e Cola. 👇`;
      */
     dueToday: (ctx: PassengerContext) => {
         const valor = formatCurrency(ctx.valor);
+        const nomeResp = getFirstName(ctx.nomeResponsavel);
         
-        return `Olá *${ctx.nomeResponsavel}*, passando apenas para lembrar que a mensalidade de *${ctx.nomePassageiro}* (${valor}) vence *HOJE*! 🗓️
+        return `Olá *${nomeResp}*, passando apenas para lembrar que a mensalidade de *${getFirstName(ctx.nomePassageiro)}* (${valor}) vence *HOJE*! 🗓️
 
 Caso precise, o código Pix está logo abaixo. 👇`;
     },
@@ -54,8 +62,9 @@ Caso precise, o código Pix está logo abaixo. 👇`;
         const valor = formatCurrency(ctx.valor);
         const data = formatDate(ctx.dataVencimento);
         const diasAtraso = ctx.diasAtraso || 1;
+        const nomeResp = getFirstName(ctx.nomeResponsavel);
         
-        return `Olá *${ctx.nomeResponsavel}*, notamos que a mensalidade de *${ctx.nomePassageiro}* (${valor}) venceu dia *${data}* (Há ${diasAtraso} dias de atraso). ⚠️
+        return `Olá *${nomeResp}*, notamos que a mensalidade de *${getFirstName(ctx.nomePassageiro)}* (${valor}) venceu dia *${data}* (Há ${diasAtraso} dias de atraso). ⚠️
 
 Para regularizar e evitar bloqueios, estamos reenviando o código Pix abaixo. 👇`;
     },
@@ -65,7 +74,10 @@ Para regularizar e evitar bloqueios, estamos reenviando o código Pix abaixo. �
      */
     paymentReceived: (ctx: PassengerContext) => {
         const valor = formatCurrency(ctx.valor);
-        return `Olá *${ctx.nomeResponsavel}*, confirmamos o recebimento da mensalidade de *${ctx.nomePassageiro}* valor de *${valor}*. ✅
+        const ref = ctx.mes ? ` referente ao mês de *${getMeshName(ctx.mes)}/${ctx.ano}*` : "";
+        const nomeResp = getFirstName(ctx.nomeResponsavel);
+        
+        return `Olá *${nomeResp}*, confirmamos o recebimento da mensalidade de *${getFirstName(ctx.nomePassageiro)}* no valor de *${valor}*${ref}. ✅
 
 Muito obrigado! 🚐💨`;
     }

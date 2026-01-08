@@ -1,9 +1,11 @@
 import { DRIVER_EVENT_PAYMENT_CONFIRMED, DRIVER_EVENT_PAYMENT_RECEIVED_ALERT, PASSENGER_EVENT_PAYMENT_RECEIVED } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
+import { formatDate } from "../../utils/format.js";
 import { cobrancaService } from "../cobranca.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { processarPagamentoCobranca } from "../processar-pagamento.service.js";
+import { receiptService } from "../receipt.service.js";
 
 export const webhookCobrancaHandler = {
   async handle(pagamento: any): Promise<boolean> {
@@ -30,10 +32,42 @@ export const webhookCobrancaHandler = {
     logger.info({ cobrancaId: cobrancaPai.id, context: "COBRANCA_PAI" }, "Cobrança de Pai encontrada. Iniciando fluxo de repasse.");
 
     try {
-        // a) Atualizar status para PAGO e calcular taxas
-        await cobrancaService.atualizarStatusPagamento(txid, valor, pagamento);
+        // a) Buscar dados completos para o recibo antes de processar
+        const { data: fullData } = await supabaseAdmin
+            .from("cobrancas")
+            .select(`
+                *, 
+                passageiros(nome, nome_responsavel),
+                usuarios(nome, apelido)
+            `)
+            .eq("txid_pix", txid)
+            .single();
+
+        let reciboUrl = "";
+        if (fullData) {
+            const moto = fullData.usuarios as any;
+            const nomeExibicao = moto?.apelido || moto?.nome || 'Motorista';
+            
+            reciboUrl = await receiptService.generateAndSave({
+                id: fullData.id,
+                titulo: "Recibo de Transporte",
+                subtitulo: `Transporte Escolar - ${nomeExibicao}`,
+                valor: valor,
+                data: formatDate(horario || new Date()),
+                pagadorNome: fullData.passageiros?.nome_responsavel || "Responsável",
+                passageiroNome: fullData.passageiros?.nome || "Passageiro",
+                mes: fullData.mes,
+                ano: fullData.ano,
+                descricao: `Mensalidade`,
+                metodoPagamento: "PIX",
+                tipo: 'PASSAGEIRO'
+            }) || "";
+        }
+
+        // b) Atualizar status para PAGO e registrar taxas e recibo
+        await cobrancaService.atualizarStatusPagamento(txid, valor, pagamento, reciboUrl);
         
-        // b) Iniciar Repasse (Fire & Forget seguro com catch individual)
+        // c) Iniciar Repasse (Fire & Forget seguro com catch individual)
         cobrancaService.iniciarRepasse(cobrancaPai.id)
             .then(res => logger.info({ res, cobrancaId: cobrancaPai.id }, "Repasse AUTOMÁTICO iniciado com sucesso"))
             .catch(err => logger.error({ err, cobrancaId: cobrancaPai.id }, "Falha ao iniciar repasse automático (tentar via painel depois)"));
@@ -60,7 +94,10 @@ export const webhookCobrancaHandler = {
                     nomePassageiro: pass.nome,
                     nomeMotorista: moto.nome,
                     valor: fullCobranca.valor,
-                    dataVencimento: fullCobranca.data_vencimento
+                    dataVencimento: fullCobranca.data_vencimento,
+                    mes: fullCobranca.mes,
+                    ano: fullCobranca.ano,
+                    reciboUrl: reciboUrl // Adicionar reciboUrl aqui também para garantir
                 }).catch(err => logger.error({ err }, "Falha ao notificar pai sobre recibo"));
 
                 // B) Notificar Motorista (Venda)
@@ -75,7 +112,10 @@ export const webhookCobrancaHandler = {
                          valor: fullCobranca.valor,
                          dataVencimento: fullCobranca.data_vencimento,
                          nomePagador: pass.nome_responsavel,
-                         nomeAluno: pass.nome
+                         nomeAluno: pass.nome,
+                         mes: fullCobranca.mes,
+                         ano: fullCobranca.ano
+                         // reciboUrl: REMOVIDO pois o motorista não recebe o recibo do pai
                     } as any).catch(err => logger.error({ err }, "Falha ao notificar motorista sobre venda"));
                 }
             }
@@ -119,16 +159,41 @@ export const webhookCobrancaHandler = {
       logger.info({ cobrancaId: cobrancaAssinatura.id, context: "COBRANCA_ASSINATURA" }, "Cobrança de Assinatura encontrada. Processando.");
 
       try {
+          // 0. Gerar Recibo da Assinatura
+          let reciboUrl = "";
+          try {
+              const assinatura = cobrancaAssinatura.assinaturas_usuarios as any;
+              const usuario = assinatura?.usuarios;
+              const plano = assinatura?.planos;
+
+               reciboUrl = await receiptService.generateAndSave({
+                  id: cobrancaAssinatura.id,
+                  titulo: "Recibo de Assinatura Van360",
+                  subtitulo: `Plano ${plano?.nome || 'Mensal'}`,
+                  valor: valor,
+                  data: formatDate(pagamento.horario || new Date()),
+                  pagadorNome: usuario?.nome || "Motorista",
+                  descricao: `Assinatura do Sistema Van360`,
+                  mes: (new Date(cobrancaAssinatura.data_vencimento).getMonth() + 1),
+                  ano: new Date(cobrancaAssinatura.data_vencimento).getFullYear(),
+                  metodoPagamento: "PIX",
+                  tipo: 'ASSINATURA'
+              }) || "";
+          } catch (recWarn) {
+              logger.warn({ recWarn }, "Falha ao gerar recibo de assinatura (continuando processamento)");
+          }
+
           // 1. Processar Ativação/Renovação
           // Adapter para chamar a função existente
           await processarPagamentoCobranca(
-              cobrancaAssinatura as any, // Cast pois o select inclui joins que a interface nao tem, mas o runtime aceita
+              cobrancaAssinatura as any, // Cast pois o select includes joins que a interface nao tem, mas o runtime aceita
               {
                   valor,
                   dataPagamento: pagamento.horario || new Date().toISOString(),
                   txid
               },
-              { txid, cobrancaId: cobrancaAssinatura.id }
+              { txid, cobrancaId: cobrancaAssinatura.id },
+              reciboUrl
           );
 
           // 2. Notificar Motorista (Recibo)
@@ -142,7 +207,10 @@ export const webhookCobrancaHandler = {
                       nomeMotorista: usuario.nome,
                       nomePlano: plano?.nome || "Plano",
                       valor: cobrancaAssinatura.valor,
-                      dataVencimento: cobrancaAssinatura.data_vencimento
+                      dataVencimento: cobrancaAssinatura.data_vencimento,
+                      mes: (new Date(cobrancaAssinatura.data_vencimento).getMonth() + 1), // Assinatura pode nao ter campo mes no DB
+                      ano: new Date(cobrancaAssinatura.data_vencimento).getFullYear(),
+                      reciboUrl: reciboUrl
                   }).catch(err => logger.error({ err }, "Falha ao notificar motorista sobre confirmação de pagamento"));
               }
           } catch (notifErr) {

@@ -1,3 +1,5 @@
+import { formatCurrency, getFirstName } from "../../../utils/format.js";
+
 /**
  * Templates de Mensagem para Motoristas / Assinantes do Sistema
  */
@@ -7,14 +9,21 @@ export interface DriverContext {
     nomePlano: string;
     valor: number;
     dataVencimento: string;
+    mes?: number;
+    ano?: number;
 }
 
-const formatCurrency = (val: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
 const formatDate = (dateStr: string) => {
     // Tratamento para data ISO ou YYYY-MM-DD
     const isoDate = dateStr.includes("T") ? dateStr.split("T")[0] : dateStr;
     const [y, m, d] = isoDate.split("-");
     return `${d}/${m}/${y}`;
+};
+
+const getMeshName = (mes?: number) => {
+    if (!mes) return "";
+    const names = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+    return names[mes - 1] || "";
 };
 
 export const DriverTemplates = {
@@ -99,11 +108,15 @@ Para efetivar a mudança, realize o pagamento da diferença abaixo. 👇`;
      */
     paymentReceivedBySystem: (ctx: DriverContext & { nomePagador: string, nomeAluno: string }) => {
         const valor = formatCurrency(ctx.valor);
-        return `💰 *Venda Realizada!*
-        
-O responsável *${ctx.nomePagador}* pagou a mensalidade de *${ctx.nomeAluno}* (${valor}).
+        const ref = ctx.mes ? ` referente a *${getMeshName(ctx.mes)}/${ctx.ano}*` : "";
+        const nomeAlun = getFirstName(ctx.nomeAluno);
+        const nomePag = getFirstName(ctx.nomePagador);
 
-O valor já está sendo processado para transferência. ⏳`;
+        return `✅ *Pagamento Recebido!*
+        
+A mensalidade do *${nomeAlun}* (*${nomePag}*) no valor de *${valor}*${ref} foi paga.
+
+O pagamento está sendo processado e o valor logo estará em sua conta. ⏳`;
     },
 
     /**
@@ -111,9 +124,12 @@ O valor já está sendo processado para transferência. ⏳`;
      */
     paymentConfirmed: (ctx: DriverContext) => {
         const valor = formatCurrency(ctx.valor);
+        const ref = ctx.mes ? ` referente a *${getMeshName(ctx.mes)}/${ctx.ano}*` : "";
+        const nomeMot = getFirstName(ctx.nomeMotorista);
+
         return `✅ *Pagamento Confirmado!*
 
-Olá *${ctx.nomeMotorista}*, confirmamos o recebimento do seu pagamento de *${valor}* referente ao plano *${ctx.nomePlano}*.
+Olá *${nomeMot}*, confirmamos o recebimento do seu pagamento de *${valor}*${ref} referente ao plano *${ctx.nomePlano}*.
 
 Seu acesso está garantido! 🚐💨`;
     },

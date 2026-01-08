@@ -40,7 +40,8 @@ interface ContextoLog {
 export async function processarPagamentoCobranca(
   cobranca: Cobranca,
   dadosPagamento: DadosPagamento,
-  contextoLog: ContextoLog = {}
+  contextoLog: ContextoLog = {},
+  reciboUrl?: string
 ): Promise<void> {
   const { txid, cobrancaId } = contextoLog;
   const logContext = txid ? { txid } : { cobrancaId };
@@ -57,7 +58,8 @@ export async function processarPagamentoCobranca(
         data_pagamento: dadosPagamento.dataPagamento,
         valor_pago: dadosPagamento.valor,
         tipo_pagamento: ASSINATURA_COBRANCA_TIPO_PAGAMENTO_PIX,
-        taxa_intermediacao_banco: taxaIntermediacao // Registro para auditoria
+        taxa_intermediacao_banco: taxaIntermediacao, // Registro para auditoria
+        recibo_url: reciboUrl || null
       })
       .eq("id", cobranca.id)
       .select();

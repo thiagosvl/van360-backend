@@ -61,8 +61,9 @@ export const CONFIG_KEY_DIAS_ANTECEDENCIA_AVISO_VENCIMENTO = "DIAS_ANTECEDENCIA_
 export const CONFIG_KEY_DIAS_ANTECEDENCIA_RENOVACAO = "DIAS_ANTECEDENCIA_RENOVACAO";
 
 // Status Cobrança (Pais)
-export const COBRANCA_STATUS_PAGA = "PAGA";
-export const COBRANCA_STATUS_PENDENTE = "PENDENTE";
+export const COBRANCA_STATUS_PAGA = "pago"; // Alinhado com DB check constraint
+export const COBRANCA_STATUS_PENDENTE = "pendente"; // Alinhado com DB check constraint
+export const COBRANCA_STATUS_ATRASADO = "atrasado";
 
 // Status Repasse
 export const STATUS_REPASSE_PENDENTE = "PENDENTE";

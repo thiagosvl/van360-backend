@@ -75,7 +75,7 @@ class WhatsappService {
 
       const { data } = await axios.post(url, {
         number: finalNumber,
-        media: base64,       // Base64 puro
+        media: base64,       // Base64 ou URL pública de imagem
         mediatype: "image",
         caption: caption || ""
       }, {

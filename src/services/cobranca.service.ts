@@ -147,11 +147,15 @@ export const cobrancaService = {
              
              logger.info("Novo PIX gerado com sucesso na edição.");
 
-          } catch (err) {
-             logger.error({ err }, "Falha ao regenerar PIX na edição.");
-             cobrancaData.txid_pix = null;
-             cobrancaData.qr_code_payload = null;
-             cobrancaData.url_qr_code = null;
+          } catch (error: any) {
+            logger.error({ 
+                error: error.message || error, 
+                stack: error.stack,
+                data 
+            }, "Falha ao regenerar PIX na edição.");
+            cobrancaData.txid_pix = null;
+            cobrancaData.qr_code_payload = null;
+            cobrancaData.url_qr_code = null;
           }
        }
     }
@@ -270,7 +274,7 @@ export const cobrancaService = {
     return novoStatus;
   },
 
-  async atualizarStatusPagamento(txid: string, valorPagoReal?: number, payload?: any): Promise<any> {
+  async atualizarStatusPagamento(txid: string, valorPagoReal?: number, payload?: any, reciboUrl?: string): Promise<any> {
     // 1. Buscar cobrança pelo TXID
     const { data: cobranca, error: fetchError } = await supabaseAdmin
         .from("cobrancas")
@@ -280,7 +284,7 @@ export const cobrancaService = {
 
     if (fetchError || !cobranca) throw new Error("Cobrança não encontrada para o TXID informado");
 
-    if (cobranca.status === "PAGA") {
+    if (cobranca.status === COBRANCA_STATUS_PAGA) {
         logger.info({ cobrancaId: cobranca.id }, "Cobrança já está paga, ignorando atualização.");
         return cobranca;
     }
@@ -294,13 +298,14 @@ export const cobrancaService = {
     const { data: updated, error: updateError } = await supabaseAdmin
         .from("cobrancas")
         .update({
-            status: "PAGA",
+            status: COBRANCA_STATUS_PAGA,
             data_pagamento: new Date(),
             valor_pago: valorPago,
             taxa_intermediacao_banco: taxaIntermediacao,
             valor_a_repassar: valorRepassar,
             status_repasse: STATUS_REPASSE_PENDENTE, // Pronto para repasse
-            dados_auditoria_pagamento: payload || {}
+            dados_auditoria_pagamento: payload || {},
+            recibo_url: reciboUrl || null
         })
         .eq("id", cobranca.id)
         .select()
