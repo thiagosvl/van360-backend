@@ -1,14 +1,18 @@
 import {
-    ASSINATURA_COBRANCA_STATUS_CANCELADA,
-    ASSINATURA_COBRANCA_STATUS_PAGO,
-    ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
-    ASSINATURA_COBRANCA_TIPO_PAGAMENTO_PIX,
-    CONFIG_KEY_TAXA_INTERMEDIACAO_PIX,
-    PLANO_PROFISSIONAL,
+  ASSINATURA_COBRANCA_STATUS_CANCELADA,
+  ASSINATURA_COBRANCA_STATUS_PAGO,
+  ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
+  ASSINATURA_COBRANCA_TIPO_PAGAMENTO_PIX,
+  ASSINATURA_USUARIO_STATUS_SUSPENSA,
+  CONFIG_KEY_TAXA_INTERMEDIACAO_PIX,
+  DRIVER_EVENT_REACTIVATION_EMBARGO,
+  PLANO_PROFISSIONAL,
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
+import { cobrancaService } from "./cobranca.service.js";
 import { getConfigNumber } from "./configuracao.service.js";
+import { notificationService } from "./notifications/notification.service.js";
 import { passageiroService } from "./passageiro.service.js";
 
 interface DadosPagamento {
@@ -93,15 +97,27 @@ export async function processarPagamentoCobranca(
 
 
 
+    // 4. Salvar estado anterior para identificar reativação
+    const { data: assinaturaStateBefore } = await supabaseAdmin
+        .from("assinaturas_usuarios")
+        .select("status, vigencia_fim")
+        .eq("id", cobranca.assinatura_usuario_id)
+        .single();
+
     // 6. Ativar assinatura
     await ativarAssinatura(cobranca, vigenciaFim, novoAnchorDate, logContext);
 
     // 7. Ativar usuário
     await ativarUsuario(cobranca, logContext);
 
-
+    // 8. Gatilho de Catch-up (Se estava suspensa)
+    if (assinaturaStateBefore?.status === ASSINATURA_USUARIO_STATUS_SUSPENSA) {
+        const paymentDate = dadosPagamento.dataPagamento ? new Date(dadosPagamento.dataPagamento) : new Date();
+        await processarCatchupReativacao(cobranca.usuario_id, logContext, paymentDate);
+    }
 
     // 9. Preencher slots restantes automaticamente (Auto-Fill)
+    // ...
     // Busca informações da assinatura para determinar franquia e plano
     const { data: assinaturaPendente } = await supabaseAdmin
         .from("assinaturas_usuarios")
@@ -456,5 +472,69 @@ async function ativarPassageirosAutomaticamente(
   } else {
     logger.info({ ...logContext, slugBase }, "Não é plano Profissional - não ativando passageiros automaticamente");
   }
+}
+
+/**
+ * Processa a geração de cobranças atrasadas e notifica o motorista sobre o embargo de 24h
+ */
+async function processarCatchupReativacao(usuarioId: string, logContext: ContextoLog, dateOverride?: Date): Promise<void> {
+    logger.info({ ...logContext, usuarioId }, "Processando Catch-up de reativação");
+
+    const now = dateOverride || new Date();
+    const targetMonth = now.getMonth() + 1;
+    const targetYear = now.getFullYear();
+
+    try {
+        // DECISÃO DE CATCH-UP:
+        // Se reativar ANTES do dia 25, gera o mês vigente. 
+        // Se reativar dia 25 ou DEPOIS, gera o PRÓXIMO mês (o atual já está no fim).
+        
+        if (now.getDate() < 25) {
+            const statsCurrent = await cobrancaService.gerarCobrancasMensaisParaMotorista(usuarioId, targetMonth, targetYear);
+            logger.info({ ...logContext, statsCurrent }, "Catch-up: Geração do mês atual concluída (pré-dia 25)");
+        } else {
+            let nextMonth = targetMonth + 1;
+            let nextYear = targetYear;
+            if (nextMonth > 12) {
+                nextMonth = 1;
+                nextYear++;
+            }
+            const statsNext = await cobrancaService.gerarCobrancasMensaisParaMotorista(usuarioId, nextMonth, nextYear);
+            logger.info({ ...logContext, statsNext }, "Catch-up: Geração do próximo mês concluída (pós-dia 25)");
+        }
+
+        // 2. Notificar motorista sobre a reativação e o embargo de 24h
+        const { data: usuario } = await supabaseAdmin
+            .from("usuarios")
+            .select("nome, telefone")
+            .eq("id", usuarioId)
+            .single();
+
+        const { data: assinatura } = await supabaseAdmin
+            .from("assinaturas_usuarios")
+            .select("planos(nome)")
+            .eq("usuario_id", usuarioId)
+            .eq("ativo", true)
+            .single();
+
+        if (usuario?.telefone) {
+            await notificationService.notifyDriver(
+                usuario.telefone,
+                DRIVER_EVENT_REACTIVATION_EMBARGO as any,
+                {
+                    nomeMotorista: usuario.nome,
+                    nomePlano: (assinatura?.planos as any)?.nome || "Profissional",
+                    valor: 0, 
+                    dataVencimento: "",
+                    mes: targetMonth,
+                    ano: targetYear
+                }
+            );
+            logger.info({ ...logContext }, "Notificação de reativação enviada ao motorista");
+        }
+    } catch (err: any) {
+        logger.error({ ...logContext, error: err.message }, "Erro no processarCatchupReativacao");
+        // Não trava o processo principal
+    }
 }
 

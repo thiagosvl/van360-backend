@@ -43,6 +43,7 @@ export const DRIVER_EVENT_ACCESS_SUSPENDED = "ACCESS_SUSPENDED";
 export const DRIVER_EVENT_PAYMENT_CONFIRMED = "PAYMENT_CONFIRMED";
 export const DRIVER_EVENT_TRIAL_ENDING = "TRIAL_ENDING";
 export const DRIVER_EVENT_REPASSE_FAILED = "REPASSE_FAILED";
+export const DRIVER_EVENT_REACTIVATION_EMBARGO = "REACTIVATION_EMBARGO";
 
 // Job Contexts & Flags
 export const JOB_CONTEXT_PASSENGER = "passenger";
@@ -64,6 +65,12 @@ export const CONFIG_KEY_DIAS_ANTECEDENCIA_RENOVACAO = "DIAS_ANTECEDENCIA_RENOVAC
 export const COBRANCA_STATUS_PAGA = "pago"; // Alinhado com DB check constraint
 export const COBRANCA_STATUS_PENDENTE = "pendente"; // Alinhado com DB check constraint
 export const COBRANCA_STATUS_ATRASADO = "atrasado";
+export const COBRANCA_TIPO_PAGAMENTO_PIX = "PIX";
+export const COBRANCA_TIPO_PAGAMENTO_DINHEIRO = "dinheiro";
+export const COBRANCA_TIPO_PAGAMENTO_CARTAO_CREDITO = "cartao-credito";
+export const COBRANCA_TIPO_PAGAMENTO_CARTAO_DEBITO = "cartao-debito";
+export const COBRANCA_TIPO_PAGAMENTO_TRANSFERENCIA = "transferencia";
+export const COBRANCA_TIPO_PAGAMENTO_BOLETO = "boleto";
 
 // Status Repasse
 export const STATUS_REPASSE_PENDENTE = "PENDENTE";

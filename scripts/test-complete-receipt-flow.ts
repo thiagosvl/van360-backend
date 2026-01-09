@@ -8,10 +8,10 @@ import { webhookCobrancaHandler } from "../src/services/handlers/webhook-cobranc
  */
 async function runTest() {
     const testTxid = `TEST_${Date.now()}`;
-    const valorTeste = 150.00;
+    const valorTeste = 250.00;
     
     // NÚMEROS DE TESTE: Altere aqui para testar com aparelhos diferentes
-    const whatsappPai = "5511952070350"; 
+    const whatsappPai = "5511949957797"; 
     const whatsappMotorista = "5511951186951"; // Pode ser o mesmo ou outro diferente
 
     console.log("-----------------------------------------");

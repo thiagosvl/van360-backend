@@ -163,5 +163,24 @@ Olá *${ctx.nomeMotorista}*, tentamos realizar o repasse de *${valor}* referente
 
 Por segurança, **sua chave PIX foi invalidada**.
 Por favor, acesse o App e cadastre sua chave novamente para receber este valor.`;
+    },
+    /**
+     * Reativação de Assinatura com Embargo de 24h
+     */
+    reactivationWithEmbargo: (ctx: DriverContext) => {
+        const nomeMot = getFirstName(ctx.nomeMotorista);
+        const mes = getMeshName(ctx.mes);
+        const ref = mes ? ` de *${mes}/${ctx.ano}*` : "";
+
+        return `✅ *Conta Reativada!*
+
+Olá *${nomeMot}*, sua assinatura foi reativada e o acesso ao sistema liberado. 🚐💨
+
+Como você esteve suspenso, geramos agora suas cobranças${ref} que estavam pendentes.
+
+⚠️ *IMPORTANTE:*
+A automação está **PAUSADA por 24 horas** para você. Esse é o tempo para você conferir seu painel e dar baixa em quem já te pagou "por fora" (dinheiro/pix direto) durante a suspensão.
+
+Se não houver baixas, o sistema começará a enviar as notificações para seus passageiros automaticamente em 24h.`;
     }
 };

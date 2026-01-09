@@ -1,7 +1,9 @@
-import { PLANO_PROFISSIONAL } from "../config/constants.js";
+import { CONFIG_KEY_DIA_GERACAO_MENSALIDADES, PLANO_PROFISSIONAL } from "../config/constants.js";
+import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { cleanString, moneyToNumber, onlyDigits, toLocalDateString } from "../utils/utils.js";
 import { cobrancaService } from "./cobranca.service.js";
+import { getConfigNumber } from "./configuracao.service.js";
 
 // Métodos privados auxiliares
 const _preparePassageiroData = (data: any, usuarioId: string, ativoDefault: boolean = true): any => {
@@ -54,6 +56,44 @@ const _createCobrancaMesAtual = async (
     });
 };
 
+/**
+ * Verifica se já passou do dia de geração automática e cria a do mês seguinte se necessário
+ */
+const _verificarGerarCobrancaMesSeguinte = async (
+    passageiroId: string,
+    passageiroData: any,
+    usuarioId: string
+): Promise<any> => {
+    const diaGeracao = await getConfigNumber(CONFIG_KEY_DIA_GERACAO_MENSALIDADES, 25);
+    const hoje = new Date();
+    
+    // Se hoje >= dia 25, significa que o job mensal já rodou. 
+    // Precisamos gerar a de Fevereiro (mês seguinte) agora para este novo passageiro.
+    if (hoje.getDate() >= diaGeracao) {
+        const nextMonthDate = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1);
+        const targetMonth = nextMonthDate.getMonth() + 1;
+        const targetYear = nextMonthDate.getFullYear();
+        
+        // Calcular Vencimento
+        const diaVencimento = passageiroData.dia_vencimento || 10;
+        const lastDayOfMonth = new Date(targetYear, targetMonth, 0).getDate();
+        const diaFinal = Math.min(diaVencimento, lastDayOfMonth);
+        const dataVencimentoStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(diaFinal).padStart(2, '0')}`;
+
+        return await cobrancaService.createCobranca({
+            passageiro_id: passageiroId,
+            mes: targetMonth,
+            ano: targetYear,
+            valor: passageiroData.valor_cobranca,
+            data_vencimento: dataVencimentoStr,
+            status: "pendente",
+            usuario_id: usuarioId,
+            origem: "automatica_cadastro" // Identifica que foi gerada no cadastro pós-fechamento
+        });
+    }
+    return null;
+};
+
 export const passageiroService = {
     async createPassageiro(data: any): Promise<any> {
         if (!data.usuario_id) throw new Error("Usuário obrigatório");
@@ -75,6 +115,14 @@ export const passageiroService = {
 
             if (emitir_cobranca_mes_atual) {
                 payment = await _createCobrancaMesAtual(
+                    newPassageiro.id,
+                    passageiroData,
+                    data.usuario_id
+                );
+            } else if (passageiroData.enviar_cobranca_automatica) {
+                // Se não for emitir a do mês atual, mas a automação estiver ligada, 
+                // verificamos se precisa gerar a do mês seguinte (caso hoje > dia 25)
+                await _verificarGerarCobrancaMesSeguinte(
                     newPassageiro.id,
                     passageiroData,
                     data.usuario_id
@@ -119,6 +167,12 @@ export const passageiroService = {
             // Criar cobrança do mês atual se necessário
             if (emitir_cobranca_mes_atual) {
                 payment = await _createCobrancaMesAtual(
+                    newPassageiro.id,
+                    passageiroData,
+                    usuarioId
+                );
+            } else if (passageiroData.enviar_cobranca_automatica) {
+                await _verificarGerarCobrancaMesSeguinte(
                     newPassageiro.id,
                     passageiroData,
                     usuarioId
@@ -438,7 +492,7 @@ export const passageiroService = {
 
         const { data: disponiveis, error: errorDisponiveis } = await supabaseAdmin
             .from("passageiros")
-            .select("id, nome, enviar_cobranca_automatica, motivo_desativacao")
+            .select("id, nome, enviar_cobranca_automatica, motivo_desativacao, valor_cobranca, dia_vencimento")
             .eq("usuario_id", usuarioId)
             .eq("ativo", true)
             .eq("enviar_cobranca_automatica", false)
@@ -472,6 +526,25 @@ export const passageiroService = {
             throw new Error(`Erro ao atualizar passageiros: ${updateError.message}`);
         }
 
+        // NOVO: Verificar se precisa gerar cobrança do mês seguinte (Catch-up de Upgrade)
+        // Se o upgrade ocorrer após o dia 25, o job mensal já passou. Precisamos garantir Fev/Mar etc.
+        logger.info(`[ativarPassageirosAutomaticamente] Verificando geração de cobrança pós-upgrade para ${idsParaAtivar.length} passageiros`);
+        
+        for (const passageiro of disponiveis) {
+            try {
+                // Prepara objeto passageiroData mínimo necessário para a função auxiliar
+                const passageiroData = {
+                    valor_cobranca: passageiro.valor_cobranca,
+                    dia_vencimento: passageiro.dia_vencimento
+                };
+                
+                await _verificarGerarCobrancaMesSeguinte(passageiro.id, passageiroData, usuarioId);
+
+            } catch (err: any) {
+                 logger.error({ err, passageiroId: passageiro.id }, "Erro ao gerar cobrança de catch-up no upgrade");
+            }
+        }
+
         console.log(`[ativarPassageirosAutomaticamente] ${idsParaAtivar.length} passageiros ativados com sucesso`);
 
         return {
@@ -479,7 +552,6 @@ export const passageiroService = {
             totalAtivos: quantidadeJaAtiva + idsParaAtivar.length,
         };
     },
-
 
 
 

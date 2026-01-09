@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { COBRANCA_STATUS_PAGA, CONFIG_KEY_TAXA_INTERMEDIACAO_PIX, STATUS_CHAVE_PIX_VALIDADA, STATUS_REPASSE_FALHA, STATUS_REPASSE_PENDENTE, STATUS_REPASSE_PROCESSANDO, STATUS_REPASSE_REPASSADO, STATUS_TRANSACAO_PROCESSANDO, STATUS_TRANSACAO_SUCESSO } from "../config/constants.js";
+import { COBRANCA_STATUS_PAGA, COBRANCA_TIPO_PAGAMENTO_PIX, CONFIG_KEY_TAXA_INTERMEDIACAO_PIX, STATUS_CHAVE_PIX_VALIDADA, STATUS_REPASSE_FALHA, STATUS_REPASSE_PENDENTE, STATUS_REPASSE_PROCESSANDO, STATUS_REPASSE_REPASSADO, STATUS_TRANSACAO_PROCESSANDO, STATUS_TRANSACAO_SUCESSO } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { moneyToNumber } from "../utils/utils.js";
@@ -305,7 +305,8 @@ export const cobrancaService = {
             valor_a_repassar: valorRepassar,
             status_repasse: STATUS_REPASSE_PENDENTE, // Pronto para repasse
             dados_auditoria_pagamento: payload || {},
-            recibo_url: reciboUrl || null
+            recibo_url: reciboUrl || null,
+            tipo_pagamento: COBRANCA_TIPO_PAGAMENTO_PIX
         })
         .eq("id", cobranca.id)
         .select()
@@ -393,6 +394,61 @@ export const cobrancaService = {
           
           throw error;
       }
-  }
+  },
 
+  async gerarCobrancasMensaisParaMotorista(motoristaId: string, targetMonth: number, targetYear: number): Promise<{ created: number, skipped: number }> {
+      let created = 0;
+      let skipped = 0;
+
+      // 1. Buscar Passageiros Ativos do Motorista
+      const { data: passageiros, error: passError } = await supabaseAdmin
+          .from("passageiros")
+          .select("id, nome, valor_mensalidade, dia_vencimento")
+          .eq("usuario_id", motoristaId)
+          .eq("ativo", true)
+          .eq("enviar_cobranca_automatica", true);
+
+      if (passError) throw passError;
+      if (!passageiros) return { created, skipped };
+
+      // 2. Iterar por Passageiro e Gerar Cobrança
+      for (const passageiro of passageiros) {
+          // Verificar se já existe cobrança para este mês/ano/passageiro
+          const { count } = await supabaseAdmin
+              .from("cobrancas")
+              .select("id", { count: "exact", head: true })
+              .eq("passageiro_id", passageiro.id)
+              .eq("mes", targetMonth)
+              .eq("ano", targetYear);
+
+          if (count && count > 0) {
+              skipped++;
+              continue;
+          }
+
+          // Calcular Vencimento
+          const diaVencimento = passageiro.dia_vencimento || 10;
+          const lastDayOfMonth = new Date(targetYear, targetMonth, 0).getDate();
+          const diaFinal = Math.min(diaVencimento, lastDayOfMonth);
+          const dataVencimentoStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(diaFinal).padStart(2, '0')}`;
+
+          const valorCobranca = passageiro.valor_mensalidade;
+          if (!valorCobranca || valorCobranca <= 0) continue;
+
+          // Criar Cobrança
+          await this.createCobranca({
+              passageiro_id: passageiro.id,
+              mes: targetMonth,
+              ano: targetYear,
+              valor: valorCobranca,
+              data_vencimento: dataVencimentoStr,
+              status: "pendente",
+              usuario_id: motoristaId,
+              origem: "automatica"
+          });
+          created++;
+      }
+
+      return { created, skipped };
+  }
 };

@@ -1,4 +1,5 @@
 import {
+    ASSINATURA_USUARIO_STATUS_ATIVA,
     COBRANCA_STATUS_PENDENTE,
     CONFIG_KEY_DIAS_ANTECEDENCIA_AVISO_VENCIMENTO,
     JOB_ORIGIN_DAILY,
@@ -55,18 +56,31 @@ export const dailyChargeMonitorJob = {
             // 2. Buscar TUDO que se encaixa nessas datas E está pendente
             const datasDeInteresse = [dataAvisoStr, hojeStr, ...datasAtraso];
             
-            // Query única filtrando pelas datas de interesse
+            // 2. Buscar Cobranças Pendentes nas datas alvo
+            // Embargo de 24h: Só processamos cobranças de motoristas cuja assinatura foi ativada há mais de 24h
+            const timestamp24hAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
             const { data: cobrancas, error: cobError } = await supabaseAdmin
                 .from("cobrancas")
                 .select(`
                     id, valor, data_vencimento, status, qr_code_payload,
-                    passageiros (
-                        id, nome, nome_responsavel, telefone_responsavel
+                    passageiros!inner (
+                        id, nome, nome_responsavel, telefone_responsavel,
+                        enviar_cobranca_automatica
                     ),
-                    usuarios ( nome )
+                    usuarios!inner ( 
+                        nome,
+                        assinaturas_usuarios!inner (
+                            status,
+                            data_ativacao
+                        )
+                    )
                 `)
                 .eq("status", COBRANCA_STATUS_PENDENTE)
-                .in("data_vencimento", datasDeInteresse);
+                .in("data_vencimento", datasDeInteresse)
+                .eq("passageiros.enviar_cobranca_automatica", true)
+                .eq("usuarios.assinaturas_usuarios.status", ASSINATURA_USUARIO_STATUS_ATIVA)
+                .lte("usuarios.assinaturas_usuarios.data_ativacao", timestamp24hAgo);
 
             if (cobError) throw cobError;
             

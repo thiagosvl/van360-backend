@@ -1,5 +1,7 @@
 import {
     ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
+    ASSINATURA_USUARIO_STATUS_ATIVA,
+    ASSINATURA_USUARIO_STATUS_CANCELADA,
     ASSINATURA_USUARIO_STATUS_SUSPENSA,
     ASSINATURA_USUARIO_STATUS_TRIAL,
     CONFIG_KEY_DIAS_ANTECEDENCIA_RENOVACAO,
@@ -146,6 +148,7 @@ export const dailySubscriptionMonitorJob = {
                             nomePlano: planoNome,
                             valor: cobranca.valor,
                             dataVencimento: cobranca.data_vencimento,
+                            pixPayload: cobranca.qr_code_payload,
                             diasAtraso: context === DRIVER_EVENT_RENEWAL_OVERDUE ? 3 : undefined
                         }
                     );
@@ -170,6 +173,66 @@ export const dailySubscriptionMonitorJob = {
                     result.errors++;
                     logger.error({ err, cobrancaId: cobranca.id }, "Erro processando assinatura job");
                 }
+            }
+
+            // 6. Inativação de Contas Abandonadas (Suspensas há mais de 30 dias)
+            const dataLimiteInativacao = new Date();
+            dataLimiteInativacao.setDate(hoje.getDate() - 30);
+            const dataLimiteInativacaoStr = dataLimiteInativacao.toISOString().split('T')[0];
+
+            logger.info({ dataLimite: dataLimiteInativacaoStr }, "Buscando contas abandonadas para inativação...");
+
+            const { data: suspensasMortas } = await supabaseAdmin
+                .from("assinaturas_usuarios")
+                .select("id, usuario_id, status, vigencia_fim")
+                .eq("status", ASSINATURA_USUARIO_STATUS_SUSPENSA)
+                .lte("vigencia_fim", dataLimiteInativacaoStr);
+
+            if (suspensasMortas && suspensasMortas.length > 0) {
+                logger.info({ count: suspensasMortas.length }, "Inativando contas abandonadas");
+                for (const dead of suspensasMortas) {
+                    try {
+                        // Inativar usuário e Marcar assinatura como cancelada
+                        await supabaseAdmin
+                            .from("assinaturas_usuarios")
+                            .update({ status: ASSINATURA_USUARIO_STATUS_CANCELADA, ativo: false })
+                            .eq("id", dead.id);
+                        
+                        await supabaseAdmin
+                            .from("usuarios")
+                            .update({ ativo: false })
+                            .eq("id", dead.usuario_id);
+
+                        logger.info({ deadId: dead.id, userId: dead.usuario_id }, "Conta INATIVADA por abandono (suspensa > 30 dias)");
+                    } catch (e: any) {
+                        logger.error({ deadId: dead.id, err: e.message }, "Erro ao inativar conta abandonada");
+                    }
+                }
+            }
+
+            // 7. Finalizar Cancelamentos Agendados (Sweeper de Validade)
+            // Problema Resolvido: Como matamos a cobrança futura (Ghost Killer), 
+            // o motorista não tem pendências na renovação, logo não cai na regra de Suspensão por inadimplência.
+            // Precisamos encerrar a assinatura explicitamente quando a vigência acaba.
+            const { data: aVencer } = await supabaseAdmin
+                .from("assinaturas_usuarios")
+                .select("id, usuario_id, vigencia_fim")
+                .in("status", [ASSINATURA_USUARIO_STATUS_ATIVA, ASSINATURA_USUARIO_STATUS_TRIAL])
+                .not("cancelamento_manual", "is", null) // Tem pedido de saída
+                .lt("vigencia_fim", hojeStr); // Já venceu (vigencia < hoje)
+
+            if (aVencer && aVencer.length > 0) {
+                logger.info({ count: aVencer.length }, "Encerrando assinaturas com cancelamento agendado vencido...");
+                
+                const ids = aVencer.map((a: any) => a.id);
+
+                // 1. Atualizar Assinatura -> CANCELADA
+                await supabaseAdmin
+                    .from("assinaturas_usuarios")
+                    .update({ status: ASSINATURA_USUARIO_STATUS_CANCELADA, ativo: false })
+                    .in("id", ids);
+                
+                logger.info({ ids }, "Assinaturas Zumbis encerradas com sucesso.");
             }
 
             return result;

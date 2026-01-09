@@ -65,20 +65,29 @@ class WhatsappService {
   /**
    * Envia Imagem (Base64)
    */
-  async sendImage(number: string, base64: string, caption?: string): Promise<boolean> {
+  async sendImage(number: string, media: string, caption?: string): Promise<boolean> {
     const cleanNumber = number.replace(/\D/g, "");
     const finalNumber = cleanNumber.length <= 11 ? `55${cleanNumber}` : cleanNumber;
     const url = `${EVO_URL}/message/sendMedia/${INSTANCE_NAME}`;
 
     try {
-      logger.info({ number: finalNumber }, "Enviando Imagem WhatsApp...");
+      logger.info({ number: finalNumber, isUrl: media.startsWith('http') }, "Enviando Imagem WhatsApp...");
 
-      const { data } = await axios.post(url, {
+      const body: any = {
         number: finalNumber,
-        media: base64,       // Base64 ou URL pública de imagem
+        media: media,
         mediatype: "image",
         caption: caption || ""
-      }, {
+      };
+
+      // Se for base64 (não URL), garantir formato limpo e adicionar fileName
+      if (!media.startsWith('http')) {
+        // Remover prefixo se existir para teste de compatibilidade
+        body.media = media.replace(/^data:image\/[a-z]+;base64,/, "");
+        body.fileName = "comprovante.png"; 
+      }
+
+      const { data } = await axios.post(url, body, {
         headers: {
           "apikey": EVO_KEY,
           "Content-Type": "application/json"
@@ -88,10 +97,17 @@ class WhatsappService {
       logger.info({ messageId: data?.key?.id }, "Imagem WhatsApp enviada com sucesso.");
       return true;
     } catch (error: any) {
+      const errorData = error.response?.data;
       logger.error({ 
-        error: error.response?.data || error.message,
+        error: errorData || error.message,
+        status: error.response?.status,
         number: finalNumber 
       }, "Falha ao enviar Imagem WhatsApp");
+      
+      // Log extra para ver o body completo do erro se for um objeto
+      if (typeof errorData === 'object') {
+        console.error("DEBUG EVO ERROR:", JSON.stringify(errorData, null, 2));
+      }
       return false;
     }
   }

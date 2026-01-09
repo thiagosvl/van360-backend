@@ -1,10 +1,11 @@
 import { randomUUID } from "crypto";
-import { ASSINATURA_COBRANCA_STATUS_CANCELADA, ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_ATIVA, ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_TRIAL, DRIVER_EVENT_ACTIVATION, DRIVER_EVENT_UPGRADE, PLANO_ESSENCIAL, PLANO_GRATUITO, PLANO_PROFISSIONAL, TIPOS_CHAVE_PIX_VALIDOS, TipoChavePix } from "../config/constants.js";
+import { ASSINATURA_COBRANCA_STATUS_CANCELADA, ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_ATIVA, ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_TRIAL, CONFIG_KEY_DIA_GERACAO_MENSALIDADES, DRIVER_EVENT_ACTIVATION, DRIVER_EVENT_UPGRADE, PLANO_ESSENCIAL, PLANO_GRATUITO, PLANO_PROFISSIONAL, TIPOS_CHAVE_PIX_VALIDOS, TipoChavePix } from "../config/constants.js";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { cleanString, onlyDigits } from "../utils/utils.js";
-import { getBillingConfig } from "./configuracao.service.js";
+import { cobrancaService } from "./cobranca.service.js";
+import { getBillingConfig, getConfigNumber } from "./configuracao.service.js";
 import { interService } from "./inter.service.js";
 import { notificationService } from "./notifications/notification.service.js";
 import { passageiroService } from "./passageiro.service.js";
@@ -638,6 +639,63 @@ export async function cancelarAssinatura(
       .eq("status", ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO)
       .eq("billing_type", "subscription");
 
+    // GHOST KILLER: Eliminar cobranças de passageiros futuras (Vencimento > Vigência Fim)
+    // Isso garante que após o fim do acesso pago, nenhuma cobrança continue válida.
+    try {
+        // 1. Buscar a Assinatura completa (precisamos do vigencia_fim para saber o limite de direito)
+        const { data: assinaturaCompleta } = await supabaseAdmin
+            .from("assinaturas_usuarios")
+            .select("vigencia_fim")
+            .eq("id", assinaturaAtual.id)
+            .single();
+
+        // Se o cancelamento é agendado, a data de corte é o vigencia_fim.
+        // Se por algum erro não tiver vigencia, usa HOJE (corte imediato).
+        const dataCorte = assinaturaCompleta?.vigencia_fim ? new Date(assinaturaCompleta.vigencia_fim).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+
+        logger.info({ usuarioId, dataCorte }, "Iniciando verificação de Ghost Charges (Cobranças Futuras)");
+
+        // 2. Buscar cobranças EXCEDENTES (Vencimento > Data Corte)
+        const { data: cobrancasFantasmas } = await supabaseAdmin
+            .from("cobrancas")
+            .select("id, txid_pix, data_vencimento")
+            .eq("usuario_id", usuarioId)
+            .eq("status", "pendente") // Apenas as não pagas
+            .gt("data_vencimento", dataCorte); // Maior estrito que a vigência
+
+        // 3. Invalidar PIX e Cancelar no Banco
+        if (cobrancasFantasmas && cobrancasFantasmas.length > 0) {
+            logger.info({ count: cobrancasFantasmas.length }, "Eliminando Ghost Charges identificadas...");
+            
+            for (const cob of cobrancasFantasmas) {
+                if (cob.txid_pix) {
+                    try {
+                        // Importação dinâmica ou uso direto se estiver importado. 
+                        // Assumindo que interService já está importado ou disponível via global.
+                        // Se não estiver importado no topo, precisarei adicionar import { interService } ...
+                        await interService.cancelarCobrancaPix(supabaseAdmin, cob.txid_pix, "cobv");
+                    } catch (pixErr) {
+                        logger.warn({ pixErr, cobId: cob.id }, "Falha ao invalidar PIX Ghost (prosseguindo com cancelamento local)");
+                    }
+                }
+            }
+
+            const idsGhost = cobrancasFantasmas.map(c => c.id);
+            await supabaseAdmin
+                .from("cobrancas")
+                .update({ status: "cancelada" })
+                .in("id", idsGhost);
+                
+            logger.info({ ids: idsGhost }, "Ghost Charges canceladas com sucesso.");
+        } else {
+            logger.info("Nenhuma Ghost Charge encontrada para cancelamento.");
+        }
+
+    } catch (ghostError: any) {
+        logger.error({ error: ghostError.message, usuarioId }, "Erro crítico na rotina Ghost Killer (cancelamento de assinatura parcial)");
+        // Não lançar erro para não impedir o cancelamento da assinatura em si
+    }
+
     // Agendar cancelamento (não alterar status ainda - a automação fará isso na vigencia_fim)
     await supabaseAdmin
       .from("assinaturas_usuarios")
@@ -697,6 +755,32 @@ export async function desistirCancelarAssinatura(usuarioId: string): Promise<boo
         updated_at: new Date().toISOString()
       })
       .eq("id", assinaturaAtual.id);
+
+    // THE RESURRECTION: Regenerar cobranças futuras se estivermos pós-data de geração
+    // Se o motorista cancelou, o Ghost Killer matou as cobranças futuras.
+    // Agora que ele desistiu, precisamos recriá-las para não dar "Mês Grátis".
+    try {
+        const diaGeracao = await getConfigNumber(CONFIG_KEY_DIA_GERACAO_MENSALIDADES, 25);
+        const hoje = new Date();
+
+        if (hoje.getDate() >= diaGeracao) {
+            logger.info({ usuarioId }, "Desistência de cancelamento tardia: Regenerando cobranças do próximo mês (Resurrection)...");
+            
+            const nextMonthDate = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1);
+            const targetMonth = nextMonthDate.getMonth() + 1; // 1-12
+            const targetYear = nextMonthDate.getFullYear();
+
+            // Chama o serviço existente que gera em lote (ignora as já existentes, cria as que faltam)
+            await cobrancaService.gerarCobrancasMensaisParaMotorista(
+                usuarioId, 
+                targetMonth, 
+                targetYear
+            );
+        }
+    } catch (resurrectionError: any) {
+        logger.error({ error: resurrectionError.message, usuarioId }, "Erro ao regenerar cobranças na desistência do cancelamento.");
+        // Não falhar o processo principal, apenas logar.
+    }
 
     return true;
 
@@ -1442,6 +1526,80 @@ export async function downgradePlano(
       throw assinaturaError;
     }
 
+    // CORREÇÃO DOWNGRADE GAP (Free Lunch Fix):
+    // 1. Antes: Cancelava a antiga e criava a nova SEM cobrar.
+    // 2. Agora: Gera cobrança imediata do novo plano para garantir continuidade.
+    // Se for plano GRATUITO, não gera cobrança.
+    let cobrancaNovaId = null;
+    let qrCodePayload = null;
+    let location = null;
+    let inter_txid = null;
+
+    if (novoPlano.slug !== PLANO_GRATUITO && precoAplicado > 0) {
+        // CORREÇÃO DATA VENCIMENTO:
+        // Usar a vigência fim (início do novo ciclo) ou HOJE se já expirado.
+        const hojeDate = new Date();
+        const vigenciaFimDate = assinaturaAtual.vigencia_fim ? new Date(assinaturaAtual.vigencia_fim) : hojeDate;
+        
+        // Se a vigência fim for no futuro, usa ela. Senão (vencida), usa hoje.
+        const cobrancaDate = vigenciaFimDate > hojeDate ? vigenciaFimDate : hojeDate;
+        const dataVencimentoCobranca = cobrancaDate.toISOString().split("T")[0];
+
+        // Criar Cobrança Pendente
+        const { data: cobrancaNova, error: cobrancaError } = await supabaseAdmin
+            .from("assinaturas_cobrancas")
+            .insert({
+                usuario_id: usuarioId,
+                assinatura_usuario_id: novaAssinatura.id,
+                valor: precoAplicado,
+                status: ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
+                data_vencimento: dataVencimentoCobranca,
+                origem: "inter",
+                billing_type: "downgrade",
+                descricao: `Downgrade de Plano - ${novoPlano.nome}`,
+            })
+            .select()
+            .single();
+
+        if (cobrancaError) throw cobrancaError;
+        cobrancaNovaId = cobrancaNova.id;
+
+        // Gerar PIX na hora
+         try {
+             // Buscar dados do usuário para o PIX
+             const { data: userPix } = await supabaseAdmin
+                .from("usuarios")
+                .select("nome, cpfcnpj")
+                .eq("id", usuarioId)
+                .single();
+
+             if (userPix) {
+                 const pixData = await interService.criarCobrancaPix(supabaseAdmin, {
+                    cobrancaId: cobrancaNova.id,
+                    valor: precoAplicado,
+                    cpf: onlyDigits(userPix.cpfcnpj),
+                    nome: userPix.nome,
+                 });
+
+                 await supabaseAdmin
+                    .from("assinaturas_cobrancas")
+                    .update({
+                        inter_txid: pixData.interTransactionId,
+                        qr_code_payload: pixData.qrCodePayload,
+                        location_url: pixData.location,
+                    })
+                    .eq("id", cobrancaNova.id);
+
+                  qrCodePayload = pixData.qrCodePayload;
+                  location = pixData.location;
+                  inter_txid = pixData.interTransactionId;
+                  logger.info({ cobrancaId: cobrancaNova.id }, "Cobrança de Downgrade gerada com sucesso.");
+             }
+         } catch (pixErr: any) {
+             logger.error({ err: pixErr.message }, "Erro ao gerar PIX no Downgrade (cobrança criada, PIX falhou)");
+         }
+    }
+
     // Desativar automação de passageiros (Regra de Negócio: Downgrade remove automação)
     if (slugAtual === PLANO_PROFISSIONAL || (planoAtual.parent as any)?.slug === PLANO_PROFISSIONAL) {
         try {
@@ -1532,6 +1690,7 @@ export async function trocarSubplano(
       // Fazer upgrade para o Profissional com o subplano escolhido
       // Limpar assinaturas pendentes antigas
       await limparAssinaturasPendentes(usuarioId);
+      await cancelarCobrancaPendente(usuarioId); // Garantia extra contra boletos de renovação antigos
 
       // Calcular preços e franquia do novo subplano
       const { precoAplicado, precoOrigem, franquiaContratada } = calcularPrecosEFranquia(novoSubplano);
@@ -1659,6 +1818,7 @@ export async function trocarSubplano(
     // Se for upgrade (diferença > 0), criar assinatura e cobrança
     if (diferenca > 0) {
       await limparAssinaturasPendentes(usuarioId);
+      await cancelarCobrancaPendente(usuarioId); // Garantia extra contra boletos de renovação antigos
       
       // Log detalhado ANTES do insert (para comparação com downgrade)
       const logDataUpgrade = { 
@@ -1927,6 +2087,7 @@ export async function criarAssinaturaProfissionalPersonalizado(
     // Se for upgrade ou novo usuário, criar assinatura e cobrança primeiro
     // Limpar assinaturas pendentes antigas (garante que só há uma pendente por vez)
     await limparAssinaturasPendentes(usuarioId);
+    await cancelarCobrancaPendente(usuarioId); // Garantia extra contra boletos de renovação antigos
 
     // Manter vigência original se houver assinatura atual
     const anchorDate = assinaturaAtual?.anchor_date || new Date().toISOString().split("T")[0];

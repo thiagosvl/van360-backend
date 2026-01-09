@@ -117,11 +117,9 @@ export const notificationService = {
                 // ... lógica existente de QR Code ou apenas Texto
                 let imageBase64 = null;
                 
-                // 1. Gerar Imagem do QR Code se tiver payload
                 if (pixPayload) {
                     try {
-                        const fullBase64 = await QRCode.toDataURL(pixPayload);
-                        imageBase64 = fullBase64.replace(/^data:image\/[a-z]+;base64,/, "");
+                        imageBase64 = await QRCode.toDataURL(pixPayload);
                     } catch (e) {
                         logger.error({ error: e }, "Erro ao gerar QR Code");
                     }
