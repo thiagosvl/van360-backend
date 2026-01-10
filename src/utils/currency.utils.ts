@@ -1,4 +1,5 @@
-export const moneyToNumber = (value: string): number => {
+export const moneyToNumber = (value: string | number): number => {
+  if (typeof value === 'number') return value;
   if (!value) return 0;
   
   const numericString = value

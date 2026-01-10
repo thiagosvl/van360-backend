@@ -9,7 +9,8 @@
     "start:worker": "tsx src/worker.ts",
     "build:worker": "tsc",
     "build": "echo \"[INIT] Compilando Backend...\" && tsc && echo \"[SUCCESS] Backend Compilado!\"",
-    "convert-certs": "node scripts/converter-certificados-base64.js"
+    "convert-certs": "node scripts/converter-certificados-base64.js",
+    "test": "vitest"
   },
   "keywords": [],
   "author": "",
@@ -38,6 +39,7 @@
     "@types/node": "^24.10.0",
     "pino-pretty": "^13.1.2",
     "tsx": "^4.20.6",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.16"
   }
 }
