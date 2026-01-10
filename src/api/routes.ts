@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import assinaturaCobrancaRoute from "./assinatura-cobranca.route.js";
 import cobrancaRoute from "./cobranca.routes.js";
 import escolaRoute from "./escola.routes.js";
+import evolutionRoute from "./evolution.routes.js";
 import gastoRoute from "./gasto.route.js";
 import interRoutes from "./inter.routes.js";
 import { jobsRoute } from "./jobs.route.js";
@@ -12,6 +13,7 @@ import prePassageiroRoute from "./pre-passageiro.routes.js";
 import usuarioRoute from "./usuario.route.js";
 import veiculoRoute from "./veiculo.routes.js";
 import webhookInterRoute from "./webhook-inter.route.js";
+import whatsappRoute from "./whatsapp.routes.js"; // Novo
 
 const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.register(usuarioRoute, { prefix: "/api/usuarios" });
@@ -42,7 +44,13 @@ const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // Rotas de Jobs (Automação)
   // Prefix /api/jobs -> endpoints serão /api/jobs/generate-monthly-charges
-  app.register(jobsRoute, { prefix: "/api/jobs" }); 
+  app.register(jobsRoute, { prefix: "/api/jobs" });
+
+  app.register(whatsappRoute, { prefix: "/api/whatsapp" });
+
+  
+  // Padronização: Webhook da Evolution agora em /api/evolution
+  app.register(evolutionRoute, { prefix: "/api/evolution" });
 };
 
 export default routes;

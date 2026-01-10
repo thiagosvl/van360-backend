@@ -1,58 +1,49 @@
 import { ASSINATURA_USUARIO_STATUS_ATIVA, ASSINATURA_USUARIO_STATUS_TRIAL, CONFIG_KEY_DIA_GERACAO_MENSALIDADES, PLANO_ESSENCIAL, PLANO_PROFISSIONAL } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
-import { cobrancaService } from "../cobranca.service.js";
+import { addToGenerationQueue } from "../../queues/generation.queue.js";
 import { getConfigNumber } from "../configuracao.service.js";
 
 interface JobResult {
-    processedDrivers: number;
-    createdCharges: number;
-    skippedCharges: number;
+    foundDrivers: number;
+    queuedDrivers: number; // Alterado de processed para queued
     errors: number;
     details: any[];
 }
 
 export const chargeGeneratorJob = {
     async run(params: { targetMonth?: number; targetYear?: number; force?: boolean } = {}): Promise<JobResult> {
-        const result: JobResult = { processedDrivers: 0, createdCharges: 0, skippedCharges: 0, errors: 0, details: [] };
+        const result: JobResult = { foundDrivers: 0, queuedDrivers: 0, errors: 0, details: [] };
 
-        // 1. Definir Data Alvo (Próximo Mês por padrão)
+        // 1. Definir Data Alvo
         const now = new Date();
-        // Se hoje for Jan (0), targetMonth Default = Feb (1). 
-        // No JS/Date, Jan=0. Mas no nosso banco usamos Jan=1.
-        
         let targetMonth = params.targetMonth;
         let targetYear = params.targetYear;
 
         if (!targetMonth || !targetYear) {
-            // Modo Automático: Verificar se hoje é dia de gerar
             const diaGeracao = await getConfigNumber(CONFIG_KEY_DIA_GERACAO_MENSALIDADES, 25);
             const hoje = now.getDate();
 
             if (hoje < diaGeracao && !params.force) {
                 logger.info({ hoje, diaGeracao }, "Job ignorado: Ainda não é dia de gerar mensalidades.");
-                return result; // Retorna vazio, não é erro
+                return result; 
             }
             
             if (params.force) {
                 logger.info("FORCE MODE: Ignorando verificação de dia de geração.");
             }
 
-            // Default: Mês seguinte ao atual
             const nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-            targetMonth = nextMonthDate.getMonth() + 1; // 1-12
+            targetMonth = nextMonthDate.getMonth() + 1; 
             targetYear = nextMonthDate.getFullYear();
             
-            logger.info({ targetMonth, targetYear, diaGeracao }, "Automático: Data atingida, iniciando geração...");
+            logger.info({ targetMonth, targetYear, diaGeracao }, "Automático: Data atingida, iniciando dispatch...");
         }
 
-        logger.info({ targetMonth, targetYear }, "Iniciando Job de Geração de Mensalidades");
-
-
+        logger.info({ targetMonth, targetYear }, "Iniciando Job de DISPATCH de Mensalidades");
 
         try {
-            // 2. Buscar IDs dos Planos (Essencial e Profissional)
-            // Precisamos dos UUIDs para buscar na tabela de assinaturas
+            // 2. Buscar IDs dos Planos
             const { data: planosData, error: planosError } = await supabaseAdmin
                 .from("planos")
                 .select("id, slug")
@@ -60,21 +51,20 @@ export const chargeGeneratorJob = {
 
             if (planosError) throw planosError;
 
-            // Extrair IDs
             const planIds = planosData?.map(p => p.id) || [];
             
             if (planIds.length === 0) {
-                logger.warn("Nenhum plano (Essencial/Profissional) encontrado no banco.");
+                logger.warn("Nenhum plano elegível encontrado no banco.");
                 return result;
             }
 
-            // Buscar usuários (motoristas) com assinaturas ativas nos planos que permitem automação
+            // 3. Buscar Motoristas Elegíveis
             const { data: assinaturas, error: subError } = await supabaseAdmin
                 .from("assinaturas_usuarios")
-                .select("usuario_id, status, plano_id, usuarios(id, nome)") // plano_id correto
-                .in("status", [ASSINATURA_USUARIO_STATUS_ATIVA, ASSINATURA_USUARIO_STATUS_TRIAL]) // Campo 'status' é texto segundo o print ou boolean/enum
+                .select("usuario_id, status, plano_id, usuarios(id, nome)") 
+                .in("status", [ASSINATURA_USUARIO_STATUS_ATIVA, ASSINATURA_USUARIO_STATUS_TRIAL]) 
                 .in("plano_id", planIds)
-                .is("cancelamento_manual", null); // Ignora quem já pediu cancelamento/agendou saída
+                .is("cancelamento_manual", null); 
 
             if (subError) throw subError;
 
@@ -83,33 +73,37 @@ export const chargeGeneratorJob = {
                  return result;
             }
 
-            // Normalizar lista de motoristas
             const motoristas = assinaturas
                 .map((a: any) => a.usuarios) 
                 .filter((u: any) => !!u); 
             
-            result.processedDrivers = motoristas.length;
+            result.foundDrivers = motoristas.length;
 
-            // 4. Iterar por Motorista
-
-            // 3. Iterar por Motorista
+            // 4. Dispatch para a Fila (Async)
             for (const motorista of motoristas) {
                 try {
-                    const stats = await cobrancaService.gerarCobrancasMensaisParaMotorista(motorista.id, targetMonth, targetYear);
-                    result.createdCharges += stats.created;
-                    result.skippedCharges += stats.skipped;
+                    // IDEMPOTÊNCIA:
+                    // O addToGenerationQueue gerencia o Job ID internamente: `gen-{id}-{mes}-{ano}`
+                    // Se rodar 2x, o Redis deduplica.
+                    await addToGenerationQueue({
+                        motoristaId: motorista.id,
+                        mes: targetMonth,
+                        ano: targetYear
+                    });
+                    
+                    result.queuedDrivers++;
                 } catch (err: any) {
-                    logger.error({ err: err.message, driverId: motorista.id }, "Erro ao gerar cobranças para motorista");
+                    logger.error({ err: err.message, driverId: motorista.id }, "Erro ao enfileirar geração para motorista");
                     result.errors++;
                     result.details.push({ driverId: motorista.id, error: err.message });
                 }
             }
 
-            logger.info(result, "Job de Mensalidades Concluído");
+            logger.info(result, "Job de Dispatch Concluído (Processamento ocorrerá em background)");
             return result;
 
         } catch (err: any) {
-            logger.error({ err }, "Falha Crítica no Job de Mensalidades");
+            logger.error({ err }, "Falha Crítica no Job de Dispatch");
             throw err;
         }
     }

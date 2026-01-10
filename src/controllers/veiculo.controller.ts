@@ -1,0 +1,65 @@
+import { FastifyReply, FastifyRequest } from "fastify";
+import { logger } from "../config/logger.js";
+import { veiculoService } from "../services/veiculo.service.js";
+import {
+    createVeiculoSchema,
+    listVeiculosFiltersSchema,
+    toggleVeiculoAtivoSchema,
+    updateVeiculoSchema
+} from "../types/dtos/veiculo.dto.js";
+
+export const veiculoController = {
+  create: async (request: FastifyRequest, reply: FastifyReply) => {
+    logger.info("VeiculoController.create - Starting");
+    const data = createVeiculoSchema.parse(request.body);
+    const result = await veiculoService.createVeiculo(data);
+    return reply.status(201).send(result);
+  },
+
+  update: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    logger.info({ veiculoId: id }, "VeiculoController.update - Starting");
+    const data = updateVeiculoSchema.parse(request.body);
+    await veiculoService.updateVeiculo(id, data);
+    return reply.status(200).send({ success: true });
+  },
+
+  delete: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    logger.info({ veiculoId: id }, "VeiculoController.delete - Starting");
+    await veiculoService.deleteVeiculo(id);
+    return reply.status(200).send({ success: true });
+  },
+
+  get: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const veiculo = await veiculoService.getVeiculo(id);
+    return reply.status(200).send(veiculo);
+  },
+
+  listByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { usuarioId } = request.params as { usuarioId: string };
+    const filtros = listVeiculosFiltersSchema.parse(request.query);
+    const veiculos = await veiculoService.listVeiculos(usuarioId, filtros);
+    return reply.status(200).send(veiculos);
+  },
+
+  listWithContagem: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { usuarioId } = request.params as { usuarioId: string };
+    const veiculos = await veiculoService.listVeiculosComContagemAtivos(usuarioId);
+    return reply.status(200).send(veiculos);
+  },
+
+  countByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { usuarioId } = request.params as { usuarioId: string };
+    const count = await veiculoService.countListVeiculosByUsuario(usuarioId);
+    return reply.status(200).send({ count });
+  },
+
+  toggleAtivo: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const { novoStatus } = toggleVeiculoAtivoSchema.parse(request.body);
+    await veiculoService.toggleAtivo(id, novoStatus);
+    return reply.status(200).send({ ativo: novoStatus });
+  }
+};

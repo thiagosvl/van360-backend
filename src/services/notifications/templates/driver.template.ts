@@ -11,6 +11,10 @@ export interface DriverContext {
     dataVencimento: string;
     mes?: number;
     ano?: number;
+    reciboUrl?: string; // URL da imagem do comprovante
+    trialDays?: number;
+    nomePassageiro?: string;
+    nomeResponsavel?: string;
 }
 
 const formatDate = (dateStr: string) => {
@@ -29,11 +33,37 @@ const getMeshName = (mes?: number) => {
 export const DriverTemplates = {
 
     /**
+     * Boas-vindas: Plano Gratuito
+     */
+    welcomeFree: (ctx: DriverContext) => {
+        return `Olá *${ctx.nomeMotorista}*, seja muito bem-vindo à Van360! 🚀
+
+É um prazer ter você conosco no plano *${ctx.nomePlano}*.
+Nossa equipe está à disposição para ajudar você a organizar seu transporte escolar.
+
+Aproveite o sistema! 🚐💨`;
+    },
+
+    /**
+     * Boas-vindas: Plano com Trial (Essencial)
+     */
+    welcomeTrial: (ctx: DriverContext) => {
+        const dias = ctx.trialDays || 7;
+        return `Olá *${ctx.nomeMotorista}*, seja muito bem-vindo à Van360! 🚀
+
+Você começou com o plano *${ctx.nomePlano}*.
+Aproveite seu acesso completo por *${dias} dias* de teste grátis!
+
+Após esse período, enviaremos os dados para oficializar sua assinatura.
+Qualquer dúvida, estamos à disposição! 🚐💨`;
+    },
+
+    /**
      * Ativação: Faça o pagamento para começar
      */
     activation: (ctx: DriverContext) => {
         const valor = formatCurrency(ctx.valor);
-        return `Olá *${ctx.nomeMotorista}*, bem-vindo à Van 360! 🚀
+        return `Olá *${ctx.nomeMotorista}*, bem-vindo à Van360! 🚀
 
 Seu plano *${ctx.nomePlano}* no valor de *${valor}* está aguardando ativação.
 Realize o pagamento pelo Pix abaixo para liberar seu acesso imediatamente! 👇`;
@@ -131,7 +161,9 @@ O pagamento está sendo processado e o valor logo estará em sua conta. ⏳`;
 
 Olá *${nomeMot}*, confirmamos o recebimento do seu pagamento de *${valor}*${ref} referente ao plano *${ctx.nomePlano}*.
 
-Seu acesso está garantido! 🚐💨`;
+Seu acesso está garantido! 🚐💨
+
+${ctx.reciboUrl ? `📎 *Comprovante:* ${ctx.reciboUrl}` : ''}`;
     },
 
     /**
@@ -143,7 +175,7 @@ Seu acesso está garantido! 🚐💨`;
         
         return `⏳ *Seu Teste Grátis está acabando!*
 
-Olá *${ctx.nomeMotorista}*, esperamos que esteja gostando da Van 360! 🚌
+Olá *${ctx.nomeMotorista}*, esperamos que esteja gostando da Van360! 🚌
 
 Seu período de testes do plano *${ctx.nomePlano}* termina em *${data}*.
 Para continuar usando todos os recursos sem interrupção, confirme sua assinatura realizando o pagamento abaixo.
@@ -182,5 +214,31 @@ Como você esteve suspenso, geramos agora suas cobranças${ref} que estavam pend
 A automação está **PAUSADA por 24 horas** para você. Esse é o tempo para você conferir seu painel e dar baixa em quem já te pagou "por fora" (dinheiro/pix direto) durante a suspensão.
 
 Se não houver baixas, o sistema começará a enviar as notificações para seus passageiros automaticamente em 24h.`;
+    },
+    /**
+     * Aviso de Desconexão do WhatsApp
+     */
+    whatsappDisconnected: (ctx: DriverContext) => {
+        return `⚠️ *Atenção: Seu WhatsApp Desconectou!*
+
+Olá *${ctx.nomeMotorista}*, notamos que sua conexão com o WhatsApp foi perdida. 📵
+
+Isso impede que o sistema envie as cobranças automáticas para seus passageiros.
+Por favor, acesse o painel e reconecte seu WhatsApp (escaneie o QR Code novamente) o mais rápido possível para evitar falhas no envio.`;
+    },
+
+    /**
+     * Notificação de Novo Pré-Cadastro
+     */
+    prePassengerCreated: (ctx: DriverContext) => {
+        const nomeMot = getFirstName(ctx.nomeMotorista);
+        const nomePas = getFirstName(ctx.nomePassageiro) || "um novo passageiro";
+        const nomeResp = ctx.nomeResponsavel ? ` (${getFirstName(ctx.nomeResponsavel)})` : "";
+
+        return `🔔 *Novo Pré-Cadastro Realizado!*
+
+Olá *${nomeMot}*, o pré-cadastro de *${nomePas}*${nomeResp} foi realizado com sucesso através do seu link! 🚀
+
+Acesse o sistema agora para revisar os dados, definir o valor da mensalidade e aprovar o cadastro. 🚐💨`;
     }
 };

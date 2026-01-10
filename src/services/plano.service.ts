@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "../config/supabase.js";
-import { calcularPrecoPersonalizado } from "./usuario.service.js";
+import { pricingService } from "./pricing.service.js";
 
 // Helper para buscar configurações da tabela configuracao_interna com fallbacks
 async function getConfiguracao(
@@ -70,7 +70,7 @@ export const planoService = {
         }
 
         try {
-            const { precoCalculado } = await calcularPrecoPersonalizado(quantidade, ignorarMinimo);
+            const { precoCalculado } = await pricingService.calcularPrecoPersonalizado(quantidade, ignorarMinimo);
             
             // Calculate unit price for consistency with interface
             const valorPorCobranca = precoCalculado / quantidade;

@@ -1,17 +1,22 @@
 import { supabaseAdmin } from "../config/supabase.js";
-import { cleanString, moneyToNumber } from "../utils/utils.js";
+import { CreateGastoDTO, ListGastosFiltersDTO, UpdateGastoDTO } from "../types/dtos/gasto.dto.js";
+import { moneyToNumber } from "../utils/currency.utils.js";
+import { cleanString } from "../utils/string.utils.js";
 
 export const gastoService = {
-    async createGasto(data: any): Promise<any> {
+    async createGasto(data: CreateGastoDTO): Promise<any> {
         if (!data.usuario_id) throw new Error("Usuário obrigatório");
 
-        const gastoData: any = {
+        const gastoData = {
+            usuario_id: data.usuario_id,
             valor: typeof data.valor === "string" ? moneyToNumber(data.valor) : data.valor,
             data: data.data,
-            descricao: cleanString(data.descricao),
+            descricao: data.descricao ? cleanString(data.descricao) : null,
             categoria: data.categoria,
-            usuario_id: data.usuario_id,
-            veiculo_id: data.veiculo_id === "none" ? null : data.veiculo_id,
+            veiculo_id: (data.veiculo_id === "none" || !data.veiculo_id) ? null : data.veiculo_id,
+            km_atual: data.km_atual || null,
+            litros: data.litros || null,
+            local: data.local || null
         };
 
         const { data: inserted, error } = await supabaseAdmin
@@ -24,15 +29,15 @@ export const gastoService = {
         return inserted;
     },
 
-    async updateGasto(id: string, data: Partial<any>): Promise<any> {
+    async updateGasto(id: string, data: UpdateGastoDTO): Promise<any> {
         if (!id) throw new Error("ID do gasto é obrigatório");
 
         const gastoData: any = { ...data };
         if (typeof data.valor === "string") gastoData.valor = moneyToNumber(data.valor);
-        if (data.data) gastoData.data = data.data;
-        if (data.categoria) gastoData.categoria = data.categoria;
         if (data.descricao) gastoData.descricao = cleanString(data.descricao);
+        
         if (data.veiculo_id !== undefined) {
+             // @ts-ignore - Handle 'none' string specially if coming from frontend
             gastoData.veiculo_id = data.veiculo_id === "none" ? null : data.veiculo_id;
         }
 
@@ -69,12 +74,7 @@ export const gastoService = {
 
     async listGastos(
         usuarioId: string,
-        filtros?: {
-            mes?: string;
-            ano?: string;
-            categoria?: string;
-            veiculoId?: string;
-        }
+        filtros?: ListGastosFiltersDTO
     ): Promise<any[]> {
         if (!usuarioId) throw new Error("Usuário obrigatório");
 
@@ -89,26 +89,16 @@ export const gastoService = {
             query = query.eq('categoria', filtros.categoria);
         }
 
-        if (filtros && filtros.veiculoId) {
-            query = query.eq('veiculo_id', filtros.veiculoId);
+        if (filtros && filtros.veiculo_id) {
+            query = query.eq('veiculo_id', filtros.veiculo_id);
         }
 
-        if (filtros && filtros.mes && filtros.ano) {
-            const ano = parseInt(filtros.ano);
-            const mes = parseInt(filtros.mes);
+        if (filtros?.data_inicio) query = query.gte("data", filtros.data_inicio);
+        if (filtros?.data_fim) query = query.lte("data", filtros.data_fim);
 
-            const firstDay = new Date(ano, mes - 1, 1).toISOString();
-            const lastDay = new Date(
-                ano,
-                mes,
-                0,
-                23,
-                59,
-                59
-            ).toISOString();
-
-            query = query.gte("data", firstDay).lte("data", lastDay);
-        }
+        // Pagination
+        if (filtros?.limit) query = query.limit(filtros.limit);
+        if (filtros?.offset) query = query.range(filtros.offset, filtros.offset + (filtros.limit || 10) - 1);
 
         const { data, error } = await query;
         if (error) throw error;

@@ -3,6 +3,8 @@
 import fastifyCors from "@fastify/cors";
 import Fastify, { FastifyInstance } from "fastify";
 import routes from "./api/routes.js";
+import { globalErrorHandler } from "./errors/errorHandler.js";
+import { setupBullBoard } from "./queues/bull-board.js";
 
 export async function createApp(): Promise<FastifyInstance> {
   try {
@@ -18,6 +20,9 @@ export async function createApp(): Promise<FastifyInstance> {
             : undefined,
       },
     });
+    
+    // Global Error Handler
+    app.setErrorHandler(globalErrorHandler);
 
     // Configuração de CORS
     const allowedOrigins = process.env.ALLOWED_ORIGINS
@@ -46,6 +51,10 @@ export async function createApp(): Promise<FastifyInstance> {
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       allowedHeaders: ["Content-Type", "Authorization"],
     });
+
+    // Configurar Bull Board (Dashboard de Filas)
+    // Opcional: Adicionar proteção de Basic Auth aqui futuramente
+    setupBullBoard(app);
 
     // Registrar rotas
     await app.register(routes);

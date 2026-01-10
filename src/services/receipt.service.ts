@@ -70,19 +70,25 @@ class ReceiptService {
      * Gera a imagem do recibo e salva no Storage
      */
     async generateAndSave(data: ReceiptData): Promise<string | null> {
+        const logId = `REC-${Date.now()}`;
         try {
-            logger.info({ id: data.id }, "Gerando recibo...");
+            logger.info({ logId, dataId: data.id, tipo: data.tipo, pagador: data.pagadorNome }, "Iniciando geração de recibo (DEBUG)");
 
             const font = await this.getFont();
             if (!font) {
+                logger.error({ logId, dataId: data.id }, "Fonte não carregada. Impossível gerar recibo.");
                 throw new Error("Fonte não carregada. Impossível gerar recibo.");
             }
+            logger.info({ logId }, "Fonte carregada OK");
 
             const logoBase64 = await this.getLogo();
+            logger.info({ logId, hasLogo: !!logoBase64 }, "Logo carregado");
+            
             const mesNome = this.getMeshName(data.mes);
             const referencia = data.mes ? `${mesNome}/${data.ano}` : "";
 
             // 1. Definir o Layout (JSX-like)
+            logger.info({ logId }, "Iniciando Satori...");
             const svg = await satori(
                 {
                     type: "div",
@@ -168,14 +174,18 @@ class ReceiptService {
                     ],
                 }
             );
+            logger.info({ logId }, "SVG Gerado OK");
 
             // 2. Converter para PNG
             const resvg = new Resvg(svg);
             const pngData = resvg.render();
             const pngBuffer = pngData.asPng();
+            logger.info({ logId, size: pngBuffer.length }, "PNG Renderizado OK");
 
             // 3. Salvar no Supabase Storage
             const fileName = `${data.tipo.toLowerCase()}_${data.id}_${Date.now()}.png`;
+            logger.info({ logId, fileName }, "Enviando pro Supabase...");
+            
             const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
                 .from("recibos")
                 .upload(fileName, pngBuffer, {
@@ -183,22 +193,28 @@ class ReceiptService {
                     upsert: true
                 });
 
-            if (uploadError) throw uploadError;
+            if (uploadError) {
+                logger.error({ logId, uploadError }, "Erro no Upload Supabase");
+                throw uploadError;
+            }
 
             // 4. Obter URL Pública
             const { data: { publicUrl } } = supabaseAdmin.storage
                 .from("recibos")
                 .getPublicUrl(fileName);
 
-            logger.info({ publicUrl }, "Recibo gerado e salvo com sucesso.");
+            logger.info({ logId, publicUrl }, "Recibo gerado e salvo com sucesso!");
             return publicUrl;
 
         } catch (error: any) {
             logger.error({ 
+                logId,
                 error: error.message || error, 
                 stack: error.stack,
-                data 
-            }, "Erro ao gerar recibo");
+                step: error.step || "unknown", // Tentar identificar o passo
+                dataId: data.id,
+                dataType: data.tipo
+            }, "Erro CRÍTICO ao gerar/salvar recibo");
             return null;
         }
     }

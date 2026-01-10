@@ -19,7 +19,10 @@ export const cobrancaNotificacaoService = {
 
         const { error } = await supabaseAdmin
             .from('cobranca_notificacoes')
-            .insert([payload]);
+            .insert([{
+                ...payload,
+                cobranca_id: cobrancaId
+            }]);
 
         if (error) throw error;
         return true;

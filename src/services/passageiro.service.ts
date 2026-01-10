@@ -1,587 +1,347 @@
-import { CONFIG_KEY_DIA_GERACAO_MENSALIDADES, PLANO_PROFISSIONAL } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
-import { cleanString, moneyToNumber, onlyDigits, toLocalDateString } from "../utils/utils.js";
+import { AppError } from "../errors/AppError.js";
+import { subscriptionLifecycleService } from "./subscription-lifecycle.service.js";
+
+import { CreatePassageiroDTO, ListPassageirosFiltersDTO, UpdatePassageiroDTO } from "../types/dtos/passageiro.dto.js";
+import { CobrancaOrigem, CobrancaTipo, DesativacaoMotivo } from "../types/enums.js";
+import { moneyToNumber } from "../utils/currency.utils.js";
+import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { cobrancaService } from "./cobranca.service.js";
-import { getConfigNumber } from "./configuracao.service.js";
 
 // Métodos privados auxiliares
-const _preparePassageiroData = (data: any, usuarioId: string, ativoDefault: boolean = true): any => {
-    // Remover campos que não pertencem à tabela passageiros
-    const { emitir_cobranca_mes_atual: _, ...pureData } = data;
-
+const _preparePassageiroData = (data: CreatePassageiroDTO | any, usuarioId: string, ativoDefault: boolean = true): any => {
     return {
-        ...pureData,
-        nome: cleanString(pureData.nome, true),
-        nome_responsavel: cleanString(pureData.nome_responsavel, true),
-        email_responsavel: cleanString(pureData.email_responsavel),
-        logradouro: cleanString(pureData.logradouro, true),
-        bairro: cleanString(pureData.bairro, true),
-        cidade: cleanString(pureData.cidade, true),
-        referencia: cleanString(pureData.referencia, true),
-        observacoes: cleanString(pureData.observacoes, true),
-        valor_cobranca: typeof pureData.valor_cobranca === "string" ? moneyToNumber(pureData.valor_cobranca) : pureData.valor_cobranca,
-        dia_vencimento: Number(pureData.dia_vencimento),
-        escola_id: pureData.escola_id || null,
-        ativo: pureData.ativo ?? ativoDefault,
         usuario_id: usuarioId,
-        cpf_responsavel: pureData.cpf_responsavel ? onlyDigits(pureData.cpf_responsavel) : null,
-        telefone_responsavel: pureData.telefone_responsavel ? onlyDigits(pureData.telefone_responsavel) : null,
-        enviar_cobranca_automatica: pureData.enviar_cobranca_automatica || false,
+        nome: cleanString(data.nome, true),
+        escola_id: data.escola_id === "none" ? null : data.escola_id, // Front sometimes sends "none"
+        veiculo_id: data.veiculo_id === "none" ? null : data.veiculo_id,
+        nome_responsavel: data.nome_responsavel ? cleanString(data.nome_responsavel, true) : null,
+        cpf_responsavel: data.cpf_responsavel ? onlyDigits(data.cpf_responsavel) : null,
+        telefone_responsavel: data.telefone_responsavel ? onlyDigits(data.telefone_responsavel) : null,
+        email_responsavel: data.email_responsavel ? cleanString(data.email_responsavel) : null,
+        logradouro: data.logradouro ? cleanString(data.logradouro, true) : null,
+        numero: data.numero ? cleanString(data.numero, true) : null,
+        bairro: data.bairro ? cleanString(data.bairro, true) : null,
+        cidade: data.cidade ? cleanString(data.cidade, true) : null,
+        estado: data.estado ? cleanString(data.estado, true) : null,
+        cep: data.cep ? onlyDigits(data.cep) : null,
+        dia_vencimento: data.dia_vencimento || 10,
+        valor_cobranca: typeof data.valor_cobranca === "string" ? moneyToNumber(data.valor_cobranca) : (data.valor_cobranca || 0),
+        ativo: ativoDefault,
+        referencia: data.referencia ? cleanString(data.referencia, true) : null,
+        observacoes: data.observacoes ? cleanString(data.observacoes, true) : null,
+        periodo: data.periodo || null,
+        genero: data.genero || null,
+        enviar_cobranca_automatica: !!data.enviar_cobranca_automatica,
     };
 };
 
-const _createCobrancaMesAtual = async (
-    passageiroId: string,
-    passageiroData: any,
-    usuarioId: string
-): Promise<any> => {
-    const currentDate = new Date();
-    const mes = currentDate.getMonth() + 1;
-    const ano = currentDate.getFullYear();
-    const diaInformado = passageiroData.dia_vencimento;
-    const hoje = currentDate.getDate();
-    const vencimentoAjustado = diaInformado < hoje ? hoje : diaInformado;
-    const dataVencimento = new Date(ano, mes - 1, vencimentoAjustado);
+const createPassageiro = async (data: CreatePassageiroDTO): Promise<any> => {
+    if (!data.usuario_id) throw new Error("Usuário obrigatório");
+    if (!data.nome) throw new Error("Nome do passageiro é obrigatório");
 
-    return await cobrancaService.createCobranca({
-        passageiro_id: passageiroId,
-        mes,
-        ano,
-        valor: passageiroData.valor_cobranca,
-        data_vencimento: toLocalDateString(dataVencimento),
-        status: "pendente",
-        usuario_id: usuarioId,
-        origem: "manual",
-    });
-};
-
-/**
- * Verifica se já passou do dia de geração automática e cria a do mês seguinte se necessário
- */
-const _verificarGerarCobrancaMesSeguinte = async (
-    passageiroId: string,
-    passageiroData: any,
-    usuarioId: string
-): Promise<any> => {
-    const diaGeracao = await getConfigNumber(CONFIG_KEY_DIA_GERACAO_MENSALIDADES, 25);
-    const hoje = new Date();
-    
-    // Se hoje >= dia 25, significa que o job mensal já rodou. 
-    // Precisamos gerar a de Fevereiro (mês seguinte) agora para este novo passageiro.
-    if (hoje.getDate() >= diaGeracao) {
-        const nextMonthDate = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1);
-        const targetMonth = nextMonthDate.getMonth() + 1;
-        const targetYear = nextMonthDate.getFullYear();
-        
-        // Calcular Vencimento
-        const diaVencimento = passageiroData.dia_vencimento || 10;
-        const lastDayOfMonth = new Date(targetYear, targetMonth, 0).getDate();
-        const diaFinal = Math.min(diaVencimento, lastDayOfMonth);
-        const dataVencimentoStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(diaFinal).padStart(2, '0')}`;
-
-        return await cobrancaService.createCobranca({
-            passageiro_id: passageiroId,
-            mes: targetMonth,
-            ano: targetYear,
-            valor: passageiroData.valor_cobranca,
-            data_vencimento: dataVencimentoStr,
-            status: "pendente",
-            usuario_id: usuarioId,
-            origem: "automatica_cadastro" // Identifica que foi gerada no cadastro pós-fechamento
-        });
+    // 1. Limites do Plano (Feature Gating)
+    // Validar limites se Cobrança Automática estiver ativada
+    if (data.enviar_cobranca_automatica) {
+        try {
+            await subscriptionLifecycleService.verificarLimiteAutonacao(data.usuario_id, 1);
+        } catch (error: any) {
+             // Traduzir erro ou repassar
+             if (error.message.includes("LIMIT_EXCEEDED")) {
+                 throw new AppError("Limite de passageiros com cobrança automática excedido para seu plano.", 403);
+             }
+             throw error;
+        }
     }
-    return null;
+
+    const passageiroData = _preparePassageiroData(data, data.usuario_id, true);
+
+    const { data: inserted, error } = await supabaseAdmin
+        .from("passageiros")
+        .insert([passageiroData])
+        .select()
+        .single();
+
+    if (error) throw error;
+    
+    // Se marcou opção de gerar cobrança mês atual
+    if (data.emitir_cobranca_mes_atual) {
+         try {
+             const valor = inserted.valor_cobranca;
+             if (valor && valor > 0) {
+                 const hoje = new Date();
+                 // Vencimento para hoje (cobrança imediata)
+                 const dataVencimento = hoje.toISOString().split('T')[0];
+                 
+                 logger.info({ passageiroId: inserted.id, valor }, "Gerando cobrança inicial (Mês Atual)...");
+                 
+                 await cobrancaService.createCobranca({
+                    usuario_id: data.usuario_id,
+                    passageiro_id: inserted.id,
+                    valor: valor,
+                    data_vencimento: dataVencimento,
+                    tipo: CobrancaTipo.MENSALIDADE,
+                    origem: CobrancaOrigem.AUTOMATICA,
+                    // descricao: Removido do DTO
+                    gerarPixAsync: true
+                 }, { gerarPixAsync: true });
+             }
+         } catch (err: any) {
+             logger.error({ err }, "Erro ao gerar cobrança inicial automática");
+             // Não dar throw para não falhar a criação do passageiro, apenas logar erro da cobrança
+         }
+    }
+
+    return inserted;
 };
 
-export const passageiroService = {
-    async createPassageiro(data: any): Promise<any> {
-        if (!data.usuario_id) throw new Error("Usuário obrigatório");
+const updatePassageiro = async (id: string, data: UpdatePassageiroDTO): Promise<any> => {
+    if (!id) throw new Error("ID do passageiro é obrigatório");
 
-        const emitir_cobranca_mes_atual = data.emitir_cobranca_mes_atual;
-        const passageiroData = _preparePassageiroData(data, data.usuario_id, true);
-
-        let newPassageiro: any = null;
-        let payment: any = null;
-
-        try {
-            const { data: inserted, error } = await supabaseAdmin
-                .from("passageiros")
-                .insert([passageiroData])
-                .select()
-                .single();
-            if (error) throw error;
-            newPassageiro = inserted;
-
-            if (emitir_cobranca_mes_atual) {
-                payment = await _createCobrancaMesAtual(
-                    newPassageiro.id,
-                    passageiroData,
-                    data.usuario_id
-                );
-            } else if (passageiroData.enviar_cobranca_automatica) {
-                // Se não for emitir a do mês atual, mas a automação estiver ligada, 
-                // verificamos se precisa gerar a do mês seguinte (caso hoje > dia 25)
-                await _verificarGerarCobrancaMesSeguinte(
-                    newPassageiro.id,
-                    passageiroData,
-                    data.usuario_id
-                );
-            }
-
-            return { newPassageiro, payment };
-        } catch (err: any) {
-            if (newPassageiro?.id) {
-                await supabaseAdmin.from("passageiros").delete().eq("id", newPassageiro.id);
-            }
-            throw new Error(err.message || "Erro ao criar passageiro");
-        }
-    },
-
-    async finalizePreCadastro(
-        prePassageiroId: string,
-        data: any,
-        usuarioId: string,
-        emitir_cobranca_mes_atual: boolean
-    ): Promise<{ newPassageiro: any; payment?: any }> {
-        if (!prePassageiroId) throw new Error("ID do pré-passageiro é obrigatório");
-        if (!usuarioId) throw new Error("Usuário obrigatório");
-
-        // Preparar dados do passageiro (sempre ativo para pré-cadastros finalizados)
-        const passageiroData = _preparePassageiroData(data, usuarioId, true);
-
-        let newPassageiro: any = null;
-        let payment: any = null;
-
-        try {
-            // Criar passageiro
-            const { data: inserted, error: insertPassageiroError } = await supabaseAdmin
-                .from("passageiros")
-                .insert([passageiroData])
-                .select()
-                .single();
-
-            if (insertPassageiroError) throw insertPassageiroError;
-            newPassageiro = inserted;
-
-            // Criar cobrança do mês atual se necessário
-            if (emitir_cobranca_mes_atual) {
-                payment = await _createCobrancaMesAtual(
-                    newPassageiro.id,
-                    passageiroData,
-                    usuarioId
-                );
-            } else if (passageiroData.enviar_cobranca_automatica) {
-                await _verificarGerarCobrancaMesSeguinte(
-                    newPassageiro.id,
-                    passageiroData,
-                    usuarioId
-                );
-            }
-
-            // Deletar pré-passageiro após sucesso
-            const { error: deletePreError } = await supabaseAdmin
-                .from("pre_passageiros")
-                .delete()
-                .eq("id", prePassageiroId);
-
-            if (deletePreError) {
-                throw new Error("Falha crítica ao finalizar o pré-cadastro. Acionando reversão.");
-            }
-
-            return { newPassageiro, payment };
-        } catch (err: any) {
-            // Rollback: deletar passageiro criado em caso de erro
-            if (newPassageiro?.id) {
-                await supabaseAdmin.from("passageiros").delete().eq("id", newPassageiro.id);
-            }
-            throw new Error(err.message || "Erro desconhecido ao processar o cadastro.");
-        }
-    },
-
-    async updatePassageiro(id: string, data: Partial<any>): Promise<any> {
-        if (!id) throw new Error("ID do passageiro é obrigatório");
-
-        // Buscar passageiro para obter usuario_id
-        const passageiro = await this.getPassageiro(id);
-        if (!passageiro?.usuario_id) {
-            throw new Error("Passageiro não encontrado ou sem usuário associado");
-        }
-
-        const passageiroData: any = { ...data };
-
-        if (data.nome) passageiroData.nome = cleanString(data.nome, true);
-        if (data.nome_responsavel) passageiroData.nome_responsavel = cleanString(data.nome_responsavel, true);
-        if (data.email_responsavel) passageiroData.email_responsavel = cleanString(data.email_responsavel);
-        if (data.logradouro) passageiroData.logradouro = cleanString(data.logradouro, true);
-        if (data.bairro) passageiroData.bairro = cleanString(data.bairro, true);
-        if (data.cidade) passageiroData.cidade = cleanString(data.cidade, true);
-        if (data.referencia) passageiroData.referencia = cleanString(data.referencia, true);
-        if (data.observacoes) passageiroData.observacoes = cleanString(data.observacoes, true);
-        if (data.valor_cobranca !== undefined) passageiroData.valor_cobranca = moneyToNumber(data.valor_cobranca);
-        if (data.dia_vencimento !== undefined) passageiroData.dia_vencimento = data.dia_vencimento;
-        if (data.cpf_responsavel) passageiroData.cpf_responsavel = onlyDigits(data.cpf_responsavel);
-        if (data.telefone_responsavel) passageiroData.telefone_responsavel = onlyDigits(data.telefone_responsavel);
-        
-        // Validar se pode ativar cobranças automáticas
-        if (data.enviar_cobranca_automatica !== undefined) {
-            // Se tentando ativar, validar se tem plano Profissional
-            if (data.enviar_cobranca_automatica === true) {
-                // Buscar assinatura ativa do usuário
-                const { data: assinaturas, error: assinaturaError } = await supabaseAdmin
-                    .from("assinaturas_usuarios")
-                    .select(`
-                        *,
-                        planos:plano_id (*, parent:parent_id (*))
-                    `)
-                    .eq("usuario_id", passageiro.usuario_id)
-                    .eq("ativo", true)
-                    .limit(1)
-                    .single();
-                
-                if (assinaturaError || !assinaturas) {
-                    throw new Error("Cobranças automáticas estão disponíveis apenas no plano Profissional");
-                }
-                
-                const plano = assinaturas.planos as any;
-                const slugPlano = plano?.parent?.slug || plano?.slug;
-                
-                if (slugPlano !== PLANO_PROFISSIONAL) {
-                    throw new Error("Cobranças automáticas estão disponíveis apenas no plano Profissional");
-                }
-                
-                // Validar se ativar este passageiro excederia a franquia
-                const franquiaContratada = assinaturas.franquia_contratada_cobrancas || 0;
-                
-                // Contar quantos passageiros já têm cobranças automáticas ativas
-                const { count: passageirosAtivos } = await supabaseAdmin
-                    .from("passageiros")
-                    .select("id", { count: "exact", head: true })
-                    .eq("usuario_id", passageiro.usuario_id)
-                    .eq("ativo", true)
-                    .eq("enviar_cobranca_automatica", true);
-                
-                const quantidadeAtiva = passageirosAtivos || 0;
-                
-                // Se o passageiro já estava ativo, não contar ele
-                const quantidadeAposAtivacao = passageiro.enviar_cobranca_automatica === true 
-                    ? quantidadeAtiva 
-                    : quantidadeAtiva + 1;
-                
-                if (quantidadeAposAtivacao > franquiaContratada) {
-                    throw new Error(`Ativar este passageiro excederia a franquia contratada de ${franquiaContratada} passageiros. Você já tem ${quantidadeAtiva} passageiros com cobranças automáticas ativas.`);
-                }
-            }
+    const passageiroData: any = {};
+    if (data.nome) passageiroData.nome = cleanString(data.nome, true);
+    if (data.escola_id !== undefined) passageiroData.escola_id = data.escola_id === "none" ? null : data.escola_id;
+    if (data.veiculo_id !== undefined) passageiroData.veiculo_id = data.veiculo_id === "none" ? null : data.veiculo_id;
+    if (data.nome_responsavel) passageiroData.nome_responsavel = cleanString(data.nome_responsavel, true);
+    if (data.email_responsavel) passageiroData.email_responsavel = cleanString(data.email_responsavel);
+    if (data.logradouro) passageiroData.logradouro = cleanString(data.logradouro as string, true);
+    if (data.numero) passageiroData.numero = cleanString(data.numero as string, true);
+    if (data.bairro) passageiroData.bairro = cleanString(data.bairro as string, true);
+    if (data.cidade) passageiroData.cidade = cleanString(data.cidade as string, true);
+    if (data.estado) passageiroData.estado = cleanString(data.estado as string, true);
+    if (data.cep) passageiroData.cep = onlyDigits(data.cep as string);
+    if (data.referencia) passageiroData.referencia = cleanString(data.referencia as string, true);
+    if (data.observacoes) passageiroData.observacoes = cleanString(data.observacoes as string, true);
+    if (data.periodo) passageiroData.periodo = cleanString(data.periodo as string, true);
+    if (data.genero) passageiroData.genero = cleanString(data.genero as string, true);
+    if (data.valor_cobranca !== undefined) passageiroData.valor_cobranca = typeof data.valor_cobranca === "string" ? moneyToNumber(data.valor_cobranca) : data.valor_cobranca;
+    if (data.dia_vencimento !== undefined) passageiroData.dia_vencimento = data.dia_vencimento;
+    if (data.cpf_responsavel) passageiroData.cpf_responsavel = onlyDigits(data.cpf_responsavel);
+    if (data.telefone_responsavel) passageiroData.telefone_responsavel = onlyDigits(data.telefone_responsavel);
+    
+    // Validar se pode ativar cobranças automáticas
+    if (data.enviar_cobranca_automatica !== undefined) {
+        // Se tentando ativar, validar se tem plano Profissional e Limites
+        if (data.enviar_cobranca_automatica === true) {
+            // Se o passageiro já estava marcado como automático E ativo, não conta como "+1" novo, 
+            // mas a função verificarLimiteAutonacao do service conta quantos JÁ existem no banco.
             
-            passageiroData.enviar_cobranca_automatica = data.enviar_cobranca_automatica;
-            
-            if (data.enviar_cobranca_automatica === false) {
-                passageiroData.motivo_desativacao = "manual";
-            } else if (data.enviar_cobranca_automatica === true) {
-                passageiroData.motivo_desativacao = null;
-            }
-        }
+            // Buscar estado atual para saber se é incremento
+            const estadoAtual = await getPassageiro(id);
+            const isIncremento = !estadoAtual.enviar_cobranca_automatica; // Se era false, vira true => +1
 
-        const { data: updated, error } = await supabaseAdmin
-            .from("passageiros")
-            .update(passageiroData)
-            .eq("id", id)
-            .select()
-            .single();
-        if (error) throw error;
-
-        return updated;
-    },
-
-    async deletePassageiro(id: string): Promise<void> {
-        if (!id) throw new Error("ID do passageiro é obrigatório");
-
-        const passageiro = await this.getPassageiro(id);
-
-        if (passageiro?.id) {
-            const { error } = await supabaseAdmin.from("passageiros").delete().eq("id", id);
-            if (error) throw error;
-        }
-    },
-
-    async getPassageiro(id: string): Promise<any> {
-        const { data, error } = await supabaseAdmin
-            .from("passageiros")
-            .select("*, escolas(nome), veiculos(placa)")
-            .eq("id", id)
-            .single();
-
-        if (error) throw error;
-        return data;
-    },
-
-    async listPassageiros(
-        usuarioId: string,
-        filtros?: {
-            search?: string;
-            escola?: string;
-            veiculo?: string;
-            status?: string;
-            periodo?: string;
-        }
-    ): Promise<any[]> {
-        let query = supabaseAdmin
-            .from("passageiros")
-            .select(`
-      *,
-      escolas(nome),
-      veiculos(placa)
-    `)
-            .eq("usuario_id", usuarioId)
-            .order("nome");
-
-        if (filtros?.search) {
-            query = query.or(
-                `nome.ilike.%${filtros.search}%,nome_responsavel.ilike.%${filtros.search}%`
-            );
-        }
-
-        if (filtros?.escola) {
-            query = query.eq("escola_id", filtros.escola);
-        }
-
-        if (filtros?.veiculo) {
-            query = query.eq("veiculo_id", filtros.veiculo);
-        }
-
-        if (filtros?.periodo) {
-            query = query.eq("periodo", filtros.periodo);
-        }
-
-        if (filtros?.status !== undefined) {
-            query = query.eq("ativo", filtros.status === "true");
-        }
-
-        const { data, error } = await query;
-        if (error) throw error;
-
-        return data || [];
-    },
-
-    async toggleAtivo(passageiroId: string, novoStatus: boolean): Promise<boolean> {
-        // Se estiver ativando, precisamos verificar limites se a automação estiver ligada
-        if (novoStatus === true) {
-            const passageiro = await this.getPassageiro(passageiroId);
-            
-            if (passageiro?.enviar_cobranca_automatica === true) {
-                // Verificar permissões e limites (lógica similar ao update)
-                const { data: assinaturas, error: assinaturaError } = await supabaseAdmin
-                    .from("assinaturas_usuarios")
-                    .select(`
-                        *,
-                        planos:plano_id (*, parent:parent_id (*))
-                    `)
-                    .eq("usuario_id", passageiro.usuario_id)
-                    .eq("ativo", true)
-                    .limit(1)
-                    .single();
-
-                // Se não tiver assinatura ou erro, bloqueia (automação requer pro)
-                if (assinaturaError || !assinaturas) {
-                     throw new Error("LIMIT_EXCEEDED_AUTOMATION: Cobrança automática requer plano Profissional ativo.");
-                }
-
-                const plano = assinaturas.planos as any;
-                const slugPlano = plano?.parent?.slug || plano?.slug;
-                
-                if (slugPlano !== PLANO_PROFISSIONAL) {
-                     throw new Error("LIMIT_EXCEEDED_AUTOMATION: Cobrança automática requer plano Profissional.");
-                }
-
-                const franquiaContratada = assinaturas.franquia_contratada_cobrancas || 0;
-                
-                 // Contar quantos passageiros JÁ têm cobranças automáticas ativas
-                // IMPORTANTE: O passageiro atual está INATIVO, então ele não está nessa conta ainda.
-                const { count: passageirosAtivosCount } = await supabaseAdmin
-                    .from("passageiros")
-                    .select("id", { count: "exact", head: true })
-                    .eq("usuario_id", passageiro.usuario_id)
-                    .eq("ativo", true)
-                    .eq("enviar_cobranca_automatica", true);
-                
-                const quantidadeJaAtiva = passageirosAtivosCount || 0;
-
-                // Se ativar esse, vai para quantidadeJaAtiva + 1
-                if (quantidadeJaAtiva + 1 > franquiaContratada) {
-                     // ERRO ESPECÍFICO PARA O FRONTEND INTERCEPTAR
-                     throw new Error("LIMIT_EXCEEDED_AUTOMATION");
+            if (isIncremento) {
+                try {
+                    await subscriptionLifecycleService.verificarLimiteAutonacao(estadoAtual.usuario_id, 1);
+                } catch (err: any) {
+                     // Repassar erro de limite
+                     throw new Error(err.message);
                 }
             }
         }
-
-        const { error } = await supabaseAdmin
-            .from("passageiros")
-            .update({ ativo: novoStatus })
-            .eq("id", passageiroId);
-
-        if (error) {
-            throw new Error(`Falha ao ${novoStatus ? "ativar" : "desativar"} o passageiro.`);
-        }
-
-        return novoStatus;
-    },
-
-    async getNumeroCobrancas(passageiroId: string): Promise<number> {
-        if (!passageiroId) throw new Error("ID do passageiro é obrigatório");
-
-        const { count, error } = await supabaseAdmin
-            .from("cobrancas")
-            .select("id", { count: "exact", head: true })
-            .eq("passageiro_id", passageiroId);
-
-        if (error) throw new Error(error.message || "Erro ao contar cobranças");
-
-        return count || 0;
-    },
-
-    async countListPassageirosByUsuario(usuarioId: string,
-        filtros?: {
-            ativo?: string;
-            enviar_cobranca_automatica?: string;
-        }): Promise<number> {
-        let query = supabaseAdmin
-            .from("passageiros")
-            .select("id", { count: "exact", head: true })
-            .eq("usuario_id", usuarioId);
-
-        if (filtros?.ativo !== undefined) {
-            query = query.eq("ativo", filtros.ativo === "true");
-        }
-
-        if (filtros?.enviar_cobranca_automatica !== undefined) {
-            query = query.eq("enviar_cobranca_automatica", true);
-        }
-
-        const { count, error } = await query;
-
-        if (error) throw new Error(error.message || "Erro ao contar passageiros");
-        return count || 0;
-    },
-
-
-
-    async ativarPassageirosAutomaticamente(
-        usuarioId: string,
-        franquia: number
-    ): Promise<{ ativados: number; totalAtivos: number }> {
-        const { data: jaAtivos, error: errorJaAtivos } = await supabaseAdmin
-            .from("passageiros")
-            .select("id")
-            .eq("usuario_id", usuarioId)
-            .eq("ativo", true)
-            .eq("enviar_cobranca_automatica", true);
-
-        if (errorJaAtivos) {
-            throw new Error(`Erro ao buscar passageiros já ativos: ${errorJaAtivos.message}`);
-        }
-
-        const quantidadeJaAtiva = jaAtivos?.length || 0;
-        const quantidadeParaAtivar = franquia - quantidadeJaAtiva;
-
-        console.log(`[ativarPassageirosAutomaticamente] usuarioId: ${usuarioId}, franquia: ${franquia}, jaAtivos: ${quantidadeJaAtiva}, paraAtivar: ${quantidadeParaAtivar}`);
-
-        if (quantidadeParaAtivar <= 0) {
-            console.log(`[ativarPassageirosAutomaticamente] Nenhum passageiro para ativar (franquia já preenchida ou excedida)`);
-            return { ativados: 0, totalAtivos: quantidadeJaAtiva };
-        }
-
-        const { data: disponiveis, error: errorDisponiveis } = await supabaseAdmin
-            .from("passageiros")
-            .select("id, nome, enviar_cobranca_automatica, motivo_desativacao, valor_cobranca, dia_vencimento")
-            .eq("usuario_id", usuarioId)
-            .eq("ativo", true)
-            .eq("enviar_cobranca_automatica", false)
-            .or("motivo_desativacao.is.null,motivo_desativacao.neq.manual")
-            .order("nome", { ascending: true })
-            .limit(quantidadeParaAtivar);
-
-        if (errorDisponiveis) {
-            throw new Error(`Erro ao buscar passageiros disponíveis: ${errorDisponiveis.message}`);
-        }
-
-        console.log(`[ativarPassageirosAutomaticamente] Passageiros disponíveis encontrados: ${disponiveis?.length || 0}`);
-
-        if (!disponiveis || disponiveis.length === 0) {
-            console.log(`[ativarPassageirosAutomaticamente] Nenhum passageiro disponível para ativar`);
-            return { ativados: 0, totalAtivos: quantidadeJaAtiva };
-        }
-
-        const idsParaAtivar = disponiveis.map((p) => p.id);
-        console.log(`[ativarPassageirosAutomaticamente] Ativando ${idsParaAtivar.length} passageiros:`, idsParaAtivar);
         
-        const { error: updateError } = await supabaseAdmin
-            .from("passageiros")
-            .update({
-                enviar_cobranca_automatica: true,
-                motivo_desativacao: null,
-            })
-            .in("id", idsParaAtivar);
-
-        if (updateError) {
-            throw new Error(`Erro ao atualizar passageiros: ${updateError.message}`);
-        }
-
-        // NOVO: Verificar se precisa gerar cobrança do mês seguinte (Catch-up de Upgrade)
-        // Se o upgrade ocorrer após o dia 25, o job mensal já passou. Precisamos garantir Fev/Mar etc.
-        logger.info(`[ativarPassageirosAutomaticamente] Verificando geração de cobrança pós-upgrade para ${idsParaAtivar.length} passageiros`);
+        passageiroData.enviar_cobranca_automatica = data.enviar_cobranca_automatica;
         
-        for (const passageiro of disponiveis) {
+        if (data.enviar_cobranca_automatica === false) {
+            passageiroData.motivo_desativacao = DesativacaoMotivo.MANUAL;
+        } else if (data.enviar_cobranca_automatica === true) {
+            passageiroData.motivo_desativacao = null;
+        }
+    }
+
+    const { data: updated, error } = await supabaseAdmin
+        .from("passageiros")
+        .update(passageiroData)
+        .eq("id", id)
+        .select()
+        .single();
+
+    if (error) throw error;
+
+    return updated;
+};
+
+const deletePassageiro = async (id: string): Promise<void> => {
+    if (!id) throw new Error("ID do passageiro é obrigatório");
+
+    const passageiro = await getPassageiro(id);
+
+    if (passageiro?.id) {
+         // Verificar se tem cobranças pendentes? (Regra de negócio opcional)
+        const { error } = await supabaseAdmin.from("passageiros").delete().eq("id", id);
+        if (error) throw error;
+    }
+};
+
+const getPassageiro = async (id: string): Promise<any> => {
+    const { data, error } = await supabaseAdmin
+        .from("passageiros")
+        .select(`
+            *,
+            escola:escolas(id, nome),
+            veiculo:veiculos(id, placa, modelo)
+        `)
+        .eq("id", id)
+        .single();
+    if (error) throw error;
+    return data;
+};
+
+const listPassageiros = async (
+    usuarioId: string,
+    filtros?: ListPassageirosFiltersDTO
+): Promise<any[]> => {
+    if (!usuarioId) throw new Error("Usuário obrigatório");
+
+    let query = supabaseAdmin
+        .from("passageiros")
+        .select(`
+            *,
+            escola:escolas(id, nome),
+            veiculo:veiculos(id, placa)
+        `)
+        .eq("usuario_id", usuarioId)
+        .order("nome", { ascending: true });
+
+    if (filtros?.search) {
+        query = query.or(
+            `nome.ilike.%${filtros.search}%,nome_responsavel.ilike.%${filtros.search}%`
+        );
+    }
+
+    if (filtros?.escola) query = query.eq("escola_id", filtros.escola);
+    if (filtros?.veiculo) query = query.eq("veiculo_id", filtros.veiculo);
+    
+    if (filtros?.ativo !== undefined) {
+         query = query.eq("ativo", filtros.ativo === "true");
+    }
+
+    if (filtros?.enviar_cobranca_automatica !== undefined) {
+        query = query.eq("enviar_cobranca_automatica", filtros.enviar_cobranca_automatica === "true");
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    return data || [];
+};
+
+const toggleAtivo = async (passageiroId: string, novoStatus: boolean): Promise<boolean> => {
+    // Se estiver ativando, precisamos verificar limites se a automação estiver ligada
+    if (novoStatus === true) {
+        const passageiro = await getPassageiro(passageiroId);
+        
+        if (passageiro?.enviar_cobranca_automatica === true) {
+            // Se ele tem flag automática e está sendo ativado, consome 1 slot.
             try {
-                // Prepara objeto passageiroData mínimo necessário para a função auxiliar
-                const passageiroData = {
-                    valor_cobranca: passageiro.valor_cobranca,
-                    dia_vencimento: passageiro.dia_vencimento
-                };
-                
-                await _verificarGerarCobrancaMesSeguinte(passageiro.id, passageiroData, usuarioId);
-
+                 await subscriptionLifecycleService.verificarLimiteAutonacao(passageiro.usuario_id, 1);
             } catch (err: any) {
-                 logger.error({ err, passageiroId: passageiro.id }, "Erro ao gerar cobrança de catch-up no upgrade");
+                 // Repassar erro de limite
+                 throw new Error(err.message);
             }
         }
+    }
 
-        console.log(`[ativarPassageirosAutomaticamente] ${idsParaAtivar.length} passageiros ativados com sucesso`);
+    const { error } = await supabaseAdmin
+        .from("passageiros")
+        .update({ ativo: novoStatus })
+        .eq("id", passageiroId);
 
-        return {
-            ativados: idsParaAtivar.length,
-            totalAtivos: quantidadeJaAtiva + idsParaAtivar.length,
-        };
-    },
+    if (error) throw new Error(`Falha ao alterar status do passageiro: ${error.message}`);
+    
+    return true;
+};
 
+const getNumeroCobrancas = async (passageiroId: string): Promise<number> => {
+    if (!passageiroId) throw new Error("ID do passageiro é obrigatório");
 
+    const { count, error } = await supabaseAdmin
+        .from("cobrancas")
+        .select("id", { count: "exact", head: true })
+        .eq("passageiro_id", passageiroId);
 
+    if (error) throw new Error(error.message || "Erro ao contar cobranças");
 
-    async desativarAutomacaoTodosPassageiros(usuarioId: string): Promise<number> {
-        if (!usuarioId) throw new Error("Usuário obrigatório");
+    return count || 0;
+};
 
-        const { data: passageiros, error: findError } = await supabaseAdmin
-            .from("passageiros")
-            .select("id")
-            .eq("usuario_id", usuarioId)
-            .eq("enviar_cobranca_automatica", true);
+const countListPassageirosByUsuario = async (
+    usuarioId: string,
+    filtros?: {
+        ativo?: string;
+        enviar_cobranca_automatica?: string;
+    }
+): Promise<number> => {
+    let query = supabaseAdmin
+        .from("passageiros")
+        .select("id", { count: "exact", head: true })
+        .eq("usuario_id", usuarioId);
 
-        if (findError) throw findError;
+    if (filtros?.ativo !== undefined) {
+        query = query.eq("ativo", filtros.ativo === "true");
+    }
 
-        if (!passageiros || passageiros.length === 0) return 0;
+    if (filtros?.enviar_cobranca_automatica !== undefined) {
+        query = query.eq("enviar_cobranca_automatica", true);
+    }
 
-        const ids = passageiros.map(p => p.id);
+    const { count, error } = await query;
 
-        const { error: updateError } = await supabaseAdmin
-            .from("passageiros")
-            .update({
-                enviar_cobranca_automatica: false,
-                motivo_desativacao: "automatico", // Indicar que foi pelo sistema
-            })
-            .in("id", ids);
+    if (error) throw new Error(error.message || "Erro ao contar passageiros");
+    return count || 0;
+};
 
-        if (updateError) throw new Error("Erro ao desativar automação: " + updateError.message);
+const finalizePreCadastro = async (
+    prePassageiroId: string,
+    data: any,
+    usuarioId: string,
+    emitirCobranca: boolean
+): Promise<any> => {
+    // 1. Buscar Pré-Cadastro
+    const { data: pre, error } = await supabaseAdmin
+        .from("pre_passageiros")
+        .select("*")
+        .eq("id", prePassageiroId)
+        .eq("usuario_id", usuarioId)
+        .single();
+    
+    if (error || !pre) throw new AppError("Pré-cadastro não encontrado.", 404);
 
-        return ids.length;
-    },
+    // 2. Mesclar dados (Data sobrescreve Pre)
+    const payload: CreatePassageiroDTO = {
+        ...pre,
+        ...data,
+        usuario_id: usuarioId,
+        emitir_cobranca_mes_atual: emitirCobranca,
+        // Garantir que valor_cobranca e dia_vencimento do pre sejam mantidos se não vierem no data
+        valor_cobranca: data.valor_cobranca !== undefined ? data.valor_cobranca : pre.valor_cobranca,
+        dia_vencimento: data.dia_vencimento !== undefined ? data.dia_vencimento : pre.dia_vencimento,
+    };
 
+    // Remover campos de sistema do pre
+    delete (payload as any).id;
+    delete (payload as any).created_at;
+    delete (payload as any).updated_at;
+
+    // 3. Criar Passageiro
+    const novoPassageiro = await createPassageiro(payload);
+
+    // 4. Deletar Pré-Cadastro
+    await supabaseAdmin.from("pre_passageiros").delete().eq("id", prePassageiroId);
+
+    return novoPassageiro;
+};
+
+// Exportar objeto unificado no final
+export const passageiroService = {
+    createPassageiro,
+    updatePassageiro,
+    deletePassageiro,
+    getPassageiro,
+    listPassageiros,
+    toggleAtivo,
+    getNumeroCobrancas,
+    countListPassageirosByUsuario,
+    finalizePreCadastro
 };

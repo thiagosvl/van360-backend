@@ -1,7 +1,6 @@
-import { ASSINATURA_COBRANCA_STATUS_CANCELADA, ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_ATIVA, CONFIG_KEY_DIAS_ANTECEDENCIA_RENOVACAO } from "../../config/constants.js";
+import { ASSINATURA_COBRANCA_STATUS_CANCELADA, ASSINATURA_USUARIO_STATUS_ATIVA, CONFIG_KEY_DIAS_ANTECEDENCIA_RENOVACAO } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
-import { assinaturaCobrancaService } from "../assinatura-cobranca.service.js";
 import { getConfigNumber } from "../configuracao.service.js";
 
 interface JobResult {
@@ -68,37 +67,29 @@ export const subscriptionGeneratorJob = {
                         continue; 
                     }
 
-                    // Criar Nova Cobrança
-                    const { data: novaCobranca, error: createError } = await supabaseAdmin
-                        .from("assinaturas_cobrancas")
-                        .insert({
-                            usuario_id: assinatura.usuario_id,
-                            assinatura_usuario_id: assinatura.id,
-                            valor: assinatura.preco_aplicado,
-                            status: ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
-                            data_vencimento: dataVencimento,
-                            origem: "job_renovacao",
-                            billing_type: "renewal", 
-                            descricao: `Renovação de Assinatura`
-                        })
-                        .select()
-                        .single();
-
-                    if (createError) throw createError;
-
-                    // Gerar PIX
+                    // Usar Service para gerar Cobrança + PIX de forma atômica/gerenciada
                     try {
-                        await assinaturaCobrancaService.gerarPixParaCobranca(novaCobranca.id);
-                        result.generated++;
-                        logger.info({ cobrancaId: novaCobranca.id }, "Cobrança de renovação gerada com PIX");
-                    } catch (pixErr) {
-                        logger.error({ pixErr, cobrancaId: novaCobranca.id }, "Erro ao gerar PIX para renovação. Realizando rollback (Deletar Cobrança).");
-                        
-                        // Rollback: Deletar cobrança defeituosa
-                        await supabaseAdmin.from("assinaturas_cobrancas").delete().eq("id", novaCobranca.id);
+                        // Importação dinâmica para evitar conflitos de importação se necessário, 
+                        // ou usar o service importado no topo se cobrancaService for adicionado aos imports.
+                        // Assumindo que vou adicionar cobrancaService aos imports no topo em breve ou usar import dinâmico.
+                        const { cobrancaService } = await import("../cobranca.service.js");
 
-                        result.details.push({ id: assinatura.id, msg: "Processo abortado por falha no PIX" });
-                        result.errors++;
+                        const { cobranca } = await cobrancaService.gerarCobrancaRenovacao({
+                            usuarioId: assinatura.usuario_id,
+                            assinaturaId: assinatura.id,
+                            valor: assinatura.preco_aplicado,
+                            dataVencimento: dataVencimento,
+                            descricao: `Renovação de Assinatura`
+                        });
+
+                        result.generated++;
+                        logger.info({ cobrancaId: cobranca.id }, "Cobrança de renovação gerada com sucesso via Service");
+
+                    } catch (serviceErr: any) {
+                         // O service já faz rollback se o PIX falhar, então aqui só logamos o erro do Job
+                         logger.error({ serviceErr, assinaturaId: assinatura.id }, "Erro no service de renovação");
+                         result.errors++;
+                         result.details.push({ id: assinatura.id, msg: serviceErr.message });
                     }
 
                 } catch (err: any) {

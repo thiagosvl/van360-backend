@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
-import { processarPagamentoCobranca } from "../services/processar-pagamento.service.js";
+import { webhookCobrancaHandler } from "../services/handlers/webhook-cobranca.handler.js";
 
 const mockPagamentoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post("/mock-pagamento", async (request, reply) => {
@@ -14,57 +14,60 @@ const mockPagamentoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     try {
       logger.info({ cobrancaId }, "Iniciando mock de pagamento");
 
-      // Buscar cobrança com todos os campos necessários
-      const { data: cobranca, error: findError } = await supabaseAdmin
+      console.log("Mock Pagamento iniciado para ID:", cobrancaId);
+
+      // 1. Tentar achar na tabela de Assinaturas (Prioridade Alta)
+      let { data: cobrancaAssinatura } = await supabaseAdmin
         .from("assinaturas_cobrancas")
-        .select("id, usuario_id, assinatura_usuario_id, status, valor, inter_txid, data_vencimento, billing_type")
+        .select("id, valor, inter_txid")
         .eq("id", cobrancaId)
         .maybeSingle();
 
-      if (findError) {
-        logger.error({ cobrancaId, findError }, "Erro ao buscar cobrança");
-        return reply.status(500).send({ error: "Erro ao buscar cobrança no banco de dados." });
+      // 2. Se não achar, tentar na tabela de Passageiros (Pais)
+      let cobrancaPai = null;
+      if (!cobrancaAssinatura) {
+          const { data: paiResult } = await supabaseAdmin
+            .from("cobrancas")
+            .select("id, valor, txid_pix")
+            .eq("id", cobrancaId)
+            .maybeSingle();
+          cobrancaPai = paiResult;
       }
 
-      if (!cobranca) {
-        logger.warn({ cobrancaId }, "Cobrança não encontrada");
-        return reply.status(404).send({ error: "Cobrança não encontrada." });
+      if (!cobrancaAssinatura && !cobrancaPai) {
+          logger.warn({ cobrancaId }, "Cobrança não encontrada em nenhuma tabela (Assinatura ou Pais)");
+          return reply.status(404).send({ error: "Cobrança não encontrada." });
       }
 
-      logger.info({ cobranca }, "Cobrança encontrada antes do update");
-
-      // Simular dados do pagamento (como se viessem do webhook)
+      // 3. Montar Payload do Webhook
+      const targetCobranca = (cobrancaAssinatura || cobrancaPai) as any;
+      const txid = targetCobranca.inter_txid || targetCobranca.txid_pix || `MOCK-${cobrancaId}-${Date.now()}`;
+      const valor = Number(targetCobranca.valor);
       const horario = new Date().toISOString();
-      const valor = Number(cobranca.valor);
-      const txid = cobranca.inter_txid || `MOCK-${cobranca.id}-${Date.now()}`;
 
-      // Processar pagamento usando serviço compartilhado
-      await processarPagamentoCobranca(
-        cobranca,
-        {
-          valor,
-          dataPagamento: horario,
-          txid,
-        },
-        { cobrancaId, txid }
-      );
+      logger.info({ cobrancaId, tipo: cobrancaAssinatura ? 'ASSINATURA' : 'PAI', txid }, "Mock: Despachando para Webhook Handler");
 
-      // Buscar vigencia_fim para retornar na resposta
-      const { data: assinaturaAtivada } = await supabaseAdmin
-        .from("assinaturas_usuarios")
-        .select("vigencia_fim")
-        .eq("id", cobranca.assinatura_usuario_id)
-        .single();
-
-      const vigenciaFim = assinaturaAtivada?.vigencia_fim || null;
-
-      return reply.status(200).send({
-        success: true,
-        message: `Pagamento mockado e conta ativada para Cobranca ID: ${cobrancaId}`,
-        cobrancaId: cobranca.id,
+      const webhookPayload = {
         txid,
         valor,
-        vigenciaFim: vigenciaFim || null,
+        horario,
+        // Campos extras que o Banco Inter manda e podem ser úteis
+        nossoNumero: cobrancaId,
+        pagador: {
+            nome: "MOCK USER"
+        }
+      };
+
+      // 4. Delegar para o Handler Oficial (Universal)
+      // O handler descobre o tipo baseado no txid, então vai funcionar para ambos
+      const sucesso = await webhookCobrancaHandler.handle(webhookPayload);
+
+
+      return reply.status(200).send({
+        success: sucesso,
+        message: `Simulação enviada para o Webhook Handler. ID: ${cobrancaId}`,
+        txid,
+        simulacao: true
       });
 
     } catch (err: any) {

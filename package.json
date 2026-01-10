@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
+    "start:worker": "tsx src/worker.ts",
+    "build:worker": "tsc",
     "build": "echo \"[INIT] Compilando Backend...\" && tsc && echo \"[SUCCESS] Backend Compilado!\"",
     "convert-certs": "node scripts/converter-certificados-base64.js"
   },
@@ -14,18 +16,23 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@bull-board/api": "^6.16.2",
+    "@bull-board/fastify": "^6.16.2",
     "@fastify/cors": "^11.1.0",
     "@resvg/resvg-js": "^2.6.2",
     "@supabase/supabase-js": "^2.79.0",
     "@types/qrcode": "^1.5.6",
     "axios": "^1.13.2",
+    "bullmq": "^5.66.4",
     "dotenv": "^17.2.3",
     "fastify": "^5.6.1",
     "fastify-cors": "^6.0.3",
+    "ioredis": "^5.9.1",
     "pino": "^10.1.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.3",
-    "satori": "^0.18.3"
+    "satori": "^0.18.3",
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",

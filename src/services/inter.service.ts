@@ -3,9 +3,11 @@ import axios from "axios";
 import fs from "fs";
 import https from "https";
 import path from "path";
+import { CONFIG_KEY_PIX_EXPIRACAO_SEGUNDOS, CONFIG_KEY_PIX_VALIDADE_APOS_VENCIMENTO } from "../config/constants.js";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
-import { onlyDigits } from "../utils/utils.js";
+import { onlyDigits } from "../utils/string.utils.js";
+import { getConfigNumber } from "./configuracao.service.js";
 
 const INTER_API_URL = env.INTER_API_URL!;
 const INTER_PIX_KEY = env.INTER_PIX_KEY!;
@@ -143,9 +145,10 @@ async function criarCobrancaPix(
   }
 
   const token = await getValidInterToken(adminClient);
+  const expirationSeconds = await getConfigNumber(CONFIG_KEY_PIX_EXPIRACAO_SEGUNDOS, 3600);
 
   const cobPayload = {
-    calendario: { expiracao: 3600 },
+    calendario: { expiracao: expirationSeconds },
     devedor: { cpf: onlyDigits(params.cpf), nome: params.nome },
     valor: { original: params.valor.toFixed(2) },
     chave: INTER_PIX_KEY,
@@ -203,11 +206,13 @@ async function criarCobrancaComVencimentoPix(
   }
 
   const token = await getValidInterToken(adminClient);
+  
+  const validadePadrao = await getConfigNumber(CONFIG_KEY_PIX_VALIDADE_APOS_VENCIMENTO, 30);
 
   const cobvPayload = {
     calendario: { 
         dataDeVencimento: params.dataVencimento,
-        validadeAposVencimento: params.validadeAposVencimentoDias || 30 // Default 30 dias de tolerância
+        validadeAposVencimento: params.validadeAposVencimentoDias || validadePadrao
     },
     devedor: { cpf: onlyDigits(params.cpf), nome: params.nome },
     valor: { original: params.valor.toFixed(2) },

@@ -1,0 +1,65 @@
+import { FastifyReply, FastifyRequest } from "fastify";
+import { logger } from "../config/logger.js";
+import { escolaService } from "../services/escola.service.js";
+import {
+    createEscolaSchema,
+    listEscolasFiltersSchema,
+    toggleEscolaAtivoSchema,
+    updateEscolaSchema
+} from "../types/dtos/escola.dto.js";
+
+export const escolaController = {
+  create: async (request: FastifyRequest, reply: FastifyReply) => {
+    logger.info("EscolaController.create - Starting");
+    const data = createEscolaSchema.parse(request.body);
+    const result = await escolaService.createEscola(data);
+    return reply.status(201).send(result);
+  },
+
+  update: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    logger.info({ escolaId: id }, "EscolaController.update - Starting");
+    const data = updateEscolaSchema.parse(request.body);
+    await escolaService.updateEscola(id, data);
+    return reply.status(200).send({ success: true });
+  },
+
+  delete: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    logger.info({ escolaId: id }, "EscolaController.delete - Starting");
+    await escolaService.deleteEscola(id);
+    return reply.status(200).send({ success: true });
+  },
+
+  get: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const escola = await escolaService.getEscola(id);
+    return reply.status(200).send(escola);
+  },
+
+  listByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { usuarioId } = request.params as { usuarioId: string };
+    const filtros = listEscolasFiltersSchema.parse(request.query);
+    const escolas = await escolaService.listEscolas(usuarioId, filtros);
+    return reply.status(200).send(escolas);
+  },
+
+  listWithContagem: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { usuarioId } = request.params as { usuarioId: string };
+    const escolas = await escolaService.listEscolasComContagemAtivos(usuarioId);
+    return reply.status(200).send(escolas);
+  },
+
+  countByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { usuarioId } = request.params as { usuarioId: string };
+    const count = await escolaService.countListEscolasByUsuario(usuarioId);
+    return reply.status(200).send({ count });
+  },
+
+  toggleAtivo: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const { novoStatus } = toggleEscolaAtivoSchema.parse(request.body);
+    await escolaService.toggleAtivo(id, novoStatus);
+    return reply.status(200).send({ ativo: novoStatus });
+  }
+};

@@ -1,12 +1,13 @@
 import { supabaseAdmin } from "../config/supabase.js";
-import { cleanString } from "../utils/utils.js";
+import { CreateVeiculoDTO, ListVeiculosFiltersDTO, UpdateVeiculoDTO, Veiculo, VeiculoComContagem } from "../types/dtos/veiculo.dto.js";
+import { cleanString } from "../utils/string.utils.js";
 
 export const veiculoService = {
-    async createVeiculo(data: any): Promise<any> {
+    async createVeiculo(data: CreateVeiculoDTO): Promise<Veiculo> {
         if (!data.usuario_id) throw new Error("Usuário obrigatório");
         if (!data.placa) throw new Error("Placa é obrigatória");
 
-        const veiculoData: any = {
+        const veiculoData = {
             ...data,
             placa: cleanString(data.placa).toUpperCase(),
             marca: data.marca ? cleanString(data.marca) : null,
@@ -21,10 +22,10 @@ export const veiculoService = {
             .single();
         if (error) throw error;
 
-        return inserted;
+        return inserted as Veiculo;
     },
 
-    async updateVeiculo(id: string, data: Partial<any>): Promise<any> {
+    async updateVeiculo(id: string, data: UpdateVeiculoDTO): Promise<Veiculo> {
         if (!id) throw new Error("ID do veículo é obrigatório");
 
         const veiculoData: any = { ...data };
@@ -40,7 +41,7 @@ export const veiculoService = {
             .single();
         if (error) throw error;
 
-        return updated;
+        return updated as Veiculo;
     },
 
     async deleteVeiculo(id: string): Promise<void> {
@@ -54,27 +55,20 @@ export const veiculoService = {
         }
     },
 
-    async getVeiculo(id: string): Promise<any> {
+    async getVeiculo(id: string): Promise<Veiculo | null> {
         const { data, error } = await supabaseAdmin
             .from("veiculos")
             .select("*")
             .eq("id", id)
             .single();
         if (error) throw error;
-        return data;
+        return data as Veiculo;
     },
 
     async listVeiculos(
         usuarioId: string,
-        filtros?: {
-            search?: string;
-            placa?: string;
-            marca?: string;
-            modelo?: string;
-            ativo?: string;
-            includeId?: string;
-        }
-    ): Promise<any[]> {
+        filtros?: ListVeiculosFiltersDTO
+    ): Promise<Veiculo[]> {
         let query = supabaseAdmin
             .from("veiculos")
             .select("*")
@@ -102,10 +96,10 @@ export const veiculoService = {
         const { data, error } = await query;
         if (error) throw error;
 
-        return data || [];
+        return (data || []) as Veiculo[];
     },
 
-    async listVeiculosComContagemAtivos(usuarioId: string): Promise<any[]> {
+    async listVeiculosComContagemAtivos(usuarioId: string): Promise<VeiculoComContagem[]> {
         if (!usuarioId) throw new Error("Usuário obrigatório");
 
         const { data, error } = await supabaseAdmin
@@ -120,7 +114,7 @@ export const veiculoService = {
         return (data || []).map((veiculo: any) => ({
             ...veiculo,
             passageiros_ativos_count: veiculo.passageiros[0]?.count || 0,
-        }));
+        })) as VeiculoComContagem[];
     },
 
     async toggleAtivo(veiculoId: string, novoStatus: boolean): Promise<boolean> {

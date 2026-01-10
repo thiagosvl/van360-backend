@@ -1,47 +1,10 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
-import { logger } from "../config/logger.js";
-import { assinaturaCobrancaService } from "../services/assinatura-cobranca.service.js";
+import { assinaturaCobrancaController } from "../controllers/assinatura-cobranca.controller.js";
 
 const assinaturaCobrancaRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
-    app.get("/:id", async (request: any, reply) => {
-        try {
-            const id = request.params.id;
-            const result = await assinaturaCobrancaService.getAssinaturaCobranca(id);
-            return reply.status(200).send(result);
-        } catch (err: any) {
-            return reply.status(404).send({ error: err.message });
-        }
-    });
-
-    app.get("/", async (request: any, reply) => {
-        const filtros = request.query;
-
-        try {
-            const result = await assinaturaCobrancaService.listAssinaturaCobrancas(filtros);
-            return reply.status(200).send(result);
-        } catch (err: any) {
-            return reply.status(400).send({ error: err.message });
-        }
-    });
-
-    app.post("/:id/gerar-pix", async (request: any, reply) => {
-        const cobrancaId = request.params.id;
-
-        try {
-            const result = await assinaturaCobrancaService.gerarPixParaCobranca(cobrancaId);
-            return reply.status(200).send(result);
-        } catch (err: any) {
-            logger.error({ error: err.message, cobrancaId }, "Erro ao gerar PIX para cobrança");
-            
-            const statusCode = err.message.includes("não encontrada") 
-                ? 404 
-                : err.message.includes("não está pendente") 
-                ? 400 
-                : 500;
-
-            return reply.status(statusCode).send({ error: err.message });
-        }
-    });
+    app.get("/:id", assinaturaCobrancaController.get);
+    app.get("/", assinaturaCobrancaController.list);
+    app.post("/:id/gerar-pix", assinaturaCobrancaController.gerarPix);
 };
 
 export default assinaturaCobrancaRoute;

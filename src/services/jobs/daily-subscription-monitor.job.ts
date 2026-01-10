@@ -1,7 +1,6 @@
 import {
     ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
     ASSINATURA_USUARIO_STATUS_ATIVA,
-    ASSINATURA_USUARIO_STATUS_CANCELADA,
     ASSINATURA_USUARIO_STATUS_SUSPENSA,
     ASSINATURA_USUARIO_STATUS_TRIAL,
     CONFIG_KEY_DIAS_ANTECEDENCIA_RENOVACAO,
@@ -125,17 +124,15 @@ export const dailySubscriptionMonitorJob = {
                             continue; // Já notificado
                         }
                     }
+                    
+                    // Import Service
+                    const { subscriptionLifecycleService } = await import("../subscription-lifecycle.service.js");
 
                     // 4. Executar Ação (Bloqueio)
                     if (context === DRIVER_EVENT_ACCESS_SUSPENDED) {
                         if (assinatura.status !== ASSINATURA_USUARIO_STATUS_SUSPENSA) {
-                            await supabaseAdmin
-                                .from("assinaturas_usuarios")
-                                .update({ status: ASSINATURA_USUARIO_STATUS_SUSPENSA, ativo: false })
-                                .eq("id", assinatura.id);
-                            
+                            await subscriptionLifecycleService.suspenderAssinatura(assinatura.id, "Suspensão automática por inadimplência");
                             result.suspended++;
-                            logger.info({ assinaturaId: assinatura.id }, "Assinatura SUSPENSA por falta de pagamento");
                         }
                     }
 
@@ -190,20 +187,15 @@ export const dailySubscriptionMonitorJob = {
 
             if (suspensasMortas && suspensasMortas.length > 0) {
                 logger.info({ count: suspensasMortas.length }, "Inativando contas abandonadas");
+                
+                const { subscriptionLifecycleService } = await import("../subscription-lifecycle.service.js");
+
                 for (const dead of suspensasMortas) {
                     try {
                         // Inativar usuário e Marcar assinatura como cancelada
-                        await supabaseAdmin
-                            .from("assinaturas_usuarios")
-                            .update({ status: ASSINATURA_USUARIO_STATUS_CANCELADA, ativo: false })
-                            .eq("id", dead.id);
+                        await subscriptionLifecycleService.cancelarAssinaturaImediato(dead.id, "Abandono (>30 dias suspenso)");
+                        await subscriptionLifecycleService.inativarUsuarioPorAbandono(dead.usuario_id);
                         
-                        await supabaseAdmin
-                            .from("usuarios")
-                            .update({ ativo: false })
-                            .eq("id", dead.usuario_id);
-
-                        logger.info({ deadId: dead.id, userId: dead.usuario_id }, "Conta INATIVADA por abandono (suspensa > 30 dias)");
                     } catch (e: any) {
                         logger.error({ deadId: dead.id, err: e.message }, "Erro ao inativar conta abandonada");
                     }
@@ -225,12 +217,13 @@ export const dailySubscriptionMonitorJob = {
                 logger.info({ count: aVencer.length }, "Encerrando assinaturas com cancelamento agendado vencido...");
                 
                 const ids = aVencer.map((a: any) => a.id);
+                
+                const { subscriptionLifecycleService } = await import("../subscription-lifecycle.service.js");
 
                 // 1. Atualizar Assinatura -> CANCELADA
-                await supabaseAdmin
-                    .from("assinaturas_usuarios")
-                    .update({ status: ASSINATURA_USUARIO_STATUS_CANCELADA, ativo: false })
-                    .in("id", ids);
+                for (const id of ids) {
+                     await subscriptionLifecycleService.cancelarAssinaturaImediato(id, "Cancelamento Agendado Concluído");
+                }
                 
                 logger.info({ ids }, "Assinaturas Zumbis encerradas com sucesso.");
             }

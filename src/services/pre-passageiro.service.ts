@@ -1,5 +1,10 @@
+import { DRIVER_EVENT_PRE_PASSENGER_CREATED } from "../config/constants.js";
+import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
-import { cleanString, moneyToNumber, onlyDigits } from "../utils/utils.js";
+import { moneyToNumber } from "../utils/currency.utils.js";
+import { cleanString, onlyDigits } from "../utils/string.utils.js";
+import { notificationService } from "./notifications/notification.service.js";
+import { getUsuarioData } from "./usuario.service.js";
 
 export const prePassageiroService = {
   async listPrePassageiros(usuarioId: string, search?: string) {
@@ -46,7 +51,7 @@ export const prePassageiroService = {
     }
 
     const prePassageiroData = {
-      ...payload,
+      usuario_id: payload.usuario_id,
       nome: cleanString(payload.nome, true),
       nome_responsavel: cleanString(payload.nome_responsavel, true),
       email_responsavel: cleanString(payload.email_responsavel),
@@ -56,6 +61,14 @@ export const prePassageiroService = {
       periodo: payload.periodo || null,
       valor_cobranca: valorCobranca,
       dia_vencimento: diaVencimento,
+      logradouro: payload.logradouro || null,
+      numero: payload.numero || null,
+      bairro: payload.bairro || null,
+      cidade: payload.cidade || null,
+      estado: payload.estado || null,
+      cep: payload.cep || null,
+      referencia: payload.referencia || null,
+      observacoes: payload.observacoes || null
     };
 
     const { data, error } = await supabaseAdmin
@@ -65,6 +78,27 @@ export const prePassageiroService = {
       .single();
 
     if (error) throw error;
+
+    // Notificar Motorista (Background)
+    (async () => {
+      try {
+        const motorista = await getUsuarioData(payload.usuario_id);
+        if (motorista?.telefone) {
+          await notificationService.notifyDriver(motorista.telefone, DRIVER_EVENT_PRE_PASSENGER_CREATED, {
+            nomeMotorista: motorista.nome,
+            nomePassageiro: data.nome,
+            nomeResponsavel: data.nome_responsavel,
+            // Campos obrigatórios do DriverContext (fallbacks)
+            nomePlano: "",
+            valor: 0,
+            dataVencimento: ""
+          });
+        }
+      } catch (err: any) {
+        logger.error({ err: err.message, payload }, "Erro ao notificar motorista sobre pré-cadastro");
+      }
+    })();
+
     return data;
   },
 

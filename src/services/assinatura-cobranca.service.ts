@@ -60,7 +60,6 @@ export const assinaturaCobrancaService = {
                 location_url,
                 usuario_id,
                 assinatura_usuario_id,
-                selecao_passageiros_pendente,
                 billing_type,
                 data_vencimento,
                 usuarios:usuario_id (cpfcnpj, nome),
@@ -127,15 +126,6 @@ export const assinaturaCobrancaService = {
                 };
             }
         }
-
-        // Verificar se já há seleção salva na cobrança
-        const selecaoSalva = cobranca.selecao_passageiros_pendente as {
-            passageiroIds?: string[];
-            tipo?: "upgrade" | "downgrade";
-            franquia?: number;
-        } | null;
-
-
 
         // Buscar dados do usuário
         const usuario = cobranca.usuarios as any;

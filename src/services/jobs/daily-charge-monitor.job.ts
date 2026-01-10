@@ -63,7 +63,7 @@ export const dailyChargeMonitorJob = {
             const { data: cobrancas, error: cobError } = await supabaseAdmin
                 .from("cobrancas")
                 .select(`
-                    id, valor, data_vencimento, status, qr_code_payload,
+                    id, valor, data_vencimento, status, qr_code_payload, usuario_id,
                     passageiros!inner (
                         id, nome, nome_responsavel, telefone_responsavel,
                         enviar_cobranca_automatica
@@ -139,7 +139,8 @@ export const dailyChargeMonitorJob = {
                             pixPayload: cobranca.qr_code_payload,
                             
                             // Calculo de dias de atraso se for overdue
-                            diasAtraso: context === PASSENGER_EVENT_OVERDUE ? Math.floor((new Date().getTime() - new Date(cobranca.data_vencimento).getTime()) / (1000 * 3600 * 24)) : undefined
+                            diasAtraso: context === PASSENGER_EVENT_OVERDUE ? Math.floor((new Date().getTime() - new Date(cobranca.data_vencimento).getTime()) / (1000 * 3600 * 24)) : undefined,
+                            usuarioId: cobranca.usuario_id
                         }
                     );
 

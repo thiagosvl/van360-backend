@@ -11,6 +11,7 @@ export interface PassengerContext {
     linkPagamento?: string; // Futuro
     mes?: number;
     ano?: number;
+    usuarioId: string; // ID do Motorista (para roteamento WhatsApp)
 }
 
 const formatDate = (dateStr: string) => {
@@ -36,7 +37,7 @@ export const PassengerTemplates = {
         const nomeResp = getFirstName(ctx.nomeResponsavel);
         const nomeMotorista = getFirstName(ctx.nomeMotorista);
 
-        return `Olá *${nomeResp}*, lembrete da Van 360 do Tio(a) *${nomeMotorista}*: 🚌
+        return `Olá *${nomeResp}*, lembrete da Van360 do Tio(a) *${nomeMotorista}*: 🚌
 
 A mensalidade de *${getFirstName(ctx.nomePassageiro)}* no valor de *${valor}* vence em *${data}*${diasMsg}.
 
@@ -80,5 +81,21 @@ Para regularizar e evitar bloqueios, estamos reenviando o código Pix abaixo. �
         return `Olá *${nomeResp}*, confirmamos o recebimento da mensalidade de *${getFirstName(ctx.nomePassageiro)}* no valor de *${valor}*${ref}. ✅
 
 Muito obrigado! 🚐💨`;
+    },
+
+    /**
+     * Envio Manual de Cobrança (Lembrete Genérico)
+     */
+    manualCharge: (ctx: PassengerContext) => {
+        const valor = formatCurrency(ctx.valor);
+        const data = formatDate(ctx.dataVencimento);
+        const nomeResp = getFirstName(ctx.nomeResponsavel);
+        const nomeMotorista = getFirstName(ctx.nomeMotorista);
+
+        return `Olá *${nomeResp}*, segue o lembrete de mensalidade da Van360 do Tio(a) *${nomeMotorista}*:
+
+Mensalidade de *${getFirstName(ctx.nomePassageiro)}* (${valor}) com vencimento em *${data}*. 🚐
+
+Segue abaixo o código Pix Copia e Cola. 👇`;
     }
 };

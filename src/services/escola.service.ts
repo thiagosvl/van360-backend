@@ -1,12 +1,13 @@
 import { supabaseAdmin } from "../config/supabase.js";
-import { cleanString } from "../utils/utils.js";
+import { CreateEscolaDTO, ListEscolasFiltersDTO, UpdateEscolaDTO } from "../types/dtos/escola.dto.js";
+import { cleanString } from "../utils/string.utils.js";
 
 export const escolaService = {
-    async createEscola(data: any): Promise<any> {
+    async createEscola(data: CreateEscolaDTO): Promise<any> {
         if (!data.usuario_id) throw new Error("Usuário obrigatório");
         if (!data.nome) throw new Error("Nome da escola é obrigatório");
 
-        const escolaData: any = {
+        const escolaData = {
             ...data,
             nome: cleanString(data.nome, true),
             logradouro: data.logradouro ? cleanString(data.logradouro, true) : null,
@@ -29,7 +30,7 @@ export const escolaService = {
         return inserted;
     },
 
-    async updateEscola(id: string, data: Partial<any>): Promise<any> {
+    async updateEscola(id: string, data: UpdateEscolaDTO): Promise<any> {
         if (!id) throw new Error("ID da escola é obrigatório");
 
         const escolaData: any = { ...data };
@@ -74,14 +75,7 @@ export const escolaService = {
 
     async listEscolas(
         usuarioId: string,
-        filtros?: {
-            search?: string;
-            nome?: string;
-            cidade?: string;
-            estado?: string;
-            ativo?: string;
-            includeId?: string;
-        }
+        filtros?: ListEscolasFiltersDTO
     ): Promise<any[]> {
         if (!usuarioId) throw new Error("Usuário obrigatório");
 

@@ -1,19 +1,19 @@
 import {
-  ASSINATURA_COBRANCA_STATUS_CANCELADA,
-  ASSINATURA_COBRANCA_STATUS_PAGO,
-  ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
-  ASSINATURA_COBRANCA_TIPO_PAGAMENTO_PIX,
-  ASSINATURA_USUARIO_STATUS_SUSPENSA,
-  CONFIG_KEY_TAXA_INTERMEDIACAO_PIX,
-  DRIVER_EVENT_REACTIVATION_EMBARGO,
-  PLANO_PROFISSIONAL,
+    ASSINATURA_COBRANCA_STATUS_CANCELADA,
+    ASSINATURA_COBRANCA_STATUS_PAGO,
+    ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
+    ASSINATURA_COBRANCA_TIPO_PAGAMENTO_PIX,
+    ASSINATURA_USUARIO_STATUS_SUSPENSA,
+    CONFIG_KEY_TAXA_INTERMEDIACAO_PIX,
+    DRIVER_EVENT_REACTIVATION_EMBARGO,
+    PLANO_PROFISSIONAL,
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
+import { automationService } from "./automation.service.js";
 import { cobrancaService } from "./cobranca.service.js";
 import { getConfigNumber } from "./configuracao.service.js";
 import { notificationService } from "./notifications/notification.service.js";
-import { passageiroService } from "./passageiro.service.js";
 
 interface DadosPagamento {
   valor: number;
@@ -54,7 +54,7 @@ export async function processarPagamentoCobranca(
     // 0. Buscar taxa de intermediação vigente
     const taxaIntermediacao = await getConfigNumber(CONFIG_KEY_TAXA_INTERMEDIACAO_PIX, 0.99);
 
-    // 1. Atualizar status da cobrança para pago e registrar taxa
+    // 1. Atualizar status da cobrança para pago e registrar taxa (COM VERIFICAÇÃO DE IDEMPOTÊNCIA)
     const { error: updateCobrancaError, data: updatedCobranca } = await supabaseAdmin
       .from("assinaturas_cobrancas")
       .update({
@@ -62,10 +62,16 @@ export async function processarPagamentoCobranca(
         data_pagamento: dadosPagamento.dataPagamento,
         valor_pago: dadosPagamento.valor,
         tipo_pagamento: ASSINATURA_COBRANCA_TIPO_PAGAMENTO_PIX,
-        taxa_intermediacao_banco: taxaIntermediacao, // Registro para auditoria
+        taxa_intermediacao_banco: taxaIntermediacao,
+        dados_auditoria_pagamento: {
+            ...dadosPagamento,
+            ...contextoLog,
+            data_processamento: new Date().toISOString()
+        },
         recibo_url: reciboUrl || null
       })
       .eq("id", cobranca.id)
+      .eq("status", ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO) // Critical: Ensure we only process pending charges
       .select();
 
     const updateCount = updatedCobranca?.length || 0;
@@ -76,8 +82,20 @@ export async function processarPagamentoCobranca(
     }
 
     if (updateCount === 0) {
-      logger.warn({ ...logContext }, "Nenhuma cobrança atualizada");
-      throw new Error("Nenhuma cobrança foi atualizada");
+      // Verificar se já foi paga (Idempotência)
+      const { data: checkState } = await supabaseAdmin
+        .from("assinaturas_cobrancas")
+        .select("status")
+        .eq("id", cobranca.id)
+        .single();
+      
+      if (checkState?.status === ASSINATURA_COBRANCA_STATUS_PAGO) {
+          logger.info({ ...logContext }, "Idempotência: Cobrança já processada anteriormente. Ignorando.");
+          return; // Retorno silencioso de sucesso
+      }
+
+      logger.warn({ ...logContext, statusEncontrado: checkState?.status }, "Cobrança não encontrada ou estado inválido para processamento");
+      throw new Error("Nenhuma cobrança foi atualizada (possível estado inválido)");
     }
 
     logger.info({ ...logContext }, "Cobrança atualizada com sucesso");
@@ -136,7 +154,7 @@ export async function processarPagamentoCobranca(
     
     // Se há assinatura pendente, tentar ativar passageiros automaticamente até atingir a franquia
     if (assinaturaPendente) {
-      await ativarPassageirosAutomaticamente(cobranca, assinaturaPendente, logContext);
+      await triggerAtivacaoAutomatica(cobranca, assinaturaPendente, logContext);
     }
 
     logger.info({ ...logContext }, "Fluxo completo para pagamento confirmado");
@@ -427,7 +445,7 @@ async function ativarUsuario(cobranca: Cobranca, logContext: ContextoLog): Promi
 /**
  * Ativa passageiros automaticamente se for plano Profissional e não precisar seleção manual
  */
-async function ativarPassageirosAutomaticamente(
+async function triggerAtivacaoAutomatica(
   cobranca: Cobranca,
   assinaturaPendente: any,
   logContext: ContextoLog
@@ -449,7 +467,7 @@ async function ativarPassageirosAutomaticamente(
     logger.info({ ...logContext, usuarioId: cobranca.usuario_id, franquia }, "Chamando ativarPassageirosAutomaticamente");
 
     try {
-      const resultado = await passageiroService.ativarPassageirosAutomaticamente(cobranca.usuario_id, franquia);
+      const resultado = await automationService.ativarPassageirosAutomaticamente(cobranca.usuario_id, franquia);
       logger.info(
         {
           ...logContext,
