@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { moneyToNumber } from "../../utils/currency.utils.js";
 
 const optionalString = z.string().optional().or(z.literal("")).transform(v => v === "" ? undefined : v);
 const optionalNumber = z.union([z.number(), z.string().length(0).transform(() => undefined), z.string().min(1).transform(val => Number(val))]).optional();

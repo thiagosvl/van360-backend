@@ -1,10 +1,11 @@
-import { PASSENGER_EVENT_PAYMENT_RECEIVED } from "../../config/constants.js";
+import { DRIVER_EVENT_PAYMENT_RECEIVED_ALERT, PASSENGER_EVENT_PAYMENT_RECEIVED } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
 import { addToReceiptQueue } from "../../queues/receipt.queue.js";
 import { PaymentMethod } from "../../types/enums.js";
 import { formatDate } from "../../utils/format.js";
 import { cobrancaService } from "../cobranca.service.js";
+import { notificationService } from "../notifications/notification.service.js";
 import { ReceiptData } from "../receipt.service.js";
 
 export const webhookCobrancaHandler = {
@@ -101,13 +102,16 @@ export const webhookCobrancaHandler = {
                 // E a do MOTORISTA via notificationService direto (pq é só texto informativo).
                 // ...pensando melhor, o NotificationService agora joga na fila, então é rápido.
                 
-                /*
                 notificationService.notifyDriver(moto.telefone, DRIVER_EVENT_PAYMENT_RECEIVED_ALERT, {
+                     nomeMotorista: moto.nome,
                      nomePagador: pass?.nome_responsavel,
                      nomeAluno: pass?.nome,
-                     valor: valor
+                     valor: valor,
+                     mes: fullData.mes,
+                     ano: fullData.ano,
+                     nomePlano: "", // Not used in this template
+                     dataVencimento: fullData.data_vencimento || ""
                 }); 
-                */
                // Descomentar acima se quiser notificar motorista instantaneamente. O worker pode notificar o pai com o recibo.
             }
 

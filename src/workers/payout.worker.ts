@@ -68,12 +68,21 @@ export const payoutWorker = new Worker<PayoutJobData>(
         } catch (error: any) {
             logger.error({ jobId: job.id, error: error.message }, "[Worker] Payout Job Failed");
             
-            // Marcar como Falha no banco (mas o retry do BullMQ vai tentar de novo logo em seguida se for erro de rede)
-            // Se for erro de lógica (sem chave pix), vai falhar e não adianta retentar mto.
-            // Para "Sem Chave Pix", deveríamos abortar.
+            // Persistir erro no banco para o motorista ver
+            if (transacaoId) {
+                await supabaseAdmin.from("transacoes_repasse")
+                    .update({ 
+                        status: STATUS_REPASSE_FALHA, 
+                        mensagem_erro: error.message 
+                    })
+                    .eq("id", transacaoId);
+            }
+
+            // Marcar cobrança como falha
+            await supabaseAdmin.from("cobrancas").update({ status_repasse: STATUS_REPASSE_FALHA }).eq("id", cobrancaId);
+
+            // Se for erro de lógica (sem chave pix), parar retry
             if (error.message.includes("Chave PIX")) {
-                 await supabaseAdmin.from("cobrancas").update({ status_repasse: STATUS_REPASSE_FALHA }).eq("id", cobrancaId);
-                 // Não lançar erro para parar o retry infinito
                  return;
             }
 

@@ -1,4 +1,4 @@
-import { CONFIG_KEY_TAXA_INTERMEDIACAO_PIX, JOB_ORIGIN_MANUAL, PASSENGER_EVENT_MANUAL, STATUS_REPASSE_FALHA, STATUS_REPASSE_PENDENTE, STATUS_REPASSE_REPASSADO, STATUS_TRANSACAO_PROCESSANDO } from "../config/constants.js";
+import { CONFIG_KEY_TAXA_INTERMEDIACAO_PIX, JOB_ORIGIN_MANUAL, PASSENGER_EVENT_MANUAL, STATUS_REPASSE_FALHA, STATUS_REPASSE_PENDENTE, STATUS_TRANSACAO_PROCESSANDO } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
@@ -369,7 +369,7 @@ export const cobrancaService = {
   async iniciarRepasse(cobrancaId: string): Promise<any> {
       logger.info({ cobrancaId }, "Iniciando fluxo de repasse (Queue)...");
 
-      // 1. Buscar Cobrança e Motorista
+      // 1. Buscar Cobrança
       const { data: cobranca } = await supabaseAdmin.from("cobrancas").select("id, usuario_id, valor, status_repasse").eq("id", cobrancaId).single();
       
       if (!cobranca) throw new AppError("Cobrança não encontrada para repasse.", 404);
@@ -378,7 +378,16 @@ export const cobrancaService = {
           return { success: true, alreadyDone: true };
       }
 
-      // 2. Calcular Valor do Repasse (Taxa PIX)
+      // 2. Buscar Motorista e Validar Chave PIX
+      const { data: usuario } = await supabaseAdmin
+        .from("usuarios")
+        .select("id, chave_pix, status_chave_pix")
+        .eq("id", cobranca.usuario_id)
+        .single();
+
+      const hasValidPix = usuario?.chave_pix && usuario?.status_chave_pix === 'validado';
+
+      // 3. Calcular Valor do Repasse (Taxa PIX)
       const taxa = await getConfigNumber(CONFIG_KEY_TAXA_INTERMEDIACAO_PIX, 0.99); 
       const valorRepasse = cobranca.valor - taxa; 
 
@@ -387,27 +396,44 @@ export const cobrancaService = {
            return { success: false, reason: "valor_baixo" };
       }
 
-      // 3. Registrar Transação no Banco (Pendente)
+      // 4. Registrar Transação no Banco (Pendente ou Falha por Chave)
+      const transacaoData: any = {
+          cobranca_id: cobrancaId,
+          motorista_id: cobranca.usuario_id,
+          valor_bruto: cobranca.valor,
+          taxa_plataforma: taxa,
+          valor_liquido: valorRepasse,
+          status: hasValidPix ? STATUS_TRANSACAO_PROCESSANDO : STATUS_REPASSE_FALHA, 
+          data_execucao: new Date()
+      };
+
+      if (!hasValidPix) {
+          transacaoData.mensagem_erro = !usuario?.chave_pix 
+            ? "Chave PIX não cadastrada" 
+            : "Chave PIX aguardando validação ou inválida";
+      }
+
       const { data: transacao, error: txError } = await supabaseAdmin
         .from("transacoes_repasse")
-        .insert({
-            cobranca_id: cobrancaId,
-            motorista_id: cobranca.usuario_id,
-            valor_bruto: cobranca.valor,
-            taxa_plataforma: taxa,
-            valor_liquido: valorRepasse,
-            status: STATUS_TRANSACAO_PROCESSANDO, 
-            data_execucao: new Date()
-        })
+        .insert(transacaoData)
         .select()
         .single();
       
       if (txError) {
           logger.error({ txError }, "Erro ao criar registro de transação de repasse");
-          // Não impede de tentar enfileirar (melhor tentar repassar mesmo sem log perfeito do que reter $)
       }
 
-      // 4. Jogar na FILA (PayoutQueue)
+      // 5. Se não tiver PIX válido, abortar repasse automático (avisar motorista no dashboard via status)
+      if (!hasValidPix) {
+          logger.warn({ cobrancaId, motoristaId: cobranca.usuario_id }, "Repasse abortado: Chave PIX inválida ou ausente");
+          await supabaseAdmin.from("cobrancas").update({ 
+              status_repasse: STATUS_REPASSE_FALHA,
+              id_transacao_repasse: transacao?.id 
+          }).eq("id", cobrancaId);
+          return { success: false, reason: "pix_invalido", transacaoId: transacao?.id };
+      }
+
+      // 6. Jogar na FILA (PayoutQueue)
       try {
           await addToPayoutQueue({
               cobrancaId,
@@ -416,10 +442,13 @@ export const cobrancaService = {
               transacaoId: transacao?.id
           });
           
-          // Atualizar status da cobrança
-          await supabaseAdmin.from("cobrancas").update({ status_repasse: STATUS_REPASSE_PENDENTE }).eq("id", cobrancaId);
+          // Atualizar status da cobrança e vincular transação
+          await supabaseAdmin.from("cobrancas").update({ 
+              status_repasse: STATUS_REPASSE_PENDENTE,
+              id_transacao_repasse: transacao?.id
+          }).eq("id", cobrancaId);
 
-          return { success: true, queued: true };
+          return { success: true, queued: true, transacaoId: transacao?.id };
 
       } catch (queueError) {
            logger.error({ queueError }, "Erro ao enfileirar repasse");

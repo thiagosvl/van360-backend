@@ -36,7 +36,7 @@ export const DriverTemplates = {
      * Boas-vindas: Plano Gratuito
      */
     welcomeFree: (ctx: DriverContext) => {
-        return `Olá *${ctx.nomeMotorista}*, seja muito bem-vindo à Van360! 🚀
+        return `Olá *${getFirstName(ctx.nomeMotorista)}*, seja muito bem-vindo à Van360! 🚀
 
 É um prazer ter você conosco no plano *${ctx.nomePlano}*.
 Nossa equipe está à disposição para ajudar você a organizar seu transporte escolar.
@@ -49,7 +49,7 @@ Aproveite o sistema! 🚐💨`;
      */
     welcomeTrial: (ctx: DriverContext) => {
         const dias = ctx.trialDays || 7;
-        return `Olá *${ctx.nomeMotorista}*, seja muito bem-vindo à Van360! 🚀
+        return `Olá *${getFirstName(ctx.nomeMotorista)}*, seja muito bem-vindo à Van360! 🚀
 
 Você começou com o plano *${ctx.nomePlano}*.
 Aproveite seu acesso completo por *${dias} dias* de teste grátis!
@@ -63,7 +63,7 @@ Qualquer dúvida, estamos à disposição! 🚐💨`;
      */
     activation: (ctx: DriverContext) => {
         const valor = formatCurrency(ctx.valor);
-        return `Olá *${ctx.nomeMotorista}*, bem-vindo à Van360! 🚀
+        return `Olá *${getFirstName(ctx.nomeMotorista)}*, bem-vindo à Van360! 🚀
 
 Seu plano *${ctx.nomePlano}* no valor de *${valor}* está aguardando ativação.
 Realize o pagamento pelo Pix abaixo para liberar seu acesso imediatamente! 👇`;
@@ -75,7 +75,7 @@ Realize o pagamento pelo Pix abaixo para liberar seu acesso imediatamente! 👇`
     renewal: (ctx: DriverContext) => {
         const valor = formatCurrency(ctx.valor);
         const data = formatDate(ctx.dataVencimento);
-        return `Olá *${ctx.nomeMotorista}*, sua assinatura do plano *${ctx.nomePlano}* vence em *${data}*. 🗓️
+        return `Olá *${getFirstName(ctx.nomeMotorista)}*, sua assinatura do plano *${ctx.nomePlano}* vence em *${data}*. 🗓️
 Valor: *${valor}*
 Garanta a continuidade do seu acesso pagando o Pix abaixo. 👇`;
     },
@@ -86,7 +86,7 @@ Garanta a continuidade do seu acesso pagando o Pix abaixo. 👇`;
     renewalDueSoon: (ctx: DriverContext) => {
         const valor = formatCurrency(ctx.valor);
         const data = formatDate(ctx.dataVencimento);
-        return `Olá *${ctx.nomeMotorista}*, sua assinatura do plano *${ctx.nomePlano}* vence em *${data}*. 🗓️
+        return `Olá *${getFirstName(ctx.nomeMotorista)}*, sua assinatura do plano *${ctx.nomePlano}* vence em *${data}*. 🗓️
 Valor: *${valor}*
 Evite bloqueios pagando antecipadamente pelo Pix abaixo. 👇`;
     },
@@ -96,7 +96,7 @@ Evite bloqueios pagando antecipadamente pelo Pix abaixo. 👇`;
      */
     renewalDueToday: (ctx: DriverContext) => {
         const valor = formatCurrency(ctx.valor);
-        return `⚠️ *Atenção, ${ctx.nomeMotorista}!*
+        return `⚠️ *Atenção, ${getFirstName(ctx.nomeMotorista)}!*
 Sua assinatura vence *HOJE*!
 Para continuar acessando o sistema sem interrupções, realize o pagamento agora:
 Valor: *${valor}*
@@ -119,7 +119,7 @@ Pix 👇`;
      */
     accessSuspended: (ctx: DriverContext) => {
         return `🚫 *Acesso Suspenso*
-Olá ${ctx.nomeMotorista}, como não identificamos o pagamento da sua assinatura, seu acesso ao sistema foi temporariamente *bloqueado*.
+Olá *${getFirstName(ctx.nomeMotorista)}*, como não identificamos o pagamento da sua assinatura, seu acesso ao sistema foi temporariamente *bloqueado*.
 Para desbloquear instantaneamente, pague o Pix abaixo. 👇`;
     },
 
@@ -127,7 +127,7 @@ Para desbloquear instantaneamente, pague o Pix abaixo. 👇`;
      * Solicitação de Upgrade / Adicional
      */
     upgradeRequest: (ctx: DriverContext) => {
-         return `Olá *${ctx.nomeMotorista}*, recebemos sua solicitação de alteração de plano para *${ctx.nomePlano}*. 📈
+         return `Olá *${getFirstName(ctx.nomeMotorista)}*, recebemos sua solicitação de alteração de plano para *${ctx.nomePlano}*. 📈
 
 Para efetivar a mudança, realize o pagamento da diferença abaixo. 👇`;
     },
@@ -175,7 +175,7 @@ ${ctx.reciboUrl ? `📎 *Comprovante:* ${ctx.reciboUrl}` : ''}`;
         
         return `⏳ *Seu Teste Grátis está acabando!*
 
-Olá *${ctx.nomeMotorista}*, esperamos que esteja gostando da Van360! 🚌
+Olá *${getFirstName(ctx.nomeMotorista)}*, esperamos que esteja gostando da Van360! 🚌
 
 Seu período de testes do plano *${ctx.nomePlano}* termina em *${data}*.
 Para continuar usando todos os recursos sem interrupção, confirme sua assinatura realizando o pagamento abaixo.
@@ -191,7 +191,7 @@ Pix Copia e Cola 👇`;
         const valor = formatCurrency(ctx.valor);
         return `⚠️ *Atenção: Falha no Repasse de Pagamento*
 
-Olá *${ctx.nomeMotorista}*, tentamos realizar o repasse de *${valor}* referente a uma mensalidade, mas o banco retornou erro na sua chave PIX.
+Olá *${getFirstName(ctx.nomeMotorista)}*, tentamos realizar o repasse de *${valor}* referente a uma mensalidade, mas o banco retornou erro na sua chave PIX.
 
 Por segurança, **sua chave PIX foi invalidada**.
 Por favor, acesse o App e cadastre sua chave novamente para receber este valor.`;
@@ -221,7 +221,7 @@ Se não houver baixas, o sistema começará a enviar as notificações para seus
     whatsappDisconnected: (ctx: DriverContext) => {
         return `⚠️ *Atenção: Seu WhatsApp Desconectou!*
 
-Olá *${ctx.nomeMotorista}*, notamos que sua conexão com o WhatsApp foi perdida. 📵
+Olá *${getFirstName(ctx.nomeMotorista)}*, notamos que sua conexão com o WhatsApp foi perdida. 📵
 
 Isso impede que o sistema envie as cobranças automáticas para seus passageiros.
 Por favor, acesse o painel e reconecte seu WhatsApp (escaneie o QR Code novamente) o mais rápido possível para evitar falhas no envio.`;

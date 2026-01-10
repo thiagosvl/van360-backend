@@ -1,14 +1,14 @@
 import {
-    ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
-    ASSINATURA_USUARIO_STATUS_ATIVA,
-    ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO,
-    ASSINATURA_USUARIO_STATUS_TRIAL,
-    CONFIG_KEY_TRIAL_DIAS_ESSENCIAL,
-    DRIVER_EVENT_ACTIVATION,
-    DRIVER_EVENT_UPGRADE,
-    PLANO_ESSENCIAL,
-    PLANO_GRATUITO,
-    PLANO_PROFISSIONAL
+  ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
+  ASSINATURA_USUARIO_STATUS_ATIVA,
+  ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO,
+  ASSINATURA_USUARIO_STATUS_TRIAL,
+  CONFIG_KEY_TRIAL_DIAS_ESSENCIAL,
+  DRIVER_EVENT_ACTIVATION,
+  DRIVER_EVENT_UPGRADE,
+  PLANO_ESSENCIAL,
+  PLANO_GRATUITO,
+  PLANO_PROFISSIONAL
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
@@ -21,11 +21,11 @@ import { interService } from "./inter.service.js";
 import { notificationService } from "./notifications/notification.service.js";
 import { pricingService } from "./pricing.service.js";
 import {
-    cancelarCobrancaPendente,
-    getAssinaturaAtiva,
-    getUsuarioData,
-    isUpgrade,
-    limparAssinaturasPendentes
+  cancelarCobrancaPendente,
+  getAssinaturaAtiva,
+  getUsuarioData,
+  isUpgrade,
+  limparAssinaturasPendentes
 } from "./subscription.common.js";
 
 // Result Interfaces
@@ -42,6 +42,7 @@ export interface UpgradePlanoResult {
   planoId?: string;
   precoAplicado?: number;
   precoOrigem?: string;
+  message?: string;
 }
 
 export interface DowngradePlanoResult {
@@ -61,6 +62,7 @@ export interface TrocaSubplanoResult {
   subplanoId?: string; 
   precoAplicado?: number;
   precoOrigem?: string;
+  message?: string;
 }
 
 export interface CriarAssinaturaPersonalizadaResult {
@@ -252,7 +254,7 @@ export const subscriptionUpgradeService = {
       
           const pixData = await interService.criarCobrancaPix(supabaseAdmin, {
             cobrancaId: cobranca.id,
-            valor: precoAplicado,
+            valor: valorCobrar,
             cpf,
             nome: usuario.nome,
           });
@@ -288,6 +290,7 @@ export const subscriptionUpgradeService = {
             inter_txid: pixData.interTransactionId,
             cobrancaId: cobranca.id,
             success: true,
+            message: "Upgrade iniciado. O novo limite entrará em vigor IMEDIATAMENTE após a confirmação do pagamento do Pix Pro-rata."
           };
       
         } catch (err: any) {
