@@ -1,4 +1,4 @@
-import { CONFIG_KEY_TAXA_INTERMEDIACAO_PIX, JOB_ORIGIN_MANUAL, PASSENGER_EVENT_MANUAL, STATUS_REPASSE_FALHA, STATUS_REPASSE_PENDENTE, STATUS_TRANSACAO_PROCESSANDO } from "../config/constants.js";
+import { CONFIG_KEY_TAXA_INTERMEDIACAO_PIX, JOB_ORIGIN_MANUAL, PASSENGER_EVENT_MANUAL, PLANO_PROFISSIONAL, STATUS_REPASSE_FALHA, STATUS_REPASSE_PENDENTE, STATUS_REPASSE_REPASSADO, STATUS_TRANSACAO_PROCESSANDO } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
@@ -15,6 +15,7 @@ import { CobrancaOrigem, CobrancaTipo } from "../types/enums.js";
 
 interface CreateCobrancaOptions {
     gerarPixAsync?: boolean; // Se true, apenas enfileira. Se false, gera na hora (síncrono).
+    planoSlug?: string;      // Opcional: slug do plano do motorista para otimizar query
 }
 
 export const cobrancaService = {
@@ -56,7 +57,27 @@ export const cobrancaService = {
     // Regra 1: Passado não gera PIX.
     // Regra 2: Pago não gera PIX (Pagamento Manual Externo).
     // Regra 3: Se não tiver CPF/Nome, não gera.
+    // REQUISITO: Somente PLANO_PROFISSIONAL gera PIX para cobranças de passageiros.
+    
+    let isProfessionalPlan = false;
+    if (options.planoSlug) {
+      isProfessionalPlan = options.planoSlug === PLANO_PROFISSIONAL;
+    } else {
+      // Buscar assinatura ativa se não informada
+      const { data: assinatura } = await supabaseAdmin
+        .from("assinaturas_usuarios")
+        .select("planos(slug, parent:parent_id(slug))")
+        .eq("usuario_id", data.usuario_id)
+        .eq("ativo", true)
+        .maybeSingle();
+      
+      const planoData = assinatura?.planos as any;
+      const slugBase = planoData?.parent?.slug ?? planoData?.slug;
+      isProfessionalPlan = slugBase === PLANO_PROFISSIONAL;
+    }
+
     const shouldGeneratePix = 
+      isProfessionalPlan &&
       !isPastDue && 
       !isPaid &&
       passageiro.cpf_responsavel && 
@@ -103,9 +124,12 @@ export const cobrancaService = {
     }
 
     // Inserir no Banco
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { gerarPixAsync, tipo, cpf, nome, ...cobrancaCleanData } = data;
+
     const cobrancaData: any = {
       id: cobrancaId,
-      ...data,
+      ...cobrancaCleanData,
       valor: valorNumerico,
       ...pixData
     };
@@ -229,12 +253,9 @@ export const cobrancaService = {
       cobrancaOriginal = await this.getCobranca(id);
     }
 
-    // ... (rest of logic remains similar, mostly internal)
-    
-    // ... (omitted update logic for brevity, assuming standard DB updates don't need intense refactor unless validation fails)
-
     const cobrancaData: any = {};
-    // ... (fields mapping)
+    
+    // Mapeamento de campos
     if (data.valor !== undefined) cobrancaData.valor = data.valor;
     if (data.data_vencimento !== undefined) cobrancaData.data_vencimento = data.data_vencimento;
     if (data.status !== undefined) cobrancaData.status = data.status;
@@ -243,6 +264,61 @@ export const cobrancaService = {
     if (data.data_pagamento !== undefined) cobrancaData.data_pagamento = data.data_pagamento;
     if (data.valor_pago !== undefined) cobrancaData.valor_pago = moneyToNumber(data.valor_pago);
 
+    // --- LÓGICA DE REGENERAÇÃO DE PIX ---
+    let shouldResendNotification = false;
+
+    // Verificar se houve mudança crítica (Valor ou Vencimento)
+    const valorChanged = data.valor !== undefined && moneyToNumber(data.valor) !== cobrancaOriginal.valor;
+    const vencimentoChanged = data.data_vencimento !== undefined && data.data_vencimento !== cobrancaOriginal.data_vencimento;
+
+    if ((valorChanged || vencimentoChanged) && cobrancaOriginal.txid_pix) {
+        logger.info({ cobrancaId: id, valorChanged, vencimentoChanged }, "Alteração crítica detectada. Regenerando PIX...");
+
+        // 1. Cancelar PIX Antigo (Best effort - não trava se falhar cancelamento, mas loga)
+        try {
+            await interService.cancelarCobrancaPix(supabaseAdmin, cobrancaOriginal.txid_pix);
+        } catch (ignore) { 
+            logger.warn({ cobrancaId: id, txid: cobrancaOriginal.txid_pix }, "Falha ao cancelar PIX antigo (ignorado para prosseguir).");
+        }
+
+        // 2. Gerar Novo PIX
+        try {
+            const passageiro = cobrancaOriginal.passageiro || cobrancaOriginal.passageiros;
+            
+            if (!passageiro?.cpf_responsavel) {
+                logger.warn({ cobrancaId: id }, "Impossível regenerar PIX: Dados do responsável ausentes. O PIX será removido.");
+                cobrancaData.txid_pix = null;
+                cobrancaData.qr_code_payload = null;
+                cobrancaData.url_qr_code = null;
+            } else {
+                const novoValor = data.valor !== undefined ? moneyToNumber(data.valor) : cobrancaOriginal.valor;
+                const novoVencimento = data.data_vencimento !== undefined ? data.data_vencimento : cobrancaOriginal.data_vencimento;
+
+                const pixResult = await interService.criarCobrancaComVencimentoPix(supabaseAdmin, {
+                    cobrancaId: id,
+                    valor: novoValor,
+                    cpf: passageiro.cpf_responsavel,
+                    nome: passageiro.nome_responsavel || "Responsável Financeiro",
+                    dataVencimento: novoVencimento
+                });
+
+                // Atualizar payload do update
+                cobrancaData.txid_pix = pixResult.interTransactionId;
+                cobrancaData.qr_code_payload = pixResult.qrCodePayload;
+                cobrancaData.url_qr_code = pixResult.location;
+
+                // 3. Verificar necessidade de Reenvio de Notificação
+                const notificacoesAnteriores = await cobrancaNotificacaoService.listByCobrancaId(id);
+                if (notificacoesAnteriores && notificacoesAnteriores.length > 0) {
+                    shouldResendNotification = true;
+                    logger.info({ cobrancaId: id }, "Cobrança já notificada anteriormente. Agendando reenvio.");
+                }
+            }
+        } catch (err: any) {
+             logger.error({ err, cobrancaId: id }, "Erro crítico ao regenerar PIX durante edição.");
+             throw new AppError("Não foi possível atualizar o PIX da cobrança. Verifique os dados e tente novamente.", 502);
+        }
+    }
 
     const { data: updated, error } = await supabaseAdmin
       .from("cobrancas")
@@ -252,11 +328,20 @@ export const cobrancaService = {
       .single();
 
     if (error) throw new AppError(`Erro ao atualizar cobrança: ${error.message}`, 500);
+
+    // 4. Reenviar notificação se necessário (Após save do DB para garantir leitura correta)
+    if (shouldResendNotification) {
+        // Executar em background para não travar a resposta HTTP
+        this.enviarNotificacaoManual(id).catch(err => {
+            logger.error({ err, cobrancaId: id }, "Falha ao reenviar notificação automática pós-edição.");
+        });
+    }
+
     return updated;
   },
 
   async getCobranca(id: string): Promise<any> {
-    const { data, error } = await supabaseAdmin.from("cobrancas").select("*").eq("id", id).single();
+    const { data, error } = await supabaseAdmin.from("cobrancas").select("*, passageiro:passageiros(*, escola:escolas(nome), veiculo:veiculos(placa))").eq("id", id).single();
     if (error) throw new AppError("Cobrança não encontrada.", 404);
     return data;
   },
@@ -267,7 +352,7 @@ export const cobrancaService = {
   },
 
   async listCobrancasWithFilters(filtros: any): Promise<any[]> {
-    let query = supabaseAdmin.from("cobrancas").select("*, passageiros(nome)").order("data_vencimento", { ascending: false });
+    let query = supabaseAdmin.from("cobrancas").select("*, passageiro:passageiros(nome)").order("data_vencimento", { ascending: false });
 
     if (filtros.passageiroId) query = query.eq("passageiro_id", filtros.passageiroId);
     if (filtros.status) query = query.eq("status", filtros.status);
@@ -457,7 +542,7 @@ export const cobrancaService = {
       }
   },
 
-  async gerarCobrancasMensaisParaMotorista(motoristaId: string, targetMonth: number, targetYear: number): Promise<{ created: number, skipped: number }> {
+  async gerarCobrancasMensaisParaMotorista(motoristaId: string, targetMonth: number, targetYear: number, planoSlug?: string): Promise<{ created: number, skipped: number }> {
       let created = 0;
       let skipped = 0;
 
@@ -508,7 +593,7 @@ export const cobrancaService = {
                 origem: CobrancaOrigem.AUTOMATICA,
                 // descricao: Removido do DTO
                 gerarPixAsync: true
-            }, { gerarPixAsync: true }); // <--- MÁGICA AQUI
+            }, { gerarPixAsync: true, planoSlug }); // <--- MÁGICA AQUI (Passando planoSlug)
             
             created++;
           } catch (e) {
@@ -598,5 +683,69 @@ export const cobrancaService = {
             
         if (error) throw error;
         return true;
+  },
+
+  /**
+   * Gera PIX retroativo para cobranças pendentes de um usuário (motorista).
+   * Geralmente chamado após upgrade para PLANO_PROFISSIONAL.
+   */
+  async gerarPixRetroativo(usuarioId: string): Promise<any> {
+    logger.info({ usuarioId }, "[CobrancaService] Iniciando geração de PIX retroativo...");
+
+    const todayStr = new Date().toISOString().split("T")[0];
+
+    // 1. Buscar cobranças pendentes sem PIX que não venceram, incluindo dados do passageiro
+    const { data: cobrancas, error: cobError } = await supabaseAdmin
+      .from("cobrancas")
+      .select(`
+        id, valor, data_vencimento,
+        passageiros!inner (
+          nome_responsavel,
+          cpf_responsavel
+        )
+      `)
+      .eq("usuario_id", usuarioId)
+      .eq("status", "pendente")
+      .is("txid_pix", null)
+      .gte("data_vencimento", todayStr);
+
+    if (cobError) {
+      logger.error({ error: cobError.message, usuarioId }, "Erro ao buscar cobranças para PIX retroativo");
+      throw new Error("Erro ao buscar cobranças para PIX retroativo.");
+    }
+
+    if (!cobrancas || cobrancas.length === 0) {
+      logger.info({ usuarioId }, "Nenhuma cobrança elegível para PIX retroativo encontrada.");
+      return { totalEnfileirados: 0 };
+    }
+
+    logger.info({ usuarioId, count: cobrancas.length }, "Enfileirando cobranças para geração de PIX retroativo");
+
+    // 2. Adicionar à PixQueue
+    const promises = cobrancas.map(async (cob) => {
+      const passageiro = cob.passageiros as any;
+      
+      // Validar se tem dados básicos
+      if (!passageiro?.cpf_responsavel || !passageiro?.nome_responsavel) {
+        logger.warn({ cobrancaId: cob.id }, "Ignorando cobrança retroativa: Passageiro sem CPF/Nome do responsável.");
+        return;
+      }
+
+      try {
+        await addToPixQueue({
+          cobrancaId: cob.id,
+          valor: cob.valor,
+          cpf: passageiro.cpf_responsavel,
+          nome: passageiro.nome_responsavel,
+          dataVencimento: cob.data_vencimento
+        });
+      } catch (err: any) {
+        logger.error({ cobrancaId: cob.id, error: err.message }, "Falha ao enfileirar PIX retroativo");
+      }
+    });
+
+    await Promise.all(promises);
+
+    return { totalEnfileirados: cobrancas.length };
   }
 };

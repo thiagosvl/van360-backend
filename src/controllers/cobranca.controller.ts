@@ -3,11 +3,11 @@ import { logger } from "../config/logger.js";
 import { cobrancaNotificacaoService } from "../services/cobranca-notificacao.service.js";
 import { cobrancaService } from "../services/cobranca.service.js";
 import {
-    createCobrancaSchema,
-    listCobrancasFiltersSchema,
-    notificacaoPayloadSchema,
-    toggleNotificacoesSchema,
-    updateCobrancaSchema
+  createCobrancaSchema,
+  listCobrancasFiltersSchema,
+  notificacaoPayloadSchema,
+  toggleNotificacoesSchema,
+  updateCobrancaSchema
 } from "../types/dtos/cobranca.dto.js";
 
 export const cobrancaController = {
@@ -35,7 +35,6 @@ export const cobrancaController = {
 
   get: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
-    // logger.info({ cobrancaId: id }, "CobrancaController.get"); // Optional for GET to reduce noise, but user asked for "everything"
     const result = await cobrancaService.getCobranca(id);
     return reply.status(200).send(result);
   },

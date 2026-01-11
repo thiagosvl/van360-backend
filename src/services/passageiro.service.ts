@@ -71,10 +71,14 @@ const createPassageiro = async (data: CreatePassageiroDTO): Promise<any> => {
              const valor = inserted.valor_cobranca;
              if (valor && valor > 0) {
                  const hoje = new Date();
-                 // Vencimento para hoje (cobrança imediata)
-                 const dataVencimento = hoje.toISOString().split('T')[0];
+                 // Usar componentes locais para evitar virada de dia por fuso horário UTC no toISOString
+                 const dataVencimento = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
                  
-                 logger.info({ passageiroId: inserted.id, valor }, "Gerando cobrança inicial (Mês Atual)...");
+                 logger.info({ 
+                    passageiroId: inserted.id, 
+                    valor, 
+                    dataVencimento 
+                 }, "Gerando cobrança inicial imediata...");
                  
                  await cobrancaService.createCobranca({
                     usuario_id: data.usuario_id,
@@ -83,12 +87,17 @@ const createPassageiro = async (data: CreatePassageiroDTO): Promise<any> => {
                     data_vencimento: dataVencimento,
                     tipo: CobrancaTipo.MENSALIDADE,
                     origem: CobrancaOrigem.AUTOMATICA,
-                    // descricao: Removido do DTO
+                    mes: hoje.getMonth() + 1,
+                    ano: hoje.getFullYear(),
                     gerarPixAsync: true
                  }, { gerarPixAsync: true });
              }
          } catch (err: any) {
-             logger.error({ err }, "Erro ao gerar cobrança inicial automática");
+             logger.error({ 
+                err: err.message, 
+                stack: err.stack,
+                passageiroId: inserted.id 
+             }, "Erro ao gerar cobrança inicial automática");
              // Não dar throw para não falhar a criação do passageiro, apenas logar erro da cobrança
          }
     }

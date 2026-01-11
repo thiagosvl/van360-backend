@@ -476,6 +476,10 @@ async function triggerAtivacaoAutomatica(
         },
         "Passageiros ativados automaticamente após confirmação do pagamento"
       );
+
+      // Geração Retroativa de PIX para cobranças atuais/futuras após upgrade para Profissional
+      await cobrancaService.gerarPixRetroativo(cobranca.usuario_id);
+      
     } catch (ativacaoError: any) {
       logger.error(
         {
@@ -503,25 +507,7 @@ async function processarCatchupReativacao(usuarioId: string, logContext: Context
     const targetYear = now.getFullYear();
 
     try {
-        // DECISÃO DE CATCH-UP:
-        // Se reativar ANTES do dia 25, gera o mês vigente. 
-        // Se reativar dia 25 ou DEPOIS, gera o PRÓXIMO mês (o atual já está no fim).
-        
-        if (now.getDate() < 25) {
-            const statsCurrent = await cobrancaService.gerarCobrancasMensaisParaMotorista(usuarioId, targetMonth, targetYear);
-            logger.info({ ...logContext, statsCurrent }, "Catch-up: Geração do mês atual concluída (pré-dia 25)");
-        } else {
-            let nextMonth = targetMonth + 1;
-            let nextYear = targetYear;
-            if (nextMonth > 12) {
-                nextMonth = 1;
-                nextYear++;
-            }
-            const statsNext = await cobrancaService.gerarCobrancasMensaisParaMotorista(usuarioId, nextMonth, nextYear);
-            logger.info({ ...logContext, statsNext }, "Catch-up: Geração do próximo mês concluída (pós-dia 25)");
-        }
-
-        // 2. Notificar motorista sobre a reativação e o embargo de 24h
+        // 0. Buscar dados da assinatura e usuário antecipadamente
         const { data: usuario } = await supabaseAdmin
             .from("usuarios")
             .select("nome, telefone")
@@ -530,10 +516,31 @@ async function processarCatchupReativacao(usuarioId: string, logContext: Context
 
         const { data: assinatura } = await supabaseAdmin
             .from("assinaturas_usuarios")
-            .select("planos(nome)")
+            .select("planos(nome, slug, parent:parent_id(slug))")
             .eq("usuario_id", usuarioId)
             .eq("ativo", true)
             .single();
+
+        const planoData = assinatura?.planos as any;
+        const planoSlug = planoData?.parent?.slug ?? planoData?.slug;
+
+        // 1. DECISÃO DE CATCH-UP:
+        // Se reativar ANTES do dia 25, gera o mês vigente. 
+        // Se reativar dia 25 ou DEPOIS, gera o PRÓXIMO mês (o atual já está no fim).
+        
+        if (now.getDate() < 25) {
+            const statsCurrent = await cobrancaService.gerarCobrancasMensaisParaMotorista(usuarioId, targetMonth, targetYear, planoSlug);
+            logger.info({ ...logContext, statsCurrent }, "Catch-up: Geração do mês atual concluída (pré-dia 25)");
+        } else {
+            let nextMonth = targetMonth + 1;
+            let nextYear = targetYear;
+            if (nextMonth > 12) {
+                nextMonth = 1;
+                nextYear++;
+            }
+            const statsNext = await cobrancaService.gerarCobrancasMensaisParaMotorista(usuarioId, nextMonth, nextYear, planoSlug);
+            logger.info({ ...logContext, statsNext }, "Catch-up: Geração do próximo mês concluída (pós-dia 25)");
+        }
 
         if (usuario?.telefone) {
             await notificationService.notifyDriver(

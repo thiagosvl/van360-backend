@@ -11,11 +11,11 @@ import { cobrancaService } from '../services/cobranca.service.js';
 export const generationWorker = new Worker<GenerationJobData>(
     QUEUE_NAME_GENERATION,
     async (job: Job<GenerationJobData>) => {
-        const { motoristaId, mes, ano } = job.data;
+        const { motoristaId, mes, ano, planoSlug } = job.data;
         logger.info({ jobId: job.id, motoristaId, mes, ano }, "[Worker] Iniciando geração mensal...");
 
         try {
-            const stats = await cobrancaService.gerarCobrancasMensaisParaMotorista(motoristaId, mes, ano);
+            const stats = await cobrancaService.gerarCobrancasMensaisParaMotorista(motoristaId, mes, ano, planoSlug);
             
             logger.info({ jobId: job.id, stats }, "[Worker] Geração mensal concluída para motorista");
             return stats;

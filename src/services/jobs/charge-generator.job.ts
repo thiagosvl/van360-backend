@@ -61,7 +61,7 @@ export const chargeGeneratorJob = {
             // 3. Buscar Motoristas Elegíveis
             const { data: assinaturas, error: subError } = await supabaseAdmin
                 .from("assinaturas_usuarios")
-                .select("usuario_id, status, plano_id, usuarios(id, nome)") 
+                .select("usuario_id, status, plano_id, usuarios(id, nome), planos:plano_id(slug)") 
                 .in("status", [ASSINATURA_USUARIO_STATUS_ATIVA, ASSINATURA_USUARIO_STATUS_TRIAL]) 
                 .in("plano_id", planIds)
                 .is("cancelamento_manual", null); 
@@ -74,8 +74,11 @@ export const chargeGeneratorJob = {
             }
 
             const motoristas = assinaturas
-                .map((a: any) => a.usuarios) 
-                .filter((u: any) => !!u); 
+                .map((a: any) => ({
+                    ...a.usuarios,
+                    planoSlug: a.planos?.slug
+                })) 
+                .filter((u: any) => !!u.id); 
             
             result.foundDrivers = motoristas.length;
 
@@ -88,7 +91,8 @@ export const chargeGeneratorJob = {
                     await addToGenerationQueue({
                         motoristaId: motorista.id,
                         mes: targetMonth,
-                        ano: targetYear
+                        ano: targetYear,
+                        planoSlug: motorista.planoSlug
                     });
                     
                     result.queuedDrivers++;
