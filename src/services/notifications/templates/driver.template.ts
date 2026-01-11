@@ -66,7 +66,7 @@ Qualquer dúvida, estamos à disposição! 🚐💨`;
         return `Olá *${getFirstName(ctx.nomeMotorista)}*, bem-vindo à Van360! 🚀
 
 Seu plano *${ctx.nomePlano}* no valor de *${valor}* está aguardando ativação.
-Realize o pagamento pelo Pix abaixo para liberar seu acesso imediatamente! 👇`;
+Realize o pagamento pelo PIX abaixo para liberar seu acesso imediatamente! 👇`;
     },
 
     /**
@@ -77,7 +77,7 @@ Realize o pagamento pelo Pix abaixo para liberar seu acesso imediatamente! 👇`
         const data = formatDate(ctx.dataVencimento);
         return `Olá *${getFirstName(ctx.nomeMotorista)}*, sua assinatura do plano *${ctx.nomePlano}* vence em *${data}*. 🗓️
 Valor: *${valor}*
-Garanta a continuidade do seu acesso pagando o Pix abaixo. 👇`;
+Garanta a continuidade do seu acesso pagando o PIX abaixo. 👇`;
     },
 
     /**
@@ -88,7 +88,7 @@ Garanta a continuidade do seu acesso pagando o Pix abaixo. 👇`;
         const data = formatDate(ctx.dataVencimento);
         return `Olá *${getFirstName(ctx.nomeMotorista)}*, sua assinatura do plano *${ctx.nomePlano}* vence em *${data}*. 🗓️
 Valor: *${valor}*
-Evite bloqueios pagando antecipadamente pelo Pix abaixo. 👇`;
+Evite bloqueios pagando antecipadamente pelo PIX abaixo. 👇`;
     },
 
     /**
@@ -100,7 +100,7 @@ Evite bloqueios pagando antecipadamente pelo Pix abaixo. 👇`;
 Sua assinatura vence *HOJE*!
 Para continuar acessando o sistema sem interrupções, realize o pagamento agora:
 Valor: *${valor}*
-Pix copia e cola 👇`;
+PIX copia e cola 👇`;
     },
 
     /**
@@ -111,7 +111,7 @@ Pix copia e cola 👇`;
         return `❌ *Constamos um atraso!*
 Sua mensalidade venceu ${dias} e ainda não identificamos o pagamento.
 Regularize agora para evitar o bloqueio do seu acesso.
-Pix 👇`;
+PIX 👇`;
     },
 
     /**
@@ -120,7 +120,7 @@ Pix 👇`;
     accessSuspended: (ctx: DriverContext) => {
         return `🚫 *Acesso Suspenso*
 Olá *${getFirstName(ctx.nomeMotorista)}*, como não identificamos o pagamento da sua assinatura, seu acesso ao sistema foi temporariamente *bloqueado*.
-Para desbloquear instantaneamente, pague o Pix abaixo. 👇`;
+Para desbloquear instantaneamente, pague o PIX abaixo. 👇`;
     },
 
     /**
@@ -181,7 +181,7 @@ Seu período de testes do plano *${ctx.nomePlano}* termina em *${data}*.
 Para continuar usando todos os recursos sem interrupção, confirme sua assinatura realizando o pagamento abaixo.
 
 Valor: *${valor}*
-Pix Copia e Cola 👇`;
+PIX Copia e Cola 👇`;
     },
 
     /**

@@ -290,7 +290,7 @@ export const subscriptionUpgradeService = {
             inter_txid: pixData.interTransactionId,
             cobrancaId: cobranca.id,
             success: true,
-            message: "Upgrade iniciado. O novo limite entrará em vigor IMEDIATAMENTE após a confirmação do pagamento do Pix Pro-rata."
+            message: "Upgrade iniciado. O novo limite entrará em vigor IMEDIATAMENTE após a confirmação do pagamento do PIX Pro-rata."
           };
       
         } catch (err: any) {

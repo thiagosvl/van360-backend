@@ -116,7 +116,7 @@ export const notificationService = {
     },
 
     /**
-     * Lógica interna de envio (Texto + Imagem Opcional + Pix Opcional + Recibo Opcional)
+     * Lógica interna de envio (Texto + Imagem Opcional + PIX Opcional + Recibo Opcional)
      * Refatorado para usar o padrão Composite (Lego) + Fallback
      */
     async _sendWithOptionalMedia(to: string, message: string, pixPayload?: string, reciboUrl?: string, instanceName?: string, eventType: string = "UNKNOWN"): Promise<boolean> {

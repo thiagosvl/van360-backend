@@ -41,7 +41,7 @@ export const PassengerTemplates = {
 
 A mensalidade de *${getFirstName(ctx.nomePassageiro)}* no valor de *${valor}* vence em *${data}*${diasMsg}.
 
-Segue abaixo o código Pix Copia e Cola. 👇`;
+Segue abaixo o código PIX Copia e Cola. 👇`;
     },
 
     /**
@@ -53,7 +53,7 @@ Segue abaixo o código Pix Copia e Cola. 👇`;
         
         return `Olá *${nomeResp}*, passando apenas para lembrar que a mensalidade de *${getFirstName(ctx.nomePassageiro)}* (${valor}) vence *HOJE*! 🗓️
 
-Caso precise, o código Pix está logo abaixo. 👇`;
+Caso precise, o código PIX está logo abaixo. 👇`;
     },
 
     /**
@@ -67,7 +67,7 @@ Caso precise, o código Pix está logo abaixo. 👇`;
         
         return `Olá *${nomeResp}*, notamos que a mensalidade de *${getFirstName(ctx.nomePassageiro)}* (${valor}) venceu dia *${data}* (Há ${diasAtraso} dias de atraso). ⚠️
 
-Para regularizar e evitar bloqueios, estamos reenviando o código Pix abaixo. 👇`;
+Para regularizar e evitar bloqueios, estamos reenviando o código PIX abaixo. 👇`;
     },
 
     /**
@@ -96,6 +96,6 @@ Muito obrigado! 🚐💨`;
 
 Mensalidade de *${getFirstName(ctx.nomePassageiro)}* (${valor}) com vencimento em *${data}*. 🚐
 
-Segue abaixo o código Pix Copia e Cola. 👇`;
+Segue abaixo o código PIX Copia e Cola. 👇`;
     }
 };

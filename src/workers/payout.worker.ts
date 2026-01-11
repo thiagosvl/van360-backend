@@ -36,7 +36,7 @@ export const payoutWorker = new Worker<PayoutJobData>(
              // Mas idealmente o worker chamaria o serviço se ele fosse refatorado para ser "Executar Repasse".
              // Vou chamar o interService direto aqui para simplificar a migração.
              
-             logger.debug({ cobrancaId, chavePix: usuario.chave_pix }, "[Worker] Enviando Pix para motorista...");
+             logger.debug({ cobrancaId, chavePix: usuario.chave_pix }, "[Worker] Enviando PIX para motorista...");
              
              const pixResponse = await interService.realizarPixRepasse(supabaseAdmin, {
                 valor: valorRepasse,
