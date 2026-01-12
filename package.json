@@ -19,6 +19,7 @@
   "dependencies": {
     "@bull-board/api": "^6.16.2",
     "@bull-board/fastify": "^6.16.2",
+    "@bull-board/ui": "^6.16.2",
     "@fastify/cors": "^11.1.0",
     "@resvg/resvg-js": "^2.6.2",
     "@supabase/supabase-js": "^2.79.0",

@@ -54,7 +54,10 @@ export async function createApp(): Promise<FastifyInstance> {
 
     // Configurar Bull Board (Dashboard de Filas)
     // Opcional: Adicionar proteção de Basic Auth aqui futuramente
-    setupBullBoard(app);
+    // Nota: O Bull Board não funciona em ambiente Serverless (Vercel)
+    if (!process.env.VERCEL) {
+      setupBullBoard(app);
+    }
 
     // Registrar rotas
     await app.register(routes);
