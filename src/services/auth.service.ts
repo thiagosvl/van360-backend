@@ -2,7 +2,7 @@ import { ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATU
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
-import { BillingMode } from "../types/enums.js";
+import { BillingMode, UserType } from "../types/enums.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { cobrancaService } from "./cobranca.service.js";
 import { getConfigNumber } from "./configuracao.service.js";
@@ -161,8 +161,8 @@ export async function checkUserStatus(
   };
 }
 
-export async function criarUsuario(data: UsuarioPayload) {
-  const { nome, apelido, email, cpfcnpj, telefone, ativo = false } = data;
+export async function criarUsuario(data: UsuarioPayload & { tipo?: UserType }) {
+  const { nome, apelido, email, cpfcnpj, telefone, ativo = false, tipo } = data;
 
   const { data: usuario, error } = await supabaseAdmin
     .from("usuarios")
@@ -173,7 +173,7 @@ export async function criarUsuario(data: UsuarioPayload) {
       cpfcnpj: onlyDigits(cpfcnpj),
       telefone: onlyDigits(telefone),
       ativo,
-      // role removido pois a coluna será depreciada
+      tipo: tipo || UserType.MOTORISTA
     }])
     .select("id, auth_uid")
     .single();
@@ -188,7 +188,8 @@ export async function criarUsuario(data: UsuarioPayload) {
 export async function criarUsuarioAuth(
   email: string,
   senha: string,
-  usuario_id: string
+  usuario_id: string,
+  tipo: UserType = UserType.MOTORISTA
 ): Promise<AuthSession> {
 
   const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -196,7 +197,7 @@ export async function criarUsuarioAuth(
     password: senha,
     email_confirm: true,
     user_metadata: { usuario_id }, // Role movida para app_metadata
-    app_metadata: { role: "motorista" } // Strict Source of Truth
+    app_metadata: { role: tipo } // Strict Source of Truth
   });
 
   if (authError || !authData?.user) {

@@ -12,7 +12,7 @@ import { notificationService } from "./notifications/notification.service.js";
 import { planRules } from "./plan-rules.service.js";
 
 import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
-import { CobrancaOrigem, CobrancaTipo } from "../types/enums.js";
+import { CobrancaOrigem, CobrancaTipo, SubscriptionBillingType } from "../types/enums.js";
 
 interface CreateCobrancaOptions {
     gerarPixAsync?: boolean; // Se true, apenas enfileira. Se false, gera na hora (síncrono).
@@ -169,7 +169,7 @@ export const cobrancaService = {
           status: "pendente_pagamento", // Usando string hardcoded ou importar constante se disponível
           data_vencimento: dataVencimento,
           origem: "inter",
-    billing_type: "activation",
+          billing_type: SubscriptionBillingType.ACTIVATION,
           descricao: descricao,
         })
         .select()
@@ -222,7 +222,7 @@ export const cobrancaService = {
           status: "pendente_pagamento",
           data_vencimento: dataVencimento,
           origem: "job_renovacao",
-          billing_type: "renewal",
+          billing_type: SubscriptionBillingType.RENEWAL,
           descricao: descricao,
         })
         .select()
