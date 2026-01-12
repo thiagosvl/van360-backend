@@ -1,6 +1,7 @@
-import { DRIVER_EVENT_REPASSE_FAILED, STATUS_CHAVE_PIX_INVALIDADA, STATUS_REPASSE_FALHA, STATUS_REPASSE_REPASSADO, STATUS_TRANSACAO_ERRO, STATUS_TRANSACAO_PROCESSANDO, STATUS_TRANSACAO_SUCESSO } from "../../config/constants.js";
+import { DRIVER_EVENT_REPASSE_FAILED } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
+import { PixKeyStatus, RepasseStatus, TransactionStatus } from "../../types/enums.js";
 import { interService } from "../inter.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 
@@ -15,7 +16,7 @@ export const repasseMonitorJob = {
         const { data: pendentes, error } = await supabaseAdmin
             .from("transacoes_repasse")
             .select("*")
-            .eq("status", STATUS_TRANSACAO_PROCESSANDO)
+            .eq("status", TransactionStatus.PROCESSAMENTO)
             .gte("created_at", limite.toISOString());
 
         if (error) {
@@ -42,15 +43,15 @@ export const repasseMonitorJob = {
                 const pixInfo = await interService.consultarPix(supabaseAdmin, transacao.txid_pix_repasse);
                 const statusInter = pixInfo.status; // REALIZADO, REJEITADO, FALHA...
 
-                let novoStatus = STATUS_TRANSACAO_PROCESSANDO;
+                let novoStatus = TransactionStatus.PROCESSAMENTO;
                 
                 if (statusInter === "REALIZADO" || statusInter === "PAGO") { // statusInter comes from Inter API
-                    novoStatus = STATUS_TRANSACAO_SUCESSO;
+                    novoStatus = TransactionStatus.SUCESSO;
                 } else if (["REJEITADO", "CANCELADO", "DEVOLVIDO", "FALHA"].includes(statusInter)) {
-                    novoStatus = STATUS_TRANSACAO_ERRO;
+                    novoStatus = TransactionStatus.ERRO;
                 }
 
-                if (novoStatus !== STATUS_TRANSACAO_PROCESSANDO) {
+                if (novoStatus !== TransactionStatus.PROCESSAMENTO) {
                     // 3. Atualizar Transação
                     await supabaseAdmin
                         .from("transacoes_repasse")
@@ -63,14 +64,14 @@ export const repasseMonitorJob = {
 
                     // 4. Atualizar status na Cobrança Original (para manter sincronia)
                     if (transacao.cobranca_id) {
-                        const statusCobranca = novoStatus === STATUS_TRANSACAO_SUCESSO ? STATUS_REPASSE_REPASSADO : STATUS_REPASSE_FALHA;
+                        const statusCobranca = novoStatus === TransactionStatus.SUCESSO ? RepasseStatus.REPASSADO : RepasseStatus.FALHA;
                         await supabaseAdmin
                             .from("cobrancas")
                             .update({ status_repasse: statusCobranca })
                             .eq("id", transacao.cobranca_id);
                     }
 
-                    if (novoStatus === STATUS_TRANSACAO_SUCESSO) {
+                    if (novoStatus === TransactionStatus.SUCESSO) {
                         logger.info({ id: transacao.id, valor: transacao.valor_repassado }, "Repasse confirmado com sucesso!");
                     } else {
                         logger.warn({ id: transacao.id, statusInter, usuarioId: transacao.usuario_id }, "Repasse FALHOU. Invalidando chave PIX e notificando motorista.");
@@ -80,7 +81,7 @@ export const repasseMonitorJob = {
                             .from("usuarios")
                             .update({ 
                                 chave_pix_validada: false, 
-                                status_chave_pix: STATUS_CHAVE_PIX_INVALIDADA 
+                                status_chave_pix: PixKeyStatus.INVALIDADA_POS_FALHA 
                             })
                             .eq("id", transacao.usuario_id);
 

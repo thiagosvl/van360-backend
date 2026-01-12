@@ -1,7 +1,4 @@
 import {
-    ASSINATURA_USUARIO_STATUS_ATIVA,
-    COBRANCA_STATUS_PENDENTE,
-    CONFIG_KEY_DIAS_ANTECEDENCIA_AVISO_VENCIMENTO,
     JOB_ORIGIN_DAILY,
     JOB_ORIGIN_FORCE,
     PASSENGER_EVENT_DUE_SOON,
@@ -10,6 +7,7 @@ import {
 } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
+import { ChargeStatus, ConfigKey, UserSubscriptionStatus } from "../../types/enums.js";
 import { getConfigNumber } from "../configuracao.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 
@@ -30,7 +28,7 @@ export const dailyChargeMonitorJob = {
             logger.info("Iniciando Job Diário de Monitoramento de Cobranças");
 
             // 1. Configurações
-            const diasAntecedencia = params.diasAntecedenciaOverride ?? await getConfigNumber(CONFIG_KEY_DIAS_ANTECEDENCIA_AVISO_VENCIMENTO, 2);
+            const diasAntecedencia = params.diasAntecedenciaOverride ?? await getConfigNumber(ConfigKey.DIAS_ANTECEDENCIA_AVISO_VENCIMENTO, 3);
             
             // Calculando Datas Chaves
             
@@ -76,10 +74,10 @@ export const dailyChargeMonitorJob = {
                         )
                     )
                 `)
-                .eq("status", COBRANCA_STATUS_PENDENTE)
+                .eq("status", ChargeStatus.PENDENTE)
                 .in("data_vencimento", datasDeInteresse)
                 .eq("passageiros.enviar_cobranca_automatica", true)
-                .eq("usuarios.assinaturas_usuarios.status", ASSINATURA_USUARIO_STATUS_ATIVA)
+                .eq("usuarios.assinaturas_usuarios.status", UserSubscriptionStatus.ATIVA)
                 .lte("usuarios.assinaturas_usuarios.data_ativacao", timestamp24hAgo);
 
             if (cobError) throw cobError;
@@ -145,12 +143,21 @@ export const dailyChargeMonitorJob = {
                     );
 
                     if (enviou) {
+                        const now = new Date(); // Garante mesma data para log e update
+                        
+                        // 1. Atualizar registro mestre da cobrança
+                        await supabaseAdmin
+                           .from("cobrancas")
+                           .update({ data_envio_ultima_notificacao: now })
+                           .eq("id", cobranca.id);
+
+                        // 2. Gravar log histórico
                         await supabaseAdmin.from("cobranca_notificacoes").insert({
                             cobranca_id: cobranca.id,
                             tipo_evento: context,
                             tipo_origem: params.force ? JOB_ORIGIN_FORCE : JOB_ORIGIN_DAILY,
                             canal: "WHATSAPP",
-                            data_envio: new Date().toISOString()
+                            data_envio: now.toISOString()
                         });
                         result.sent++;
                     } else {

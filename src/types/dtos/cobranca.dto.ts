@@ -7,23 +7,24 @@ export const createCobrancaSchema = z.object({
     passageiro_id: z.string().uuid().optional(),
     valor: z.union([z.number(), z.string()]).transform(v => typeof v === 'string' ? moneyToNumber(v) : v),
     data_vencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve estar no formato YYYY-MM-DD"),
-    // descricao: Removido pois não existe na tabela 'cobrancas'
     tipo: z.nativeEnum(CobrancaTipo).optional(),
     billing_type: z.nativeEnum(SubscriptionBillingType).optional(),
 
-    // Campos de metadados (usados pelo worker/job e agora no create manual)
-    // Aceita string (do form) e converte para number (do banco)
     mes: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),
     ano: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),
     
     status: z.string().optional(),
     origem: z.string().optional(),
     
-    // Campos opcionais de payload
+    pagamento_manual: z.boolean().optional(),
+    tipo_pagamento: z.string().nullable().optional(),
+    data_pagamento: z.string().nullable().optional(),
+    valor_pago: z.union([z.number(), z.string()]).transform(v => typeof v === 'string' ? moneyToNumber(v) : v).optional(),
+    recibo_url: z.string().nullable().optional(),
+
     cpf: z.string().optional(),
     nome: z.string().optional(),
     
-    // Options
     gerarPixAsync: z.boolean().optional()
 });
 

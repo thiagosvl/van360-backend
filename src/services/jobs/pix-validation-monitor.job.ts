@@ -1,6 +1,6 @@
-import { STATUS_TRANSACAO_ERRO, STATUS_TRANSACAO_PROCESSANDO, STATUS_TRANSACAO_SUCESSO } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
+import { TransactionStatus } from "../../types/enums.js";
 import { interService } from "../inter.service.js";
 import { validacaoPixService } from "../validacao-pix.service.js";
 
@@ -16,7 +16,7 @@ export const pixValidationMonitorJob = {
         const { data: pendentes, error } = await supabaseAdmin
             .from("pix_validacao_pendente")
             .select("*")
-            .eq("status", STATUS_TRANSACAO_PROCESSANDO)
+            .eq("status", TransactionStatus.PROCESSAMENTO)
             .gte("created_at", ontem.toISOString());
 
         if (error) {
@@ -46,25 +46,25 @@ export const pixValidationMonitorJob = {
                 // Depende da API do Inter. Geralmente: "REALIZADO" = Sucesso.
                 // "REJEITADO", "DEVOLVIDO", "CANCELADO" = Falha.
                 
-                let novoStatus = STATUS_TRANSACAO_PROCESSANDO; // Mantém se ainda estiver processando
+                let novoStatus = TransactionStatus.PROCESSAMENTO; // Mantém se ainda estiver processando
 
                 if (statusInter === "REALIZADO" || statusInter === "PAGO") {
-                    novoStatus = STATUS_TRANSACAO_SUCESSO;
+                    novoStatus = TransactionStatus.SUCESSO;
                 } else if (["REJEITADO", "CANCELADO", "DEVOLVIDO", "FALHA"].includes(statusInter)) {
-                    novoStatus = STATUS_TRANSACAO_ERRO;
+                    novoStatus = TransactionStatus.ERRO;
                 }
 
-                if (novoStatus !== STATUS_TRANSACAO_PROCESSANDO) {
+                if (novoStatus !== TransactionStatus.PROCESSAMENTO) {
                     // Atualizar DB
                     await supabaseAdmin
                         .from("pix_validacao_pendente")
                         .update({ 
                             status: novoStatus, 
-                            motivo_falha: novoStatus === STATUS_TRANSACAO_ERRO ? (pixInfo.motivo || statusInter) : null
+                            motivo_falha: novoStatus === TransactionStatus.ERRO ? (pixInfo.motivo || statusInter) : null
                         })
                         .eq("id", item.id);
 
-                    if (novoStatus === STATUS_TRANSACAO_SUCESSO) {
+                    if (novoStatus === TransactionStatus.SUCESSO) {
                         logger.info({ id: item.id, usuarioId: item.usuario_id }, "Validação PIX confirmada com sucesso!");
                         // Nota: Se 'tipo_chave' não existir na tabela, teremos que inferir ou deixar NULL
                         // Estou assumindo que adicionaremos 'tipo_chave'

@@ -2,18 +2,31 @@ import { supabaseAdmin } from "../config/supabase.js";
 import { CreateVeiculoDTO, ListVeiculosFiltersDTO, UpdateVeiculoDTO, Veiculo, VeiculoComContagem } from "../types/dtos/veiculo.dto.js";
 import { cleanString } from "../utils/string.utils.js";
 
+// Helper Methods
+const _prepareVeiculoData = (data: Partial<CreateVeiculoDTO>, usuarioId?: string, isUpdate: boolean = false): any => {
+    const prepared: any = {};
+
+    if (!isUpdate && usuarioId) {
+        prepared.usuario_id = usuarioId;
+        prepared.ativo = true;
+    }
+
+    if (data.placa) prepared.placa = cleanString(data.placa).toUpperCase();
+    if (data.marca !== undefined) prepared.marca = data.marca ? cleanString(data.marca) : null;
+    if (data.modelo !== undefined) prepared.modelo = data.modelo ? cleanString(data.modelo) : null;
+    if (data.ano !== undefined) prepared.ano = data.ano;
+    if (data.capacidade !== undefined) prepared.capacidade = data.capacidade;
+    if (data.ativo !== undefined) prepared.ativo = data.ativo;
+
+    return prepared;
+};
+
 export const veiculoService = {
     async createVeiculo(data: CreateVeiculoDTO): Promise<Veiculo> {
         if (!data.usuario_id) throw new Error("Usuário obrigatório");
         if (!data.placa) throw new Error("Placa é obrigatória");
 
-        const veiculoData = {
-            ...data,
-            placa: cleanString(data.placa).toUpperCase(),
-            marca: data.marca ? cleanString(data.marca) : null,
-            modelo: data.modelo ? cleanString(data.modelo) : null,
-            ativo: true,
-        };
+        const veiculoData = _prepareVeiculoData(data, data.usuario_id, false);
 
         const { data: inserted, error } = await supabaseAdmin
             .from("veiculos")
@@ -28,10 +41,7 @@ export const veiculoService = {
     async updateVeiculo(id: string, data: UpdateVeiculoDTO): Promise<Veiculo> {
         if (!id) throw new Error("ID do veículo é obrigatório");
 
-        const veiculoData: any = { ...data };
-        if (data.placa) veiculoData.placa = cleanString(data.placa).toUpperCase();
-        if (data.marca) veiculoData.marca = cleanString(data.marca);
-        if (data.modelo) veiculoData.modelo = cleanString(data.modelo);
+        const veiculoData = _prepareVeiculoData(data, undefined, true);
 
         const { data: updated, error } = await supabaseAdmin
             .from("veiculos")

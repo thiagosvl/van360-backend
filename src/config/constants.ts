@@ -2,34 +2,12 @@ export const PLANO_GRATUITO = "gratuito";
 export const PLANO_ESSENCIAL = "essencial";
 export const PLANO_PROFISSIONAL = "profissional"; 
 
-export const ASSINATURA_COBRANCA_STATUS_PAGO = "pago";
-export const ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO = "pendente_pagamento";
-export const ASSINATURA_COBRANCA_STATUS_CANCELADA = "cancelada"
-
-export const ASSINATURA_COBRANCA_TIPO_PAGAMENTO_PIX = "pix";
-
-export const ASSINATURA_USUARIO_STATUS_ATIVA = "ativa";
-export const ASSINATURA_USUARIO_STATUS_TRIAL = "trial";
-export const ASSINATURA_USUARIO_STATUS_SUSPENSA = "suspensa";
-export const ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO = "pendente_pagamento";
-export const ASSINATURA_USUARIO_STATUS_CANCELADA = "cancelada";
-
-// PIX Constants
-export const TipoChavePix = {
-    CPF: "CPF",
-    CNPJ: "CNPJ",
-    TELEFONE: "TELEFONE",
-    EMAIL: "EMAIL",
-    ALEATORIA: "ALEATORIA"
-} as const;
-
-export const TIPOS_CHAVE_PIX_VALIDOS = Object.values(TipoChavePix);
-
 // Passenger Events
 export const PASSENGER_EVENT_DUE_SOON = "DUE_SOON";
 export const PASSENGER_EVENT_DUE_TODAY = "DUE_TODAY";
 export const PASSENGER_EVENT_OVERDUE = "OVERDUE";
 export const PASSENGER_EVENT_PAYMENT_RECEIVED = "PAYMENT_RECEIVED";
+export const PASSENGER_EVENT_MANUAL = "COBRANCA_MANUAL";
 
 // Driver Events
 export const DRIVER_EVENT_ACTIVATION = "ACTIVATION";
@@ -52,61 +30,18 @@ export const DRIVER_EVENT_PRE_PASSENGER_CREATED = "PRE_PASSENGER_CREATED";
 // Job Contexts & Flags
 export const JOB_CONTEXT_PASSENGER = "passenger";
 export const JOB_CONTEXT_SUBSCRIPTION = "subscription";
-export const JOB_FLAG_FORCE = "force"; // Used in request body as { force: true }
-export const JOB_ORIGIN_FORCE = "JOB_FORCE";
-export const JOB_ORIGIN_DAILY = "JOB_DAILY";
+export const JOB_FLAG_FORCE = "force";
+export const JOB_ORIGIN_FORCE = "manual";
+export const JOB_ORIGIN_DAILY = "automatica";
 export const JOB_ORIGIN_MANUAL = "manual";
-
-export const PASSENGER_EVENT_MANUAL = "COBRANCA_MANUAL";
-
-// Configuration Keys
-export const CONFIG_KEY_TAXA_INTERMEDIACAO_PIX = "TAXA_INTERMEDIACAO_PIX";
-export const CONFIG_KEY_PRO_RATA_DIAS_MES = "PRO_RATA_DIAS_MES";
-export const CONFIG_KEY_PRO_RATA_VALOR_MINIMO = "PRO_RATA_VALOR_MINIMO";
-export const CONFIG_KEY_VALOR_INCREMENTO_PASSAGEIRO_EXCESSO = "VALOR_INCREMENTO_PASSAGEIRO_EXCESSO";
-export const CONFIG_KEY_DIA_GERACAO_MENSALIDADES = "DIA_GERACAO_MENSALIDADES";
-export const CONFIG_KEY_DIAS_ANTECEDENCIA_AVISO_VENCIMENTO = "DIAS_ANTECEDENCIA_AVISO_VENCIMENTO";
-export const CONFIG_KEY_DIAS_ANTECEDENCIA_RENOVACAO = "DIAS_ANTECEDENCIA_RENOVACAO";
-
-export const CONFIG_KEY_TRIAL_DIAS_ESSENCIAL = "TRIAL_DIAS_ESSENCIAL";
-export const CONFIG_KEY_PIX_EXPIRACAO_SEGUNDOS = "PIX_EXPIRACAO_SEGUNDOS";
-export const CONFIG_KEY_PIX_VALIDADE_APOS_VENCIMENTO = "PIX_VALIDADE_APOS_VENCIMENTO";
-
-// Status Cobrança (Pais)
-export const COBRANCA_STATUS_PAGA = "pago"; // Alinhado com DB check constraint
-export const COBRANCA_STATUS_PENDENTE = "pendente"; // Alinhado com DB check constraint
-export const COBRANCA_STATUS_ATRASADO = "atrasado";
-export const COBRANCA_TIPO_PAGAMENTO_PIX = "PIX";
-export const COBRANCA_TIPO_PAGAMENTO_DINHEIRO = "dinheiro";
-export const COBRANCA_TIPO_PAGAMENTO_CARTAO_CREDITO = "cartao-credito";
-export const COBRANCA_TIPO_PAGAMENTO_CARTAO_DEBITO = "cartao-debito";
-export const COBRANCA_TIPO_PAGAMENTO_TRANSFERENCIA = "transferencia";
-export const COBRANCA_TIPO_PAGAMENTO_BOLETO = "boleto";
-
-// Status Repasse
-export const STATUS_REPASSE_PENDENTE = "PENDENTE";
-export const STATUS_REPASSE_PROCESSANDO = "PROCESSANDO";
-export const STATUS_REPASSE_REPASSADO = "REPASSADO";
-export const STATUS_REPASSE_FALHA = "FALHA_REPASSE";
-
-// Status Chave PIX
-export const STATUS_CHAVE_PIX_VALIDADA = "VALIDADA";
-export const STATUS_CHAVE_PIX_NAO_CADASTRADA = "NAO_CADASTRADA";
-export const STATUS_CHAVE_PIX_INVALIDADA = "INVALIDADA_POS_FALHA";
-
-// Status Transação / Validação
-export const STATUS_TRANSACAO_SUCESSO = "SUCESSO";
-export const STATUS_TRANSACAO_ERRO = "ERRO";
-export const STATUS_TRANSACAO_PROCESSANDO = "PROCESSAMENTO"; // Usado em validação PIX
-export const STATUS_TRANSACAO_PENDENTE = "PENDENTE";
 
 // WhatsApp Connection Status
 export const WHATSAPP_STATUS = {
     CONNECTED: "CONNECTED",
     DISCONNECTED: "DISCONNECTED",
     CONNECTING: "CONNECTING",
-    OPEN: "open", // Evolution API Status
-    CLOSE: "close", // Evolution API Status
+    OPEN: "open",
+    CLOSE: "close",
     UNKNOWN: "UNKNOWN",
     NOT_FOUND: "NOT_FOUND" 
 } as const;

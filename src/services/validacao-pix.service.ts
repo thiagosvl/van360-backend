@@ -1,7 +1,7 @@
-import { STATUS_TRANSACAO_PENDENTE, STATUS_TRANSACAO_PROCESSANDO, STATUS_TRANSACAO_SUCESSO, TipoChavePix } from "../config/constants.js";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
+import { PixKeyType, TransactionStatus } from "../types/enums.js";
 import { onlyDigits } from "../utils/string.utils.js";
 import { interService } from "./inter.service.js";
 
@@ -25,7 +25,7 @@ export async function cadastrarOuAtualizarChavePix(
 
   // 1. Sanitizar
   let chaveSanitizada = chavePix.trim();
-  if ([TipoChavePix.CPF, TipoChavePix.CNPJ, TipoChavePix.TELEFONE].includes(tipoChave as any)) {
+  if ([PixKeyType.CPF, PixKeyType.CNPJ, PixKeyType.TELEFONE].includes(tipoChave as any)) {
     chaveSanitizada = onlyDigits(chavePix);
   }
 
@@ -73,7 +73,7 @@ export async function iniciarValidacaoPix(usuarioId: string, chavePix: string, t
         usuario_id: usuarioId,
         x_id_idempotente: xIdIdempotente,
         chave_pix_enviada: chavePix,
-        status: STATUS_TRANSACAO_PENDENTE
+        status: TransactionStatus.PENDENTE
       });
 
     if (insertError) {
@@ -93,7 +93,7 @@ export async function iniciarValidacaoPix(usuarioId: string, chavePix: string, t
     logger.info({ usuarioId, xIdIdempotente, statusInter: resultado.status }, "Micro-pagamento enviado.");
 
      // 3. Atualizar registro com resultado inicial
-     const novoStatus = resultado.status === "PAGO" || resultado.status === "REALIZADO" ? STATUS_TRANSACAO_SUCESSO : STATUS_TRANSACAO_PROCESSANDO;
+     const novoStatus = resultado.status === "PAGO" || resultado.status === "REALIZADO" ? TransactionStatus.SUCESSO : TransactionStatus.PROCESSAMENTO;
             
      await supabaseAdmin
          .from("pix_validacao_pendente")
@@ -104,14 +104,14 @@ export async function iniciarValidacaoPix(usuarioId: string, chavePix: string, t
          .eq("x_id_idempotente", xIdIdempotente);
 
      // Se SUCESSO imediato, atualizar usuário
-     if (novoStatus === STATUS_TRANSACAO_SUCESSO) {
+     if (novoStatus === TransactionStatus.SUCESSO) {
          await confirmarChaveUsuario(usuarioId, chavePix, tipoChave || "DESCONHECIDO");
      }
 
     // BLOCK MOCK: Auto-validar se estiver em ambiente de teste E falhou/ficou processando
     // (Se já deu sucesso acima, não precisa mock)
     const isMock = env.INTER_MOCK_MODE === "true" || (env.INTER_MOCK_MODE as any) === true;
-    if (isMock && novoStatus !== STATUS_TRANSACAO_SUCESSO) {
+    if (isMock && novoStatus !== TransactionStatus.SUCESSO) {
       logger.warn({ usuarioId }, "MOCK MODE: Auto-validando chave PIX em 3 segundos...");
 
       setTimeout(async () => {

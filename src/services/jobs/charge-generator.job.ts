@@ -1,7 +1,8 @@
-import { ASSINATURA_USUARIO_STATUS_ATIVA, ASSINATURA_USUARIO_STATUS_TRIAL, CONFIG_KEY_DIA_GERACAO_MENSALIDADES, PLANO_ESSENCIAL, PLANO_PROFISSIONAL } from "../../config/constants.js";
+import { PLANO_ESSENCIAL, PLANO_PROFISSIONAL } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
 import { addToGenerationQueue } from "../../queues/generation.queue.js";
+import { ConfigKey, UserSubscriptionStatus } from "../../types/enums.js";
 import { getConfigNumber } from "../configuracao.service.js";
 
 interface JobResult {
@@ -21,7 +22,7 @@ export const chargeGeneratorJob = {
         let targetYear = params.targetYear;
 
         if (!targetMonth || !targetYear) {
-            const diaGeracao = await getConfigNumber(CONFIG_KEY_DIA_GERACAO_MENSALIDADES, 25);
+            const diaGeracao = await getConfigNumber(ConfigKey.DIA_GERACAO_MENSALIDADES, 25);
             const hoje = now.getDate();
 
             if (hoje < diaGeracao && !params.force) {
@@ -62,7 +63,7 @@ export const chargeGeneratorJob = {
             const { data: assinaturas, error: subError } = await supabaseAdmin
                 .from("assinaturas_usuarios")
                 .select("usuario_id, status, plano_id, usuarios(id, nome), planos:plano_id(slug)") 
-                .in("status", [ASSINATURA_USUARIO_STATUS_ATIVA, ASSINATURA_USUARIO_STATUS_TRIAL]) 
+                .in("status", [UserSubscriptionStatus.ATIVA, UserSubscriptionStatus.TRIAL]) 
                 .in("plano_id", planIds)
                 .is("cancelamento_manual", null); 
 

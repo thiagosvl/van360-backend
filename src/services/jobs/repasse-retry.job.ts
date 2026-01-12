@@ -1,6 +1,6 @@
-import { COBRANCA_STATUS_PAGA, STATUS_CHAVE_PIX_VALIDADA, STATUS_REPASSE_FALHA, STATUS_REPASSE_PENDENTE } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
+import { ChargeStatus, PixKeyStatus, RepasseStatus } from "../../types/enums.js";
 import { cobrancaService } from "../cobranca.service.js";
 
 export const repasseRetryJob = {
@@ -19,9 +19,9 @@ export const repasseRetryJob = {
                     id, nome, status_chave_pix
                 )
             `)
-            .eq("status", COBRANCA_STATUS_PAGA) // Dinheiro já entrou
-            .in("status_repasse", [STATUS_REPASSE_FALHA, STATUS_REPASSE_PENDENTE]) // Repasse travado
-            .eq("usuarios.status_chave_pix", STATUS_CHAVE_PIX_VALIDADA); // Chave agora está OK
+            .eq("status", ChargeStatus.PAGO) // Dinheiro já entrou
+            .in("status_repasse", [RepasseStatus.FALHA, RepasseStatus.PENDENTE]) // Repasse travado
+            .eq("usuarios.status_chave_pix", PixKeyStatus.VALIDADA); // Chave agora está OK
 
         if (error) {
             logger.error({ error }, "Erro ao buscar fila de repasses para retry");
@@ -39,7 +39,7 @@ export const repasseRetryJob = {
             try {
                 // Double check (redundante mas seguro)
                 const motorista = cobranca.usuarios as any;
-                if (motorista.status_chave_pix !== STATUS_CHAVE_PIX_VALIDADA) continue;
+                if (motorista.status_chave_pix !== PixKeyStatus.VALIDADA) continue;
 
                 logger.info({ cobrancaId: cobranca.id, motorista: motorista.nome }, "Retentando repasse...");
 

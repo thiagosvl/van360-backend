@@ -1,7 +1,4 @@
 import {
-    ASSINATURA_COBRANCA_STATUS_CANCELADA,
-    ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
-    ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO,
     PLANO_ESSENCIAL,
     PLANO_GRATUITO,
     PLANO_PROFISSIONAL
@@ -9,6 +6,7 @@ import {
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
+import { SubscriptionChargeStatus, UserSubscriptionStatus } from "../types/enums.js";
 
 // TODO: Definir interface AssinaturaUsuario estrita no futuro
 export interface AssinaturaUsuario {
@@ -60,9 +58,9 @@ export async function getAssinaturaAtiva(usuarioId: string): Promise<AssinaturaU
 export async function cancelarCobrancaPendente(usuarioId: string) {
   const { error } = await supabaseAdmin
     .from("assinaturas_cobrancas")
-    .update({ status: ASSINATURA_COBRANCA_STATUS_CANCELADA })
+    .update({ status: SubscriptionChargeStatus.CANCELADA })
     .eq("usuario_id", usuarioId)
-    .eq("status", ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO);
+    .eq("status", SubscriptionChargeStatus.PENDENTE);
 
   if (error) {
     logger.warn({ error: error.message, usuarioId }, "Erro ao cancelar cobrança pendente (pode não existir)");
@@ -76,7 +74,7 @@ export async function limparAssinaturasPendentes(usuarioId: string) {
       .from("assinaturas_usuarios")
       .select("id")
       .eq("usuario_id", usuarioId)
-      .eq("status", ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO)
+      .eq("status", UserSubscriptionStatus.PENDENTE_PAGAMENTO)
       .eq("ativo", false);
 
     if (findError) {
@@ -93,9 +91,9 @@ export async function limparAssinaturasPendentes(usuarioId: string) {
     // Cancelar cobranças vinculadas
     await supabaseAdmin
       .from("assinaturas_cobrancas")
-      .update({ status: ASSINATURA_COBRANCA_STATUS_CANCELADA })
+      .update({ status: SubscriptionChargeStatus.CANCELADA })
       .in("assinatura_usuario_id", assinaturaIds)
-      .eq("status", ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO);
+      .eq("status", SubscriptionChargeStatus.PENDENTE);
 
     // Remover assinaturas pendentes
     const { error: deleteError } = await supabaseAdmin

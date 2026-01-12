@@ -1,15 +1,15 @@
 import {
-    ASSINATURA_COBRANCA_STATUS_CANCELADA,
-    ASSINATURA_COBRANCA_STATUS_PAGO,
-    ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
-    ASSINATURA_COBRANCA_TIPO_PAGAMENTO_PIX,
-    ASSINATURA_USUARIO_STATUS_SUSPENSA,
-    CONFIG_KEY_TAXA_INTERMEDIACAO_PIX,
-    DRIVER_EVENT_REACTIVATION_EMBARGO,
-    PLANO_PROFISSIONAL,
+  DRIVER_EVENT_REACTIVATION_EMBARGO,
+  PLANO_PROFISSIONAL
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
+import {
+  ChargePaymentType,
+  ConfigKey,
+  SubscriptionChargeStatus,
+  UserSubscriptionStatus
+} from "../types/enums.js";
 import { automationService } from "./automation.service.js";
 import { cobrancaService } from "./cobranca.service.js";
 import { getConfigNumber } from "./configuracao.service.js";
@@ -52,16 +52,16 @@ export async function processarPagamentoCobranca(
 
   try {
     // 0. Buscar taxa de intermediação vigente
-    const taxaIntermediacao = await getConfigNumber(CONFIG_KEY_TAXA_INTERMEDIACAO_PIX, 0.99);
+    const taxaIntermediacao = await getConfigNumber(ConfigKey.TAXA_INTERMEDIACAO_PIX, 0.99);
 
     // 1. Atualizar status da cobrança para pago e registrar taxa (COM VERIFICAÇÃO DE IDEMPOTÊNCIA)
     const { error: updateCobrancaError, data: updatedCobranca } = await supabaseAdmin
       .from("assinaturas_cobrancas")
       .update({
-        status: ASSINATURA_COBRANCA_STATUS_PAGO,
+        status: SubscriptionChargeStatus.PAGO,
         data_pagamento: dadosPagamento.dataPagamento,
         valor_pago: dadosPagamento.valor,
-        tipo_pagamento: ASSINATURA_COBRANCA_TIPO_PAGAMENTO_PIX,
+        tipo_pagamento: ChargePaymentType.PIX,
         taxa_intermediacao_banco: taxaIntermediacao,
         dados_auditoria_pagamento: {
             ...dadosPagamento,
@@ -71,7 +71,7 @@ export async function processarPagamentoCobranca(
         recibo_url: reciboUrl || null
       })
       .eq("id", cobranca.id)
-      .eq("status", ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO) // Critical: Ensure we only process pending charges
+      .eq("status", SubscriptionChargeStatus.PENDENTE) // Critical: Ensure we only process pending charges
       .select();
 
     const updateCount = updatedCobranca?.length || 0;
@@ -89,7 +89,7 @@ export async function processarPagamentoCobranca(
         .eq("id", cobranca.id)
         .single();
       
-      if (checkState?.status === ASSINATURA_COBRANCA_STATUS_PAGO) {
+      if (checkState?.status === SubscriptionChargeStatus.PAGO) {
           logger.info({ ...logContext }, "Idempotência: Cobrança já processada anteriormente. Ignorando.");
           return; // Retorno silencioso de sucesso
       }
@@ -129,7 +129,7 @@ export async function processarPagamentoCobranca(
     await ativarUsuario(cobranca, logContext);
 
     // 8. Gatilho de Catch-up (Se estava suspensa)
-    if (assinaturaStateBefore?.status === ASSINATURA_USUARIO_STATUS_SUSPENSA) {
+    if (assinaturaStateBefore?.status === UserSubscriptionStatus.SUSPENSA) {
         const paymentDate = dadosPagamento.dataPagamento ? new Date(dadosPagamento.dataPagamento) : new Date();
         await processarCatchupReativacao(cobranca.usuario_id, logContext, paymentDate);
     }
@@ -317,9 +317,9 @@ async function cancelarCobrancasConflitantes(cobranca: Cobranca, logContext: Con
   if (isSpecialBilling) {
     const { error: cancelSubscriptionError } = await supabaseAdmin
       .from("assinaturas_cobrancas")
-      .update({ status: ASSINATURA_COBRANCA_STATUS_CANCELADA })
+      .update({ status: SubscriptionChargeStatus.CANCELADA })
       .eq("usuario_id", cobranca.usuario_id)
-      .eq("status", ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO)
+      .eq("status", SubscriptionChargeStatus.PENDENTE)
       .eq("billing_type", "subscription")
       .neq("id", cobranca.id);
 
@@ -331,9 +331,9 @@ async function cancelarCobrancasConflitantes(cobranca: Cobranca, logContext: Con
   } else {
     const { error: cancelUpgradeError } = await supabaseAdmin
       .from("assinaturas_cobrancas")
-      .update({ status: ASSINATURA_COBRANCA_STATUS_CANCELADA })
+      .update({ status: SubscriptionChargeStatus.CANCELADA })
       .eq("usuario_id", cobranca.usuario_id)
-      .eq("status", ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO)
+      .eq("status", SubscriptionChargeStatus.PENDENTE)
       .in("billing_type", ["upgrade", "upgrade_plan", "activation", "expansion"])
       .neq("id", cobranca.id);
 
@@ -372,9 +372,9 @@ async function desativarOutrasAssinaturas(cobranca: Cobranca, logContext: Contex
 
       const { error: cancelOutrasCobrancasError } = await supabaseAdmin
         .from("assinaturas_cobrancas")
-        .update({ status: ASSINATURA_COBRANCA_STATUS_CANCELADA })
+        .update({ status: SubscriptionChargeStatus.CANCELADA })
         .in("assinatura_usuario_id", outrasAssinaturaIds)
-        .eq("status", ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO)
+        .eq("status", SubscriptionChargeStatus.PENDENTE)
         .neq("id", cobranca.id);
 
       if (cancelOutrasCobrancasError) {

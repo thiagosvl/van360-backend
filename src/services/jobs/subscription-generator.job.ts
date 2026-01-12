@@ -1,6 +1,6 @@
-import { ASSINATURA_COBRANCA_STATUS_CANCELADA, ASSINATURA_USUARIO_STATUS_ATIVA, CONFIG_KEY_DIAS_ANTECEDENCIA_RENOVACAO } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
+import { ConfigKey, SubscriptionChargeStatus, UserSubscriptionStatus } from "../../types/enums.js";
 import { getConfigNumber } from "../configuracao.service.js";
 
 interface JobResult {
@@ -19,7 +19,7 @@ export const subscriptionGeneratorJob = {
 
             // 1. Configurações
             // Busca quantos dias antes devemos gerar a renovação (Default: 5 dias)
-            const diasAntecedencia = params.diasAntecedenciaOverride ?? await getConfigNumber(CONFIG_KEY_DIAS_ANTECEDENCIA_RENOVACAO, 5);
+            const diasAntecedencia = params.diasAntecedenciaOverride ?? await getConfigNumber(ConfigKey.DIAS_ANTECEDENCIA_RENOVACAO, 5);
 
             // 2. Calcular Data Alvo (Hoje + Dias Anteceência)
             const hoje = new Date();
@@ -35,7 +35,7 @@ export const subscriptionGeneratorJob = {
             const { data: assinaturas, error: assError } = await supabaseAdmin
                 .from("assinaturas_usuarios")
                 .select("id, usuario_id, vigencia_fim, preco_aplicado, plano_id, status")
-                .eq("status", ASSINATURA_USUARIO_STATUS_ATIVA)
+                .eq("status", UserSubscriptionStatus.ATIVA)
                 .eq("vigencia_fim", dataAlvoStr);
 
             if (assError) throw assError;
@@ -60,7 +60,7 @@ export const subscriptionGeneratorJob = {
                         .select("id", { count: "exact", head: true })
                         .eq("assinatura_usuario_id", assinatura.id)
                         .eq("data_vencimento", dataVencimento)
-                        .neq("status", ASSINATURA_COBRANCA_STATUS_CANCELADA); // Ignora canceladas
+                        .neq("status", SubscriptionChargeStatus.CANCELADA); // Ignora canceladas
 
                     if (count && count > 0 && !params.force) {
                         logger.info({ assinaturaId: assinatura.id }, "Renovação já gerada anteriormente.");

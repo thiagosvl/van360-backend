@@ -3,9 +3,9 @@ import axios from "axios";
 import fs from "fs";
 import https from "https";
 import path from "path";
-import { CONFIG_KEY_PIX_EXPIRACAO_SEGUNDOS, CONFIG_KEY_PIX_VALIDADE_APOS_VENCIMENTO } from "../config/constants.js";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
+import { ChargeStatus, ConfigKey } from "../types/enums.js";
 import { onlyDigits } from "../utils/string.utils.js";
 import { getConfigNumber } from "./configuracao.service.js";
 
@@ -145,7 +145,7 @@ async function criarCobrancaPix(
   }
 
   const token = await getValidInterToken(adminClient);
-  const expirationSeconds = await getConfigNumber(CONFIG_KEY_PIX_EXPIRACAO_SEGUNDOS, 3600);
+  const expirationSeconds = await getConfigNumber(ConfigKey.PIX_EXPIRACAO_SEGUNDOS, 3600);
 
   const cobPayload = {
     calendario: { expiracao: expirationSeconds },
@@ -207,7 +207,7 @@ async function criarCobrancaComVencimentoPix(
 
   const token = await getValidInterToken(adminClient);
   
-  const validadePadrao = await getConfigNumber(CONFIG_KEY_PIX_VALIDADE_APOS_VENCIMENTO, 30);
+  const validadePadrao = await getConfigNumber(ConfigKey.PIX_VALIDADE_APOS_VENCIMENTO, 30);
 
   const cobvPayload = {
     calendario: { 
@@ -414,7 +414,7 @@ async function realizarPagamentoPix(
     logger.warn({ params }, "MOCK INTER ATIVO: Simulando Pagamento PIX");
     return {
       endToEndId: `MOCK-E2E-${Date.now()}`,
-      status: "PAGO"
+      status: ChargeStatus.PAGO
     };
   }
 

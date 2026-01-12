@@ -1,8 +1,8 @@
-import { ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_ATIVA, ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO, ASSINATURA_USUARIO_STATUS_TRIAL, CONFIG_KEY_TRIAL_DIAS_ESSENCIAL, DRIVER_EVENT_ACTIVATION, DRIVER_EVENT_WELCOME_FREE, DRIVER_EVENT_WELCOME_TRIAL, PLANO_GRATUITO, PLANO_PROFISSIONAL } from "../config/constants.js";
+import { DRIVER_EVENT_ACTIVATION, DRIVER_EVENT_WELCOME_FREE, DRIVER_EVENT_WELCOME_TRIAL, PLANO_GRATUITO, PLANO_PROFISSIONAL } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
-import { BillingMode, UserType } from "../types/enums.js";
+import { ConfigKey, SubscriptionChargeStatus, UserSubscriptionStatus, UserType } from "../types/enums.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { cobrancaService } from "./cobranca.service.js";
 import { getConfigNumber } from "./configuracao.service.js";
@@ -316,7 +316,7 @@ export async function iniciaRegistroPlanoGratuito(
         usuario_id: usuarioId,
         plano_id: plano.id,
         ativo: true,
-        status: ASSINATURA_USUARIO_STATUS_ATIVA,
+        status: UserSubscriptionStatus.ATIVA,
         preco_aplicado: 0,
       })
       .select()
@@ -398,7 +398,7 @@ export async function iniciaRegistroPlanoEssencial(
     const anchorDate = hoje.toISOString().split("T")[0];
 
     // Modificado para usar configuração dinâmica ou valor do plano
-    const trialDays = await getConfigNumber(CONFIG_KEY_TRIAL_DIAS_ESSENCIAL, plano.trial_days);
+    const trialDays = await getConfigNumber(ConfigKey.TRIAL_DIAS_ESSENCIAL, plano.trial_days);
 
     const trialEndAt = (() => {
       if (trialDays > 0) {
@@ -415,12 +415,12 @@ export async function iniciaRegistroPlanoEssencial(
         usuario_id: usuarioId,
         plano_id: plano.id,
         ativo: true,
-        status: ASSINATURA_USUARIO_STATUS_TRIAL,
-        billing_mode: BillingMode.MANUAL,
+        status: UserSubscriptionStatus.TRIAL,
+
         preco_aplicado: precoAplicado,
         preco_origem: precoOrigem,
         anchor_date: anchorDate,
-        vigencia_fim: null, // NULL até o primeiro pagamento (preenchido pelo webhook)
+        vigencia_fim: null,
         trial_end_at: trialEndAt,
       })
       .select()
@@ -439,7 +439,7 @@ export async function iniciaRegistroPlanoEssencial(
         usuario_id: usuarioId,
         assinatura_usuario_id: assinaturaId,
         valor: precoAplicado,
-        status: ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
+        status: SubscriptionChargeStatus.PENDENTE,
         data_vencimento: dataVencimentoCobranca,
         origem: "inter",
         billing_type: "activation",
@@ -593,8 +593,8 @@ export async function iniciarRegistroplanoProfissional(
         plano_id: planoSelecionadoId,
         franquia_contratada_cobrancas: franquiaContratada,
         ativo: false,
-        status: ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO,
-        billing_mode: BillingMode.AUTOMATICO,
+        status: UserSubscriptionStatus.PENDENTE_PAGAMENTO,
+
         preco_aplicado: precoAplicado,
         preco_origem: precoOrigem,
         anchor_date: anchorDate,

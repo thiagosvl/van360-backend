@@ -1,7 +1,7 @@
-import { TIPOS_CHAVE_PIX_VALIDOS, TipoChavePix } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
+import { PixKeyStatus, PixKeyType } from "../types/enums.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { iniciarValidacaoPix } from "./validacao-pix.service.js";
 
@@ -52,7 +52,7 @@ export async function atualizarUsuario(usuarioId: string, payload: {
   // Atualização de PIX com Sanitização Obrigatória e TRIGGER DE VALIDAÇÃO
   if (payload.chave_pix !== undefined) {
     // Validação estrita do ENUM
-    if (payload.tipo_chave_pix && !TIPOS_CHAVE_PIX_VALIDOS.includes(payload.tipo_chave_pix as any)) {
+    if (payload.tipo_chave_pix && !Object.values(PixKeyType).includes(payload.tipo_chave_pix as any)) {
       throw new AppError("Tipo de chave PIX inválido.", 400);
     }
 
@@ -61,7 +61,7 @@ export async function atualizarUsuario(usuarioId: string, payload: {
     let chaveSanitizada = "";
 
     // Se temos o tipo e é um dos numéricos, remover formatação
-    if (tipoConsiderado && [TipoChavePix.CPF, TipoChavePix.CNPJ, TipoChavePix.TELEFONE].includes(tipoConsiderado as any)) {
+    if (tipoConsiderado && [PixKeyType.CPF, PixKeyType.CNPJ, PixKeyType.TELEFONE].includes(tipoConsiderado as any)) {
       chaveSanitizada = onlyDigits(payload.chave_pix);
     } else {
       // Para E-mail, Aleatória ou se não temos o tipo (fallback), apenas limpar espaços
@@ -72,7 +72,7 @@ export async function atualizarUsuario(usuarioId: string, payload: {
     if (payload.tipo_chave_pix) updates.tipo_chave_pix = payload.tipo_chave_pix;
 
     // RESETAR STATUS E INICIAR VALIDAÇÃO
-    updates.status_chave_pix = "PENDENTE_VALIDACAO";
+    updates.status_chave_pix = PixKeyStatus.PENDENTE_VALIDACAO;
     updates.chave_pix_validada_em = null;
     updates.nome_titular_pix_validado = null;
     updates.cpf_cnpj_titular_pix_validado = null;

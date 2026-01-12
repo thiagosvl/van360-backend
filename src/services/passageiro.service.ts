@@ -4,37 +4,53 @@ import { AppError } from "../errors/AppError.js";
 import { subscriptionLifecycleService } from "./subscription-lifecycle.service.js";
 
 import { CreatePassageiroDTO, ListPassageirosFiltersDTO, UpdatePassageiroDTO } from "../types/dtos/passageiro.dto.js";
-import { CobrancaOrigem, CobrancaTipo, DesativacaoMotivo } from "../types/enums.js";
+import { CobrancaOrigem, PassageiroDesativacaoCobrancaAutomaticaMotivo } from "../types/enums.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { cobrancaService } from "./cobranca.service.js";
 
 // Métodos privados auxiliares
-const _preparePassageiroData = (data: CreatePassageiroDTO | any, usuarioId: string, ativoDefault: boolean = true): any => {
-    return {
-        usuario_id: usuarioId,
-        nome: cleanString(data.nome, true),
-        escola_id: data.escola_id === "none" ? null : data.escola_id, // Front sometimes sends "none"
-        veiculo_id: data.veiculo_id === "none" ? null : data.veiculo_id,
-        nome_responsavel: data.nome_responsavel ? cleanString(data.nome_responsavel, true) : null,
-        cpf_responsavel: data.cpf_responsavel ? onlyDigits(data.cpf_responsavel) : null,
-        telefone_responsavel: data.telefone_responsavel ? onlyDigits(data.telefone_responsavel) : null,
-        email_responsavel: data.email_responsavel ? cleanString(data.email_responsavel) : null,
-        logradouro: data.logradouro ? cleanString(data.logradouro, true) : null,
-        numero: data.numero ? cleanString(data.numero, true) : null,
-        bairro: data.bairro ? cleanString(data.bairro, true) : null,
-        cidade: data.cidade ? cleanString(data.cidade, true) : null,
-        estado: data.estado ? cleanString(data.estado, true) : null,
-        cep: data.cep ? onlyDigits(data.cep) : null,
-        dia_vencimento: data.dia_vencimento || 10,
-        valor_cobranca: typeof data.valor_cobranca === "string" ? moneyToNumber(data.valor_cobranca) : (data.valor_cobranca || 0),
-        ativo: ativoDefault,
-        referencia: data.referencia ? cleanString(data.referencia, true) : null,
-        observacoes: data.observacoes ? cleanString(data.observacoes, true) : null,
-        periodo: data.periodo || null,
-        genero: data.genero || null,
-        enviar_cobranca_automatica: !!data.enviar_cobranca_automatica,
-    };
+const _preparePassageiroData = (data: Partial<CreatePassageiroDTO> & Record<string, any>, usuarioId?: string, isUpdate: boolean = false): any => {
+    const prepared: any = {};
+
+    if (!isUpdate && usuarioId) {
+        prepared.usuario_id = usuarioId;
+        prepared.ativo = true; // Default registration active
+    }
+
+    if (data.nome) prepared.nome = cleanString(data.nome, true);
+    
+    // Tratamento de Foreign Keys (permite null ou undefined)
+    if (data.escola_id !== undefined) prepared.escola_id = (data.escola_id === "none" || data.escola_id === "") ? null : data.escola_id;
+    if (data.veiculo_id !== undefined) prepared.veiculo_id = (data.veiculo_id === "none" || data.veiculo_id === "") ? null : data.veiculo_id;
+    
+    // Campos Opcionais
+    if (data.nome_responsavel !== undefined) prepared.nome_responsavel = data.nome_responsavel ? cleanString(data.nome_responsavel, true) : null;
+    if (data.cpf_responsavel !== undefined) prepared.cpf_responsavel = data.cpf_responsavel ? onlyDigits(data.cpf_responsavel) : null;
+    if (data.telefone_responsavel !== undefined) prepared.telefone_responsavel = data.telefone_responsavel ? onlyDigits(data.telefone_responsavel) : null;
+    if (data.email_responsavel !== undefined) prepared.email_responsavel = data.email_responsavel ? cleanString(data.email_responsavel) : null;
+    
+    // Endereço
+    if (data.logradouro !== undefined) prepared.logradouro = data.logradouro ? cleanString(data.logradouro, true) : null;
+    if (data.numero !== undefined) prepared.numero = data.numero ? cleanString(data.numero, true) : null;
+    if (data.bairro !== undefined) prepared.bairro = data.bairro ? cleanString(data.bairro, true) : null;
+    if (data.cidade !== undefined) prepared.cidade = data.cidade ? cleanString(data.cidade, true) : null;
+    if (data.estado !== undefined) prepared.estado = data.estado ? cleanString(data.estado, true) : null;
+    if (data.cep !== undefined) prepared.cep = data.cep ? onlyDigits(data.cep) : null;
+    if (data.referencia !== undefined) prepared.referencia = data.referencia ? cleanString(data.referencia, true) : null;
+    if (data.observacoes !== undefined) prepared.observacoes = data.observacoes ? cleanString(data.observacoes, true) : null;
+    
+    // Detalhes
+    if (data.periodo !== undefined) prepared.periodo = data.periodo ? cleanString(data.periodo.toLocaleLowerCase(), true) : null;
+    if (data.genero !== undefined) prepared.genero = data.genero ? cleanString(data.genero, true) : null;
+    if (data.valor_cobranca !== undefined) prepared.valor_cobranca = typeof data.valor_cobranca === "string" ? moneyToNumber(data.valor_cobranca) : (data.valor_cobranca || 0);
+    if (data.dia_vencimento !== undefined) prepared.dia_vencimento = data.dia_vencimento;
+    
+    // Controle
+    if (data.ativo !== undefined) prepared.ativo = data.ativo;
+    if (data.enviar_cobranca_automatica !== undefined) prepared.enviar_cobranca_automatica = !!data.enviar_cobranca_automatica;
+    
+    return prepared;
 };
 
 const createPassageiro = async (data: CreatePassageiroDTO): Promise<any> => {
@@ -55,7 +71,7 @@ const createPassageiro = async (data: CreatePassageiroDTO): Promise<any> => {
         }
     }
 
-    const passageiroData = _preparePassageiroData(data, data.usuario_id, true);
+    const passageiroData = _preparePassageiroData(data, data.usuario_id, false);
 
     const { data: inserted, error } = await supabaseAdmin
         .from("passageiros")
@@ -85,7 +101,6 @@ const createPassageiro = async (data: CreatePassageiroDTO): Promise<any> => {
                     passageiro_id: inserted.id,
                     valor: valor,
                     data_vencimento: dataVencimento,
-                    tipo: CobrancaTipo.MENSALIDADE,
                     origem: CobrancaOrigem.AUTOMATICA,
                     mes: hoje.getMonth() + 1,
                     ano: hoje.getFullYear(),
@@ -108,26 +123,7 @@ const createPassageiro = async (data: CreatePassageiroDTO): Promise<any> => {
 const updatePassageiro = async (id: string, data: UpdatePassageiroDTO): Promise<any> => {
     if (!id) throw new Error("ID do passageiro é obrigatório");
 
-    const passageiroData: any = {};
-    if (data.nome) passageiroData.nome = cleanString(data.nome, true);
-    if (data.escola_id !== undefined) passageiroData.escola_id = data.escola_id === "none" ? null : data.escola_id;
-    if (data.veiculo_id !== undefined) passageiroData.veiculo_id = data.veiculo_id === "none" ? null : data.veiculo_id;
-    if (data.nome_responsavel) passageiroData.nome_responsavel = cleanString(data.nome_responsavel, true);
-    if (data.email_responsavel) passageiroData.email_responsavel = cleanString(data.email_responsavel);
-    if (data.logradouro) passageiroData.logradouro = cleanString(data.logradouro as string, true);
-    if (data.numero) passageiroData.numero = cleanString(data.numero as string, true);
-    if (data.bairro) passageiroData.bairro = cleanString(data.bairro as string, true);
-    if (data.cidade) passageiroData.cidade = cleanString(data.cidade as string, true);
-    if (data.estado) passageiroData.estado = cleanString(data.estado as string, true);
-    if (data.cep) passageiroData.cep = onlyDigits(data.cep as string);
-    if (data.referencia) passageiroData.referencia = cleanString(data.referencia as string, true);
-    if (data.observacoes) passageiroData.observacoes = cleanString(data.observacoes as string, true);
-    if (data.periodo) passageiroData.periodo = cleanString(data.periodo as string, true);
-    if (data.genero) passageiroData.genero = cleanString(data.genero as string, true);
-    if (data.valor_cobranca !== undefined) passageiroData.valor_cobranca = typeof data.valor_cobranca === "string" ? moneyToNumber(data.valor_cobranca) : data.valor_cobranca;
-    if (data.dia_vencimento !== undefined) passageiroData.dia_vencimento = data.dia_vencimento;
-    if (data.cpf_responsavel) passageiroData.cpf_responsavel = onlyDigits(data.cpf_responsavel);
-    if (data.telefone_responsavel) passageiroData.telefone_responsavel = onlyDigits(data.telefone_responsavel);
+    const passageiroData = _preparePassageiroData(data, undefined, true);
     
     // Validar se pode ativar cobranças automáticas
     if (data.enviar_cobranca_automatica !== undefined) {
@@ -153,9 +149,9 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO): Promise<
         passageiroData.enviar_cobranca_automatica = data.enviar_cobranca_automatica;
         
         if (data.enviar_cobranca_automatica === false) {
-            passageiroData.motivo_desativacao = DesativacaoMotivo.MANUAL;
+            passageiroData.origem_desativacao_cobranca_automatica = PassageiroDesativacaoCobrancaAutomaticaMotivo.MANUAL;
         } else if (data.enviar_cobranca_automatica === true) {
-            passageiroData.motivo_desativacao = null;
+            passageiroData.origem_desativacao_cobranca_automatica = null;
         }
     }
 
@@ -177,7 +173,18 @@ const deletePassageiro = async (id: string): Promise<void> => {
     const passageiro = await getPassageiro(id);
 
     if (passageiro?.id) {
-         // Verificar se tem cobranças pendentes? (Regra de negócio opcional)
+         // Verificar se tem cobranças (pendentes ou pagas)
+         const { count, error: countError } = await supabaseAdmin
+            .from("cobrancas")
+            .select("id", { count: "exact", head: true })
+            .eq("passageiro_id", id);
+         
+         if (countError) throw countError;
+
+         if (count && count > 0) {
+             throw new AppError("Não é possível excluir este passageiro pois ele possui cobranças registradas. Em vez disso, desative o cadastro.", 400);
+         }
+
         const { error } = await supabaseAdmin.from("passageiros").delete().eq("id", id);
         if (error) throw error;
     }

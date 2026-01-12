@@ -1,7 +1,6 @@
-import { CONFIG_KEY_DIA_GERACAO_MENSALIDADES } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
-import { DesativacaoMotivo } from "../types/enums.js";
+import { ChargeStatus, CobrancaOrigem, ConfigKey, PassageiroDesativacaoCobrancaAutomaticaMotivo } from "../types/enums.js";
 import { cobrancaService } from "./cobranca.service.js";
 import { getConfigNumber } from "./configuracao.service.js";
 
@@ -13,7 +12,7 @@ const _verificarGerarCobrancaMesSeguinte = async (
     passageiroData: any,
     usuarioId: string
 ): Promise<any> => {
-    const diaGeracao = await getConfigNumber(CONFIG_KEY_DIA_GERACAO_MENSALIDADES, 25);
+    const diaGeracao = await getConfigNumber(ConfigKey.DIA_GERACAO_MENSALIDADES, 25);
     const hoje = new Date();
     
     // Se hoje >= dia 25, significa que o job mensal já rodou. 
@@ -35,9 +34,9 @@ const _verificarGerarCobrancaMesSeguinte = async (
             ano: targetYear,
             valor: passageiroData.valor_cobranca,
             data_vencimento: dataVencimentoStr,
-            status: "pendente",
+            status: ChargeStatus.PENDENTE,
             usuario_id: usuarioId,
-            origem: "automatica_cadastro" // Identifica que foi gerada no cadastro pós-fechamento
+            origem: CobrancaOrigem.AUTOMATICA
         });
     }
     return null;
@@ -74,11 +73,11 @@ export const automationService = {
 
         const { data: disponiveis, error: errorDisponiveis } = await supabaseAdmin
             .from("passageiros")
-            .select("id, nome, enviar_cobranca_automatica, motivo_desativacao, valor_cobranca, dia_vencimento")
+            .select("id, nome, enviar_cobranca_automatica, origem_desativacao_cobranca_automatica, valor_cobranca, dia_vencimento")
             .eq("usuario_id", usuarioId)
             .eq("ativo", true)
             .eq("enviar_cobranca_automatica", false)
-            .or("motivo_desativacao.is.null,motivo_desativacao.neq.manual")
+            .or("origem_desativacao_cobranca_automatica.is.null,origem_desativacao_cobranca_automatica.neq.manual")
             .order("nome", { ascending: true })
             .limit(quantidadeParaAtivar);
 
@@ -100,7 +99,7 @@ export const automationService = {
             .from("passageiros")
             .update({
                 enviar_cobranca_automatica: true,
-                motivo_desativacao: null,
+                origem_desativacao_cobranca_automatica: null,
             })
             .in("id", idsParaAtivar);
 
@@ -154,7 +153,7 @@ export const automationService = {
             .from("passageiros")
             .update({
                 enviar_cobranca_automatica: false,
-                motivo_desativacao: DesativacaoMotivo.AUTOMATICO, // Indicar que foi pelo sistema
+                origem_desativacao_cobranca_automatica: PassageiroDesativacaoCobrancaAutomaticaMotivo.AUTOMATICO,
             })
             .in("id", ids);
 

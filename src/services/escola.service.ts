@@ -2,23 +2,34 @@ import { supabaseAdmin } from "../config/supabase.js";
 import { CreateEscolaDTO, ListEscolasFiltersDTO, UpdateEscolaDTO } from "../types/dtos/escola.dto.js";
 import { cleanString } from "../utils/string.utils.js";
 
+// Helper Methods
+const _prepareEscolaData = (data: Partial<CreateEscolaDTO>, usuarioId?: string, isUpdate: boolean = false): any => {
+    const prepared: any = {};
+
+    if (!isUpdate && usuarioId) {
+        prepared.usuario_id = usuarioId;
+        prepared.ativo = true;
+    }
+
+    if (data.nome) prepared.nome = cleanString(data.nome, true);
+    if (data.logradouro !== undefined) prepared.logradouro = data.logradouro ? cleanString(data.logradouro, true) : null;
+    if (data.numero !== undefined) prepared.numero = data.numero || null;
+    if (data.bairro !== undefined) prepared.bairro = data.bairro ? cleanString(data.bairro, true) : null;
+    if (data.cidade !== undefined) prepared.cidade = data.cidade ? cleanString(data.cidade, true) : null;
+    if (data.estado !== undefined) prepared.estado = data.estado ? cleanString(data.estado, true) : null;
+    if (data.cep !== undefined) prepared.cep = data.cep ? cleanString(data.cep) : null;
+    if (data.referencia !== undefined) prepared.referencia = data.referencia ? cleanString(data.referencia, true) : null;
+    if (data.ativo !== undefined) prepared.ativo = data.ativo;
+
+    return prepared;
+};
+
 export const escolaService = {
     async createEscola(data: CreateEscolaDTO): Promise<any> {
         if (!data.usuario_id) throw new Error("Usuário obrigatório");
         if (!data.nome) throw new Error("Nome da escola é obrigatório");
 
-        const escolaData = {
-            ...data,
-            nome: cleanString(data.nome, true),
-            logradouro: data.logradouro ? cleanString(data.logradouro, true) : null,
-            numero: data.numero || null,
-            bairro: data.bairro ? cleanString(data.bairro, true) : null,
-            cidade: data.cidade ? cleanString(data.cidade, true) : null,
-            estado: data.estado ? cleanString(data.estado, true) : null,
-            cep: data.cep ? cleanString(data.cep) : null,
-            referencia: data.referencia ? cleanString(data.referencia, true) : null,
-            ativo: true,
-        };
+        const escolaData = _prepareEscolaData(data, data.usuario_id, false);
 
         const { data: inserted, error } = await supabaseAdmin
             .from("escolas")
@@ -33,13 +44,7 @@ export const escolaService = {
     async updateEscola(id: string, data: UpdateEscolaDTO): Promise<any> {
         if (!id) throw new Error("ID da escola é obrigatório");
 
-        const escolaData: any = { ...data };
-        if (data.nome) escolaData.nome = cleanString(data.nome, true);
-        if (data.logradouro) escolaData.logradouro = cleanString(data.logradouro, true);
-        if (data.bairro) escolaData.bairro = cleanString(data.bairro, true);
-        if (data.cidade) escolaData.cidade = cleanString(data.cidade, true);
-        if (data.estado) escolaData.estado = cleanString(data.estado, true);
-        if (data.referencia) escolaData.referencia = cleanString(data.referencia, true);
+        const escolaData = _prepareEscolaData(data, undefined, true);
 
         const { data: updated, error } = await supabaseAdmin
             .from("escolas")

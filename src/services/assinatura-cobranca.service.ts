@@ -1,5 +1,6 @@
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
+import { SubscriptionChargeStatus } from "../types/enums.js";
 import { interService } from "./inter.service.js";
 
 export const assinaturaCobrancaService = {
@@ -81,7 +82,7 @@ export const assinaturaCobrancaService = {
             throw new Error("Cobrança não encontrada.");
         }
 
-        if (cobranca.status !== "pendente_pagamento") {
+        if (cobranca.status !== SubscriptionChargeStatus.PENDENTE) {
             throw new Error("Esta cobrança não está pendente de pagamento.");
         }
 

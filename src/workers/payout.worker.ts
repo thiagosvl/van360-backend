@@ -1,10 +1,10 @@
 import { Job, Worker } from 'bullmq';
-import { STATUS_REPASSE_FALHA, STATUS_REPASSE_PROCESSANDO, STATUS_REPASSE_REPASSADO, STATUS_TRANSACAO_SUCESSO } from '../config/constants.js';
 import { logger } from '../config/logger.js';
 import { redisConfig } from '../config/redis.js';
 import { supabaseAdmin } from '../config/supabase.js';
 import { PayoutJobData, QUEUE_NAME_PAYOUT } from '../queues/payout.queue.js';
 import { interService } from '../services/inter.service.js';
+import { RepasseStatus, TransactionStatus } from '../types/enums.js';
 
 /**
  * Worker responsável por realizar transferências bancárias (Repasses).
@@ -19,7 +19,7 @@ export const payoutWorker = new Worker<PayoutJobData>(
             // 1. Marcar como "Processando" no banco (se ainda não estiver)
             // (Isso dá feedback visual caso o job demore)
             await supabaseAdmin.from("cobrancas")
-                .update({ status_repasse: STATUS_REPASSE_PROCESSANDO })
+                .update({ status_repasse: RepasseStatus.PROCESSANDO })
                 .eq("id", cobrancaId);
 
             // 2. Chamar Service de Repasse (Reutiliza lógica existente ou chama Inter direto)
@@ -48,14 +48,14 @@ export const payoutWorker = new Worker<PayoutJobData>(
              // 3. Sucesso! Atualizar Banco
              if (pixResponse.endToEndId) {
                 await supabaseAdmin.from("cobrancas")
-                    .update({ status_repasse: STATUS_REPASSE_REPASSADO })
+                    .update({ status_repasse: RepasseStatus.REPASSADO })
                     .eq("id", cobrancaId);
 
                 // Se tiver transacaoId (do registro financeiro da plataforma), atualiza tbm
                 if (transacaoId) {
                     await supabaseAdmin.from("transacoes_repasse")
                         .update({ 
-                            status: STATUS_TRANSACAO_SUCESSO, 
+                            status: TransactionStatus.SUCESSO, 
                             txid_pix_repasse: pixResponse.endToEndId, 
                             data_conclusao: new Date() 
                         })
@@ -72,14 +72,14 @@ export const payoutWorker = new Worker<PayoutJobData>(
             if (transacaoId) {
                 await supabaseAdmin.from("transacoes_repasse")
                     .update({ 
-                        status: STATUS_REPASSE_FALHA, 
+                        status: RepasseStatus.FALHA, 
                         mensagem_erro: error.message 
                     })
                     .eq("id", transacaoId);
             }
 
             // Marcar cobrança como falha
-            await supabaseAdmin.from("cobrancas").update({ status_repasse: STATUS_REPASSE_FALHA }).eq("id", cobrancaId);
+            await supabaseAdmin.from("cobrancas").update({ status_repasse: RepasseStatus.FALHA }).eq("id", cobrancaId);
 
             // Se for erro de lógica (sem chave pix), parar retry
             if (error.message.includes("Chave PIX")) {

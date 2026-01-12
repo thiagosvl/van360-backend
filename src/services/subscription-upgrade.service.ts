@@ -1,9 +1,4 @@
 import {
-  ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
-  ASSINATURA_USUARIO_STATUS_ATIVA,
-  ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO,
-  ASSINATURA_USUARIO_STATUS_TRIAL,
-  CONFIG_KEY_TRIAL_DIAS_ESSENCIAL,
   DRIVER_EVENT_ACTIVATION,
   DRIVER_EVENT_UPGRADE,
   PLANO_ESSENCIAL,
@@ -13,7 +8,7 @@ import {
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
-import { BillingMode, CobrancaOrigem, SubscriptionBillingType } from "../types/enums.js";
+import { CobrancaOrigem, ConfigKey, SubscriptionBillingType, SubscriptionChargeStatus, UserSubscriptionStatus } from "../types/enums.js";
 import { onlyDigits } from "../utils/string.utils.js";
 import { automationService } from "./automation.service.js";
 import { getBillingConfig, getConfigNumber } from "./configuracao.service.js";
@@ -124,7 +119,7 @@ export const subscriptionUpgradeService = {
       
           // Lógica de Trial (Gratuito -> Essencial)
           if (slugNovo === PLANO_ESSENCIAL && slugAtual !== PLANO_PROFISSIONAL) {
-            const trialDays = await getConfigNumber(CONFIG_KEY_TRIAL_DIAS_ESSENCIAL, 7);
+            const trialDays = await getConfigNumber(ConfigKey.TRIAL_DIAS_ESSENCIAL, 7);
             const trialEnd = new Date();
             trialEnd.setDate(trialEnd.getDate() + trialDays);
       
@@ -142,8 +137,8 @@ export const subscriptionUpgradeService = {
                 plano_id: novoPlano.id,
                 franquia_contratada_cobrancas: franquiaContratada,
                 ativo: true,
-                status: ASSINATURA_USUARIO_STATUS_TRIAL,
-                billing_mode: BillingMode.MANUAL,
+                status: UserSubscriptionStatus.TRIAL,
+
                 preco_aplicado: precoAplicado,
                 preco_origem: precoOrigem,
                 anchor_date: anchorDate,
@@ -163,7 +158,7 @@ export const subscriptionUpgradeService = {
                 usuario_id: usuarioId,
                 assinatura_usuario_id: novaAssinatura.id,
                 valor: precoAplicado,
-                status: ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
+                status: SubscriptionChargeStatus.PENDENTE,
                 data_vencimento: trialEnd.toISOString().split("T")[0],
                 origem: CobrancaOrigem.INTER,
                 billing_type: SubscriptionBillingType.UPGRADE_PLAN,
@@ -220,8 +215,8 @@ export const subscriptionUpgradeService = {
               plano_id: novoPlano.id,
               franquia_contratada_cobrancas: franquiaContratada,
               ativo: false,
-              status: ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO,
-              billing_mode: novoPlano.slug === PLANO_PROFISSIONAL ? BillingMode.AUTOMATICO : BillingMode.MANUAL,
+              status: UserSubscriptionStatus.PENDENTE_PAGAMENTO,
+
               preco_aplicado: precoAplicado,
               preco_origem: precoOrigem,
               anchor_date: anchorDate,
@@ -238,7 +233,7 @@ export const subscriptionUpgradeService = {
               usuario_id: usuarioId,
               assinatura_usuario_id: novaAssinatura.id,
               valor: valorCobrar,
-              status: ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
+              status: SubscriptionChargeStatus.PENDENTE,
               data_vencimento: hoje.toISOString().split("T")[0],
               origem: CobrancaOrigem.INTER,
               billing_type: billingType,
@@ -336,10 +331,10 @@ export const subscriptionUpgradeService = {
             .eq("id", assinaturaAtual.id);
       
           const statusNovo = novoPlano.slug === PLANO_GRATUITO
-            ? ASSINATURA_USUARIO_STATUS_ATIVA
+            ? UserSubscriptionStatus.ATIVA
             : (novoPlano.slug === PLANO_ESSENCIAL && assinaturaAtual.trial_end_at
-              ? ASSINATURA_USUARIO_STATUS_TRIAL
-              : ASSINATURA_USUARIO_STATUS_ATIVA);
+              ? UserSubscriptionStatus.TRIAL
+              : UserSubscriptionStatus.ATIVA);
       
           const { data: novaAssinatura, error: assinaturaError } = await supabaseAdmin
             .from("assinaturas_usuarios")
@@ -349,7 +344,7 @@ export const subscriptionUpgradeService = {
               franquia_contratada_cobrancas: franquiaContratada,
               ativo: true,
               status: statusNovo,
-              billing_mode: novoPlano.slug === PLANO_PROFISSIONAL ? BillingMode.AUTOMATICO : BillingMode.MANUAL,
+
               preco_aplicado: precoAplicado,
               preco_origem: precoOrigem,
               anchor_date: anchorDate,
@@ -375,7 +370,7 @@ export const subscriptionUpgradeService = {
                 usuario_id: usuarioId,
                 assinatura_usuario_id: novaAssinatura.id,
                 valor: precoAplicado,
-                status: ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
+                status: SubscriptionChargeStatus.PENDENTE,
                 data_vencimento: dataVencimentoCobranca,
                 origem: CobrancaOrigem.INTER,
                 billing_type: SubscriptionBillingType.DOWNGRADE,
@@ -485,8 +480,8 @@ export const subscriptionUpgradeService = {
                 plano_id: novoSubplano.id,
                 franquia_contratada_cobrancas: franquiaContratada,
                 ativo: false,
-                status: ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO,
-                billing_mode: BillingMode.AUTOMATICO,
+                status: UserSubscriptionStatus.PENDENTE_PAGAMENTO,
+
                 preco_aplicado: precoAplicado,
                 preco_origem: precoOrigem,
                 anchor_date: anchorDate,
@@ -504,7 +499,7 @@ export const subscriptionUpgradeService = {
                 usuario_id: usuarioId,
                 assinatura_usuario_id: novaAssinatura.id,
                 valor: precoAplicado,
-                status: ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
+                status: SubscriptionChargeStatus.PENDENTE,
                 data_vencimento: hoje.toISOString().split("T")[0],
                 origem: CobrancaOrigem.INTER,
                 billing_type: SubscriptionBillingType.UPGRADE_PLAN,
@@ -584,8 +579,8 @@ export const subscriptionUpgradeService = {
                 plano_id: novoSubplano.id,
                 franquia_contratada_cobrancas: franquiaContratada,
                 ativo: false,
-                status: ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO,
-                billing_mode: BillingMode.AUTOMATICO,
+                status: UserSubscriptionStatus.PENDENTE_PAGAMENTO,
+
                 preco_aplicado: precoAplicado,
                 preco_origem: precoOrigem,
                 anchor_date: anchorDate,
@@ -603,7 +598,7 @@ export const subscriptionUpgradeService = {
                 usuario_id: usuarioId,
                 assinatura_usuario_id: novaAssinatura.id,
                 valor: diferenca,
-                status: ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
+                status: SubscriptionChargeStatus.PENDENTE,
                 data_vencimento: hoje.toISOString().split("T")[0],
                 origem: CobrancaOrigem.INTER,
                 billing_type: SubscriptionBillingType.EXPANSION,
@@ -653,8 +648,8 @@ export const subscriptionUpgradeService = {
                 plano_id: novoSubplano.id,
                 franquia_contratada_cobrancas: franquiaContratada,
                 ativo: true,
-                status: ASSINATURA_USUARIO_STATUS_ATIVA,
-                billing_mode: BillingMode.AUTOMATICO,
+                status: UserSubscriptionStatus.ATIVA,
+
                 preco_aplicado: precoAplicado,
                 preco_origem: precoOrigem,
                 anchor_date: anchorDate,
@@ -725,8 +720,8 @@ export const subscriptionUpgradeService = {
               plano_id: planoProfissionalBase.id,
               franquia_contratada_cobrancas: quantidade,
               ativo: false,
-              status: ASSINATURA_USUARIO_STATUS_PENDENTE_PAGAMENTO,
-              billing_mode: BillingMode.AUTOMATICO,
+              status: UserSubscriptionStatus.PENDENTE_PAGAMENTO,
+
               preco_aplicado: precoCalculado,
               preco_origem: "personalizado",
               anchor_date: anchorDate,
@@ -767,7 +762,7 @@ export const subscriptionUpgradeService = {
               usuario_id: usuarioId,
               assinatura_usuario_id: novaAssinatura.id,
               valor: valorCobranca,
-              status: ASSINATURA_COBRANCA_STATUS_PENDENTE_PAGAMENTO,
+              status: SubscriptionChargeStatus.PENDENTE,
               data_vencimento: hoje.toISOString().split("T")[0],
               origem: CobrancaOrigem.INTER,
               billing_type: billingType === SubscriptionBillingType.SUBSCRIPTION ? SubscriptionBillingType.ACTIVATION : SubscriptionBillingType.EXPANSION,

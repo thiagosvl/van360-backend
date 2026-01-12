@@ -1,34 +1,10 @@
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 
-import {
-    CONFIG_KEY_DIA_GERACAO_MENSALIDADES,
-    CONFIG_KEY_DIAS_ANTECEDENCIA_AVISO_VENCIMENTO,
-    CONFIG_KEY_DIAS_ANTECEDENCIA_RENOVACAO,
-    CONFIG_KEY_PIX_EXPIRACAO_SEGUNDOS,
-    CONFIG_KEY_PIX_VALIDADE_APOS_VENCIMENTO,
-    CONFIG_KEY_PRO_RATA_DIAS_MES,
-    CONFIG_KEY_PRO_RATA_VALOR_MINIMO,
-    CONFIG_KEY_TAXA_INTERMEDIACAO_PIX,
-    CONFIG_KEY_TRIAL_DIAS_ESSENCIAL,
-    CONFIG_KEY_VALOR_INCREMENTO_PASSAGEIRO_EXCESSO
-} from "../config/constants.js";
+import { ConfigKey } from "../types/enums.js";
 
 // Re-exportando para manter compatibilidade ou usando direto
-export const CONFIG_KEYS = {
-  PRO_RATA_DIAS_MES: CONFIG_KEY_PRO_RATA_DIAS_MES,
-  PRO_RATA_VALOR_MINIMO: CONFIG_KEY_PRO_RATA_VALOR_MINIMO,
-  VALOR_INCREMENTO_PASSAGEIRO_EXCESSO: CONFIG_KEY_VALOR_INCREMENTO_PASSAGEIRO_EXCESSO,
-  TAXA_INTERMEDIACAO_PIX: CONFIG_KEY_TAXA_INTERMEDIACAO_PIX,
-  DIA_GERACAO_MENSALIDADES: CONFIG_KEY_DIA_GERACAO_MENSALIDADES,
-  DIAS_ANTECEDENCIA_AVISO_VENCIMENTO: CONFIG_KEY_DIAS_ANTECEDENCIA_AVISO_VENCIMENTO,
-  DIAS_ANTECEDENCIA_RENOVACAO: CONFIG_KEY_DIAS_ANTECEDENCIA_RENOVACAO,
-  TRIAL_DIAS_ESSENCIAL: CONFIG_KEY_TRIAL_DIAS_ESSENCIAL,
-  PIX_EXPIRACAO_SEGUNDOS: CONFIG_KEY_PIX_EXPIRACAO_SEGUNDOS,
-  PIX_VALIDADE_APOS_VENCIMENTO: CONFIG_KEY_PIX_VALIDADE_APOS_VENCIMENTO
-} as const;
 
-export type ConfigKey = keyof typeof CONFIG_KEYS;
 
 /**
  * Busca uma configuração do banco de dados com fallback para valor padrão
@@ -77,11 +53,11 @@ export async function getBillingConfig() {
     incrementoBloco,
     taxaIntermediacaoPix
   ] = await Promise.all([
-    getConfigNumber(CONFIG_KEY_PRO_RATA_DIAS_MES, 30),
-    getConfigNumber(CONFIG_KEY_PRO_RATA_VALOR_MINIMO, 0.01),
-    getConfigNumber(CONFIG_KEY_VALOR_INCREMENTO_PASSAGEIRO_EXCESSO, 2.50),
-    getConfigNumber(CONFIG_KEY_TAXA_INTERMEDIACAO_PIX, 0.99),
-    getConfigNumber(CONFIG_KEY_DIAS_ANTECEDENCIA_RENOVACAO, 5)
+    getConfigNumber(ConfigKey.PRO_RATA_DIAS_MES, 30),
+    getConfigNumber(ConfigKey.PRO_RATA_VALOR_MINIMO, 0.01),
+    getConfigNumber(ConfigKey.VALOR_INCREMENTO_PASSAGEIRO_EXCESSO, 2.50),
+    getConfigNumber(ConfigKey.TAXA_INTERMEDIACAO_PIX, 0.99),
+    getConfigNumber(ConfigKey.DIAS_ANTECEDENCIA_RENOVACAO, 5)
   ]);
 
   /* Recycled variable for the new logic */
@@ -93,6 +69,6 @@ export async function getBillingConfig() {
     planoBaseId: null, 
     valorIncrementoPassageiro,
     taxaIntermediacaoPix,
-    diasAntecedenciaRenovacao: (await Promise.all([getConfigNumber(CONFIG_KEY_DIAS_ANTECEDENCIA_RENOVACAO, 5)]))[0] // Fallback safe retrieval if not in array destructuring above (simplificado abaixo)
+    diasAntecedenciaRenovacao: (await Promise.all([getConfigNumber(ConfigKey.DIAS_ANTECEDENCIA_RENOVACAO, 5)]))[0] // Fallback safe retrieval if not in array destructuring above (simplificado abaixo)
   };
 }

@@ -100,15 +100,14 @@ export const usuarioResumoService = {
       supabaseAdmin.from("veiculos").select("id, ativo", { count: "exact", head: false }).eq("usuario_id", usuarioId),
       
       // Escolas
-      supabaseAdmin.from("escolas_motoristas").select("id, ativo", { count: "exact", head: false }).eq("motorista_id", usuarioId).is("deleted_at", null),
+      supabaseAdmin.from("escolas").select("id, ativo", { count: "exact", head: false }).eq("usuario_id", usuarioId),
       
       // Whatsapp (Only if allowed)
       funcionalidades.notificacoes_whatsapp ? whatsappService.getInstanceStatus(whatsappService.getInstanceName(usuarioId)) : Promise.resolve(null),
       
       // Passageiros (Native Select for filtering)
-      supabaseAdmin.from("passageiros").select("id, ativo, enviar_cobranca_automatica").eq("usuario_id", usuarioId).is("deleted_at", null)
+      supabaseAdmin.from("passageiros").select("id, ativo, enviar_cobranca_automatica").eq("usuario_id", usuarioId)
     ]);
-
 
     // Process Counters
     // Passageiros

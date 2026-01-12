@@ -1,4 +1,4 @@
-import { CONFIG_KEY_TAXA_INTERMEDIACAO_PIX, JOB_ORIGIN_MANUAL, PASSENGER_EVENT_MANUAL, STATUS_REPASSE_FALHA, STATUS_REPASSE_PENDENTE, STATUS_REPASSE_REPASSADO, STATUS_TRANSACAO_PROCESSANDO } from "../config/constants.js";
+import { JOB_ORIGIN_MANUAL, PASSENGER_EVENT_MANUAL } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
@@ -12,7 +12,7 @@ import { notificationService } from "./notifications/notification.service.js";
 import { planRules } from "./plan-rules.service.js";
 
 import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
-import { CobrancaOrigem, CobrancaTipo, SubscriptionBillingType } from "../types/enums.js";
+import { ChargeStatus, CobrancaOrigem, ConfigKey, PixKeyStatus, RepasseStatus, SubscriptionBillingType, SubscriptionChargeStatus, TransactionStatus } from "../types/enums.js";
 
 interface CreateCobrancaOptions {
     gerarPixAsync?: boolean; // Se true, apenas enfileira. Se false, gera na hora (síncrono).
@@ -29,6 +29,7 @@ export const cobrancaService = {
     if (error) throw error;
     return count || 0;
   },
+
   async createCobranca(data: CreateCobrancaDTO, options: CreateCobrancaOptions = { gerarPixAsync: false }): Promise<any> {
     if (!data.passageiro_id || !data.usuario_id) throw new AppError("Campos obrigatórios ausentes (passageiro_id, usuario_id).", 400);
 
@@ -166,9 +167,9 @@ export const cobrancaService = {
           usuario_id: usuarioId,
           assinatura_usuario_id: assinaturaId,
           valor: valor,
-          status: "pendente_pagamento", // Usando string hardcoded ou importar constante se disponível
+          status: SubscriptionChargeStatus.PENDENTE,
           data_vencimento: dataVencimento,
-          origem: "inter",
+          origem: CobrancaOrigem.INTER,
           billing_type: SubscriptionBillingType.ACTIVATION,
           descricao: descricao,
         })
@@ -219,9 +220,8 @@ export const cobrancaService = {
           usuario_id: usuarioId,
           assinatura_usuario_id: assinaturaId,
           valor: valor,
-          status: "pendente_pagamento",
+          status: SubscriptionChargeStatus.PENDENTE,
           data_vencimento: dataVencimento,
-          origem: "job_renovacao",
           billing_type: SubscriptionBillingType.RENEWAL,
           descricao: descricao,
         })
@@ -353,7 +353,7 @@ export const cobrancaService = {
   },
 
   async listCobrancasWithFilters(filtros: any): Promise<any[]> {
-    let query = supabaseAdmin.from("cobrancas").select("*, passageiro:passageiros(nome)").order("data_vencimento", { ascending: false });
+    let query = supabaseAdmin.from("cobrancas").select("*, passageiro:passageiros(nome, nome_responsavel)").order("data_vencimento", { ascending: false });
 
     if (filtros.passageiroId) query = query.eq("passageiro_id", filtros.passageiroId);
     if (filtros.status) query = query.eq("status", filtros.status);
@@ -426,32 +426,45 @@ export const cobrancaService = {
   },
 
   async toggleNotificacoes(cobrancaId: string, novoStatus: boolean): Promise<boolean> {
-      // Nota: A tabela cobranças não tem flag de notificação explícita normalmente, 
-      // mas se tiver, atualizamos. Se não, assumimos que é uma flag de controle de envio.
-      // Vamos assumir que existe um campo 'notificacao_habilitada' ou similar, ou usar metadata.
-      // CHECK: O controller chama isso. Vamos verificar se existe essa coluna no schema mental ou se é mock.
-      // Assumindo que o usuário quer controlar se notifica ou não.
-      // Se não existir coluna, isso vai dar erro.
-      // Vamos assumir que é 'enviar_notificacao' ou erro se não tiver.
-      // Vou logar warning se não tiver certeza, mas vou tentar update.
-      
-      // Update genérico
-      // const { error } = await supabaseAdmin.from("cobrancas").update({ enviar_notificacao: novoStatus }).eq("id", cobrancaId);
-      
-      // FALLBACK: Como não tenho certeza da coluna, vou comentar e logar TODO.
-      // Mas para não quebrar o controller, vou retornar true fake.
-      // OU melhor, verificar se existe automação relacionada.
-      
-      // REVISÃO: O controller chama `toggleNotificacoes`. O serviço tem que ter.
-      // Vou supor que é `cobranca.ativo`? Não.
-      // Vou adicionar a implementação placeholder que lança erro se não implementado ou faz update dummy.
-      
-      logger.warn({ cobrancaId, novoStatus }, "toggleNotificacoes chamado, mas coluna no DB a verificar.");
-      return novoStatus; 
+      const { data, error } = await supabaseAdmin
+          .from("cobrancas")
+          .update({ desativar_lembretes: novoStatus })
+          .eq("id", cobrancaId)
+          .select("desativar_lembretes")
+          .single();
+
+      if (error) {
+          logger.error({ error, cobrancaId }, "Erro ao alterar status de notificação da cobrança");
+          throw new AppError("Erro ao alterar notificações.", 500);
+      }
+
+      return data.desativar_lembretes; 
   },
 
-  // --- REPASSE (Refatorado para Fila) ---
-  
+  async desfazerPagamento(cobrancaId: string): Promise<any> {
+    const { data, error } = await supabaseAdmin
+      .from("cobrancas")
+      .update({
+        status: ChargeStatus.PENDENTE,
+        data_pagamento: null,
+        valor_pago: null,
+        tipo_pagamento: null,
+        pagamento_manual: false, // Resetar para garantir
+        recibo_url: null,
+        dados_auditoria: null // Opcional: limpar dados de auditoria do pagamento desfeito
+      })
+      .eq("id", cobrancaId)
+      .select()
+      .single();
+
+    if (error) {
+      logger.error({ error, cobrancaId }, "Erro ao desfazer pagamento da cobrança");
+      throw new AppError("Erro ao desfazer pagamento.", 500);
+    }
+
+    return data;
+  },
+
   async iniciarRepasse(cobrancaId: string): Promise<any> {
       logger.info({ cobrancaId }, "Iniciando fluxo de repasse (Queue)...");
 
@@ -459,7 +472,7 @@ export const cobrancaService = {
       const { data: cobranca } = await supabaseAdmin.from("cobrancas").select("id, usuario_id, valor, status_repasse").eq("id", cobrancaId).single();
       
       if (!cobranca) throw new AppError("Cobrança não encontrada para repasse.", 404);
-      if (cobranca.status_repasse === STATUS_REPASSE_REPASSADO) {
+      if (cobranca.status_repasse === RepasseStatus.REPASSADO) {
           logger.warn({ cobrancaId }, "Repasse já realizado.");
           return { success: true, alreadyDone: true };
       }
@@ -471,10 +484,10 @@ export const cobrancaService = {
         .eq("id", cobranca.usuario_id)
         .single();
 
-      const hasValidPix = usuario?.chave_pix && usuario?.status_chave_pix === 'validado';
+      const hasValidPix = usuario?.chave_pix && usuario?.status_chave_pix === PixKeyStatus.VALIDADA;
 
       // 3. Calcular Valor do Repasse (Taxa PIX)
-      const taxa = await getConfigNumber(CONFIG_KEY_TAXA_INTERMEDIACAO_PIX, 0.99); 
+      const taxa = await getConfigNumber(ConfigKey.TAXA_INTERMEDIACAO_PIX, 0.99); 
       const valorRepasse = cobranca.valor - taxa; 
 
       if (valorRepasse <= 0) {
@@ -485,11 +498,11 @@ export const cobrancaService = {
       // 4. Registrar Transação no Banco (Pendente ou Falha por Chave)
       const transacaoData: any = {
           cobranca_id: cobrancaId,
-          motorista_id: cobranca.usuario_id,
+          usuario_id: cobranca.usuario_id,
           valor_bruto: cobranca.valor,
           taxa_plataforma: taxa,
           valor_liquido: valorRepasse,
-          status: hasValidPix ? STATUS_TRANSACAO_PROCESSANDO : STATUS_REPASSE_FALHA, 
+          status: hasValidPix ? TransactionStatus.PROCESSAMENTO : RepasseStatus.FALHA, 
           data_execucao: new Date()
       };
 
@@ -513,7 +526,7 @@ export const cobrancaService = {
       if (!hasValidPix) {
           logger.warn({ cobrancaId, motoristaId: cobranca.usuario_id }, "Repasse abortado: Chave PIX inválida ou ausente");
           await supabaseAdmin.from("cobrancas").update({ 
-              status_repasse: STATUS_REPASSE_FALHA,
+              status_repasse: RepasseStatus.FALHA,
               id_transacao_repasse: transacao?.id 
           }).eq("id", cobrancaId);
           return { success: false, reason: "pix_invalido", transacaoId: transacao?.id };
@@ -530,7 +543,7 @@ export const cobrancaService = {
           
           // Atualizar status da cobrança e vincular transação
           await supabaseAdmin.from("cobrancas").update({ 
-              status_repasse: STATUS_REPASSE_PENDENTE,
+              status_repasse: RepasseStatus.PENDENTE,
               id_transacao_repasse: transacao?.id
           }).eq("id", cobrancaId);
 
@@ -538,7 +551,7 @@ export const cobrancaService = {
 
       } catch (queueError) {
            logger.error({ queueError }, "Erro ao enfileirar repasse");
-           await supabaseAdmin.from("cobrancas").update({ status_repasse: STATUS_REPASSE_FALHA }).eq("id", cobrancaId);
+           await supabaseAdmin.from("cobrancas").update({ status_repasse: RepasseStatus.FALHA }).eq("id", cobrancaId);
            throw queueError;
       }
   },
@@ -582,23 +595,18 @@ export const cobrancaService = {
           const valorCobranca = passageiro.valor_mensalidade;
           if (!valorCobranca || valorCobranca <= 0) continue;
 
-          // Criar Cobrança (USANDO FILA PARA PIX)
-          // gerarPixAsync = true -> Para que o Batch seja rápido
           try {
             await this.createCobranca({
                 usuario_id: motoristaId,
                 passageiro_id: passageiro.id,
                 valor: valorCobranca,
                 data_vencimento: dataVencimentoStr,
-                tipo: CobrancaTipo.MENSALIDADE,
                 origem: CobrancaOrigem.AUTOMATICA,
-                // descricao: Removido do DTO
                 gerarPixAsync: true
-            }, { gerarPixAsync: true, planoSlug }); // <--- MÁGICA AQUI (Passando planoSlug)
+            }, { gerarPixAsync: true, planoSlug });
             
             created++;
           } catch (e) {
-              // Se falhar uma, loga e continua para o próximo passageiro
               logger.error({ error: e, passageiroId: passageiro.id }, "Erro ao gerar cobrança automática no loop");
           }
       }
@@ -642,8 +650,15 @@ export const cobrancaService = {
           }
       );
 
-      // 3. Log de Histórico
+      // 3. Log de Histórico e Atualizar Tabela Mestra
       if (success) {
+         // Atualizar data da última notificação na cobrança
+         await supabaseAdmin
+            .from("cobrancas")
+            .update({ data_envio_ultima_notificacao: new Date() })
+            .eq("id", cobrancaId);
+
+         // Gravar log detalhado
          await cobrancaNotificacaoService.create(cobrancaId, {
             tipo_origem: JOB_ORIGIN_MANUAL,
             tipo_evento: PASSENGER_EVENT_MANUAL,
@@ -674,7 +689,7 @@ export const cobrancaService = {
         const { error } = await supabaseAdmin
             .from("cobrancas")
             .update({
-                status: "pago",
+                status: ChargeStatus.PAGO,
                 valor_pago: valor,
                 data_pagamento: pagamento.horario || new Date(),
                 dados_auditoria: pagamento,
@@ -706,7 +721,7 @@ export const cobrancaService = {
         )
       `)
       .eq("usuario_id", usuarioId)
-      .eq("status", "pendente")
+      .eq("status", ChargeStatus.PENDENTE)
       .is("txid_pix", null)
       .gte("data_vencimento", todayStr);
 
