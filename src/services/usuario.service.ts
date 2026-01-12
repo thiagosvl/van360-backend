@@ -11,7 +11,7 @@ import { iniciarValidacaoPix } from "./validacao-pix.service.js";
 export async function getUsuarioData(usuarioId: string) {
   const { data: usuario, error } = await supabaseAdmin
     .from("usuarios")
-    .select("id, nome, cpfcnpj, telefone")
+    .select("id, nome, cpfcnpj, telefone, chave_pix")
     .eq("id", usuarioId)
     .single();
 

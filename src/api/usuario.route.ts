@@ -1,6 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { AuthController } from "../controllers/auth.controller.js";
 import { SubscriptionController } from "../controllers/subscription.controller.js";
+import { usuarioResumoController } from "../controllers/usuario-resumo.controller.js";
 import { UsuarioController } from "../controllers/usuario.controller.js";
 
 export default async function usuarioRoute(app: FastifyInstance) {
@@ -20,5 +21,6 @@ export default async function usuarioRoute(app: FastifyInstance) {
 
     // --- Rotas de Usuário ---
     app.patch("/:id", UsuarioController.atualizarUsuario);
+    app.get("/:usuarioId/resumo", usuarioResumoController.getResumo);
 
 }

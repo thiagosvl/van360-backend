@@ -1,4 +1,4 @@
-import { CONFIG_KEY_TAXA_INTERMEDIACAO_PIX, JOB_ORIGIN_MANUAL, PASSENGER_EVENT_MANUAL, PLANO_PROFISSIONAL, STATUS_REPASSE_FALHA, STATUS_REPASSE_PENDENTE, STATUS_REPASSE_REPASSADO, STATUS_TRANSACAO_PROCESSANDO } from "../config/constants.js";
+import { CONFIG_KEY_TAXA_INTERMEDIACAO_PIX, JOB_ORIGIN_MANUAL, PASSENGER_EVENT_MANUAL, STATUS_REPASSE_FALHA, STATUS_REPASSE_PENDENTE, STATUS_REPASSE_REPASSADO, STATUS_TRANSACAO_PROCESSANDO } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
@@ -9,6 +9,7 @@ import { cobrancaNotificacaoService } from "./cobranca-notificacao.service.js";
 import { getConfigNumber } from "./configuracao.service.js";
 import { interService } from "./inter.service.js";
 import { notificationService } from "./notifications/notification.service.js";
+import { planRules } from "./plan-rules.service.js";
 
 import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
 import { CobrancaOrigem, CobrancaTipo } from "../types/enums.js";
@@ -57,11 +58,11 @@ export const cobrancaService = {
     // Regra 1: Passado não gera PIX.
     // Regra 2: Pago não gera PIX (Pagamento Manual Externo).
     // Regra 3: Se não tiver CPF/Nome, não gera.
-    // REQUISITO: Somente PLANO_PROFISSIONAL gera PIX para cobranças de passageiros.
+    // REQUISITO: Centralizado no planRules
     
-    let isProfessionalPlan = false;
+    let canGeneratePix = false;
     if (options.planoSlug) {
-      isProfessionalPlan = options.planoSlug === PLANO_PROFISSIONAL;
+      canGeneratePix = planRules.canGeneratePix(options.planoSlug);
     } else {
       // Buscar assinatura ativa se não informada
       const { data: assinatura } = await supabaseAdmin
@@ -73,11 +74,11 @@ export const cobrancaService = {
       
       const planoData = assinatura?.planos as any;
       const slugBase = planoData?.parent?.slug ?? planoData?.slug;
-      isProfessionalPlan = slugBase === PLANO_PROFISSIONAL;
+      canGeneratePix = planRules.canGeneratePix(slugBase);
     }
 
     const shouldGeneratePix = 
-      isProfessionalPlan &&
+      canGeneratePix &&
       !isPastDue && 
       !isPaid &&
       passageiro.cpf_responsavel && 
