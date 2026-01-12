@@ -1,7 +1,7 @@
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
 import { ChargeStatus, PixKeyStatus, RepasseStatus } from "../../types/enums.js";
-import { cobrancaService } from "../cobranca.service.js";
+import { cobrancaPagamentoService } from "../cobranca-pagamento.service.js";
 
 export const repasseRetryJob = {
     async run() {
@@ -44,7 +44,7 @@ export const repasseRetryJob = {
                 logger.info({ cobrancaId: cobranca.id, motorista: motorista.nome }, "Retentando repasse...");
 
                 // Chama logica original de repasse
-                await cobrancaService.iniciarRepasse(cobranca.id);
+                await cobrancaPagamentoService.iniciarRepasse(cobranca.id);
                 
                 // Aguarda um pouco entre requisições para não estourar rate limit do Inter
                 await new Promise(resolve => setTimeout(resolve, 500));

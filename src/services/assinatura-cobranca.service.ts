@@ -1,6 +1,7 @@
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
-import { SubscriptionChargeStatus } from "../types/enums.js";
+import { AppError } from "../errors/AppError.js";
+import { CobrancaOrigem, SubscriptionBillingType, SubscriptionChargeStatus } from "../types/enums.js";
 import { interService } from "./inter.service.js";
 
 export const assinaturaCobrancaService = {
@@ -89,7 +90,6 @@ export const assinaturaCobrancaService = {
         // DECISÃO DE ESTRATÉGIA (COB vs COBV)
         const isCobrancaComVencimento = 
             cobranca.billing_type === "subscription" || 
-            cobranca.billing_type === "school_fee" ||
             (cobranca.billing_type === "activation" && 
              cobranca.data_vencimento && 
              new Date(cobranca.data_vencimento + 'T12:00:00') > new Date());
@@ -184,6 +184,105 @@ export const assinaturaCobrancaService = {
             inter_txid: pixData.interTransactionId,
             cobrancaId: cobranca.id,
         };
+    },
+
+    async gerarCobrancaAtivacao(payload: {
+        usuarioId: string;
+        assinaturaId: string;
+        valor: number;
+        dataVencimento: string;
+        descricao: string;
+        cpfResponsavel: string;
+        nomeResponsavel: string;
+    }): Promise<{ cobranca: any; pixData: any; location: string }> {
+        const { usuarioId, assinaturaId, valor, dataVencimento, descricao, cpfResponsavel, nomeResponsavel } = payload;
+        
+        // 1. Criar registro de cobrança PENDENTE
+        const cobrancaId = crypto.randomUUID();
+        
+        const { data: cobranca, error: cobrancaError } = await supabaseAdmin
+          .from("assinaturas_cobrancas")
+          .insert({
+            id: cobrancaId,
+            usuario_id: usuarioId,
+            assinatura_usuario_id: assinaturaId,
+            valor: valor,
+            status: SubscriptionChargeStatus.PENDENTE,
+            data_vencimento: dataVencimento,
+            origem: CobrancaOrigem.INTER,
+            billing_type: SubscriptionBillingType.ACTIVATION,
+            descricao: descricao,
+          })
+          .select()
+          .single();
+        
+        if (cobrancaError) throw new AppError(`Erro ao criar cobrança de ativação: ${cobrancaError.message}`, 500);
+        
+        // 2. Gerar PIX via Inter
+        let pixData: any = {};
+        try {
+            pixData = await interService.criarCobrancaComVencimentoPix(supabaseAdmin, {
+                cobrancaId: cobranca.id,
+                valor: valor,
+                cpf: cpfResponsavel,
+                nome: nomeResponsavel,
+                dataVencimento: dataVencimento,
+                validadeAposVencimentoDias: 30
+            });
+            
+            // Atualizar payload do PIX (inline update)
+            await supabaseAdmin
+                .from("assinaturas_cobrancas")
+                .update({
+                    inter_txid: pixData.interTransactionId,
+                    qr_code_payload: pixData.qrCodePayload,
+                    location_url: pixData.location
+                })
+                .eq("id", cobranca.id);
+
+        } catch (err: any) {
+            logger.error({ err, cobrancaId: cobranca.id }, "Falha ao gerar PIX para ativação.");
+        }
+        
+        return { cobranca, pixData, location: pixData?.location };
+    },
+
+    async gerarCobrancaRenovacao(payload: {
+        usuarioId: string;
+        assinaturaId: string;
+        valor: number;
+        dataVencimento: string;
+        descricao: string;
+    }): Promise<{ cobranca: any; generatedPix: boolean }> {
+        const { usuarioId, assinaturaId, valor, dataVencimento, descricao } = payload;
+        
+        // 1. Criar registro de cobrança
+        const { data: cobranca, error: cobrancaError } = await supabaseAdmin
+          .from("assinaturas_cobrancas")
+          .insert({
+            usuario_id: usuarioId,
+            assinatura_usuario_id: assinaturaId,
+            valor: valor,
+            status: SubscriptionChargeStatus.PENDENTE,
+            data_vencimento: dataVencimento,
+            billing_type: SubscriptionBillingType.RENEWAL,
+            descricao: descricao,
+          })
+          .select()
+          .single();
+        
+        if (cobrancaError) throw new Error(`Erro ao criar cobrança de renovação: ${cobrancaError.message}`);
+        
+        // 2. Gerar PIX (Reaproveita lógica interna)
+        try {
+             await this.gerarPixParaCobranca(cobranca.id);
+             return { cobranca, generatedPix: true };
+        } catch (err: any) {
+            logger.error({ err, cobrancaId: cobranca.id }, "Falha CRÍTICA ao gerar PIX de renovação. Realizando Rollback.");
+            // Rollback mandatorio aqui pois é um Job
+            await supabaseAdmin.from("assinaturas_cobrancas").delete().eq("id", cobranca.id);
+            throw new Error(`Falha PIX: ${err.message}`);
+        }
     },
 
 };

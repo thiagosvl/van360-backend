@@ -77,8 +77,7 @@ CREATE TYPE "public"."billing_type_enum" AS ENUM (
     'upgrade_plan',
     'expansion',
     'downgrade',
-    'renewal',
-    'school_fee'
+    'renewal'
 );
 
 ALTER TYPE "public"."billing_type_enum" OWNER TO "postgres";
@@ -159,7 +158,6 @@ CREATE TABLE IF NOT EXISTS "public"."assinaturas_cobrancas" (
     "data_pagamento" timestamp with time zone,
     "created_at" timestamp with time zone DEFAULT "now"(),
     "updated_at" timestamp with time zone DEFAULT "now"(),
-    "pagamento_manual" boolean DEFAULT false,
     "tipo_pagamento" "text",
     "valor_pago" numeric(10,2),
     "inter_txid" "text",

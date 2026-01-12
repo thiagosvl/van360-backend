@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { moneyToNumber } from "../../utils/currency.utils.js";
-import { CobrancaTipo, SubscriptionBillingType } from "../enums.js";
+import { CobrancaTipo } from "../enums.js";
 
 export const createCobrancaSchema = z.object({
     usuario_id: z.string().uuid(),
@@ -8,7 +8,6 @@ export const createCobrancaSchema = z.object({
     valor: z.union([z.number(), z.string()]).transform(v => typeof v === 'string' ? moneyToNumber(v) : v),
     data_vencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve estar no formato YYYY-MM-DD"),
     tipo: z.nativeEnum(CobrancaTipo).optional(),
-    billing_type: z.nativeEnum(SubscriptionBillingType).optional(),
 
     mes: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),
     ano: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),

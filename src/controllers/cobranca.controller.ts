@@ -1,13 +1,14 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
 import { cobrancaNotificacaoService } from "../services/cobranca-notificacao.service.js";
+import { cobrancaPagamentoService } from "../services/cobranca-pagamento.service.js";
 import { cobrancaService } from "../services/cobranca.service.js";
 import {
-    createCobrancaSchema,
-    listCobrancasFiltersSchema,
-    notificacaoPayloadSchema,
-    toggleNotificacoesSchema,
-    updateCobrancaSchema
+  createCobrancaSchema,
+  listCobrancasFiltersSchema,
+  notificacaoPayloadSchema,
+  toggleNotificacoesSchema,
+  updateCobrancaSchema
 } from "../types/dtos/cobranca.dto.js";
 
 export const cobrancaController = {
@@ -91,7 +92,7 @@ export const cobrancaController = {
   desfazerPagamento: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     logger.info({ cobrancaId: id }, "CobrancaController.desfazerPagamento - Starting");
-    const cobranca = await cobrancaService.desfazerPagamento(id);
+    const cobranca = await cobrancaPagamentoService.desfazerPagamento(id);
     return reply.status(200).send(cobranca);
   }
 };

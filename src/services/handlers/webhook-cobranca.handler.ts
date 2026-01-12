@@ -4,7 +4,9 @@ import { supabaseAdmin } from "../../config/supabase.js";
 import { addToReceiptQueue } from "../../queues/receipt.queue.js";
 import { PaymentMethod } from "../../types/enums.js";
 import { formatDate } from "../../utils/format.js";
-import { cobrancaService } from "../cobranca.service.js";
+import { cobrancaPagamentoService } from "../cobranca-pagamento.service.js";
+// Actually checking usages below.. notifications use cobrancaService? No, notificationService.
+// Let's keep it safe, but looks like we might remove it if unused.
 import { notificationService } from "../notifications/notification.service.js";
 import { ReceiptData } from "../receipt.service.js";
 
@@ -25,8 +27,11 @@ export const webhookCobrancaHandler = {
     }
 
     if (!cobrancaPai) {
-        // Tentar buscar como Cobrança de Assinatura (Motorista pagando Van360)
-        return await this.handleAssinatura(txid, valor, pagamento);
+        // Cobrança não encontrada nas cobranças 'filhas' (passengers).
+        // Se for assinatura, o roteador deveria ter mandado para outro handler, 
+        // ou o webhookInterController trata isso. 
+        // Aqui retornamos false para indicar "não é minha responsabilidade".
+        return false;
     }
 
     // 2. Processar Pagamento e Repasse
@@ -36,10 +41,10 @@ export const webhookCobrancaHandler = {
         // b) Atualizar status para PAGO (Imediato)
         // Nota: O reciboUrl será atualizado depois pelo Worker
         const dataPagamento = horario || new Date().toISOString();
-        await cobrancaService.atualizarStatusPagamento(txid, valor, pagamento, undefined); // Alterado de null para undefined
+        await cobrancaPagamentoService.processarPagamento(txid, valor, pagamento, undefined); 
         
         // c) Iniciar Repasse (Fire & Forget seguro com catch individual)
-        cobrancaService.iniciarRepasse(cobrancaPai.id)
+        cobrancaPagamentoService.iniciarRepasse(cobrancaPai.id)
             .then(res => logger.info({ res, cobrancaId: cobrancaPai.id }, "Repasse AUTOMÁTICO iniciado com sucesso"))
             .catch(err => logger.error({ err, cobrancaId: cobrancaPai.id }, "Falha ao iniciar repasse automático (tentar via painel depois)"));
 
@@ -126,14 +131,5 @@ export const webhookCobrancaHandler = {
     }
   },
 
-  /**
-   * Handler para Assinaturas (Motorista pagando Van360)
-   */
-  async handleAssinatura(txid: string, valor: number, pagamento: any): Promise<boolean> {
-      // Re-implementar usando a logica nova de handler-assinatura se necessário,
-      // mas aqui ele delega para webhookAssinaturaHandler se chamar o endpoint certo.
-      // O webhookInterRoute já separa, então esse método aqui é só um fallback legado ou utilitário.
-      // Vou manter chamando o processarPagamentoCobranca mas SEM RECIBO imediato.
-      return false; 
-  }
+
 };

@@ -5,7 +5,7 @@ import { supabaseAdmin } from "../../config/supabase.js";
 import { addToReceiptQueue } from "../../queues/receipt.queue.js";
 import { PaymentMethod } from "../../types/enums.js";
 import { formatDate } from "../../utils/format.js";
-import { processarPagamentoCobranca } from "../processar-pagamento.service.js";
+import { processarPagamentoAssinatura } from "../assinatura-pagamento.service.js";
 import { ReceiptData } from "../receipt.service.js";
 import { processarRetornoValidacaoPix } from "../validacao-pix.service.js";
 
@@ -46,7 +46,7 @@ export const webhookAssinaturaHandler = {
         const dataPagamento = horario || new Date().toISOString();
 
         // A) Processar Pagamento (Lógica de Negócio: Ativar Assinatura, etc)
-        await processarPagamentoCobranca(
+        await processarPagamentoAssinatura(
             cobranca,
             {
                 valor,

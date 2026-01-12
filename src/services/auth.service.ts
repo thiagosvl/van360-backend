@@ -4,7 +4,7 @@ import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
 import { ConfigKey, SubscriptionChargeStatus, UserSubscriptionStatus, UserType } from "../types/enums.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
-import { cobrancaService } from "./cobranca.service.js";
+import { assinaturaCobrancaService } from "./assinatura-cobranca.service.js";
 import { getConfigNumber } from "./configuracao.service.js";
 import { notificationService } from "./notifications/notification.service.js";
 import { pricingService } from "./pricing.service.js";
@@ -615,7 +615,7 @@ export async function iniciarRegistroplanoProfissional(
     // Preparar descrição
     const descricaoCobranca = `Ativação de Assinatura - Plano ${planoSelecionado.nome}`;
 
-    const activationResult = await cobrancaService.gerarCobrancaAtivacao({
+    const activationResult = await assinaturaCobrancaService.gerarCobrancaAtivacao({
         usuarioId: usuarioId!,
         assinaturaId: assinaturaId!,
         valor: precoAplicado,

@@ -1,6 +1,7 @@
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
 import { ConfigKey, SubscriptionChargeStatus, UserSubscriptionStatus } from "../../types/enums.js";
+import { assinaturaCobrancaService } from "../assinatura-cobranca.service.js";
 import { getConfigNumber } from "../configuracao.service.js";
 
 interface JobResult {
@@ -67,14 +68,9 @@ export const subscriptionGeneratorJob = {
                         continue; 
                     }
 
-                    // Usar Service para gerar Cobrança + PIX de forma atômica/gerenciada
+                        // Usar Service para gerar Cobrança + PIX de forma atômica/gerenciada
                     try {
-                        // Importação dinâmica para evitar conflitos de importação se necessário, 
-                        // ou usar o service importado no topo se cobrancaService for adicionado aos imports.
-                        // Assumindo que vou adicionar cobrancaService aos imports no topo em breve ou usar import dinâmico.
-                        const { cobrancaService } = await import("../cobranca.service.js");
-
-                        const { cobranca } = await cobrancaService.gerarCobrancaRenovacao({
+                        const { cobranca } = await assinaturaCobrancaService.gerarCobrancaRenovacao({
                             usuarioId: assinatura.usuario_id,
                             assinaturaId: assinatura.id,
                             valor: assinatura.preco_aplicado,

@@ -3,13 +3,12 @@
 
 export enum SubscriptionBillingType {
   SUBSCRIPTION = "subscription",
-  UPGRADE_PLAN = "upgrade_plan", // Código atual (Manter ou alinhar com DB se db tiver 'upgrade_plan') -> DB tem 'upgrade_plan'
-  UPGRADE = "upgrade", // DB has 'upgrade'
+  UPGRADE_PLAN = "upgrade_plan",
+  UPGRADE = "upgrade",
   DOWNGRADE = "downgrade",
   ACTIVATION = "activation",
   EXPANSION = "expansion",
   RENEWAL = "renewal",
-  SCHOOL_FEE = "school_fee"
 }
 
 export enum UserSubscriptionStatus {

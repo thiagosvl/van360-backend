@@ -2,17 +2,15 @@ import { JOB_ORIGIN_MANUAL, PASSENGER_EVENT_MANUAL } from "../config/constants.j
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
-import { addToPayoutQueue } from "../queues/payout.queue.js";
 import { addToPixQueue } from "../queues/pix.queue.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { cobrancaNotificacaoService } from "./cobranca-notificacao.service.js";
-import { getConfigNumber } from "./configuracao.service.js";
 import { interService } from "./inter.service.js";
 import { notificationService } from "./notifications/notification.service.js";
 import { planRules } from "./plan-rules.service.js";
 
 import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
-import { ChargeStatus, CobrancaOrigem, ConfigKey, PixKeyStatus, RepasseStatus, SubscriptionBillingType, SubscriptionChargeStatus, TransactionStatus } from "../types/enums.js";
+import { ChargeStatus, CobrancaOrigem } from "../types/enums.js";
 
 interface CreateCobrancaOptions {
     gerarPixAsync?: boolean; // Se true, apenas enfileira. Se false, gera na hora (síncrono).
@@ -146,105 +144,7 @@ export const cobrancaService = {
     return inserted;
   },
 
-  async gerarCobrancaAtivacao(payload: {
-      usuarioId: string;
-      assinaturaId: string;
-      valor: number;
-      dataVencimento: string;
-      descricao: string;
-      cpfResponsavel: string;
-      nomeResponsavel: string;
-  }): Promise<{ cobranca: any; pixData: any; location: string }> {
-      const { usuarioId, assinaturaId, valor, dataVencimento, descricao, cpfResponsavel, nomeResponsavel } = payload;
-      
-      // 1. Criar registro de cobrança PENDENTE
-      const cobrancaId = crypto.randomUUID();
-      
-      const { data: cobranca, error: cobrancaError } = await supabaseAdmin
-        .from("assinaturas_cobrancas")
-        .insert({
-          id: cobrancaId,
-          usuario_id: usuarioId,
-          assinatura_usuario_id: assinaturaId,
-          valor: valor,
-          status: SubscriptionChargeStatus.PENDENTE,
-          data_vencimento: dataVencimento,
-          origem: CobrancaOrigem.INTER,
-          billing_type: SubscriptionBillingType.ACTIVATION,
-          descricao: descricao,
-        })
-        .select()
-        .single();
-      
-      if (cobrancaError) throw new AppError(`Erro ao criar cobrança de ativação: ${cobrancaError.message}`, 500);
-      
-      // 2. Gerar PIX via Inter
-      let pixData: any = {};
-      try {
-          pixData = await interService.criarCobrancaComVencimentoPix(supabaseAdmin, {
-              cobrancaId: cobranca.id,
-              valor: valor,
-              cpf: cpfResponsavel,
-              nome: nomeResponsavel,
-              dataVencimento: dataVencimento,
-              validadeAposVencimentoDias: 30
-          });
-          
-          await this.updateCobranca(cobranca.id, {
-              inter_txid: pixData.interTransactionId,
-              qr_code_payload: pixData.qrCodePayload,
-              location_url: pixData.location
-          });
-      } catch (err: any) {
-          logger.error({ err, cobrancaId: cobranca.id }, "Falha ao gerar PIX para ativação.");
-          // Opcional: deletar a cobrança se o PIX falhar ou manter pendente para retry?
-          // Neste caso, retorno sucesso parcial, mas sem PIX. O front deve tratar.
-      }
-      
-      return { cobranca, pixData, location: pixData.location };
-  },
 
-  async gerarCobrancaRenovacao(payload: {
-      usuarioId: string;
-      assinaturaId: string;
-      valor: number;
-      dataVencimento: string;
-      descricao: string;
-  }): Promise<{ cobranca: any; generatedPix: boolean }> {
-      const { usuarioId, assinaturaId, valor, dataVencimento, descricao } = payload;
-      
-      // 1. Criar registro de cobrança
-      const { data: cobranca, error: cobrancaError } = await supabaseAdmin
-        .from("assinaturas_cobrancas")
-        .insert({
-          usuario_id: usuarioId,
-          assinatura_usuario_id: assinaturaId,
-          valor: valor,
-          status: SubscriptionChargeStatus.PENDENTE,
-          data_vencimento: dataVencimento,
-          billing_type: SubscriptionBillingType.RENEWAL,
-          descricao: descricao,
-        })
-        .select()
-        .single();
-      
-      if (cobrancaError) throw new Error(`Erro ao criar cobrança de renovação: ${cobrancaError.message}`);
-      
-      // 2. Gerar PIX (Delegar para assinaturaCobrancaService que já tem a lógica inteligente de COBV)
-      try {
-           // Preciso importar assinaturaCobrancaService, mas cuidado com Ciclo.
-           // Melhor usar interService direto OU garantir que assinaturaCobrancaService não importa cobrancaService.
-           // AssinaturaCobrancaService imports: logger, supabase, interService. OK.
-           const { assinaturaCobrancaService } = await import("./assinatura-cobranca.service.js");
-           await assinaturaCobrancaService.gerarPixParaCobranca(cobranca.id);
-           return { cobranca, generatedPix: true };
-      } catch (err: any) {
-          logger.error({ err, cobrancaId: cobranca.id }, "Falha CRÍTICA ao gerar PIX de renovação. Realizando Rollback.");
-          // Rollback mandatorio aqui pois é um Job
-          await supabaseAdmin.from("assinaturas_cobrancas").delete().eq("id", cobranca.id);
-          throw new Error(`Falha PIX: ${err.message}`);
-      }
-  },
 
   async updateCobranca(id: string, data: Partial<any>, cobrancaOriginal?: any): Promise<any> {
     if (!id) throw new AppError("ID da cobrança é obrigatório", 400);
@@ -441,120 +341,9 @@ export const cobrancaService = {
       return data.desativar_lembretes; 
   },
 
-  async desfazerPagamento(cobrancaId: string): Promise<any> {
-    const { data, error } = await supabaseAdmin
-      .from("cobrancas")
-      .update({
-        status: ChargeStatus.PENDENTE,
-        data_pagamento: null,
-        valor_pago: null,
-        tipo_pagamento: null,
-        pagamento_manual: false, // Resetar para garantir
-        recibo_url: null,
-        dados_auditoria: null // Opcional: limpar dados de auditoria do pagamento desfeito
-      })
-      .eq("id", cobrancaId)
-      .select()
-      .single();
 
-    if (error) {
-      logger.error({ error, cobrancaId }, "Erro ao desfazer pagamento da cobrança");
-      throw new AppError("Erro ao desfazer pagamento.", 500);
-    }
 
-    return data;
-  },
 
-  async iniciarRepasse(cobrancaId: string): Promise<any> {
-      logger.info({ cobrancaId }, "Iniciando fluxo de repasse (Queue)...");
-
-      // 1. Buscar Cobrança
-      const { data: cobranca } = await supabaseAdmin.from("cobrancas").select("id, usuario_id, valor, status_repasse").eq("id", cobrancaId).single();
-      
-      if (!cobranca) throw new AppError("Cobrança não encontrada para repasse.", 404);
-      if (cobranca.status_repasse === RepasseStatus.REPASSADO) {
-          logger.warn({ cobrancaId }, "Repasse já realizado.");
-          return { success: true, alreadyDone: true };
-      }
-
-      // 2. Buscar Motorista e Validar Chave PIX
-      const { data: usuario } = await supabaseAdmin
-        .from("usuarios")
-        .select("id, chave_pix, status_chave_pix")
-        .eq("id", cobranca.usuario_id)
-        .single();
-
-      const hasValidPix = usuario?.chave_pix && usuario?.status_chave_pix === PixKeyStatus.VALIDADA;
-
-      // 3. Calcular Valor do Repasse (Taxa PIX)
-      const taxa = await getConfigNumber(ConfigKey.TAXA_INTERMEDIACAO_PIX, 0.99); 
-      const valorRepasse = cobranca.valor - taxa; 
-
-      if (valorRepasse <= 0) {
-           logger.warn({ cobrancaId, valor: cobranca.valor, taxa }, "Valor do repasse zerado ou negativo.");
-           return { success: false, reason: "valor_baixo" };
-      }
-
-      // 4. Registrar Transação no Banco (Pendente ou Falha por Chave)
-      const transacaoData: any = {
-          cobranca_id: cobrancaId,
-          usuario_id: cobranca.usuario_id,
-          valor_bruto: cobranca.valor,
-          taxa_plataforma: taxa,
-          valor_liquido: valorRepasse,
-          status: hasValidPix ? TransactionStatus.PROCESSAMENTO : RepasseStatus.FALHA, 
-          data_execucao: new Date()
-      };
-
-      if (!hasValidPix) {
-          transacaoData.mensagem_erro = !usuario?.chave_pix 
-            ? "Chave PIX não cadastrada" 
-            : "Chave PIX aguardando validação ou inválida";
-      }
-
-      const { data: transacao, error: txError } = await supabaseAdmin
-        .from("transacoes_repasse")
-        .insert(transacaoData)
-        .select()
-        .single();
-      
-      if (txError) {
-          logger.error({ txError }, "Erro ao criar registro de transação de repasse");
-      }
-
-      // 5. Se não tiver PIX válido, abortar repasse automático (avisar motorista no dashboard via status)
-      if (!hasValidPix) {
-          logger.warn({ cobrancaId, motoristaId: cobranca.usuario_id }, "Repasse abortado: Chave PIX inválida ou ausente");
-          await supabaseAdmin.from("cobrancas").update({ 
-              status_repasse: RepasseStatus.FALHA,
-              id_transacao_repasse: transacao?.id 
-          }).eq("id", cobrancaId);
-          return { success: false, reason: "pix_invalido", transacaoId: transacao?.id };
-      }
-
-      // 6. Jogar na FILA (PayoutQueue)
-      try {
-          await addToPayoutQueue({
-              cobrancaId,
-              motoristaId: cobranca.usuario_id,
-              valorRepasse,
-              transacaoId: transacao?.id
-          });
-          
-          // Atualizar status da cobrança e vincular transação
-          await supabaseAdmin.from("cobrancas").update({ 
-              status_repasse: RepasseStatus.PENDENTE,
-              id_transacao_repasse: transacao?.id
-          }).eq("id", cobrancaId);
-
-          return { success: true, queued: true, transacaoId: transacao?.id };
-
-      } catch (queueError) {
-           logger.error({ queueError }, "Erro ao enfileirar repasse");
-           await supabaseAdmin.from("cobrancas").update({ status_repasse: RepasseStatus.FALHA }).eq("id", cobrancaId);
-           throw queueError;
-      }
-  },
 
   async gerarCobrancasMensaisParaMotorista(motoristaId: string, targetMonth: number, targetYear: number, planoSlug?: string): Promise<{ created: number, skipped: number }> {
       let created = 0;
@@ -670,36 +459,7 @@ export const cobrancaService = {
   },
   
   // Métodos auxiliares necessários para updateCobranca...
-  async atualizarStatusPagamento(txid: string, valor: number, pagamento: any, reciboUrl?: string) {
-        // Implementação mantida ou referenciada do original 
-        // (Como substituímos o arquivo todo, precisamos garantir que funcoes usadas por outros handlers existam)
-        // ... (Para economizar espaço aqui vou assumir que o usuário sabe que o replace sobreescreve).
-        // PERIGO: Sobreescrever methods que não copiei.
-        // Vou usar replace pontual ou garantir que copiei tudo.
-        // Verifiquei o arquivo original. Ele tem `atualizarStatusPagamento`.
-        // Vou adicioná-lo abaixo.
-        return this._atualizarStatusPagamentoImpl(txid, valor, pagamento, reciboUrl);
-  },
 
-  async _atualizarStatusPagamentoImpl(txid: string, valor: number, pagamento: any, reciboUrl?: string) {
-       // Buscar Cobrança pelo TXID
-       const { data: cobranca } = await supabaseAdmin.from("cobrancas").select("id, status").eq("txid_pix", txid).single();
-       if (!cobranca) throw new Error("Cobrança não encontrada pelo TXID");
-
-        const { error } = await supabaseAdmin
-            .from("cobrancas")
-            .update({
-                status: ChargeStatus.PAGO,
-                valor_pago: valor,
-                data_pagamento: pagamento.horario || new Date(),
-                dados_auditoria: pagamento,
-                recibo_url: reciboUrl // Url opcional, pode vir null se for via worker
-            })
-            .eq("id", cobranca.id);
-            
-        if (error) throw error;
-        return true;
-  },
 
   /**
    * Gera PIX retroativo para cobranças pendentes de um usuário (motorista).

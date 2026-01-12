@@ -1,14 +1,14 @@
 import {
-  DRIVER_EVENT_REACTIVATION_EMBARGO,
-  PLANO_PROFISSIONAL
+    DRIVER_EVENT_REACTIVATION_EMBARGO,
+    PLANO_PROFISSIONAL
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import {
-  ChargePaymentType,
-  ConfigKey,
-  SubscriptionChargeStatus,
-  UserSubscriptionStatus
+    ChargePaymentType,
+    ConfigKey,
+    SubscriptionChargeStatus,
+    UserSubscriptionStatus
 } from "../types/enums.js";
 import { automationService } from "./automation.service.js";
 import { cobrancaService } from "./cobranca.service.js";
@@ -21,7 +21,7 @@ interface DadosPagamento {
   txid?: string;
 }
 
-interface Cobranca {
+interface AssinaturaCobrancaInfo {
   id: string;
   usuario_id: string;
   assinatura_usuario_id: string;
@@ -41,8 +41,8 @@ interface ContextoLog {
  * Esta função centraliza toda a lógica de processamento de pagamento, sendo usada tanto pelo
  * webhook real quanto pelo mock de pagamento.
  */
-export async function processarPagamentoCobranca(
-  cobranca: Cobranca,
+export async function processarPagamentoAssinatura(
+  cobranca: AssinaturaCobrancaInfo,
   dadosPagamento: DadosPagamento,
   contextoLog: ContextoLog = {},
   reciboUrl?: string
@@ -168,7 +168,7 @@ export async function processarPagamentoCobranca(
  * Calcula a vigência fim e o novo anchor_date baseado no billing_type e situação da assinatura
  */
 async function calcularVigenciaFimEAnchorDate(
-  cobranca: Cobranca,
+  cobranca: AssinaturaCobrancaInfo,
   dataPagamentoStr: string,
   logContext: ContextoLog
 ): Promise<{ vigenciaFim: Date; novoAnchorDate: string | null }> {
@@ -310,7 +310,7 @@ async function calcularVigenciaFimEAnchorDate(
 /**
  * Cancela cobranças conflitantes baseado no billing_type
  */
-async function cancelarCobrancasConflitantes(cobranca: Cobranca, logContext: ContextoLog): Promise<void> {
+async function cancelarCobrancasConflitantes(cobranca: AssinaturaCobrancaInfo, logContext: ContextoLog): Promise<void> {
   const billingType = cobranca.billing_type || "subscription";
   const isSpecialBilling = ["upgrade", "upgrade_plan", "activation", "expansion"].includes(billingType);
 
@@ -348,7 +348,7 @@ async function cancelarCobrancasConflitantes(cobranca: Cobranca, logContext: Con
 /**
  * Desativa outras assinaturas ativas do mesmo usuário (quando uma nova assinatura está sendo ativada)
  */
-async function desativarOutrasAssinaturas(cobranca: Cobranca, logContext: ContextoLog): Promise<void> {
+async function desativarOutrasAssinaturas(cobranca: AssinaturaCobrancaInfo, logContext: ContextoLog): Promise<void> {
   const { data: assinaturaAtual } = await supabaseAdmin
     .from("assinaturas_usuarios")
     .select("id, ativo")
@@ -392,7 +392,7 @@ async function desativarOutrasAssinaturas(cobranca: Cobranca, logContext: Contex
  * Ativa a assinatura do usuário
  */
 async function ativarAssinatura(
-  cobranca: Cobranca,
+  cobranca: AssinaturaCobrancaInfo,
   vigenciaFim: Date,
   novoAnchorDate: string | null,
   logContext: ContextoLog
@@ -428,7 +428,7 @@ async function ativarAssinatura(
 /**
  * Ativa o usuário
  */
-async function ativarUsuario(cobranca: Cobranca, logContext: ContextoLog): Promise<void> {
+async function ativarUsuario(cobranca: AssinaturaCobrancaInfo, logContext: ContextoLog): Promise<void> {
   const { error: updateUsuarioError } = await supabaseAdmin
     .from("usuarios")
     .update({ ativo: true })
@@ -446,7 +446,7 @@ async function ativarUsuario(cobranca: Cobranca, logContext: ContextoLog): Promi
  * Ativa passageiros automaticamente se for plano Profissional e não precisar seleção manual
  */
 async function triggerAtivacaoAutomatica(
-  cobranca: Cobranca,
+  cobranca: AssinaturaCobrancaInfo,
   assinaturaPendente: any,
   logContext: ContextoLog
 ): Promise<void> {
