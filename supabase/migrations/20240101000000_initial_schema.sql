@@ -160,7 +160,6 @@ CREATE TABLE IF NOT EXISTS "public"."assinaturas_cobrancas" (
     "created_at" timestamp with time zone DEFAULT "now"(),
     "updated_at" timestamp with time zone DEFAULT "now"(),
     "pagamento_manual" boolean DEFAULT false,
-    "origem" "text" DEFAULT ''::"text",
     "tipo_pagamento" "text",
     "valor_pago" numeric(10,2),
     "inter_txid" "text",
@@ -191,7 +190,6 @@ CREATE TABLE IF NOT EXISTS "public"."assinaturas_usuarios" (
     "status" "text" DEFAULT 'pendente_pagamento'::"text" NOT NULL,
     "anchor_date" "date" DEFAULT CURRENT_DATE NOT NULL,
     "trial_end_at" timestamp with time zone,
-    "billing_mode" "text" DEFAULT 'manual'::"text",
     "preco_aplicado" numeric(10,2),
     "preco_origem" "text" DEFAULT 'normal'::"text",
     "created_at" timestamp with time zone DEFAULT "now"(),
@@ -201,7 +199,6 @@ CREATE TABLE IF NOT EXISTS "public"."assinaturas_usuarios" (
     "vigencia_fim" timestamp without time zone,
     "cancelamento_manual" timestamp with time zone,
     "status_anterior" "text",
-    CONSTRAINT "assinaturas_usuarios_billing_mode_check" CHECK (("billing_mode" = ANY (ARRAY['manual'::"text", 'subscription'::"text", 'automatico'::"text"]))),
     CONSTRAINT "assinaturas_usuarios_preco_origem_check" CHECK (("preco_origem" = ANY (ARRAY['normal'::"text", 'promocional'::"text", 'personalizado'::"text"]))),
     CONSTRAINT "assinaturas_usuarios_status_check" CHECK (("status" = ANY (ARRAY['ativa'::"text", 'pendente_pagamento'::"text", 'cancelada'::"text", 'suspensa'::"text", 'trial'::"text"])))
 );
@@ -218,7 +215,7 @@ CREATE TABLE IF NOT EXISTS "public"."cobranca_notificacoes" (
     "canal" character varying(20) NOT NULL,
     "data_envio" timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT "chk_canal" CHECK ((("canal")::"text" = ANY ((ARRAY['whatsapp'::character varying, 'email'::character varying, 'sms'::character varying])::"text"[]))),
-    CONSTRAINT "chk_tipo_origem" CHECK ((("tipo_origem")::"text" = ANY ((ARRAY['auto'::character varying, 'manual'::character varying])::"text"[])))
+    CONSTRAINT "chk_tipo_origem" CHECK ((("tipo_origem")::"text" = ANY ((ARRAY['automatica'::character varying, 'manual'::character varying])::"text"[])))
 );
 
 
@@ -251,7 +248,7 @@ CREATE TABLE IF NOT EXISTS "public"."cobrancas" (
     "data_repasse" timestamp without time zone,
     "id_transacao_repasse" "uuid",
     "dados_auditoria_pagamento" "jsonb" DEFAULT '{}'::"jsonb",
-    "data_envio_notificacao" timestamp without time zone,
+    "data_envio_ultima_notificacao" timestamp without time zone,
     "recibo_url" "text",
     CONSTRAINT "cobrancas_mes_check" CHECK ((("mes" >= 1) AND ("mes" <= 12))),
     CONSTRAINT "cobrancas_origem_check" CHECK (("origem" = ANY (ARRAY['automatica'::"text", 'manual'::"text"]))),
@@ -266,7 +263,7 @@ COMMENT ON COLUMN "public"."cobrancas"."dados_auditoria_pagamento" IS 'Payload c
 
 
 
-COMMENT ON COLUMN "public"."cobrancas"."data_envio_notificacao" IS 'Data e hora do último envio de notificação (Email/Zap) para esta cobrança';
+COMMENT ON COLUMN "public"."cobrancas"."data_envio_ultima_notificacao" IS 'Data e hora do último envio de notificação (Email/Zap) para esta cobrança';
 
 
 
@@ -352,7 +349,7 @@ CREATE TABLE IF NOT EXISTS "public"."passageiros" (
     "veiculo_id" "uuid" NOT NULL,
     "periodo" "text" NOT NULL,
     "enviar_cobranca_automatica" boolean DEFAULT false,
-    "motivo_desativacao" character varying(20) DEFAULT NULL::character varying,
+    "origem_desativacao_cobranca_automatica" character varying(50) DEFAULT NULL::character varying,
     CONSTRAINT "alunos_dia_vencimento_check" CHECK ((("dia_vencimento" >= 1) AND ("dia_vencimento" <= 31)))
 );
 
@@ -360,7 +357,7 @@ CREATE TABLE IF NOT EXISTS "public"."passageiros" (
 ALTER TABLE "public"."passageiros" OWNER TO "postgres";
 
 
-COMMENT ON COLUMN "public"."passageiros"."motivo_desativacao" IS 'Razão da desativação: manual (usuário desativou) ou automatico (sistema desativou por exceder franquia). NULL quando ativo.';
+COMMENT ON COLUMN "public"."passageiros"."origem_desativacao_cobranca_automatica" IS 'Razão da desativação da cobrança: manual (usuário), automatico (sistema por franquia), ou CONTA_EXCLUIDA.';
 
 
 
@@ -652,7 +649,7 @@ CREATE INDEX "idx_ass_notificacoes_cobranca" ON "public"."assinatura_notificacoe
 
 
 
-CREATE INDEX "idx_cobrancas_data_envio_notificacao" ON "public"."cobrancas" USING "btree" ("data_envio_notificacao");
+CREATE INDEX "idx_cobrancas_data_envio_ultima_notificacao" ON "public"."cobrancas" USING "btree" ("data_envio_ultima_notificacao");
 
 
 
@@ -660,7 +657,7 @@ CREATE INDEX "idx_cobrancas_status_repasse" ON "public"."cobrancas" USING "btree
 
 
 
-CREATE INDEX "idx_passageiros_motivo_desativacao" ON "public"."passageiros" USING "btree" ("motivo_desativacao") WHERE ("motivo_desativacao" IS NOT NULL);
+CREATE INDEX "idx_passageiros_origem_desativacao_cobranca_automatica" ON "public"."passageiros" USING "btree" ("origem_desativacao_cobranca_automatica") WHERE ("origem_desativacao_cobranca_automatica" IS NOT NULL);
 
 
 
@@ -745,7 +742,7 @@ ALTER TABLE ONLY "public"."cobrancas"
 
 
 ALTER TABLE ONLY "public"."cobrancas"
-    ADD CONSTRAINT "cobrancas_passageiro_id_fkey" FOREIGN KEY ("passageiro_id") REFERENCES "public"."passageiros"("id") ON UPDATE CASCADE ON DELETE CASCADE;
+    ADD CONSTRAINT "cobrancas_passageiro_id_fkey" FOREIGN KEY ("passageiro_id") REFERENCES "public"."passageiros"("id") ON UPDATE CASCADE ON DELETE SET NULL;
 
 
 
@@ -1317,3 +1314,111 @@ CREATE INDEX IF NOT EXISTS "idx_passageiros_usuario_id" ON "public"."passageiros
 CREATE INDEX IF NOT EXISTS "idx_cobrancas_passageiro_id" ON "public"."cobrancas"("passageiro_id");
 CREATE INDEX IF NOT EXISTS "idx_cobrancas_usuario_id" ON "public"."cobrancas"("usuario_id");
 CREATE INDEX IF NOT EXISTS "idx_gastos_veiculo_id" ON "public"."gastos"("veiculo_id");
+
+
+-- FUNCTION: Anonymize User Account (LGPD Compliance)
+-- Replaces PII with generic data instead of deleting, preserving financial history.
+CREATE OR REPLACE FUNCTION "public"."anonymize_user_account"("target_user_id" uuid) RETURNS void
+    LANGUAGE "plpgsql"
+    SECURITY DEFINER
+    AS $$
+BEGIN
+  -- 1. DELETE non-critical data (Physical Deletion)
+  DELETE FROM "public"."pre_passageiros" WHERE "usuario_id" = target_user_id;
+  DELETE FROM "public"."pix_validacao_pendente" WHERE "usuario_id" = target_user_id;
+  DELETE FROM "public"."cobranca_notificacoes" WHERE "cobranca_id" IN (
+    SELECT id FROM "public"."cobrancas" WHERE "usuario_id" = target_user_id
+  );
+  DELETE FROM "public"."assinatura_notificacoes" WHERE "usuario_id" = target_user_id;
+
+  -- 2. ANONYMIZE Core User Data
+  UPDATE "public"."usuarios"
+  SET
+    "nome" = 'Usuário Excluído',
+    "apelido" = 'Anônimo',
+    "email" = 'deleted_' || "id"::text || '@van360.anon',
+    "cpfcnpj" = 'DEL' || substring("id"::text, 1, 11),
+    "telefone" = '00000000000_' || substring("id"::text, 1, 5),
+    "chave_pix" = NULL,
+    "tipo_chave_pix" = NULL,
+    "status_chave_pix" = 'NAO_CADASTRADA',
+    "nome_titular_pix_validado" = NULL,
+    "cpf_cnpj_titular_pix_validado" = NULL,
+    "auth_uid" = NULL,
+    "ativo" = false,
+    "whatsapp_status" = 'DISCONNECTED'
+  WHERE "id" = target_user_id;
+
+  -- 3. ANONYMIZE Passengers (Keep ID for Cobrancas)
+  UPDATE "public"."passageiros"
+  SET
+    "nome" = 'Passageiro ' || substring("id"::text, 1, 8),
+    "nome_responsavel" = 'Responsável Anônimo',
+    "cpf_responsavel" = '00000000000',
+    "email_responsavel" = 'anon@anon.com',
+    "telefone_responsavel" = '00000000000',
+    "logradouro" = NULL,
+    "numero" = NULL,
+    "bairro" = NULL,
+    "cidade" = NULL,
+    "estado" = NULL,
+    "cep" = NULL,
+    "referencia" = NULL,
+    "observacoes" = NULL,
+    "ativo" = false
+  WHERE "usuario_id" = target_user_id;
+
+  -- 4. ANONYMIZE Vehicles
+  UPDATE "public"."veiculos"
+  SET
+    "placa" = 'DEL-' || substring("id"::text, 1, 4),
+    "marca" = 'Genérica',
+    "modelo" = 'Genérico'
+  WHERE "usuario_id" = target_user_id;
+
+  -- 5. ANONYMIZE Schools
+  UPDATE "public"."escolas"
+  SET
+    "nome" = 'Escola ' || substring("id"::text, 1, 8),
+    "logradouro" = NULL,
+    "numero" = NULL,
+    "bairro" = NULL,
+    "cidade" = NULL,
+    "estado" = NULL,
+    "cep" = NULL,
+    "referencia" = NULL
+  WHERE "usuario_id" = target_user_id;
+
+  -- 6. SANITIZE Financial Records (Remove PII from audit logs)
+  UPDATE "public"."cobrancas"
+  SET
+    "dados_auditoria_pagamento" = '{}'::jsonb,
+    "recibo_url" = NULL,
+    "url_qr_code" = NULL,
+    "qr_code_payload" = NULL
+  WHERE "usuario_id" = target_user_id;
+
+  -- 7. ANONYMIZE/CANCEL SaaS Subscriptions (Stop future billing)
+  UPDATE "public"."assinaturas_usuarios"
+  SET
+    "ativo" = false,
+    "status" = 'cancelada',
+    "billing_mode" = 'manual' -- Prevent auto-renewal
+  WHERE "usuario_id" = target_user_id;
+
+  -- 8. SANITIZE SaaS Billing Records (Keep history, remove PII artifacts)
+  UPDATE "public"."assinaturas_cobrancas"
+  SET
+    "qr_code_payload" = NULL,
+    "location_url" = NULL,
+    "recibo_url" = NULL,
+    "dados_auditoria_pagamento" = '{}'::jsonb
+  WHERE "usuario_id" = target_user_id;
+
+  UPDATE "public"."gastos"
+  SET "descricao" = 'Gasto histórico (Conta excluída)'
+  WHERE "usuario_id" = target_user_id;
+
+END;
+$$;
+
