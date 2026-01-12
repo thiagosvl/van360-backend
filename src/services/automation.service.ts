@@ -64,10 +64,10 @@ export const automationService = {
         const quantidadeJaAtiva = jaAtivos?.length || 0;
         const quantidadeParaAtivar = franquia - quantidadeJaAtiva;
 
-        console.log(`[ativarPassageirosAutomaticamente] usuarioId: ${usuarioId}, franquia: ${franquia}, jaAtivos: ${quantidadeJaAtiva}, paraAtivar: ${quantidadeParaAtivar}`);
+        logger.info({ usuarioId, franquia, jaAtivos: quantidadeJaAtiva, paraAtivar: quantidadeParaAtivar }, "[ativarPassageirosAutomaticamente] Iniciando ativação");
 
         if (quantidadeParaAtivar <= 0) {
-            console.log(`[ativarPassageirosAutomaticamente] Nenhum passageiro para ativar (franquia já preenchida ou excedida)`);
+            logger.info({ usuarioId }, "[ativarPassageirosAutomaticamente] Nenhum passageiro para ativar (franquia já preenchida ou excedida)");
             return { ativados: 0, totalAtivos: quantidadeJaAtiva };
         }
 
@@ -85,15 +85,15 @@ export const automationService = {
             throw new Error(`Erro ao buscar passageiros disponíveis: ${errorDisponiveis.message}`);
         }
 
-        console.log(`[ativarPassageirosAutomaticamente] Passageiros disponíveis encontrados: ${disponiveis?.length || 0}`);
+        logger.info({ disponiveis: disponiveis?.length || 0 }, "[ativarPassageirosAutomaticamente] Passageiros disponíveis encontrados");
 
         if (!disponiveis || disponiveis.length === 0) {
-            console.log(`[ativarPassageirosAutomaticamente] Nenhum passageiro disponível para ativar`);
+            logger.info("[ativarPassageirosAutomaticamente] Nenhum passageiro disponível para ativar");
             return { ativados: 0, totalAtivos: quantidadeJaAtiva };
         }
 
         const idsParaAtivar = disponiveis.map((p) => p.id);
-        console.log(`[ativarPassageirosAutomaticamente] Ativando ${idsParaAtivar.length} passageiros:`, idsParaAtivar);
+        logger.info({ idsParaAtivar }, "[ativarPassageirosAutomaticamente] Ativando passageiros");
         
         const { error: updateError } = await supabaseAdmin
             .from("passageiros")
@@ -126,7 +126,7 @@ export const automationService = {
             }
         }
 
-        console.log(`[ativarPassageirosAutomaticamente] ${idsParaAtivar.length} passageiros ativados com sucesso`);
+        logger.info({ count: idsParaAtivar.length }, "[ativarPassageirosAutomaticamente] Passageiros ativados com sucesso");
 
         return {
             ativados: idsParaAtivar.length,

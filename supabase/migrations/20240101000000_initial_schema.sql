@@ -684,6 +684,14 @@ CREATE INDEX "idx_usuarios_whatsapp_status" ON "public"."usuarios" USING "btree"
 
 
 CREATE INDEX "passageiros_veiculo_id_idx" ON "public"."passageiros" USING "btree" ("veiculo_id");
+CREATE INDEX "idx_cobrancas_status" ON "public"."cobrancas" USING "btree" ("status");
+CREATE INDEX "idx_cobrancas_data_vencimento" ON "public"."cobrancas" USING "btree" ("data_vencimento");
+CREATE INDEX "idx_cobrancas_usuario_id" ON "public"."cobrancas" USING "btree" ("usuario_id");
+CREATE INDEX "idx_cobrancas_passageiro_id" ON "public"."cobrancas" USING "btree" ("passageiro_id");
+
+CREATE INDEX "idx_assinaturas_cobrancas_status" ON "public"."assinaturas_cobrancas" USING "btree" ("status");
+CREATE INDEX "idx_assinaturas_cobrancas_usuario_id" ON "public"."assinaturas_cobrancas" USING "btree" ("usuario_id");
+CREATE INDEX "idx_assinaturas_cobrancas_data_vencimento" ON "public"."assinaturas_cobrancas" USING "btree" ("data_vencimento");
 
 
 

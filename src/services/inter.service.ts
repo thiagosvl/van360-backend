@@ -2,12 +2,16 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import axios from "axios";
 import fs from "fs";
 import https from "https";
+import { Redis } from "ioredis";
 import path from "path";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
+import { redisConfig } from "../config/redis.js";
 import { ChargeStatus, ConfigKey } from "../types/enums.js";
 import { onlyDigits } from "../utils/string.utils.js";
 import { getConfigNumber } from "./configuracao.service.js";
+
+const redis = new Redis(redisConfig as any);
 
 const INTER_API_URL = env.INTER_API_URL!;
 const INTER_PIX_KEY = env.INTER_PIX_KEY!;
@@ -84,18 +88,29 @@ function gerarTxid(cobrancaId: string): string {
 }
 
 async function getValidInterToken(adminClient: SupabaseClient): Promise<string> {
+  const cachedToken = await redis.get("inter:token");
+  if (cachedToken) {
+    return cachedToken;
+  }
+
+  // Fallback para o Banco de Dados (Legacy ou Cold Start)
   const { data, error } = await adminClient
     .from("configuracao_interna")
     .select("chave, valor")
     .in("chave", ["INTER_ACCESS_TOKEN", "INTER_TOKEN_EXPIRES_AT"]);
 
-  if (error) throw new Error("Falha ao buscar config de token no DB.");
+  if (!error && data) {
+      const accessToken = data.find(d => d.chave === "INTER_ACCESS_TOKEN")?.valor;
+      const expiresAt = parseInt(data.find(d => d.chave === "INTER_TOKEN_EXPIRES_AT")?.valor || "0");
 
-  const accessToken = data.find(d => d.chave === "INTER_ACCESS_TOKEN")?.valor;
-  const expiresAt = parseInt(data.find(d => d.chave === "INTER_TOKEN_EXPIRES_AT")?.valor || "0");
-
-  if (accessToken && expiresAt > Date.now() + 5 * 60 * 1000) {
-    return accessToken;
+      if (accessToken && expiresAt > Date.now() + 5 * 60 * 1000) {
+        // Cachear no Redis para a próxima (TTL = tempo restante - margem)
+        const ttlSeconds = Math.floor((expiresAt - Date.now()) / 1000) - 300; 
+        if (ttlSeconds > 0) {
+            await redis.set("inter:token", accessToken, "EX", ttlSeconds);
+        }
+        return accessToken;
+      }
   }
 
   const body = new URLSearchParams();
@@ -118,6 +133,11 @@ async function getValidInterToken(adminClient: SupabaseClient): Promise<string> 
 
   const newExpiresAt = Date.now() + expiresIn * 1000;
 
+  // Persistir no Redis (TTL = expiração - 5 min de margem de segurança)
+  const safeTtl = Math.max(expiresIn - 300, 60); 
+  await redis.set("inter:token", newAccessToken, "EX", safeTtl);
+
+  // Persistir no Banco (Backup)
   await adminClient.from("configuracao_interna").upsert(
     [
       { chave: "INTER_ACCESS_TOKEN", valor: newAccessToken },

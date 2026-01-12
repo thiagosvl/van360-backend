@@ -14,7 +14,7 @@ const mockPagamentoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     try {
       logger.info({ cobrancaId }, "Iniciando mock de pagamento");
 
-      console.log("Mock Pagamento iniciado para ID:", cobrancaId);
+      logger.info({ cobrancaId }, "Mock Pagamento iniciado");
 
       // 1. Tentar achar na tabela de Assinaturas (Prioridade Alta)
       let { data: cobrancaAssinatura } = await supabaseAdmin
