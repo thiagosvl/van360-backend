@@ -193,7 +193,7 @@ class WhatsappService {
    * Solicita conexão (Retorna QR Code)
    * Se a instância não existir, cria.
    */
-  async connectInstance(instanceName: string): Promise<ConnectInstanceResponse> {
+  async connectInstance(instanceName: string, alreadyRetried: boolean = false): Promise<ConnectInstanceResponse> {
       try {
           // 1. Garantir que instância existe (com delay interno se criar)
           const created = await this.createInstance(instanceName);
@@ -231,12 +231,12 @@ class WhatsappService {
               return { instance: { state: WHATSAPP_STATUS.OPEN } };
           }
 
-          // Tratar estado "connecting" travado
-          if (lastData?.instance?.state === "connecting" || lastData?.instance?.state === WHATSAPP_STATUS.CONNECTING) {
+          // Tratar estado "connecting" travado (ex: sessão fantasma)
+          if ((lastData?.instance?.state === "connecting" || lastData?.instance?.state === WHATSAPP_STATUS.CONNECTING) && !alreadyRetried) {
                 logger.warn({ instanceName }, "Instância travada em 'connecting'. Forçando logout...");
                 await this.disconnectInstance(instanceName);
-                await new Promise(r => setTimeout(r, 1000));
-                return this.connectInstance(instanceName); // Recursão controlada (uma vez)
+                await new Promise(r => setTimeout(r, 1500));
+                return this.connectInstance(instanceName, true); // Retenta apenas UMA vez
           }
             
           return {}; 
@@ -283,7 +283,22 @@ class WhatsappService {
               }
           }
 
-          logger.warn({ instanceName, lastData }, "Evolution falhou em retornar pairingCode após 3 tentativas.");
+          // Se chegamos aqui sem pairingCode, mas a instância está "connecting" ou "open",
+          // vamos tentar um logout forçado pois pode estar presa no modo QR.
+          if (lastData?.instance?.state === "connecting" || lastData?.instance?.state === WHATSAPP_STATUS.CONNECTING || lastData?.instance?.state === "open") {
+              logger.warn({ instanceName }, "Pareamento travado. Forçando logout para tentar novo código...");
+              await this.disconnectInstance(instanceName);
+              await new Promise(r => setTimeout(r, 1500));
+              
+              // Tenta uma última vez após o logout
+              const retryUrl = `${EVO_URL}/instance/connect/${instanceName}?number=${finalNumber}`;
+              const { data: finalData } = await axios.get<EvolutionConnectResponse>(retryUrl, { headers: { "apikey": EVO_KEY } });
+              if (finalData?.pairingCode && finalData.pairingCode.length < 20) {
+                  return { pairingCode: finalData.pairingCode };
+              }
+          }
+
+          logger.warn({ instanceName, lastData }, "Evolution falhou em retornar pairingCode após retentativas e logout.");
           return {};
 
       } catch (error) {
