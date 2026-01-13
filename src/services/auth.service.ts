@@ -303,6 +303,11 @@ export async function iniciaRegistroPlanoGratuito(
       .single();
 
     if (planoError || !plano) throw new AppError("Plano selecionado não foi encontrado.", 404);
+    
+    // Validar se o plano realmente é o Gratuito
+    if (plano.slug !== PLANO_GRATUITO) {
+      throw new AppError("Este plano não permite registro gratuito direto.", 403);
+    }
 
     const usuario = await criarUsuario(payload);
     usuarioId = usuario.id;
@@ -384,6 +389,11 @@ export async function iniciaRegistroPlanoEssencial(
       .single();
 
     if (planoError || !plano) throw new AppError("Plano selecionado não foi encontrado.", 404);
+
+    // Validar se o plano realmente é o Essencial
+    if (plano.slug !== PLANO_ESSENCIAL) {
+      throw new AppError("Este plano não permite registro experimental via trial.", 403);
+    }
 
     const usuario = await criarUsuario(payload);
     usuarioId = usuario.id;
@@ -643,10 +653,12 @@ export async function iniciarRegistroplanoProfissional(
 
     return { 
         success: true, 
-        session, 
+        session,
+        cobrancaId,
+        preco_aplicado: precoAplicado,
         pix: { 
-            qrCode: pixData.qrCode, 
-            qrCodeUrl: pixData.qrCodeUrl 
+            qrCode: pixData.qrCodePayload, 
+            qrCodeUrl: pixData.location 
         } 
     };
   } catch (err: any) {

@@ -17,15 +17,15 @@ export const webhookAssinaturaHandler = {
     const { data: cobranca, error: findError } = await supabaseAdmin
       .from("assinaturas_cobrancas")
       .select(`
-            id, usuario_id, assinatura_usuario_id, status, data_vencimento, billing_type, mes, ano,
+            id, usuario_id, assinatura_usuario_id, status, data_vencimento, billing_type,
             usuarios(nome, telefone),
-            planos:assinaturas_usuarios(planos(nome))
+            assinaturas_usuarios(planos(nome))
        `)
       .eq("inter_txid", txid)
       .maybeSingle();
 
     if (findError) {
-      logger.error({ txid, findError }, "Erro ao buscar assinatura no banco");
+      logger.error({ txid, error: findError.message }, "Erro ao buscar assinatura no banco");
       return false; 
     }
 
@@ -47,7 +47,7 @@ export const webhookAssinaturaHandler = {
 
         // A) Processar Pagamento (Lógica de Negócio: Ativar Assinatura, etc)
         await processarPagamentoAssinatura(
-            cobranca,
+            cobranca as any,
             {
                 valor,
                 dataPagamento,
@@ -60,9 +60,7 @@ export const webhookAssinaturaHandler = {
         // B) Enfileirar Geração de Recibo + Notificação
         try {
             const usuario = cobranca.usuarios as any;
-            // Corrigir acesso a planos aninhados se necessário: cobranca.planos -> assinaturas_usuarios -> planos
-            // O select acima está complexo, simplificando:
-            const nomePlano = (cobranca as any).planos?.planos?.nome || "Plano Van360";
+            const nomePlano = (cobranca as any).assinaturas_usuarios?.planos?.nome || "Plano Van360";
 
             const receiptData: ReceiptData = {
                 id: cobranca.id,
@@ -71,8 +69,6 @@ export const webhookAssinaturaHandler = {
                 valor: valor,
                 data: formatDate(dataPagamento),
                 pagadorNome: usuario?.nome || "Assinante",
-                mes: cobranca.mes,
-                ano: cobranca.ano,
                 descricao: `Mensalidade - ${nomePlano}`,
                 metodoPagamento: PaymentMethod.PIX,
                 tipo: 'ASSINATURA'

@@ -80,7 +80,6 @@ export const repasseMonitorJob = {
                         await supabaseAdmin
                             .from("usuarios")
                             .update({ 
-                                chave_pix_validada: false, 
                                 status_chave_pix: PixKeyStatus.INVALIDADA_POS_FALHA 
                             })
                             .eq("id", transacao.usuario_id);

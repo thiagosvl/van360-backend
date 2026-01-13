@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { moneyToNumber } from "../../utils/currency.utils.js";
-import { CobrancaTipo } from "../enums.js";
+import { CobrancaOrigem, CobrancaTipo } from "../enums.js"; // Added CobrancaOrigem
 
 export const createCobrancaSchema = z.object({
     usuario_id: z.string().uuid(),
@@ -13,7 +13,7 @@ export const createCobrancaSchema = z.object({
     ano: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),
     
     status: z.string().optional(),
-    origem: z.string().optional(),
+    origem: z.nativeEnum(CobrancaOrigem).optional(), // Changed from z.string().optional() to z.nativeEnum(CobrancaOrigem).optional()
     
     pagamento_manual: z.boolean().optional(),
     tipo_pagamento: z.string().nullable().optional(),

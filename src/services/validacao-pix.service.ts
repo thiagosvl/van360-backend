@@ -1,9 +1,11 @@
+import { DRIVER_EVENT_PIX_KEY_VALIDATED } from "../config/constants.js";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { PixKeyStatus, PixKeyType, TransactionStatus } from "../types/enums.js";
 import { onlyDigits } from "../utils/string.utils.js";
 import { interService } from "./inter.service.js";
+import { notificationService } from "./notifications/notification.service.js";
 
 // Interface interna
 interface SolicitacaoValidacao {
@@ -204,7 +206,6 @@ async function confirmarChaveUsuario(
         chave_pix: chave,
         status_chave_pix: "VALIDADA",
         chave_pix_validada_em: new Date().toISOString(),
-        chave_pix_validada: true, // Legacy flag check
         nome_titular_pix_validado: nomeTitular,
         cpf_cnpj_titular_pix_validado: cpfTitular
     };
@@ -221,6 +222,28 @@ async function confirmarChaveUsuario(
     if (error) {
         logger.error({ error, usuarioId }, "Erro ao salvar chave pix validada no usuário");
         throw error;
+    }
+
+    // 4. Notificar Usuário via WhatsApp
+    try {
+        const { data: userData } = await supabaseAdmin
+            .from("usuarios")
+            .select("nome, telefone")
+            .eq("id", usuarioId)
+            .single();
+
+        if (userData?.telefone) {
+            logger.info({ usuarioId, telefone: userData.telefone }, "Enviando notificação de Chave PIX Validada");
+            await notificationService.notifyDriver(userData.telefone, DRIVER_EVENT_PIX_KEY_VALIDATED, {
+                nomeMotorista: userData.nome || "Motorista",
+                nomePlano: "", // Not used in this template
+                valor: 0,
+                dataVencimento: ""
+            });
+        }
+    } catch (notifyErr) {
+        logger.error({ notifyErr, usuarioId }, "Erro ao enviar notificação de sucesso na validação PIX");
+        // Não travar o processo principal por erro na notificação
     }
 }
 

@@ -240,5 +240,20 @@ Por favor, acesse o painel e reconecte seu WhatsApp (escaneie o QR Code novament
 Olá *${nomeMot}*, o pré-cadastro de *${nomePas}*${nomeResp} foi realizado com sucesso através do seu link! 🚀
 
 Acesse o sistema agora para revisar os dados, definir o valor da mensalidade e aprovar o cadastro. 🚐💨`;
+    },
+
+    /**
+     * Sucesso na Validação da Chave PIX
+     */
+    pixKeyValidated: (ctx: DriverContext) => {
+        const nomeMot = getFirstName(ctx.nomeMotorista);
+
+        return `✅ *Chave PIX Validada!*
+
+Olá *${nomeMot}*, ótimas notícias! Sua chave PIX foi validada com sucesso pelo banco. 🎉🏢
+
+Agora você já pode ativar a cobrança automática para seus passageiros e receber seus repasses diretamente em sua conta.
+
+Acesse o painel para concluir as configurações se necessário. 🚐💨`;
     }
 };

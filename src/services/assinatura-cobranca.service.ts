@@ -231,7 +231,7 @@ export const assinaturaCobrancaService = {
             });
             
             // Atualizar payload do PIX (inline update)
-            await supabaseAdmin
+            const { error: updateError } = await supabaseAdmin
                 .from("assinaturas_cobrancas")
                 .update({
                     inter_txid: pixData.interTransactionId,
@@ -239,6 +239,10 @@ export const assinaturaCobrancaService = {
                     location_url: pixData.location
                 })
                 .eq("id", cobranca.id);
+            
+            if (updateError) {
+                logger.error({ updateError, cobrancaId: cobranca.id }, "Erro ao atualizar cobrança com dados do PIX");
+            }
 
         } catch (err: any) {
             logger.error({ err, cobrancaId: cobranca.id }, "Falha ao gerar PIX para ativação.");

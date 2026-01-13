@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
+import { webhookAssinaturaHandler } from "../services/handlers/webhook-assinatura.handler.js";
 import { webhookCobrancaHandler } from "../services/handlers/webhook-cobranca.handler.js";
 
 const mockPagamentoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
@@ -41,7 +42,21 @@ const mockPagamentoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
       // 3. Montar Payload do Webhook
       const targetCobranca = (cobrancaAssinatura || cobrancaPai) as any;
-      const txid = targetCobranca.inter_txid || targetCobranca.txid_pix || `MOCK-${cobrancaId}-${Date.now()}`;
+      const txid = targetCobranca.inter_txid || targetCobranca.txid_pix;
+      
+      if (!txid) {
+          logger.error({ cobrancaId, foundRecord: targetCobranca }, "Mock: Cobrança encontrada mas sem TXID.");
+          return reply.status(400).send({ 
+              success: false, 
+              error: "A cobrança informada não possui um TXID (Pix) vinculado no banco de dados.",
+              debug: {
+                  idEncontrado: targetCobranca.id,
+                  colunas: Object.keys(targetCobranca),
+                  valores: targetCobranca
+              }
+          });
+      }
+
       const valor = Number(targetCobranca.valor);
       const horario = new Date().toISOString();
 
@@ -58,14 +73,34 @@ const mockPagamentoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
         }
       };
 
-      // 4. Delegar para o Handler Oficial (Universal)
-      // O handler descobre o tipo baseado no txid, então vai funcionar para ambos
-      const sucesso = await webhookCobrancaHandler.handle(webhookPayload);
+      // 4. Delegar para os Handlers Oficiais (Universal)
+      // Mirroring the logic in webhook.worker.ts
+      
+      // A) Tentar Assinatura (Sistema)
+      const sucessoAssinatura = await webhookAssinaturaHandler.handle(webhookPayload);
+      if (sucessoAssinatura) {
+        return reply.status(200).send({
+            success: true,
+            message: `Simulação processada como ASSINATURA. ID: ${cobrancaId}`,
+            txid,
+            simulacao: true
+        });
+      }
 
+      // B) Tentar Cobrança (Pai/Passageiro)
+      const sucessoCobranca = await webhookCobrancaHandler.handle(webhookPayload);
+      if (sucessoCobranca) {
+        return reply.status(200).send({
+            success: true,
+            message: `Simulação processada como COBRANCA_PAI. ID: ${cobrancaId}`,
+            txid,
+            simulacao: true
+        });
+      }
 
       return reply.status(200).send({
-        success: sucesso,
-        message: `Simulação enviada para o Webhook Handler. ID: ${cobrancaId}`,
+        success: false,
+        message: `Nenhum handler encontrou a cobrança com ID ou TXID informado.`,
         txid,
         simulacao: true
       });

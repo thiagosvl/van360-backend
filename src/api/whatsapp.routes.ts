@@ -10,13 +10,13 @@ const whatsappRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     // Retorna status da instância do usuário + status da Evolution
     app.get("/status", whatsappController.status);
 
-    // Endpoint: POST /conectar
+    // Endpoint: POST /connect
     // Inicia conexão e retorna QR Code ou Status Open
-    app.post("/conectar", whatsappController.connect);
+    app.post("/connect", whatsappController.connect);
 
-    // Endpoint: POST /desconectar
+    // Endpoint: POST /disconnect
     // Faz logout da instância
-    app.post("/desconectar", whatsappController.disconnect);
+    app.post("/disconnect", whatsappController.disconnect);
 };
 
 export default whatsappRoute;
