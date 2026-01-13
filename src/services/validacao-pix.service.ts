@@ -1,7 +1,7 @@
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
-import { PixKeyType, TransactionStatus } from "../types/enums.js";
+import { PixKeyStatus, PixKeyType, TransactionStatus } from "../types/enums.js";
 import { onlyDigits } from "../utils/string.utils.js";
 import { interService } from "./inter.service.js";
 
@@ -9,7 +9,7 @@ import { interService } from "./inter.service.js";
 interface SolicitacaoValidacao {
     usuarioId: string;
     chavePix: string;
-    tipoChave: string; // CPF, EMAIL, TELEFONE, ALEATORIA, CNPJ
+    tipoChave: string;
 }
 
 /**
@@ -35,8 +35,8 @@ export async function cadastrarOuAtualizarChavePix(
     .update({
       chave_pix: chaveSanitizada,
       tipo_chave_pix: tipoChave,
-      status_chave_pix: "PENDENTE_VALIDACAO",
-      chave_pix_validada_em: null, // Reseta validação anterior
+      status_chave_pix: PixKeyStatus.PENDENTE_VALIDACAO,
+      chave_pix_validada_em: null,
       nome_titular_pix_validado: null,
       cpf_cnpj_titular_pix_validado: null,
       updated_at: new Date().toISOString()
@@ -54,7 +54,7 @@ export async function cadastrarOuAtualizarChavePix(
       logger.error({ error: err.message, usuarioId }, "Falha silenciosa ao iniciar validação PIX (background).");
     });
 
-  return { success: true, status: "PENDENTE_VALIDACAO" };
+  return { success: true, status: PixKeyStatus.PENDENTE_VALIDACAO };
 }
 
 /**

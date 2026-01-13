@@ -8,7 +8,7 @@ import {
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
-import { CobrancaOrigem, ConfigKey, SubscriptionBillingType, SubscriptionChargeStatus, UserSubscriptionStatus } from "../types/enums.js";
+import { ConfigKey, SubscriptionBillingType, SubscriptionChargeStatus, UserSubscriptionStatus } from "../types/enums.js";
 import { onlyDigits } from "../utils/string.utils.js";
 import { automationService } from "./automation.service.js";
 import { getBillingConfig, getConfigNumber } from "./configuracao.service.js";
@@ -160,7 +160,6 @@ export const subscriptionUpgradeService = {
                 valor: precoAplicado,
                 status: SubscriptionChargeStatus.PENDENTE,
                 data_vencimento: trialEnd.toISOString().split("T")[0],
-                origem: CobrancaOrigem.INTER,
                 billing_type: SubscriptionBillingType.UPGRADE_PLAN,
                 descricao: `Upgrade de Plano: ${planoAtual?.slug === PLANO_ESSENCIAL ? "Essencial" : "Grátis"} → ${novoPlano.nome} (Período de Testes)`,
               })
@@ -235,7 +234,6 @@ export const subscriptionUpgradeService = {
               valor: valorCobrar,
               status: SubscriptionChargeStatus.PENDENTE,
               data_vencimento: hoje.toISOString().split("T")[0],
-              origem: CobrancaOrigem.INTER,
               billing_type: billingType,
               descricao: descricaoCobranca,
             })
@@ -372,7 +370,6 @@ export const subscriptionUpgradeService = {
                 valor: precoAplicado,
                 status: SubscriptionChargeStatus.PENDENTE,
                 data_vencimento: dataVencimentoCobranca,
-                origem: CobrancaOrigem.INTER,
                 billing_type: SubscriptionBillingType.DOWNGRADE,
                 descricao: `Downgrade de Plano - ${novoPlano.nome}`,
               })
@@ -501,7 +498,6 @@ export const subscriptionUpgradeService = {
                 valor: precoAplicado,
                 status: SubscriptionChargeStatus.PENDENTE,
                 data_vencimento: hoje.toISOString().split("T")[0],
-                origem: CobrancaOrigem.INTER,
                 billing_type: SubscriptionBillingType.UPGRADE_PLAN,
                 descricao: `Upgrade de Plano: ${planoAtual.nome} → ${novoSubplano.nome}`,
               })
@@ -600,7 +596,6 @@ export const subscriptionUpgradeService = {
                 valor: diferenca,
                 status: SubscriptionChargeStatus.PENDENTE,
                 data_vencimento: hoje.toISOString().split("T")[0],
-                origem: CobrancaOrigem.INTER,
                 billing_type: SubscriptionBillingType.EXPANSION,
                 descricao: `Expansão de Limite: ${assinaturaAtual.franquia_contratada_cobrancas} → ${franquiaContratada} passageiros`,
               })
@@ -764,7 +759,6 @@ export const subscriptionUpgradeService = {
               valor: valorCobranca,
               status: SubscriptionChargeStatus.PENDENTE,
               data_vencimento: hoje.toISOString().split("T")[0],
-              origem: CobrancaOrigem.INTER,
               billing_type: billingType === SubscriptionBillingType.SUBSCRIPTION ? SubscriptionBillingType.ACTIVATION : SubscriptionBillingType.EXPANSION,
               descricao: billingType === SubscriptionBillingType.SUBSCRIPTION
                 ? `Ativação de Plano Profissional (${quantidade} passageiros)`

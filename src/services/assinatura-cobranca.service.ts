@@ -1,7 +1,8 @@
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
-import { CobrancaOrigem, SubscriptionBillingType, SubscriptionChargeStatus } from "../types/enums.js";
+import { ConfigKey, SubscriptionBillingType, SubscriptionChargeStatus } from "../types/enums.js";
+import { getConfigNumber } from "./configuracao.service.js";
 import { interService } from "./inter.service.js";
 
 export const assinaturaCobrancaService = {
@@ -149,7 +150,7 @@ export const assinaturaCobrancaService = {
                 cpf: usuario.cpfcnpj,
                 nome: usuario.nome,
                 dataVencimento: dataVencimento,
-                validadeAposVencimentoDias: 30 // Pode virar config no futuro
+                validadeAposVencimentoDias: await getConfigNumber(ConfigKey.PIX_VALIDADE_APOS_VENCIMENTO, 30)
              });
 
         } else {
@@ -209,7 +210,6 @@ export const assinaturaCobrancaService = {
             valor: valor,
             status: SubscriptionChargeStatus.PENDENTE,
             data_vencimento: dataVencimento,
-            origem: CobrancaOrigem.INTER,
             billing_type: SubscriptionBillingType.ACTIVATION,
             descricao: descricao,
           })
@@ -227,7 +227,7 @@ export const assinaturaCobrancaService = {
                 cpf: cpfResponsavel,
                 nome: nomeResponsavel,
                 dataVencimento: dataVencimento,
-                validadeAposVencimentoDias: 30
+                validadeAposVencimentoDias: await getConfigNumber(ConfigKey.PIX_VALIDADE_APOS_VENCIMENTO, 30)
             });
             
             // Atualizar payload do PIX (inline update)

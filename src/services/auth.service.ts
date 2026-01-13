@@ -441,7 +441,6 @@ export async function iniciaRegistroPlanoEssencial(
         valor: precoAplicado,
         status: SubscriptionChargeStatus.PENDENTE,
         data_vencimento: dataVencimentoCobranca,
-        origem: "inter",
         billing_type: "activation",
         descricao: `Ativação de Assinatura - Plano Essencial`,
       })
