@@ -5,16 +5,16 @@ import { supabaseAdmin } from "../config/supabase.js";
 import { ConnectInstanceResponse, whatsappService } from "../services/whatsapp.service.js";
 
 // Helper para buscar ID interno
-async function getUsuarioId(authUid: string): Promise<{ id: string | null, error?: string }> {
+async function getUsuarioId(authUid: string): Promise<{ id: string | null, telefone: string | null, error?: string }> {
     const { data: usuario, error } = await supabaseAdmin
         .from("usuarios")
-        .select("id, whatsapp_status")
+        .select("id, whatsapp_status, telefone")
         .eq("auth_uid", authUid)
         .maybeSingle(); 
     
-    if (error) return { id: null, error: `DB Error: ${error.message}` };
-    if (!usuario) return { id: null, error: "Record not found" };
-    return { id: usuario.id };
+    if (error) return { id: null, telefone: null, error: `DB Error: ${error.message}` };
+    if (!usuario) return { id: null, telefone: null, error: "Record not found" };
+    return { id: usuario.id, telefone: usuario.telefone };
 }
 
 export const whatsappController = {
@@ -77,19 +77,19 @@ export const whatsappController = {
   requestPairingCode: async (request: FastifyRequest, reply: FastifyReply) => {
     try {
         const authUid = (request as any).user?.id;
-        const { phoneNumber } = request.body as { phoneNumber: string };
-
-        logger.info({ authUid, phoneNumber }, "WhatsappController.requestPairingCode - Request received");
         
         if (!authUid) return reply.status(401).send({ error: "Não autorizado." });
-        if (!phoneNumber) return reply.status(400).send({ error: "Número de telefone obrigatório." });
 
-        const { id: usuarioId } = await getUsuarioId(authUid);
+        const { id: usuarioId, telefone } = await getUsuarioId(authUid);
+        
+        logger.info({ authUid, usuarioId, hasTelefone: !!telefone }, "WhatsappController.requestPairingCode - Request received");
+
         if (!usuarioId) return reply.status(404).send({ error: "Perfil não encontrado." });
+        if (!telefone) return reply.status(400).send({ error: "Número de telefone não cadastrado no perfil." });
 
         const instanceName = whatsappService.getInstanceName(usuarioId);
 
-        const result: ConnectInstanceResponse = await whatsappService.requestPairingCode(instanceName, phoneNumber);
+        const result: ConnectInstanceResponse = await whatsappService.requestPairingCode(instanceName, telefone);
         
         return reply.send(result);
     } catch (err: any) {

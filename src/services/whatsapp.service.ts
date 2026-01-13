@@ -254,12 +254,16 @@ class WhatsappService {
           
           const { data } = await axios.get<EvolutionConnectResponse>(url, { headers: { "apikey": EVO_KEY } });
 
-          logger.info({ instanceName, hasPairingCode: !!data?.pairingCode, hasCode: !!data?.code }, "Evolution Response for Pairing Code");
-
-          if (data?.pairingCode || data?.code) {
-              return { pairingCode: data.pairingCode || data.code };
+          if (data?.pairingCode) {
+              // Se o pairingCode for muito longo, provavelmente é um QR Payload (vaza as vezes na Evo)
+              if (data.pairingCode.length > 20) {
+                  logger.warn({ instanceName, pairingCodeLength: data.pairingCode.length }, "Evolution returned a QR payload instead of Pairing Code");
+                  return {};
+              }
+              return { pairingCode: data.pairingCode };
           }
 
+          logger.warn({ instanceName, data }, "Evolution did not return pairingCode");
           return {};
 
       } catch (error) {
