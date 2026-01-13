@@ -237,6 +237,39 @@ class WhatsappService {
   }
 
   /**
+   * Solicita Código de Pareamento (Mobile)
+   */
+  async requestPairingCode(instanceName: string, phoneNumber: string): Promise<ConnectInstanceResponse> {
+      try {
+          // 1. Garantir que instância existe
+          await this.createInstance(instanceName);
+
+          const cleanNumber = phoneNumber.replace(/\D/g, "");
+          // Evolution geralmente espera o número no formato internacional (55...)
+          const finalNumber = cleanNumber.length <= 11 ? `55${cleanNumber}` : cleanNumber;
+
+          // 2. Chamar /instance/connect/{instance} com o query param 'number'
+          // Evolution V2: Ao passar ?number=..., ele retorna o pairingCode ao invés do QR
+          const url = `${EVO_URL}/instance/connect/${instanceName}?number=${finalNumber}`;
+          
+          const { data } = await axios.get<EvolutionConnectResponse>(url, { headers: { "apikey": EVO_KEY } });
+
+          logger.info({ instanceName, hasPairingCode: !!data?.pairingCode, hasCode: !!data?.code }, "Evolution Response for Pairing Code");
+
+          if (data?.pairingCode || data?.code) {
+              return { pairingCode: data.pairingCode || data.code };
+          }
+
+          return {};
+
+      } catch (error) {
+          const err = error as AxiosError;
+          logger.error({ err: err.response?.data || err.message, instanceName }, "Falha ao solicitar Pairing Code");
+          throw new Error("Falha ao gerar Código de Pareamento.");
+      }
+  }
+
+  /**
    * Desconecta (Logout)
    */
   async disconnectInstance(instanceName: string): Promise<boolean> {

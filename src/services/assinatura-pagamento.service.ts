@@ -46,7 +46,7 @@ export async function processarPagamentoAssinatura(
   dadosPagamento: DadosPagamento,
   contextoLog: ContextoLog = {},
   reciboUrl?: string
-): Promise<void> {
+): Promise<{ vigenciaFim: Date } | void> {
   const { txid, cobrancaId } = contextoLog;
   const logContext = txid ? { txid } : { cobrancaId };
 
@@ -158,6 +158,8 @@ export async function processarPagamentoAssinatura(
     }
 
     logger.info({ ...logContext }, "Fluxo completo para pagamento confirmado");
+
+    return { vigenciaFim };
   } catch (error: any) {
     logger.error({ ...logContext, error: error.message, stack: error.stack }, "Erro ao processar pagamento");
     throw error;

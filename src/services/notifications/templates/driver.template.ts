@@ -156,10 +156,12 @@ O pagamento está sendo processado e o valor logo estará em sua conta. ⏳`;
         const valor = formatCurrency(ctx.valor);
         const ref = ctx.mes ? ` referente a *${getMeshName(ctx.mes)}/${ctx.ano}*` : "";
         const nomeMot = getFirstName(ctx.nomeMotorista);
+        const validade = ctx.dataVencimento ? `\n🗓️ *Validade do Plano:* ${formatDate(ctx.dataVencimento)}` : "";
 
         return `✅ *Pagamento Confirmado!*
 
 Olá *${nomeMot}*, confirmamos o recebimento do seu pagamento de *${valor}*${ref} referente ao plano *${ctx.nomePlano}*.
+${validade}
 
 Seu acesso está garantido! 🚐💨
 

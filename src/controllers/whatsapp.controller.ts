@@ -74,6 +74,29 @@ export const whatsappController = {
     }
   },
 
+  requestPairingCode: async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+        const authUid = (request as any).user?.id;
+        const { phoneNumber } = request.body as { phoneNumber: string };
+
+        logger.info({ authUid, phoneNumber }, "WhatsappController.requestPairingCode - Request received");
+        
+        if (!authUid) return reply.status(401).send({ error: "Não autorizado." });
+        if (!phoneNumber) return reply.status(400).send({ error: "Número de telefone obrigatório." });
+
+        const { id: usuarioId } = await getUsuarioId(authUid);
+        if (!usuarioId) return reply.status(404).send({ error: "Perfil não encontrado." });
+
+        const instanceName = whatsappService.getInstanceName(usuarioId);
+
+        const result: ConnectInstanceResponse = await whatsappService.requestPairingCode(instanceName, phoneNumber);
+        
+        return reply.send(result);
+    } catch (err: any) {
+          return reply.status(500).send({ error: err.message });
+    }
+  },
+
   disconnect: async (request: FastifyRequest, reply: FastifyReply) => {
     try {
         const authUid = (request as any).user?.id;

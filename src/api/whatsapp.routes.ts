@@ -17,6 +17,10 @@ const whatsappRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     // Endpoint: POST /disconnect
     // Faz logout da instância
     app.post("/disconnect", whatsappController.disconnect);
+
+    // Endpoint: POST /pairing-code
+    // Solicita código de pareamento para conexão mobile
+    app.post("/pairing-code", whatsappController.requestPairingCode);
 };
 
 export default whatsappRoute;

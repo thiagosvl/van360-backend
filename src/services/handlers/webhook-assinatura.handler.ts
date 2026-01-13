@@ -46,7 +46,7 @@ export const webhookAssinaturaHandler = {
         const dataPagamento = horario || new Date().toISOString();
 
         // A) Processar Pagamento (Lógica de Negócio: Ativar Assinatura, etc)
-        await processarPagamentoAssinatura(
+        const result = await processarPagamentoAssinatura(
             cobranca as any,
             {
                 valor,
@@ -61,6 +61,7 @@ export const webhookAssinaturaHandler = {
         try {
             const usuario = cobranca.usuarios as any;
             const nomePlano = (cobranca as any).assinaturas_usuarios?.planos?.nome || "Plano Van360";
+            const vigenciaFim = result?.vigenciaFim ? result.vigenciaFim.toISOString().split('T')[0] : cobranca.data_vencimento;
 
             const receiptData: ReceiptData = {
                 id: cobranca.id,
@@ -82,7 +83,7 @@ export const webhookAssinaturaHandler = {
                     templateData: {
                         nomeMotorista: usuario?.nome,
                         nomePlano: nomePlano,
-                        dataVencimento: cobranca.data_vencimento
+                        dataVencimento: vigenciaFim
                     }
                 }
             });

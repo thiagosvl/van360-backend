@@ -23,6 +23,7 @@ export interface EvolutionConnectResponse {
     instance?: EvolutionInstance;
     base64?: string; // Legacy/Alternative format
     code?: string; // Legacy/Alternative format
+    pairingCode?: string; // New Mobile Connection
 }
 
 export interface CompositeMessagePart {
@@ -35,4 +36,5 @@ export interface CompositeMessagePart {
 export interface ConnectInstanceResponse {
     qrcode?: EvolutionQrCode;
     instance?: EvolutionInstance;
+    pairingCode?: string;
 }
