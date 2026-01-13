@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { DRIVER_EVENT_PIX_KEY_VALIDATED } from "../config/constants.js";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
@@ -65,7 +66,7 @@ export async function cadastrarOuAtualizarChavePix(
 export async function iniciarValidacaoPix(usuarioId: string, chavePix: string, tipoChave?: string) {
   logger.info({ usuarioId, chavePix }, "Iniciando validação de Chave PIX (Micro-pagamento)");
 
-  const xIdIdempotente = `VAL-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  const xIdIdempotente = crypto.randomUUID();
 
   try {
     // 1. Registrar intenção de validação (Tabela Temporária)
