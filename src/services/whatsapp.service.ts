@@ -154,28 +154,37 @@ class WhatsappService {
 
   /**
    * Cria uma instância (se não existir)
+   * Retorna 'true' se a instância está pronta (já existia ou foi criada agora)
    */
   async createInstance(instanceName: string): Promise<boolean> {
       try {
-          // Verificar se já existe primeiro
+          // 1. Verificar se já existe
           const status = await this.getInstanceStatus(instanceName);
-          if (status.state !== WHATSAPP_STATUS.NOT_FOUND) {
-              return true; // Já existe
+          
+          if (status.state !== WHATSAPP_STATUS.NOT_FOUND && status.state !== "ERROR") {
+              return true; // Já existe e está respondendo
           }
 
+          // 2. Se não existe (404), criar
+          logger.info({ instanceName }, "Instância não encontrada. Criando nova instância na Evolution...");
           const url = `${EVO_URL}/instance/create`;
           await axios.post(url, {
               instanceName: instanceName,
-              qrcode: true, // Habilita retorno de QR no connect
+              qrcode: true, 
               integration: "WHATSAPP-BAILEYS" 
           }, { 
               headers: { "apikey": EVO_KEY } 
           });
 
+          // 3. Pequeno delay para garantir que a Evolution registrou a nova instância internamente
+          await new Promise(r => setTimeout(r, 1200));
           return true;
       } catch (error) {
           const err = error as AxiosError;
-          logger.error({ err: err.response?.data || err.message, instanceName }, "Falha ao criar instância Evolution");
+          logger.error({ 
+              err: err.response?.data || err.message, 
+              instanceName 
+          }, "Falha crítica ao criar/verificar instância na Evolution");
           return false;
       }
   }
@@ -186,53 +195,55 @@ class WhatsappService {
    */
   async connectInstance(instanceName: string): Promise<ConnectInstanceResponse> {
       try {
-          // 1. Garantir que instância existe
-          await this.createInstance(instanceName);
+          // 1. Garantir que instância existe (com delay interno se criar)
+          const created = await this.createInstance(instanceName);
+          if (!created) throw new Error("A instância do WhatsApp não pôde ser preparada.");
 
-          // 2. Chamar /instance/connect/{instance}
-          const url = `${EVO_URL}/instance/connect/${instanceName}`;
-          const { data } = await axios.get<EvolutionConnectResponse>(url, { headers: { "apikey": EVO_KEY } });
+          // 2. Loop de retentativa (Evolution às vezes demora a herdar a sessão de criação)
+          let lastData: EvolutionConnectResponse | null = null;
+          
+          for (let attempt = 1; attempt <= 2; attempt++) {
+              const url = `${EVO_URL}/instance/connect/${instanceName}`;
+              const { data } = await axios.get<EvolutionConnectResponse>(url, { headers: { "apikey": EVO_KEY } });
+              lastData = data;
 
-          // Retorno esperado Evolution V2: { base64: "...", code: "..." } ou { instance: { state: "open" } } se já conectado
-          if (data?.base64 || data?.qrcode?.base64) {
+              if (data?.base64 || data?.qrcode?.base64 || data?.instance?.state === WHATSAPP_STATUS.OPEN) {
+                  break; 
+              }
+              
+              if (attempt < 2) {
+                  logger.warn({ instanceName, attempt }, "Evolution não retornou QR Code. Tentando novamente em 1.5s...");
+                  await new Promise(r => setTimeout(r, 1500));
+              }
+          }
+
+          // 3. Processar resultado
+          if (lastData?.base64 || lastData?.qrcode?.base64) {
                return { 
                    qrcode: { 
-                       base64: (data.base64 || data.qrcode?.base64) as string,
-                       code: data.code || data.qrcode?.code
+                       base64: (lastData.base64 || lastData.qrcode?.base64) as string,
+                       code: lastData.code || lastData.qrcode?.code
                    } 
                };
           }
            
-          // Se já estiver conectado, pode não retornar QR
-          if (data?.instance?.state === WHATSAPP_STATUS.OPEN) {
+          if (lastData?.instance?.state === WHATSAPP_STATUS.OPEN) {
               return { instance: { state: WHATSAPP_STATUS.OPEN } };
           }
-            // Se estiver "connecting" mas sem QR Code, pode estar travado.
-            // Vamos tentar um logout forçado e conectar novamente.
-            if (data?.instance?.state === "connecting" || data?.instance?.state === WHATSAPP_STATUS.CONNECTING) {
-                logger.warn({ instanceName }, "Instância travada em 'connecting'. Forçando logout para novo QR Code...");
+
+          // Tratar estado "connecting" travado
+          if (lastData?.instance?.state === "connecting" || lastData?.instance?.state === WHATSAPP_STATUS.CONNECTING) {
+                logger.warn({ instanceName }, "Instância travada em 'connecting'. Forçando logout...");
                 await this.disconnectInstance(instanceName);
-                
-                // Tenta conectar de novo após breve delay
                 await new Promise(r => setTimeout(r, 1000));
-                const retryUrl = `${EVO_URL}/instance/connect/${instanceName}`;
-                const { data: retryData } = await axios.get<EvolutionConnectResponse>(retryUrl, { headers: { "apikey": EVO_KEY } });
-                
-                if (retryData?.base64 || retryData?.qrcode?.base64) {
-                    return { 
-                        qrcode: { 
-                            base64: (retryData.base64 || retryData.qrcode?.base64) as string,
-                            code: retryData.code || retryData.qrcode?.code
-                        } 
-                    };
-                }
-            }
+                return this.connectInstance(instanceName); // Recursão controlada (uma vez)
+          }
             
-            return {}; // Retorna vazio se falhar algo
+          return {}; 
         } catch (error) {
             const err = error as AxiosError;
             logger.error({ err: err.response?.data || err.message, instanceName }, "Falha ao conectar instância");
-            throw new Error("Falha ao gerar QR Code de conexão.");
+            throw new Error("Não foi possível gerar a conexão. Tente novamente em instantes.");
         }
   }
 
@@ -241,29 +252,38 @@ class WhatsappService {
    */
   async requestPairingCode(instanceName: string, phoneNumber: string): Promise<ConnectInstanceResponse> {
       try {
-          // 1. Garantir que instância existe
-          await this.createInstance(instanceName);
+          // 1. Garantir que instância existe (com delay interno se criar)
+          const created = await this.createInstance(instanceName);
+          if (!created) throw new Error("A instância do WhatsApp não pôde ser preparada.");
 
           const cleanNumber = phoneNumber.replace(/\D/g, "");
-          // Evolution geralmente espera o número no formato internacional (55...)
           const finalNumber = cleanNumber.length <= 11 ? `55${cleanNumber}` : cleanNumber;
 
-          // 2. Chamar /instance/connect/{instance} com o query param 'number'
-          // Evolution V2: Ao passar ?number=..., ele retorna o pairingCode ao invés do QR
-          const url = `${EVO_URL}/instance/connect/${instanceName}?number=${finalNumber}`;
+          // 2. Loop de retentativa para Pairing Code
+          let lastData: EvolutionConnectResponse | null = null;
           
-          const { data } = await axios.get<EvolutionConnectResponse>(url, { headers: { "apikey": EVO_KEY } });
+          for (let attempt = 1; attempt <= 3; attempt++) {
+              const url = `${EVO_URL}/instance/connect/${instanceName}?number=${finalNumber}`;
+              const { data } = await axios.get<EvolutionConnectResponse>(url, { headers: { "apikey": EVO_KEY } });
+              lastData = data;
 
-          if (data?.pairingCode) {
-              // Se o pairingCode for muito longo, provavelmente é um QR Payload (vaza as vezes na Evo)
-              if (data.pairingCode.length > 20) {
-                  logger.warn({ instanceName, pairingCodeLength: data.pairingCode.length }, "Evolution returned a QR payload instead of Pairing Code");
-                  return {};
+              if (data?.pairingCode) {
+                  // Anti-QR Payload vaza as vezes na Evo
+                  if (data.pairingCode.length > 20) {
+                      logger.warn({ instanceName, pairingCodeLength: data.pairingCode.length }, "Evolution retornou QR payload, retentando...");
+                  } else {
+                      return { pairingCode: data.pairingCode };
+                  }
               }
-              return { pairingCode: data.pairingCode };
+
+              if (attempt < 3) {
+                  const delay = attempt * 1000;
+                  logger.warn({ instanceName, attempt }, `Evolution não retornou pairingCode. Tentando novamente em ${delay}ms...`);
+                  await new Promise(r => setTimeout(r, delay));
+              }
           }
 
-          logger.warn({ instanceName, data }, "Evolution did not return pairingCode");
+          logger.warn({ instanceName, lastData }, "Evolution falhou em retornar pairingCode após 3 tentativas.");
           return {};
 
       } catch (error) {
