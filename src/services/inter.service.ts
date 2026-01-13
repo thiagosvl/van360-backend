@@ -463,11 +463,25 @@ async function realizarPagamentoPix(
       httpsAgent: getHttpsAgent(),
     });
 
-    // O retorno de sucesso geralmente contém o endToEndId e status
-    // Se for agendamento, status pode ser 'AGENDADO'
-    return {
+    logger.info({ 
+      msg: "Resposta do Inter ao realizar PIX",
+      status: data.status,
       endToEndId: data.endToEndId,
-      status: data.status || "PROCESSAMENTO"
+      fullData: data 
+    }, "Inter API Response (PIX)");
+
+    // Mapeamento de Status da API Banking v2 (Pagamento)
+    // Se tipoRetorno for APROVACAO, consideramos que a chave é válida e o pagamento foi aceito.
+    let statusFinal = data.status || "PROCESSAMENTO";
+    if (data.tipoRetorno === "APROVACAO" || data.tipoRetorno === "PROCESSADO") {
+        statusFinal = "PAGO"; // Tratamos como Pago para fins de validação da chave
+    } else if (data.tipoRetorno === "AGENDADO") {
+        statusFinal = "AGENDADO";
+    }
+
+    return {
+      endToEndId: data.endToEndId || data.codigoSolicitacao, // CodigoSolicitacao é o ID do pagamento na v2
+      status: statusFinal
     };
 
   } catch (err: any) {
@@ -539,6 +553,30 @@ async function cancelarCobrancaPix(
   }
 }
 
+/**
+ * Consulta o status de um pagamento PIX enviado (Banking API).
+ * Endpoint: GET /banking/v2/pix/{codigoSolicitacao}
+ */
+async function consultarPagamentoPix(
+  adminClient: SupabaseClient,
+  codigoSolicitacao: string
+) {
+  const token = await getValidInterToken(adminClient);
+  const url = `${INTER_API_URL}/banking/v2/pix/${codigoSolicitacao}`;
+
+  try {
+    logger.info({ codigoSolicitacao }, "Consultando status de pagamento PIX (Banking)...");
+    const { data } = await axios.get(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      httpsAgent: getHttpsAgent(),
+    });
+    return data;
+  } catch (err: any) {
+    logger.error({ err: err.response?.data || err.message, codigoSolicitacao }, "Erro ao consultar pagamento PIX");
+    throw err;
+  }
+}
+
 export const interService = {
   getValidInterToken,
   criarCobrancaPix,
@@ -549,6 +587,7 @@ export const interService = {
   listarPixRecebidos,
   consultarPix,
   realizarPagamentoPix,
+  consultarPagamentoPix, // Exportando nova função
   realizarPixRepasse,
   cancelarCobrancaPix
 };

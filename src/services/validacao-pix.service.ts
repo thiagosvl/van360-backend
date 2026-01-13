@@ -93,7 +93,13 @@ export async function iniciarValidacaoPix(usuarioId: string, chavePix: string, t
       xIdIdempotente
     });
 
-    logger.info({ usuarioId, xIdIdempotente, statusInter: resultado.status }, "Micro-pagamento enviado.");
+    logger.info({ 
+      usuarioId, 
+      xIdIdempotente, 
+      statusInter: resultado.status, 
+      endToEndId: resultado.endToEndId,
+      fullResult: resultado 
+    }, "Micro-pagamento enviado. Aguardando Webhook ou Processamento.");
 
      // 3. Atualizar registro com resultado inicial
      const novoStatus = resultado.status === "PAGO" || resultado.status === "REALIZADO" ? TransactionStatus.SUCESSO : TransactionStatus.PROCESSAMENTO;
