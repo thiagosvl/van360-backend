@@ -1,5 +1,7 @@
 import {
-  DRIVER_EVENT_ACTIVATION, DRIVER_EVENT_WELCOME_FREE, DRIVER_EVENT_WELCOME_TRIAL,
+  DRIVER_EVENT_ACTIVATION,
+  DRIVER_EVENT_WELCOME_FREE,
+  DRIVER_EVENT_WELCOME_TRIAL,
   PLANO_ESSENCIAL,
   PLANO_GRATUITO,
   PLANO_PROFISSIONAL
@@ -68,6 +70,7 @@ export interface RegistroAutomaticoResult {
   inter_txid?: string; // Mantendo caso precise
   cobrancaId?: string; // Mantendo caso precise
   valor?: number;      // Mantendo caso precise
+  preco_aplicado?: number;
   session: {
     access_token: string;
     refresh_token: string;
