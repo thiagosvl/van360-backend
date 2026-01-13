@@ -1,4 +1,4 @@
-import { DRIVER_EVENT_ACTIVATION, DRIVER_EVENT_WELCOME_FREE, DRIVER_EVENT_WELCOME_TRIAL, PLANO_GRATUITO, PLANO_PROFISSIONAL } from "../config/constants.js";
+import { DRIVER_EVENT_ACTIVATION, DRIVER_EVENT_WELCOME_FREE, DRIVER_EVENT_WELCOME_TRIAL, PLANO_ESSENCIAL, PLANO_GRATUITO, PLANO_PROFISSIONAL } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
