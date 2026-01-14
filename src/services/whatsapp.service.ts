@@ -259,20 +259,20 @@ class WhatsappService {
               // Se não está conectado, força disconnect/delete para garantir "Clean Slate"
               if (status.state !== WHATSAPP_STATUS.NOT_FOUND) {
                    logger.info({ instanceName }, "Resetando instância para novo Pairing Code (Clean Slate)...");
-                   await this.logoutInstance(instanceName); // Logout gracefully first
+                   await this.disconnectInstance(instanceName); // Logout gracefully first
                    await new Promise(r => setTimeout(r, 1000));
                    await this.deleteInstance(instanceName); // Delete é mais "forte" que Logout
                    await new Promise(r => setTimeout(r, 2000));
               }
 
               // 2. Criar Instância Limpa
-              // (MUDANÇA: enableQrcode=true para garantir que a instância inicialize "full" na Evolution, evitando erro no celular)
-              await this.createInstance(instanceName, true);
+              // (REVERTIDO: enableQrcode=false para ser mais leve e rápido na geração do código)
+              await this.createInstance(instanceName, false);
 
-              // Esperar a Evolution "respirar" e iniciar o Chrome
-              await new Promise(r => setTimeout(r, 5000));
+              // Esperar a Evolution iniciar (modo leve é rápido)
+              await new Promise(r => setTimeout(r, 1500));
 
-              // 3. Solicitar Código (Aumentado para 6 tentativas de 3s = ~18s de timeout)
+              // 3. Solicitar Código (6 tentativas de 3s)
               for (let attempt = 1; attempt <= 6; attempt++) {
                   const url = `${EVO_URL}/instance/connect/${instanceName}?number=${finalPhone}`;
                   try {
