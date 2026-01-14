@@ -34,9 +34,11 @@ export const whatsappHealthCheckJob = {
         }
 
         if (!usuarios || usuarios.length === 0) {
-            // logger.info("Health Check: Nenhum usuário conectado para verificar.");
+            logger.info("Health Check: Nenhum usuário conectado para verificar.");
             return result;
         }
+
+        logger.info({ count: usuarios.length }, "Health Check: Iniciando verificação de instâncias...");
 
         result.totalChecked = usuarios.length;
 
