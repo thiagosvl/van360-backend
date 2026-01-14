@@ -429,7 +429,7 @@ interface PagamentoPixParams {
 async function realizarPagamentoPix(
   adminClient: SupabaseClient,
   params: PagamentoPixParams
-): Promise<{ endToEndId: string; status: string }> {
+): Promise<{ endToEndId: string; status: string; nomeBeneficiario?: string; cpfCnpjBeneficiario?: string }> {
   if (INTER_MOCK_MODE) {
     logger.warn({ params }, "MOCK INTER ATIVO: Simulando Pagamento PIX");
     return {
@@ -481,7 +481,9 @@ async function realizarPagamentoPix(
 
     return {
       endToEndId: data.endToEndId || data.codigoSolicitacao, // CodigoSolicitacao é o ID do pagamento na v2
-      status: statusFinal
+      status: statusFinal,
+      nomeBeneficiario: data.beneficiario?.nome,
+      cpfCnpjBeneficiario: data.beneficiario?.cpfCnpj
     };
 
   } catch (err: any) {

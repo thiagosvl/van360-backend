@@ -26,13 +26,29 @@ export async function cadastrarOuAtualizarChavePix(
   if (!usuarioId) throw new Error("ID do usuário é obrigatório.");
   if (!chavePix) throw new Error("Chave PIX é obrigatória.");
 
-  // 1. Sanitizar
+  // 1. RATE LIMITING: Verificar tentativas recentes (滥uso)
+  // 1. RATE LIMITING: Verificar tentativas recentes (滥uso)
+  /* 
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const { count, error: countError } = await supabaseAdmin
+      .from("pix_validacao_pendente")
+      .select("*", { count: "exact", head: true })
+      .eq("usuario_id", usuarioId)
+      .gt("created_at", oneHourAgo);
+
+  if (!countError && count !== null && count >= 3) {
+      logger.warn({ usuarioId, count }, "Bloqueio de Rate Limit para validação PIX");
+      throw new Error("Muitas tentativas de validação. Aguarde 1 hora para tentar novamente.");
+  }
+  */
+
+  // 2. Sanitizar
   let chaveSanitizada = chavePix.trim();
   if ([PixKeyType.CPF, PixKeyType.CNPJ, PixKeyType.TELEFONE].includes(tipoChave as any)) {
     chaveSanitizada = onlyDigits(chavePix);
   }
 
-  // 2. Salvar no Banco como PENDENTE
+  // 3. Salvar no Banco como PENDENTE
   const { error } = await supabaseAdmin
     .from("usuarios")
     .update({
@@ -51,7 +67,7 @@ export async function cadastrarOuAtualizarChavePix(
     throw new Error("Erro ao salvar chave PIX.");
   }
 
-  // 3. Iniciar Validação Async (Micro-pagamento)
+  // 4. Iniciar Validação Async (Micro-pagamento)
   iniciarValidacaoPix(usuarioId, chaveSanitizada, tipoChave)
     .catch(err => {
       logger.error({ error: err.message, usuarioId }, "Falha silenciosa ao iniciar validação PIX (background).");
@@ -113,8 +129,15 @@ export async function iniciarValidacaoPix(usuarioId: string, chavePix: string, t
          .eq("x_id_idempotente", xIdIdempotente);
 
      // Se SUCESSO imediato, atualizar usuário
+     // Passamos os dados do beneficiário retornados pelo Inter, se disponíveis
      if (novoStatus === TransactionStatus.SUCESSO) {
-         await confirmarChaveUsuario(usuarioId, chavePix, tipoChave || "DESCONHECIDO");
+         await confirmarChaveUsuario(
+             usuarioId, 
+             chavePix, 
+             tipoChave || "DESCONHECIDO", 
+             resultado.nomeBeneficiario || "VALIDADO AUTO", 
+             resultado.cpfCnpjBeneficiario || ""
+         );
      }
 
     // BLOCK MOCK: Auto-validar se estiver em ambiente de teste E falhou/ficou processando

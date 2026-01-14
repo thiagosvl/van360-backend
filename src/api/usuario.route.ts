@@ -21,6 +21,7 @@ export default async function usuarioRoute(app: FastifyInstance) {
 
     // --- Rotas de Usuário ---
     app.patch("/:id", UsuarioController.atualizarUsuario);
+    app.delete("/:id", UsuarioController.deleteAccount);
     app.get("/:usuarioId/resumo", usuarioResumoController.getResumo);
 
 }

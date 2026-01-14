@@ -98,3 +98,46 @@ export async function atualizarUsuario(usuarioId: string, payload: {
 
   return { success: true };
 }
+
+export async function excluirUsuario(usuarioId: string, authUid: string) {
+    // 1. Cleanup Whatsapp
+    // Importação dinâmica para evitar dependência circular se houver, ou mover para topo se seguro.
+    // Assumindo que whatsappService pode ser importado pois usuario.service é baixo nível.
+    // Mas whatsappService usa notificationService que usa templates... ok.
+    const { whatsappService } = await import("./whatsapp.service.js");
+    
+    // Obter nome da instância (geralmente baseada no ID)
+    const instanceName = whatsappService.getInstanceName(usuarioId);
+    
+    try {
+        logger.info({ usuarioId, instanceName }, "Tentando desconectar/remover instância WhatsApp antes da exclusão...");
+        await whatsappService.deleteInstance(instanceName);
+        logger.info({ usuarioId }, "Instância Whatsapp removida com sucesso.");
+    } catch (error: any) {
+        logger.warn({ usuarioId, error: error.message }, "Falha não-bloqueante ao remover instância Whatsapp (pode não existir).");
+    }
+
+    // 2. Anonymize User Data (DB Logic)
+    // Isso garante que o histórico financeiro seja mantido mas os dados pessoais removidos.
+    // Também desvincula o usuario (auth_uid = NULL) para que o deleteUser abaixo não apague o registro público via cascade.
+    const { error: rpcError } = await supabaseAdmin.rpc('anonymize_user_account', {
+        target_user_id: usuarioId
+    });
+
+    if (rpcError) {
+        logger.error({ error: rpcError.message, usuarioId }, "Falha ao anonimizar usuário no DB.");
+        throw new AppError("Erro ao processar exclusão de dados.", 500);
+    }
+
+    // 3. Delete Auth User (Remove Login)
+    // Como o auth_uid foi setado para NULL no passo anterior, o CASCADE não deve apagar o registro anonimizado.
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(authUid);
+    
+    if (error) {
+        logger.error({ error: error.message, usuarioId }, "Erro ao excluir usuário no Supabase Auth.");
+        // Não lançar erro aqui pois o usuário já foi anonimizado/inutilizado.
+        // throw new AppError(`Erro ao excluir conta: ${error.message}`, 500);
+    }
+
+    return { success: true };
+}

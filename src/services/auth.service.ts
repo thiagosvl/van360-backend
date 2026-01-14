@@ -1,10 +1,10 @@
 import {
-  DRIVER_EVENT_ACTIVATION,
-  DRIVER_EVENT_WELCOME_FREE,
-  DRIVER_EVENT_WELCOME_TRIAL,
-  PLANO_ESSENCIAL,
-  PLANO_GRATUITO,
-  PLANO_PROFISSIONAL
+    DRIVER_EVENT_ACTIVATION,
+    DRIVER_EVENT_WELCOME_FREE,
+    DRIVER_EVENT_WELCOME_TRIAL,
+    PLANO_ESSENCIAL,
+    PLANO_GRATUITO,
+    PLANO_PROFISSIONAL
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
@@ -64,7 +64,7 @@ export interface RegistroPayload {
 export interface RegistroAutomaticoResult {
   success: boolean;
   pix: {
-      qrCode: string;
+      qrCodePayload: string;
       qrCodeUrl: string;
   };
   inter_txid?: string; // Mantendo caso precise
@@ -653,7 +653,7 @@ export async function iniciarRegistroplanoProfissional(
             nomePlano: "Profissional",
             valor: precoAplicado,
             dataVencimento: dataVencimentoCobranca,
-            pixPayload: pixData.qrCode
+            pixPayload: pixData.qrCodePayload
         })
         .then(() => logger.info(`[AuthService] Notificação de boas-vindas (Profissional) enviada com sucesso.`))
         .catch(err => logger.error({ err }, `Falha ao enviar boas vindas (Profissional)`));
@@ -665,7 +665,7 @@ export async function iniciarRegistroplanoProfissional(
         cobrancaId: cobrancaId || undefined,
         preco_aplicado: precoAplicado,
         pix: { 
-            qrCode: pixData.qrCodePayload, 
+            qrCodePayload: pixData.qrCodePayload, 
             qrCodeUrl: pixData.location 
         } 
     };

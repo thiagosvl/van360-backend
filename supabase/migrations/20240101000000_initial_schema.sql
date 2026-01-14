@@ -231,7 +231,7 @@ CREATE TABLE IF NOT EXISTS "public"."cobrancas" (
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "pagamento_manual" boolean DEFAULT false,
     "desativar_lembretes" boolean DEFAULT false NOT NULL,
-    "usuario_id" "uuid" NOT NULL,
+    "usuario_id" "uuid",
     "origem" "text" DEFAULT '''automatica''::text'::"text" NOT NULL,
     "tipo_pagamento" "public"."tipo_pagamento_enum",
     "txid_pix" "text",

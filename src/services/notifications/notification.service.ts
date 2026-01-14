@@ -67,19 +67,20 @@ export const notificationService = {
         ctx: PassengerContext & { pixPayload?: string, reciboUrl?: string }
     ): Promise<boolean> {
         
-        let message = "";
-        // Selecionar Template
+        let parts: CompositeMessagePart[] = [];
+        
         switch (type) {
-            case PASSENGER_EVENT_DUE_SOON: message = PassengerTemplates.dueSoon(ctx); break;
-            case PASSENGER_EVENT_DUE_TODAY: message = PassengerTemplates.dueToday(ctx); break;
-            case PASSENGER_EVENT_OVERDUE: message = PassengerTemplates.overdue(ctx); break;
-            case PASSENGER_EVENT_PAYMENT_RECEIVED: message = PassengerTemplates.paymentReceived(ctx); break;
-            case PASSENGER_EVENT_MANUAL: message = PassengerTemplates.manualCharge(ctx); break;
+            case PASSENGER_EVENT_DUE_SOON: parts = PassengerTemplates.dueSoon(ctx); break;
+            case PASSENGER_EVENT_DUE_TODAY: parts = PassengerTemplates.dueToday(ctx); break;
+            case PASSENGER_EVENT_OVERDUE: parts = PassengerTemplates.overdue(ctx); break;
+            case PASSENGER_EVENT_PAYMENT_RECEIVED: parts = PassengerTemplates.paymentReceived(ctx); break;
+            case PASSENGER_EVENT_MANUAL: parts = PassengerTemplates.manualCharge(ctx); break;
         }
 
         // Tentar enviar pela instância do motorista
         const driverInstance = whatsappService.getInstanceName(ctx.usuarioId);
-        return await this._sendWithOptionalMedia(to, message, ctx.pixPayload, ctx.reciboUrl, driverInstance, type);
+        
+        return await this._processAndEnqueue(to, parts, type, driverInstance, ctx.pixPayload);
     },
 
     /**
@@ -91,89 +92,78 @@ export const notificationService = {
         ctx: DriverContext & { pixPayload?: string, nomePagador?: string, nomeAluno?: string, diasAtraso?: number, reciboUrl?: string, trialDays?: number }
     ): Promise<boolean> {
 
-        let message = "";
+        let parts: CompositeMessagePart[] = [];
+
         switch (type) {
-            case DRIVER_EVENT_ACTIVATION: message = DriverTemplates.activation(ctx); break;
-            case DRIVER_EVENT_WELCOME_FREE: message = DriverTemplates.welcomeFree(ctx); break;
-            case DRIVER_EVENT_WELCOME_TRIAL: message = DriverTemplates.welcomeTrial(ctx); break;
-            case DRIVER_EVENT_RENEWAL: message = DriverTemplates.renewal(ctx); break;
-            case DRIVER_EVENT_UPGRADE: message = DriverTemplates.upgradeRequest(ctx); break;
+            case DRIVER_EVENT_ACTIVATION: parts = DriverTemplates.activation(ctx); break;
+            case DRIVER_EVENT_WELCOME_FREE: parts = DriverTemplates.welcomeFree(ctx); break;
+            case DRIVER_EVENT_WELCOME_TRIAL: parts = DriverTemplates.welcomeTrial(ctx); break;
+            case DRIVER_EVENT_RENEWAL: parts = DriverTemplates.renewal(ctx); break;
+            case DRIVER_EVENT_UPGRADE: parts = DriverTemplates.upgradeRequest(ctx); break;
             case DRIVER_EVENT_PAYMENT_RECEIVED_ALERT: 
-                // cast para tipo estendido
-                message = DriverTemplates.paymentReceivedBySystem(ctx as any); 
+                parts = DriverTemplates.paymentReceivedBySystem(ctx as any); 
                 break;
-            case DRIVER_EVENT_RENEWAL_DUE_SOON: message = DriverTemplates.renewalDueSoon(ctx); break;
-            case DRIVER_EVENT_RENEWAL_DUE_TODAY: message = DriverTemplates.renewalDueToday(ctx); break;
-            case DRIVER_EVENT_RENEWAL_OVERDUE: message = DriverTemplates.renewalOverdue(ctx); break;
-            case DRIVER_EVENT_ACCESS_SUSPENDED: message = DriverTemplates.accessSuspended(ctx); break;
-            case DRIVER_EVENT_PAYMENT_CONFIRMED: message = DriverTemplates.paymentConfirmed(ctx); break;
-            case DRIVER_EVENT_TRIAL_ENDING: message = DriverTemplates.trialEnding(ctx); break;
-            case DRIVER_EVENT_REPASSE_FAILED: message = DriverTemplates.repasseFailed(ctx); break;
-            case DRIVER_EVENT_WHATSAPP_DISCONNECTED: message = DriverTemplates.whatsappDisconnected(ctx); break;
-            case DRIVER_EVENT_PIX_KEY_VALIDATED: message = DriverTemplates.pixKeyValidated(ctx); break;
-            case DRIVER_EVENT_PRE_PASSENGER_CREATED: message = DriverTemplates.prePassengerCreated(ctx); break;
+            case DRIVER_EVENT_RENEWAL_DUE_SOON: parts = DriverTemplates.renewalDueSoon(ctx); break;
+            case DRIVER_EVENT_RENEWAL_DUE_TODAY: parts = DriverTemplates.renewalDueToday(ctx); break;
+            case DRIVER_EVENT_RENEWAL_OVERDUE: parts = DriverTemplates.renewalOverdue(ctx); break;
+            case DRIVER_EVENT_ACCESS_SUSPENDED: parts = DriverTemplates.accessSuspended(ctx); break;
+            case DRIVER_EVENT_PAYMENT_CONFIRMED: parts = DriverTemplates.paymentConfirmed(ctx); break;
+            case DRIVER_EVENT_TRIAL_ENDING: parts = DriverTemplates.trialEnding(ctx); break;
+            case DRIVER_EVENT_REPASSE_FAILED: parts = DriverTemplates.repasseFailed(ctx); break;
+            case DRIVER_EVENT_WHATSAPP_DISCONNECTED: parts = DriverTemplates.whatsappDisconnected(ctx); break;
+            case DRIVER_EVENT_PIX_KEY_VALIDATED: parts = DriverTemplates.pixKeyValidated(ctx); break;
+            case DRIVER_EVENT_PRE_PASSENGER_CREATED: parts = DriverTemplates.prePassengerCreated(ctx); break;
         }
 
         // Motorista recebe da instância global
-        return await this._sendWithOptionalMedia(to, message, ctx.pixPayload, ctx.reciboUrl, GLOBAL_WHATSAPP_INSTANCE, type);
+        return await this._processAndEnqueue(to, parts, type, GLOBAL_WHATSAPP_INSTANCE, ctx.pixPayload);
     },
 
     /**
-     * Lógica interna de envio (Texto + Imagem Opcional + PIX Opcional + Recibo Opcional)
-     * Refatorado para usar o padrão Composite (Lego) + Fallback
+     * Processa as partes da mensagem (Gera QR Codes se necessário) e Enfileira
      */
-    async _sendWithOptionalMedia(to: string, message: string, pixPayload?: string, reciboUrl?: string, instanceName?: string, eventType: string = "UNKNOWN"): Promise<boolean> {
+    async _processAndEnqueue(
+        to: string, 
+        parts: CompositeMessagePart[], 
+        eventType: string, 
+        instanceName?: string,
+        pixPayload?: string
+    ): Promise<boolean> {
         try {
-            const parts: CompositeMessagePart[] = [];
-            
-            // 1. Priorizar Recibo se houver
-            if (reciboUrl) {
-                parts.push({
-                    type: "image",
-                    mediaBase64: reciboUrl, 
-                    content: message 
-                });
-            } 
-            else {
-                let imageBase64 = null;
-                
-                if (pixPayload) {
+            // 1. Processar partes dinâmicas (ex: Gerar QR Code)
+            for (const part of parts) {
+                if (part.meta === 'qrcode' && pixPayload) {
                     try {
-                        imageBase64 = await QRCode.toDataURL(pixPayload);
+                        part.mediaBase64 = await QRCode.toDataURL(pixPayload);
+                        // Remover meta para limpar o objeto antes do envio
+                        delete part.meta; 
                     } catch (e) {
-                        logger.error({ error: e }, "Erro ao gerar QR Code");
+                         logger.error({ error: e }, "Erro ao gerar QR Code na parte da mensagem");
+                         // Em caso de erro, removemos a parte de imagem para não enviar imagem quebrada,
+                         // mas mantemos o resto (texto do copy paste vai garantir o pagamento)
+                         part.mediaBase64 = undefined; 
                     }
                 }
-
-                if (imageBase64) {
-                    parts.push({
-                        type: "image",
-                        mediaBase64: imageBase64,
-                        content: message
-                    });
-                } else {
-                    parts.push({
-                        type: "text",
-                        content: message
-                    });
-                }
             }
+            
+            // 2. Filtrar partes que deveriam ter imagem mas falharam (opcional) ou vazias
+            const validParts = parts.filter(p => !((p.type === 'image') && !p.mediaBase64));
 
             const phone = process.env.NODE_ENV === "development" ? 
                  ("5511999999999") : // Fallback dev 
                  (to); // Production
 
-             // 5. Enviar para a Fila (Com suporte a Idempotência)
+             // 3. Enviar para a Fila
              const jobId = eventType !== "UNKNOWN" ? `whatsapp-${to}-${eventType}-${Date.now()}` : undefined;
 
              await addToWhatsappQueue({
                  phone,
-                 compositeMessage: parts, 
+                 compositeMessage: validParts, 
                  context: eventType,
-                 options: { instanceName } // Passar a instância alvo
+                 options: { instanceName } 
              }, jobId);
              
-             logger.info({ eventType, phone, instanceName, jobId }, "Notificação enfileirada com sucesso.");
+             logger.info({ eventType, phone, instanceName, jobId, partsCount: validParts.length }, "Notificação Lego enfileirada com sucesso.");
              return true; 
 
         } catch (error) {

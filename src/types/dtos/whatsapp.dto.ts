@@ -31,6 +31,7 @@ export interface CompositeMessagePart {
   content?: string;  // Para texto ou legenda
   mediaBase64?: string; // Para imagem
   delayMs?: number; // Delay opcional antes de enviar
+  meta?: string; // Flag interna (ex: "qrcode")
 }
 
 export interface ConnectInstanceResponse {

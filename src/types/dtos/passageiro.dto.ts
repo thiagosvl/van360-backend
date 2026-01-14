@@ -37,7 +37,7 @@ export const createPassageiroSchema = z.object({
     ativo: z.boolean().optional(),
     enviar_cobranca_automatica: z.boolean().optional(),
     emitir_cobranca_mes_atual: z.boolean().optional(),
-    periodo: optionalString,
+    periodo: z.string().optional().or(z.literal("")).transform(v => v ? v.toLowerCase() : undefined),
     genero: optionalString,
 }).passthrough(); // Permite outros campos não estritos por enquanto (migração suave)
 

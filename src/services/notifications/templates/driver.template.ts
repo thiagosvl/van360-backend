@@ -15,6 +15,8 @@ export interface DriverContext {
     trialDays?: number;
     nomePassageiro?: string;
     nomeResponsavel?: string;
+    // New fields for flexible Lego composition
+    pixPayload?: string; 
 }
 
 const formatDate = (dateStr: string) => {
@@ -30,152 +32,205 @@ const getMeshName = (mes?: number) => {
     return names[mes - 1] || "";
 };
 
+import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
+
+// Helper to construct standard PIX message parts
+const buildPixMessageParts = (text: string, pixPayload?: string): CompositeMessagePart[] => {
+    const parts: CompositeMessagePart[] = [
+        { type: "text", content: text }
+    ];
+
+    if (pixPayload) {
+        // 1. Image Placeholder (Service will recognize 'qrcode' meta and generate the image)
+        parts.push({ 
+            type: "image", 
+            content: "", 
+            meta: "qrcode" 
+        }); 
+        
+        // 2. Text Payload (Copy-Paste)
+        parts.push({ 
+            type: "text", 
+            content: pixPayload,
+            delayMs: 800 
+        });
+    }
+
+    return parts;
+};
+
+// Helper for simple text messages
+const textPart = (text: string): CompositeMessagePart[] => {
+    return [{ type: "text", content: text }];
+};
+
 export const DriverTemplates = {
 
     /**
      * Boas-vindas: Plano Gratuito
      */
-    welcomeFree: (ctx: DriverContext) => {
-        return `Olá *${getFirstName(ctx.nomeMotorista)}*, seja muito bem-vindo à Van360! 🚀
+    welcomeFree: (ctx: DriverContext): CompositeMessagePart[] => {
+        return textPart(`Olá *${getFirstName(ctx.nomeMotorista)}*, seja muito bem-vindo à Van360! 🚀
 
 É um prazer ter você conosco no plano *${ctx.nomePlano}*.
 Nossa equipe está à disposição para ajudar você a organizar seu transporte escolar.
 
-Aproveite o sistema! 🚐💨`;
+Aproveite o sistema! 🚐💨`);
     },
 
     /**
      * Boas-vindas: Plano com Trial (Essencial)
      */
-    welcomeTrial: (ctx: DriverContext) => {
+    welcomeTrial: (ctx: DriverContext): CompositeMessagePart[] => {
         const dias = ctx.trialDays || 7;
-        return `Olá *${getFirstName(ctx.nomeMotorista)}*, seja muito bem-vindo à Van360! 🚀
+        return textPart(`Olá *${getFirstName(ctx.nomeMotorista)}*, seja muito bem-vindo à Van360! 🚀
 
 Você começou com o plano *${ctx.nomePlano}*.
 Aproveite seu acesso completo por *${dias} dias* de teste grátis!
 
 Após esse período, enviaremos os dados para oficializar sua assinatura.
-Qualquer dúvida, estamos à disposição! 🚐💨`;
+Qualquer dúvida, estamos à disposição! 🚐💨`);
     },
 
     /**
      * Ativação: Faça o pagamento para começar
      */
-    activation: (ctx: DriverContext) => {
+    activation: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
-        return `Olá *${getFirstName(ctx.nomeMotorista)}*, bem-vindo à Van360! 🚀
+        const text = `Olá *${getFirstName(ctx.nomeMotorista)}*, bem-vindo à Van360! 🚀
 
 Seu plano *${ctx.nomePlano}* no valor de *${valor}* está aguardando ativação.
 Realize o pagamento pelo PIX abaixo para liberar seu acesso imediatamente! 👇`;
+
+        return buildPixMessageParts(text, ctx.pixPayload);
     },
 
     /**
      * Renovação: Genérica (Uso manual ou info)
      */
-    renewal: (ctx: DriverContext) => {
+    renewal: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
         const data = formatDate(ctx.dataVencimento);
-        return `Olá *${getFirstName(ctx.nomeMotorista)}*, sua assinatura do plano *${ctx.nomePlano}* vence em *${data}*. 🗓️
+        const text = `Olá *${getFirstName(ctx.nomeMotorista)}*, sua assinatura do plano *${ctx.nomePlano}* vence em *${data}*. 🗓️
 Valor: *${valor}*
 Garanta a continuidade do seu acesso pagando o PIX abaixo. 👇`;
+
+        return buildPixMessageParts(text, ctx.pixPayload);
     },
 
     /**
      * Renovação: Aviso Prévio (X dias antes)
      */
-    renewalDueSoon: (ctx: DriverContext) => {
+    renewalDueSoon: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
         const data = formatDate(ctx.dataVencimento);
-        return `Olá *${getFirstName(ctx.nomeMotorista)}*, sua assinatura do plano *${ctx.nomePlano}* vence em *${data}*. 🗓️
+        const text = `Olá *${getFirstName(ctx.nomeMotorista)}*, sua assinatura do plano *${ctx.nomePlano}* vence em *${data}*. 🗓️
 Valor: *${valor}*
 Evite bloqueios pagando antecipadamente pelo PIX abaixo. 👇`;
+        
+        return buildPixMessageParts(text, ctx.pixPayload);
     },
 
     /**
      * Renovação: Vence Hoje
      */
-    renewalDueToday: (ctx: DriverContext) => {
+    renewalDueToday: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
-        return `⚠️ *Atenção, ${getFirstName(ctx.nomeMotorista)}!*
+        const text = `⚠️ *Atenção, ${getFirstName(ctx.nomeMotorista)}!*
 Sua assinatura vence *HOJE*!
 Para continuar acessando o sistema sem interrupções, realize o pagamento agora:
 Valor: *${valor}*
 PIX copia e cola 👇`;
+
+        return buildPixMessageParts(text, ctx.pixPayload);
     },
 
     /**
      * Renovação: Atrasado (Ainda não suspenso)
      */
-    renewalOverdue: (ctx: DriverContext & { diasAtraso?: number }) => {
+    renewalOverdue: (ctx: DriverContext & { diasAtraso?: number }): CompositeMessagePart[] => {
         const dias = ctx.diasAtraso ? `há ${ctx.diasAtraso} dias` : "";
-        return `❌ *Constamos um atraso!*
+        const text = `❌ *Constamos um atraso!*
 Sua mensalidade venceu ${dias} e ainda não identificamos o pagamento.
 Regularize agora para evitar o bloqueio do seu acesso.
 PIX 👇`;
+        return buildPixMessageParts(text, ctx.pixPayload);
     },
 
     /**
      * Acesso Suspenso (Bloqueado)
      */
-    accessSuspended: (ctx: DriverContext) => {
-        return `🚫 *Acesso Suspenso*
+    accessSuspended: (ctx: DriverContext): CompositeMessagePart[] => {
+        const text = `🚫 *Acesso Suspenso*
 Olá *${getFirstName(ctx.nomeMotorista)}*, como não identificamos o pagamento da sua assinatura, seu acesso ao sistema foi temporariamente *bloqueado*.
 Para desbloquear instantaneamente, pague o PIX abaixo. 👇`;
+        return buildPixMessageParts(text, ctx.pixPayload);
     },
 
     /**
      * Solicitação de Upgrade / Adicional
      */
-    upgradeRequest: (ctx: DriverContext) => {
-         return `Olá *${getFirstName(ctx.nomeMotorista)}*, recebemos sua solicitação de alteração de plano para *${ctx.nomePlano}*. 📈
+    upgradeRequest: (ctx: DriverContext): CompositeMessagePart[] => {
+         const text = `Olá *${getFirstName(ctx.nomeMotorista)}*, recebemos sua solicitação de alteração de plano para *${ctx.nomePlano}*. 📈
 
 Para efetivar a mudança, realize o pagamento da diferença abaixo. 👇`;
+         return buildPixMessageParts(text, ctx.pixPayload);
     },
     
     /**
      * Aviso de Recebimento (Pai pagou)
-     * Futuro: Webhook do Inter
      */
-    paymentReceivedBySystem: (ctx: DriverContext & { nomePagador: string, nomeAluno: string }) => {
+    paymentReceivedBySystem: (ctx: DriverContext & { nomePagador: string, nomeAluno: string }): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
         const ref = ctx.mes ? ` referente a *${getMeshName(ctx.mes)}/${ctx.ano}*` : "";
         const nomeAlun = getFirstName(ctx.nomeAluno);
         const nomePag = getFirstName(ctx.nomePagador);
 
-        return `✅ *Pagamento Recebido!*
+        return textPart(`✅ *Pagamento Recebido!*
         
 A mensalidade do *${nomeAlun}* (*${nomePag}*) no valor de *${valor}*${ref} foi paga.
 
-O pagamento está sendo processado e o valor logo estará em sua conta. ⏳`;
+O pagamento está sendo processado e o valor logo estará em sua conta. ⏳`);
     },
 
     /**
      * Confirmação de Pagamento de Assinatura (Recibo do Motorista)
      */
-    paymentConfirmed: (ctx: DriverContext) => {
+    paymentConfirmed: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
         const ref = ctx.mes ? ` referente a *${getMeshName(ctx.mes)}/${ctx.ano}*` : "";
         const nomeMot = getFirstName(ctx.nomeMotorista);
         const validade = ctx.dataVencimento ? `\n🗓️ *Validade do Plano:* ${formatDate(ctx.dataVencimento)}` : "";
 
-        return `✅ *Pagamento Confirmado!*
+        const text = `✅ *Pagamento Confirmado!*
 
 Olá *${nomeMot}*, confirmamos o recebimento do seu pagamento de *${valor}*${ref} referente ao plano *${ctx.nomePlano}*.
 ${validade}
 
-Seu acesso está garantido! 🚐💨
+Seu acesso está garantido! 🚐💨`;
 
-${ctx.reciboUrl ? `📎 *Comprovante:* ${ctx.reciboUrl}` : ''}`;
+        const parts = textPart(text);
+        
+        // Append Receipt Image if available
+        if (ctx.reciboUrl) {
+             parts.push({
+                 type: "image",
+                 mediaBase64: ctx.reciboUrl,
+                 content: `📎 *Comprovante*`
+             });
+        }
+        
+        return parts;
     },
 
     /**
      * Aviso de Fim de Trial
      */
-    trialEnding: (ctx: DriverContext) => {
+    trialEnding: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
         const data = formatDate(ctx.dataVencimento);
         
-        return `⏳ *Seu Teste Grátis está acabando!*
+        const text = `⏳ *Seu Teste Grátis está acabando!*
 
 Olá *${getFirstName(ctx.nomeMotorista)}*, esperamos que esteja gostando da Van360! 🚌
 
@@ -184,29 +239,31 @@ Para continuar usando todos os recursos sem interrupção, confirme sua assinatu
 
 Valor: *${valor}*
 PIX Copia e Cola 👇`;
+
+        return buildPixMessageParts(text, ctx.pixPayload);
     },
 
     /**
      * Falha no Repasse (Invalidar Chave)
      */
-    repasseFailed: (ctx: DriverContext) => {
+    repasseFailed: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
-        return `⚠️ *Atenção: Falha no Repasse de Pagamento*
+        return textPart(`⚠️ *Atenção: Falha no Repasse de Pagamento*
 
 Olá *${getFirstName(ctx.nomeMotorista)}*, tentamos realizar o repasse de *${valor}* referente a uma mensalidade, mas o banco retornou erro na sua chave PIX.
 
 Por segurança, **sua chave PIX foi invalidada**.
-Por favor, acesse o App e cadastre sua chave novamente para receber este valor.`;
+Por favor, acesse o App e cadastre sua chave novamente para receber este valor.`);
     },
     /**
      * Reativação de Assinatura com Embargo de 24h
      */
-    reactivationWithEmbargo: (ctx: DriverContext) => {
+    reactivationWithEmbargo: (ctx: DriverContext): CompositeMessagePart[] => {
         const nomeMot = getFirstName(ctx.nomeMotorista);
         const mes = getMeshName(ctx.mes);
         const ref = mes ? ` de *${mes}/${ctx.ano}*` : "";
 
-        return `✅ *Conta Reativada!*
+        return textPart(`✅ *Conta Reativada!*
 
 Olá *${nomeMot}*, sua assinatura foi reativada e o acesso ao sistema liberado. 🚐💨
 
@@ -215,47 +272,47 @@ Como você esteve suspenso, geramos agora suas cobranças${ref} que estavam pend
 ⚠️ *IMPORTANTE:*
 A automação está **PAUSADA por 24 horas** para você. Esse é o tempo para você conferir seu painel e dar baixa em quem já te pagou "por fora" (dinheiro/pix direto) durante a suspensão.
 
-Se não houver baixas, o sistema começará a enviar as notificações para seus passageiros automaticamente em 24h.`;
+Se não houver baixas, o sistema começará a enviar as notificações para seus passageiros automaticamente em 24h.`);
     },
     /**
      * Aviso de Desconexão do WhatsApp
      */
-    whatsappDisconnected: (ctx: DriverContext) => {
-        return `⚠️ *Atenção: Seu WhatsApp Desconectou!*
+    whatsappDisconnected: (ctx: DriverContext): CompositeMessagePart[] => {
+        return textPart(`⚠️ *Atenção: Seu WhatsApp Desconectou!*
 
 Olá *${getFirstName(ctx.nomeMotorista)}*, notamos que sua conexão com o WhatsApp foi perdida. 📵
 
 Isso impede que o sistema envie as cobranças automáticas para seus passageiros.
-Por favor, acesse o painel e reconecte seu WhatsApp (escaneie o QR Code novamente) o mais rápido possível para evitar falhas no envio.`;
+Por favor, acesse o painel e reconecte seu WhatsApp (escaneie o QR Code novamente) o mais rápido possível para evitar falhas no envio.`);
     },
 
     /**
      * Notificação de Novo Pré-Cadastro
      */
-    prePassengerCreated: (ctx: DriverContext) => {
+    prePassengerCreated: (ctx: DriverContext): CompositeMessagePart[] => {
         const nomeMot = getFirstName(ctx.nomeMotorista);
         const nomePas = getFirstName(ctx.nomePassageiro) || "um novo passageiro";
         const nomeResp = ctx.nomeResponsavel ? ` (${getFirstName(ctx.nomeResponsavel)})` : "";
 
-        return `🔔 *Novo Pré-Cadastro Realizado!*
+        return textPart(`🔔 *Novo Pré-Cadastro Realizado!*
 
 Olá *${nomeMot}*, o pré-cadastro de *${nomePas}*${nomeResp} foi realizado com sucesso através do seu link! 🚀
 
-Acesse o sistema agora para revisar os dados, definir o valor da mensalidade e aprovar o cadastro. 🚐💨`;
+Acesse o sistema agora para revisar os dados, definir o valor da mensalidade e aprovar o cadastro. 🚐💨`);
     },
 
     /**
      * Sucesso na Validação da Chave PIX
      */
-    pixKeyValidated: (ctx: DriverContext) => {
+    pixKeyValidated: (ctx: DriverContext): CompositeMessagePart[] => {
         const nomeMot = getFirstName(ctx.nomeMotorista);
 
-        return `✅ *Chave PIX Validada!*
+        return textPart(`✅ *Chave PIX Validada!*
 
 Olá *${nomeMot}*, ótimas notícias! Sua chave PIX foi validada com sucesso pelo banco. 🎉🏢
 
 Agora você já pode ativar a cobrança automática para seus passageiros e receber seus repasses diretamente em sua conta.
 
-Acesse o painel para concluir as configurações se necessário. 🚐💨`;
+Acesse o painel para concluir as configurações se necessário. 🚐💨`);
     }
 };
