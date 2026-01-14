@@ -14,4 +14,5 @@ export const env = {
   EVOLUTION_API_URL: process.env.EVOLUTION_API_URL || "http://localhost:8081",
   EVOLUTION_API_KEY: process.env.EVOLUTION_API_KEY!,
   CRON_SECRET: process.env.CRON_SECRET || "super_secret_cron_key",
+  BACKEND_URL: process.env.BACKEND_URL || "http://host.docker.internal:3000",
 };

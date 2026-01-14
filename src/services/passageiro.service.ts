@@ -41,7 +41,7 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO> & Record<stri
     if (data.observacoes !== undefined) prepared.observacoes = data.observacoes ? cleanString(data.observacoes, true) : null;
     
     // Detalhes
-    if (data.periodo !== undefined) prepared.periodo = data.periodo ? cleanString(data.periodo.toLocaleLowerCase(), true) : null;
+    if (data.periodo !== undefined) prepared.periodo = data.periodo ? cleanString(data.periodo.toLocaleLowerCase(), false) : null;
     if (data.genero !== undefined) prepared.genero = data.genero ? cleanString(data.genero, true) : null;
     if (data.valor_cobranca !== undefined) prepared.valor_cobranca = typeof data.valor_cobranca === "string" ? moneyToNumber(data.valor_cobranca) : (data.valor_cobranca || 0);
     if (data.dia_vencimento !== undefined) prepared.dia_vencimento = data.dia_vencimento;

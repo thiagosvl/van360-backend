@@ -19,6 +19,7 @@ export async function createApp(): Promise<FastifyInstance> {
               }
             : undefined,
       },
+      disableRequestLogging: true,
     });
     
     // Global Error Handler

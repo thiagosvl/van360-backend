@@ -153,25 +153,61 @@ class WhatsappService {
   }
 
   /**
+   * Configura/Atualiza o Webhook da instância
+   */
+  async setWebhook(instanceName: string, webhookUrl: string, enabled: boolean = true): Promise<boolean> {
+      try {
+          const url = `${EVO_URL}/webhook/set/${instanceName}`;
+          await axios.post(url, {
+              enabled,
+              url: webhookUrl,
+              webhookByEvents: false,
+              events: ["connection.update"]
+          }, { 
+              headers: { "apikey": EVO_KEY } 
+          });
+          // logger.info({ instanceName, url: webhookUrl }, "Webhook atualizado com sucesso.");
+          return true;
+      } catch (error) {
+          const err = error as AxiosError;
+           logger.error({ 
+              err: err.response?.data || err.message, 
+              instanceName 
+          }, "Falha ao configurar Webhook");
+          return false;
+      }
+  }
+
+  /**
    * Cria uma instância (se não existir)
    * Retorna 'true' se a instância está pronta (já existia ou foi criada agora)
    */
-  async createInstance(instanceName: string): Promise<boolean> {
+  async createInstance(instanceName: string, enableQrcode: boolean = true): Promise<boolean> {
       try {
+          const webhookUrl = `${env.BACKEND_URL}/api/webhook/evolution`;
+
           // 1. Verificar se já existe
           const status = await this.getInstanceStatus(instanceName);
           
           if (status.state !== WHATSAPP_STATUS.NOT_FOUND && status.state !== "ERROR") {
-              return true; // Já existe e está respondendo
+              // Já existe, mas vamos garantir que o Webhook esteja certo
+              await this.setWebhook(instanceName, webhookUrl, true);
+              return true; 
           }
 
           // 2. Se não existe (404), criar
-          logger.info({ instanceName }, "Instância não encontrada. Criando nova instância na Evolution...");
+          logger.info({ instanceName, enableQrcode }, "Instância não encontrada. Criando nova instância na Evolution...");
           const url = `${EVO_URL}/instance/create`;
           await axios.post(url, {
               instanceName: instanceName,
-              qrcode: true, 
-              integration: "WHATSAPP-BAILEYS" 
+              token: "random_secure_token", 
+              qrcode: enableQrcode, 
+              integration: "WHATSAPP-BAILEYS",
+              webhook: {
+                  enabled: true,
+                  url: webhookUrl,
+                  events: ["connection.update"]
+              }
           }, { 
               headers: { "apikey": EVO_KEY } 
           });
@@ -195,69 +231,64 @@ class WhatsappService {
    */
   async connectInstance(instanceName: string, phoneNumber?: string, alreadyRetried: boolean = false): Promise<ConnectInstanceResponse> {
       try {
+          const webhookUrl = `${env.BACKEND_URL}/api/webhook/evolution`;
+
           // --- FLUXO PAIRING CODE (Mobile) ---
           if (phoneNumber) {
               const cleanPhone = phoneNumber.replace(/\D/g, "");
               const finalPhone = cleanPhone.length <= 11 ? `55${cleanPhone}` : cleanPhone;
 
-              // 1. Limpeza Agressiva de Sessão Zumbi
-              // Se vamos pedir um código novo, a sessão anterior NÃO presta.
-              // Verificar se está 'connecting' ou 'open' e matar.
+              // 1. Limpeza Inteligente de Sessão (Clean Slate)
+              // Se o usuário pede pairing code, ele quer conectar AGORA. 
+              // Se já houver algo pendente ou travado, melhor limpar para garantir o código novo.
+              
               const status = await this.getInstanceStatus(instanceName);
-              if (status.state !== WHATSAPP_STATUS.NOT_FOUND && status.state !== "close") {
-                   logger.warn({ instanceName, state: status.state }, "Limpando sessão antiga para gerar novo Pairing Code...");
-                   await this.disconnectInstance(instanceName);
-                   await new Promise(r => setTimeout(r, 2500)); // Tempo vital para a Evolution limpar
+              const isWorking = status.state === WHATSAPP_STATUS.OPEN || status.state === WHATSAPP_STATUS.CONNECTED;
+
+              // Se já está conectado, não faz sentido pedir pairing code. Retorna sucesso.
+              if (isWorking) {
+                   // Garante webhook atualizado mesmo se já conectado
+                   await this.setWebhook(instanceName, webhookUrl, true);
+                   return { instance: { state: WHATSAPP_STATUS.OPEN } };
               }
 
-              // 2. Garantir Instância Criada
-              await this.createInstance(instanceName);
+              // Se não está conectado, força disconnect/delete para garantir "Clean Slate"
+              if (status.state !== WHATSAPP_STATUS.NOT_FOUND) {
+                   logger.info({ instanceName }, "Resetando instância para novo Pairing Code (Clean Slate)...");
+                   await this.deleteInstance(instanceName); // Delete é mais "forte" que Logout
+                   await new Promise(r => setTimeout(r, 2000));
+              }
 
-              // 3. Solicitar Código com Retries (Paciência)
+              // 2. Criar Instância Limpa (Sem QR Code automático)
+              await this.createInstance(instanceName, false);
+
+              // 3. Solicitar Código
               for (let attempt = 1; attempt <= 4; attempt++) {
-                  // FIXED: O endpoint correto é o mesmo do QR Code, apenas passando o numero
                   const url = `${EVO_URL}/instance/connect/${instanceName}?number=${finalPhone}`;
-                  
                   try {
                       const { data } = await axios.get<{ pairingCode: string, code: string }>(url, { headers: { "apikey": EVO_KEY } });
+                      const pCode = data?.pairingCode || data?.code;
                       
-                      const pCode = data?.pairingCode || data?.code; // Evolution as vezes retorna em campos diferentes
-                      
-                      // Validação: Pairing Code deve ser curto (ex: 8 chars). Se for longo, é QR Code vazando.
                       if (pCode && pCode.length < 20) {
-                          // Sucesso!
                           return { pairingCode: { code: pCode } };
-                      } else {
-                          logger.warn({ instanceName, attempt, data }, "Resposta inválida da Evolution: 'pairingCode' ausente ou muito longo (possível QR Code).");
                       }
                   } catch (e) {
-                       const err = e as AxiosError;
-                       logger.warn({ 
-                           instanceName, 
-                           attempt, 
-                           status: err.response?.status,
-                           data: err.response?.data,
-                           message: err.message
-                       }, "Erro ao solicitar Pairing Code na Evolution.");
+                      // Ignora erro no loop
                   }
 
                   if (attempt < 4) {
-                      const delay = 3000;
-                      logger.warn({ instanceName, attempt }, `Retry Pairing Code em ${delay}ms...`);
-                      await new Promise(r => setTimeout(r, delay));
+                      await new Promise(r => setTimeout(r, 2500));
                   }
               }
-              
               throw new Error("Não foi possível gerar o código. A API não respondeu a tempo.");
           }
 
-          // --- FLUXO QR CODE (Legacy/Desktop) ---
+          // --- FLUXO QR CODE / RECONNECT (Sem Phone) ---
           
-          // 1. Garantir que instância existe
-          const created = await this.createInstance(instanceName);
-          if (!created) throw new Error("A instância do WhatsApp não pôde ser preparada.");
-
-          // 2. Loop de tentativa para QR Code
+          // 1. Garantir que instância existe e webhook está setado
+          await this.createInstance(instanceName, true); // True = default behavior (QR se precisasse)
+          
+          // 2. Soft Reconnect (Apenas pede connect para ver se gera QR ou conecta session existente)
           let lastData: EvolutionConnectResponse | null = null;
           
           for (let attempt = 1; attempt <= 3; attempt++) {
@@ -269,13 +300,10 @@ class WhatsappService {
                   break; 
               }
               
-              if (attempt < 3) {
-                  logger.warn({ instanceName, attempt }, "Aguardando QR Code...");
-                  await new Promise(r => setTimeout(r, 1500));
-              }
+              if (attempt < 3) await new Promise(r => setTimeout(r, 1500));
           }
 
-          // 3. Processar resultado QR
+          // Retorno padrão
           if (lastData?.base64 || lastData?.qrcode?.base64) {
                return { 
                    qrcode: { 
@@ -289,14 +317,6 @@ class WhatsappService {
               return { instance: { state: WHATSAPP_STATUS.OPEN } };
           }
 
-          // Tratar travamento "connecting" no fluxo QR
-          if ((lastData?.instance?.state === "connecting" || lastData?.instance?.state === WHATSAPP_STATUS.CONNECTING) && !alreadyRetried) {
-                logger.warn({ instanceName }, "QR Code: Instância travada em 'connecting'. Reiniciando...");
-                await this.disconnectInstance(instanceName);
-                await new Promise(r => setTimeout(r, 2000));
-                return this.connectInstance(instanceName, undefined, true);
-          }
-            
           return {}; 
 
       } catch (error) {
