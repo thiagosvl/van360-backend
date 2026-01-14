@@ -1,124 +1,102 @@
-# Código de Exemplo - Próximas Fases
+# Código de Exemplo para Próximas Fases
 
-## Fase 2: Health Check Otimizado
+Este documento fornece exemplos de código para as próximas fases de melhoria da integração do WhatsApp, facilitando a implementação.
 
-### Arquivo: `src/services/jobs/whatsapp-health-check-v2.job.ts`
+## 1. Exemplo: Aumentar Frequência do Health Check (Fase 2)
+
+Para aumentar a frequência do `whatsappHealthCheckJob`, você precisaria ajustar a configuração do agendador de tarefas (cron job) que dispara o `jobOrchestratorService`. Se você estiver usando GitHub Actions ou um cron externo, o ajuste seria lá. No `jobOrchestratorService.ts`, a lógica já está preparada para rodar a cada 5 minutos. Para 1 minuto, você ajustaria a condição:
 
 ```typescript
-import { DRIVER_EVENT_WHATSAPP_DISCONNECTED, WHATSAPP_STATUS } from "../../config/constants.js";
+// src/services/jobs/job-orchestrator.service.ts
+
+// ... (imports e outras lógicas)
+
+    // Health Check: Roda a cada 1 minuto para corrigir estados travados
+    if (minute % 1 === 0) { // Alterar de '5' para '1'
+      executions.push(whatsappHealthCheckJob.run());
+    }
+
+// ... (restante do código)
+```
+
+## 2. Exemplo: Notificação de Desconexão (Fase 2)
+
+Para notificar o motorista quando o WhatsApp desconecta, você modificaria o `whatsappHealthCheckJob.ts` para usar o `notificationService`.
+
+```typescript
+// src/services/jobs/whatsapp-health-check.job.ts
+
+import { WHATSAPP_STATUS, DRIVER_EVENT_WHATSAPP_DISCONNECTED } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
-import { notificationService } from "../notifications/notification.service.js";
 import { whatsappService } from "../whatsapp.service.js";
+import { notificationService } from "../notifications/notification.service.js"; // Importar o serviço de notificação
 
-interface HealthCheckResult {
-    totalChecked: number;
-    fixed: number;
-    errors: number;
-    notified: number;
-    details: Array<{ 
-        usuarioId: string, 
-        oldStatus: string, 
-        newStatus: string, 
-        reason?: string,
-        notificationSent?: boolean 
-    }>;
-}
+// ... (interface HealthCheckResult e outras lógicas)
 
-// Circuit breaker para Evolution API
-class CircuitBreaker {
-    private failureCount = 0;
-    private lastFailureTime = 0;
-    private readonly threshold = 5;
-    private readonly timeout = 60000; // 1 minuto
-
-    isOpen(): boolean {
-        if (this.failureCount >= this.threshold) {
-            if (Date.now() - this.lastFailureTime > this.timeout) {
-                this.failureCount = 0;
-                return false;
-            }
-            return true;
-        }
-        return false;
-    }
-
-    recordFailure(): void {
-        this.failureCount++;
-        this.lastFailureTime = Date.now();
-    }
-
-    recordSuccess(): void {
-        this.failureCount = 0;
-    }
-}
-
-const circuitBreaker = new CircuitBreaker();
-
-export const whatsappHealthCheckJobV2 = {
+export const whatsappHealthCheckJob = {
     async run(): Promise<HealthCheckResult> {
-        logger.info("Starting WhatsApp Health Check Job (V2)...");
+        // ... (código existente)
 
-        const result: HealthCheckResult = {
-            totalChecked: 0,
-            fixed: 0,
-            errors: 0,
-            notified: 0,
-            details: []
-        };
+        for (const usuario of usuarios) {
+            // ... (código existente para verificar status)
 
-        // 1. Verificar se circuit breaker está aberto
-        if (circuitBreaker.isOpen()) {
-            logger.warn("Circuit breaker aberto para Evolution API. Pulando health check.");
-            return result;
+            // Se houver discrepância (DB diz Connected, API diz Disconnected), corrige o banco
+            if (realStatus !== usuario.whatsapp_status && realStatus === WHATSAPP_STATUS.DISCONNECTED) {
+                logger.warn({ 
+                    usuarioId: usuario.id, 
+                    dbStatus: usuario.whatsapp_status, 
+                    realStatus,
+                    apiState: apiStatus.state
+                }, "Health Check: Discrepância encontrada. Corrigindo DB para DISCONNECTED.");
+
+                await supabaseAdmin
+                    .from("usuarios")
+                    .update({ whatsapp_status: WHATSAPP_STATUS.DISCONNECTED })
+                    .eq("id", usuario.id);
+
+                // Notificar motorista que caiu!
+                if (usuario.telefone) {
+                    await notificationService.notifyDriver(
+                        usuario.telefone, 
+                        DRIVER_EVENT_WHATSAPP_DISCONNECTED, 
+                        { nomeMotorista: usuario.nome || "Motorista" } // Contexto mínimo
+                    );
+                    logger.info({ usuarioId: usuario.id }, "Notificação de WhatsApp desconectado enviada.");
+                }
+
+                result.fixed++;
+                result.details.push({
+                    usuarioId: usuario.id,
+                    oldStatus: usuario.whatsapp_status,
+                    newStatus: realStatus,
+                    reason: `API state: ${apiStatus.state}`
+                });
+            } // ... (restante do código)
         }
+        return result;
+    }
+};
+```
 
-        // 2. Buscar todos os usuários supostamente conectados
-        const { data: usuarios, error } = await supabaseAdmin
-            .from("usuarios")
-            .select("id, nome, telefone, whatsapp_status")
-            .eq("whatsapp_status", WHATSAPP_STATUS.CONNECTED);
+## 3. Exemplo: Timeout para Instâncias Travadas (Fase 3)
 
-        if (error) {
-            logger.error({ error }, "Health Check: Falha ao buscar usuários conectados.");
-            circuitBreaker.recordFailure();
-            throw error;
-        }
+Para lidar com instâncias travadas no estado `connecting`, você pode adicionar uma lógica no `whatsappHealthCheckJob` para forçar a desconexão e exclusão após um certo tempo.
 
-        if (!usuarios || usuarios.length === 0) {
-            logger.info("Health Check: Nenhum usuário conectado para verificar.");
-            circuitBreaker.recordSuccess();
-            return result;
-        }
+```typescript
+// src/services/jobs/whatsapp-health-check.job.ts
 
-        result.totalChecked = usuarios.length;
+// ... (imports e outras lógicas)
 
-        // 3. Iterar e Validar com retry logic
+export const whatsappHealthCheckJob = {
+    async run(): Promise<HealthCheckResult> {
+        // ... (código existente)
+
         for (const usuario of usuarios) {
             const instanceName = whatsappService.getInstanceName(usuario.id);
             
             try {
-                // Retry logic: até 3 tentativas com exponential backoff
-                let apiStatus = null;
-                let lastError = null;
-
-                for (let attempt = 0; attempt < 3; attempt++) {
-                    try {
-                        apiStatus = await whatsappService.getInstanceStatus(instanceName);
-                        circuitBreaker.recordSuccess();
-                        break;
-                    } catch (err) {
-                        lastError = err;
-                        if (attempt < 2) {
-                            // Exponential backoff: 100ms, 200ms
-                            await new Promise(r => setTimeout(r, 100 * Math.pow(2, attempt)));
-                        }
-                    }
-                }
-
-                if (!apiStatus) {
-                    throw lastError || new Error("Falha ao obter status após 3 tentativas");
-                }
+                // ... (lógica de retry existente)
 
                 // Mapeia status da API para status do DB
                 let realStatus: string = WHATSAPP_STATUS.DISCONNECTED;
@@ -126,410 +104,202 @@ export const whatsappHealthCheckJobV2 = {
                 if (apiStatus.state === "open") {
                     realStatus = WHATSAPP_STATUS.CONNECTED;
                 } else if (apiStatus.state === "connecting") {
-                    realStatus = WHATSAPP_STATUS.CONNECTING;
+                    // SE ESTIVER CONNECTING: Dar uma chance (Timeout)
+                    logger.warn({ instanceName }, "Health Check: Instance 'connecting'. Aguardando 10s...");
+                    await new Promise(r => setTimeout(r, 10000));
+                    
+                    const retryStatus = await whatsappService.getInstanceStatus(instanceName);
+                    
+                    if (retryStatus.state === "open") {
+                         realStatus = WHATSAPP_STATUS.CONNECTED;
+                    } else {
+                         // Se continuar connecting ou cair, consideramos DISCONNECTED.
+                         // Se travou em connecting por muito tempo, melhor matar.
+                         realStatus = WHATSAPP_STATUS.DISCONNECTED;
+                         
+                         // Lógica de Timeout para instâncias travadas em 'connecting'
+                         // Se a instância ainda está 'connecting' após o retry, forçamos a limpeza.
+                         if (retryStatus.state === "connecting") {
+                            logger.warn({ instanceName }, "Health Check: Instance travada em 'connecting'. Limpando...");
+                            await whatsappService.disconnectInstance(instanceName); // Logout
+                            await whatsappService.deleteInstance(instanceName); // Delete
+                            // O status será atualizado para DISCONNECTED e o usuário precisará reconectar.
+                         }
+                    }
                 } else {
                     realStatus = WHATSAPP_STATUS.DISCONNECTED;
                 }
 
-                // Se houver discrepância, corrige o banco
-                if (realStatus !== usuario.whatsapp_status) {
-                    logger.warn({ 
-                        usuarioId: usuario.id, 
-                        dbStatus: usuario.whatsapp_status, 
-                        apiStatus: apiStatus.state 
-                    }, "Health Check: Discrepância encontrada. Corrigindo...");
-
-                    await supabaseAdmin
-                        .from("usuarios")
-                        .update({ whatsapp_status: realStatus })
-                        .eq("id", usuario.id);
-
-                    // Se desconectou, avisa o motorista
-                    if (realStatus === WHATSAPP_STATUS.DISCONNECTED && usuario.whatsapp_status === WHATSAPP_STATUS.CONNECTED) {
-                        try {
-                            if (usuario.telefone) {
-                                await notificationService.notifyDriver(
-                                    usuario.telefone, 
-                                    DRIVER_EVENT_WHATSAPP_DISCONNECTED, 
-                                    {
-                                        nomeMotorista: usuario.nome || "Motorista",
-                                        nomePlano: "N/A",
-                                        valor: 0,
-                                        dataVencimento: new Date().toISOString()
-                                    }
-                                );
-                                result.notified++;
-                                logger.info({ usuarioId: usuario.id }, "Health Check: Notificação de desconexão enviada.");
-                            }
-                        } catch (notifErr) {
-                            logger.error({ 
-                                usuarioId: usuario.id, 
-                                error: notifErr 
-                            }, "Health Check: Falha ao enviar notificação de desconexão.");
-                        }
-                    }
-
-                    result.fixed++;
-                    result.details.push({
-                        usuarioId: usuario.id,
-                        oldStatus: usuario.whatsapp_status,
-                        newStatus: realStatus,
-                        reason: `API returned ${apiStatus.state}`,
-                        notificationSent: realStatus === WHATSAPP_STATUS.DISCONNECTED
-                    });
-                }
+                // ... (restante do código para atualizar DB e notificar)
 
             } catch (err: any) {
-                logger.error({ 
-                    err: err.message, 
-                    usuarioId: usuario.id 
-                }, "Health Check: Erro ao verificar instância individual.");
-                result.errors++;
-                circuitBreaker.recordFailure();
+                // ... (tratamento de erro existente)
             }
         }
-
-        logger.info({ result }, "WhatsApp Health Check Job (V2) Finished.");
         return result;
     }
 };
 ```
 
-**Melhorias**:
-- ✅ Retry logic com exponential backoff
-- ✅ Circuit breaker para Evolution API
-- ✅ Logging detalhado de falhas
-- ✅ Tratamento de erro em notificações
-- ✅ Métrica de notificações enviadas
+## 4. Exemplo: Countdown Visual e Re-geração Automática (Fase 4 - Frontend)
 
----
+No frontend, você pode usar um `useEffect` com `setInterval` para criar um countdown e uma função para re-gerar o código.
 
-## Fase 3: Migration SQL para Pairing Code
+```typescript
+// src/components/Whatsapp/WhatsappConnect.tsx (Exemplo)
 
-### Arquivo: `supabase/migrations/20260114_add_pairing_code_columns.sql`
+import { useEffect, useState } from "react";
+import { useWhatsapp } from "../../hooks/useWhatsapp";
+import { Button } from "../ui/button";
+import { Loader2 } from "lucide-react";
+
+export function WhatsappConnect() {
+  const { state, qrCode, pairingCode, isLoading, connect, disconnect, refresh, instanceName, requestPairingCode, userPhone } = useWhatsapp({ enablePolling: true });
+  const [countdown, setCountdown] = useState(60); // 60 segundos
+  const [showPairingInput, setShowPairingInput] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState("");
+
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  useEffect(() => {
+    if (state === "CONNECTED") {
+      setCountdown(0); // Reseta countdown se conectado
+      return;
+    }
+
+    if (qrCode || pairingCode) {
+      setCountdown(60); // Inicia countdown quando um código é gerado
+      const timer = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            // Código expirou, solicitar novo automaticamente
+            if (showPairingInput && phoneNumber) {
+                requestPairingCode(phoneNumber);
+            } else {
+                connect(); // Re-gerar QR Code
+            }
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      return () => clearInterval(timer);
+    } else {
+      setCountdown(0); // Sem código, sem countdown
+    }
+  }, [qrCode, pairingCode, state, connect, requestPairingCode, showPairingInput, phoneNumber]);
+
+  const handleConnect = async () => {
+    if (showPairingInput && phoneNumber) {
+      await requestPairingCode(phoneNumber);
+    } else {
+      await connect();
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center p-4">
+      {state === "CONNECTED" && (
+        <p className="text-green-500 font-bold">WhatsApp Conectado! ✅</p>
+      )}
+
+      {state !== "CONNECTED" && (
+        <>
+          {isLoading && <Loader2 className="h-8 w-8 animate-spin text-primary" />}
+          {!isLoading && (
+            <>
+              {showPairingInput ? (
+                <div className="flex flex-col items-center gap-2">
+                  <Input
+                    placeholder="Seu número de WhatsApp (com DDD)"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                  />
+                  <Button onClick={handleConnect} disabled={!phoneNumber || isLoading}>
+                    {isLoading ? "Gerando Código..." : "Gerar Pairing Code"}
+                  </Button>
+                  {pairingCode && (
+                    <div className="text-center mt-4">
+                      <p className="text-lg font-semibold">Seu Pairing Code:</p>
+                      <p className="text-2xl font-bold text-primary">{pairingCode.code}</p>
+                      <p className="text-sm text-gray-500">Expira em {countdown} segundos</p>
+                      <p className="text-sm text-gray-500 mt-2">Abra o WhatsApp, vá em Aparelhos Conectados > Conectar um Aparelho > Conectar com número de telefone e digite o código.</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2">
+                  <Button onClick={handleConnect} disabled={isLoading}>
+                    {isLoading ? "Gerando QR Code..." : "Conectar com QR Code"}
+                  </Button>
+                  {qrCode && (
+                    <div className="text-center mt-4">
+                      <img src={`data:image/png;base64,${qrCode.base64}`} alt="QR Code" className="w-48 h-48 mx-auto" />
+                      <p className="text-sm text-gray-500">Expira em {countdown} segundos</p>
+                      <p className="text-sm text-gray-500 mt-2">Escaneie o QR Code com seu celular no WhatsApp.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+              <Button variant="link" onClick={() => setShowPairingInput(!showPairingInput)} className="mt-4">
+                {showPairingInput ? "Prefiro QR Code" : "Prefiro Pairing Code"}
+              </Button>
+            </>
+          )}
+        </>
+      )}
+
+      {state === "DISCONNECTED" && !isLoading && (
+        <Button onClick={handleConnect}>Reconectar WhatsApp</Button>
+      )}
+
+      {state === "ERROR" && !isLoading && (
+        <p className="text-red-500">Erro na conexão. Tente novamente.</p>
+      )}
+    </div>
+  );
+}
+```
+
+## 5. Exemplo: Adicionar Colunas à Tabela `usuarios` (Fase 6)
+
+Você precisaria criar uma nova migração no Supabase para adicionar as colunas. Exemplo de arquivo de migração:
 
 ```sql
--- Adicionar colunas de Pairing Code
-ALTER TABLE "public"."usuarios" 
-ADD COLUMN "pairing_code" VARCHAR(8),
-ADD COLUMN "pairing_code_generated_at" TIMESTAMP WITH TIME ZONE,
-ADD COLUMN "pairing_code_expires_at" TIMESTAMP WITH TIME ZONE,
-ADD COLUMN "pairing_code_attempts" INT DEFAULT 0;
+-- supabase/migrations/YYYYMMDDHHMMSS_add_whatsapp_metadata_to_usuarios.sql
 
--- Criar índice para limpeza de códigos expirados
-CREATE INDEX "idx_usuarios_pairing_code_expires_at" 
-ON "public"."usuarios" ("pairing_code_expires_at") 
-WHERE "pairing_code" IS NOT NULL;
+ALTER TABLE public.usuarios
+ADD COLUMN whatsapp_instance_id TEXT,
+ADD COLUMN whatsapp_last_connected_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN whatsapp_last_disconnected_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN whatsapp_pairing_code TEXT, -- Apenas para depuração, não para reuso
+ADD COLUMN whatsapp_webhook_url TEXT;
 
--- Adicionar comentários
-COMMENT ON COLUMN "public"."usuarios"."pairing_code" IS 'Código de pareamento de 8 dígitos (válido por ~60s)';
-COMMENT ON COLUMN "public"."usuarios"."pairing_code_generated_at" IS 'Timestamp de geração do código';
-COMMENT ON COLUMN "public"."usuarios"."pairing_code_expires_at" IS 'Timestamp de expiração do código';
-COMMENT ON COLUMN "public"."usuarios"."pairing_code_attempts" IS 'Número de tentativas de uso do código';
+-- Opcional: Adicionar índices para campos frequentemente consultados
+CREATE INDEX IF NOT EXISTS idx_usuarios_whatsapp_instance_id ON public.usuarios (whatsapp_instance_id);
 ```
 
----
-
-## Fase 4: Heartbeat Job
-
-### Arquivo: `src/services/jobs/whatsapp-heartbeat.job.ts`
+E então, no `whatsapp.service.ts` e `webhook-evolution.handler.ts`, você precisaria atualizar essas colunas sempre que houver uma mudança de status ou geração de código. Por exemplo, no `webhook-evolution.handler.ts`:
 
 ```typescript
-import { WHATSAPP_STATUS } from "../../config/constants.js";
-import { logger } from "../../config/logger.js";
-import { supabaseAdmin } from "../../config/supabase.js";
-import { whatsappService } from "../whatsapp.service.js";
+// src/services/handlers/webhook-evolution.handler.ts
 
-interface HeartbeatResult {
-    totalChecked: number;
-    healthy: number;
-    unhealthy: number;
-    errors: number;
-}
+// ... (imports e outras lógicas)
 
-export const whatsappHeartbeatJob = {
-    async run(): Promise<HeartbeatResult> {
-        logger.info("Starting WhatsApp Heartbeat Job...");
+        // ... (lógica de mapeamento de status)
 
-        const result: HeartbeatResult = {
-            totalChecked: 0,
-            healthy: 0,
-            unhealthy: 0,
-            errors: 0
-        };
-
-        // Buscar usuários conectados
-        const { data: usuarios, error } = await supabaseAdmin
+        await supabaseAdmin
             .from("usuarios")
-            .select("id, whatsapp_status")
-            .eq("whatsapp_status", WHATSAPP_STATUS.CONNECTED);
+            .update({
+                whatsapp_status: dbStatus,
+                whatsapp_last_connected_at: dbStatus === WHATSAPP_STATUS.CONNECTED ? new Date().toISOString() : null,
+                whatsapp_last_disconnected_at: dbStatus === WHATSAPP_STATUS.DISCONNECTED ? new Date().toISOString() : null,
+                // Outros campos podem ser atualizados aqui conforme necessário
+            })
+            .eq("id", usuarioId);
 
-        if (error) {
-            logger.error({ error }, "Heartbeat: Falha ao buscar usuários.");
-            throw error;
-        }
-
-        if (!usuarios || usuarios.length === 0) {
-            return result;
-        }
-
-        result.totalChecked = usuarios.length;
-
-        // Fazer ping em cada instância
-        for (const usuario of usuarios) {
-            const instanceName = whatsappService.getInstanceName(usuario.id);
-            
-            try {
-                const status = await whatsappService.getInstanceStatus(instanceName);
-                
-                if (status.state === "open") {
-                    result.healthy++;
-                } else {
-                    result.unhealthy++;
-                    logger.warn({ 
-                        usuarioId: usuario.id, 
-                        state: status.state 
-                    }, "Heartbeat: Instância não está saudável.");
-                }
-            } catch (err: any) {
-                result.errors++;
-                logger.error({ 
-                    usuarioId: usuario.id, 
-                    error: err.message 
-                }, "Heartbeat: Erro ao fazer ping.");
-            }
-        }
-
-        logger.info({ result }, "WhatsApp Heartbeat Job Finished.");
-        return result;
-    }
-};
+// ... (restante do código)
 ```
-
----
-
-## Fase 5: Hook de Status do WhatsApp (Frontend)
-
-### Arquivo: `src/hooks/api/useWhatsappStatus.ts`
-
-```typescript
-import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "@/services/api/client";
-
-export interface WhatsappStatus {
-    instanceName: string;
-    state: "open" | "close" | "connecting" | "UNKNOWN" | "NOT_FOUND";
-    statusReason?: number;
-}
-
-export function useWhatsappStatus(enabled: boolean = true) {
-    const { data, error, isLoading, refetch } = useQuery({
-        queryKey: ["whatsappStatus"],
-        queryFn: async () => {
-            const response = await apiClient.get<WhatsappStatus>("/whatsapp/status");
-            return response.data;
-        },
-        enabled,
-        refetchInterval: 5000, // Poll a cada 5 segundos
-        retry: 2,
-        staleTime: 2000,
-    });
-
-    return {
-        status: data,
-        error,
-        isLoading,
-        refetch,
-        isConnected: data?.state === "open",
-        isConnecting: data?.state === "connecting",
-        isDisconnected: data?.state === "close" || data?.state === "DISCONNECTED"
-    };
-}
-```
-
----
-
-## Fase 6: Retry Queue para Webhooks
-
-### Arquivo: `src/queues/webhook-evolution.queue.ts`
-
-```typescript
-import { Queue, Worker } from "bullmq";
-import { logger } from "../config/logger.js";
-import { webhookEvolutionHandler } from "../services/handlers/webhook-evolution.handler.js";
-import { redis } from "../config/redis.js";
-
-interface WebhookJob {
-    payload: any;
-    attempt: number;
-    maxAttempts: number;
-}
-
-const webhookQueue = new Queue<WebhookJob>("webhook-evolution", {
-    connection: redis,
-    defaultJobOptions: {
-        attempts: 3,
-        backoff: {
-            type: "exponential",
-            delay: 5000 // 5 segundos
-        },
-        removeOnComplete: true,
-        removeOnFail: false
-    }
-});
-
-// Worker para processar webhooks
-const webhookWorker = new Worker<WebhookJob>(
-    "webhook-evolution",
-    async (job) => {
-        logger.info({ jobId: job.id, attempt: job.data.attempt }, "Processando webhook...");
-        
-        try {
-            const result = await webhookEvolutionHandler.handle(job.data.payload);
-            if (!result) {
-                throw new Error("Handler retornou false");
-            }
-            logger.info({ jobId: job.id }, "Webhook processado com sucesso.");
-            return result;
-        } catch (err: any) {
-            logger.error({ 
-                jobId: job.id, 
-                attempt: job.data.attempt,
-                error: err.message 
-            }, "Erro ao processar webhook.");
-            
-            if (job.data.attempt >= job.data.maxAttempts) {
-                logger.error({ jobId: job.id }, "Webhook falhou após todas as tentativas.");
-            }
-            
-            throw err;
-        }
-    },
-    {
-        connection: redis,
-        concurrency: 5 // Processar até 5 webhooks em paralelo
-    }
-);
-
-webhookWorker.on("failed", (job, err) => {
-    logger.error({ 
-        jobId: job?.id, 
-        error: err.message 
-    }, "Webhook job falhou permanentemente.");
-});
-
-export async function enqueueWebhook(payload: any): Promise<void> {
-    try {
-        await webhookQueue.add("webhook", {
-            payload,
-            attempt: 1,
-            maxAttempts: 3
-        });
-    } catch (err: any) {
-        logger.error({ error: err.message }, "Falha ao enfileirar webhook.");
-        throw err;
-    }
-}
-
-export { webhookQueue, webhookWorker };
-```
-
----
-
-## Fase 7: Timeout para Instância Travada
-
-### Arquivo: `src/services/whatsapp.service.ts` (Modificação)
-
-```typescript
-async connectInstance(instanceName: string, phoneNumber?: string): Promise<ConnectInstanceResponse> {
-    try {
-        await this.createInstance(instanceName);
-
-        if (phoneNumber) {
-            const cleanPhone = phoneNumber.replace(/\D/g, "");
-            const finalPhone = cleanPhone.length <= 11 ? `55${cleanPhone}` : cleanPhone;
-            
-            const url = `${EVO_URL}/instance/connect/pairing/${instanceName}?number=${finalPhone}`;
-            const { data } = await axios.get<{ code: string }>(url, { headers: { "apikey": EVO_KEY } });
-            
-            if (data?.code) {
-                return { pairingCode: { code: data.code } };
-            }
-        }
-
-        const url = `${EVO_URL}/instance/connect/${instanceName}`;
-        const { data } = await axios.get<EvolutionConnectResponse>(url, { headers: { "apikey": EVO_KEY } });
-
-        if (data?.base64 || data?.qrcode?.base64) {
-            return { 
-                qrcode: { 
-                    base64: (data.base64 || data.qrcode?.base64) as string,
-                    code: data.code || data.qrcode?.code
-                } 
-            };
-        }
-        
-        if (data?.instance?.state === WHATSAPP_STATUS.OPEN) {
-            return { instance: { state: WHATSAPP_STATUS.OPEN } };
-        }
-
-        // ✅ NOVO: Timeout para instância travada em "connecting"
-        if (data?.instance?.state === "connecting" || data?.instance?.state === WHATSAPP_STATUS.CONNECTING) {
-            logger.warn({ instanceName }, "Instância em 'connecting'. Verificando timeout...");
-            
-            // Aguardar 30 segundos para ver se sai de "connecting"
-            await new Promise(r => setTimeout(r, 30000));
-            
-            const retryUrl = `${EVO_URL}/instance/connectionState/${instanceName}`;
-            const { data: retryData } = await axios.get<{ instance: EvolutionInstance }>(retryUrl, { 
-                headers: { "apikey": EVO_KEY } 
-            });
-            
-            // Se ainda estiver em "connecting", fazer logout forçado
-            if (retryData?.instance?.state === "connecting") {
-                logger.warn({ instanceName }, "Instância ainda em 'connecting' após 30s. Fazendo logout forçado...");
-                await this.disconnectInstance(instanceName);
-                
-                // Tentar conectar novamente
-                await new Promise(r => setTimeout(r, 1000));
-                const finalUrl = `${EVO_URL}/instance/connect/${instanceName}`;
-                const { data: finalData } = await axios.get<EvolutionConnectResponse>(finalUrl, { 
-                    headers: { "apikey": EVO_KEY } 
-                });
-                
-                if (finalData?.base64 || finalData?.qrcode?.base64) {
-                    return { 
-                        qrcode: { 
-                            base64: (finalData.base64 || finalData.qrcode?.base64) as string,
-                            code: finalData.code || finalData.qrcode?.code
-                        } 
-                    };
-                }
-            } else if (retryData?.instance?.state === "open") {
-                return { instance: { state: WHATSAPP_STATUS.OPEN } };
-            }
-        }
-        
-        return {}; 
-    } catch (error) {
-        const err = error as AxiosError;
-        logger.error({ err: err.response?.data || err.message, instanceName }, "Falha ao conectar instância");
-        throw new Error("Falha ao gerar código de conexão.");
-    }
-}
-```
-
----
-
-## 📝 Resumo
-
-| Fase | Arquivo | Linhas | Complexidade |
-|------|---------|--------|-------------|
-| 2 | `whatsapp-health-check-v2.job.ts` | ~150 | Média |
-| 3 | `20260114_add_pairing_code_columns.sql` | ~20 | Baixa |
-| 4 | `whatsapp-heartbeat.job.ts` | ~60 | Baixa |
-| 5 | `useWhatsappStatus.ts` | ~30 | Baixa |
-| 6 | `webhook-evolution.queue.ts` | ~80 | Média |
-| 7 | Modificação em `whatsapp.service.ts` | ~40 | Média |
-
-**Total**: ~380 linhas de código novo
