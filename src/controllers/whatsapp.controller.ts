@@ -46,7 +46,15 @@ export const whatsappController = {
 
         // Se o status real for diferente do status no banco (e não for erro de leitura), atualiza
         // (Ignora UNKNOWN/ERROR para não sujar o banco com falsos negativos se a API cair)
-        const { whatsapp_status: dbStatus } = await supabaseAdmin.from("usuarios").select("whatsapp_status").eq("id", usuarioId).single().then(r => r.data || { whatsapp_status: "UNKNOWN" });
+        const { data: userData } = await supabaseAdmin
+            .from("usuarios")
+            .select("whatsapp_status, pairing_code, pairing_code_expires_at")
+            .eq("id", usuarioId)
+            .single();
+
+        const dbStatus = userData?.whatsapp_status || "UNKNOWN";
+        const persistedPairingCode = userData?.pairing_code;
+        const persistedExpiresAt = userData?.pairing_code_expires_at;
 
         if (realStatus !== dbStatus && evoStatus.state !== "ERROR" && evoStatus.state !== WHATSAPP_STATUS.NOT_FOUND) {
              logger.info({ usuarioId, real: realStatus, db: dbStatus }, "Status Check: Corrigindo status no banco (Self-Healing on Read)");
@@ -55,7 +63,9 @@ export const whatsappController = {
         
         return reply.send({
             instanceName,
-            ...evoStatus
+            ...evoStatus,
+            pairingCode: persistedPairingCode,
+            pairingCodeExpiresAt: persistedExpiresAt
         });
     } catch (err: any) {
         return reply.status(500).send({ error: err.message });
