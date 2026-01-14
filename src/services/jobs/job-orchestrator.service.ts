@@ -67,7 +67,9 @@ export const jobOrchestratorService = {
 
     // Health Check: Roda a cada 5 minutos para corrigir estados travados
     // (Antes era a cada 4 horas, inútil para o problema atual)
-    if (minute % 5 === 0) {
+    // Health Check: Roda a cada 1 minuto para corrigir estados travados
+    // (Aumentado frequência para mitigar falha de webhook)
+    if (minute % 1 === 0) {
       executions.push(whatsappHealthCheckJob.run());
     }
 

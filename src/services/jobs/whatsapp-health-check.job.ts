@@ -1,6 +1,7 @@
-import { WHATSAPP_STATUS } from "../../config/constants.js";
+import { DRIVER_EVENT_WHATSAPP_DISCONNECTED, WHATSAPP_STATUS } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
+import { notificationService } from "../notifications/notification.service.js";
 import { whatsappService } from "../whatsapp.service.js";
 
 interface HealthCheckResult {
@@ -80,6 +81,7 @@ export const whatsappHealthCheckJob = {
                          if (retryStatus.state === "connecting") {
                             logger.warn({ instanceName }, "Health Check: Instance travada em 'connecting'. Limpando...");
                             await whatsappService.disconnectInstance(instanceName);
+                            await whatsappService.deleteInstance(instanceName);
                          }
                     }
                 } else {
@@ -100,12 +102,24 @@ export const whatsappHealthCheckJob = {
                         .update({ whatsapp_status: WHATSAPP_STATUS.DISCONNECTED })
                         .eq("id", usuario.id);
 
-                    // Notificar motorista que caiu?
-                    /* 
+                    // Notificar motorista que caiu!
                     if (usuario.telefone) {
-                         // TODO: Implementar notificação de "Connection Lost"
+                         try {
+                              await notificationService.notifyDriver(
+                                   usuario.telefone, 
+                                   DRIVER_EVENT_WHATSAPP_DISCONNECTED, 
+                                   { 
+                                        nomeMotorista: usuario.nome || "Motorista",
+                                        nomePlano: "Essencial", // Dummy for context
+                                        valor: 0,
+                                        dataVencimento: new Date()
+                                   } as any 
+                              );
+                              logger.info({ usuarioId: usuario.id }, "Notificação de WhatsApp desconectado enviada.");
+                         } catch (notifErr) {
+                              logger.error({ notifErr }, "Falha ao enviar notificação de desconexão.");
+                         }
                     }
-                    */
 
                     result.fixed++;
                     result.details.push({

@@ -163,7 +163,7 @@ class WhatsappService {
                 enabled,
                 url: webhookUrl,
                 webhookByEvents: false,
-                events: ["connection.update", "qrcode.updated"]
+                  events: ["CONNECTION_UPDATE", "QRCODE_UPDATED"]
               }
           }, { 
               headers: { "apikey": EVO_KEY } 
@@ -209,7 +209,7 @@ class WhatsappService {
                   enabled: true,
                   url: webhookUrl,
                   webhookByEvents: false,
-                  events: ["connection.update", "qrcode.updated"]
+                    events: ["CONNECTION_UPDATE", "QRCODE_UPDATED"]
               }
           }, { 
               headers: { "apikey": EVO_KEY } 
@@ -258,8 +258,9 @@ class WhatsappService {
               // Se não está conectado, força disconnect/delete para garantir "Clean Slate"
               if (status.state !== WHATSAPP_STATUS.NOT_FOUND && status.state !== "ERROR") {
                    logger.info({ instanceName }, "Resetando instância para novo Pairing Code (Clean Slate)...");
-                   await this.deleteInstance(instanceName); // Delete é mais "forte" que Logout
-                   await new Promise(r => setTimeout(r, 3000));
+                   await this.disconnectInstance(instanceName); // Logout tenta limpar sessão
+                   await this.deleteInstance(instanceName); // Delete limpa o container da Evolution
+                   await new Promise(r => setTimeout(r, 2000));
               }
 
               // 2. Criar Instância Limpa (Modo Full para garantir aceitação do Celular)
@@ -279,7 +280,7 @@ class WhatsappService {
                       const { data } = await axios.get<{ pairingCode: string, code: string }>(url, { headers: { "apikey": EVO_KEY } });
                       
                       // PRIORIDADE: Pairing Code explícito
-                      let pCode = data?.pairingCode;
+                      let pCode: string | undefined = data?.pairingCode;
 
                       // FALLBACK: Campo 'code', mas SOMENTE se NÃO for um QR Code (começa com 2@)
                       if (!pCode && data?.code && !data.code.startsWith("2@") && data.code.length < 50) {

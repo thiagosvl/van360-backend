@@ -40,7 +40,7 @@ export const whatsappController = {
         const evoStatus = await whatsappService.getInstanceStatus(instanceName);
 
         // SELF-HEALING: Atualizar DB se houver discrepância
-        let realStatus = WHATSAPP_STATUS.DISCONNECTED;
+        let realStatus: string = WHATSAPP_STATUS.DISCONNECTED;
         if (evoStatus.state === "open" || evoStatus.state === "connected") realStatus = WHATSAPP_STATUS.CONNECTED;
         else if (evoStatus.state === "connecting") realStatus = WHATSAPP_STATUS.CONNECTING;
 
@@ -49,7 +49,7 @@ export const whatsappController = {
         const { whatsapp_status: dbStatus } = await supabaseAdmin.from("usuarios").select("whatsapp_status").eq("id", usuarioId).single().then(r => r.data || { whatsapp_status: "UNKNOWN" });
 
         if (realStatus !== dbStatus && evoStatus.state !== "ERROR" && evoStatus.state !== WHATSAPP_STATUS.NOT_FOUND) {
-             // logger.info({ usuarioId, real: realStatus, db: dbStatus }, "Status Check: Corrigindo status no banco (Self-Healing on Read)");
+             logger.info({ usuarioId, real: realStatus, db: dbStatus }, "Status Check: Corrigindo status no banco (Self-Healing on Read)");
              await supabaseAdmin.from("usuarios").update({ whatsapp_status: realStatus }).eq("id", usuarioId);
         }
         
@@ -142,7 +142,11 @@ export const whatsappController = {
 
         const instanceName = whatsappService.getInstanceName(usuarioId);
 
+        // "Nuclear Option": Reset completo da instância para garantir que não haja
+        // "Sessões Zumbis" atrapalhando a próxima conexão (Lite Mode).
+        logger.info({ instanceName }, "Disconnecting and Deleting instance (Clean Slate)...");
         await whatsappService.disconnectInstance(instanceName);
+        await whatsappService.deleteInstance(instanceName);
         
         // Atualizar DB
         await supabaseAdmin.from("usuarios")
