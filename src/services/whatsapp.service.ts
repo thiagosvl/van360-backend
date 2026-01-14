@@ -283,12 +283,14 @@ class WhatsappService {
               }
           }
 
-          // Se chegamos aqui sem pairingCode, mas a instância está "connecting" ou "open",
-          // vamos tentar um logout forçado pois pode estar presa no modo QR.
-          if (lastData?.instance?.state === "connecting" || lastData?.instance?.state === WHATSAPP_STATUS.CONNECTING || lastData?.instance?.state === "open") {
-              logger.warn({ instanceName }, "Pareamento travado. Forçando logout para tentar novo código...");
+          // Se chegamos aqui sem pairingCode, mas a instância está "connecting", "open" ou retornando QR Code
+          const isStuckInQR = (lastData as any)?.base64 || (lastData as any)?.code || (lastData as any)?.qrcode;
+          const isStuckConnecting = lastData?.instance?.state === "connecting" || lastData?.instance?.state === WHATSAPP_STATUS.CONNECTING || lastData?.instance?.state === "open";
+
+          if (isStuckInQR || isStuckConnecting) {
+              logger.warn({ instanceName, isStuckInQR, isStuckConnecting }, "Pareamento travado ou em modo QR. Forçando logout para tentar novo código...");
               await this.disconnectInstance(instanceName);
-              await new Promise(r => setTimeout(r, 1500));
+              await new Promise(r => setTimeout(r, 1800));
               
               // Tenta uma última vez após o logout
               const retryUrl = `${EVO_URL}/instance/connect/${instanceName}?number=${finalNumber}`;
@@ -298,8 +300,8 @@ class WhatsappService {
               }
           }
 
-          logger.warn({ instanceName, lastData }, "Evolution falhou em retornar pairingCode após retentativas e logout.");
-          return {};
+          logger.error({ instanceName, lastData }, "Evolution falhou em retornar pairingCode após retentativas e logout.");
+          throw new Error("Não foi possível gerar seu código de pareamento (Timeout da Evolution). Tente o QR Code ou aguarde 1 minuto.");
 
       } catch (error) {
           const err = error as AxiosError;
