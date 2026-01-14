@@ -1,6 +1,6 @@
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
-import { ChargeStatus, CobrancaOrigem, ConfigKey, PassageiroDesativacaoCobrancaAutomaticaMotivo } from "../types/enums.js";
+import { CobrancaOrigem, CobrancaStatus, ConfigKey, PassageiroDesativacaoCobrancaAutomaticaMotivo } from "../types/enums.js";
 import { cobrancaService } from "./cobranca.service.js";
 import { getConfigNumber } from "./configuracao.service.js";
 
@@ -34,7 +34,7 @@ const _verificarGerarCobrancaMesSeguinte = async (
             ano: targetYear,
             valor: passageiroData.valor_cobranca,
             data_vencimento: dataVencimentoStr,
-            status: ChargeStatus.PENDENTE,
+            status: CobrancaStatus.PENDENTE,
             usuario_id: usuarioId,
             origem: CobrancaOrigem.AUTOMATICA
         });
@@ -153,7 +153,7 @@ export const automationService = {
             .from("passageiros")
             .update({
                 enviar_cobranca_automatica: false,
-                origem_desativacao_cobranca_automatica: PassageiroDesativacaoCobrancaAutomaticaMotivo.AUTOMATICO,
+                origem_desativacao_cobranca_automatica: PassageiroDesativacaoCobrancaAutomaticaMotivo.AUTOMATICA,
             })
             .in("id", ids);
 

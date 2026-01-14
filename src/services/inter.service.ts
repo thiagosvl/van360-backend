@@ -7,7 +7,7 @@ import path from "path";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { redisConfig } from "../config/redis.js";
-import { ChargeStatus, ConfigKey } from "../types/enums.js";
+import { CobrancaStatus, ConfigKey } from "../types/enums.js";
 import { onlyDigits } from "../utils/string.utils.js";
 import { getConfigNumber } from "./configuracao.service.js";
 
@@ -434,7 +434,7 @@ async function realizarPagamentoPix(
     logger.warn({ params }, "MOCK INTER ATIVO: Simulando Pagamento PIX");
     return {
       endToEndId: `MOCK-E2E-${Date.now()}`,
-      status: ChargeStatus.PAGO
+      status: CobrancaStatus.PAGO
     };
   }
 

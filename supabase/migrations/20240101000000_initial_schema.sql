@@ -94,9 +94,7 @@ ALTER TYPE "public"."whatsapp_status_enum" OWNER TO "postgres";
 
 CREATE TYPE "public"."user_type_enum" AS ENUM (
     'admin',
-    'motorista',
-    'responsavel',
-    'escola'
+    'motorista'
 );
 
 ALTER TYPE "public"."user_type_enum" OWNER TO "postgres";

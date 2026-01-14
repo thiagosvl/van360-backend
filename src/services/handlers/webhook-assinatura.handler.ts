@@ -3,7 +3,7 @@ import { DRIVER_EVENT_PAYMENT_CONFIRMED } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
 import { addToReceiptQueue } from "../../queues/receipt.queue.js";
-import { PaymentMethod } from "../../types/enums.js";
+import { AssinaturaTipoPagamento } from "../../types/enums.js";
 import { formatDate } from "../../utils/format.js";
 import { processarPagamentoAssinatura } from "../assinatura-pagamento.service.js";
 import { ReceiptData } from "../receipt.service.js";
@@ -71,7 +71,7 @@ export const webhookAssinaturaHandler = {
                 data: formatDate(dataPagamento),
                 pagadorNome: usuario?.nome || "Assinante",
                 descricao: `Mensalidade - ${nomePlano}`,
-                metodoPagamento: PaymentMethod.PIX,
+                metodoPagamento: AssinaturaTipoPagamento.PIX,
                 tipo: 'ASSINATURA'
             };
 

@@ -7,7 +7,7 @@ import {
 } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
-import { ChargeStatus, ConfigKey, UserSubscriptionStatus } from "../../types/enums.js";
+import { AssinaturaStatus, CobrancaStatus, ConfigKey } from "../../types/enums.js";
 import { getConfigNumber } from "../configuracao.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 
@@ -74,10 +74,10 @@ export const dailyChargeMonitorJob = {
                         )
                     )
                 `)
-                .eq("status", ChargeStatus.PENDENTE)
+                .eq("status", CobrancaStatus.PENDENTE)
                 .in("data_vencimento", datasDeInteresse)
                 .eq("passageiros.enviar_cobranca_automatica", true)
-                .eq("usuarios.assinaturas_usuarios.status", UserSubscriptionStatus.ATIVA)
+                .eq("usuarios.assinaturas_usuarios.status", AssinaturaStatus.ATIVA)
                 .lte("usuarios.assinaturas_usuarios.data_ativacao", timestamp24hAgo);
 
             if (cobError) throw cobError;

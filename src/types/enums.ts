@@ -1,7 +1,4 @@
-
-
-
-export enum SubscriptionBillingType {
+export enum AssinaturaBillingType {
   SUBSCRIPTION = "subscription",
   UPGRADE_PLAN = "upgrade_plan",
   UPGRADE = "upgrade",
@@ -11,7 +8,7 @@ export enum SubscriptionBillingType {
   RENEWAL = "renewal",
 }
 
-export enum UserSubscriptionStatus {
+export enum AssinaturaStatus {
   ATIVA = "ativa",
   TRIAL = "trial",
   SUSPENSA = "suspensa",
@@ -19,19 +16,19 @@ export enum UserSubscriptionStatus {
   CANCELADA = "cancelada"
 }
 
-export enum ChargeStatus {
+export enum CobrancaStatus {
   PAGO = "pago",
   PENDENTE = "pendente",
-  ATRASADO = "atrasado"
-}
-
-export enum SubscriptionChargeStatus {
-  PAGO = "pago",
-  PENDENTE = "pendente_pagamento",
   CANCELADA = "cancelada"
 }
 
-export enum ChargePaymentType {
+export enum AssinaturaCobrancaStatus {
+  PAGO = "pago",
+  PENDENTE_PAGAMENTO = "pendente_pagamento",
+  CANCELADA = "cancelada"
+}
+
+export enum CobrancaTipoPagamento {
   DINHEIRO = "dinheiro",
   CARTAO_CREDITO = "cartao-credito",
   CARTAO_DEBITO = "cartao-debito",
@@ -40,11 +37,13 @@ export enum ChargePaymentType {
   BOLETO = "boleto"
 }
 
+export enum AssinaturaTipoPagamento {
+  PIX = "PIX",
+}
+
 export enum CobrancaOrigem {
-  INTER = "inter",
   MANUAL = "manual",
   AUTOMATICA = "automatica",
-  JOB_RENOVACAO = "job_renovacao"
 }
 
 export enum CobrancaTipo {
@@ -52,22 +51,14 @@ export enum CobrancaTipo {
   AVULSA = "avulsa"
 }
 
-export enum PaymentMethod {
-  PIX = "PIX",
-  BOLETO = "BOLETO",
-  CARTAO = "CARTAO"
-}
-
 export enum PassageiroDesativacaoCobrancaAutomaticaMotivo {
   MANUAL = "manual",
-  AUTOMATICO = "automatico",
+  AUTOMATICA = "automatica",
 }
 
 export enum UserType {
   ADMIN = "admin",
   MOTORISTA = "motorista",
-  RESPONSAVEL = "responsavel",
-  ESCOLA = "escola"
 }
 
 export enum WhatsappStatus {

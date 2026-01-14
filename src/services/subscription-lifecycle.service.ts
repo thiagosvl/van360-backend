@@ -1,7 +1,7 @@
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
-import { ConfigKey, SubscriptionChargeStatus, UserSubscriptionStatus } from "../types/enums.js";
+import { AssinaturaCobrancaStatus, AssinaturaStatus, ConfigKey } from "../types/enums.js";
 import { cobrancaService } from "./cobranca.service.js";
 import { getConfigNumber } from "./configuracao.service.js";
 import { getAssinaturaAtiva } from "./subscription.common.js";
@@ -53,9 +53,9 @@ export const subscriptionLifecycleService = {
             // Reverter apenas cobranças de subscription canceladas
             await supabaseAdmin
                 .from("assinaturas_cobrancas")
-                .update({ status: SubscriptionChargeStatus.PENDENTE })
+                .update({ status: AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO })
                 .eq("assinatura_usuario_id", assinaturaAtual.id)
-                .eq("status", SubscriptionChargeStatus.CANCELADA)
+                .eq("status", AssinaturaCobrancaStatus.CANCELADA)
                 .eq("billing_type", "subscription")
                 .is("data_pagamento", null);
 
@@ -148,12 +148,10 @@ export const subscriptionLifecycleService = {
     },
 
     async suspenderAssinatura(assinaturaId: string, motivo: string): Promise<void> {
-        // const { ASSINATURA_USUARIO_STATUS_SUSPENSA } = await import("../config/constants.js");
-        
         const { error } = await supabaseAdmin
             .from("assinaturas_usuarios")
             .update({ 
-                status: UserSubscriptionStatus.SUSPENSA, 
+                status: AssinaturaStatus.SUSPENSA, 
                 ativo: false,
                 updated_at: new Date().toISOString()
             })
@@ -166,12 +164,10 @@ export const subscriptionLifecycleService = {
     },
 
     async cancelarAssinaturaImediato(assinaturaId: string, motivo: string): Promise<void> {
-        // const { ASSINATURA_USUARIO_STATUS_CANCELADA } = await import("../config/constants.js");
-
         const { error } = await supabaseAdmin
             .from("assinaturas_usuarios")
             .update({ 
-                status: UserSubscriptionStatus.CANCELADA, 
+                status: AssinaturaStatus.CANCELADA, 
                 ativo: false,
                 updated_at: new Date().toISOString()
             })

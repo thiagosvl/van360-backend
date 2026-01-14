@@ -2,7 +2,7 @@ import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
 import { addToPayoutQueue } from "../queues/payout.queue.js";
-import { ChargeStatus, ConfigKey, PixKeyStatus, RepasseStatus, TransactionStatus } from "../types/enums.js";
+import { CobrancaStatus, ConfigKey, PixKeyStatus, RepasseStatus, TransactionStatus } from "../types/enums.js";
 import { getConfigNumber } from "./configuracao.service.js";
 
 interface PagamentoInfo {
@@ -20,7 +20,7 @@ export const cobrancaPagamentoService = {
         const { error } = await supabaseAdmin
             .from("cobrancas")
             .update({
-                status: ChargeStatus.PAGO,
+                status: CobrancaStatus.PAGO,
                 valor_pago: valor,
                 data_pagamento: pagamento.horario || new Date(),
                 dados_auditoria: pagamento,
@@ -38,7 +38,7 @@ export const cobrancaPagamentoService = {
     const { data, error } = await supabaseAdmin
       .from("cobrancas")
       .update({
-        status: ChargeStatus.PENDENTE,
+        status: CobrancaStatus.PENDENTE,
         data_pagamento: null,
         valor_pago: null,
         tipo_pagamento: null,

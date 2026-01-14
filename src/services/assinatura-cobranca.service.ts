@@ -1,7 +1,7 @@
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
-import { ConfigKey, SubscriptionBillingType, SubscriptionChargeStatus } from "../types/enums.js";
+import { AssinaturaBillingType, AssinaturaCobrancaStatus, ConfigKey } from "../types/enums.js";
 import { getConfigNumber } from "./configuracao.service.js";
 import { interService } from "./inter.service.js";
 
@@ -84,7 +84,7 @@ export const assinaturaCobrancaService = {
             throw new Error("Cobrança não encontrada.");
         }
 
-        if (cobranca.status !== SubscriptionChargeStatus.PENDENTE) {
+        if (cobranca.status !== AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO) {
             throw new Error("Esta cobrança não está pendente de pagamento.");
         }
 
@@ -208,9 +208,9 @@ export const assinaturaCobrancaService = {
             usuario_id: usuarioId,
             assinatura_usuario_id: assinaturaId,
             valor: valor,
-            status: SubscriptionChargeStatus.PENDENTE,
+            status: AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO,
             data_vencimento: dataVencimento,
-            billing_type: SubscriptionBillingType.ACTIVATION,
+            billing_type: AssinaturaBillingType.ACTIVATION,
             descricao: descricao,
           })
           .select()
@@ -267,9 +267,9 @@ export const assinaturaCobrancaService = {
             usuario_id: usuarioId,
             assinatura_usuario_id: assinaturaId,
             valor: valor,
-            status: SubscriptionChargeStatus.PENDENTE,
+            status: AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO,
             data_vencimento: dataVencimento,
-            billing_type: SubscriptionBillingType.RENEWAL,
+            billing_type: AssinaturaBillingType.RENEWAL,
             descricao: descricao,
           })
           .select()

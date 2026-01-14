@@ -2,7 +2,7 @@ import { PLANO_ESSENCIAL, PLANO_PROFISSIONAL } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
 import { addToGenerationQueue } from "../../queues/generation.queue.js";
-import { ConfigKey, UserSubscriptionStatus } from "../../types/enums.js";
+import { AssinaturaStatus, ConfigKey } from "../../types/enums.js";
 import { getConfigNumber } from "../configuracao.service.js";
 
 interface JobResult {
@@ -63,7 +63,7 @@ export const chargeGeneratorJob = {
             const { data: assinaturas, error: subError } = await supabaseAdmin
                 .from("assinaturas_usuarios")
                 .select("usuario_id, status, plano_id, usuarios(id, nome), planos:plano_id(slug)") 
-                .in("status", [UserSubscriptionStatus.ATIVA, UserSubscriptionStatus.TRIAL]) 
+                .in("status", [AssinaturaStatus.ATIVA, AssinaturaStatus.TRIAL]) 
                 .in("plano_id", planIds)
                 .is("cancelamento_manual", null); 
 

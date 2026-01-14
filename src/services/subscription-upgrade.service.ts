@@ -8,7 +8,7 @@ import {
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
-import { ConfigKey, SubscriptionBillingType, SubscriptionChargeStatus, UserSubscriptionStatus } from "../types/enums.js";
+import { AssinaturaBillingType, AssinaturaCobrancaStatus, AssinaturaStatus, ConfigKey } from "../types/enums.js";
 import { onlyDigits } from "../utils/string.utils.js";
 import { automationService } from "./automation.service.js";
 import { getBillingConfig, getConfigNumber } from "./configuracao.service.js";
@@ -137,7 +137,7 @@ export const subscriptionUpgradeService = {
                 plano_id: novoPlano.id,
                 franquia_contratada_cobrancas: franquiaContratada,
                 ativo: true,
-                status: UserSubscriptionStatus.TRIAL,
+                status: AssinaturaStatus.TRIAL,
 
                 preco_aplicado: precoAplicado,
                 preco_origem: precoOrigem,
@@ -158,9 +158,9 @@ export const subscriptionUpgradeService = {
                 usuario_id: usuarioId,
                 assinatura_usuario_id: novaAssinatura.id,
                 valor: precoAplicado,
-                status: SubscriptionChargeStatus.PENDENTE,
+                status: AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO,
                 data_vencimento: trialEnd.toISOString().split("T")[0],
-                billing_type: SubscriptionBillingType.UPGRADE_PLAN,
+                billing_type: AssinaturaBillingType.UPGRADE_PLAN,
                 descricao: `Upgrade de Plano: ${planoAtual?.slug === PLANO_ESSENCIAL ? "Essencial" : "Grátis"} → ${novoPlano.nome} (Período de Testes)`,
               })
               .select()
@@ -181,7 +181,7 @@ export const subscriptionUpgradeService = {
             };
           }
       
-          let billingType = SubscriptionBillingType.ACTIVATION;
+          let billingType = AssinaturaBillingType.ACTIVATION;
           let valorCobrar = precoAplicado;
           let vigenciaFimInsert: string | null = null;
           let descricaoCobranca = `Upgrade de Plano: ${planoAtual?.slug === PLANO_ESSENCIAL ? "Essencial" : "Grátis"} → ${novoPlano.nome}`;
@@ -198,11 +198,11 @@ export const subscriptionUpgradeService = {
             );
       
             valorCobrar = valorPR;
-            billingType = SubscriptionBillingType.UPGRADE_PLAN;
+            billingType = AssinaturaBillingType.UPGRADE_PLAN;
             vigenciaFimInsert = assinaturaAtual.vigencia_fim;
             descricaoCobranca += ` (Pro-Rata: ${diasRestantes} dias)`;
           } else {
-            billingType = SubscriptionBillingType.ACTIVATION;
+            billingType = AssinaturaBillingType.ACTIVATION;
             valorCobrar = precoAplicado;
             vigenciaFimInsert = null;
           }
@@ -214,7 +214,7 @@ export const subscriptionUpgradeService = {
               plano_id: novoPlano.id,
               franquia_contratada_cobrancas: franquiaContratada,
               ativo: false,
-              status: UserSubscriptionStatus.PENDENTE_PAGAMENTO,
+              status: AssinaturaStatus.PENDENTE_PAGAMENTO,
 
               preco_aplicado: precoAplicado,
               preco_origem: precoOrigem,
@@ -232,7 +232,7 @@ export const subscriptionUpgradeService = {
               usuario_id: usuarioId,
               assinatura_usuario_id: novaAssinatura.id,
               valor: valorCobrar,
-              status: SubscriptionChargeStatus.PENDENTE,
+              status: AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO,
               data_vencimento: hoje.toISOString().split("T")[0],
               billing_type: billingType,
               descricao: descricaoCobranca,
@@ -264,7 +264,7 @@ export const subscriptionUpgradeService = {
           // Envio Imediato do PIX via WhatsApp
           try {
             if (usuario.telefone) {
-              const eventType = billingType === SubscriptionBillingType.ACTIVATION ? DRIVER_EVENT_ACTIVATION : DRIVER_EVENT_UPGRADE;
+              const eventType = billingType === AssinaturaBillingType.ACTIVATION ? DRIVER_EVENT_ACTIVATION : DRIVER_EVENT_UPGRADE;
               notificationService.notifyDriver(usuario.telefone, eventType, {
                 nomeMotorista: usuario.nome,
                 nomePlano: novoPlano.nome,
@@ -329,10 +329,10 @@ export const subscriptionUpgradeService = {
             .eq("id", assinaturaAtual.id);
       
           const statusNovo = novoPlano.slug === PLANO_GRATUITO
-            ? UserSubscriptionStatus.ATIVA
+            ? AssinaturaStatus.ATIVA
             : (novoPlano.slug === PLANO_ESSENCIAL && assinaturaAtual.trial_end_at
-              ? UserSubscriptionStatus.TRIAL
-              : UserSubscriptionStatus.ATIVA);
+              ? AssinaturaStatus.TRIAL
+              : AssinaturaStatus.ATIVA);
       
           const { data: novaAssinatura, error: assinaturaError } = await supabaseAdmin
             .from("assinaturas_usuarios")
@@ -368,9 +368,9 @@ export const subscriptionUpgradeService = {
                 usuario_id: usuarioId,
                 assinatura_usuario_id: novaAssinatura.id,
                 valor: precoAplicado,
-                status: SubscriptionChargeStatus.PENDENTE,
+                status: AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO,
                 data_vencimento: dataVencimentoCobranca,
-                billing_type: SubscriptionBillingType.DOWNGRADE,
+                billing_type: AssinaturaBillingType.DOWNGRADE,
                 descricao: `Downgrade de Plano - ${novoPlano.nome}`,
               })
               .select()
@@ -477,7 +477,7 @@ export const subscriptionUpgradeService = {
                 plano_id: novoSubplano.id,
                 franquia_contratada_cobrancas: franquiaContratada,
                 ativo: false,
-                status: UserSubscriptionStatus.PENDENTE_PAGAMENTO,
+                status: AssinaturaStatus.PENDENTE_PAGAMENTO,
 
                 preco_aplicado: precoAplicado,
                 preco_origem: precoOrigem,
@@ -496,9 +496,9 @@ export const subscriptionUpgradeService = {
                 usuario_id: usuarioId,
                 assinatura_usuario_id: novaAssinatura.id,
                 valor: precoAplicado,
-                status: SubscriptionChargeStatus.PENDENTE,
+                status: AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO,
                 data_vencimento: hoje.toISOString().split("T")[0],
-                billing_type: SubscriptionBillingType.UPGRADE_PLAN,
+                billing_type: AssinaturaBillingType.UPGRADE_PLAN,
                 descricao: `Upgrade de Plano: ${planoAtual.nome} → ${novoSubplano.nome}`,
               })
               .select()
@@ -575,7 +575,7 @@ export const subscriptionUpgradeService = {
                 plano_id: novoSubplano.id,
                 franquia_contratada_cobrancas: franquiaContratada,
                 ativo: false,
-                status: UserSubscriptionStatus.PENDENTE_PAGAMENTO,
+                status: AssinaturaStatus.PENDENTE_PAGAMENTO,
 
                 preco_aplicado: precoAplicado,
                 preco_origem: precoOrigem,
@@ -594,9 +594,9 @@ export const subscriptionUpgradeService = {
                 usuario_id: usuarioId,
                 assinatura_usuario_id: novaAssinatura.id,
                 valor: diferenca,
-                status: SubscriptionChargeStatus.PENDENTE,
+                status: AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO,
                 data_vencimento: hoje.toISOString().split("T")[0],
-                billing_type: SubscriptionBillingType.EXPANSION,
+                billing_type: AssinaturaBillingType.EXPANSION,
                 descricao: `Expansão de Limite: ${assinaturaAtual.franquia_contratada_cobrancas} → ${franquiaContratada} passageiros`,
               })
               .select()
@@ -643,7 +643,7 @@ export const subscriptionUpgradeService = {
                 plano_id: novoSubplano.id,
                 franquia_contratada_cobrancas: franquiaContratada,
                 ativo: true,
-                status: UserSubscriptionStatus.ATIVA,
+                status: AssinaturaStatus.ATIVA,
 
                 preco_aplicado: precoAplicado,
                 preco_origem: precoOrigem,
@@ -715,7 +715,7 @@ export const subscriptionUpgradeService = {
               plano_id: planoProfissionalBase.id,
               franquia_contratada_cobrancas: quantidade,
               ativo: false,
-              status: UserSubscriptionStatus.PENDENTE_PAGAMENTO,
+              status: AssinaturaStatus.PENDENTE_PAGAMENTO,
 
               preco_aplicado: precoCalculado,
               preco_origem: "personalizado",
@@ -726,7 +726,7 @@ export const subscriptionUpgradeService = {
             .single();
       
           if (assinaturaError) throw assinaturaError;
-          const billingType = assinaturaAtual ? SubscriptionBillingType.UPGRADE_PLAN : SubscriptionBillingType.SUBSCRIPTION;
+          const billingType = assinaturaAtual ? AssinaturaBillingType.UPGRADE_PLAN : AssinaturaBillingType.SUBSCRIPTION;
           let valorCobranca = precoCalculado;
       
           if (assinaturaAtual) {
@@ -757,10 +757,10 @@ export const subscriptionUpgradeService = {
               usuario_id: usuarioId,
               assinatura_usuario_id: novaAssinatura.id,
               valor: valorCobranca,
-              status: SubscriptionChargeStatus.PENDENTE,
+              status: AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO,
               data_vencimento: hoje.toISOString().split("T")[0],
-              billing_type: billingType === SubscriptionBillingType.SUBSCRIPTION ? SubscriptionBillingType.ACTIVATION : SubscriptionBillingType.EXPANSION,
-              descricao: billingType === SubscriptionBillingType.SUBSCRIPTION
+              billing_type: billingType === AssinaturaBillingType.SUBSCRIPTION ? AssinaturaBillingType.ACTIVATION : AssinaturaBillingType.EXPANSION,
+              descricao: billingType === AssinaturaBillingType.SUBSCRIPTION
                 ? `Ativação de Plano Profissional (${quantidade} passageiros)`
                 : `Expansão de Limite: ${assinaturaAtual!.franquia_contratada_cobrancas} → ${quantidade} passageiros`,
             })

@@ -10,7 +10,7 @@ import { notificationService } from "./notifications/notification.service.js";
 import { planRules } from "./plan-rules.service.js";
 
 import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
-import { ChargeStatus, CobrancaOrigem } from "../types/enums.js";
+import { CobrancaOrigem, CobrancaStatus } from "../types/enums.js";
 
 interface CreateCobrancaOptions {
     gerarPixAsync?: boolean; // Se true, apenas enfileira. Se false, gera na hora (síncrono).
@@ -48,7 +48,11 @@ export const cobrancaService = {
 
     // --- Lógica de Geração PIX ---
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
+    // FIX: Ajuste para Fuso Horário do Brasil (UTC-3)
+    // Isso garante que cobranças geradas à noite (ex: 22h) sejam consideradas "hoje" e não "amanhã"
+    const diffBrasilia = -3;
+    const nowBrasilia = new Date(now.getTime() + (diffBrasilia * 60 * 60 * 1000));
+    const todayStr = nowBrasilia.toISOString().split('T')[0];
     const isPastDue = data.data_vencimento < todayStr;
     // status não existe no DTO de criação, assumimos pendente por padrão se não for passado explicitamente
     // mas aqui estamos validando regras de negócio
@@ -481,7 +485,7 @@ export const cobrancaService = {
         )
       `)
       .eq("usuario_id", usuarioId)
-      .eq("status", ChargeStatus.PENDENTE)
+      .eq("status", CobrancaStatus.PENDENTE)
       .is("txid_pix", null)
       .gte("data_vencimento", todayStr);
 

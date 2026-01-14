@@ -1,6 +1,6 @@
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
-import { ConfigKey, SubscriptionChargeStatus, UserSubscriptionStatus } from "../../types/enums.js";
+import { AssinaturaCobrancaStatus, AssinaturaStatus, ConfigKey } from "../../types/enums.js";
 import { assinaturaCobrancaService } from "../assinatura-cobranca.service.js";
 import { getConfigNumber } from "../configuracao.service.js";
 
@@ -36,7 +36,7 @@ export const subscriptionGeneratorJob = {
             const { data: assinaturas, error: assError } = await supabaseAdmin
                 .from("assinaturas_usuarios")
                 .select("id, usuario_id, vigencia_fim, preco_aplicado, plano_id, status")
-                .eq("status", UserSubscriptionStatus.ATIVA)
+                .eq("status", AssinaturaStatus.ATIVA)
                 .eq("vigencia_fim", dataAlvoStr);
 
             if (assError) throw assError;
@@ -61,7 +61,7 @@ export const subscriptionGeneratorJob = {
                         .select("id", { count: "exact", head: true })
                         .eq("assinatura_usuario_id", assinatura.id)
                         .eq("data_vencimento", dataVencimento)
-                        .neq("status", SubscriptionChargeStatus.CANCELADA); // Ignora canceladas
+                        .neq("status", AssinaturaCobrancaStatus.CANCELADA); // Ignora canceladas
 
                     if (count && count > 0 && !params.force) {
                         logger.info({ assinaturaId: assinatura.id }, "Renovação já gerada anteriormente.");

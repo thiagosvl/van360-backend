@@ -9,7 +9,7 @@ import {
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
-import { ConfigKey, SubscriptionChargeStatus, UserSubscriptionStatus, UserType } from "../types/enums.js";
+import { AssinaturaCobrancaStatus, AssinaturaStatus, ConfigKey, UserType } from "../types/enums.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { assinaturaCobrancaService } from "./assinatura-cobranca.service.js";
 import { getConfigNumber } from "./configuracao.service.js";
@@ -329,7 +329,7 @@ export async function iniciaRegistroPlanoGratuito(
         usuario_id: usuarioId,
         plano_id: plano.id,
         ativo: true,
-        status: UserSubscriptionStatus.ATIVA,
+        status: AssinaturaStatus.ATIVA,
         preco_aplicado: 0,
       })
       .select()
@@ -433,7 +433,7 @@ export async function iniciaRegistroPlanoEssencial(
         usuario_id: usuarioId,
         plano_id: plano.id,
         ativo: true,
-        status: UserSubscriptionStatus.TRIAL,
+        status: AssinaturaStatus.TRIAL,
 
         preco_aplicado: precoAplicado,
         preco_origem: precoOrigem,
@@ -457,7 +457,7 @@ export async function iniciaRegistroPlanoEssencial(
         usuario_id: usuarioId,
         assinatura_usuario_id: assinaturaId,
         valor: precoAplicado,
-        status: SubscriptionChargeStatus.PENDENTE,
+        status: AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO,
         data_vencimento: dataVencimentoCobranca,
         billing_type: "activation",
         descricao: `Ativação de Assinatura - Plano Essencial`,
@@ -610,7 +610,7 @@ export async function iniciarRegistroplanoProfissional(
         plano_id: planoSelecionadoId,
         franquia_contratada_cobrancas: franquiaContratada,
         ativo: false,
-        status: UserSubscriptionStatus.PENDENTE_PAGAMENTO,
+        status: AssinaturaStatus.PENDENTE_PAGAMENTO,
 
         preco_aplicado: precoAplicado,
         preco_origem: precoOrigem,

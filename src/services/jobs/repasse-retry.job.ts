@@ -1,6 +1,6 @@
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
-import { ChargeStatus, PixKeyStatus, RepasseStatus } from "../../types/enums.js";
+import { CobrancaStatus, PixKeyStatus, RepasseStatus } from "../../types/enums.js";
 import { cobrancaPagamentoService } from "../cobranca-pagamento.service.js";
 
 export const repasseRetryJob = {
@@ -19,7 +19,7 @@ export const repasseRetryJob = {
                     id, nome, status_chave_pix
                 )
             `)
-            .eq("status", ChargeStatus.PAGO) // Dinheiro já entrou
+            .eq("status", CobrancaStatus.PAGO) // Dinheiro já entrou
             .in("status_repasse", [RepasseStatus.FALHA, RepasseStatus.PENDENTE]) // Repasse travado
             .eq("usuarios.status_chave_pix", PixKeyStatus.VALIDADA); // Chave agora está OK
 

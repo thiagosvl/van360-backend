@@ -1,14 +1,14 @@
 import {
-    DRIVER_EVENT_REACTIVATION_EMBARGO,
-    PLANO_PROFISSIONAL
+  DRIVER_EVENT_REACTIVATION_EMBARGO,
+  PLANO_PROFISSIONAL
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import {
-    ChargePaymentType,
-    ConfigKey,
-    SubscriptionChargeStatus,
-    UserSubscriptionStatus
+  AssinaturaCobrancaStatus,
+  AssinaturaStatus,
+  AssinaturaTipoPagamento,
+  ConfigKey
 } from "../types/enums.js";
 import { automationService } from "./automation.service.js";
 import { cobrancaService } from "./cobranca.service.js";
@@ -58,10 +58,10 @@ export async function processarPagamentoAssinatura(
     const { error: updateCobrancaError, data: updatedCobranca } = await supabaseAdmin
       .from("assinaturas_cobrancas")
       .update({
-        status: SubscriptionChargeStatus.PAGO,
+        status: AssinaturaCobrancaStatus.PAGO,
         data_pagamento: dadosPagamento.dataPagamento,
         valor_pago: dadosPagamento.valor,
-        tipo_pagamento: ChargePaymentType.PIX,
+        tipo_pagamento: AssinaturaTipoPagamento.PIX,
         taxa_intermediacao_banco: taxaIntermediacao,
         dados_auditoria_pagamento: {
             ...dadosPagamento,
@@ -71,7 +71,7 @@ export async function processarPagamentoAssinatura(
         recibo_url: reciboUrl || null
       })
       .eq("id", cobranca.id)
-      .eq("status", SubscriptionChargeStatus.PENDENTE) // Critical: Ensure we only process pending charges
+      .eq("status", AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO)
       .select();
 
     const updateCount = updatedCobranca?.length || 0;
@@ -89,7 +89,7 @@ export async function processarPagamentoAssinatura(
         .eq("id", cobranca.id)
         .single();
       
-      if (checkState?.status === SubscriptionChargeStatus.PAGO) {
+      if (checkState?.status === AssinaturaCobrancaStatus.PAGO) {
           logger.info({ ...logContext }, "Idempotência: Cobrança já processada anteriormente. Ignorando.");
           return; // Retorno silencioso de sucesso
       }
@@ -129,7 +129,7 @@ export async function processarPagamentoAssinatura(
     await ativarUsuario(cobranca, logContext);
 
     // 8. Gatilho de Catch-up (Se estava suspensa)
-    if (assinaturaStateBefore?.status === UserSubscriptionStatus.SUSPENSA) {
+    if (assinaturaStateBefore?.status === AssinaturaStatus.SUSPENSA) {
         const paymentDate = dadosPagamento.dataPagamento ? new Date(dadosPagamento.dataPagamento) : new Date();
         await processarCatchupReativacao(cobranca.usuario_id, logContext, paymentDate);
     }
@@ -319,9 +319,9 @@ async function cancelarCobrancasConflitantes(cobranca: AssinaturaCobrancaInfo, l
   if (isSpecialBilling) {
     const { error: cancelSubscriptionError } = await supabaseAdmin
       .from("assinaturas_cobrancas")
-      .update({ status: SubscriptionChargeStatus.CANCELADA })
+      .update({ status: AssinaturaCobrancaStatus.CANCELADA })
       .eq("usuario_id", cobranca.usuario_id)
-      .eq("status", SubscriptionChargeStatus.PENDENTE)
+      .eq("status", AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO)
       .eq("billing_type", "subscription")
       .neq("id", cobranca.id);
 
@@ -333,9 +333,9 @@ async function cancelarCobrancasConflitantes(cobranca: AssinaturaCobrancaInfo, l
   } else {
     const { error: cancelUpgradeError } = await supabaseAdmin
       .from("assinaturas_cobrancas")
-      .update({ status: SubscriptionChargeStatus.CANCELADA })
+      .update({ status: AssinaturaCobrancaStatus.CANCELADA })
       .eq("usuario_id", cobranca.usuario_id)
-      .eq("status", SubscriptionChargeStatus.PENDENTE)
+      .eq("status", AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO)
       .in("billing_type", ["upgrade", "upgrade_plan", "activation", "expansion"])
       .neq("id", cobranca.id);
 
@@ -374,9 +374,9 @@ async function desativarOutrasAssinaturas(cobranca: AssinaturaCobrancaInfo, logC
 
       const { error: cancelOutrasCobrancasError } = await supabaseAdmin
         .from("assinaturas_cobrancas")
-        .update({ status: SubscriptionChargeStatus.CANCELADA })
+        .update({ status: AssinaturaCobrancaStatus.CANCELADA })
         .in("assinatura_usuario_id", outrasAssinaturaIds)
-        .eq("status", SubscriptionChargeStatus.PENDENTE)
+        .eq("status", AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO)
         .neq("id", cobranca.id);
 
       if (cancelOutrasCobrancasError) {

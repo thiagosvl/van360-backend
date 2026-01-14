@@ -2,7 +2,7 @@ import { DRIVER_EVENT_PAYMENT_RECEIVED_ALERT, PASSENGER_EVENT_PAYMENT_RECEIVED }
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
 import { addToReceiptQueue } from "../../queues/receipt.queue.js";
-import { PaymentMethod } from "../../types/enums.js";
+import { AssinaturaTipoPagamento } from "../../types/enums.js";
 import { formatDate } from "../../utils/format.js";
 import { cobrancaPagamentoService } from "../cobranca-pagamento.service.js";
 // Actually checking usages below.. notifications use cobrancaService? No, notificationService.
@@ -78,7 +78,7 @@ export const webhookCobrancaHandler = {
                     mes: fullData.mes,
                     ano: fullData.ano,
                     descricao: `Mensalidade`,
-                    metodoPagamento: PaymentMethod.PIX,
+                    metodoPagamento: AssinaturaTipoPagamento.PIX,
                     tipo: 'PASSAGEIRO'
                 };
 

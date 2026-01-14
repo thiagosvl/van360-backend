@@ -7,7 +7,7 @@ import {
 } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
-import { ConfigKey, SubscriptionChargeStatus, UserSubscriptionStatus } from "../../types/enums.js";
+import { AssinaturaCobrancaStatus, AssinaturaStatus, ConfigKey } from "../../types/enums.js";
 import { getConfigNumber } from "../configuracao.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 
@@ -59,7 +59,7 @@ export const dailySubscriptionMonitorJob = {
                     assinaturas_usuarios!inner ( id, status, plano_id, planos(nome) ),
                     usuarios!inner ( id, nome, telefone )
                 `)
-                .eq("status", SubscriptionChargeStatus.PENDENTE)
+                .eq("status", AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO)
                 .in("data_vencimento", datasDeInteresse);
 
             if (cobError) throw cobError;
@@ -85,7 +85,7 @@ export const dailySubscriptionMonitorJob = {
                 if (vencimento === dataAvisoStr) {
                     context = DRIVER_EVENT_RENEWAL_DUE_SOON;
                      // Se for Trial, mudar mensagem para Fim de Teste
-                     if (assinatura.status === UserSubscriptionStatus.TRIAL) {
+                     if (assinatura.status === AssinaturaStatus.TRIAL) {
                         context = DRIVER_EVENT_TRIAL_ENDING;
                     }
                 } else if (vencimento === hojeStr) {
@@ -126,7 +126,7 @@ export const dailySubscriptionMonitorJob = {
 
                     // 4. Executar Ação (Bloqueio)
                     if (context === DRIVER_EVENT_ACCESS_SUSPENDED) {
-                        if (assinatura.status !== UserSubscriptionStatus.SUSPENSA) {
+                        if (assinatura.status !== AssinaturaStatus.SUSPENSA) {
                             await subscriptionLifecycleService.suspenderAssinatura(assinatura.id, "Suspensão automática por inadimplência");
                             result.suspended++;
                         }
@@ -178,7 +178,7 @@ export const dailySubscriptionMonitorJob = {
             const { data: suspensasMortas } = await supabaseAdmin
                 .from("assinaturas_usuarios")
                 .select("id, usuario_id, status, vigencia_fim")
-                .eq("status", UserSubscriptionStatus.SUSPENSA)
+                .eq("status", AssinaturaStatus.SUSPENSA)
                 .lte("vigencia_fim", dataLimiteInativacaoStr);
 
             if (suspensasMortas && suspensasMortas.length > 0) {
@@ -205,7 +205,7 @@ export const dailySubscriptionMonitorJob = {
             const { data: aVencer } = await supabaseAdmin
                 .from("assinaturas_usuarios")
                 .select("id, usuario_id, vigencia_fim")
-                .in("status", [UserSubscriptionStatus.ATIVA, UserSubscriptionStatus.TRIAL])
+                .in("status", [AssinaturaStatus.ATIVA, AssinaturaStatus.TRIAL])
                 .not("cancelamento_manual", "is", null) // Tem pedido de saída
                 .lt("vigencia_fim", hojeStr); // Já venceu (vigencia < hoje)
 
