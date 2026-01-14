@@ -16,6 +16,7 @@ const start = async () => {
 
     await app.listen({ port, host: "0.0.0.0" });
     console.log(`🚀 Servidor rodando em http://localhost:${port}`);
+    console.log(`📡 URL Pública para Webhooks (BACKEND_URL): ${process.env.BACKEND_URL}`);
 
     // --- JOBS LOCAIS (Para manter conexão viva em Dev/VPS) ---
     // Heartbeat: 45 segundos

@@ -159,10 +159,12 @@ class WhatsappService {
       try {
           const url = `${EVO_URL}/webhook/set/${instanceName}`;
           await axios.post(url, {
-              enabled,
-              url: webhookUrl,
-              webhookByEvents: false,
-              events: ["connection.update"]
+              webhook: {
+                enabled,
+                url: webhookUrl,
+                webhookByEvents: false,
+                events: ["connection.update"]
+              }
           }, { 
               headers: { "apikey": EVO_KEY } 
           });
@@ -213,6 +215,7 @@ class WhatsappService {
           });
 
           // 3. Pequeno delay para garantir que a Evolution registrou a nova instância internamente
+          logger.info({ instanceName, webhookUrl }, "Instância criada. Webhook configurado.");
           await new Promise(r => setTimeout(r, 1200));
           return true;
       } catch (error) {

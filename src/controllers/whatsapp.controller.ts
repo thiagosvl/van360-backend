@@ -109,6 +109,11 @@ export const whatsappController = {
                     // Let's just set proper timestamps for now.
                 })
                 .eq("id", usuarioId);
+        } else if (result.instance?.state === "open" || result.instance?.state === "connected") {
+             // Se já estiver conectado, atualiza o banco para refletir isso imediatamente
+             await supabaseAdmin.from("usuarios")
+                .update({ whatsapp_status: WHATSAPP_STATUS.CONNECTED })
+                .eq("id", usuarioId);
         }
 
         return reply.send(result);
