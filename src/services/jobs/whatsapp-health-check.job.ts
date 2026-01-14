@@ -12,6 +12,10 @@ interface HealthCheckResult {
 }
 
 export const whatsappHealthCheckJob = {
+    /**
+     * Frequência recomendada: 10 minutos.
+     * O Webhook cuida do tempo real. O Job cuida da consistência e notificações de queda.
+     */
     async run(): Promise<HealthCheckResult> {
         logger.info("Starting WhatsApp Health Check Job (V2)...");
 
