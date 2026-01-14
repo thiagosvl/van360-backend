@@ -51,7 +51,9 @@ export const whatsappController = {
   connect: async (request: FastifyRequest, reply: FastifyReply) => {
     try {
         const authUid = (request as any).user?.id;
-        logger.info({ authUid }, "WhatsappController.connect - Request received");
+        const { phoneNumber } = request.body as { phoneNumber?: string };
+
+        logger.info({ authUid, phoneNumber }, "WhatsappController.connect - Request received");
         if (!authUid) return reply.status(401).send({ error: "Não autorizado." });
 
         const { id: usuarioId } = await getUsuarioId(authUid);
@@ -59,7 +61,7 @@ export const whatsappController = {
 
         const instanceName = whatsappService.getInstanceName(usuarioId);
 
-        const result: ConnectInstanceResponse = await whatsappService.connectInstance(instanceName);
+        const result: ConnectInstanceResponse = await whatsappService.connectInstance(instanceName, phoneNumber);
         
         // Se já conectado, atualizar DB local (opcional, mas bom pra cache)
         if (result.instance?.state === "open") {

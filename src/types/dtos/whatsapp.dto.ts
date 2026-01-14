@@ -34,8 +34,13 @@ export interface CompositeMessagePart {
   meta?: string; // Flag interna (ex: "qrcode")
 }
 
+export interface EvolutionPairingCode {
+    code: string;
+}
+
 export interface ConnectInstanceResponse {
     qrcode?: EvolutionQrCode;
+    pairingCode?: EvolutionPairingCode;
     instance?: EvolutionInstance;
     pairingCode?: string;
 }

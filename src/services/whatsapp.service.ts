@@ -190,16 +190,29 @@ class WhatsappService {
   }
 
   /**
-   * Solicita conexão (Retorna QR Code)
+   * Solicita conexão (Retorna QR Code ou Pairing Code)
    * Se a instância não existir, cria.
    */
-  async connectInstance(instanceName: string, alreadyRetried: boolean = false): Promise<ConnectInstanceResponse> {
+  async connectInstance(instanceName: string, phoneNumber?: string, alreadyRetried: boolean = false): Promise<ConnectInstanceResponse> {
       try {
           // 1. Garantir que instância existe (com delay interno se criar)
           const created = await this.createInstance(instanceName);
           if (!created) throw new Error("A instância do WhatsApp não pôde ser preparada.");
 
-          // 2. Loop de retentativa (Evolution às vezes demora a herdar a sessão de criação)
+          // 2. Se tiver número de telefone, gera Pairing Code
+          if (phoneNumber) {
+              const cleanPhone = phoneNumber.replace(/\D/g, "");
+              const finalPhone = cleanPhone.length <= 11 ? `55${cleanPhone}` : cleanPhone;
+              
+              const url = `${EVO_URL}/instance/connect/pairing/${instanceName}?number=${finalPhone}`;
+              const { data } = await axios.get<{ code: string }>(url, { headers: { "apikey": EVO_KEY } });
+              
+              if (data?.code) {
+                  return { pairingCode: { code: data.code } };
+              }
+          }
+
+          // 3. Caso contrário, gera QR Code (ou se pairing falhar)
           let lastData: EvolutionConnectResponse | null = null;
           
           for (let attempt = 1; attempt <= 2; attempt++) {
@@ -217,7 +230,7 @@ class WhatsappService {
               }
           }
 
-          // 3. Processar resultado
+          // 4. Processar resultado
           if (lastData?.base64 || lastData?.qrcode?.base64) {
                return { 
                    qrcode: { 
@@ -236,7 +249,7 @@ class WhatsappService {
                 logger.warn({ instanceName }, "Instância travada em 'connecting'. Forçando logout...");
                 await this.disconnectInstance(instanceName);
                 await new Promise(r => setTimeout(r, 1500));
-                return this.connectInstance(instanceName, true); // Retenta apenas UMA vez
+                return this.connectInstance(instanceName, phoneNumber, true); // Retenta apenas UMA vez
           }
             
           return {}; 
@@ -245,66 +258,6 @@ class WhatsappService {
             logger.error({ err: err.response?.data || err.message, instanceName }, "Falha ao conectar instância");
             throw new Error("Não foi possível gerar a conexão. Tente novamente em instantes.");
         }
-  }
-
-  /**
-   * Solicita Código de Pareamento (Mobile)
-   */
-  /**
-   * Solicita Código de Pareamento (Mobile)
-   */
-  async requestPairingCode(instanceName: string, phoneNumber: string): Promise<ConnectInstanceResponse> {
-      try {
-          const cleanNumber = phoneNumber.replace(/\D/g, "");
-          const finalNumber = cleanNumber.length <= 11 ? `55${cleanNumber}` : cleanNumber;
-
-          // 1. Verificação Pre-Flight: Limpar estados zumbis
-          // Se o usuário está pedindo código, ele NÃO deve estar conectado ou conectando.
-          // Forçar um estado limpo aumenta muito a chance de sucesso.
-          const status = await this.getInstanceStatus(instanceName);
-
-          if (status.state !== WHATSAPP_STATUS.NOT_FOUND && status.state !== "close") {
-               logger.warn({ instanceName, state: status.state }, "Estado sujo detectado antes de gerar código. Forçando limpeza...");
-               await this.disconnectInstance(instanceName);
-               // Aguardar Evolution processar o logout/reset
-               await new Promise(r => setTimeout(r, 2500)); 
-          }
-
-          // 2. Garantir que instância existe (agora que limpamos, pode ter sido deletada ou estar fechada)
-          const created = await this.createInstance(instanceName);
-          if (!created) throw new Error("A instância do WhatsApp não pôde ser preparada.");
-
-          // 3. Solicitar Código (aumentando tentativas para garantir)
-          // Se falhar na primeira, esperamos um pouco mais.
-          
-          for (let attempt = 1; attempt <= 4; attempt++) {
-              const url = `${EVO_URL}/instance/connect/${instanceName}?number=${finalNumber}`;
-              const { data } = await axios.get<EvolutionConnectResponse>(url, { headers: { "apikey": EVO_KEY } });
-
-              if (data?.pairingCode) {
-                  // Validar payload
-                  if (data.pairingCode.length > 20) {
-                      logger.warn({ instanceName, length: data.pairingCode.length }, "Código de pareamento inválido (payload QR?). Ignorando...");
-                  } else {
-                      return { pairingCode: data.pairingCode };
-                  }
-              }
-
-              if (attempt < 4) {
-                  // Se falhou, esperas progressivas
-                  const delay = 3000;
-                  logger.warn({ instanceName, attempt }, `Tentativa ${attempt} falhou. Aguardando ${delay}ms...`);
-                  await new Promise(r => setTimeout(r, delay));
-              }
-          }
-
-          throw new Error("Não foi possível obter um código válido da API. Tente novamente em 1 minuto.");
-
-      } catch (error) {
-          const err = error as AxiosError;
-          logger.error({ err: err.response?.data || err.message, instanceName }, "Falha ao solicitar Pairing Code");
-          throw new Error("Falha ao gerar Código de Pareamento.");
-      }
   }
 
   /**
@@ -335,3 +288,4 @@ class WhatsappService {
 }
 
 export const whatsappService = new WhatsappService();
+  = new WhatsappService();
