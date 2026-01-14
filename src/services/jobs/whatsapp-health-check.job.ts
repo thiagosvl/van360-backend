@@ -1,5 +1,4 @@
 import { WHATSAPP_STATUS } from "../../config/constants.js";
-import { env } from "../../config/env.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
 import { whatsappService } from "../whatsapp.service.js";
@@ -34,11 +33,9 @@ export const whatsappHealthCheckJob = {
         }
 
         if (!usuarios || usuarios.length === 0) {
-            logger.info("Health Check: Nenhum usuário conectado para verificar.");
+            // logger.info("Health Check: Nenhum usuário conectado para verificar.");
             return result;
         }
-
-        logger.info({ count: usuarios.length }, "Health Check: Iniciando verificação de instâncias...");
 
         result.totalChecked = usuarios.length;
 
@@ -119,13 +116,8 @@ export const whatsappHealthCheckJob = {
                     });
                 } else if (realStatus === WHATSAPP_STATUS.CONNECTED && usuario.whatsapp_status !== WHATSAPP_STATUS.CONNECTED) {
                     // Caso raro: DB diz Disconnected, mas API diz Connected.
-                    // Isso pode acontecer se o Webhook falhar na conexão ou se a URL estava errada.
-                    logger.info({ usuarioId: usuario.id }, "Health Check: Reconciliando status para CONNECTED (Fixing Webhook...)");
-                    
-                    // Tenta consertar o Webhook, pois pode ser a causa da falha silenciosa
-                    const webhookUrl = `${env.BACKEND_URL}/api/evolution/webhook`;
-                    await whatsappService.setWebhook(instanceName, webhookUrl, true);
-
+                    // Isso pode acontecer se o Webhook falhar na conexão. O Health Check corrige.
+                    logger.info({ usuarioId: usuario.id }, "Health Check: Reconciliando status para CONNECTED (Webhook falhou?)");
                     await supabaseAdmin
                         .from("usuarios")
                         .update({ whatsapp_status: WHATSAPP_STATUS.CONNECTED })

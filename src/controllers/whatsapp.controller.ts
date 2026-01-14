@@ -38,6 +38,20 @@ export const whatsappController = {
 
         // Consultar Evolution
         const evoStatus = await whatsappService.getInstanceStatus(instanceName);
+
+        // SELF-HEALING: Atualizar DB se houver discrepância
+        let realStatus = WHATSAPP_STATUS.DISCONNECTED;
+        if (evoStatus.state === "open" || evoStatus.state === "connected") realStatus = WHATSAPP_STATUS.CONNECTED;
+        else if (evoStatus.state === "connecting") realStatus = WHATSAPP_STATUS.CONNECTING;
+
+        // Se o status real for diferente do status no banco (e não for erro de leitura), atualiza
+        // (Ignora UNKNOWN/ERROR para não sujar o banco com falsos negativos se a API cair)
+        const { whatsapp_status: dbStatus } = await supabaseAdmin.from("usuarios").select("whatsapp_status").eq("id", usuarioId).single().then(r => r.data || { whatsapp_status: "UNKNOWN" });
+
+        if (realStatus !== dbStatus && evoStatus.state !== "ERROR" && evoStatus.state !== WHATSAPP_STATUS.NOT_FOUND) {
+             // logger.info({ usuarioId, real: realStatus, db: dbStatus }, "Status Check: Corrigindo status no banco (Self-Healing on Read)");
+             await supabaseAdmin.from("usuarios").update({ whatsapp_status: realStatus }).eq("id", usuarioId);
+        }
         
         return reply.send({
             instanceName,
@@ -108,11 +122,6 @@ export const whatsappController = {
                     // Increment attempts safely (need to fetch first or just set to 1 if we don't care about precise increment now)
                     // Let's just set proper timestamps for now.
                 })
-                .eq("id", usuarioId);
-        } else if (result.instance?.state === "open" || result.instance?.state === "connected") {
-             // Se já estiver conectado, atualiza o banco para refletir isso imediatamente
-             await supabaseAdmin.from("usuarios")
-                .update({ whatsapp_status: WHATSAPP_STATUS.CONNECTED })
                 .eq("id", usuarioId);
         }
 

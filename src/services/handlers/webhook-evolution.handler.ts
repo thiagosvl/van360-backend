@@ -6,9 +6,9 @@ export const webhookEvolutionHandler = {
     async handle(payload: any): Promise<boolean> {
         const { event, instance, data } = payload;
         
-        // DEBUG: Log ALL webhooks to verify connectivity
-        if (event !== "presence.update") { // Reduce noise
-             logger.info({ event, instance }, "Webhook Evolution: Recebido!");
+        // DEBUG: Log received webhooks (ignore presence updates)
+        if (event !== "presence.update") {
+             logger.info({ event, instance }, "Webhook Evolution: Recebido com sucesso!");
         }
 
         switch (event) {

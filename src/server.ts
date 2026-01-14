@@ -16,7 +16,6 @@ const start = async () => {
 
     await app.listen({ port, host: "0.0.0.0" });
     console.log(`🚀 Servidor rodando em http://localhost:${port}`);
-    console.log(`📡 URL Pública para Webhooks (BACKEND_URL): ${process.env.BACKEND_URL}`);
 
     // --- JOBS LOCAIS (Para manter conexão viva em Dev/VPS) ---
     // Heartbeat: 45 segundos
@@ -24,10 +23,10 @@ const start = async () => {
         whatsappHeartbeatJob.run().catch((err: any) => console.error("Heartbeat Error:", err));
     }, 45000);
 
-    // Health Check: 5 minutos
+    // Health Check: 1 minuto (Reduzido para compensar falha de webhook)
     setInterval(() => {
         whatsappHealthCheckJob.run().catch((err: any) => console.error("HealthCheck Error:", err));
-    }, 5 * 60 * 1000);
+    }, 60 * 1000);
   } catch (err) {
     console.error("❌ Erro ao iniciar servidor:", err);
     process.exit(1);
