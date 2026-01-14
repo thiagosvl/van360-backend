@@ -34,7 +34,9 @@ export const webhookEvolutionHandler = {
         
         const statusMap: Record<string, string> = {
             open: WHATSAPP_STATUS.CONNECTED,
+            connected: WHATSAPP_STATUS.CONNECTED,
             close: WHATSAPP_STATUS.DISCONNECTED,
+            disconnected: WHATSAPP_STATUS.DISCONNECTED,
             connecting: WHATSAPP_STATUS.CONNECTING
         };
 

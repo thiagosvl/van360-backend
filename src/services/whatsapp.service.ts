@@ -163,7 +163,7 @@ class WhatsappService {
                 enabled,
                 url: webhookUrl,
                 webhookByEvents: false,
-                events: ["connection.update"]
+                events: ["connection.update", "qrcode.updated"]
               }
           }, { 
               headers: { "apikey": EVO_KEY } 
@@ -208,7 +208,8 @@ class WhatsappService {
               webhook: {
                   enabled: true,
                   url: webhookUrl,
-                  events: ["connection.update"]
+                  webhookByEvents: false,
+                  events: ["connection.update", "qrcode.updated"]
               }
           }, { 
               headers: { "apikey": EVO_KEY } 
@@ -255,7 +256,7 @@ class WhatsappService {
               }
 
               // Se não está conectado, força disconnect/delete para garantir "Clean Slate"
-              if (status.state !== WHATSAPP_STATUS.NOT_FOUND) {
+              if (status.state !== WHATSAPP_STATUS.NOT_FOUND && status.state !== "ERROR") {
                    logger.info({ instanceName }, "Resetando instância para novo Pairing Code (Clean Slate)...");
                    await this.deleteInstance(instanceName); // Delete é mais "forte" que Logout
                    await new Promise(r => setTimeout(r, 3000));
