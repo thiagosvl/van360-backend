@@ -51,7 +51,8 @@ export const whatsappController = {
   connect: async (request: FastifyRequest, reply: FastifyReply) => {
     try {
         const authUid = (request as any).user?.id;
-        const { phoneNumber } = request.body as { phoneNumber?: string };
+        const body = request.body as { phoneNumber?: string } | undefined;
+        const phoneNumber = body?.phoneNumber;
 
         logger.info({ authUid, phoneNumber }, "WhatsappController.connect - Request received");
         if (!authUid) return reply.status(401).send({ error: "Não autorizado." });
@@ -91,8 +92,25 @@ export const whatsappController = {
 
         const instanceName = whatsappService.getInstanceName(usuarioId);
 
-        const result: ConnectInstanceResponse = await whatsappService.requestPairingCode(instanceName, telefone);
+        // URGENT FIX: Use the unified connectInstance method which handles the cleanup logic
+        const result: ConnectInstanceResponse = await whatsappService.connectInstance(instanceName, telefone);
         
+        // PERSISTENCE: Save to DB if we got a code
+        if (result.pairingCode?.code) {
+             const now = new Date();
+             const expiresAt = new Date(now.getTime() + 60000); // +60s
+
+             await supabaseAdmin.from("usuarios")
+                .update({ 
+                    pairing_code: result.pairingCode.code,
+                    pairing_code_generated_at: now.toISOString(),
+                    pairing_code_expires_at: expiresAt.toISOString(),
+                    // Increment attempts safely (need to fetch first or just set to 1 if we don't care about precise increment now)
+                    // Let's just set proper timestamps for now.
+                })
+                .eq("id", usuarioId);
+        }
+
         return reply.send(result);
     } catch (err: any) {
           return reply.status(500).send({ error: err.message });

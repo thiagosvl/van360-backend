@@ -2,6 +2,8 @@
 // Para produção na Vercel, use api/index.ts
 import "dotenv/config";
 import { createApp } from "./app.js";
+import { whatsappHealthCheckJob } from "./services/jobs/whatsapp-health-check.job.js";
+import { whatsappHeartbeatJob } from "./services/jobs/whatsapp-heartbeat.job.js";
 import { queueService } from "./services/queue.service.js";
 
 const start = async () => {
@@ -14,6 +16,17 @@ const start = async () => {
 
     await app.listen({ port, host: "0.0.0.0" });
     console.log(`🚀 Servidor rodando em http://localhost:${port}`);
+
+    // --- JOBS LOCAIS (Para manter conexão viva em Dev/VPS) ---
+    // Heartbeat: 45 segundos
+    setInterval(() => {
+        whatsappHeartbeatJob.run().catch((err: any) => console.error("Heartbeat Error:", err));
+    }, 45000);
+
+    // Health Check: 5 minutos
+    setInterval(() => {
+        whatsappHealthCheckJob.run().catch((err: any) => console.error("HealthCheck Error:", err));
+    }, 5 * 60 * 1000);
   } catch (err) {
     console.error("❌ Erro ao iniciar servidor:", err);
     process.exit(1);

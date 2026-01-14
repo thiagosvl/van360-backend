@@ -13,7 +13,7 @@ interface HealthCheckResult {
 
 export const whatsappHealthCheckJob = {
     async run(): Promise<HealthCheckResult> {
-        logger.info("Starting WhatsApp Health Check Job...");
+        logger.info("Starting WhatsApp Health Check Job (V2)...");
 
         const result: HealthCheckResult = {
             totalChecked: 0,
@@ -25,7 +25,7 @@ export const whatsappHealthCheckJob = {
         // 1. Buscar todos os usuários supostamente conectados
         const { data: usuarios, error } = await supabaseAdmin
             .from("usuarios")
-            .select("id, nome, whatsapp_status")
+            .select("id, nome, whatsapp_status, telefone")
             .eq("whatsapp_status", WHATSAPP_STATUS.CONNECTED);
 
         if (error) {
@@ -45,15 +45,44 @@ export const whatsappHealthCheckJob = {
             const instanceName = whatsappService.getInstanceName(usuario.id);
             
             try {
-                const apiStatus = await whatsappService.getInstanceStatus(instanceName);
-                
-                // Mapeia status da API para status do DB (Lógica similar ao Webhook)
+                // Retry logic: até 2 tentativas
+                let apiStatus = null;
+                for (let attempt = 0; attempt < 2; attempt++) {
+                    try {
+                        apiStatus = await whatsappService.getInstanceStatus(instanceName);
+                        break;
+                    } catch (err) {
+                        await new Promise(r => setTimeout(r, 500));
+                    }
+                }
+
+                if (!apiStatus) throw new Error("Falha ao obter status após retries");
+
+                // Mapeia status da API para status do DB
                 let realStatus: string = WHATSAPP_STATUS.DISCONNECTED;
 
                 if (apiStatus.state === "open") {
                     realStatus = WHATSAPP_STATUS.CONNECTED;
                 } else if (apiStatus.state === "connecting") {
-                    realStatus = WHATSAPP_STATUS.CONNECTING;
+                    // SE ESTIVER CONNECTING: Dar uma chance (Timeout)
+                    // A Evolution as vezes fica connecting por um tempo.
+                    // Não queremos desconectar prematuramente.
+                    logger.warn({ instanceName }, "Health Check: Instance 'connecting'. Aguardando 15s...");
+                    await new Promise(r => setTimeout(r, 15000));
+                    const retryStatus = await whatsappService.getInstanceStatus(instanceName);
+                    
+                    if (retryStatus.state === "open") {
+                         realStatus = WHATSAPP_STATUS.CONNECTED;
+                    } else if (retryStatus.state === "connecting") {
+                         // Se ainda estiver connecting, consideramos DISCONNECTED para forçar reconexão limpa
+                         // Ou mantemos 'connecting'? O ideal é matar para não ficar zumbi.
+                         realStatus = WHATSAPP_STATUS.DISCONNECTED;
+                         logger.warn({ instanceName }, "Health Check: Instance travada em 'connecting'. Marcando como desconectado.");
+                         // Opcional: Kill instance here?
+                         await whatsappService.disconnectInstance(instanceName);
+                    } else {
+                         realStatus = WHATSAPP_STATUS.DISCONNECTED;
+                    }
                 } else {
                     realStatus = WHATSAPP_STATUS.DISCONNECTED;
                 }
@@ -63,7 +92,7 @@ export const whatsappHealthCheckJob = {
                     logger.warn({ 
                         usuarioId: usuario.id, 
                         dbStatus: usuario.whatsapp_status, 
-                        apiStatus: apiStatus.state 
+                        newStatus: realStatus 
                     }, "Health Check: Discrepância encontrada. Corrigindo...");
 
                     await supabaseAdmin
@@ -71,12 +100,10 @@ export const whatsappHealthCheckJob = {
                         .update({ whatsapp_status: realStatus })
                         .eq("id", usuario.id);
 
-                    // Se desconectou, avisa o motorista pela instância global
+                    // Se desconectou, avisa o motorista
                     if (realStatus === WHATSAPP_STATUS.DISCONNECTED && usuario.whatsapp_status === WHATSAPP_STATUS.CONNECTED) {
-                         const { data: motorista } = await supabaseAdmin.from("usuarios").select("telefone").eq("id", usuario.id).single();
-                         if (motorista?.telefone) {
-                             await notificationService.notifyDriver(motorista.telefone, DRIVER_EVENT_WHATSAPP_DISCONNECTED, {
-                                 // Campos obrigatórios do Context, mesmo que não usados no template específico
+                         if (usuario.telefone) {
+                             await notificationService.notifyDriver(usuario.telefone, DRIVER_EVENT_WHATSAPP_DISCONNECTED, {
                                  nomeMotorista: usuario.nome || "Motorista",
                                  nomePlano: "N/A",
                                  valor: 0,

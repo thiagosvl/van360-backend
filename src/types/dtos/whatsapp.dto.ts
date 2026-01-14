@@ -42,5 +42,4 @@ export interface ConnectInstanceResponse {
     qrcode?: EvolutionQrCode;
     pairingCode?: EvolutionPairingCode;
     instance?: EvolutionInstance;
-    pairingCode?: string;
 }

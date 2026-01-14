@@ -195,27 +195,72 @@ class WhatsappService {
    */
   async connectInstance(instanceName: string, phoneNumber?: string, alreadyRetried: boolean = false): Promise<ConnectInstanceResponse> {
       try {
-          // 1. Garantir que instância existe (com delay interno se criar)
-          const created = await this.createInstance(instanceName);
-          if (!created) throw new Error("A instância do WhatsApp não pôde ser preparada.");
-
-          // 2. Se tiver número de telefone, gera Pairing Code
+          // --- FLUXO PAIRING CODE (Mobile) ---
           if (phoneNumber) {
               const cleanPhone = phoneNumber.replace(/\D/g, "");
               const finalPhone = cleanPhone.length <= 11 ? `55${cleanPhone}` : cleanPhone;
-              
-              const url = `${EVO_URL}/instance/connect/pairing/${instanceName}?number=${finalPhone}`;
-              const { data } = await axios.get<{ code: string }>(url, { headers: { "apikey": EVO_KEY } });
-              
-              if (data?.code) {
-                  return { pairingCode: { code: data.code } };
+
+              // 1. Limpeza Agressiva de Sessão Zumbi
+              // Se vamos pedir um código novo, a sessão anterior NÃO presta.
+              // Verificar se está 'connecting' ou 'open' e matar.
+              const status = await this.getInstanceStatus(instanceName);
+              if (status.state !== WHATSAPP_STATUS.NOT_FOUND && status.state !== "close") {
+                   logger.warn({ instanceName, state: status.state }, "Limpando sessão antiga para gerar novo Pairing Code...");
+                   await this.disconnectInstance(instanceName);
+                   await new Promise(r => setTimeout(r, 2500)); // Tempo vital para a Evolution limpar
               }
+
+              // 2. Garantir Instância Criada
+              await this.createInstance(instanceName);
+
+              // 3. Solicitar Código com Retries (Paciência)
+              for (let attempt = 1; attempt <= 4; attempt++) {
+                  // FIXED: O endpoint correto é o mesmo do QR Code, apenas passando o numero
+                  const url = `${EVO_URL}/instance/connect/${instanceName}?number=${finalPhone}`;
+                  
+                  try {
+                      const { data } = await axios.get<{ pairingCode: string, code: string }>(url, { headers: { "apikey": EVO_KEY } });
+                      
+                      const pCode = data?.pairingCode || data?.code; // Evolution as vezes retorna em campos diferentes
+                      
+                      // Validação: Pairing Code deve ser curto (ex: 8 chars). Se for longo, é QR Code vazando.
+                      if (pCode && pCode.length < 20) {
+                          // Sucesso!
+                          return { pairingCode: { code: pCode } };
+                      } else {
+                          logger.warn({ instanceName, attempt, data }, "Resposta inválida da Evolution: 'pairingCode' ausente ou muito longo (possível QR Code).");
+                      }
+                  } catch (e) {
+                       const err = e as AxiosError;
+                       logger.warn({ 
+                           instanceName, 
+                           attempt, 
+                           status: err.response?.status,
+                           data: err.response?.data,
+                           message: err.message
+                       }, "Erro ao solicitar Pairing Code na Evolution.");
+                  }
+
+                  if (attempt < 4) {
+                      const delay = 3000;
+                      logger.warn({ instanceName, attempt }, `Retry Pairing Code em ${delay}ms...`);
+                      await new Promise(r => setTimeout(r, delay));
+                  }
+              }
+              
+              throw new Error("Não foi possível gerar o código. A API não respondeu a tempo.");
           }
 
-          // 3. Caso contrário, gera QR Code (ou se pairing falhar)
+          // --- FLUXO QR CODE (Legacy/Desktop) ---
+          
+          // 1. Garantir que instância existe
+          const created = await this.createInstance(instanceName);
+          if (!created) throw new Error("A instância do WhatsApp não pôde ser preparada.");
+
+          // 2. Loop de tentativa para QR Code
           let lastData: EvolutionConnectResponse | null = null;
           
-          for (let attempt = 1; attempt <= 2; attempt++) {
+          for (let attempt = 1; attempt <= 3; attempt++) {
               const url = `${EVO_URL}/instance/connect/${instanceName}`;
               const { data } = await axios.get<EvolutionConnectResponse>(url, { headers: { "apikey": EVO_KEY } });
               lastData = data;
@@ -224,13 +269,13 @@ class WhatsappService {
                   break; 
               }
               
-              if (attempt < 2) {
-                  logger.warn({ instanceName, attempt }, "Evolution não retornou QR Code. Tentando novamente em 1.5s...");
+              if (attempt < 3) {
+                  logger.warn({ instanceName, attempt }, "Aguardando QR Code...");
                   await new Promise(r => setTimeout(r, 1500));
               }
           }
 
-          // 4. Processar resultado
+          // 3. Processar resultado QR
           if (lastData?.base64 || lastData?.qrcode?.base64) {
                return { 
                    qrcode: { 
@@ -244,20 +289,21 @@ class WhatsappService {
               return { instance: { state: WHATSAPP_STATUS.OPEN } };
           }
 
-          // Tratar estado "connecting" travado (ex: sessão fantasma)
+          // Tratar travamento "connecting" no fluxo QR
           if ((lastData?.instance?.state === "connecting" || lastData?.instance?.state === WHATSAPP_STATUS.CONNECTING) && !alreadyRetried) {
-                logger.warn({ instanceName }, "Instância travada em 'connecting'. Forçando logout...");
+                logger.warn({ instanceName }, "QR Code: Instância travada em 'connecting'. Reiniciando...");
                 await this.disconnectInstance(instanceName);
-                await new Promise(r => setTimeout(r, 1500));
-                return this.connectInstance(instanceName, phoneNumber, true); // Retenta apenas UMA vez
+                await new Promise(r => setTimeout(r, 2000));
+                return this.connectInstance(instanceName, undefined, true);
           }
             
           return {}; 
-        } catch (error) {
-            const err = error as AxiosError;
-            logger.error({ err: err.response?.data || err.message, instanceName }, "Falha ao conectar instância");
-            throw new Error("Não foi possível gerar a conexão. Tente novamente em instantes.");
-        }
+
+      } catch (error) {
+          const err = error as AxiosError;
+          logger.error({ err: err.response?.data || err.message, instanceName }, "Falha ao conectar instância");
+          throw new Error("Falha ao gerar conexão, tente novamente.");
+      }
   }
 
   /**
@@ -288,4 +334,3 @@ class WhatsappService {
 }
 
 export const whatsappService = new WhatsappService();
-  = new WhatsappService();
