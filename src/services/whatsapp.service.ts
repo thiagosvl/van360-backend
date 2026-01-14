@@ -187,6 +187,7 @@ class WhatsappService {
   async createInstance(instanceName: string, enableQrcode: boolean = true): Promise<boolean> {
       try {
           const webhookUrl = `${env.BACKEND_URL}/api/evolution/webhook`;
+          logger.info({ webhookUrl }, "Configuring Webhook URL...");
 
           // 1. Verificar se já existe
           const status = await this.getInstanceStatus(instanceName);
@@ -258,15 +259,21 @@ class WhatsappService {
               // Se não está conectado, força disconnect/delete para garantir "Clean Slate"
               if (status.state !== WHATSAPP_STATUS.NOT_FOUND) {
                    logger.info({ instanceName }, "Resetando instância para novo Pairing Code (Clean Slate)...");
+                   await this.logoutInstance(instanceName); // Logout gracefully first
+                   await new Promise(r => setTimeout(r, 1000));
                    await this.deleteInstance(instanceName); // Delete é mais "forte" que Logout
                    await new Promise(r => setTimeout(r, 2000));
               }
 
-              // 2. Criar Instância Limpa (Sem QR Code automático)
-              await this.createInstance(instanceName, false);
+              // 2. Criar Instância Limpa
+              // (MUDANÇA: enableQrcode=true para garantir que a instância inicialize "full" na Evolution, evitando erro no celular)
+              await this.createInstance(instanceName, true);
 
-              // 3. Solicitar Código
-              for (let attempt = 1; attempt <= 4; attempt++) {
+              // Esperar a Evolution "respirar" e iniciar o Chrome
+              await new Promise(r => setTimeout(r, 5000));
+
+              // 3. Solicitar Código (Aumentado para 6 tentativas de 3s = ~18s de timeout)
+              for (let attempt = 1; attempt <= 6; attempt++) {
                   const url = `${EVO_URL}/instance/connect/${instanceName}?number=${finalPhone}`;
                   try {
                       const { data } = await axios.get<{ pairingCode: string, code: string }>(url, { headers: { "apikey": EVO_KEY } });
@@ -279,11 +286,11 @@ class WhatsappService {
                       // Ignora erro no loop
                   }
 
-                  if (attempt < 4) {
-                      await new Promise(r => setTimeout(r, 2500));
+                  if (attempt < 6) {
+                      await new Promise(r => setTimeout(r, 3000));
                   }
               }
-              throw new Error("Não foi possível gerar o código. A API não respondeu a tempo.");
+              throw new Error("Não foi possível gerar o código. A API não respondeu a tempo (Timeout aumentado).");
           }
 
           // --- FLUXO QR CODE / RECONNECT (Sem Phone) ---
