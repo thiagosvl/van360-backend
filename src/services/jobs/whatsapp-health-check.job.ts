@@ -25,7 +25,7 @@ export const whatsappHealthCheckJob = {
         const { data: usuarios, error } = await supabaseAdmin
             .from("usuarios")
             .select("id, nome, whatsapp_status, telefone")
-            .in("whatsapp_status", [WHATSAPP_STATUS.CONNECTED, WHATSAPP_STATUS.OPEN]);
+            .eq("whatsapp_status", WHATSAPP_STATUS.CONNECTED);
 
         if (error) {
             logger.error({ error }, "Health Check: Falha ao buscar usuários conectados.");

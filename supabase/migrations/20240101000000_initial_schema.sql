@@ -469,7 +469,11 @@ CREATE TABLE IF NOT EXISTS "public"."usuarios" (
     "nome_titular_pix_validado" "text",
     "cpf_cnpj_titular_pix_validado" "text",
     "whatsapp_status" "public"."whatsapp_status_enum" DEFAULT 'DISCONNECTED'::"public"."whatsapp_status_enum",
-    "tipo" "public"."user_type_enum" DEFAULT 'motorista'::"public"."user_type_enum" NOT NULL
+    "tipo" "public"."user_type_enum" DEFAULT 'motorista'::"public"."user_type_enum" NOT NULL,
+    "pairing_code" character varying(8),
+    "pairing_code_generated_at" timestamp with time zone DEFAULT now(),
+    "pairing_code_expires_at" timestamp with time zone,
+    "pairing_code_attempts" integer DEFAULT 0
 );
 
 
@@ -678,6 +682,8 @@ CREATE INDEX "idx_usuarios_status_chave_pix" ON "public"."usuarios" USING "btree
 
 
 CREATE INDEX "idx_usuarios_whatsapp_status" ON "public"."usuarios" USING "btree" ("whatsapp_status");
+
+CREATE INDEX "idx_usuarios_pairing_code_expires_at" ON "public"."usuarios" USING "btree" ("pairing_code_expires_at");
 
 
 
