@@ -159,10 +159,12 @@ class WhatsappService {
       try {
           const url = `${EVO_URL}/webhook/set/${instanceName}`;
           await axios.post(url, {
-              enabled,
-              url: webhookUrl,
-              webhookByEvents: false,
-              events: ["connection.update"]
+              webhook: {
+                enabled,
+                url: webhookUrl,
+                webhookByEvents: false,
+                events: ["connection.update"]
+              }
           }, { 
               headers: { "apikey": EVO_KEY } 
           });
@@ -184,7 +186,7 @@ class WhatsappService {
    */
   async createInstance(instanceName: string, enableQrcode: boolean = true): Promise<boolean> {
       try {
-          const webhookUrl = `${env.BACKEND_URL}/api/webhook/evolution`;
+          const webhookUrl = `${env.BACKEND_URL}/api/evolution/webhook`;
 
           // 1. Verificar se já existe
           const status = await this.getInstanceStatus(instanceName);
@@ -231,7 +233,7 @@ class WhatsappService {
    */
   async connectInstance(instanceName: string, phoneNumber?: string, alreadyRetried: boolean = false): Promise<ConnectInstanceResponse> {
       try {
-          const webhookUrl = `${env.BACKEND_URL}/api/webhook/evolution`;
+          const webhookUrl = `${env.BACKEND_URL}/api/evolution/webhook`;
 
           // --- FLUXO PAIRING CODE (Mobile) ---
           if (phoneNumber) {
@@ -256,42 +258,63 @@ class WhatsappService {
               if (status.state !== WHATSAPP_STATUS.NOT_FOUND) {
                    logger.info({ instanceName }, "Resetando instância para novo Pairing Code (Clean Slate)...");
                    await this.deleteInstance(instanceName); // Delete é mais "forte" que Logout
-                   await new Promise(r => setTimeout(r, 2000));
+                   await new Promise(r => setTimeout(r, 3000));
               }
 
-              // 2. Criar Instância Limpa (Sem QR Code automático)
+              // 2. Criar Instância Limpa (Modo Full para garantir aceitação do Celular)
+              // Lite Mode (false) gera código rápido, mas celular rejeita.
+              // Full Mode (true) demora para iniciar, mas celular aceita.
+              // SOLUÇÃO: Usar Full Mode + Muita Paciência no Timeout.
               await this.createInstance(instanceName, false);
 
-              // 3. Solicitar Código
-              for (let attempt = 1; attempt <= 4; attempt++) {
+              // Esperar a Evolution iniciar (Modo Lite é mais rápido)
+              logger.info({ instanceName }, "Aguardando inicialização (2.5s)...");
+              await new Promise(r => setTimeout(r, 2500));
+
+              // 3. Solicitar Código (5 tentativas)
+              for (let attempt = 1; attempt <= 5; attempt++) {
                   const url = `${EVO_URL}/instance/connect/${instanceName}?number=${finalPhone}`;
                   try {
                       const { data } = await axios.get<{ pairingCode: string, code: string }>(url, { headers: { "apikey": EVO_KEY } });
-                      const pCode = data?.pairingCode || data?.code;
                       
-                      if (pCode && pCode.length < 20) {
+                      // PRIORIDADE: Pairing Code explícito
+                      let pCode = data?.pairingCode;
+
+                      // FALLBACK: Campo 'code', mas SOMENTE se NÃO for um QR Code (começa com 2@)
+                      if (!pCode && data?.code && !data.code.startsWith("2@") && data.code.length < 50) {
+                          pCode = data.code;
+                      }
+                      
+                      // Filtro Anti-QR: Ignorar se começar com "2@" ou for muito longo
+                      if (pCode?.startsWith("2@")) pCode = undefined;
+
+                      // Validação Rígida: Pairing Code é curto (ex: "K2A5-Z9B1"). 
+                      if (pCode && pCode.length >= 8 && pCode.length < 25) {
                           return { pairingCode: { code: pCode } };
                       }
                   } catch (e) {
-                      // Ignora erro no loop
+                      // Ignora erro no loop, apenas espera
                   }
 
-                  if (attempt < 4) {
-                      await new Promise(r => setTimeout(r, 2500));
+                  if (attempt < 5) {
+                      await new Promise(r => setTimeout(r, 2000));
                   }
               }
-              throw new Error("Não foi possível gerar o código. A API não respondeu a tempo.");
+              throw new Error("Não foi possível gerar o código. Tente novamente.");
           }
 
           // --- FLUXO QR CODE / RECONNECT (Sem Phone) ---
           
           // 1. Garantir que instância existe e webhook está setado
-          await this.createInstance(instanceName, true); // True = default behavior (QR se precisasse)
+          await this.createInstance(instanceName, false); // True = default behavior (QR se precisasse)
           
+          // WARM-UP QR CODE: Esperar o Chrome iniciar para gerar o QR Code
+          await new Promise(r => setTimeout(r, 2500)); 
+
           // 2. Soft Reconnect (Apenas pede connect para ver se gera QR ou conecta session existente)
           let lastData: EvolutionConnectResponse | null = null;
           
-          for (let attempt = 1; attempt <= 3; attempt++) {
+          for (let attempt = 1; attempt <= 5; attempt++) {
               const url = `${EVO_URL}/instance/connect/${instanceName}`;
               const { data } = await axios.get<EvolutionConnectResponse>(url, { headers: { "apikey": EVO_KEY } });
               lastData = data;
@@ -300,7 +323,7 @@ class WhatsappService {
                   break; 
               }
               
-              if (attempt < 3) await new Promise(r => setTimeout(r, 1500));
+              if (attempt < 5) await new Promise(r => setTimeout(r, 2000));
           }
 
           // Retorno padrão
