@@ -186,7 +186,7 @@ class WhatsappService {
    */
   async createInstance(instanceName: string, enableQrcode: boolean = true): Promise<boolean> {
       try {
-          const webhookUrl = `${env.BACKEND_URL}/api/webhook/evolution`;
+          const webhookUrl = `${env.BACKEND_URL}/api/evolution/webhook`;
 
           // 1. Verificar se já existe
           const status = await this.getInstanceStatus(instanceName);

@@ -121,7 +121,7 @@ export const whatsappHealthCheckJob = {
                     logger.info({ usuarioId: usuario.id }, "Health Check: Reconciliando status para CONNECTED (Fixing Webhook...)");
                     
                     // Tenta consertar o Webhook, pois pode ser a causa da falha silenciosa
-                    const webhookUrl = `${env.BACKEND_URL}/api/webhook/evolution`;
+                    const webhookUrl = `${env.BACKEND_URL}/api/evolution/webhook`;
                     await whatsappService.setWebhook(instanceName, webhookUrl, true);
 
                     await supabaseAdmin

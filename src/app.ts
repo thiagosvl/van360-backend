@@ -25,6 +25,13 @@ export async function createApp(): Promise<FastifyInstance> {
     // Global Error Handler
     app.setErrorHandler(globalErrorHandler);
 
+    // NUCLEAR LOG: Log every request to debug Webhook Reachability
+    app.addHook("onRequest", async (request) => {
+        if (request.url.includes("evolution")) {
+            console.log(`☢️ [NUCLEAR LOG] Incoming Request: ${request.method} ${request.url} from ${request.ip}`);
+        }
+    });
+
     // Configuração de CORS
     const allowedOrigins = process.env.ALLOWED_ORIGINS
       ? process.env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim())
