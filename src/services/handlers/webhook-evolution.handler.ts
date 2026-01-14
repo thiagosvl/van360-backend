@@ -14,10 +14,35 @@ export const webhookEvolutionHandler = {
         switch (event) {
             case "connection.update":
                 return await this.handleConnectionUpdate(instance, data);
+            case "qrcode.updated":
+                return await this.handleQrCodeUpdated(instance, data);
             default:
                 //logger.info({ event }, "Webhook Evolution: Evento ignorado.");
                 return true;
         }
+    },
+
+    async handleQrCodeUpdated(instanceName: string, data: any): Promise<boolean> {
+        // data: { qrcode: string, pairingCode: string }
+        const { pairingCode } = data;
+
+        if (!pairingCode) return true; // Se não tem pairing code, ignora
+
+        if (!instanceName.startsWith("user_")) return false;
+        const usuarioId = instanceName.replace("user_", "");
+
+        logger.info({ instanceName, pairingCode }, "Webhook Evolution: Recebido novo Pairing Code, salvando no banco.");
+
+        const { error } = await supabaseAdmin
+            .from("usuarios")
+            .update({ pairing_code: pairingCode, pairing_code_expires_at: new Date(Date.now() + 45000).toISOString() }) // 45s TTL estimado
+            .eq("id", usuarioId);
+
+        if (error) {
+            logger.error({ error, usuarioId }, "Falha ao salvar pairing_code via webhook");
+            return false;
+        }
+        return true;
     },
 
     async handleConnectionUpdate(instanceName: string, data: any): Promise<boolean> {
@@ -41,13 +66,21 @@ export const webhookEvolutionHandler = {
         };
 
         const dbStatus = statusMap[state] || WHATSAPP_STATUS.DISCONNECTED;
+        
+        const updateData: any = { whatsapp_status: dbStatus };
+        
+        // Se conectou, limpa o código de pareamento
+        if (state === "open" || state === "connected") {
+             updateData.pairing_code = null;
+             updateData.pairing_code_expires_at = null;
+        }
 
         logger.info({ instanceName, state, dbStatus }, "Webhook Evolution: Atualizando status de conexão");
 
         // Atualizar Banco
         const { error } = await supabaseAdmin
             .from("usuarios")
-            .update({ whatsapp_status: dbStatus })
+            .update(updateData)
             .eq("id", usuarioId);
 
         if (error) {
