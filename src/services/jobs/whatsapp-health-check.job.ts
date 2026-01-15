@@ -1,8 +1,8 @@
 import { WHATSAPP_STATUS } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
+import { webhookEvolutionHandler } from "../handlers/webhook-evolution.handler.js";
 import { whatsappService } from "../whatsapp.service.js";
-import { webhookEvolutionHandler } from "./webhook-evolution.handler.js";
 
 interface HealthCheckResult {
     totalChecked: number;

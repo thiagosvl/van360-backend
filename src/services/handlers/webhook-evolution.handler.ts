@@ -1,9 +1,8 @@
 import { GLOBAL_WHATSAPP_INSTANCE, WHATSAPP_STATUS } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
-import { whatsappService } from "../whatsapp.service.js";
-import { env } from "../../config/env.js";
 import { whatsappQueue } from "../../queues/whatsapp.queue.js";
+import { whatsappService } from "../whatsapp.service.js";
 
 // Constantes para controle de spam
 const DISCONNECTION_NOTIFICATION_COOLDOWN_MS = 60 * 60 * 1000; // 1 hora
@@ -246,8 +245,7 @@ export const webhookEvolutionHandler = {
             }
 
             // 4. Montar mensagem
-            const reconectLink = `${env.FRONTEND_URL}/assinatura?reconnect=true`;
-            const mensagem = `Olá ${usuario.nome}! 👋\n\nSeu WhatsApp desconectou do Van360. Para manter o envio de notificações de cobranças ativo, reconecte agora:\n\n${reconectLink}\n\nQualquer dúvida, entre em contato conosco.`;
+            const mensagem = `Olá ${usuario.nome}! 👋\n\nSeu WhatsApp desconectou do Van360. Para manter o envio de notificações de cobranças ativo, acesse o sistema e reconecte agora.\n\nQualquer dúvida, entre em contato conosco.`;
             
             logger.info({ usuarioId, telefone: usuario.telefone }, "Enviando notificação de desconexão...");
 
