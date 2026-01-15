@@ -251,8 +251,9 @@ class WhatsappService {
               }
 
               // 2. Criar Instância (Full Mode para melhor compatibilidade)
-              // Full Mode (true) garante melhor aceitação pelo WhatsApp Web
-              await this.createInstance(instanceName, true);
+              // Full Mode (true) garante melhor aceitação pelo WhatsApp Web, mas
+              // para pairing code devemos tentar iniciar SEM gerar QR code para evitar conflitos.
+              await this.createInstance(instanceName, false);
 
               // Esperar a Evolution inicializar o Chromium
               logger.info({ instanceName }, "Aguardando inicialização (4s)...");
