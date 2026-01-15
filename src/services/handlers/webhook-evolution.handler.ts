@@ -1,6 +1,12 @@
-import { WHATSAPP_STATUS } from "../../config/constants.js";
+import { GLOBAL_WHATSAPP_INSTANCE, WHATSAPP_STATUS } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
+import { whatsappService } from "../whatsapp.service.js";
+import { env } from "../../config/env.js";
+
+// Constantes para controle de spam
+const DISCONNECTION_NOTIFICATION_COOLDOWN_MS = 60 * 60 * 1000; // 1 hora
+const MAX_NOTIFICATIONS_PER_DAY = 5;
 
 export const webhookEvolutionHandler = {
     async handle(payload: any): Promise<boolean> {
@@ -101,13 +107,17 @@ export const webhookEvolutionHandler = {
 
         const dbStatus = statusMap[state.toLowerCase()] || WHATSAPP_STATUS.DISCONNECTED;
         
-        const updateData: any = { whatsapp_status: dbStatus };
+        const updateData: any = { 
+            whatsapp_status: dbStatus,
+            whatsapp_last_status_change_at: new Date().toISOString()
+        };
         
         // Se conectou, limpa o código de pareamento
         if (state === "open" || state === "connected") {
              updateData.pairing_code = null;
              updateData.pairing_code_expires_at = null;
              updateData.pairing_code_generated_at = null;
+             updateData.disconnection_notification_count = 0; // Reset counter on successful connection
         }
 
         logger.info({ 
@@ -129,12 +139,88 @@ export const webhookEvolutionHandler = {
             return false;
         }
 
-        // Se desconectou, disparar notificação (será implementado na próxima fase)
+        // Se desconectou, disparar notificação
         if (state === "close" || state === "disconnected") {
-            logger.warn({ usuarioId, statusReason }, "Webhook Evolution: WhatsApp desconectou. Notificação será disparada em breve.");
-            // TODO: Implementar notificação de queda via instância principal
+            logger.warn({ usuarioId, statusReason }, "Webhook Evolution: WhatsApp desconectou. Verificando se deve notificar...");
+            await this.notifyMotoristaDisconnection(usuarioId, statusReason);
         }
 
         return true;
+    },
+
+    /**
+     * Notifica o motorista sobre desconexão do WhatsApp
+     * Implementa controle de spam para evitar múltiplas notificações
+     */
+    async notifyMotoristaDisconnection(usuarioId: string, statusReason?: number): Promise<void> {
+        try {
+            // 1. Buscar dados do motorista e histórico de notificações
+            const { data: usuario, error: fetchError } = await supabaseAdmin
+                .from("usuarios")
+                .select("id, telefone, nome, last_disconnection_notification_at, disconnection_notification_count")
+                .eq("id", usuarioId)
+                .single();
+            
+            if (fetchError || !usuario?.telefone) {
+                logger.warn({ usuarioId, error: fetchError }, "Motorista não encontrado ou sem telefone. Notificação não enviada.");
+                return;
+            }
+
+            // 2. Verificar cooldown para evitar spam
+            const lastNotificationTime = usuario.last_disconnection_notification_at 
+                ? new Date(usuario.last_disconnection_notification_at).getTime() 
+                : 0;
+            const now = Date.now();
+            const timeSinceLastNotification = now - lastNotificationTime;
+
+            if (timeSinceLastNotification < DISCONNECTION_NOTIFICATION_COOLDOWN_MS) {
+                logger.info({ 
+                    usuarioId, 
+                    timeSinceLastNotification,
+                    cooldown: DISCONNECTION_NOTIFICATION_COOLDOWN_MS
+                }, "Notificação de desconexão bloqueada por cooldown (spam prevention)");
+                return;
+            }
+
+            // 3. Verificar limite diário de notificações
+            if (usuario.disconnection_notification_count >= MAX_NOTIFICATIONS_PER_DAY) {
+                logger.warn({ 
+                    usuarioId, 
+                    count: usuario.disconnection_notification_count,
+                    limit: MAX_NOTIFICATIONS_PER_DAY
+                }, "Limite diário de notificações atingido");
+                return;
+            }
+
+            // 4. Montar mensagem
+            const reconectLink = `${env.FRONTEND_URL}/assinatura?reconnect=true`;
+            const mensagem = `Olá ${usuario.nome}! 👋\n\nSeu WhatsApp desconectou do Van360. Para manter o envio de notificações de cobranças ativo, reconecte agora:\n\n${reconectLink}\n\nQualquer dúvida, entre em contato conosco.`;
+            
+            logger.info({ usuarioId, telefone: usuario.telefone }, "Enviando notificação de desconexão...");
+
+            // 5. Enviar via instância principal
+            const enviado = await whatsappService.sendText(
+                usuario.telefone,
+                mensagem,
+                GLOBAL_WHATSAPP_INSTANCE
+            );
+            
+            if (enviado) {
+                logger.info({ usuarioId }, "Notificação de desconexão enviada com sucesso");
+                
+                // 6. Atualizar timestamp e contador
+                await supabaseAdmin
+                    .from("usuarios")
+                    .update({
+                        last_disconnection_notification_at: new Date().toISOString(),
+                        disconnection_notification_count: (usuario.disconnection_notification_count || 0) + 1
+                    })
+                    .eq("id", usuarioId);
+            } else {
+                logger.warn({ usuarioId }, "Falha ao enviar notificação de desconexão (instância principal pode estar offline)");
+            }
+        } catch (error) {
+            logger.error({ error, usuarioId }, "Erro ao notificar desconexão");
+        }
     }
 };

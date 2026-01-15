@@ -1,14 +1,14 @@
-import { DRIVER_EVENT_WHATSAPP_DISCONNECTED, WHATSAPP_STATUS } from "../../config/constants.js";
+import { WHATSAPP_STATUS } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
-import { notificationService } from "../notifications/notification.service.js";
 import { whatsappService } from "../whatsapp.service.js";
+import { webhookEvolutionHandler } from "./webhook-evolution.handler.js";
 
 interface HealthCheckResult {
     totalChecked: number;
     fixed: number;
     errors: number;
-    details: Array<{ usuarioId: string, oldStatus: string, newStatus: string, reason?: string }>;
+    details: Array<{ usuarioId: string, oldStatus: string, newStatus: string, reason?: string, notificationSent?: boolean }>;
 }
 
 export const whatsappHealthCheckJob = {
@@ -106,23 +106,11 @@ export const whatsappHealthCheckJob = {
                         .update({ whatsapp_status: WHATSAPP_STATUS.DISCONNECTED })
                         .eq("id", usuario.id);
 
-                    // Notificar motorista que caiu!
-                    if (usuario.telefone) {
-                         try {
-                              await notificationService.notifyDriver(
-                                   usuario.telefone, 
-                                   DRIVER_EVENT_WHATSAPP_DISCONNECTED, 
-                                   { 
-                                        nomeMotorista: usuario.nome || "Motorista",
-                                        nomePlano: "Essencial", // Dummy for context
-                                        valor: 0,
-                                        dataVencimento: new Date()
-                                   } as any 
-                              );
-                              logger.info({ usuarioId: usuario.id }, "Notificação de WhatsApp desconectado enviada.");
-                         } catch (notifErr) {
-                              logger.error({ notifErr }, "Falha ao enviar notificação de desconexão.");
-                         }
+                    // Notificar motorista que caiu (com controle de spam)
+                    try {
+                         await webhookEvolutionHandler.notifyMotoristaDisconnection(usuario.id, apiStatus.statusReason);
+                    } catch (notifErr) {
+                         logger.error({ notifErr, usuarioId: usuario.id }, "Falha ao enviar notificação de desconexão via Health Check.");
                     }
 
                     result.fixed++;
@@ -130,7 +118,8 @@ export const whatsappHealthCheckJob = {
                         usuarioId: usuario.id,
                         oldStatus: usuario.whatsapp_status,
                         newStatus: realStatus,
-                        reason: `API state: ${apiStatus.state}`
+                        reason: `API state: ${apiStatus.state}`,
+                        notificationSent: true
                     });
                 } else if (realStatus === WHATSAPP_STATUS.CONNECTED && usuario.whatsapp_status !== WHATSAPP_STATUS.CONNECTED) {
                     // Caso raro: DB diz Disconnected, mas API diz Connected.
