@@ -144,6 +144,13 @@ export const whatsappController = {
         
         // PERSISTENCE: Save to DB if we got a code
         if (result.pairingCode?.code) {
+             let codeToSave = result.pairingCode.code;
+             
+             // FORMATTER: xxxx-xxxx
+             if (codeToSave.length === 8 && !codeToSave.includes("-")) {
+                 codeToSave = `${codeToSave.substring(0, 4)}-${codeToSave.substring(4)}`;
+             }
+
              const now = new Date();
              const expiresAt = new Date(now.getTime() + 60000); // +60s
 
@@ -155,7 +162,7 @@ export const whatsappController = {
 
              await supabaseAdmin.from("usuarios")
                 .update({ 
-                    pairing_code: result.pairingCode.code,
+                    pairing_code: codeToSave,
                     pairing_code_generated_at: now.toISOString(),
                     pairing_code_expires_at: expiresAt.toISOString(),
                 })

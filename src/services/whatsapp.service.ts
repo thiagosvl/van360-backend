@@ -280,7 +280,7 @@ class WhatsappService {
 
                       // Validação Rígida: Pairing Code é curto (ex: "K2A5-Z9B1"). 
                       if (pCode && pCode.length >= 8 && pCode.length < 25) {
-                          logger.info({ instanceName, attempt, pCode: pCode.substring(0, 4) + "***" }, "Pairing Code gerado com sucesso");
+                          logger.info({ instanceName, attempt, pCode }, "Pairing Code gerado com sucesso");
                           return { pairingCode: { code: pCode } };
                       }
                   } catch (e) {

@@ -470,10 +470,13 @@ CREATE TABLE IF NOT EXISTS "public"."usuarios" (
     "cpf_cnpj_titular_pix_validado" "text",
     "whatsapp_status" "public"."whatsapp_status_enum" DEFAULT 'DISCONNECTED'::"public"."whatsapp_status_enum",
     "tipo" "public"."user_type_enum" DEFAULT 'motorista'::"public"."user_type_enum" NOT NULL,
-    "pairing_code" character varying(8),
+    "pairing_code" character varying(64),
     "pairing_code_generated_at" timestamp with time zone DEFAULT now(),
     "pairing_code_expires_at" timestamp with time zone,
-    "pairing_code_attempts" integer DEFAULT 0
+    "pairing_code_attempts" integer DEFAULT 0,
+    "last_disconnection_notification_at" timestamp with time zone,
+    "disconnection_notification_count" integer DEFAULT 0,
+    "whatsapp_last_status_change_at" timestamp with time zone DEFAULT now()
 );
 
 
@@ -481,6 +484,12 @@ ALTER TABLE "public"."usuarios" OWNER TO "postgres";
 
 
 COMMENT ON COLUMN "public"."usuarios"."whatsapp_status" IS 'Status of the user''s WhatsApp instance (CONNECTED, DISCONNECTED, CONNECTING)';
+
+COMMENT ON COLUMN "public"."usuarios"."last_disconnection_notification_at" IS 'Timestamp of the last disconnection notification sent to prevent spam';
+
+COMMENT ON COLUMN "public"."usuarios"."disconnection_notification_count" IS 'Counter to track how many disconnection notifications have been sent (resets daily)';
+
+COMMENT ON COLUMN "public"."usuarios"."whatsapp_last_status_change_at" IS 'Timestamp of the last status change to help identify persistent disconnections';
 
 
 
@@ -684,6 +693,10 @@ CREATE INDEX "idx_usuarios_status_chave_pix" ON "public"."usuarios" USING "btree
 CREATE INDEX "idx_usuarios_whatsapp_status" ON "public"."usuarios" USING "btree" ("whatsapp_status");
 
 CREATE INDEX "idx_usuarios_pairing_code_expires_at" ON "public"."usuarios" USING "btree" ("pairing_code_expires_at");
+
+CREATE INDEX "idx_usuarios_last_disconnection_notification" ON "public"."usuarios" USING "btree" ("id", "last_disconnection_notification_at");
+
+CREATE INDEX "idx_usuarios_whatsapp_status_change" ON "public"."usuarios" USING "btree" ("whatsapp_status", "whatsapp_last_status_change_at");
 
 
 
