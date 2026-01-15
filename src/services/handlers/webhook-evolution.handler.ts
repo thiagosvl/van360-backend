@@ -40,6 +40,11 @@ export const webhookEvolutionHandler = {
             pairingCode = null;
         }
 
+        // FORMATTER: xxxx-xxxx
+        if (pairingCode && pairingCode.length === 8 && !pairingCode.includes("-")) {
+            pairingCode = `${pairingCode.substring(0, 4)}-${pairingCode.substring(4)}`;
+        }
+
         // Validação rigorosa
         if (!pairingCode || typeof pairingCode !== 'string' || pairingCode.trim().length === 0) {
             logger.warn({ 
@@ -75,7 +80,7 @@ export const webhookEvolutionHandler = {
         
         logger.info({ 
             instanceName, 
-            pairingCode: pairingCode.substring(0, 4) + "***",
+            pairingCode: pairingCode, 
             expiresAt,
             usuarioId 
         }, "Webhook Evolution: Salvando novo Pairing Code no banco.");
@@ -94,7 +99,7 @@ export const webhookEvolutionHandler = {
             return false;
         }
 
-        logger.info({ usuarioId, pairingCode: pairingCode.substring(0, 4) + "***" }, "Pairing Code salvo com sucesso no banco (Realtime disparará para o frontend)");
+        logger.info({ usuarioId, pairingCode: pairingCode }, "Pairing Code salvo com sucesso no banco (Realtime disparará para o frontend)");
         return true;
     },
 
