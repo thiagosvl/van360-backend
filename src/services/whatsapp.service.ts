@@ -15,9 +15,6 @@ class WhatsappService {
    * Sanitiza o ID para evitar caracteres inválidos na URL
    */
   getInstanceName(usuarioId: string): string {
-      // Remover hífens ou caracteres especiais se a API não aceitar
-      // A Evolution aceita alfanuméricos. UUID tem hifens. Vamos simplificar se precisar.
-      // Por enquanto, manter UUID deve funcionar.
       return `user_${usuarioId}`; 
   }
 
@@ -25,15 +22,12 @@ class WhatsappService {
    * Envia mensagem de texto simples
    */
   async sendText(number: string, text: string, instanceName: string = GLOBAL_WHATSAPP_INSTANCE): Promise<boolean> {
-    // Formata número (apenas dígitos)
     const cleanNumber = number.replace(/\D/g, "");
     const finalNumber = cleanNumber.length <= 11 ? `55${cleanNumber}` : cleanNumber;
 
     const url = `${EVO_URL}/message/sendText/${instanceName}`;
     
     try {
-      // logger.info({ number: finalNumber, instance: instanceName }, "Enviando mensagem WhatsApp...");
-
       await axios.post(url, {
         number: finalNumber,
         text: text
@@ -44,16 +38,10 @@ class WhatsappService {
         }
       });
 
-      // logger.info({ messageId: data?.key?.id, instance: instanceName }, "Mensagem WhatsApp enviada.");
       return true;
 
     } catch (error) {
       const err = error as AxiosError;
-    //   logger.error({ 
-    //     error: err.response?.data || err.message,
-    //     number: finalNumber,
-    //     instance: instanceName
-    //   }, "Falha ao enviar mensagem WhatsApp");
       return false; 
     }
   }
@@ -107,8 +95,6 @@ class WhatsappService {
     const cleanNumber = number.replace(/\D/g, "");
     const finalNumber = cleanNumber.length <= 11 ? `55${cleanNumber}` : cleanNumber;
 
-    // logger.info({ number: finalNumber, partsCount: parts.length, instance: instanceName }, "Enviando Mensagem Composta");
-
     let success = true;
 
     for (const part of parts) {
@@ -138,7 +124,6 @@ class WhatsappService {
       const url = `${EVO_URL}/instance/connectionState/${instanceName}`;
       const { data } = await axios.get<{ instance: EvolutionInstance }>(url, { headers: { "apikey": EVO_KEY } });
       
-      // Evolution retorna { instance: { state: "open", ... } }
       return { 
           state: data?.instance?.state || WHATSAPP_STATUS.UNKNOWN,
           statusReason: data?.instance?.statusReason 
@@ -168,7 +153,6 @@ class WhatsappService {
           }, { 
               headers: { "apikey": EVO_KEY } 
           });
-          // logger.info({ instanceName, url: webhookUrl }, "Webhook atualizado com sucesso.");
           return true;
       } catch (error) {
           const err = error as AxiosError;
@@ -215,8 +199,9 @@ class WhatsappService {
               headers: { "apikey": EVO_KEY } 
           });
 
-          // 3. Pequeno delay para garantir que a Evolution registrou a nova instância internamente
-          await new Promise(r => setTimeout(r, 1200));
+          // 3. Delay adequado para garantir que a Evolution registrou a nova instância internamente
+          // Evolution API precisa de tempo para inicializar o Chromium/Baileys
+          await new Promise(r => setTimeout(r, 3000));
           return true;
       } catch (error) {
           const err = error as AxiosError;
@@ -241,9 +226,8 @@ class WhatsappService {
               const cleanPhone = phoneNumber.replace(/\D/g, "");
               const finalPhone = cleanPhone.length <= 11 ? `55${cleanPhone}` : cleanPhone;
 
-              // 1. Limpeza Inteligente de Sessão (Clean Slate)
-              // Se o usuário pede pairing code, ele quer conectar AGORA. 
-              // Se já houver algo pendente ou travado, melhor limpar para garantir o código novo.
+              // 1. Limpeza Inteligente de Sessão (Smart Cleanup)
+              // Só limpa se realmente necessário. Não limpa se já há um código válido em andamento.
               
               const status = await this.getInstanceStatus(instanceName);
               const isWorking = status.state === WHATSAPP_STATUS.OPEN || status.state === WHATSAPP_STATUS.CONNECTED;
@@ -255,26 +239,28 @@ class WhatsappService {
                    return { instance: { state: WHATSAPP_STATUS.OPEN } };
               }
 
-              // Se não está conectado, força disconnect/delete para garantir "Clean Slate"
-              if (status.state !== WHATSAPP_STATUS.NOT_FOUND && status.state !== "ERROR") {
-                   logger.info({ instanceName }, "Resetando instância para novo Pairing Code (Clean Slate)...");
-                   await this.disconnectInstance(instanceName); // Logout tenta limpar sessão
-                   await this.deleteInstance(instanceName); // Delete limpa o container da Evolution
-                   await new Promise(r => setTimeout(r, 2000));
+              // Se está em estado de erro ou travado, fazer limpeza
+              const needsCleanup = status.state !== WHATSAPP_STATUS.NOT_FOUND && 
+                                  (status.state === "ERROR" || status.state === WHATSAPP_STATUS.CONNECTING);
+              
+              if (needsCleanup) {
+                   logger.info({ instanceName, reason: status.state }, "Limpando instância travada para novo Pairing Code...");
+                   await this.disconnectInstance(instanceName);
+                   await this.deleteInstance(instanceName);
+                   await new Promise(r => setTimeout(r, 2500));
               }
 
-              // 2. Criar Instância Limpa (Modo Full para garantir aceitação do Celular)
-              // Lite Mode (false) gera código rápido, mas celular rejeita.
-              // Full Mode (true) demora para iniciar, mas celular aceita.
-              // SOLUÇÃO: Usar Full Mode + Muita Paciência no Timeout.
-              await this.createInstance(instanceName, false);
+              // 2. Criar Instância (Full Mode para melhor compatibilidade)
+              // Full Mode (true) garante melhor aceitação pelo WhatsApp Web
+              await this.createInstance(instanceName, true);
 
-              // Esperar a Evolution iniciar (Modo Lite é mais rápido)
-              logger.info({ instanceName }, "Aguardando inicialização (3s)...");
-              await new Promise(r => setTimeout(r, 3000));
+              // Esperar a Evolution inicializar o Chromium
+              logger.info({ instanceName }, "Aguardando inicialização (4s)...");
+              await new Promise(r => setTimeout(r, 4000));
 
-              // 3. Solicitar Código (8 tentativas)
-              for (let attempt = 1; attempt <= 8; attempt++) {
+              // 3. Solicitar Código (Retry com Backoff Exponencial)
+              const maxAttempts = 6;
+              for (let attempt = 1; attempt <= maxAttempts; attempt++) {
                   const url = `${EVO_URL}/instance/connect/${instanceName}?number=${finalPhone}`;
                   try {
                       const { data } = await axios.get<{ pairingCode: string, code: string }>(url, { headers: { "apikey": EVO_KEY } });
@@ -283,7 +269,7 @@ class WhatsappService {
                       let pCode: string | undefined = data?.pairingCode;
 
                       // FALLBACK: Campo 'code', mas SOMENTE se NÃO for um QR Code (começa com 2@)
-                      if (!pCode && data?.code && !data.code.startsWith("2@") && data.code.length < 50) {
+                      if (!pCode) {
                           pCode = data.code;
                       }
                       
@@ -292,26 +278,31 @@ class WhatsappService {
 
                       // Validação Rígida: Pairing Code é curto (ex: "K2A5-Z9B1"). 
                       if (pCode && pCode.length >= 8 && pCode.length < 25) {
+                          logger.info({ instanceName, attempt, pCode: pCode.substring(0, 4) + "***" }, "Pairing Code gerado com sucesso");
                           return { pairingCode: { code: pCode } };
                       }
                   } catch (e) {
-                      // Ignora erro no loop, apenas espera
+                      const err = e as AxiosError;
+                      logger.warn({ instanceName, attempt, status: err.response?.status }, `Tentativa ${attempt}/${maxAttempts} falhou`);
                   }
 
-                  if (attempt < 8) {
-                      await new Promise(r => setTimeout(r, 2500));
+                  if (attempt < maxAttempts) {
+                      // Backoff exponencial: 1s, 2s, 4s, 8s, 16s
+                      const delayMs = Math.min(1000 * Math.pow(2, attempt - 1), 16000);
+                      logger.info({ instanceName, attempt, nextDelayMs: delayMs }, "Aguardando antes de retry...");
+                      await new Promise(r => setTimeout(r, delayMs));
                   }
               }
-              throw new Error("Não foi possível gerar o código. Tente novamente.");
+              throw new Error("Não foi possível gerar o código após 6 tentativas. Tente novamente.");
           }
 
           // --- FLUXO QR CODE / RECONNECT (Sem Phone) ---
           
           // 1. Garantir que instância existe e webhook está setado
-          await this.createInstance(instanceName, false); // True = default behavior (QR se precisasse)
+          await this.createInstance(instanceName, true);
           
           // WARM-UP QR CODE: Esperar o Chrome iniciar para gerar o QR Code
-          await new Promise(r => setTimeout(r, 2500)); 
+          await new Promise(r => setTimeout(r, 3000)); 
 
           // 2. Soft Reconnect (Apenas pede connect para ver se gera QR ou conecta session existente)
           let lastData: EvolutionConnectResponse | null = null;
