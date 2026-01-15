@@ -1,10 +1,10 @@
 import {
-    DRIVER_EVENT_ACTIVATION,
-    DRIVER_EVENT_WELCOME_FREE,
-    DRIVER_EVENT_WELCOME_TRIAL,
-    PLANO_ESSENCIAL,
-    PLANO_GRATUITO,
-    PLANO_PROFISSIONAL
+  DRIVER_EVENT_ACTIVATION,
+  DRIVER_EVENT_WELCOME_FREE,
+  DRIVER_EVENT_WELCOME_TRIAL,
+  PLANO_ESSENCIAL,
+  PLANO_GRATUITO,
+  PLANO_PROFISSIONAL
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
@@ -632,6 +632,7 @@ export async function iniciarRegistroplanoProfissional(
     // Preparar descrição
     const descricaoCobranca = `Ativação de Assinatura - Plano ${planoSelecionado.nome}`;
 
+    logger.info(`[AuthService] Iniciando geração de cobrança de ativação para o usuário ${usuarioId}`);
     const activationResult = await assinaturaCobrancaService.gerarCobrancaAtivacao({
         usuarioId: usuarioId!,
         assinaturaId: assinaturaId!,
@@ -641,6 +642,7 @@ export async function iniciarRegistroplanoProfissional(
         cpfResponsavel: cpf,
         nomeResponsavel: payload.nome
     });
+    logger.info(`[AuthService] Cobrança de ativação gerada com sucesso. ID: ${activationResult.cobranca.id}`);
 
     cobrancaId = activationResult.cobranca.id;
     const pixData = activationResult.pixData; // Já vem formatado { qrCode, qrCodeUrl, inter_txid }
@@ -670,6 +672,7 @@ export async function iniciarRegistroplanoProfissional(
         } 
     };
   } catch (err: any) {
+    logger.error({ err, usuarioId, authUid, assinaturaId, cobrancaId }, "Erro durante o registro de plano Profissional. Realizando rollback.");
     if (usuarioId) await rollbackCadastro({ usuarioId, authUid, assinaturaId, cobrancaId });
     if (err instanceof AppError) throw err;
 

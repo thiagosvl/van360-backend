@@ -246,6 +246,7 @@ export const assinaturaCobrancaService = {
 
         } catch (err: any) {
             logger.error({ err, cobrancaId: cobranca.id }, "Falha ao gerar PIX para ativação.");
+            throw new AppError("Não foi possível gerar os dados para pagamento PIX. Por favor, tente novamente.");
         }
         
         return { cobranca, pixData, location: pixData?.location };
