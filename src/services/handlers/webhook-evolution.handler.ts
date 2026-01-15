@@ -3,6 +3,7 @@ import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
 import { whatsappService } from "../whatsapp.service.js";
 import { env } from "../../config/env.js";
+import { whatsappQueue } from "../../queues/whatsapp.queue.js";
 
 // Constantes para controle de spam
 const DISCONNECTION_NOTIFICATION_COOLDOWN_MS = 60 * 60 * 1000; // 1 hora
@@ -112,12 +113,19 @@ export const webhookEvolutionHandler = {
             whatsapp_last_status_change_at: new Date().toISOString()
         };
         
-        // Se conectou, limpa o código de pareamento
+        // Se conectou, limpa o código de pareamento e reprocessa mensagens pendentes
         if (state === "open" || state === "connected") {
              updateData.pairing_code = null;
              updateData.pairing_code_expires_at = null;
              updateData.pairing_code_generated_at = null;
              updateData.disconnection_notification_count = 0; // Reset counter on successful connection
+             
+             // Reprocessar mensagens que falharam para esta instância
+             try {
+                  await this.reprocessFailedJobs(instanceName);
+             } catch (err) {
+                  logger.error({ err, instanceName }, "Erro ao reprocessar jobs falhados");
+             }
         }
 
         logger.info({ 
@@ -146,6 +154,51 @@ export const webhookEvolutionHandler = {
         }
 
         return true;
+    },
+
+    /**
+     * Reprocessa jobs que falharam para uma instância que acabou de reconectar
+     */
+    async reprocessFailedJobs(instanceName: string): Promise<void> {
+        try {
+            const failedJobs = await whatsappQueue.getFailed();
+            
+            if (!failedJobs || failedJobs.length === 0) {
+                logger.info({ instanceName }, "Nenhum job falhado para reprocessar");
+                return;
+            }
+            
+            // Filtrar jobs que eram para esta instância
+            const relevantJobs = failedJobs.filter(job => 
+                job.data?.options?.instanceName === instanceName
+            );
+            
+            if (relevantJobs.length === 0) {
+                logger.info({ instanceName }, "Nenhum job falhado específico para esta instância");
+                return;
+            }
+            
+            logger.info({ instanceName, count: relevantJobs.length }, "Reprocessando jobs falhados...");
+            
+            // Adicionar novamente à fila com alta prioridade
+            for (const failedJob of relevantJobs) {
+                try {
+                    await whatsappQueue.add('send-message', failedJob.data, {
+                        priority: 100, // Muito alta prioridade
+                        jobId: `retry-${failedJob.id}-${Date.now()}`,
+                        removeOnComplete: true
+                    });
+                    
+                    logger.debug({ jobId: failedJob.id, instanceName }, "Job readicionado à fila com alta prioridade");
+                } catch (err) {
+                    logger.error({ err, jobId: failedJob.id }, "Erro ao readicionar job à fila");
+                }
+            }
+            
+            logger.info({ instanceName, count: relevantJobs.length }, "Reprocessamento de jobs concluído");
+        } catch (error) {
+            logger.error({ error, instanceName }, "Erro ao reprocessar jobs falhados");
+        }
     },
 
     /**

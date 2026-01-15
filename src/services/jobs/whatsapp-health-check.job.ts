@@ -83,9 +83,24 @@ export const whatsappHealthCheckJob = {
                          
                          // Se tiver travado, faz um cleanup silencioso
                          if (retryStatus.state === "connecting") {
-                            logger.warn({ instanceName }, "Health Check: Instance travada em 'connecting'. Limpando...");
-                            await whatsappService.disconnectInstance(instanceName);
-                            await whatsappService.deleteInstance(instanceName);
+                            logger.warn({ instanceName }, "Health Check: Instance travada em 'connecting'. Tentando soft-reconnect...");
+                            try {
+                                await whatsappService.connectInstance(instanceName);
+                                await new Promise(r => setTimeout(r, 5000));
+                                const softReconnectStatus = await whatsappService.getInstanceStatus(instanceName);
+                                if (softReconnectStatus.state === "open") {
+                                    logger.info({ instanceName }, "Health Check: Soft-reconnect bem-sucedido");
+                                    realStatus = WHATSAPP_STATUS.CONNECTED;
+                                } else {
+                                    logger.warn({ instanceName }, "Health Check: Soft-reconnect falhou. Limpando instância...");
+                                    await whatsappService.disconnectInstance(instanceName);
+                                    await whatsappService.deleteInstance(instanceName);
+                                }
+                            } catch (err) {
+                                logger.error({ instanceName, err }, "Health Check: Erro no soft-reconnect. Limpando instância...");
+                                await whatsappService.disconnectInstance(instanceName);
+                                await whatsappService.deleteInstance(instanceName);
+                            }
                          }
                     }
                 } else {
