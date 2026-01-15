@@ -28,18 +28,37 @@ export const webhookEvolutionHandler = {
     },
 
     async handleQrCodeUpdated(instanceName: string, data: any): Promise<boolean> {
-        // data: { qrcode: string, pairingCode: string }
-        const { pairingCode } = data;
+        // A Evolution API pode enviar o Pairing Code em diferentes formatos:
+        // 1. data.pairingCode (direto)
+        // 2. data.qrcode.pairingCode (aninhado)
+        // 3. Às vezes vem como 'code' em vez de 'pairingCode'
+        
+        let pairingCode = data?.pairingCode || data?.qrcode?.pairingCode || data?.code;
+
+        // Filtro anti-QR: Se começar com "2@", é um QR Code, não um Pairing Code
+        if (pairingCode?.startsWith("2@")) {
+            pairingCode = null;
+        }
 
         // Validação rigorosa
         if (!pairingCode || typeof pairingCode !== 'string' || pairingCode.trim().length === 0) {
-            logger.warn({ instanceName, pairingCode }, "Webhook Evolution: qrcode.updated recebido mas pairingCode inválido. Ignorando.");
+            logger.warn({ 
+                instanceName, 
+                pairingCode,
+                dataKeys: Object.keys(data || {}),
+                fullData: JSON.stringify(data).substring(0, 200)
+            }, "Webhook Evolution: qrcode.updated recebido mas pairingCode inválido. Ignorando.");
             return true; 
         }
 
-        // Validação de formato: Pairing Code deve ter entre 8 e 24 caracteres
+        // Validação de formato: Pairing Code é curto (ex: "K2A5-Z9B1" ou "K2A5Z9B1")
+        // Geralmente entre 8 e 24 caracteres
         if (pairingCode.length < 8 || pairingCode.length > 24) {
-            logger.warn({ instanceName, length: pairingCode.length }, "Webhook Evolution: pairingCode com tamanho inválido. Ignorando.");
+            logger.warn({ 
+                instanceName, 
+                length: pairingCode.length,
+                pairingCode: pairingCode.substring(0, 4) + "***"
+            }, "Webhook Evolution: pairingCode com tamanho inválido. Ignorando.");
             return true;
         }
 
@@ -75,7 +94,7 @@ export const webhookEvolutionHandler = {
             return false;
         }
 
-        logger.info({ usuarioId }, "Pairing Code salvo com sucesso no banco (Realtime disparará para o frontend)");
+        logger.info({ usuarioId, pairingCode: pairingCode.substring(0, 4) + "***" }, "Pairing Code salvo com sucesso no banco (Realtime disparará para o frontend)");
         return true;
     },
 

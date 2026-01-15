@@ -259,11 +259,12 @@ class WhatsappService {
               await new Promise(r => setTimeout(r, 4000));
 
               // 3. Solicitar Código (Retry com Backoff Exponencial)
-              const maxAttempts = 6;
+              // Reduzido para 4 tentativas (max 8 segundos) em vez de 6 (max 31 segundos)
+              const maxAttempts = 4;
               for (let attempt = 1; attempt <= maxAttempts; attempt++) {
                   const url = `${EVO_URL}/instance/connect/${instanceName}?number=${finalPhone}`;
                   try {
-                      const { data } = await axios.get<{ pairingCode: string, code: string }>(url, { headers: { "apikey": EVO_KEY } });
+                      const { data } = await axios.get<{ pairingCode: string, code: string }>(url, { headers: { "apikey": EVO_KEY }, timeout: 10000 });
                       
                       // PRIORIDADE: Pairing Code explícito
                       let pCode: string | undefined = data?.pairingCode;
@@ -283,17 +284,17 @@ class WhatsappService {
                       }
                   } catch (e) {
                       const err = e as AxiosError;
-                      logger.warn({ instanceName, attempt, status: err.response?.status }, `Tentativa ${attempt}/${maxAttempts} falhou`);
+                      logger.warn({ instanceName, attempt, status: err.response?.status, errorMessage: err.message }, `Tentativa ${attempt}/${maxAttempts} falhou`);
                   }
 
                   if (attempt < maxAttempts) {
-                      // Backoff exponencial: 1s, 2s, 4s, 8s, 16s
-                      const delayMs = Math.min(1000 * Math.pow(2, attempt - 1), 16000);
+                      // Backoff exponencial reduzido: 500ms, 1s, 2s, 4s (max 7.5s total)
+                      const delayMs = Math.min(500 * Math.pow(2, attempt - 1), 4000);
                       logger.info({ instanceName, attempt, nextDelayMs: delayMs }, "Aguardando antes de retry...");
                       await new Promise(r => setTimeout(r, delayMs));
                   }
               }
-              throw new Error("Não foi possível gerar o código após 6 tentativas. Tente novamente.");
+              throw new Error("Não foi possível gerar o código após 4 tentativas. A Evolution API pode estar indisponível. Tente novamente em alguns segundos.");
           }
 
           // --- FLUXO QR CODE / RECONNECT (Sem Phone) ---
@@ -301,8 +302,8 @@ class WhatsappService {
           // 1. Garantir que instância existe e webhook está setado
           await this.createInstance(instanceName, true);
           
-          // WARM-UP QR CODE: Esperar o Chrome iniciar para gerar o QR Code
-          await new Promise(r => setTimeout(r, 3000)); 
+          // WARM-UP QR CODE: Reduzido de 3s para 2s (Evolution geralmente está pronto mais rápido)
+          await new Promise(r => setTimeout(r, 2000)); 
 
           // 2. Soft Reconnect (Apenas pede connect para ver se gera QR ou conecta session existente)
           let lastData: EvolutionConnectResponse | null = null;
