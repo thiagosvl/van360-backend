@@ -270,11 +270,11 @@ class WhatsappService {
               await this.createInstance(instanceName, false);
 
               // Esperar a Evolution iniciar (Modo Lite é mais rápido)
-              logger.info({ instanceName }, "Aguardando inicialização (2.5s)...");
-              await new Promise(r => setTimeout(r, 2500));
+              logger.info({ instanceName }, "Aguardando inicialização (3s)...");
+              await new Promise(r => setTimeout(r, 3000));
 
-              // 3. Solicitar Código (5 tentativas)
-              for (let attempt = 1; attempt <= 5; attempt++) {
+              // 3. Solicitar Código (8 tentativas)
+              for (let attempt = 1; attempt <= 8; attempt++) {
                   const url = `${EVO_URL}/instance/connect/${instanceName}?number=${finalPhone}`;
                   try {
                       const { data } = await axios.get<{ pairingCode: string, code: string }>(url, { headers: { "apikey": EVO_KEY } });
@@ -298,8 +298,8 @@ class WhatsappService {
                       // Ignora erro no loop, apenas espera
                   }
 
-                  if (attempt < 5) {
-                      await new Promise(r => setTimeout(r, 2000));
+                  if (attempt < 8) {
+                      await new Promise(r => setTimeout(r, 2500));
                   }
               }
               throw new Error("Não foi possível gerar o código. Tente novamente.");

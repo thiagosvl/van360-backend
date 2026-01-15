@@ -56,6 +56,29 @@ export const whatsappController = {
         const persistedPairingCode = userData?.pairing_code;
         const persistedExpiresAt = userData?.pairing_code_expires_at;
 
+        // VALIDAÇÃO DE EXPIRAÇÃO (Smart Cleanup)
+        let cleanPairingCode = persistedPairingCode;
+        let cleanExpiresAt = persistedExpiresAt;
+
+        const isExpired = persistedExpiresAt ? new Date(persistedExpiresAt).getTime() < Date.now() : true;
+        
+        // SÓ limpa se o estado realmente não permitir mais conexão (CONNECTED) 
+        // ou se expirou há mais de 10 segundos (margem de segurança para rede)
+        const expiryThreshold = persistedExpiresAt ? new Date(persistedExpiresAt).getTime() + 10000 : 0;
+        const isDefinitivelyExpired = Date.now() > expiryThreshold;
+        const isInvalidState = realStatus === WHATSAPP_STATUS.CONNECTED; 
+
+        // Se expirou e NÃO estamos em connecting, ou se já conectou, limpar
+        if ((persistedPairingCode && isDefinitivelyExpired) || (persistedPairingCode && isInvalidState)) {
+             logger.info({ usuarioId, reason: isExpired ? "Expired" : "InvalidState" }, "Status Check: Limpando Pairing Code antigo/inválido");
+             await supabaseAdmin.from("usuarios")
+                .update({ pairing_code: null, pairing_code_expires_at: null })
+                .eq("id", usuarioId);
+             
+             cleanPairingCode = null;
+             cleanExpiresAt = null;
+        }
+
         if (realStatus !== dbStatus && evoStatus.state !== "ERROR" && evoStatus.state !== WHATSAPP_STATUS.NOT_FOUND) {
              logger.info({ usuarioId, real: realStatus, db: dbStatus }, "Status Check: Corrigindo status no banco (Self-Healing on Read)");
              await supabaseAdmin.from("usuarios").update({ whatsapp_status: realStatus }).eq("id", usuarioId);
@@ -64,8 +87,8 @@ export const whatsappController = {
         return reply.send({
             instanceName,
             ...evoStatus,
-            pairingCode: persistedPairingCode,
-            pairingCodeExpiresAt: persistedExpiresAt
+            pairingCode: cleanPairingCode,
+            pairingCodeExpiresAt: cleanExpiresAt
         });
     } catch (err: any) {
         return reply.status(500).send({ error: err.message });
@@ -124,13 +147,17 @@ export const whatsappController = {
              const now = new Date();
              const expiresAt = new Date(now.getTime() + 60000); // +60s
 
+             logger.info({ 
+                usuarioId, 
+                code: result.pairingCode.code, 
+                expiresAt: expiresAt.toISOString() 
+             }, "WhatsappController: Pairing Code gerado e persistido.");
+
              await supabaseAdmin.from("usuarios")
                 .update({ 
                     pairing_code: result.pairingCode.code,
                     pairing_code_generated_at: now.toISOString(),
                     pairing_code_expires_at: expiresAt.toISOString(),
-                    // Increment attempts safely (need to fetch first or just set to 1 if we don't care about precise increment now)
-                    // Let's just set proper timestamps for now.
                 })
                 .eq("id", usuarioId);
         }

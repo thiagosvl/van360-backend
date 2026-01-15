@@ -41,8 +41,8 @@ As seguintes fases são propostas para garantir a máxima estabilidade, usabilid
 
 **Objetivo**: Manter as conexões ativas e limpar instâncias que ficam presas no estado `connecting`.
 
-*   **Heartbeat Robusto**: O `whatsappHeartbeatJob` já existe, mas pode ser aprimorado para não apenas "pingar", mas também para forçar um `logout` ou `delete` em instâncias que não respondem ou estão em estado `connecting` por um tempo excessivo (ex: mais de 5 minutos).
-*   **Timeout para `connecting`**: No `whatsappHealthCheckJob`, implementar um mecanismo para identificar instâncias que estão em `connecting` por mais de X minutos e forçar um `disconnect` seguido de `delete` para liberar o recurso e permitir uma nova conexão limpa.
+*   **Health Check Robusto**: O `whatsappHealthCheckJob` foi aprimorado para não apenas verificar o status, mas também para forçar um `logout` ou `delete` em instâncias que não respondem ou estão em estado `connecting` por um tempo excessivo (ex: mais de 5 minutos).
+*   **Timeout para `connecting`**: No `whatsappHealthCheckJob`, foi implementado um mecanismo para identificar instâncias que estão em `connecting` por mais de X minutos e forçar um `disconnect` seguido de `delete` para liberar o recurso e permitir uma nova conexão limpa.
 
 **Estimativa**: 1 dia.
 

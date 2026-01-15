@@ -26,16 +26,28 @@ export const webhookEvolutionHandler = {
         // data: { qrcode: string, pairingCode: string }
         const { pairingCode } = data;
 
-        if (!pairingCode) return true; // Se não tem pairing code, ignora
+        if (!pairingCode) {
+            // logger.info({ instanceName }, "Webhook Evolution: Recebido qrcode.updated mas sem pairingCode. Ignorando.");
+            return true; 
+        }
 
         if (!instanceName.startsWith("user_")) return false;
         const usuarioId = instanceName.replace("user_", "");
 
-        logger.info({ instanceName, pairingCode }, "Webhook Evolution: Recebido novo Pairing Code, salvando no banco.");
+        const expiresAt = new Date(Date.now() + 60000).toISOString();
+        logger.info({ 
+            instanceName, 
+            pairingCode, 
+            expiresAt,
+            usuarioId 
+        }, "Webhook Evolution: Salvando novo Pairing Code no banco.");
 
         const { error } = await supabaseAdmin
             .from("usuarios")
-            .update({ pairing_code: pairingCode, pairing_code_expires_at: new Date(Date.now() + 45000).toISOString() }) // 45s TTL estimado
+            .update({ 
+                pairing_code: pairingCode, 
+                pairing_code_expires_at: expiresAt
+            }) 
             .eq("id", usuarioId);
 
         if (error) {

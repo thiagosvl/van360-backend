@@ -8,7 +8,6 @@ import { repasseMonitorJob } from "./repasse-monitor.job.js";
 import { repasseRetryJob } from "./repasse-retry.job.js";
 import { subscriptionGeneratorJob } from "./subscription-generator.job.js";
 import { whatsappHealthCheckJob } from "./whatsapp-health-check.job.js";
-import { whatsappHeartbeatJob } from "./whatsapp-heartbeat.job.js";
 
 export const jobOrchestratorService = {
   async runWorker() {
@@ -62,14 +61,8 @@ export const jobOrchestratorService = {
     }
 
     // --- JOBS DE ALTA FREQUENCIA (Whatsapp Stability) ---
-    // Heartbeat: Roda TODO minuto para manter conexões vivas
-    executions.push(whatsappHeartbeatJob.run());
-
     // Health Check: Roda a cada 5 minutos para corrigir estados travados
-    // (Antes era a cada 4 horas, inútil para o problema atual)
-    // Health Check: Roda a cada 1 minuto para corrigir estados travados
-    // (Aumentado frequência para mitigar falha de webhook)
-    if (minute % 1 === 0) {
+    if (minute % 5 === 0) {
       executions.push(whatsappHealthCheckJob.run());
     }
 
