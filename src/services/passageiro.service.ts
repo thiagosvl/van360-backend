@@ -1,13 +1,11 @@
-import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
 import { subscriptionLifecycleService } from "./subscription-lifecycle.service.js";
 
 import { CreatePassageiroDTO, ListPassageirosFiltersDTO, UpdatePassageiroDTO } from "../types/dtos/passageiro.dto.js";
-import { CobrancaOrigem, PassageiroDesativacaoCobrancaAutomaticaMotivo } from "../types/enums.js";
+import { PassageiroDesativacaoCobrancaAutomaticaMotivo } from "../types/enums.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
-import { cobrancaService } from "./cobranca.service.js";
 
 // Métodos privados auxiliares
 const _preparePassageiroData = (data: Partial<CreatePassageiroDTO> & Record<string, any>, usuarioId?: string, isUpdate: boolean = false): any => {
@@ -81,41 +79,7 @@ const createPassageiro = async (data: CreatePassageiroDTO): Promise<any> => {
 
     if (error) throw error;
     
-    // Se marcou opção de gerar cobrança mês atual
-    if (data.emitir_cobranca_mes_atual) {
-         try {
-             const valor = inserted.valor_cobranca;
-             if (valor && valor > 0) {
-                 const hoje = new Date();
-                 // Usar componentes locais para evitar virada de dia por fuso horário UTC no toISOString
-                 const dataVencimento = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
-                 
-                 logger.info({ 
-                    passageiroId: inserted.id, 
-                    valor, 
-                    dataVencimento 
-                 }, "Gerando cobrança inicial imediata...");
-                 
-                 await cobrancaService.createCobranca({
-                    usuario_id: data.usuario_id,
-                    passageiro_id: inserted.id,
-                    valor: valor,
-                    data_vencimento: dataVencimento,
-                    origem: CobrancaOrigem.AUTOMATICA,
-                    mes: hoje.getMonth() + 1,
-                    ano: hoje.getFullYear(),
-                    gerarPixAsync: true
-                 }, { gerarPixAsync: true });
-             }
-         } catch (err: any) {
-             logger.error({ 
-                err: err.message, 
-                stack: err.stack,
-                passageiroId: inserted.id 
-             }, "Erro ao gerar cobrança inicial automática");
-             // Não dar throw para não falhar a criação do passageiro, apenas logar erro da cobrança
-         }
-    }
+
 
     return inserted;
 };
@@ -311,8 +275,7 @@ const countListPassageirosByUsuario = async (
 const finalizePreCadastro = async (
     prePassageiroId: string,
     data: any,
-    usuarioId: string,
-    emitirCobranca: boolean
+    usuarioId: string
 ): Promise<any> => {
     // 1. Buscar Pré-Cadastro
     const { data: pre, error } = await supabaseAdmin
@@ -329,7 +292,6 @@ const finalizePreCadastro = async (
         ...pre,
         ...data,
         usuario_id: usuarioId,
-        emitir_cobranca_mes_atual: emitirCobranca,
         // Garantir que valor_cobranca e dia_vencimento do pre sejam mantidos se não vierem no data
         valor_cobranca: data.valor_cobranca !== undefined ? data.valor_cobranca : pre.valor_cobranca,
         dia_vencimento: data.dia_vencimento !== undefined ? data.dia_vencimento : pre.dia_vencimento,

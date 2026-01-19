@@ -4,11 +4,11 @@ import { AppError } from "../errors/AppError.js";
 import { cobrancaService } from "../services/cobranca.service.js";
 import { passageiroService } from "../services/passageiro.service.js";
 import {
-  createPassageiroSchema,
-  finalizePreCadastroSchema,
-  listPassageirosFiltersSchema,
-  toggleAtivoSchema,
-  updatePassageiroSchema
+    createPassageiroSchema,
+    finalizePreCadastroSchema,
+    listPassageirosFiltersSchema,
+    toggleAtivoSchema,
+    updatePassageiroSchema
 } from "../types/dtos/passageiro.dto.js";
 // Assuming AppError is defined or imported elsewhere, as it's used in the provided snippet.
 // import { AppError } from "../utils/appError.js"; // Example import if needed
@@ -99,9 +99,8 @@ export const passageiroController = {
 
   finalizePreCadastro: async (request: FastifyRequest, reply: FastifyReply) => {
     const { prePassageiroId } = request.params as { prePassageiroId: string };
-    const { data, usuarioId, emitir_cobranca_mes_atual } = finalizePreCadastroSchema.parse(request.body);
-
-    const result = await passageiroService.finalizePreCadastro(prePassageiroId, data, usuarioId, emitir_cobranca_mes_atual);
+    const { data, usuarioId } = finalizePreCadastroSchema.parse(request.body);
+    const result = await passageiroService.finalizePreCadastro(prePassageiroId, data, usuarioId);
     return reply.status(200).send(result);
   }
 };

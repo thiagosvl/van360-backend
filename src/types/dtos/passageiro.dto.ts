@@ -36,7 +36,7 @@ export const createPassageiroSchema = z.object({
     // Controle
     ativo: z.boolean().optional(),
     enviar_cobranca_automatica: z.boolean().optional(),
-    emitir_cobranca_mes_atual: z.boolean().optional(),
+
     periodo: z.string().optional().or(z.literal("")).transform(v => v ? v.toLowerCase() : undefined),
     genero: optionalString,
 }).passthrough(); // Permite outros campos não estritos por enquanto (migração suave)
@@ -67,7 +67,7 @@ export type ToggleAtivoDTO = z.infer<typeof toggleAtivoSchema>;
 export const finalizePreCadastroSchema = z.object({
   data: updatePassageiroSchema, // Partial create
   usuarioId: z.string().uuid(),
-  emitir_cobranca_mes_atual: z.boolean()
+
 });
 
 export type FinalizePreCadastroDTO = z.infer<typeof finalizePreCadastroSchema>;
