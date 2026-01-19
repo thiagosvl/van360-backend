@@ -12,37 +12,6 @@ interface AuthenticatedRequest extends FastifyRequest {
 }
 
 export const SubscriptionController = {
-    async cancelarAssinatura(request: FastifyRequest, reply: FastifyReply) {
-        const userIdRaw = (request.params as any).id;
-        logger.info({ userIdRaw }, "SubscriptionController.cancelarAssinatura - Starting");
-        // O body não é usado no service, mas estava no route original. Mantendo assinatura.
-        // const body = request.body;
-
-        try {
-            await subscriptionService.cancelarAssinatura({ usuarioId: userIdRaw });
-            return reply.status(204).send();
-        } catch (error: any) {
-            const statusCode = error.message.includes("obrigatório") ? 400 : 500;
-            return reply.status(statusCode).send({
-                error: "Falha ao agendar cancelamento.",
-                details: error.message
-            });
-        }
-    },
-
-    async desistirCancelarAssinatura(request: FastifyRequest, reply: FastifyReply) {
-        const usuarioId = (request.params as any).id;
-        try {
-            await subscriptionService.desistirCancelarAssinatura(usuarioId);
-            return reply.status(204).send();
-        } catch (error: any) {
-            const statusCode = error.message.includes("obrigatório") ? 400 : 500;
-            return reply.status(statusCode).send({
-                error: "Falha ao agendar cancelamento.", // Mensagem original estava assim, corrigindo? "Falha ao desfazer cancelamento"
-                details: error.message
-            });
-        }
-    },
 
     async upgradePlano(request: FastifyRequest, reply: FastifyReply) {
         const authUid = (request as AuthenticatedRequest).user?.id;

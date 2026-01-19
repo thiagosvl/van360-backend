@@ -1,19 +1,16 @@
 import {
-  DRIVER_EVENT_REACTIVATION_EMBARGO,
-  PLANO_PROFISSIONAL
+    PLANO_PROFISSIONAL
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import {
-  AssinaturaCobrancaStatus,
-  AssinaturaStatus,
-  AssinaturaTipoPagamento,
-  ConfigKey
+    AssinaturaCobrancaStatus,
+    AssinaturaTipoPagamento,
+    ConfigKey
 } from "../types/enums.js";
 import { automationService } from "./automation.service.js";
 import { cobrancaService } from "./cobranca.service.js";
 import { getConfigNumber } from "./configuracao.service.js";
-import { notificationService } from "./notifications/notification.service.js";
 
 interface DadosPagamento {
   valor: number;
@@ -128,11 +125,8 @@ export async function processarPagamentoAssinatura(
     // 7. Ativar usuário
     await ativarUsuario(cobranca, logContext);
 
-    // 8. Gatilho de Catch-up (Se estava suspensa)
-    if (assinaturaStateBefore?.status === AssinaturaStatus.SUSPENSA) {
-        const paymentDate = dadosPagamento.dataPagamento ? new Date(dadosPagamento.dataPagamento) : new Date();
-        await processarCatchupReativacao(cobranca.usuario_id, logContext, paymentDate);
-    }
+    // 8. Gatilho de Catch-up (Removido: D+1 Simplificado)
+    // if (assinaturaStateBefore?.status === AssinaturaStatus.SUSPENSA) { ... }
 
     // 9. Preencher slots restantes automaticamente (Auto-Fill)
     // ...
@@ -501,67 +495,6 @@ async function triggerAtivacaoAutomatica(
 /**
  * Processa a geração de cobranças atrasadas e notifica o motorista sobre o embargo de 24h
  */
-async function processarCatchupReativacao(usuarioId: string, logContext: ContextoLog, dateOverride?: Date): Promise<void> {
-    logger.info({ ...logContext, usuarioId }, "Processando Catch-up de reativação");
 
-    const now = dateOverride || new Date();
-    const targetMonth = now.getMonth() + 1;
-    const targetYear = now.getFullYear();
-
-    try {
-        // 0. Buscar dados da assinatura e usuário antecipadamente
-        const { data: usuario } = await supabaseAdmin
-            .from("usuarios")
-            .select("nome, telefone")
-            .eq("id", usuarioId)
-            .single();
-
-        const { data: assinatura } = await supabaseAdmin
-            .from("assinaturas_usuarios")
-            .select("planos(nome, slug, parent:parent_id(slug))")
-            .eq("usuario_id", usuarioId)
-            .eq("ativo", true)
-            .single();
-
-        const planoData = assinatura?.planos as any;
-        const planoSlug = planoData?.parent?.slug ?? planoData?.slug;
-
-        // 1. DECISÃO DE CATCH-UP:
-        // Se reativar ANTES do dia 25, gera o mês vigente. 
-        // Se reativar dia 25 ou DEPOIS, gera o PRÓXIMO mês (o atual já está no fim).
-        
-        if (now.getDate() < 25) {
-            const statsCurrent = await cobrancaService.gerarCobrancasMensaisParaMotorista(usuarioId, targetMonth, targetYear, planoSlug);
-            logger.info({ ...logContext, statsCurrent }, "Catch-up: Geração do mês atual concluída (pré-dia 25)");
-        } else {
-            let nextMonth = targetMonth + 1;
-            let nextYear = targetYear;
-            if (nextMonth > 12) {
-                nextMonth = 1;
-                nextYear++;
-            }
-            const statsNext = await cobrancaService.gerarCobrancasMensaisParaMotorista(usuarioId, nextMonth, nextYear, planoSlug);
-            logger.info({ ...logContext, statsNext }, "Catch-up: Geração do próximo mês concluída (pós-dia 25)");
-        }
-
-        if (usuario?.telefone) {
-            await notificationService.notifyDriver(
-                usuario.telefone,
-                DRIVER_EVENT_REACTIVATION_EMBARGO as any,
-                {
-                    nomeMotorista: usuario.nome,
-                    nomePlano: (assinatura?.planos as any)?.nome || "Profissional",
-                    valor: 0, 
-                    dataVencimento: "",
-                    mes: targetMonth,
-                    ano: targetYear
-                }
-            );
-            logger.info({ ...logContext }, "Notificação de reativação enviada ao motorista");
-        }
-    } catch (err: any) {
-        logger.error({ ...logContext, error: err.message }, "Erro no processarCatchupReativacao");
-        // Não trava o processo principal
-    }
-}
+// processarCatchupReativacao REMOVIDO (Simplificação D+1)
 

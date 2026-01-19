@@ -54,6 +54,9 @@ type DriverEventType =
     | typeof DRIVER_EVENT_REPASSE_FAILED
     | typeof DRIVER_EVENT_WHATSAPP_DISCONNECTED
     | typeof DRIVER_EVENT_PIX_KEY_VALIDATED
+    | typeof DRIVER_EVENT_WHATSAPP_DISCONNECTED
+    | typeof DRIVER_EVENT_PIX_KEY_VALIDATED
+    | typeof DRIVER_EVENT_PIX_KEY_VALIDATED
     | typeof DRIVER_EVENT_PRE_PASSENGER_CREATED;
 
 export const notificationService = {
@@ -111,6 +114,8 @@ export const notificationService = {
             case DRIVER_EVENT_TRIAL_ENDING: parts = DriverTemplates.trialEnding(ctx); break;
             case DRIVER_EVENT_REPASSE_FAILED: parts = DriverTemplates.repasseFailed(ctx); break;
             case DRIVER_EVENT_WHATSAPP_DISCONNECTED: parts = DriverTemplates.whatsappDisconnected(ctx); break;
+            case DRIVER_EVENT_PIX_KEY_VALIDATED: parts = DriverTemplates.pixKeyValidated(ctx); break;
+            case DRIVER_EVENT_PIX_KEY_VALIDATED: parts = DriverTemplates.pixKeyValidated(ctx); break;
             case DRIVER_EVENT_PIX_KEY_VALIDATED: parts = DriverTemplates.pixKeyValidated(ctx); break;
             case DRIVER_EVENT_PRE_PASSENGER_CREATED: parts = DriverTemplates.prePassengerCreated(ctx); break;
         }

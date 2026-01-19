@@ -1,9 +1,10 @@
 import {
-  DRIVER_EVENT_ACTIVATION,
-  DRIVER_EVENT_UPGRADE,
-  PLANO_ESSENCIAL,
-  PLANO_GRATUITO,
-  PLANO_PROFISSIONAL
+    DRIVER_EVENT_ACTIVATION,
+    DRIVER_EVENT_UPGRADE,
+    DRIVER_EVENT_WELCOME_TRIAL,
+    PLANO_ESSENCIAL,
+    PLANO_GRATUITO,
+    PLANO_PROFISSIONAL
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
@@ -16,11 +17,11 @@ import { interService } from "./inter.service.js";
 import { notificationService } from "./notifications/notification.service.js";
 import { pricingService } from "./pricing.service.js";
 import {
-  cancelarCobrancaPendente,
-  getAssinaturaAtiva,
-  getUsuarioData,
-  isUpgrade,
-  limparAssinaturasPendentes
+    cancelarCobrancaPendente,
+    getAssinaturaAtiva,
+    getUsuarioData,
+    isUpgrade,
+    limparAssinaturasPendentes
 } from "./subscription.common.js";
 
 // Result Interfaces
@@ -151,6 +152,22 @@ export const subscriptionUpgradeService = {
             if (assinaturaError) throw assinaturaError;
       
             logger.info({ usuarioId, plano: novoPlano.slug }, "Upgrade com Trial de 7 dias ativado com sucesso.");
+            
+            // Notificação de Boas-vindas ao Trial
+            try {
+                const usuarioData = await getUsuarioData(usuarioId);
+                if (usuarioData.telefone) {
+                    await notificationService.notifyDriver(usuarioData.telefone, DRIVER_EVENT_WELCOME_TRIAL, {
+                        nomeMotorista: usuarioData.nome,
+                        nomePlano: novoPlano.nome,
+                        valor: precoAplicado,
+                        dataVencimento: trialEnd.toISOString().split("T")[0],
+                        trialDays: trialDays
+                    });
+                }
+            } catch (notifErr) {
+                logger.error({ notifErr }, "Falha ao enviar notificação de Welcome Trial");
+            }
       
             const { data: cobranca, error: cobrancaError } = await supabaseAdmin
               .from("assinaturas_cobrancas")
@@ -530,6 +547,21 @@ export const subscriptionUpgradeService = {
               })
               .eq("id", cobranca.id);
       
+            // Notificar Motorista (Ativação via Subplano)
+            try {
+               if (usuario.telefone) {
+                   await notificationService.notifyDriver(usuario.telefone, DRIVER_EVENT_ACTIVATION, {
+                       nomeMotorista: usuario.nome,
+                       nomePlano: novoSubplano.nome,
+                       valor: precoAplicado,
+                       dataVencimento: new Date().toISOString().split("T")[0],
+                       pixPayload: pixData.qrCodePayload
+                   });
+               }
+            } catch (notifErr) {
+               logger.error({ notifErr }, "Falha ao enviar notificação de ativação subplano");
+            }
+
             return {
               qrCodePayload: pixData.qrCodePayload,
               location: pixData.location,
@@ -623,6 +655,21 @@ export const subscriptionUpgradeService = {
               })
               .eq("id", cobranca.id);
       
+            // Notificar Motorista (Expansão via Subplano)
+            try {
+               if (usuario.telefone) {
+                   await notificationService.notifyDriver(usuario.telefone, DRIVER_EVENT_UPGRADE, {
+                       nomeMotorista: usuario.nome,
+                       nomePlano: novoSubplano.nome,
+                       valor: diferenca,
+                       dataVencimento: new Date().toISOString().split("T")[0],
+                       pixPayload: pixData.qrCodePayload
+                   });
+               }
+            } catch (notifErr) {
+               logger.error({ notifErr }, "Falha ao enviar notificação de expansão subplano");
+            }
+
             return {
               qrCodePayload: pixData.qrCodePayload,
               location: pixData.location,
@@ -788,13 +835,29 @@ export const subscriptionUpgradeService = {
             })
             .eq("id", cobranca.id);
       
-          return {
-            qrCodePayload: pixData.qrCodePayload,
-            location: pixData.location,
-            inter_txid: pixData.interTransactionId,
-            cobrancaId: cobranca.id,
-            success: true,
-          };
+            // Notificar Motorista (Personalizado)
+            try {
+               if (usuario.telefone) {
+                   const eventType = billingType === AssinaturaBillingType.SUBSCRIPTION ? DRIVER_EVENT_ACTIVATION : DRIVER_EVENT_UPGRADE;
+                   await notificationService.notifyDriver(usuario.telefone, eventType, {
+                       nomeMotorista: usuario.nome,
+                       nomePlano: `Profissional Personalizado (${quantidade} pass.)`,
+                       valor: valorCobranca,
+                       dataVencimento: hoje.toISOString().split("T")[0],
+                       pixPayload: pixData.qrCodePayload
+                   });
+               }
+            } catch (notifErr) {
+               logger.error({ notifErr }, "Falha ao enviar notificação de personalizado");
+            }
+
+            return {
+              qrCodePayload: pixData.qrCodePayload,
+              location: pixData.location,
+              inter_txid: pixData.interTransactionId,
+              cobrancaId: cobranca.id,
+              success: true,
+            };
       
         } catch (err: any) {
           logger.error({ error: err.message, usuarioId, quantidade }, "Falha ao criar assinatura personalizada.");

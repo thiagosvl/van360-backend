@@ -193,8 +193,6 @@ CREATE TABLE IF NOT EXISTS "public"."assinaturas_usuarios" (
     "data_ativacao" timestamp with time zone,
     "franquia_contratada_cobrancas" integer,
     "vigencia_fim" timestamp without time zone,
-    "cancelamento_manual" timestamp with time zone,
-    "status_anterior" "text",
     CONSTRAINT "assinaturas_usuarios_preco_origem_check" CHECK (("preco_origem" = ANY (ARRAY['normal'::"text", 'promocional'::"text", 'personalizado'::"text"]))),
     CONSTRAINT "assinaturas_usuarios_status_check" CHECK (("status" = ANY (ARRAY['ativa'::"text", 'pendente_pagamento'::"text", 'cancelada'::"text", 'suspensa'::"text", 'trial'::"text"])))
 );

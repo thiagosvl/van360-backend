@@ -83,10 +83,15 @@ Aproveite o sistema! 🚐💨`);
      */
     welcomeTrial: (ctx: DriverContext): CompositeMessagePart[] => {
         const dias = ctx.trialDays || 7;
+        const validade = ctx.dataVencimento ? formatDate(ctx.dataVencimento) : "";
+        
+        // Se temos a data exata, mostramos "Válido até DD/MM/AAAA", senão genérico
+        const validadeMsg = validade ? `\nVálido até: *${validade}*` : "";
+
         return textPart(`Olá *${getFirstName(ctx.nomeMotorista)}*, seja muito bem-vindo à Van360! 🚀
 
 Você começou com o plano *${ctx.nomePlano}*.
-Aproveite seu acesso completo por *${dias} dias* de teste grátis!
+Aproveite seu acesso completo por *${dias} dias* de teste grátis!${validadeMsg}
 
 Após esse período, enviaremos os dados para oficializar sua assinatura.
 Qualquer dúvida, estamos à disposição! 🚐💨`);

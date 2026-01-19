@@ -1,10 +1,10 @@
 import {
-  DRIVER_EVENT_ACTIVATION,
-  DRIVER_EVENT_WELCOME_FREE,
-  DRIVER_EVENT_WELCOME_TRIAL,
-  PLANO_ESSENCIAL,
-  PLANO_GRATUITO,
-  PLANO_PROFISSIONAL
+    DRIVER_EVENT_ACTIVATION,
+    DRIVER_EVENT_WELCOME_FREE,
+    DRIVER_EVENT_WELCOME_TRIAL,
+    PLANO_ESSENCIAL,
+    PLANO_GRATUITO,
+    PLANO_PROFISSIONAL
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
@@ -477,7 +477,10 @@ export async function iniciaRegistroPlanoEssencial(
             eventType = DRIVER_EVENT_WELCOME_FREE;
         } else if (trialDays > 0) {
             eventType = DRIVER_EVENT_WELCOME_TRIAL;
-            extraData = { trialDays };
+            extraData = { 
+                trialDays,
+                dataVencimento: dataVencimentoCobranca
+            };
         } else {
             // Plano Pago sem Trial (Imediato)
             eventType = DRIVER_EVENT_ACTIVATION;

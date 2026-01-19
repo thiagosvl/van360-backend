@@ -82,7 +82,6 @@ export const cobrancaService = {
 
     const shouldGeneratePix = 
       canGeneratePix &&
-      !isPastDue && 
       !isPaid &&
       passageiro.cpf_responsavel && 
       passageiro.nome_responsavel;
@@ -486,8 +485,7 @@ export const cobrancaService = {
       `)
       .eq("usuario_id", usuarioId)
       .eq("status", CobrancaStatus.PENDENTE)
-      .is("txid_pix", null)
-      .gte("data_vencimento", todayStr);
+      .is("txid_pix", null);
 
     if (cobError) {
       logger.error({ error: cobError.message, usuarioId }, "Erro ao buscar cobranças para PIX retroativo");

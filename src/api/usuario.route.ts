@@ -12,8 +12,6 @@ export default async function usuarioRoute(app: FastifyInstance) {
     app.post("/registrar-plano-profissional", AuthController.registrarPlanoProfissional);
 
     // --- Rotas de Assinatura ---
-    app.delete("/cancelar-assinatura/:id", SubscriptionController.cancelarAssinatura);
-    app.patch("/desistir-cancelar-assinatura/:id", SubscriptionController.desistirCancelarAssinatura);
     app.post("/upgrade-plano", SubscriptionController.upgradePlano);
     app.post("/downgrade-plano", SubscriptionController.downgradePlano);
     app.post("/trocar-subplano", SubscriptionController.trocarSubplano);

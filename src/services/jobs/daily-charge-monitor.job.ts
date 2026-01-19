@@ -40,16 +40,15 @@ export const dailyChargeMonitorJob = {
             // B) Vence Hoje (Hoje)
             // hojeStr ja temos
 
-            // C) Atrasados (Regra: 1 dia, 3 dias, 5 dias após vencimento)
-            const atraso1d = new Date(); atraso1d.setDate(hoje.getDate() - 1);
-            const atraso3d = new Date(); atraso3d.setDate(hoje.getDate() - 3);
-            const atraso5d = new Date(); atraso5d.setDate(hoje.getDate() - 5);
+            // C) Atrasados (Regra: até X dias após vencimento)
+            const diasPosVencimento = await getConfigNumber(ConfigKey.DIAS_COBRANCA_POS_VENCIMENTO, 3);
+            const datasAtraso: string[] = [];
             
-            const datasAtraso = [
-                atraso1d.toISOString().split('T')[0],
-                atraso3d.toISOString().split('T')[0],
-                atraso5d.toISOString().split('T')[0]
-            ];
+            for (let i = 1; i <= diasPosVencimento; i++) {
+                const d = new Date();
+                d.setDate(hoje.getDate() - i);
+                datasAtraso.push(d.toISOString().split('T')[0]);
+            }
 
             // 2. Buscar TUDO que se encaixa nessas datas E está pendente
             const datasDeInteresse = [dataAvisoStr, hojeStr, ...datasAtraso];

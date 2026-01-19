@@ -22,6 +22,8 @@ export const webhookEvolutionHandler = {
                 return await this.handleConnectionUpdate(instance, data);
             case "qrcode.updated":
                 return await this.handleQrCodeUpdated(instance, data);
+            case "logout.instance":
+                return await this.handleLogoutInstance(instance, data);
             default:
                 return true;
         }
@@ -233,7 +235,7 @@ export const webhookEvolutionHandler = {
             // 1. Buscar dados do motorista e histórico de notificações
             const { data: usuario, error: fetchError } = await supabaseAdmin
                 .from("usuarios")
-                .select("id, telefone, nome, last_disconnection_notification_at, disconnection_notification_count")
+                .select("id, telefone, nome, last_disconnection_notification_at, disconnection_notification_count, whatsapp_status")
                 .eq("id", usuarioId)
                 .single();
             
@@ -248,6 +250,14 @@ export const webhookEvolutionHandler = {
                 : 0;
             const now = Date.now();
             const timeSinceLastNotification = now - lastNotificationTime;
+
+            logger.info({ 
+                usuarioId, 
+                timeSinceLastNotification, 
+                cooldown: DISCONNECTION_NOTIFICATION_COOLDOWN_MS,
+                lastNotification: usuario.last_disconnection_notification_at,
+                currentStatus: usuario.whatsapp_status
+            }, "Verificando cooldown de notificação...");
 
             if (timeSinceLastNotification < DISCONNECTION_NOTIFICATION_COOLDOWN_MS) {
                 logger.info({ 
@@ -297,5 +307,36 @@ export const webhookEvolutionHandler = {
         } catch (error) {
             logger.error({ error, usuarioId }, "Erro ao notificar desconexão");
         }
+    },
+
+    async handleLogoutInstance(instanceName: string, data: any): Promise<boolean> {
+        logger.info({ instanceName }, "Webhook Evolution: logout.instance recebido. Marcando como desconectado.");
+        
+        if (!instanceName.startsWith("user_")) {
+            return true;
+        }
+
+        const usuarioId = instanceName.replace("user_", "");
+
+        const { error } = await supabaseAdmin
+            .from("usuarios")
+            .update({ 
+                whatsapp_status: WHATSAPP_STATUS.DISCONNECTED,
+                pairing_code: null,
+                pairing_code_expires_at: null,
+                pairing_code_generated_at: null,
+                whatsapp_last_status_change_at: new Date().toISOString()
+            })
+            .eq("id", usuarioId);
+
+        if (error) {
+            logger.error({ error, usuarioId }, "Falha ao processar logout.instance via webhook");
+            return false;
+        }
+
+        // NOTIFICAR MOTORISTA
+        await this.notifyMotoristaDisconnection(usuarioId);
+
+        return true;
     }
 };

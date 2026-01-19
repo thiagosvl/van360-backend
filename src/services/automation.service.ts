@@ -107,23 +107,61 @@ export const automationService = {
             throw new Error(`Erro ao atualizar passageiros: ${updateError.message}`);
         }
 
-        // NOVO: Verificar se precisa gerar cobrança do mês seguinte (Catch-up de Upgrade)
-        // Se o upgrade ocorrer após o dia 25, o job mensal já passou. Precisamos garantir Fev/Mar etc.
-        logger.info(`[ativarPassageirosAutomaticamente] Verificando geração de cobrança pós-upgrade para ${idsParaAtivar.length} passageiros`);
+        // Lógica de Catch-up (Upgrade / Ativação)
+        // 1. Tentar gerar cobranças para o mês ATUAL se ainda não existirem
+        // 2. Para as cobranças existentes (atuais ou futuras), garantir que tenham PIX
+        // 3. Notificar sobre estabilização (24h)
         
-        for (const passageiro of disponiveis) {
-            try {
-                // Prepara objeto passageiroData mínimo necessário para a função auxiliar
+        const hoje = new Date();
+        const mesAtual = hoje.getMonth() + 1;
+        const anoAtual = hoje.getFullYear();
+        
+        logger.info(`[ativarPassageirosAutomaticamente] Processando Catch-up para ${idsParaAtivar.length} passageiros`);
+
+        try {
+            // A) Gerar cobranças faltantes do mês ATUAL
+            // O cobrancaService.gerarCobrancasMensaisParaMotorista já valida se existe, então é seguro chamar.
+            // Só chamamos se for antes do dia 25, senão o mês já "fechou" para automação regular.
+            const diaCorte = await getConfigNumber(ConfigKey.DIA_GERACAO_MENSALIDADES, 25);
+            if (hoje.getDate() < diaCorte) {
+                await cobrancaService.gerarCobrancasMensaisParaMotorista(usuarioId, mesAtual, anoAtual);
+            }
+
+            // B) Verificar geração do PRÓXIMO mês (Lógica original mantida/adaptada)
+            // Se hoje >= dia 25, precisamos garantir o próximo mês.
+             for (const passageiro of disponiveis) {
                 const passageiroData = {
                     valor_cobranca: passageiro.valor_cobranca,
                     dia_vencimento: passageiro.dia_vencimento
                 };
-                
                 await _verificarGerarCobrancaMesSeguinte(passageiro.id, passageiroData, usuarioId);
-
-            } catch (err: any) {
-                 logger.error({ err, passageiroId: passageiro.id }, "Erro ao gerar cobrança de catch-up no upgrade");
             }
+
+            // C) Gerar PIX Retroativo (Para tudo que ficou pendente sem PIX)
+            // Isso cobre tanto as cobranças antigas quanto as recém geradas no passo A
+            await cobrancaService.gerarPixRetroativo(usuarioId);
+
+            // D) Notificar Motorista sobre Regularização (24h)
+            // Importar dinamicamente para evitar ciclo se necessário ou usar notificationService direto
+            const { notificationService } = await import("./notifications/notification.service.js");
+            const { DRIVER_EVENT_REACTIVATION_EMBARGO } = await import("../config/constants.js");
+            
+            const { data: usuario } = await supabaseAdmin.from("usuarios").select("nome, telefone").eq("id", usuarioId).single();
+            
+            if (usuario && usuario.telefone) {
+                await notificationService.notifyDriver(usuario.telefone, DRIVER_EVENT_REACTIVATION_EMBARGO as any, {
+                    nomeMotorista: usuario.nome,
+                    nomePlano: "Profissional", // Genérico ou buscar do banco
+                    valor: 0,
+                    dataVencimento: "",
+                    mes: mesAtual,
+                    ano: anoAtual
+                });
+            }
+
+        } catch (catchUpErr: any) {
+             logger.error({ catchUpErr }, "Erro parcial no fluxo de catch-up de ativação");
+             // Não lançar erro para não reverter a ativação dos passageiros
         }
 
         logger.info({ count: idsParaAtivar.length }, "[ativarPassageirosAutomaticamente] Passageiros ativados com sucesso");

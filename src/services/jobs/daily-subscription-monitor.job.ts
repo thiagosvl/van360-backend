@@ -40,16 +40,22 @@ export const dailySubscriptionMonitorJob = {
 
             // B) Vence Hoje (Hoje) -> hojeStr
 
-            // C) Venceu Ontem (Bloqueio)
-            const ontem = new Date();
-            ontem.setDate(hoje.getDate() - 1);
-            const dataBloqueioStr = ontem.toISOString().split('T')[0];
+            // C) Bloqueio (Regra: 1 dia após vencimento - D+1)
+            const bloqueio = new Date();
+            bloqueio.setDate(hoje.getDate() - 1);
+            const dataBloqueioStr = bloqueio.toISOString().split('T')[0];
 
-            // D) Atraso (3 dias)
-            const atraso3d = new Date(); atraso3d.setDate(hoje.getDate() - 3);
-            const dataAtraso3dStr = atraso3d.toISOString().split('T')[0];
+            // D) Atrasados (Regra: até X dias após vencimento)
+            const diasPosVencimento = await getConfigNumber(ConfigKey.DIAS_COBRANCA_POS_VENCIMENTO, 3);
+            const datasAtraso: string[] = [];
+            
+            for (let i = 1; i <= diasPosVencimento; i++) {
+                const d = new Date();
+                d.setDate(hoje.getDate() - i);
+                datasAtraso.push(d.toISOString().split('T')[0]);
+            }
 
-            const datasDeInteresse = [dataAvisoStr, hojeStr, dataBloqueioStr, dataAtraso3dStr];
+            const datasDeInteresse = [dataAvisoStr, hojeStr, dataBloqueioStr, ...datasAtraso];
 
             // 2. Buscar Cobranças Pendentes nessas datas
             const { data: cobrancas, error: cobError } = await supabaseAdmin
@@ -93,7 +99,7 @@ export const dailySubscriptionMonitorJob = {
                 } else if (vencimento === dataBloqueioStr) {
                     // BLOQUEIO
                     context = DRIVER_EVENT_ACCESS_SUSPENDED;
-                } else if (vencimento === dataAtraso3dStr) {
+                } else if (datasAtraso.includes(vencimento)) {
                     context = DRIVER_EVENT_RENEWAL_OVERDUE;
                 }
 
@@ -198,31 +204,7 @@ export const dailySubscriptionMonitorJob = {
                 }
             }
 
-            // 7. Finalizar Cancelamentos Agendados (Sweeper de Validade)
-            // Problema Resolvido: Como matamos a cobrança futura (Ghost Killer), 
-            // o motorista não tem pendências na renovação, logo não cai na regra de Suspensão por inadimplência.
-            // Precisamos encerrar a assinatura explicitamente quando a vigência acaba.
-            const { data: aVencer } = await supabaseAdmin
-                .from("assinaturas_usuarios")
-                .select("id, usuario_id, vigencia_fim")
-                .in("status", [AssinaturaStatus.ATIVA, AssinaturaStatus.TRIAL])
-                .not("cancelamento_manual", "is", null) // Tem pedido de saída
-                .lt("vigencia_fim", hojeStr); // Já venceu (vigencia < hoje)
 
-            if (aVencer && aVencer.length > 0) {
-                logger.info({ count: aVencer.length }, "Encerrando assinaturas com cancelamento agendado vencido...");
-                
-                const ids = aVencer.map((a: any) => a.id);
-                
-                const { subscriptionLifecycleService } = await import("../subscription-lifecycle.service.js");
-
-                // 1. Atualizar Assinatura -> CANCELADA
-                for (const id of ids) {
-                     await subscriptionLifecycleService.cancelarAssinaturaImediato(id, "Cancelamento Agendado Concluído");
-                }
-                
-                logger.info({ ids }, "Assinaturas Zumbis encerradas com sucesso.");
-            }
 
             return result;
 
