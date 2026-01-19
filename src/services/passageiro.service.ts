@@ -146,7 +146,7 @@ const deletePassageiro = async (id: string): Promise<void> => {
          if (countError) throw countError;
 
          if (count && count > 0) {
-             throw new AppError("Não é possível excluir este passageiro pois ele possui cobranças registradas. Em vez disso, desative o cadastro.", 400);
+             throw new AppError("Passageiro possui cobranças. Desative o cadastro ou remova as cobranças.", 400);
          }
 
         const { error } = await supabaseAdmin.from("passageiros").delete().eq("id", id);
