@@ -1,4 +1,4 @@
-import { GLOBAL_WHATSAPP_INSTANCE, WHATSAPP_STATUS } from "../../config/constants.js";
+import { WHATSAPP_STATUS, GLOBAL_WHATSAPP_INSTANCE } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
 import { whatsappQueue } from "../../queues/whatsapp.queue.js";
@@ -17,15 +17,25 @@ export const webhookEvolutionHandler = {
              logger.info({ event, instance, dataKeys: Object.keys(data || {}) }, "Webhook Evolution: Recebido com sucesso!");
         }
 
-        switch (event) {
-            case "connection.update":
-                return await this.handleConnectionUpdate(instance, data);
-            case "qrcode.updated":
-                return await this.handleQrCodeUpdated(instance, data);
-            case "logout.instance":
-                return await this.handleLogoutInstance(instance, data);
-            default:
-                return true;
+        try {
+            switch (event) {
+                case "connection.update":
+                    return await this.handleConnectionUpdate(instance, data);
+                case "qrcode.updated":
+                    return await this.handleQrCodeUpdated(instance, data);
+                case "logout.instance":
+                    return await this.handleLogoutInstance(instance, data);
+                case "send.message":
+                    return await this.handleSendMessage(instance, data);
+                case "messages.update":
+                    return await this.handleMessagesUpdate(instance, data);
+                default:
+                    // Ignorar eventos não mapeados silenciosamente
+                    return true;
+            }
+        } catch (error) {
+            logger.error({ error, event, instance }, "Erro ao processar webhook Evolution");
+            return false;
         }
     },
 
@@ -179,6 +189,72 @@ export const webhookEvolutionHandler = {
         }
 
         return true;
+    },
+
+    /**
+     * Processa confirmação de envio de mensagem
+     * Atualiza o status da cobrança para "Enviada" quando a Evolution confirma
+     */
+    async handleSendMessage(instanceName: string, data: any): Promise<boolean> {
+        try {
+            const { messageId, status, number } = data;
+            
+            if (!instanceName.startsWith("user_")) {
+                return true;
+            }
+
+            const usuarioId = instanceName.replace("user_", "");
+
+            logger.debug({ 
+                instanceName, 
+                messageId, 
+                status, 
+                number 
+            }, "Webhook Evolution: send.message recebido");
+
+            // Aqui você pode atualizar o status da cobrança/notificação no banco
+            // se tiver um mapeamento de messageId -> cobrancaId
+            // Por enquanto, apenas log para auditoria
+            
+            return true;
+        } catch (error) {
+            logger.error({ error, instanceName }, "Erro ao processar send.message");
+            return false;
+        }
+    },
+
+    /**
+     * Processa atualização de status de mensagem (entregue, lida, etc)
+     * Útil para rastreamento de confirmação de leitura
+     */
+    async handleMessagesUpdate(instanceName: string, data: any): Promise<boolean> {
+        try {
+            const { messageId, status, fromMe } = data;
+            
+            // Ignorar mensagens recebidas (fromMe = false)
+            // Focar apenas em mensagens que o sistema enviou
+            if (!fromMe) {
+                return true;
+            }
+
+            if (!instanceName.startsWith("user_")) {
+                return true;
+            }
+
+            logger.debug({ 
+                instanceName, 
+                messageId, 
+                status 
+            }, "Webhook Evolution: messages.update recebido (mensagem enviada)");
+
+            // Aqui você pode atualizar o status da cobrança para "Lida" quando status === "read"
+            // Por enquanto, apenas log para auditoria
+            
+            return true;
+        } catch (error) {
+            logger.error({ error, instanceName }, "Erro ao processar messages.update");
+            return false;
+        }
     },
 
     /**

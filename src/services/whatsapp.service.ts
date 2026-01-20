@@ -8,6 +8,19 @@ export type { ConnectInstanceResponse };
 const EVO_URL = env.EVOLUTION_API_URL;
 const EVO_KEY = env.EVOLUTION_API_KEY;
 
+/**
+ * Configurações de privacidade e performance para instâncias de motoristas
+ * Essas configurações garantem que o sistema não invada a privacidade do usuário
+ */
+const DRIVER_INSTANCE_SETTINGS = {
+  rejectCalls: true,           // Rejeita chamadas de voz/vídeo
+  ignoreGroups: true,          // Ignora mensagens de grupos
+  alwaysOnline: false,         // Não força status "online"
+  readMessages: false,         // Não marca mensagens como lidas
+  syncFullHistory: false,      // Não sincroniza histórico completo
+  readStatus: false            // Não marca stories como visto
+};
+
 class WhatsappService {
   
   /**
@@ -148,7 +161,7 @@ class WhatsappService {
                 enabled,
                 url: webhookUrl,
                 webhookByEvents: false,
-                  events: ["CONNECTION_UPDATE", "QRCODE_UPDATED"]
+                  events: ["CONNECTION_UPDATE", "QRCODE_UPDATED", "SEND_MESSAGE", "MESSAGES_UPDATE", "LOGOUT_INSTANCE"]
               }
           }, { 
               headers: { "apikey": EVO_KEY } 
@@ -165,6 +178,33 @@ class WhatsappService {
   }
 
   /**
+   * Atualiza as configurações de privacidade e performance da instância
+   * Garante que a instância não invada a privacidade do motorista
+   */
+  async updateSettings(instanceName: string, settings: Partial<typeof DRIVER_INSTANCE_SETTINGS> = DRIVER_INSTANCE_SETTINGS): Promise<boolean> {
+      try {
+          const url = `${EVO_URL}/instance/settings/set/${instanceName}`;
+          
+          const mergedSettings = { ...DRIVER_INSTANCE_SETTINGS, ...settings };
+          
+          await axios.post(url, mergedSettings, {
+              headers: { "apikey": EVO_KEY }
+          });
+
+          logger.info({ instanceName, settings: mergedSettings }, "Configurações de privacidade aplicadas com sucesso");
+          return true;
+      } catch (error) {
+          const err = error as AxiosError;
+          logger.warn({ 
+              err: err.response?.data || err.message, 
+              instanceName 
+          }, "Falha ao atualizar configurações (pode ser esperado em versões antigas da API)");
+          // Não falha a operação pois essa feature pode não estar disponível em todas as versões
+          return true;
+      }
+  }
+
+  /**
    * Cria uma instância (se não existir)
    * Retorna 'true' se a instância está pronta (já existia ou foi criada agora)
    */
@@ -176,8 +216,9 @@ class WhatsappService {
           const status = await this.getInstanceStatus(instanceName);
           
           if (status.state !== WHATSAPP_STATUS.NOT_FOUND && status.state !== "ERROR") {
-              // Já existe, mas vamos garantir que o Webhook esteja certo
+              // Já existe, mas vamos garantir que o Webhook e as configurações estejam corretos
               await this.setWebhook(instanceName, webhookUrl, true);
+              await this.updateSettings(instanceName);
               return true; 
           }
 
@@ -193,7 +234,7 @@ class WhatsappService {
                   enabled: true,
                   url: webhookUrl,
                   webhookByEvents: false,
-                    events: ["CONNECTION_UPDATE", "QRCODE_UPDATED"]
+                    events: ["CONNECTION_UPDATE", "QRCODE_UPDATED", "SEND_MESSAGE", "MESSAGES_UPDATE", "LOGOUT_INSTANCE"]
               }
           }, { 
               headers: { "apikey": EVO_KEY } 
@@ -202,6 +243,10 @@ class WhatsappService {
           // 3. Delay adequado para garantir que a Evolution registrou a nova instância internamente
           // Evolution API precisa de tempo para inicializar o Chromium/Baileys
           await new Promise(r => setTimeout(r, 3000));
+
+          // 4. Aplicar configurações de privacidade
+          await this.updateSettings(instanceName);
+
           return true;
       } catch (error) {
           const err = error as AxiosError;
@@ -236,6 +281,7 @@ class WhatsappService {
               if (isWorking) {
                    // Garante webhook atualizado mesmo se já conectado
                    await this.setWebhook(instanceName, webhookUrl, true);
+                   await this.updateSettings(instanceName);
                    return { instance: { state: WHATSAPP_STATUS.OPEN } };
               }
 
@@ -250,22 +296,20 @@ class WhatsappService {
                    await new Promise(r => setTimeout(r, 2500));
               }
 
-              // 2. Criar Instância (Full Mode para melhor compatibilidade)
-              // Full Mode (true) garante melhor aceitação pelo WhatsApp Web, mas
-              // para pairing code devemos tentar iniciar SEM gerar QR code para evitar conflitos.
+              // 2. Criar Instância com enableQrcode = false para evitar conflitos
+              // O false garante que a Evolution foque apenas no Pairing Code
               await this.createInstance(instanceName, false);
 
               // Esperar a Evolution inicializar o Chromium
-              logger.info({ instanceName }, "Aguardando inicialização (4s)...");
-              await new Promise(r => setTimeout(r, 4000));
+              logger.info({ instanceName }, "Aguardando inicialização (6s)...");
+              await new Promise(r => setTimeout(r, 6000));
 
               // 3. Solicitar Código (Retry com Backoff Exponencial)
-              // Reduzido para 4 tentativas (max 8 segundos) em vez de 6 (max 31 segundos)
-              const maxAttempts = 4;
+              const maxAttempts = 6;
               for (let attempt = 1; attempt <= maxAttempts; attempt++) {
                   const url = `${EVO_URL}/instance/connect/${instanceName}?number=${finalPhone}`;
                   try {
-                      const { data } = await axios.get<{ pairingCode: string, code: string }>(url, { headers: { "apikey": EVO_KEY }, timeout: 10000 });
+                      const { data } = await axios.get<{ pairingCode: string, code: string }>(url, { headers: { "apikey": EVO_KEY } });
                       
                       // PRIORIDADE: Pairing Code explícito
                       let pCode: string | undefined = data?.pairingCode;
@@ -280,22 +324,22 @@ class WhatsappService {
 
                       // Validação Rígida: Pairing Code é curto (ex: "K2A5-Z9B1"). 
                       if (pCode && pCode.length >= 8 && pCode.length < 25) {
-                          logger.info({ instanceName, attempt, pCode }, "Pairing Code gerado com sucesso");
+                          logger.info({ instanceName, attempt, pCode: pCode.substring(0, 4) + "***" }, "Pairing Code gerado com sucesso");
                           return { pairingCode: { code: pCode } };
                       }
                   } catch (e) {
                       const err = e as AxiosError;
-                      logger.warn({ instanceName, attempt, status: err.response?.status, errorMessage: err.message }, `Tentativa ${attempt}/${maxAttempts} falhou`);
+                      logger.warn({ instanceName, attempt, status: err.response?.status }, `Tentativa ${attempt}/${maxAttempts} falhou`);
                   }
 
                   if (attempt < maxAttempts) {
-                      // Backoff exponencial reduzido: 500ms, 1s, 2s, 4s (max 7.5s total)
-                      const delayMs = Math.min(500 * Math.pow(2, attempt - 1), 4000);
-                      logger.info({ instanceName, attempt, nextDelayMs: delayMs }, "Aguardando antes de retry...");
+                      // Backoff exponencial: 1s, 2s, 4s, 8s, 16s
+                      const delayMs = Math.pow(2, attempt - 1) * 1000;
+                      logger.info({ instanceName, attempt, delayMs }, `Aguardando ${delayMs}ms antes da próxima tentativa...`);
                       await new Promise(r => setTimeout(r, delayMs));
                   }
               }
-              throw new Error("Não foi possível gerar o código após 4 tentativas. A Evolution API pode estar indisponível. Tente novamente em alguns segundos.");
+              throw new Error("Não foi possível gerar o código após 6 tentativas. Tente novamente.");
           }
 
           // --- FLUXO QR CODE / RECONNECT (Sem Phone) ---
@@ -303,8 +347,8 @@ class WhatsappService {
           // 1. Garantir que instância existe e webhook está setado
           await this.createInstance(instanceName, true);
           
-          // WARM-UP QR CODE: Reduzido de 3s para 2s (Evolution geralmente está pronto mais rápido)
-          await new Promise(r => setTimeout(r, 2000)); 
+          // WARM-UP QR CODE: Esperar o Chrome iniciar para gerar o QR Code
+          await new Promise(r => setTimeout(r, 3000)); 
 
           // 2. Soft Reconnect (Apenas pede connect para ver se gera QR ou conecta session existente)
           let lastData: EvolutionConnectResponse | null = null;
