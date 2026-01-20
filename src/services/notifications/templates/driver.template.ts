@@ -17,6 +17,7 @@ export interface DriverContext {
     nomeResponsavel?: string;
     // New fields for flexible Lego composition
     pixPayload?: string; 
+    isActivation?: boolean; // Se é o primeiro pagamento (Onboarding)
 }
 
 const formatDate = (dateStr: string) => {
@@ -35,26 +36,32 @@ const getMeshName = (mes?: number) => {
 import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
 
 // Helper to construct standard PIX message parts
+// Helper to construct standard PIX message parts
 const buildPixMessageParts = (text: string, pixPayload?: string): CompositeMessagePart[] => {
-    const parts: CompositeMessagePart[] = [
-        { type: "text", content: text }
-    ];
-
-    if (pixPayload) {
-        // 1. Image Placeholder (Service will recognize 'qrcode' meta and generate the image)
-        parts.push({ 
-            type: "image", 
-            content: "", 
-            meta: "qrcode" 
-        }); 
-        
-        // 2. Text Payload (Copy-Paste)
-        parts.push({ 
-            type: "text", 
-            content: pixPayload,
-            delayMs: 800 
-        });
+    // Se não tiver PIX Payload, retorna apenas o texto
+    if (!pixPayload) {
+        return [{ type: "text", content: text }];
     }
+
+    const parts: CompositeMessagePart[] = [];
+
+    // Adiciona dica de pagamento automático
+    const caption = `${text}\n\n💡 Pague pelo app do seu banco. Não precisa enviar comprovante, o sistema identifica automaticamente! ✨`;
+
+    // 1. Bundle: Image Placeholder (QR Code) with Caption (Instructions)
+    // Service recognize 'qrcode' meta and generate the image
+    parts.push({ 
+        type: "image", 
+        content: caption, // Caption vai aqui
+        meta: "qrcode" 
+    }); 
+    
+    // 2. Text Payload (Copy-Paste) - SEPARADO para facilitar copiar
+    parts.push({ 
+        type: "text", 
+        content: pixPayload,
+        delayMs: 800 
+    });
 
     return parts;
 };
@@ -214,15 +221,32 @@ ${validade}
 
 Seu acesso está garantido! 🚐💨`;
 
-        const parts = textPart(text);
-        
-        // Append Receipt Image if available
+        const parts: CompositeMessagePart[] = [];
+
+        // 1. Recibo / Confirmação
         if (ctx.reciboUrl) {
-             parts.push({
-                 type: "image",
-                 mediaBase64: ctx.reciboUrl,
-                 content: `📎 *Comprovante*`
-             });
+            parts.push({
+                type: "image",
+                mediaBase64: ctx.reciboUrl,
+                content: text // Caption
+            });
+        } else {
+            parts.push({ type: "text", content: text });
+        }
+
+        // 2. Lembretes Importantes (APENAS NA ATIVAÇÃO E PLANO PROFISSIONAL)
+        // 2. Lembretes Importantes (APENAS NA ATIVAÇÃO E PLANO PROFISSIONAL)
+        const isProfessional = ctx.nomePlano.toLowerCase().includes("profissional");
+        
+        if (ctx.isActivation && isProfessional) {
+            parts.push({
+                type: "text",
+                content: `⚠ *Importante:*
+            
+1️⃣ *Cadastre sua Chave PIX:* Para receber os pagamentos dos passageiros direto na sua conta.
+
+2️⃣ *Conecte seu WhatsApp:* Acesse o painel e escaneie o QR Code conforme as instruções na tela. Assim o sistema enviará as cobranças automaticamente por você! 🚀`
+            });
         }
         
         return parts;

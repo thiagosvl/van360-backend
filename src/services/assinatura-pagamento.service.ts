@@ -1,12 +1,13 @@
 import {
-    PLANO_PROFISSIONAL
+  PLANO_PROFISSIONAL
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import {
-    AssinaturaCobrancaStatus,
-    AssinaturaTipoPagamento,
-    ConfigKey
+  AssinaturaBillingType,
+  AssinaturaCobrancaStatus,
+  AssinaturaTipoPagamento,
+  ConfigKey
 } from "../types/enums.js";
 import { automationService } from "./automation.service.js";
 import { cobrancaService } from "./cobranca.service.js";
@@ -43,7 +44,7 @@ export async function processarPagamentoAssinatura(
   dadosPagamento: DadosPagamento,
   contextoLog: ContextoLog = {},
   reciboUrl?: string
-): Promise<{ vigenciaFim: Date } | void> {
+): Promise<{ vigenciaFim: Date; isOnboardingPayment?: boolean } | void> {
   const { txid, cobrancaId } = contextoLog;
   const logContext = txid ? { txid } : { cobrancaId };
 
@@ -61,9 +62,9 @@ export async function processarPagamentoAssinatura(
         tipo_pagamento: AssinaturaTipoPagamento.PIX,
         taxa_intermediacao_banco: taxaIntermediacao,
         dados_auditoria_pagamento: {
-            ...dadosPagamento,
-            ...contextoLog,
-            data_processamento: new Date().toISOString()
+          ...dadosPagamento,
+          ...contextoLog,
+          data_processamento: new Date().toISOString()
         },
         recibo_url: reciboUrl || null
       })
@@ -85,10 +86,10 @@ export async function processarPagamentoAssinatura(
         .select("status")
         .eq("id", cobranca.id)
         .single();
-      
+
       if (checkState?.status === AssinaturaCobrancaStatus.PAGO) {
-          logger.info({ ...logContext }, "Idempotência: Cobrança já processada anteriormente. Ignorando.");
-          return; // Retorno silencioso de sucesso
+        logger.info({ ...logContext }, "Idempotência: Cobrança já processada anteriormente. Ignorando.");
+        return; // Retorno silencioso de sucesso
       }
 
       logger.warn({ ...logContext, statusEncontrado: checkState?.status }, "Cobrança não encontrada ou estado inválido para processamento");
@@ -98,7 +99,7 @@ export async function processarPagamentoAssinatura(
     logger.info({ ...logContext }, "Cobrança atualizada com sucesso");
 
     // 2. Calcular vigencia_fim e anchor_date
-    const { vigenciaFim, novoAnchorDate } = await calcularVigenciaFimEAnchorDate(
+    const { vigenciaFim, novoAnchorDate, isOnboardingPayment } = await calcularVigenciaFimEAnchorDate(
       cobranca,
       dadosPagamento.dataPagamento,
       logContext
@@ -110,30 +111,17 @@ export async function processarPagamentoAssinatura(
     // 4. Desativar outras assinaturas ativas (se necessário)
     await desativarOutrasAssinaturas(cobranca, logContext);
 
-
-
-    // 4. Salvar estado anterior para identificar reativação
-    const { data: assinaturaStateBefore } = await supabaseAdmin
-        .from("assinaturas_usuarios")
-        .select("status, vigencia_fim")
-        .eq("id", cobranca.assinatura_usuario_id)
-        .single();
-
-    // 6. Ativar assinatura
+    // 5. Ativar assinatura
     await ativarAssinatura(cobranca, vigenciaFim, novoAnchorDate, logContext);
 
-    // 7. Ativar usuário
+    // 6. Ativar usuário
     await ativarUsuario(cobranca, logContext);
 
-    // 8. Gatilho de Catch-up (Removido: D+1 Simplificado)
-    // if (assinaturaStateBefore?.status === AssinaturaStatus.SUSPENSA) { ... }
-
-    // 9. Preencher slots restantes automaticamente (Auto-Fill)
-    // ...
+    // 7. Preencher slots restantes automaticamente (Auto-Fill)
     // Busca informações da assinatura para determinar franquia e plano
     const { data: assinaturaPendente } = await supabaseAdmin
-        .from("assinaturas_usuarios")
-        .select(`
+      .from("assinaturas_usuarios")
+      .select(`
             id,
             franquia_contratada_cobrancas,
             planos:plano_id (
@@ -143,9 +131,9 @@ export async function processarPagamentoAssinatura(
                 )
             )
         `)
-        .eq("id", cobranca.assinatura_usuario_id)
-        .single();
-    
+      .eq("id", cobranca.assinatura_usuario_id)
+      .single();
+
     // Se há assinatura pendente, tentar ativar passageiros automaticamente até atingir a franquia
     if (assinaturaPendente) {
       await triggerAtivacaoAutomatica(cobranca, assinaturaPendente, logContext);
@@ -153,7 +141,7 @@ export async function processarPagamentoAssinatura(
 
     logger.info({ ...logContext }, "Fluxo completo para pagamento confirmado");
 
-    return { vigenciaFim };
+    return { vigenciaFim, isOnboardingPayment };
   } catch (error: any) {
     logger.error({ ...logContext, error: error.message, stack: error.stack }, "Erro ao processar pagamento");
     throw error;
@@ -167,7 +155,7 @@ async function calcularVigenciaFimEAnchorDate(
   cobranca: AssinaturaCobrancaInfo,
   dataPagamentoStr: string,
   logContext: ContextoLog
-): Promise<{ vigenciaFim: Date; novoAnchorDate: string | null }> {
+): Promise<{ vigenciaFim: Date; novoAnchorDate: string | null; isOnboardingPayment: boolean }> {
   const dataPagamentoDate = new Date(dataPagamentoStr);
 
   // Buscar assinatura atual
@@ -209,14 +197,21 @@ async function calcularVigenciaFimEAnchorDate(
   const billingType = cobranca.billing_type || "subscription";
 
   // Identificar estratégias
-  const isActivation = ["activation", "expansion"].includes(billingType);
-  const isProRataUpgrade = ["upgrade_plan", "upgrade"].includes(billingType);
+  // RESTORED: isProRataUpgrade declaration
+  const isProRataUpgrade = [AssinaturaBillingType.UPGRADE_PLAN, AssinaturaBillingType.UPGRADE].includes(billingType as AssinaturaBillingType);
 
-  if (isActivation) {
+  // Identificar se é uma ativação de fato (Primeiro pagamento ou Startup)
+  const isBillingActivation = [AssinaturaBillingType.ACTIVATION, AssinaturaBillingType.EXPANSION].includes(billingType as AssinaturaBillingType);
+
+  // Flag final para indicar se é "Primeiro Pagamento" (Onboarding)
+  let isOnboardingPayment = false;
+
+  if (isBillingActivation) {
     // START NEW CYCLE: Data Pagamento + 1 Mês
     novoAnchorDate = dataPagamentoStr;
     vigenciaFim = new Date(dataPagamentoDate);
     vigenciaFim.setMonth(vigenciaFim.getMonth() + 1);
+    isOnboardingPayment = true;
 
     logger.info(
       {
@@ -232,27 +227,28 @@ async function calcularVigenciaFimEAnchorDate(
     // PRESERVE CYCLE: Mantém vigência fim da assinatura (já inserida com data correta)
     // Se a assinatura não tiver vigência (ex: upgrade de trial ou manual), calculamos +1 mês como fallback
     if (assinaturaAtual?.vigencia_fim) {
-        vigenciaFim = new Date(assinaturaAtual.vigencia_fim);
-        // Não altera anchor_date
-        
-        logger.info(
-            {
-              ...logContext,
-              vigenciaFimPreservada: vigenciaFim.toISOString().split("T")[0],
-              billingType
-            },
-            "Upgrade Pro-Rata: Ciclo preservado (Mantendo vigencia_fim)"
-        );
+      vigenciaFim = new Date(assinaturaAtual.vigencia_fim);
+      // Não altera anchor_date
+
+      logger.info(
+        {
+          ...logContext,
+          vigenciaFimPreservada: vigenciaFim.toISOString().split("T")[0],
+          billingType
+        },
+        "Upgrade Pro-Rata: Ciclo preservado (Mantendo vigencia_fim)"
+      );
     } else {
-        // Fallback: Se não tem vigência (upgrade de inativo ou erro), inicia ciclo
-        novoAnchorDate = dataPagamentoStr;
-        vigenciaFim = new Date(dataPagamentoDate);
-        vigenciaFim.setMonth(vigenciaFim.getMonth() + 1);
-        
-        logger.warn(
-            { ...logContext, billingType },
-            "Upgrade sem vigência anterior definida: Iniciando novo ciclo como fallback"
-        );
+      // Fallback: Se não tem vigência (upgrade de inativo ou erro), inicia ciclo
+      novoAnchorDate = dataPagamentoStr;
+      vigenciaFim = new Date(dataPagamentoDate);
+      vigenciaFim.setMonth(vigenciaFim.getMonth() + 1);
+      isOnboardingPayment = true; // Se não tinha vigência, é 'reset'
+
+      logger.warn(
+        { ...logContext, billingType },
+        "Upgrade sem vigência anterior definida: Iniciando novo ciclo como fallback"
+      );
     }
   } else {
     // SUBSCRIPTION (Renovação Mensal)
@@ -260,6 +256,7 @@ async function calcularVigenciaFimEAnchorDate(
       novoAnchorDate = dataPagamentoStr;
       vigenciaFim = new Date(dataPagamentoDate);
       vigenciaFim.setMonth(vigenciaFim.getMonth() + 1);
+      isOnboardingPayment = true; // Primeira cobrança pós-trial é um marco de onboarding financeiro
 
       logger.info(
         {
@@ -287,6 +284,7 @@ async function calcularVigenciaFimEAnchorDate(
       novoAnchorDate = dataPagamentoStr;
       vigenciaFim = new Date(dataPagamentoDate);
       vigenciaFim.setMonth(vigenciaFim.getMonth() + 1);
+      isOnboardingPayment = true; // Se não tinha vigência atual, é reativação/início
 
       logger.info(
         {
@@ -300,7 +298,7 @@ async function calcularVigenciaFimEAnchorDate(
     }
   }
 
-  return { vigenciaFim, novoAnchorDate };
+  return { vigenciaFim, novoAnchorDate, isOnboardingPayment };
 }
 
 /**
@@ -381,8 +379,6 @@ async function desativarOutrasAssinaturas(cobranca: AssinaturaCobrancaInfo, logC
     }
   }
 }
-
-
 
 /**
  * Ativa a assinatura do usuário
@@ -475,7 +471,7 @@ async function triggerAtivacaoAutomatica(
 
       // Geração Retroativa de PIX para cobranças atuais/futuras após upgrade para Profissional
       await cobrancaService.gerarPixRetroativo(cobranca.usuario_id);
-      
+
     } catch (ativacaoError: any) {
       logger.error(
         {
@@ -491,10 +487,3 @@ async function triggerAtivacaoAutomatica(
     logger.info({ ...logContext, slugBase }, "Não é plano Profissional - não ativando passageiros automaticamente");
   }
 }
-
-/**
- * Processa a geração de cobranças atrasadas e notifica o motorista sobre o embargo de 24h
- */
-
-// processarCatchupReativacao REMOVIDO (Simplificação D+1)
-

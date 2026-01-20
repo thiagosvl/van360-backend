@@ -14,6 +14,7 @@ export interface PassengerContext {
     usuarioId: string; // ID do Motorista (para roteamento WhatsApp)
     // New fields for flexible Lego composition
     pixPayload?: string;
+    reciboUrl?: string;
 }
 
 import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
@@ -31,25 +32,30 @@ const getMeshName = (mes?: number) => {
 
 // Helper to construct standard PIX message parts for Passengers
 const buildPixMessageParts = (text: string, pixPayload?: string): CompositeMessagePart[] => {
-    const parts: CompositeMessagePart[] = [
-        { type: "text", content: text }
-    ];
-
-    if (pixPayload) {
-        // 1. Image Placeholder (Service will recognize 'qrcode' meta and generate the image)
-        parts.push({ 
-            type: "image", 
-            content: "", 
-            meta: "qrcode" 
-        }); 
-        
-        // 2. Text Payload (Copy-Paste)
-        parts.push({ 
-            type: "text", 
-            content: pixPayload,
-            delayMs: 800 
-        });
+    // Se não tiver PIX Payload, retorna apenas o texto
+    if (!pixPayload) {
+        return [{ type: "text", content: text }];
     }
+
+    const parts: CompositeMessagePart[] = [];
+
+    // Adiciona dica de pagamento automático
+    const caption = `${text}\n\n💡 Pague pelo app do seu banco. Não precisa enviar comprovante, o sistema identifica automaticamente! ✨`;
+
+    // 1. Bundle: Image Placeholder (QR Code) with Caption (Instructions)
+    // Service recognizes 'qrcode' meta and generate the image
+    parts.push({ 
+        type: "image", 
+        content: caption, // Caption vai aqui
+        meta: "qrcode" 
+    }); 
+    
+    // 2. Text Payload (Copy-Paste) - SEPARADO para facilitar copiar
+    parts.push({ 
+        type: "text", 
+        content: pixPayload,
+        delayMs: 800 
+    });
 
     return parts;
 };
@@ -118,9 +124,20 @@ Para regularizar e evitar bloqueios, estamos reenviando o código PIX abaixo. �
         const ref = ctx.mes ? ` referente ao mês de *${getMeshName(ctx.mes)}/${ctx.ano}*` : "";
         const nomeResp = getFirstName(ctx.nomeResponsavel);
         
-        return textPart(`Olá *${nomeResp}*, confirmamos o recebimento da mensalidade de *${getFirstName(ctx.nomePassageiro)}* no valor de *${valor}*${ref}. ✅
+        const text = `Olá *${nomeResp}*, confirmamos o recebimento da mensalidade de *${getFirstName(ctx.nomePassageiro)}* no valor de *${valor}*${ref}. ✅
 
-Muito obrigado! 🚐💨`);
+Muito obrigado! 🚐💨`;
+
+        // Se tiver recibo, envia a imagem com o texto na legenda (Bundle)
+        if (ctx.reciboUrl) {
+            return [{
+                type: "image",
+                mediaBase64: ctx.reciboUrl,
+                content: text // Caption
+            }];
+        }
+
+        return textPart(text);
     },
 
     /**

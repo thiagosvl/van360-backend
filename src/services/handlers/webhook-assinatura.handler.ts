@@ -83,7 +83,8 @@ export const webhookAssinaturaHandler = {
                     templateData: {
                         nomeMotorista: usuario?.nome,
                         nomePlano: nomePlano,
-                        dataVencimento: vigenciaFim
+                        dataVencimento: vigenciaFim,
+                        isActivation: result?.isOnboardingPayment
                     }
                 }
             });
