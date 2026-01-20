@@ -12,6 +12,7 @@ const passageiroRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     app.get("/usuario/:usuarioId", passageiroController.listByUsuario);
     app.get("/usuario/:usuarioId/contagem", passageiroController.countByUsuario);
     app.get("/:id/numero-cobrancas", passageiroController.countCobrancas);
+    app.get("/responsavel/lookup", passageiroController.lookupResponsavel);
 
     // Ações Específicas
     app.patch("/:id/toggle-ativo", passageiroController.toggleAtivo);

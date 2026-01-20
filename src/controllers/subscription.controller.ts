@@ -123,5 +123,7 @@ export const SubscriptionController = {
              const status = err.message.includes("não encontrado") ? 404 : 400;
              return reply.status(status).send({ error: err.message });
         }
-    }
+    },
+
+
 };

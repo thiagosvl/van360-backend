@@ -8,20 +8,36 @@ import {
     updateVeiculoSchema
 } from "../types/dtos/veiculo.dto.js";
 
+import { AppError } from "../errors/AppError.js";
+
 export const veiculoController = {
   create: async (request: FastifyRequest, reply: FastifyReply) => {
     logger.info("VeiculoController.create - Starting");
-    const data = createVeiculoSchema.parse(request.body);
-    const result = await veiculoService.createVeiculo(data);
-    return reply.status(201).send(result);
+    try {
+        const data = createVeiculoSchema.parse(request.body);
+        const result = await veiculoService.createVeiculo(data);
+        return reply.status(201).send(result);
+    } catch (error: any) {
+        if (error.code === '23505') {
+            throw new AppError("Já existe um veículo cadastrado com esta placa.", 409);
+        }
+        throw error;
+    }
   },
 
   update: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     logger.info({ veiculoId: id }, "VeiculoController.update - Starting");
-    const data = updateVeiculoSchema.parse(request.body);
-    await veiculoService.updateVeiculo(id, data);
-    return reply.status(200).send({ success: true });
+    try {
+        const data = updateVeiculoSchema.parse(request.body);
+        await veiculoService.updateVeiculo(id, data);
+        return reply.status(200).send({ success: true });
+    } catch (error: any) {
+        if (error.code === '23505') {
+            throw new AppError("Já existe um veículo cadastrado com esta placa.", 409);
+        }
+        throw error;
+    }
   },
 
   delete: async (request: FastifyRequest, reply: FastifyReply) => {

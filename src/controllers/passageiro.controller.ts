@@ -1,5 +1,6 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
+import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
 import { cobrancaService } from "../services/cobranca.service.js";
 import { passageiroService } from "../services/passageiro.service.js";
@@ -10,8 +11,7 @@ import {
     toggleAtivoSchema,
     updatePassageiroSchema
 } from "../types/dtos/passageiro.dto.js";
-// Assuming AppError is defined or imported elsewhere, as it's used in the provided snippet.
-// import { AppError } from "../utils/appError.js"; // Example import if needed
+import { onlyDigits } from "../utils/string.utils.js";
 
 export const passageiroController = {
   create: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -32,10 +32,7 @@ export const passageiroController = {
             await passageiroService.updatePassageiro(id, data);
         } catch (err: any) {
             // Interceptar erro de limite para retornar 403 ou 422 específico se quiser
-            // Mas o global handler já trata Error normal com 500 ou AppError.
-            // Se o service lançar Error, vai 500. Se quisermos 400, precisamos converter.
             if (err.message.includes("LIMIT_EXCEEDED")) {
-                // Assuming AppError is available in scope
                 throw new AppError(err.message, 403);
             }
             throw err;
@@ -77,7 +74,6 @@ export const passageiroController = {
         return reply.status(200).send({ ativo: novoStatus });
     } catch (err: any) {
          if (err.message.includes("LIMIT_EXCEEDED")) {
-            // Assuming AppError is available in scope
             throw new AppError(err.message, 403);
          }
          throw err;
@@ -102,5 +98,32 @@ export const passageiroController = {
     const { data, usuarioId } = finalizePreCadastroSchema.parse(request.body);
     const result = await passageiroService.finalizePreCadastro(prePassageiroId, data, usuarioId);
     return reply.status(200).send(result);
+  },
+
+  lookupResponsavel: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { cpf } = request.query as { cpf: string };
+    const authHeader = request.headers.authorization;
+    if (!authHeader) return reply.status(401).send({ error: "Token ausente" });
+    
+    const { data: { user } } = await supabaseAdmin.auth.getUser(authHeader.split(" ")[1]);
+    if (!user) return reply.status(401).send({ error: "Usuário não identificado" });
+    
+    if (!cpf) return reply.status(400).send({ error: "CPF obrigatório" });
+
+    const cpfClean = onlyDigits(cpf);
+
+    const { data, error } = await supabaseAdmin
+        .from("passageiros")
+        .select("nome_responsavel, email_responsavel, telefone_responsavel")
+        .eq("usuario_id", user.user_metadata?.usuario_id || user.app_metadata?.usuario_id)
+        .eq("cpf_responsavel", cpfClean)
+        .limit(1)
+        .maybeSingle();
+
+    if (error) {
+        throw new AppError("Erro ao buscar responsável.", 500);
+    }
+
+    return reply.status(200).send(data); 
   }
 };

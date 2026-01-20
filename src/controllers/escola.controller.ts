@@ -8,20 +8,36 @@ import {
     updateEscolaSchema
 } from "../types/dtos/escola.dto.js";
 
+import { AppError } from "../errors/AppError.js";
+
 export const escolaController = {
   create: async (request: FastifyRequest, reply: FastifyReply) => {
     logger.info("EscolaController.create - Starting");
-    const data = createEscolaSchema.parse(request.body);
-    const result = await escolaService.createEscola(data);
-    return reply.status(201).send(result);
+    try {
+        const data = createEscolaSchema.parse(request.body);
+        const result = await escolaService.createEscola(data);
+        return reply.status(201).send(result);
+    } catch (error: any) {
+        if (error.code === '23505') {
+            throw new AppError("Já existe uma escola cadastrada com este nome.", 409);
+        }
+        throw error;
+    }
   },
 
   update: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     logger.info({ escolaId: id }, "EscolaController.update - Starting");
-    const data = updateEscolaSchema.parse(request.body);
-    await escolaService.updateEscola(id, data);
-    return reply.status(200).send({ success: true });
+    try {
+        const data = updateEscolaSchema.parse(request.body);
+        await escolaService.updateEscola(id, data);
+        return reply.status(200).send({ success: true });
+    } catch (error: any) {
+        if (error.code === '23505') {
+            throw new AppError("Já existe uma escola cadastrada com este nome.", 409);
+        }
+        throw error;
+    }
   },
 
   delete: async (request: FastifyRequest, reply: FastifyReply) => {

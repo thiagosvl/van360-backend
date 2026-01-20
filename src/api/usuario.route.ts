@@ -3,6 +3,7 @@ import { AuthController } from "../controllers/auth.controller.js";
 import { SubscriptionController } from "../controllers/subscription.controller.js";
 import { usuarioResumoController } from "../controllers/usuario-resumo.controller.js";
 import { UsuarioController } from "../controllers/usuario.controller.js";
+import { verifySupabaseJWT } from "../middleware/auth.js";
 
 export default async function usuarioRoute(app: FastifyInstance) {
 
@@ -18,8 +19,11 @@ export default async function usuarioRoute(app: FastifyInstance) {
     app.post("/criar-assinatura-profissional-personalizado", SubscriptionController.criarAssinaturaPersonalizada);
 
     // --- Rotas de Usuário ---
-    app.patch("/:id", UsuarioController.atualizarUsuario);
-    app.delete("/:id", UsuarioController.deleteAccount);
+    app.patch("/:id", { onRequest: [verifySupabaseJWT] }, UsuarioController.atualizarUsuario);
+    app.delete("/:id", { onRequest: [verifySupabaseJWT] }, UsuarioController.deleteAccount);
+    
+
+
     app.get("/:usuarioId/resumo", usuarioResumoController.getResumo);
 
 }

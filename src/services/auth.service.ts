@@ -1,10 +1,10 @@
 import {
-    DRIVER_EVENT_ACTIVATION,
-    DRIVER_EVENT_WELCOME_FREE,
-    DRIVER_EVENT_WELCOME_TRIAL,
-    PLANO_ESSENCIAL,
-    PLANO_GRATUITO,
-    PLANO_PROFISSIONAL
+  DRIVER_EVENT_ACTIVATION,
+  DRIVER_EVENT_WELCOME_FREE,
+  DRIVER_EVENT_WELCOME_TRIAL,
+  PLANO_ESSENCIAL,
+  PLANO_GRATUITO,
+  PLANO_PROFISSIONAL
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
@@ -686,3 +686,161 @@ export async function iniciarRegistroplanoProfissional(
   }
 }
 
+
+export async function login(identifier: string, password: string): Promise<AuthSession> {
+    // Apenas login via CPF é permitido
+    const cpf = onlyDigits(identifier);
+
+    if (!cpf) {
+        throw new AppError("CPF inválido.", 400);
+    }
+
+    // 1. Busca prévia no banco: Recuperar email a partir do CPF e checar Status
+    const { data: user, error } = await supabaseAdmin
+        .from("usuarios")
+        .select("email, ativo")
+        .eq("cpfcnpj", cpf)
+        .single();
+
+    if (error || !user) {
+        throw new AppError("Usuário não encontrado com este CPF.", 404);
+    }
+
+    if (!user.ativo) {
+        throw new AppError("Sua conta está inativa. Entre em contato com o suporte.", 403);
+    }
+
+    // 2. Autenticação no Supabase Auth usando o email recuperado
+    const { data, error: authError } = await supabaseAdmin.auth.signInWithPassword({
+        email: user.email,
+        password
+    });
+
+    if (authError || !data.session) {
+        throw new AppError("Credenciais inválidas.", 401);
+    }
+
+    return {
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+        user: data.user as any
+    };
+}
+
+export async function loginResponsavel(cpf: string, email: string) {
+    const cpfClean = onlyDigits(cpf);
+    const emailClean = email.trim();
+
+    // 1. Encontrar um passageiro com este responsavel para identificar o motorista (usuario_id)
+    const { data: firstMatch, error } = await supabaseAdmin
+        .from("passageiros")
+        .select("usuario_id")
+        .eq("cpf_responsavel", cpfClean)
+        .eq("email_responsavel", emailClean)
+        .limit(1)
+        .single();
+
+    if (error || !firstMatch) {
+         // Silencioso se não achar, ou erro 401
+         if (error && error.code !== 'PGRST116') logger.error({ error: error.message }, "Erro DB loginResponsavel");
+         throw new AppError("CPF ou Email não encontrados.", 401);
+    }
+
+    // 2. Buscar todos os passageiros deste responsavel para este motorista
+    const { data: passageiros, error: listError } = await supabaseAdmin
+        .from("passageiros")
+        .select("*, escolas(nome), veiculos(placa)")
+        .eq("cpf_responsavel", cpfClean)
+        .eq("email_responsavel", emailClean)
+        .eq("usuario_id", firstMatch.usuario_id)
+        .order("nome", { ascending: true });
+
+    if (listError) {
+        throw new AppError("Erro ao buscar passageiros.", 500);
+    }
+
+    return passageiros;
+}
+
+export async function updatePassword(token: string, newPassword: string, oldPassword?: string): Promise<void> {
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
+    
+    if (userError || !user || !user.email) {
+        throw new AppError("Token inválido ou expirado.", 401);
+    }
+
+    // Verify old password if provided (Recommended)
+    if (oldPassword) {
+        const { error: signInError } = await supabaseAdmin.auth.signInWithPassword({
+            email: user.email,
+            password: oldPassword
+        });
+
+        if (signInError) {
+             throw new AppError("A senha atual está incorreta.", 401);
+        }
+    }
+
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
+        password: newPassword
+    });
+
+    if (error) {
+         logger.error({ error: error.message, userId: user.id }, "Erro ao atualizar senha.");
+         throw new AppError("Não foi possível atualizar a senha.", 500);
+    }
+}
+
+export async function resetPassword(identifier: string, redirectTo?: string): Promise<void> {
+    let email = identifier.trim();
+
+    const isCpf = /^\d+$/.test(identifier);
+    if (isCpf) {
+        const cpf = onlyDigits(identifier);
+        const { data: user, error } = await supabaseAdmin
+            .from("usuarios")
+            .select("email")
+            .eq("cpfcnpj", cpf)
+            .single();
+
+        if (error || !user) {
+            // Throw generic error or specific? Frontend expects "Email sent" even if not found?
+            // Or "CPF not found"?
+            // Current frontend checks existence.
+            throw new AppError("Usuário não encontrado.", 404);
+        }
+        email = user.email;
+    }
+
+    const { error } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
+        redirectTo: redirectTo
+    });
+
+    if (error) {
+        logger.error({ error: error.message, email }, "Erro ao solicitar redefinição de senha via Supabase Admin.");
+        throw new AppError("Não foi possível enviar o e-mail de recuperação.", 500);
+    }
+}
+
+export async function logout(token: string): Promise<void> {
+    const { error } = await supabaseAdmin.auth.admin.signOut(token);
+    if (error) {
+        logger.warn({ error: error.message }, "Erro ao realizar logout no Supabase.");
+        // Não lançar erro crítico no logout
+    }
+}
+
+export async function refreshToken(refreshToken: string): Promise<AuthSession> {
+    const { data, error } = await supabaseAdmin.auth.refreshSession({ refresh_token: refreshToken });
+
+    if (error || !data.session) {
+        logger.warn({ error: error?.message }, "Falha ao renovar sessão com refresh token.");
+        throw new AppError("Sessão expirada.", 401);
+    }
+
+    return {
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+        user: data.user as any
+    };
+}
