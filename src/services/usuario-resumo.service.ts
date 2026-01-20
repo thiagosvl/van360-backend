@@ -39,6 +39,7 @@ interface SystemSummary {
       ativos: number;
       inativos: number;
       com_automacao: number;
+      solicitacoes_pendentes: number;
     };
     veiculos: {
       total: number;
@@ -95,6 +96,7 @@ export const usuarioResumoService = {
       escolasCount,
       whatsappStatusReq,
       passData, // Fetch full passenger data for granular status counting
+      prePassageirosCount
     ] = await Promise.all([
       // Veiculos
       supabaseAdmin.from("veiculos").select("id, ativo", { count: "exact", head: false }).eq("usuario_id", usuarioId),
@@ -106,7 +108,10 @@ export const usuarioResumoService = {
       funcionalidades.notificacoes_whatsapp ? whatsappService.getInstanceStatus(whatsappService.getInstanceName(usuarioId)) : Promise.resolve(null),
       
       // Passageiros (Native Select for filtering)
-      supabaseAdmin.from("passageiros").select("id, ativo, enviar_cobranca_automatica").eq("usuario_id", usuarioId)
+      supabaseAdmin.from("passageiros").select("id, ativo, enviar_cobranca_automatica").eq("usuario_id", usuarioId),
+
+      // Pre-Passageiros (Solicitações)
+      supabaseAdmin.from("pre_passageiros").select("id", { count: "exact", head: true }).eq("usuario_id", usuarioId)
     ]);
 
     // Process Counters
@@ -181,7 +186,8 @@ export const usuarioResumoService = {
           total: passTotal,
           ativos: passAtivos,
           inativos: passInativos,
-          com_automacao: passAuto
+          com_automacao: passAuto,
+          solicitacoes_pendentes: prePassageirosCount.count || 0
         },
         veiculos: {
           total: veicTotal,
