@@ -1,5 +1,5 @@
-import { WHATSAPP_STATUS } from "../config/constants.js";
 import { supabaseAdmin } from "../config/supabase.js";
+import { AssinaturaCobrancaStatus, WhatsappStatus } from "../types/enums.js";
 import { planRules } from "./plan-rules.service.js";
 import { getUsuarioData } from "./usuario.service.js";
 import { whatsappService } from "./whatsapp.service.js";
@@ -28,7 +28,7 @@ interface SystemSummary {
       is_trial_ativo: boolean;
       dias_restantes_trial: number;
       whatsapp_status: "connected" | "disconnected" | "qr_ready" | null;
-      ultima_fatura: "pendente" | "vencida" | "paga" | "cancelada" | "nenhuma";
+      ultima_fatura: AssinaturaCobrancaStatus | null;
       limite_franquia_atingido: boolean;
       pix_key_configurada: boolean;
     };
@@ -78,8 +78,8 @@ export const usuarioResumoService = {
 
     const planoBase = assinaturaData?.planos;
     const parentPlan = planoBase?.parent;
-    const nomePlano = parentPlan ? parentPlan.nome : (planoBase?.nome || "Gratuito");
-    const slugPlano = parentPlan ? parentPlan.slug : (planoBase?.slug || "gratuito");
+    const nomePlano = parentPlan ? parentPlan.nome : planoBase?.nome;
+    const slugPlano = parentPlan ? parentPlan.slug : planoBase?.slug;
 
     // Determine features using Centralized Rules
     const funcionalidades = {
@@ -135,8 +135,19 @@ export const usuarioResumoService = {
     const franquiaContratada = assinaturaData?.franquia_contratada_cobrancas || 0;
     const franquiaRestante = Math.max(0, franquiaContratada - passAuto);
 
+    // 5. Fetch Last Invoice Status
+    const { data: lastInvoice } = await supabaseAdmin
+      .from("assinaturas_cobrancas")
+      .select("status")
+      .eq("usuario_id", usuarioId)
+      .order("data_vencimento", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const statusFatura = (lastInvoice?.status as AssinaturaCobrancaStatus) || null;
+
     const whatsappState = whatsappStatusReq 
-      ? (whatsappStatusReq.state === WHATSAPP_STATUS.OPEN ? WHATSAPP_STATUS.CONNECTED : WHATSAPP_STATUS.DISCONNECTED) 
+      ? (whatsappStatusReq.state === WhatsappStatus.CONNECTED ? WhatsappStatus.CONNECTED : WhatsappStatus.DISCONNECTED) 
       : null;
 
     const isTrial = false; // TODO: Implement trial logic check
@@ -149,8 +160,8 @@ export const usuarioResumoService = {
           nome: nomePlano,
           status: assinaturaData?.status,
           limites: {
-            passageiros_max: null, // Unlimited for now based on logic
-            passageiros_restantes: null, 
+            passageiros_max: planoBase?.limite_passageiros || null,
+            passageiros_restantes: planoBase?.limite_passageiros ? Math.max(0, planoBase.limite_passageiros - passAtivos) : null, 
             franquia_cobranca_max: franquiaContratada,
             franquia_cobranca_restante: franquiaRestante
           },
@@ -160,7 +171,7 @@ export const usuarioResumoService = {
           is_trial_ativo: isTrial,
           dias_restantes_trial: 0,
           whatsapp_status: whatsappState as any,
-          ultima_fatura: "nenhuma",
+          ultima_fatura: statusFatura,
           limite_franquia_atingido: franquiaRestante <= 0 && planRules.canGeneratePix(slugPlano),
           pix_key_configurada: !!usuario.chave_pix
         }
