@@ -763,7 +763,7 @@ ALTER TABLE ONLY "public"."cobrancas"
 
 
 ALTER TABLE ONLY "public"."cobrancas"
-    ADD CONSTRAINT "cobrancas_passageiro_id_fkey" FOREIGN KEY ("passageiro_id") REFERENCES "public"."passageiros"("id") ON UPDATE CASCADE ON DELETE SET NULL;
+    ADD CONSTRAINT "cobrancas_passageiro_id_fkey" FOREIGN KEY ("passageiro_id") REFERENCES "public"."passageiros"("id") ON UPDATE CASCADE ON DELETE CASCADE;
 
 
 
