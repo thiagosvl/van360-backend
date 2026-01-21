@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "../config/supabase.js";
-import { AssinaturaCobrancaStatus, WhatsappStatus } from "../types/enums.js";
+import { AssinaturaCobrancaStatus, ConfigKey, WhatsappStatus } from "../types/enums.js";
+import { getConfigNumber } from "./configuracao.service.js";
 import { planRules } from "./plan-rules.service.js";
 import { getUsuarioData } from "./usuario.service.js";
 import { whatsappService } from "./whatsapp.service.js";
@@ -27,6 +28,7 @@ interface SystemSummary {
     flags: {
       is_trial_ativo: boolean;
       dias_restantes_trial: number;
+      trial_dias_total: number;
       whatsapp_status: "connected" | "disconnected" | "qr_ready" | null;
       ultima_fatura: AssinaturaCobrancaStatus | null;
       limite_franquia_atingido: boolean;
@@ -96,7 +98,8 @@ export const usuarioResumoService = {
       escolasCount,
       whatsappStatusReq,
       passData, // Fetch full passenger data for granular status counting
-      prePassageirosCount
+      prePassageirosCount,
+      trialDiasTotal,
     ] = await Promise.all([
       // Veiculos
       supabaseAdmin.from("veiculos").select("id, ativo", { count: "exact", head: false }).eq("usuario_id", usuarioId),
@@ -111,7 +114,10 @@ export const usuarioResumoService = {
       supabaseAdmin.from("passageiros").select("id, ativo, enviar_cobranca_automatica").eq("usuario_id", usuarioId),
 
       // Pre-Passageiros (Solicitações)
-      supabaseAdmin.from("pre_passageiros").select("id", { count: "exact", head: true }).eq("usuario_id", usuarioId)
+      supabaseAdmin.from("pre_passageiros").select("id", { count: "exact", head: true }).eq("usuario_id", usuarioId),
+
+      // Configuração Trial
+      getConfigNumber(ConfigKey.TRIAL_DIAS_ESSENCIAL, 7)
     ]);
 
     // Process Counters
@@ -175,6 +181,7 @@ export const usuarioResumoService = {
         flags: {
           is_trial_ativo: isTrial,
           dias_restantes_trial: 0,
+          trial_dias_total: trialDiasTotal,
           whatsapp_status: whatsappState as any,
           ultima_fatura: statusFatura,
           limite_franquia_atingido: franquiaRestante <= 0 && planRules.canGeneratePix(slugPlano),
