@@ -18,7 +18,7 @@ const cobrancaRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     app.get("/:cobrancaId/notificacoes", cobrancaController.listNotificacoes);
     app.post("/:cobrancaId/notificacoes", cobrancaController.createNotificacao);
     app.patch("/:id/toggle-notificacoes", cobrancaController.toggleNotificacoes);
-    app.post("/:id/desfazer-pagamento", cobrancaController.desfazerPagamento);
+    app.post("/:id/desfazer-pagamento-manual", cobrancaController.desfazerPagamentoManual);
 };
 
 export default cobrancaRoute;

@@ -23,8 +23,8 @@ export const cobrancaPagamentoService = {
                 status: CobrancaStatus.PAGO,
                 valor_pago: valor,
                 data_pagamento: pagamento.horario || new Date(),
-                dados_auditoria: pagamento,
-                recibo_url: reciboUrl // Url opcional, pode vir null se for via worker
+                dados_auditoria_pagamento: pagamento,
+                recibo_url: reciboUrl
             })
             .eq("id", cobranca.id);
             
@@ -35,6 +35,23 @@ export const cobrancaPagamentoService = {
   },
 
   async desfazerPagamento(cobrancaId: string): Promise<any> {
+    // 1. Buscar a cobrança para validar se é pagamento manual
+    const { data: cobranca, error: findError } = await supabaseAdmin
+      .from("cobrancas")
+      .select("id, pagamento_manual, status")
+      .eq("id", cobrancaId)
+      .single();
+
+    if (findError || !cobranca) {
+      throw new AppError("Cobrança não encontrada.", 404);
+    }
+
+    // 2. Validar se é pagamento manual
+    if (!cobranca.pagamento_manual) {
+      throw new AppError("Apenas pagamentos manuais podem ser desfeitos.", 400);
+    }
+
+    // 3. Executar o desfazer
     const { data, error } = await supabaseAdmin
       .from("cobrancas")
       .update({
@@ -42,9 +59,9 @@ export const cobrancaPagamentoService = {
         data_pagamento: null,
         valor_pago: null,
         tipo_pagamento: null,
-        pagamento_manual: false, // Resetar para garantir
+        pagamento_manual: false, // Resetar
         recibo_url: null,
-        dados_auditoria: null // Opcional: limpar dados de auditoria do pagamento desfeito
+        dados_auditoria_pagamento: null
       })
       .eq("id", cobrancaId)
       .select()
