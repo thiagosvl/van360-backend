@@ -156,15 +156,12 @@ export async function calcularPrecoPersonalizado(
     planoReferencia = subplanos[subplanos.length - 1];
   }
 
-  const franquiaRef = planoReferencia.franquia_cobrancas_mes || 0;
-  const precoRef = Number(
+  // Usar o PREÇO FIXO do tier (sem cálculo proporcional)
+  const precoCalculado = Number(
     planoReferencia.promocao_ativa
       ? planoReferencia.preco_promocional ?? planoReferencia.preco
       : planoReferencia.preco
   );
-
-  const valorUnitario = precoRef / franquiaRef;
-  const precoCalculado = quantidade * valorUnitario;
 
   return {
     precoCalculado: Math.round(precoCalculado * 100) / 100,
