@@ -256,41 +256,28 @@ export const cobrancaService = {
   },
 
   async listCobrancasWithFilters(filtros: any): Promise<any[]> {
-    let query = supabaseAdmin.from("cobrancas").select("*, passageiro:passageiros(nome, nome_responsavel)").order("data_vencimento", { ascending: false });
+    let query = supabaseAdmin
+        .from("cobrancas")
+        .select("*, passageiro:passageiros!inner(nome, nome_responsavel)")
+        .order("data_vencimento", { ascending: false });
 
     if (filtros.passageiroId) query = query.eq("passageiro_id", filtros.passageiroId);
     if (filtros.status) query = query.eq("status", filtros.status);
     if (filtros.dataInicio) query = query.gte("data_vencimento", filtros.dataInicio);
     if (filtros.dataFim) query = query.lte("data_vencimento", filtros.dataFim);
     
-    // Filtro de busca textual (nome do passageiro) é mais complexo no Supabase direto se for relação
-    // Implementação de filtro por Mês/Ano (compatível com DTO)
     if (filtros.mes && filtros.ano) {
-         // Calcular primeiro e último dia do mês
          const start = new Date(filtros.ano, filtros.mes - 1, 1);
-         const end = new Date(filtros.ano, filtros.mes, 0); // 0 = último dia do mês anterior (não, espera, no Date constructor mes é 0-indexed para start, mas aqui quero end of month)
-         // Date(2025, 1, 0) -> 28/02/2025 (Fev é mes 1, dia 0 volta 1).
-         // Mes 1-12 no filtro. 
-         // new Date(y, m-1, 1) -> 1st day.
-         // new Date(y, m, 0) -> last day of m-1+1 = m.
-         
-         const startStr = start.toISOString().split("T")[0];
-         // Preciso do último dia CORRETO.
-         // new Date(ano, mes, 0) -> dia 0 do "próximo" mês, ou seja, ultimo do atual.
-         // Se mes=1 (Jan), new Date(2025, 1, 0) -> 31 Jan.
          const endObj = new Date(filtros.ano, filtros.mes, 0);
+         const startStr = start.toISOString().split("T")[0];
          const endStr = endObj.toISOString().split("T")[0];
 
          query = query.gte("data_vencimento", startStr);
          query = query.lte("data_vencimento", endStr);
     }
 
-    // Filtro de busca textual (nome do passageiro) é mais complexo no Supabase direto se for relação
-    // Busca por descrição REMOVIDA pois coluna não existe.
-    // Se desejar busca por ID ou valor, implementar aqui.
     if (filtros.search) {
-       // Tentar buscar por valor exato se for numérico? ou ignorar search textual
-       // query = query.ilike("descricao", `%${filtros.search}%`); // REMOVIDO
+       query = query.or(`nome.ilike.%${filtros.search}%,nome_responsavel.ilike.%${filtros.search}%`, { foreignTable: 'passageiro' });
     }
 
     const { data, error } = await query;

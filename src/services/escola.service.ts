@@ -115,16 +115,35 @@ export const escolaService = {
         return data || [];
     },
 
-    async listEscolasComContagemAtivos(usuarioId: string): Promise<any[]> {
+    async listEscolasComContagemAtivos(usuarioId: string, filtros?: ListEscolasFiltersDTO): Promise<any[]> {
         if (!usuarioId) throw new Error("Usuário obrigatório");
 
-        const { data, error } = await supabaseAdmin
+        let query = supabaseAdmin
             .from("escolas")
             .select(`*, passageiros(count)`)
             .eq("usuario_id", usuarioId)
             .eq("passageiros.ativo", true)
             .order("nome", { ascending: true });
 
+        if (filtros?.search) {
+            query = query.or(
+                `nome.ilike.%${filtros.search}%,cidade.ilike.%${filtros.search}%,estado.ilike.%${filtros.search}%`
+            );
+        }
+
+        if (filtros?.nome) query = query.eq("nome", filtros.nome);
+        if (filtros?.cidade) query = query.eq("cidade", filtros.cidade);
+        if (filtros?.estado) query = query.eq("estado", filtros.estado);
+
+        if (filtros?.ativo !== undefined && filtros?.includeId) {
+            query = query.or(`ativo.eq.${filtros.ativo === "true"},id.eq.${filtros.includeId}`);
+        } else if (filtros?.ativo !== undefined) {
+            query = query.eq("ativo", filtros.ativo === "true");
+        } else if (filtros?.includeId) {
+            query = query.eq("id", filtros.includeId);
+        }
+
+        const { data, error } = await query;
         if (error) throw error;
 
         return (data || []).map(escola => ({

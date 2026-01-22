@@ -103,6 +103,10 @@ export const gastoService = {
         if (filtros?.data_inicio) query = query.gte("data", filtros.data_inicio);
         if (filtros?.data_fim) query = query.lte("data", filtros.data_fim);
 
+        if (filtros?.search) {
+             query = query.ilike('descricao', `%${filtros.search}%`);
+        }
+
         // Pagination
         if (filtros?.limit) query = query.limit(filtros.limit);
         if (filtros?.offset) query = query.range(filtros.offset, filtros.offset + (filtros.limit || 10) - 1);

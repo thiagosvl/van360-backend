@@ -83,7 +83,8 @@ export const veiculoController = {
 
   listWithContagem: async (request: FastifyRequest, reply: FastifyReply) => {
     const { usuarioId } = request.params as { usuarioId: string };
-    const veiculos = await veiculoService.listVeiculosComContagemAtivos(usuarioId);
+    const filtros = listVeiculosFiltersSchema.parse(request.query);
+    const veiculos = await veiculoService.listVeiculosComContagemAtivos(usuarioId, filtros);
     return reply.status(200).send(veiculos);
   },
 

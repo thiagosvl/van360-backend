@@ -109,16 +109,35 @@ export const veiculoService = {
         return (data || []) as Veiculo[];
     },
 
-    async listVeiculosComContagemAtivos(usuarioId: string): Promise<VeiculoComContagem[]> {
+    async listVeiculosComContagemAtivos(usuarioId: string, filtros?: ListVeiculosFiltersDTO): Promise<VeiculoComContagem[]> {
         if (!usuarioId) throw new Error("Usuário obrigatório");
 
-        const { data, error } = await supabaseAdmin
+        let query = supabaseAdmin
             .from("veiculos")
             .select(`*, passageiros(count)`)
             .eq("usuario_id", usuarioId)
             .eq("passageiros.ativo", true)
             .order("placa", { ascending: true });
 
+        if (filtros?.search) {
+            query = query.or(
+                `placa.ilike.%${filtros.search}%,marca.ilike.%${filtros.search}%,modelo.ilike.%${filtros.search}%`
+            );
+        }
+
+        if (filtros?.placa) query = query.eq("placa", filtros.placa);
+        if (filtros?.marca) query = query.eq("marca", filtros.marca);
+        if (filtros?.modelo) query = query.eq("modelo", filtros.modelo);
+
+        if (filtros?.ativo !== undefined && filtros?.includeId) {
+            query = query.or(`ativo.eq.${filtros.ativo === "true"},id.eq.${filtros.includeId}`);
+        } else if (filtros?.ativo !== undefined) {
+            query = query.eq("ativo", filtros.ativo === "true");
+        } else if (filtros?.includeId) {
+            query = query.eq("id", filtros.includeId);
+        }
+
+        const { data, error } = await query;
         if (error) throw error;
 
         return (data || []).map((veiculo: any) => ({

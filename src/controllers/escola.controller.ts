@@ -83,7 +83,8 @@ export const escolaController = {
 
   listWithContagem: async (request: FastifyRequest, reply: FastifyReply) => {
     const { usuarioId } = request.params as { usuarioId: string };
-    const escolas = await escolaService.listEscolasComContagemAtivos(usuarioId);
+    const filtros = listEscolasFiltersSchema.parse(request.query);
+    const escolas = await escolaService.listEscolasComContagemAtivos(usuarioId, filtros);
     return reply.status(200).send(escolas);
   },
 
