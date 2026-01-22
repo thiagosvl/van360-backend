@@ -90,7 +90,7 @@ export const notificationService = {
     async notifyDriver(
         to: string, 
         type: DriverEventType, 
-        ctx: DriverContext & { pixPayload?: string, nomePagador?: string, nomeAluno?: string, diasAtraso?: number, reciboUrl?: string, trialDays?: number }
+        ctx: DriverContext & { pixPayload?: string, nomePagador?: string, nomePassageiro?: string, diasAtraso?: number, reciboUrl?: string, trialDays?: number }
     ): Promise<boolean> {
 
         let parts: CompositeMessagePart[] = [];

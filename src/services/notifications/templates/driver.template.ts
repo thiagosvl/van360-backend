@@ -163,9 +163,11 @@ PIX 👇`;
      * Acesso Suspenso (Bloqueado)
      */
     accessSuspended: (ctx: DriverContext): CompositeMessagePart[] => {
-        const text = `🚫 *Acesso Suspenso*
-Olá *${getFirstName(ctx.nomeMotorista)}*, como não identificamos o pagamento da sua assinatura, seu acesso ao sistema foi temporariamente *bloqueado*.
-Para desbloquear instantaneamente, pague o PIX abaixo. 👇`;
+        const text = `🚫 *Acesso Limitado*
+Olá *${getFirstName(ctx.nomeMotorista)}*, como não identificamos o pagamento da sua assinatura, seu acesso foi *temporariamente limitado*.
+
+Você ainda pode visualizar seus dados, mas novas ações e automações estão restritas. 🔒
+Para liberar o uso completo instantaneamente, pague o PIX abaixo. 👇`;
         return buildPixMessageParts(text, ctx.pixPayload);
     },
 
@@ -182,10 +184,10 @@ Para efetivar a mudança, realize o pagamento da diferença abaixo. 👇`;
     /**
      * Aviso de Recebimento (Pai pagou)
      */
-    paymentReceivedBySystem: (ctx: DriverContext & { nomePagador: string, nomeAluno: string }): CompositeMessagePart[] => {
+    paymentReceivedBySystem: (ctx: DriverContext & { nomePagador: string, nomePassageiro: string }): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
         const ref = ctx.mes ? ` referente a *${getMeshName(ctx.mes)}/${ctx.ano}*` : "";
-        const nomeAlun = getFirstName(ctx.nomeAluno);
+        const nomeAlun = getFirstName(ctx.nomePassageiro);
         const nomePag = getFirstName(ctx.nomePagador);
 
         return textPart(`✅ *Pagamento Recebido!*
@@ -225,17 +227,32 @@ Seu acesso está garantido! 🚐💨`;
         }
 
         // 2. Lembretes Importantes (APENAS NA ATIVAÇÃO E PLANO PROFISSIONAL)
-        // 2. Lembretes Importantes (APENAS NA ATIVAÇÃO E PLANO PROFISSIONAL)
+        // Lembretes Importantes (APENAS NA ATIVAÇÃO E PLANO PROFISSIONAL)
         const isProfessional = ctx.nomePlano.toLowerCase().includes("profissional");
         
         if (ctx.isActivation && isProfessional) {
+            // Header
             parts.push({
                 type: "text",
-                content: `⚠ *Importante:*
-            
-1️⃣ *Cadastre sua Chave PIX:* Para receber os pagamentos dos passageiros direto na sua conta.
+                content: `⚠ *Importante: Próximos Passos*
+Para aproveitar ao máximo a automação do Plano Profissional:`,
+                delayMs: 1500
+            });
 
-2️⃣ *Conecte seu WhatsApp:* Acesse o painel e escaneie o QR Code conforme as instruções na tela. Assim o sistema enviará as cobranças automaticamente por você! 🚀`
+            // Passo 1
+            parts.push({
+                type: "text",
+                content: `1️⃣ *Cadastre sua Chave PIX*
+Acesse o menu *Minha Conta* e cadastre sua chave para receber os pagamentos dos passageiros direto na sua conta bancária. 💸`,
+                delayMs: 1500
+            });
+
+            // Passo 2
+            parts.push({
+                type: "text",
+                content: `2️⃣ *Conecte seu WhatsApp*
+Acesse o painel e escaneie o QR Code. Assim o sistema enviará as cobranças automaticamente por você! 🚀`,
+                delayMs: 1500
             });
         }
         

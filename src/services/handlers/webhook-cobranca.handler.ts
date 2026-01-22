@@ -110,7 +110,7 @@ export const webhookCobrancaHandler = {
                 notificationService.notifyDriver(moto.telefone, DRIVER_EVENT_PAYMENT_RECEIVED_ALERT, {
                      nomeMotorista: moto.nome,
                      nomePagador: pass?.nome_responsavel,
-                     nomeAluno: pass?.nome,
+                     nomePassageiro: pass?.nome,
                      valor: valor,
                      mes: fullData.mes,
                      ano: fullData.ano,

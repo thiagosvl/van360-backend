@@ -344,7 +344,7 @@ CREATE TABLE IF NOT EXISTS "public"."passageiros" (
     "periodo" "text" NOT NULL,
     "enviar_cobranca_automatica" boolean DEFAULT false,
     "origem_desativacao_cobranca_automatica" character varying(50) DEFAULT NULL::character varying,
-    CONSTRAINT "alunos_dia_vencimento_check" CHECK ((("dia_vencimento" >= 1) AND ("dia_vencimento" <= 31)))
+    CONSTRAINT "passageiros_dia_vencimento_check" CHECK ((("dia_vencimento" >= 1) AND ("dia_vencimento" <= 31)))
 );
 
 
@@ -507,7 +507,7 @@ ALTER TABLE "public"."veiculos" OWNER TO "postgres";
 
 
 ALTER TABLE ONLY "public"."passageiros"
-    ADD CONSTRAINT "alunos_pkey" PRIMARY KEY ("id");
+    ADD CONSTRAINT "passageiros_pkey" PRIMARY KEY ("id");
 
 
 
@@ -710,7 +710,7 @@ CREATE INDEX "idx_assinaturas_cobrancas_data_vencimento" ON "public"."assinatura
 
 
 
-CREATE OR REPLACE TRIGGER "update_alunos_updated_at" BEFORE UPDATE ON "public"."passageiros" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
+CREATE OR REPLACE TRIGGER "update_passageiros_updated_at" BEFORE UPDATE ON "public"."passageiros" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
 
 
 

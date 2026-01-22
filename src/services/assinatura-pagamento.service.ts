@@ -1,17 +1,19 @@
 import {
-  PLANO_PROFISSIONAL
+    DRIVER_EVENT_PAYMENT_CONFIRMED,
+    PLANO_PROFISSIONAL
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import {
-  AssinaturaBillingType,
-  AssinaturaCobrancaStatus,
-  AssinaturaTipoPagamento,
-  ConfigKey
+    AssinaturaBillingType,
+    AssinaturaCobrancaStatus,
+    AssinaturaTipoPagamento,
+    ConfigKey
 } from "../types/enums.js";
 import { automationService } from "./automation.service.js";
 import { cobrancaService } from "./cobranca.service.js";
 import { getConfigNumber } from "./configuracao.service.js";
+import { notificationService } from "./notifications/notification.service.js";
 
 interface DadosPagamento {
   valor: number;
@@ -117,7 +119,7 @@ export async function processarPagamentoAssinatura(
     // 6. Ativar usuário
     await ativarUsuario(cobranca, logContext);
 
-    // 7. Preencher slots restantes automaticamente (Auto-Fill)
+    // 7. Preencher slots restantes automaticamente (Auto-Fill) e buscar dados para notificação
     // Busca informações da assinatura para determinar franquia e plano
     const { data: assinaturaPendente } = await supabaseAdmin
       .from("assinaturas_usuarios")
@@ -126,8 +128,10 @@ export async function processarPagamentoAssinatura(
             franquia_contratada_cobrancas,
             planos:plano_id (
                 slug,
+                nome,
                 parent:parent_id (
-                    slug
+                    slug,
+                    nome
                 )
             )
         `)
@@ -137,6 +141,40 @@ export async function processarPagamentoAssinatura(
     // Se há assinatura pendente, tentar ativar passageiros automaticamente até atingir a franquia
     if (assinaturaPendente) {
       await triggerAtivacaoAutomatica(cobranca, assinaturaPendente, logContext);
+    }
+
+    // 8. Enviar Notificação de Confirmação (WhatsApp)
+    try {
+        const { data: usuario } = await supabaseAdmin
+            .from("usuarios")
+            .select("nome, telefone")
+            .eq("id", cobranca.usuario_id)
+            .single();
+        
+        // Determinar nome do plano corretamente
+        const planoRef = assinaturaPendente?.planos as any;
+        const nomePlano = planoRef?.parent?.nome || planoRef?.nome || "Plano Van360";
+
+        if (usuario?.telefone) {
+             await notificationService.notifyDriver(
+                 usuario.telefone,
+                 DRIVER_EVENT_PAYMENT_CONFIRMED,
+                 {
+                     usuarioId: cobranca.usuario_id,
+                     nomeMotorista: usuario.nome,
+                     nomePlano,
+                     valor: dadosPagamento.valor,
+                     dataVencimento: vigenciaFim.toISOString().split("T")[0],
+                     isActivation: isOnboardingPayment,
+                     reciboUrl, // Adiciona o recibo se houver (útil para confirmação de upload manual)
+                     mes: new Date(dadosPagamento.dataPagamento).getMonth() + 1, 
+                     ano: new Date(dadosPagamento.dataPagamento).getFullYear()
+                 }
+             );
+        }
+    } catch (notifError: any) {
+        logger.error({ ...logContext, error: notifError.message }, "Erro ao enviar notificação de confirmação de pagamento");
+        // Não falhar o processo de pagamento por erro de notificação
     }
 
     logger.info({ ...logContext }, "Fluxo completo para pagamento confirmado");

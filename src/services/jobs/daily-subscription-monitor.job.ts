@@ -29,7 +29,7 @@ export const dailySubscriptionMonitorJob = {
             logger.info("Iniciando Monitoramento Diário de Assinaturas (Motoristas)");
 
             // 1. Configurações
-            const diasAntecedencia = params.diasAntecedenciaOverride ?? await getConfigNumber(ConfigKey.DIAS_ANTECEDENCIA_RENOVACAO, 5);
+            const diasAntecedencia = params.diasAntecedenciaOverride ?? await getConfigNumber(ConfigKey.DIAS_ANTECEDENCIA_RENOVACAO, 3);
             
             // Datas de Interesse
             

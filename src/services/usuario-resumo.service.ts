@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "../config/supabase.js";
-import { AssinaturaCobrancaStatus, ConfigKey, WhatsappStatus } from "../types/enums.js";
+import { AssinaturaCobrancaStatus, AssinaturaStatus, ConfigKey, WhatsappStatus } from "../types/enums.js";
 import { getConfigNumber } from "./configuracao.service.js";
 import { planRules } from "./plan-rules.service.js";
 import { getUsuarioData } from "./usuario.service.js";
@@ -26,10 +26,11 @@ interface SystemSummary {
     };
     flags: {
       is_trial_ativo: boolean;
-      dias_restantes_trial: number;
+      dias_restantes_trial: number | null;
       trial_dias_total: number;
       whatsapp_status: "connected" | "disconnected" | "qr_ready" | null;
       ultima_fatura: AssinaturaCobrancaStatus | null;
+      ultima_fatura_id: string | null;
       limite_franquia_atingido: boolean;
       pix_key_configurada: boolean;
     };
@@ -148,7 +149,7 @@ export const usuarioResumoService = {
     // 5. Fetch Last Invoice Status
     const { data: lastInvoice } = await supabaseAdmin
       .from("assinaturas_cobrancas")
-      .select("status")
+      .select("id, status")
       .eq("usuario_id", usuarioId)
       .order("data_vencimento", { ascending: false })
       .limit(1)
@@ -160,7 +161,21 @@ export const usuarioResumoService = {
       ? (whatsappStatusReq.state === WhatsappStatus.CONNECTED ? WhatsappStatus.CONNECTED : WhatsappStatus.DISCONNECTED) 
       : null;
 
-    const isTrial = false; // TODO: Implement trial logic check
+
+    const now = new Date();
+    const isTrial = assinaturaData?.status === AssinaturaStatus.TRIAL;
+    let diasRestantes: number | null = null;
+
+    if (isTrial && assinaturaData?.trial_end_at) {
+        const end = new Date(assinaturaData.trial_end_at);
+        const diff = end.getTime() - now.getTime();
+        diasRestantes = Math.ceil(diff / (1000 * 3600 * 24));
+        // Keep negative if verifying overdue? User said "dias_restantes_trial sempre deve ser null" if not active.
+        // If expired, status might still be TRIAL until job runs?
+        // If inactive, null.
+        // I will clamp to 0 just in case.
+        if (diasRestantes < 0) diasRestantes = 0;
+    }
     
     return {
       usuario: {
@@ -178,10 +193,11 @@ export const usuarioResumoService = {
         },
         flags: {
           is_trial_ativo: isTrial,
-          dias_restantes_trial: 0,
+          dias_restantes_trial: diasRestantes,
           trial_dias_total: trialDiasTotal,
           whatsapp_status: whatsappState as any,
           ultima_fatura: statusFatura,
+          ultima_fatura_id: lastInvoice?.id || null,
           limite_franquia_atingido: franquiaRestante <= 0 && planRules.canGeneratePix(slugPlano),
           pix_key_configurada: !!usuario.chave_pix
         }

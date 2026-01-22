@@ -1,8 +1,8 @@
 import {
-    DRIVER_EVENT_ACTIVATION,
-    DRIVER_EVENT_WELCOME_TRIAL,
-    PLANO_ESSENCIAL,
-    PLANO_PROFISSIONAL
+  DRIVER_EVENT_ACTIVATION,
+  DRIVER_EVENT_WELCOME_TRIAL,
+  PLANO_ESSENCIAL,
+  PLANO_PROFISSIONAL
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
@@ -33,6 +33,7 @@ export interface CheckUserStatusResult {
   message: string;
   userId?: string;
   authUid?: string;
+  field?: string;
 }
 
 export interface AuthSession {
@@ -119,17 +120,24 @@ export async function checkUserStatus(
   // Verificar campos em ordem de prioridade e retornar o primeiro encontrado
   // Ordem: CPF → E-mail → Telefone
   let campoEmUso: string | null = null;
+  let field: string | undefined;
 
   if (user.cpfcnpj === cpfcnpjNormalizado) {
     campoEmUso = "CPF";
+    field = "cpfcnpj";
   } else if (user.email?.toLowerCase().trim() === emailNormalizado) {
     campoEmUso = "E-mail";
+    field = "email";
   } else if (user.telefone === telefoneNormalizado) {
-    campoEmUso = "Telefone";
+    campoEmUso = "Número";
+    field = "telefone";
   }
 
   // Se nenhum campo bateu (caso inesperado), usar mensagem genérica
-  const mensagem = campoEmUso ? `${campoEmUso} já está em uso.` : "E-mail/CPF/Telefone já está em uso.";
+  // Se nenhum campo bateu (caso inesperado), usar mensagem genérica
+  const mensagem = campoEmUso ? `${campoEmUso} já está em uso.` : "E-mail/CPF/Número já está em uso.";
+
+  logger.info({ campoEmUso, field, cpfcnpjNormalizado, emailNormalizado, telefoneNormalizado }, "DEBUG: CheckUserStatus Conflict Detection");
 
   const { data: assinaturaAtual, error: findAssinaturaError } = await supabaseAdmin
     .from("assinaturas_usuarios")
@@ -148,11 +156,12 @@ export async function checkUserStatus(
   if (userIsActive) {
     return {
       action: 'bloqueado_em_uso',
-      message: mensagem
+      message: mensagem,
+      field
     };
   }
 
-  if (!userIsActive && statusAssinatura === 'pendente_pagamento') {
+  if (!userIsActive && statusAssinatura === AssinaturaStatus.PENDENTE_PAGAMENTO) {
     return {
       action: 'limpar_e_prosseguir',
       message: 'Lixo PIX encontrado.',
@@ -163,7 +172,8 @@ export async function checkUserStatus(
 
   return {
     action: 'bloqueado_em_uso',
-    message: mensagem
+    message: mensagem,
+    field
   };
 }
 
@@ -294,7 +304,7 @@ export async function iniciaRegistroPlanoEssencial(
     const userStatus = await checkUserStatus(cpf, email, telefone);
 
     if (userStatus.action === "bloqueado_em_uso") {
-      throw new AppError(userStatus.message, 400);
+      throw new AppError(userStatus.message, 409, true, userStatus.field);
     }
 
     if (userStatus.action === "limpar_e_prosseguir") {
@@ -420,7 +430,7 @@ export async function iniciaRegistroPlanoEssencial(
     return { success: true, session };
   } catch (err: any) {
     if (usuarioId) await rollbackCadastro({ usuarioId, authUid, assinaturaId });
-    if (err instanceof AppError) throw err;
+    if (err instanceof AppError || err.field) throw err;
 
     const errorMessage = err.message.includes("já está em uso")
       ? err.message
@@ -447,7 +457,7 @@ export async function iniciarRegistroplanoProfissional(
     const userStatus = await checkUserStatus(cpf, email, telefone);
 
     if (userStatus.action === "bloqueado_em_uso") {
-      throw new AppError(userStatus.message, 400);
+        throw new AppError(userStatus.message, 409, true, userStatus.field);
     }
 
     if (userStatus.action === "limpar_e_prosseguir") {
@@ -589,7 +599,7 @@ export async function iniciarRegistroplanoProfissional(
   } catch (err: any) {
     logger.error({ err, usuarioId, authUid, assinaturaId, cobrancaId }, "Erro durante o registro de plano Profissional. Realizando rollback.");
     if (usuarioId) await rollbackCadastro({ usuarioId, authUid, assinaturaId, cobrancaId });
-    if (err instanceof AppError) throw err;
+    if (err instanceof AppError || err.field) throw err;
 
     const errorMessage = err.message.includes("já está em uso")
       ? err.message

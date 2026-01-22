@@ -128,7 +128,7 @@ export const dailyChargeMonitorJob = {
                         context as any,
                         {
                             nomeResponsavel: passageiro.nome_responsavel || "Responsável",
-                            nomePassageiro: passageiro.nome || "Aluno",
+                            nomePassageiro: passageiro.nome || "Passageiro",
                             nomeMotorista: motorista.nome || "Motorista",
                             valor: cobranca.valor,
                             dataVencimento: cobranca.data_vencimento,

@@ -31,12 +31,13 @@ export const AuthController = {
                 session: result.session,
             });
         } catch (err: any) {
+            logger.info({ errField: err.field, errMsg: err.message }, "DEBUG: registrarPlanoEssencial Catch");
             logger.error(
                 { error: err.message, payload: { email: payload.email, plano: payload.plano_id } },
                 "Falha no Endpoint de Cadastro no Plano Essencial."
             );
-            const status = err.message.includes("já está em uso") ? 409 : 400;
-            return reply.status(status).send({ error: err.message });
+            const status = err.statusCode || (err.message.includes("já está em uso") ? 409 : 400);
+            return reply.status(status).send({ error: err.message, field: err.field });
         }
     },
 
@@ -52,12 +53,13 @@ export const AuthController = {
             const result = await iniciarRegistroplanoProfissional(payload);
             return reply.status(200).send(result);
         } catch (err: any) {
+            logger.info({ errField: err.field, errMsg: err.message }, "DEBUG: registrarPlanoProfissional Catch");
             logger.error(
                 { error: err.message, payload: { email: payload.email, plano: payload.plano_id } },
                 "Falha no Endpoint de Cadastro no Plano Profissional."
             );
-            const status = err.message.includes("já está em uso") ? 409 : 400;
-            return reply.status(status).send({ error: err.message });
+            const status = err.statusCode || (err.message.includes("já está em uso") ? 409 : 400);
+            return reply.status(status).send({ error: err.message, field: err.field });
         }
     },
 

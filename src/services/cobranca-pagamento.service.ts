@@ -38,7 +38,7 @@ export const cobrancaPagamentoService = {
     // 1. Buscar a cobrança para validar se é pagamento manual
     const { data: cobranca, error: findError } = await supabaseAdmin
       .from("cobrancas")
-      .select("id, pagamento_manual, status")
+      .select("id, pagamento_manual, status, status_repasse")
       .eq("id", cobrancaId)
       .single();
 
@@ -46,9 +46,13 @@ export const cobrancaPagamentoService = {
       throw new AppError("Cobrança não encontrada.", 404);
     }
 
-    // 2. Validar se é pagamento manual
+    // 2. Validar se é pagamento manual e se já foi repassado
     if (!cobranca.pagamento_manual) {
       throw new AppError("Apenas pagamentos manuais podem ser desfeitos.", 400);
+    }
+
+    if (cobranca.status_repasse === RepasseStatus.REPASSADO) {
+        throw new AppError("Não é possível desfazer: O valor já foi repassado ao motorista.", 400);
     }
 
     // 3. Executar o desfazer
@@ -61,7 +65,8 @@ export const cobrancaPagamentoService = {
         tipo_pagamento: null,
         pagamento_manual: false, // Resetar
         recibo_url: null,
-        dados_auditoria_pagamento: null
+        dados_auditoria_pagamento: null,
+        status_repasse: RepasseStatus.PENDENTE
       })
       .eq("id", cobrancaId)
       .select()
@@ -72,8 +77,7 @@ export const cobrancaPagamentoService = {
       throw new AppError("Erro ao desfazer pagamento.", 500);
     }
 
-    // TODO: Considerar se deve cancelar o repasse se já tiver sido iniciado?
-    // Por enquanto mantém comportamento original de apenas limpar a cobrança.
+    // Repasse resetado para PENDENTE acima.
 
     return data;
   },

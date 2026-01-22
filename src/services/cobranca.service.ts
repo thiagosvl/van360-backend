@@ -433,7 +433,7 @@ export const cobrancaService = {
           PASSENGER_EVENT_MANUAL,
           {
               nomeResponsavel: passageiro.nome_responsavel || "Responsável",
-              nomePassageiro: passageiro.nome || "Aluno",
+              nomePassageiro: passageiro.nome || "Passageiro",
               nomeMotorista: motorista.nome || "Motorista",
               valor: cobranca.valor,
               dataVencimento: cobranca.data_vencimento,

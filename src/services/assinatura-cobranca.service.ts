@@ -128,15 +128,22 @@ export const assinaturaCobrancaService = {
                     };
                 }
             } else {
-                // Se for Cobrança com Vencimento (COBV), reutilizar sempre (o QR Code é durável)
-                // TODO: Opcionalmente verificar se já passou da data de vencimento + tolerância
-                logger.info({ cobrancaId }, "Reutilizando PIX com vencimento (cobv)");
-                return {
-                    qrCodePayload: cobranca.qr_code_payload,
-                    location: cobranca.location_url || "",
-                    inter_txid: cobranca.inter_txid,
-                    cobrancaId: cobranca.id,
-                };
+                const vencimento = new Date(cobranca.data_vencimento);
+                const limite = new Date(vencimento);
+                limite.setDate(limite.getDate() + 60); // 60 dias de margem de segurança
+
+                if (new Date() > limite) {
+                    logger.info({ cobrancaId }, "PIX com vencimento muito antigo (>60 dias). Regenerando...");
+                    // Segue para regeneração
+                } else {
+                    logger.info({ cobrancaId }, "Reutilizando PIX com vencimento (cobv)");
+                    return {
+                        qrCodePayload: cobranca.qr_code_payload,
+                        location: cobranca.location_url || "",
+                        inter_txid: cobranca.inter_txid,
+                        cobrancaId: cobranca.id,
+                    };
+                }
             }
         }
 
