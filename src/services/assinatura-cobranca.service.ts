@@ -17,6 +17,17 @@ export const assinaturaCobrancaService = {
         return data;
     },
 
+    async getCobrancaStatus(id: string): Promise<{ status: string }> {
+        const { data, error } = await supabaseAdmin
+            .from("assinaturas_cobrancas")
+            .select("status")
+            .eq("id", id)
+            .single();
+
+        if (error) throw error;
+        return { status: data.status };
+    },
+
     async listAssinaturaCobrancas(
         filtros?: {
             usuarioId?: string;

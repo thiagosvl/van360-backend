@@ -13,6 +13,16 @@ export const assinaturaCobrancaController = {
         }
     },
 
+    async checkStatus(request: FastifyRequest, reply: FastifyReply) {
+        try {
+            const id = (request.params as any).id;
+            const result = await assinaturaCobrancaService.getCobrancaStatus(id);
+            return reply.status(200).send(result);
+        } catch (err: any) {
+            return reply.status(404).send({ error: err.message });
+        }
+    },
+
     async list(request: FastifyRequest, reply: FastifyReply) {
         const filtros = request.query as any;
 
