@@ -1,10 +1,6 @@
-import { DRIVER_EVENT_PRE_PASSENGER_CREATED } from "../config/constants.js";
-import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
-import { notificationService } from "./notifications/notification.service.js";
-import { getUsuarioData } from "./usuario.service.js";
 
 export const prePassageiroService = {
   async listPrePassageiros(usuarioId: string, search?: string) {
@@ -80,6 +76,8 @@ export const prePassageiroService = {
     if (error) throw error;
 
     // Notificar Motorista (Background)
+    
+    /* REMOVIDO TEMPORARIAMENTE PARA EVITAR SPAM (REQ. CLIENTE)
     (async () => {
       try {
         const motorista = await getUsuarioData(payload.usuario_id);
@@ -98,6 +96,7 @@ export const prePassageiroService = {
         logger.error({ err: err.message, payload }, "Erro ao notificar motorista sobre pré-cadastro");
       }
     })();
+    */
 
     return data;
   },

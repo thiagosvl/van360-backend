@@ -27,6 +27,7 @@ interface SystemSummary {
     flags: {
       is_trial_ativo: boolean;
       dias_restantes_trial: number | null;
+      dias_restantes_assinatura: number | null;
       trial_dias_total: number;
       whatsapp_status: "connected" | "disconnected" | "qr_ready" | null;
       ultima_fatura: AssinaturaCobrancaStatus | null;
@@ -176,6 +177,14 @@ export const usuarioResumoService = {
         // I will clamp to 0 just in case.
         if (diasRestantes < 0) diasRestantes = 0;
     }
+
+    let diasRestantesAssinatura: number | null = null;
+    if (assinaturaData?.vigencia_fim) {
+        const end = new Date(assinaturaData.vigencia_fim);
+        const diff = end.getTime() - now.getTime();
+        diasRestantesAssinatura = Math.ceil(diff / (1000 * 3600 * 24));
+        if (diasRestantesAssinatura < 0) diasRestantesAssinatura = 0;
+    }
     
     return {
       usuario: {
@@ -194,6 +203,7 @@ export const usuarioResumoService = {
         flags: {
           is_trial_ativo: isTrial,
           dias_restantes_trial: diasRestantes,
+          dias_restantes_assinatura: diasRestantesAssinatura,
           trial_dias_total: trialDiasTotal,
           whatsapp_status: whatsappState as any,
           ultima_fatura: statusFatura,
