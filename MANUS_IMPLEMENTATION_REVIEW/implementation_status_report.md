@@ -3,7 +3,7 @@
 **Data:** 22/01/2026  
 **Repositórios Analisados:**
 - Frontend: `thiagosvl/van360` (commit: 053a13d)
-- Backend: `thiagosvl/van360-backend` (commit: 3dd38a0)
+- Backend: `thiagosvl/van360-backend` (commit: c8ddc88)
 
 ---
 
@@ -13,7 +13,7 @@ Esta é a lista de implementações atualizada após a revisão do código e os 
 
 ---
 
-## ✅ Concluído (8 itens)
+## ✅ Concluído (9 itens)
 
 | Item | Status | Detalhes |
 | :--- | :--- | :--- |
@@ -25,17 +25,24 @@ Esta é a lista de implementações atualizada após a revisão do código e os 
 | **Bloqueio Read-Only** | ✅ Concluído | Implementado no backend e frontend |
 | **Privacidade da Evolution API** | ✅ Concluído | Configurações de privacidade aplicadas |
 | **Tratamento Básico de Webhooks** | ✅ Concluído | Handlers básicos implementados |
+| **Pricing Simplificado** | ✅ Concluído | Ajustado para usar preço fixo do tier |
 
 ---
 
-## ⏳ Pendente (4 itens)
+## ⏳ Pendente (1 item)
 
 | Item | Status | Detalhes |
 | :--- | :--- | :--- |
-| **Ajuste de Preços** | ⏳ Pendente | Preços promocionais na seed ainda são valores de teste (R$ 0,01) |
-| **Desconto de Lançamento** | ⏳ Pendente | Lógica de desconto para os primeiros 100 clientes não implementada |
-| **Pricing Simplificado** | ⏳ Pendente | Verificar se o `pricing.service.ts` ainda calcula preço proporcional |
 | **Rastreamento de Mensagens** | ⏳ Pendente | Implementar rastreamento de entrega de mensagens do WhatsApp |
+
+---
+
+## ✅ Resolvido pelo Usuário (2 itens)
+
+| Item | Status | Detalhes |
+| :--- | :--- | :--- |
+| **Ajuste de Preços** | ✅ Resolvido | Usuário ajustará manualmente antes do lançamento |
+| **Desconto de Lançamento** | ✅ Resolvido | Usuário controlará manualmente |
 
 ---
 
@@ -50,7 +57,15 @@ Esta é a lista de implementações atualizada após a revisão do código e os 
 
 ## Próximos Passos Sugeridos:
 
-1. **Definir e implementar a estratégia de desconto de lançamento** (backend)
-2. **Ajustar os preços promocionais na seed** para os valores reais (backend)
-3. **Verificar e ajustar a lógica de pricing** para usar preços fixos por tier (backend)
-4. **Implementar o rastreamento de entrega de mensagens** do WhatsApp (backend)
+1. **Implementar rastreamento de entrega de mensagens** do WhatsApp (quando necessário)
+2. **Ajustar preços promocionais na seed** antes do lançamento (usuário)
+
+---
+
+## ✅ Correções Realizadas:
+
+### 22/01/2026 - Correção de Pricing
+- **Problema:** `pricing.service.ts` calculava preço proporcional para sub-planos
+- **Solução:** Ajustado para usar preço fixo do tier (sem cálculo proporcional)
+- **Commit:** `c8ddc88` - fix: usar preço fixo do tier em vez de cálculo proporcional
+- **Impacto:** Agora quando o usuário escolhe uma quantidade dentro dos sub-planos (≤ 90), o sistema retorna o preço fixo do tier que encaixa a quantidade, sem cálculo proporcional
