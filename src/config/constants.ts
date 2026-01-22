@@ -1,4 +1,4 @@
-export const PLANO_GRATUITO = "gratuito";
+
 export const PLANO_ESSENCIAL = "essencial";
 export const PLANO_PROFISSIONAL = "profissional"; 
 
@@ -11,7 +11,7 @@ export const PASSENGER_EVENT_MANUAL = "COBRANCA_MANUAL";
 
 // Driver Events
 export const DRIVER_EVENT_ACTIVATION = "ACTIVATION";
-export const DRIVER_EVENT_WELCOME_FREE = "WELCOME_FREE";
+
 export const DRIVER_EVENT_WELCOME_TRIAL = "WELCOME_TRIAL";
 export const DRIVER_EVENT_RENEWAL = "RENEWAL";
 export const DRIVER_EVENT_UPGRADE = "UPGRADE";

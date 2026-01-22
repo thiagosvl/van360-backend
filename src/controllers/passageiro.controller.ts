@@ -13,10 +13,15 @@ import {
 } from "../types/dtos/passageiro.dto.js";
 import { onlyDigits } from "../utils/string.utils.js";
 
+import { accessControlService } from "../services/access-control.service.js";
+
 export const passageiroController = {
   create: async (request: FastifyRequest, reply: FastifyReply) => {
     logger.info("PassageiroController.create - Starting");
     const data = createPassageiroSchema.parse(request.body);
+    
+    await accessControlService.validateWriteAccess(data.usuario_id);
+
     const result = await passageiroService.createPassageiro(data);
     return reply.status(201).send(result);
   },
@@ -24,6 +29,13 @@ export const passageiroController = {
   update: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     logger.info({ passageiroId: id }, "PassageiroController.update - Starting");
+    
+    const authUid = (request as any).user?.id;
+    if (authUid) {
+        const usuarioId = await accessControlService.resolveUsuarioId(authUid);
+        await accessControlService.validateWriteAccess(usuarioId);
+    }
+
     const data = updatePassageiroSchema.parse(request.body);
     
     // Tratamento especial para enviar_cobranca_automatica
@@ -47,6 +59,13 @@ export const passageiroController = {
   delete: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     logger.info({ passageiroId: id }, "PassageiroController.delete - Starting");
+
+    const authUid = (request as any).user?.id;
+    if (authUid) {
+        const usuarioId = await accessControlService.resolveUsuarioId(authUid);
+        await accessControlService.validateWriteAccess(usuarioId);
+    }
+
     await passageiroService.deletePassageiro(id);
     return reply.status(200).send({ success: true });
   },

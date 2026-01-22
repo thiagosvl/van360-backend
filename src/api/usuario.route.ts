@@ -8,7 +8,7 @@ import { verifySupabaseJWT } from "../middleware/auth.js";
 export default async function usuarioRoute(app: FastifyInstance) {
 
     // --- Rotas de Autenticação/Registro ---
-    app.post("/registrar-plano-gratuito", AuthController.registrarPlanoGratuito);
+
     app.post("/registrar-plano-essencial", AuthController.registrarPlanoEssencial);
     app.post("/registrar-plano-profissional", AuthController.registrarPlanoProfissional);
 

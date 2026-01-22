@@ -9,12 +9,17 @@ import {
 } from "../types/dtos/escola.dto.js";
 
 import { AppError } from "../errors/AppError.js";
+import { accessControlService } from "../services/access-control.service.js";
 
 export const escolaController = {
   create: async (request: FastifyRequest, reply: FastifyReply) => {
     logger.info("EscolaController.create - Starting");
     try {
         const data = createEscolaSchema.parse(request.body);
+        
+        // Validate Write Access (Subscription/Trial)
+        await accessControlService.validateWriteAccess(data.usuario_id);
+
         const result = await escolaService.createEscola(data);
         return reply.status(201).send(result);
     } catch (error: any) {
@@ -28,6 +33,14 @@ export const escolaController = {
   update: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     logger.info({ escolaId: id }, "EscolaController.update - Starting");
+    
+    // Permission Check
+    const authUid = (request as any).user?.id;
+    if (authUid) {
+        const usuarioId = await accessControlService.resolveUsuarioId(authUid);
+        await accessControlService.validateWriteAccess(usuarioId);
+    }
+
     try {
         const data = updateEscolaSchema.parse(request.body);
         await escolaService.updateEscola(id, data);
@@ -43,6 +56,14 @@ export const escolaController = {
   delete: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     logger.info({ escolaId: id }, "EscolaController.delete - Starting");
+
+    // Permission Check
+    const authUid = (request as any).user?.id;
+    if (authUid) {
+        const usuarioId = await accessControlService.resolveUsuarioId(authUid);
+        await accessControlService.validateWriteAccess(usuarioId);
+    }
+
     await escolaService.deleteEscola(id);
     return reply.status(200).send({ success: true });
   },

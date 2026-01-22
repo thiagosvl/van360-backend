@@ -13,8 +13,7 @@ interface SystemSummary {
       nome: string;
       status: string; // Subscription status (ativa, pendente, etc)
       limites: {
-        passageiros_max: number | null;
-        passageiros_restantes: number | null;
+
         franquia_cobranca_max: number;
         franquia_cobranca_restante: number;
       };
@@ -171,8 +170,7 @@ export const usuarioResumoService = {
           nome: nomePlano,
           status: assinaturaData?.status,
           limites: {
-            passageiros_max: planoBase?.limite_passageiros || null,
-            passageiros_restantes: planoBase?.limite_passageiros ? Math.max(0, planoBase.limite_passageiros - passAtivos) : null, 
+ 
             franquia_cobranca_max: franquiaContratada,
             franquia_cobranca_restante: franquiaRestante
           },

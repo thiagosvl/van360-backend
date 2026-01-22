@@ -1,8 +1,7 @@
 -- 1. SEED PLANOS (Base Only First)
 INSERT INTO public.planos (id, parent_id, tipo, nome, slug, descricao_curta, ordem_exibicao, ativo, limite_passageiros, franquia_cobrancas_mes, preco, preco_promocional, promocao_ativa, permite_cobrancas, created_at, trial_days, beneficios)
 VALUES 
-('d2c48f69-1c16-43bd-a505-120b2e880c85', NULL, 'base', 'Gratuito', 'gratuito', 'Ideal apenas para testar.', 1, true, 5, 0, 0.00, NULL, false, false, '2025-10-30 15:08:48.988941+00', 0, '["Até {{LIMITE_PASSAGEIROS}} passageiros (Ideal para testar)", "Adeus caderno e planilhas: tudo organizado no celular", "Organize escolas, veículos e responsáveis", "Controle básico de quem pagou e quem deve", "Histórico simples de pagamentos"]'),
-('ac17996e-5522-43f9-949a-41353542a53b', NULL, 'base', 'Essencial', 'essencial', 'Profissionalize sua gestão e organize quantos passageiros quiser.', 2, true, 0, 0, 89.90, 0.01, true, true, '2025-10-30 15:08:48.988941+00', 7, '["Passageiros e Cadastros ILIMITADOS", "Link de Cadastro: envie para os pais e eles preenchem por você", "Controle de Gastos: saiba seu lucro real (Combustível/Manutenção)", "Relatórios Financeiros e de Inadimplência", "Suporte prioritário via WhatsApp"]'),
+('ac17996e-5522-43f9-949a-41353542a53b', NULL, 'base', 'Essencial', 'essencial', 'Profissionalize sua gestão e organize quantos passageiros quiser.', 2, true, 0, 0, 89.90, 0.01, true, true, '2025-10-30 15:08:48.988941+00', 21, '["Passageiros e Cadastros ILIMITADOS", "Link de Cadastro: envie para os pais e eles preenchem por você", "Controle de Gastos: saiba seu lucro real (Combustível/Manutenção)", "Relatórios Financeiros e de Inadimplência", "Suporte prioritário via WhatsApp"]'),
 ('e0961539-3186-43e8-adac-4f009720d428', NULL, 'base', 'Profissional', 'profissional', 'Você só dirige. O sistema cobra, recebe, dá baixa e envia recibos.', 3, true, 0, 0, 0.00, 0.00, false, true, '2025-10-30 15:08:48.988941+00', 0, '["Cobrança 100% Automática no WhatsApp (Sem tocar no celular)", "Baixa automática de pagamentos PIX (Fim de conferir extrato)", "Envio automático de Recibos e Lembretes de vencimento", "Redução drástica da inadimplência e atrasos", "Você só dirige: o sistema cuida do financeiro"]')
 ON CONFLICT (id) DO UPDATE SET 
     nome = EXCLUDED.nome,
@@ -30,7 +29,7 @@ VALUES
 ('DIA_GERACAO_MENSALIDADES', '25'),
 ('DIAS_ANTECEDENCIA_AVISO_VENCIMENTO', '2'),
 ('DIAS_ANTECEDENCIA_RENOVACAO', '5'),
-('TRIAL_DIAS_ESSENCIAL', '7'),
+('TRIAL_DIAS_ESSENCIAL', '21'),
 ('PIX_EXPIRACAO_SEGUNDOS', '3600'),
 ('PIX_VALIDADE_APOS_VENCIMENTO', '30'),
 ('DIAS_COBRANCA_POS_VENCIMENTO', '3')

@@ -18,7 +18,6 @@ import {
     DRIVER_EVENT_REPASSE_FAILED,
     DRIVER_EVENT_TRIAL_ENDING,
     DRIVER_EVENT_UPGRADE,
-    DRIVER_EVENT_WELCOME_FREE,
     DRIVER_EVENT_WELCOME_TRIAL,
     DRIVER_EVENT_WHATSAPP_DISCONNECTED,
     PASSENGER_EVENT_DUE_SOON,
@@ -40,7 +39,6 @@ type PassengerEventType =
 
 type DriverEventType = 
     | typeof DRIVER_EVENT_ACTIVATION 
-    | typeof DRIVER_EVENT_WELCOME_FREE 
     | typeof DRIVER_EVENT_WELCOME_TRIAL 
     | typeof DRIVER_EVENT_RENEWAL 
     | typeof DRIVER_EVENT_UPGRADE 
@@ -99,7 +97,6 @@ export const notificationService = {
 
         switch (type) {
             case DRIVER_EVENT_ACTIVATION: parts = DriverTemplates.activation(ctx); break;
-            case DRIVER_EVENT_WELCOME_FREE: parts = DriverTemplates.welcomeFree(ctx); break;
             case DRIVER_EVENT_WELCOME_TRIAL: parts = DriverTemplates.welcomeTrial(ctx); break;
             case DRIVER_EVENT_RENEWAL: parts = DriverTemplates.renewal(ctx); break;
             case DRIVER_EVENT_UPGRADE: parts = DriverTemplates.upgradeRequest(ctx); break;

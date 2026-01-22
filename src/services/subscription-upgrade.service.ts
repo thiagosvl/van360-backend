@@ -1,27 +1,25 @@
 import {
-    DRIVER_EVENT_ACTIVATION,
-    DRIVER_EVENT_UPGRADE,
-    DRIVER_EVENT_WELCOME_TRIAL,
-    PLANO_ESSENCIAL,
-    PLANO_GRATUITO,
-    PLANO_PROFISSIONAL
+  DRIVER_EVENT_ACTIVATION,
+  DRIVER_EVENT_UPGRADE,
+  PLANO_ESSENCIAL,
+  PLANO_PROFISSIONAL
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
-import { AssinaturaBillingType, AssinaturaCobrancaStatus, AssinaturaStatus, ConfigKey } from "../types/enums.js";
+import { AssinaturaBillingType, AssinaturaCobrancaStatus, AssinaturaStatus } from "../types/enums.js";
 import { onlyDigits } from "../utils/string.utils.js";
 import { automationService } from "./automation.service.js";
-import { getBillingConfig, getConfigNumber } from "./configuracao.service.js";
+import { getBillingConfig } from "./configuracao.service.js";
 import { interService } from "./inter.service.js";
 import { notificationService } from "./notifications/notification.service.js";
 import { pricingService } from "./pricing.service.js";
 import {
-    cancelarCobrancaPendente,
-    getAssinaturaAtiva,
-    getUsuarioData,
-    isUpgrade,
-    limparAssinaturasPendentes
+  cancelarCobrancaPendente,
+  getAssinaturaAtiva,
+  getUsuarioData,
+  isUpgrade,
+  limparAssinaturasPendentes
 } from "./subscription.common.js";
 
 // Result Interfaces
@@ -86,7 +84,7 @@ export const subscriptionUpgradeService = {
           try {
             assinaturaAtual = await getAssinaturaAtiva(usuarioId);
           } catch (e) {
-            logger.info({ usuarioId }, "Upgrade iniciado sem assinatura ativa: assumindo origem Gratuito/Inativo.");
+            logger.info({ usuarioId }, "Upgrade iniciado sem assinatura ativa.");
           }
       
           const planoAtual = assinaturaAtual?.planos;
@@ -103,7 +101,7 @@ export const subscriptionUpgradeService = {
       
           const slugAtual = planoAtual
             ? ((planoAtual.parent as any)?.slug || planoAtual.slug)
-            : PLANO_GRATUITO;
+            : null;
       
           const slugNovo = (novoPlano.parent as any)?.slug || novoPlano.slug;
       
@@ -118,90 +116,12 @@ export const subscriptionUpgradeService = {
           const hoje = new Date();
           const anchorDate = assinaturaAtual?.anchor_date || hoje.toISOString().split("T")[0];
       
-          // Lógica de Trial (Gratuito -> Essencial)
-          if (slugNovo === PLANO_ESSENCIAL && slugAtual !== PLANO_PROFISSIONAL) {
-            const trialDays = await getConfigNumber(ConfigKey.TRIAL_DIAS_ESSENCIAL, 7);
-            const trialEnd = new Date();
-            trialEnd.setDate(trialEnd.getDate() + trialDays);
-      
-            if (assinaturaAtual) {
-              await supabaseAdmin
-                .from("assinaturas_usuarios")
-                .update({ ativo: false })
-                .eq("id", assinaturaAtual.id);
-            }
-      
-            const { data: novaAssinatura, error: assinaturaError } = await supabaseAdmin
-              .from("assinaturas_usuarios")
-              .insert({
-                usuario_id: usuarioId,
-                plano_id: novoPlano.id,
-                franquia_contratada_cobrancas: franquiaContratada,
-                ativo: true,
-                status: AssinaturaStatus.TRIAL,
 
-                preco_aplicado: precoAplicado,
-                preco_origem: precoOrigem,
-                anchor_date: anchorDate,
-                vigencia_fim: null,
-                trial_end_at: trialEnd.toISOString()
-              })
-              .select()
-              .single();
-      
-            if (assinaturaError) throw assinaturaError;
-      
-            logger.info({ usuarioId, plano: novoPlano.slug }, "Upgrade com Trial de 7 dias ativado com sucesso.");
-            
-            // Notificação de Boas-vindas ao Trial
-            try {
-                const usuarioData = await getUsuarioData(usuarioId);
-                if (usuarioData.telefone) {
-                    await notificationService.notifyDriver(usuarioData.telefone, DRIVER_EVENT_WELCOME_TRIAL, {
-                        nomeMotorista: usuarioData.nome,
-                        nomePlano: novoPlano.nome,
-                        valor: precoAplicado,
-                        dataVencimento: trialEnd.toISOString().split("T")[0],
-                        trialDays: trialDays
-                    });
-                }
-            } catch (notifErr) {
-                logger.error({ notifErr }, "Falha ao enviar notificação de Welcome Trial");
-            }
-      
-            const { data: cobranca, error: cobrancaError } = await supabaseAdmin
-              .from("assinaturas_cobrancas")
-              .insert({
-                usuario_id: usuarioId,
-                assinatura_usuario_id: novaAssinatura.id,
-                valor: precoAplicado,
-                status: AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO,
-                data_vencimento: trialEnd.toISOString().split("T")[0],
-                billing_type: AssinaturaBillingType.UPGRADE_PLAN,
-                descricao: `Upgrade de Plano: ${planoAtual?.slug === PLANO_ESSENCIAL ? "Essencial" : "Grátis"} → ${novoPlano.nome} (Período de Testes)`,
-              })
-              .select()
-              .single();
-      
-            if (cobrancaError) {
-              logger.error({ error: cobrancaError, usuarioId }, "Erro ao criar cobrança para trial no upgrade");
-            }
-      
-            return {
-              success: true,
-              tipo: "upgrade",
-              franquia: franquiaContratada,
-              planoId: novoPlano.id,
-              precoAplicado,
-              precoOrigem,
-              cobrancaId: cobranca?.id
-            };
-          }
       
           let billingType = AssinaturaBillingType.ACTIVATION;
           let valorCobrar = precoAplicado;
           let vigenciaFimInsert: string | null = null;
-          let descricaoCobranca = `Upgrade de Plano: ${planoAtual?.slug === PLANO_ESSENCIAL ? "Essencial" : "Grátis"} → ${novoPlano.nome}`;
+          let descricaoCobranca = `Upgrade de Plano: ${planoAtual?.slug === PLANO_ESSENCIAL ? "Essencial" : "Novo"} → ${novoPlano.nome}`;
       
           if (assinaturaAtual && assinaturaAtual.vigencia_fim) {
             const billingConfig = await getBillingConfig();
@@ -345,9 +265,7 @@ export const subscriptionUpgradeService = {
             .update({ ativo: false })
             .eq("id", assinaturaAtual.id);
       
-          const statusNovo = novoPlano.slug === PLANO_GRATUITO
-            ? AssinaturaStatus.ATIVA
-            : (novoPlano.slug === PLANO_ESSENCIAL && assinaturaAtual.trial_end_at
+          const statusNovo = (novoPlano.slug === PLANO_ESSENCIAL && assinaturaAtual.trial_end_at
               ? AssinaturaStatus.TRIAL
               : AssinaturaStatus.ATIVA);
       
@@ -373,7 +291,7 @@ export const subscriptionUpgradeService = {
       
           if (assinaturaError) throw assinaturaError;
       
-          if (novoPlano.slug !== PLANO_GRATUITO && precoAplicado > 0) {
+          if (precoAplicado > 0) {
             const hojeDate = new Date();
             const vigenciaFimDate = assinaturaAtual.vigencia_fim ? new Date(assinaturaAtual.vigencia_fim) : hojeDate;
             const cobrancaDate = vigenciaFimDate > hojeDate ? vigenciaFimDate : hojeDate;

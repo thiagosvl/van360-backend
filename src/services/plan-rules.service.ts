@@ -47,7 +47,7 @@ export const planRules = {
   
   /**
    * Verifica se o plano pode usar o módulo Pre-Passageiro (Cadastro Rápido).
-   * Regra: Todos (Gratuito, Essencial, Profissional).
+   * Regra: Todos os planos ativos (Essencial, Profissional).
    * (Mantendo explícito para futuro controle)
    */
   hasQuickRegister: (planSlug: string): boolean => {

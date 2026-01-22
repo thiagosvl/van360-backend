@@ -73,17 +73,7 @@ const textPart = (text: string): CompositeMessagePart[] => {
 
 export const DriverTemplates = {
 
-    /**
-     * Boas-vindas: Plano Gratuito
-     */
-    welcomeFree: (ctx: DriverContext): CompositeMessagePart[] => {
-        return textPart(`Olá *${getFirstName(ctx.nomeMotorista)}*, seja muito bem-vindo à Van360! 🚀
 
-É um prazer ter você conosco no plano *${ctx.nomePlano}*.
-Nossa equipe está à disposição para ajudar você a organizar seu transporte escolar.
-
-Aproveite o sistema! 🚐💨`);
-    },
 
     /**
      * Boas-vindas: Plano com Trial (Essencial)

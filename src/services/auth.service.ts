@@ -1,10 +1,8 @@
 import {
-  DRIVER_EVENT_ACTIVATION,
-  DRIVER_EVENT_WELCOME_FREE,
-  DRIVER_EVENT_WELCOME_TRIAL,
-  PLANO_ESSENCIAL,
-  PLANO_GRATUITO,
-  PLANO_PROFISSIONAL
+    DRIVER_EVENT_ACTIVATION,
+    DRIVER_EVENT_WELCOME_TRIAL,
+    PLANO_ESSENCIAL,
+    PLANO_PROFISSIONAL
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
@@ -277,91 +275,7 @@ export async function rollbackCadastro({
   }
 }
 
-export async function iniciaRegistroPlanoGratuito(
-  payload: RegistroPayload
-): Promise<RegistroManualResult> {
-  let usuarioId: string | null = null;
-  let authUid: string | null = null;
-  let assinaturaId: string | null = null;
 
-  try {
-    payload.ativo = true;
-
-    const cpf = onlyDigits(payload.cpfcnpj);
-    const email = payload.email.toLowerCase();
-    const telefone = onlyDigits(payload.telefone);
-
-    const userStatus = await checkUserStatus(cpf, email, telefone);
-
-    if (userStatus.action === "bloqueado_em_uso") {
-      throw new AppError(userStatus.message, 400);
-    }
-
-    if (userStatus.action === "limpar_e_prosseguir") {
-      await rollbackCadastro({
-        usuarioId: userStatus.userId,
-        authUid: userStatus.authUid,
-      });
-    }
-
-    const { data: plano, error: planoError } = await supabaseAdmin
-      .from("planos")
-      .select("id, slug")
-      .eq("id", payload.plano_id)
-      .single();
-
-    if (planoError || !plano) throw new AppError("Plano selecionado não foi encontrado.", 404);
-    
-    // Validar se o plano realmente é o Gratuito
-    if (plano.slug !== PLANO_GRATUITO) {
-      throw new AppError("Este plano não permite registro gratuito direto.", 403);
-    }
-
-    const usuario = await criarUsuario(payload);
-    usuarioId = usuario.id;
-
-    const session = await criarUsuarioAuth(email, payload.senha, usuario.id);
-    authUid = session.user.id;
-
-    const { data: assinatura, error: assinaturaError } = await supabaseAdmin
-      .from("assinaturas_usuarios")
-      .insert({
-        usuario_id: usuarioId,
-        plano_id: plano.id,
-        ativo: true,
-        status: AssinaturaStatus.ATIVA,
-        preco_aplicado: 0,
-      })
-      .select()
-      .single();
-
-    if (assinaturaError) throw assinaturaError;
-
-    // Notificação de Boas Vindas (Plano Gratuito)
-    if (payload.telefone) {
-        logger.info(`[AuthService] Enviando notificação de boas-vindas (Gratuito) para: ${payload.telefone}`);
-        notificationService.notifyDriver(payload.telefone, DRIVER_EVENT_WELCOME_FREE, {
-            nomeMotorista: payload.nome,
-            nomePlano: "Gratuito",
-            valor: 0,
-            dataVencimento: new Date().toISOString().split('T')[0],
-            pixPayload: undefined
-        })
-        .then(() => logger.info(`[AuthService] Notificação de boas-vindas (Gratuito) enviada com sucesso.`))
-        .catch(err => logger.error({ err }, `Falha ao enviar boas vindas (Gratuito)`));
-    }
-
-    return { success: true, session };
-  } catch (err: any) {
-    if (usuarioId) await rollbackCadastro({ usuarioId, authUid, assinaturaId });
-    if (err instanceof AppError) throw err;
-    
-    const errorMessage = err.message.includes("já está em uso")
-      ? err.message
-      : err.message || "Erro desconhecido ao processar registro.";
-    throw new AppError(errorMessage, 400);
-  }
-}
 
 export async function iniciaRegistroPlanoEssencial(
   payload: RegistroPayload
@@ -473,9 +387,7 @@ export async function iniciaRegistroPlanoEssencial(
         let eventType: any = null;
         let extraData: any = {};
 
-        if (plano.slug === PLANO_GRATUITO) {
-            eventType = DRIVER_EVENT_WELCOME_FREE;
-        } else if (trialDays > 0) {
+        if (trialDays > 0) {
             eventType = DRIVER_EVENT_WELCOME_TRIAL;
             extraData = { 
                 trialDays,
@@ -490,7 +402,7 @@ export async function iniciaRegistroPlanoEssencial(
             logger.info(`[AuthService] Enviando notificação tipo: ${eventType}`);
             notificationService.notifyDriver(payload.telefone, eventType, {
                 nomeMotorista: payload.nome,
-                nomePlano: plano.slug === PLANO_GRATUITO ? "Gratuito" : (plano.slug === PLANO_PROFISSIONAL ? "Profissional" : "Essencial"),
+                nomePlano: plano.slug === PLANO_PROFISSIONAL ? "Profissional" : "Essencial",
                 valor: precoAplicado,
                 dataVencimento: dataVencimentoCobranca,
                 pixPayload: undefined,

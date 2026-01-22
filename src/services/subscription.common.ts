@@ -1,7 +1,6 @@
 import {
-  PLANO_ESSENCIAL,
-  PLANO_GRATUITO,
-  PLANO_PROFISSIONAL
+    PLANO_ESSENCIAL,
+    PLANO_PROFISSIONAL
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
@@ -127,7 +126,6 @@ export async function getUsuarioData(usuarioId: string) {
 
 export function isUpgrade(slugAtual: string, slugNovo: string): boolean {
   const ordem: Record<string, number> = {
-    [PLANO_GRATUITO]: 1,
     [PLANO_ESSENCIAL]: 2,
     [PLANO_PROFISSIONAL]: 3,
   };
@@ -135,5 +133,5 @@ export function isUpgrade(slugAtual: string, slugNovo: string): boolean {
   const ordemAtual = ordem[slugAtual] || 0;
   const ordemNova = ordem[slugNovo] || 0;
 
-  return ordemNova > ordemAtual;
+  return ordemNova >= ordemAtual;
 }

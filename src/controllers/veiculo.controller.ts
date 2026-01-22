@@ -9,12 +9,17 @@ import {
 } from "../types/dtos/veiculo.dto.js";
 
 import { AppError } from "../errors/AppError.js";
+import { accessControlService } from "../services/access-control.service.js";
 
 export const veiculoController = {
   create: async (request: FastifyRequest, reply: FastifyReply) => {
     logger.info("VeiculoController.create - Starting");
     try {
         const data = createVeiculoSchema.parse(request.body);
+        
+        // Validate Write Access
+        await accessControlService.validateWriteAccess(data.usuario_id);
+
         const result = await veiculoService.createVeiculo(data);
         return reply.status(201).send(result);
     } catch (error: any) {
@@ -28,6 +33,14 @@ export const veiculoController = {
   update: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     logger.info({ veiculoId: id }, "VeiculoController.update - Starting");
+    
+    // Permission Check
+    const authUid = (request as any).user?.id;
+    if (authUid) {
+        const usuarioId = await accessControlService.resolveUsuarioId(authUid);
+        await accessControlService.validateWriteAccess(usuarioId);
+    }
+
     try {
         const data = updateVeiculoSchema.parse(request.body);
         await veiculoService.updateVeiculo(id, data);
@@ -43,6 +56,14 @@ export const veiculoController = {
   delete: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     logger.info({ veiculoId: id }, "VeiculoController.delete - Starting");
+
+    // Permission Check
+    const authUid = (request as any).user?.id;
+    if (authUid) {
+        const usuarioId = await accessControlService.resolveUsuarioId(authUid);
+        await accessControlService.validateWriteAccess(usuarioId);
+    }
+
     await veiculoService.deleteVeiculo(id);
     return reply.status(200).send({ success: true });
   },
