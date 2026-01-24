@@ -68,6 +68,7 @@ interface SystemSummary {
     receita: {
       realizada: number;
       prevista: number;
+      pendente: number;
       taxa_recebimento: number;
     };
     saidas: {
@@ -186,65 +187,69 @@ export const usuarioResumoService = {
       : null;
 
 
-    // 6. Financial Summary (If requested)
+    // 6. Financial Summary (Default to current month if not specified)
     let financeiro: SystemSummary["financeiro"] = undefined;
 
-    if (mes !== undefined && ano !== undefined) {
-      const start = new Date(ano, mes - 1, 1).toISOString().split("T")[0];
-      const end = new Date(ano, mes, 0).toISOString().split("T")[0];
+    // Always calculate financials - default to current month if not specified
+    const now = new Date();
+    const targetMes = mes ?? (now.getMonth() + 1);
+    const targetAno = ano ?? now.getFullYear();
 
-      const [cobrancasRes, gastosRes] = await Promise.all([
-        supabaseAdmin
-          .from("cobrancas")
-          .select("*")
-          .eq("usuario_id", usuarioId)
-          .gte("data_vencimento", start)
-          .lte("data_vencimento", end),
-        supabaseAdmin
-          .from("gastos")
-          .select("*")
-          .eq("usuario_id", usuarioId)
-          .gte("data", start)
-          .lte("data", end)
-      ]);
+    const start = new Date(targetAno, targetMes - 1, 1).toISOString().split("T")[0];
+    const end = new Date(targetAno, targetMes, 0).toISOString().split("T")[0];
 
-      const cobrancas = cobrancasRes.data || [];
-      const gastos = gastosRes.data || [];
+    const [cobrancasRes, gastosRes] = await Promise.all([
+      supabaseAdmin
+        .from("cobrancas")
+        .select("*")
+        .eq("usuario_id", usuarioId)
+        .gte("data_vencimento", start)
+        .lte("data_vencimento", end),
+      supabaseAdmin
+        .from("gastos")
+        .select("*")
+        .eq("usuario_id", usuarioId)
+        .gte("data", start)
+        .lte("data", end)
+    ]);
 
-      const cobrancasPagas = cobrancas.filter((c: any) => c.status === CobrancaStatus.PAGO);
-      const cobrancasAbertas = cobrancas.filter((c: any) => c.status === CobrancaStatus.PENDENTE);
+    const cobrancas = cobrancasRes.data || [];
+    const gastos = gastosRes.data || [];
 
-      const receitaRealizada = cobrancasPagas.reduce((acc: number, c: any) => acc + Number(c.valor || 0), 0);
-      const receitaPrevista = cobrancas.reduce((acc: number, c: any) => acc + Number(c.valor || 0), 0);
-      const taxaRecebimento = receitaPrevista > 0 ? (receitaRealizada / receitaPrevista) * 100 : 0;
+    const cobrancasPagas = cobrancas.filter((c: any) => c.status === CobrancaStatus.PAGO);
+    const cobrancasAbertas = cobrancas.filter((c: any) => c.status === CobrancaStatus.PENDENTE);
 
-      const totalDespesas = gastos.reduce((acc: number, g: any) => acc + Number(g.valor || 0), 0);
-      const margemOperacional = receitaRealizada > 0 ? ((receitaRealizada - totalDespesas) / receitaRealizada) * 100 : 0;
+    const receitaRealizada = cobrancasPagas.reduce((acc: number, c: any) => acc + Number(c.valor || 0), 0);
+    const receitaPrevista = cobrancas.reduce((acc: number, c: any) => acc + Number(c.valor || 0), 0);
+    const taxaRecebimento = receitaPrevista > 0 ? (receitaRealizada / receitaPrevista) * 100 : 0;
 
-      const hoje = new Date().toISOString().split("T")[0];
-      const atrasos = cobrancasAbertas.filter((c: any) => c.data_vencimento < hoje);
-      const valorAtrasos = atrasos.reduce((acc: number, c: any) => acc + Number(c.valor || 0), 0);
+    const totalDespesas = gastos.reduce((acc: number, g: any) => acc + Number(g.valor || 0), 0);
+    const margemOperacional = receitaRealizada > 0 ? ((receitaRealizada - totalDespesas) / receitaRealizada) * 100 : 0;
 
-      const passageirosPagos = new Set(cobrancasPagas.map((c: any) => c.passageiro_id)).size;
-      const ticketMedio = passageirosPagos > 0 ? receitaRealizada / passageirosPagos : 0;
+    const hoje = new Date().toISOString().split("T")[0];
+    const atrasos = cobrancasAbertas.filter((c: any) => c.data_vencimento < hoje);
+    const valorAtrasos = atrasos.reduce((acc: number, c: any) => acc + Number(c.valor || 0), 0);
 
-      financeiro = {
-        receita: {
-          realizada: receitaRealizada,
-          prevista: receitaPrevista,
-          taxa_recebimento: Math.round(taxaRecebimento)
-        },
-        saidas: {
-          total: totalDespesas,
-          margem_operacional: Math.round(margemOperacional)
-        },
-        atrasos: {
-          valor: valorAtrasos,
-          count: atrasos.length
-        },
-        ticket_medio: ticketMedio
-      };
-    }
+    const passageirosPagos = new Set(cobrancasPagas.map((c: any) => c.passageiro_id)).size;
+    const ticketMedio = passageirosPagos > 0 ? receitaRealizada / passageirosPagos : 0;
+
+    financeiro = {
+      receita: {
+        realizada: receitaRealizada,
+        prevista: receitaPrevista,
+        pendente: receitaPrevista - receitaRealizada,
+        taxa_recebimento: Math.round(taxaRecebimento)
+      },
+      saidas: {
+        total: totalDespesas,
+        margem_operacional: Math.round(margemOperacional)
+      },
+      atrasos: {
+        valor: valorAtrasos,
+        count: atrasos.length
+      },
+      ticket_medio: ticketMedio
+    };
     
     const flags = calculatePlanFlags(assinaturaData);
 

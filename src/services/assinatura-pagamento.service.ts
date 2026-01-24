@@ -1,14 +1,14 @@
 import {
-    DRIVER_EVENT_PAYMENT_CONFIRMED,
-    PLANO_PROFISSIONAL
+  DRIVER_EVENT_PAYMENT_CONFIRMED,
+  PLANO_PROFISSIONAL
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import {
-    AssinaturaBillingType,
-    AssinaturaCobrancaStatus,
-    AssinaturaTipoPagamento,
-    ConfigKey
+  AssinaturaBillingType,
+  AssinaturaCobrancaStatus,
+  AssinaturaTipoPagamento,
+  ConfigKey
 } from "../types/enums.js";
 import { automationService } from "./automation.service.js";
 import { cobrancaService } from "./cobranca.service.js";
@@ -160,13 +160,12 @@ export async function processarPagamentoAssinatura(
                  usuario.telefone,
                  DRIVER_EVENT_PAYMENT_CONFIRMED,
                  {
-                     usuarioId: cobranca.usuario_id,
                      nomeMotorista: usuario.nome,
                      nomePlano,
                      valor: dadosPagamento.valor,
                      dataVencimento: vigenciaFim.toISOString().split("T")[0],
                      isActivation: isOnboardingPayment,
-                     reciboUrl, // Adiciona o recibo se houver (útil para confirmação de upload manual)
+                     reciboUrl,
                      mes: new Date(dadosPagamento.dataPagamento).getMonth() + 1, 
                      ano: new Date(dadosPagamento.dataPagamento).getFullYear()
                  }
@@ -487,7 +486,7 @@ async function triggerAtivacaoAutomatica(
     {
       ...logContext,
       slugBase,
-      isProfissional: slugBase === PLANO_PROFISSIONAL,
+      is_profissional: slugBase === PLANO_PROFISSIONAL,
     },
     "Verificando se deve ativar passageiros automaticamente"
   );

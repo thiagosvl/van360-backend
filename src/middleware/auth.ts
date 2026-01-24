@@ -26,7 +26,11 @@ export async function verifySupabaseJWT(
         .eq("auth_uid", user.user.id)
         .maybeSingle();
 
-    if (profile && profile.ativo === false) {
+    if (!profile) {
+        return reply.status(401).send({ error: "Perfil não encontrado. Faça login novamente." });
+    }
+
+    if (profile.ativo === false) {
         return reply.status(403).send({ error: "Sua conta está inativa. Entre em contato com o suporte." });
     }
 
