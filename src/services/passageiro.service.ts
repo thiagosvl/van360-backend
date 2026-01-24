@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
+import { automationService } from "./automation.service.js";
 import { subscriptionLifecycleService } from "./subscription-lifecycle.service.js";
 
 import { CreatePassageiroDTO, ListPassageirosFiltersDTO, UpdatePassageiroDTO } from "../types/dtos/passageiro.dto.js";
@@ -79,7 +80,16 @@ const createPassageiro = async (data: CreatePassageiroDTO): Promise<any> => {
 
     if (error) throw error;
     
-
+    // Safety Net: Verificar se precisa gerar cobrança do Mês Seguinte (Pós dia 25)
+    if (inserted.enviar_cobranca_automatica) {
+        try {
+            // Roda em background (não await blocking crítico, mas aqui usamos await para garantir consistência em testes)
+            await automationService.verificarGerarCobrancaMesSeguinte(inserted.id, inserted, inserted.usuario_id);
+        } catch (err) {
+             console.error("[createPassageiro] Falha na safety net de cobrança futura", err);
+             // Não lançamos erro para não falhar o cadastro
+        }
+    }
 
     return inserted;
 };
@@ -127,6 +137,15 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO): Promise<
         .single();
 
     if (error) throw error;
+
+    // Safety Net: Verificar se precisa gerar cobrança do Mês Seguinte (Pós dia 25) após ativação
+    if (data.enviar_cobranca_automatica === true) {
+        try {
+            await automationService.verificarGerarCobrancaMesSeguinte(updated.id, updated, updated.usuario_id);
+        } catch (err) {
+             console.error("[updatePassageiro] Falha na safety net de cobrança futura", err);
+        }
+    }
 
     return updated;
 };

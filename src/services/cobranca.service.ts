@@ -128,7 +128,7 @@ export const cobrancaService = {
 
     // Inserir no Banco
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { gerarPixAsync, tipo, cpf, nome, ...cobrancaCleanData } = data;
+    const { gerarPixAsync, enviar_notificacao_agora, tipo, cpf, nome, ...cobrancaCleanData } = data;
 
     const cobrancaData: any = {
       id: cobrancaId,
@@ -144,6 +144,15 @@ export const cobrancaService = {
       .single();
 
     if (error) throw new AppError(`Erro ao criar cobrança no banco: ${error.message}`, 500);
+
+    // Enviar notificação imediata se solicitado
+    if (data.enviar_notificacao_agora) {
+        // Roda em background para não travar response
+        this.enviarNotificacaoManual(inserted.id).catch(err => {
+            logger.error({ err, cobrancaId: inserted.id }, "Falha ao enviar notificação imediata após criação.");
+        });
+    }
+
     return inserted;
   },
 

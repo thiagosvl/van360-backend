@@ -12,12 +12,17 @@ export const usuarioResumoController = {
 
       const { usuarioId } = paramsSchema.parse(request.params);
 
-      // Verify Permission (Optional: Check if request.user.id === usuarioId or is Admin)
-      // request.user is populated by auth middleware usually.
-      // const requesterId = (request.user as any)?.id;
-      // if (requesterId !== usuarioId && role !== 'admin') ...
+      // Validate Query
+      const querySchema = z.object({
+        mes: z.string().optional(),
+        ano: z.string().optional(),
+      });
 
-      const resumo = await usuarioResumoService.getResumo(usuarioId);
+      const { mes, ano } = querySchema.parse(request.query);
+      const mesNum = mes ? parseInt(mes) : undefined;
+      const anoNum = ano ? parseInt(ano) : undefined;
+
+      const resumo = await usuarioResumoService.getResumo(usuarioId, mesNum, anoNum);
 
       return reply.send(resumo);
     } catch (error: any) {

@@ -24,7 +24,8 @@ export const createCobrancaSchema = z.object({
     cpf: z.string().optional(),
     nome: z.string().optional(),
     
-    gerarPixAsync: z.boolean().optional()
+    gerarPixAsync: z.boolean().optional(),
+    enviar_notificacao_agora: z.boolean().optional()
 });
 
 export type CreateCobrancaDTO = z.infer<typeof createCobrancaSchema>;

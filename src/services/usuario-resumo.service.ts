@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "../config/supabase.js";
-import { AssinaturaCobrancaStatus, AssinaturaStatus, ConfigKey, WhatsappStatus } from "../types/enums.js";
+import { AssinaturaCobrancaStatus, CobrancaStatus, ConfigKey, WhatsappStatus } from "../types/enums.js";
+import { calculatePlanFlags } from "../utils/plan-flags.utils.js";
 import { getConfigNumber } from "./configuracao.service.js";
 import { planRules } from "./plan-rules.service.js";
 import { getUsuarioData } from "./usuario.service.js";
@@ -12,6 +13,7 @@ interface SystemSummary {
       slug: string;
       nome: string;
       status: string; // Subscription status (ativa, pendente, etc)
+      trial_end_at?: string;
       limites: {
 
         franquia_cobranca_max: number;
@@ -20,20 +22,27 @@ interface SystemSummary {
       funcionalidades: {
         cobranca_automatica: boolean;
         notificacoes_whatsapp: boolean;
-        relatorios_financeiros: boolean;
-        gestao_gastos: boolean;
       };
     };
     flags: {
       is_trial_ativo: boolean;
+      is_trial_valido: boolean;
       dias_restantes_trial: number | null;
       dias_restantes_assinatura: number | null;
       trial_dias_total: number;
-      whatsapp_status: "connected" | "disconnected" | "qr_ready" | null;
+      whatsapp_status: string | null;
       ultima_fatura: AssinaturaCobrancaStatus | null;
       ultima_fatura_id: string | null;
       limite_franquia_atingido: boolean;
       pix_key_configurada: boolean;
+      is_plano_valido: boolean;
+      is_read_only: boolean;
+      is_ativo: boolean;
+      is_pendente: boolean;
+      is_suspensa: boolean;
+      is_cancelada: boolean;
+      is_profissional: boolean;
+      is_essencial: boolean;
     };
   };
   contadores: {
@@ -55,10 +64,26 @@ interface SystemSummary {
       inativos: number;
     };
   };
+  financeiro?: {
+    receita: {
+      realizada: number;
+      prevista: number;
+      taxa_recebimento: number;
+    };
+    saidas: {
+      total: number;
+      margem_operacional: number;
+    };
+    atrasos: {
+      valor: number;
+      count: number;
+    };
+    ticket_medio: number;
+  };
 }
 
 export const usuarioResumoService = {
-  getResumo: async (usuarioId: string): Promise<SystemSummary> => {
+  getResumo: async (usuarioId: string, mes?: number, ano?: number): Promise<SystemSummary> => {
     // 1. Fetch User
     const usuario = await getUsuarioData(usuarioId);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -89,8 +114,6 @@ export const usuarioResumoService = {
     const funcionalidades = {
       cobranca_automatica: planRules.hasAutomatedBilling(slugPlano),
       notificacoes_whatsapp: planRules.hasWhatsAppNotifications(slugPlano),
-      relatorios_financeiros: planRules.hasFinancialReports(slugPlano),
-      gestao_gastos: planRules.hasExpenseManagement(slugPlano),
     };
 
     // 3. Parallel Fetching for Counters & Status
@@ -163,53 +186,90 @@ export const usuarioResumoService = {
       : null;
 
 
-    const now = new Date();
-    const isTrial = assinaturaData?.status === AssinaturaStatus.TRIAL;
-    let diasRestantes: number | null = null;
+    // 6. Financial Summary (If requested)
+    let financeiro: SystemSummary["financeiro"] = undefined;
 
-    if (isTrial && assinaturaData?.trial_end_at) {
-        const end = new Date(assinaturaData.trial_end_at);
-        const diff = end.getTime() - now.getTime();
-        diasRestantes = Math.ceil(diff / (1000 * 3600 * 24));
-        // Keep negative if verifying overdue? User said "dias_restantes_trial sempre deve ser null" if not active.
-        // If expired, status might still be TRIAL until job runs?
-        // If inactive, null.
-        // I will clamp to 0 just in case.
-        if (diasRestantes < 0) diasRestantes = 0;
-    }
+    if (mes !== undefined && ano !== undefined) {
+      const start = new Date(ano, mes - 1, 1).toISOString().split("T")[0];
+      const end = new Date(ano, mes, 0).toISOString().split("T")[0];
 
-    let diasRestantesAssinatura: number | null = null;
-    if (assinaturaData?.vigencia_fim) {
-        const end = new Date(assinaturaData.vigencia_fim);
-        const diff = end.getTime() - now.getTime();
-        diasRestantesAssinatura = Math.ceil(diff / (1000 * 3600 * 24));
-        if (diasRestantesAssinatura < 0) diasRestantesAssinatura = 0;
+      const [cobrancasRes, gastosRes] = await Promise.all([
+        supabaseAdmin
+          .from("cobrancas")
+          .select("*")
+          .eq("usuario_id", usuarioId)
+          .gte("data_vencimento", start)
+          .lte("data_vencimento", end),
+        supabaseAdmin
+          .from("gastos")
+          .select("*")
+          .eq("usuario_id", usuarioId)
+          .gte("data", start)
+          .lte("data", end)
+      ]);
+
+      const cobrancas = cobrancasRes.data || [];
+      const gastos = gastosRes.data || [];
+
+      const cobrancasPagas = cobrancas.filter((c: any) => c.status === CobrancaStatus.PAGO);
+      const cobrancasAbertas = cobrancas.filter((c: any) => c.status === CobrancaStatus.PENDENTE);
+
+      const receitaRealizada = cobrancasPagas.reduce((acc: number, c: any) => acc + Number(c.valor || 0), 0);
+      const receitaPrevista = cobrancas.reduce((acc: number, c: any) => acc + Number(c.valor || 0), 0);
+      const taxaRecebimento = receitaPrevista > 0 ? (receitaRealizada / receitaPrevista) * 100 : 0;
+
+      const totalDespesas = gastos.reduce((acc: number, g: any) => acc + Number(g.valor || 0), 0);
+      const margemOperacional = receitaRealizada > 0 ? ((receitaRealizada - totalDespesas) / receitaRealizada) * 100 : 0;
+
+      const hoje = new Date().toISOString().split("T")[0];
+      const atrasos = cobrancasAbertas.filter((c: any) => c.data_vencimento < hoje);
+      const valorAtrasos = atrasos.reduce((acc: number, c: any) => acc + Number(c.valor || 0), 0);
+
+      const passageirosPagos = new Set(cobrancasPagas.map((c: any) => c.passageiro_id)).size;
+      const ticketMedio = passageirosPagos > 0 ? receitaRealizada / passageirosPagos : 0;
+
+      financeiro = {
+        receita: {
+          realizada: receitaRealizada,
+          prevista: receitaPrevista,
+          taxa_recebimento: Math.round(taxaRecebimento)
+        },
+        saidas: {
+          total: totalDespesas,
+          margem_operacional: Math.round(margemOperacional)
+        },
+        atrasos: {
+          valor: valorAtrasos,
+          count: atrasos.length
+        },
+        ticket_medio: ticketMedio
+      };
     }
     
+    const flags = calculatePlanFlags(assinaturaData);
+
     return {
       usuario: {
-        ativo: (usuario as any).ativo, // Using boolean as requested
+        ativo: (usuario as any).ativo,
         plano: {
           slug: slugPlano,
           nome: nomePlano,
           status: assinaturaData?.status,
+          trial_end_at: assinaturaData?.trial_end_at,
           limites: {
- 
             franquia_cobranca_max: franquiaContratada,
             franquia_cobranca_restante: franquiaRestante
           },
           funcionalidades
         },
         flags: {
-          is_trial_ativo: isTrial,
-          dias_restantes_trial: diasRestantes,
-          dias_restantes_assinatura: diasRestantesAssinatura,
+          ...flags,
           trial_dias_total: trialDiasTotal,
           whatsapp_status: whatsappState as any,
           ultima_fatura: statusFatura,
           ultima_fatura_id: lastInvoice?.id || null,
           limite_franquia_atingido: franquiaRestante <= 0 && planRules.canGeneratePix(slugPlano),
-          pix_key_configurada: !!usuario.chave_pix
+          pix_key_configurada: !!usuario.chave_pix,
         }
       },
       contadores: {
@@ -230,7 +290,8 @@ export const usuarioResumoService = {
           ativos: escAtivos,
           inativos: escInativos
         }
-      }
+      },
+      financeiro
     };
   }
 };
