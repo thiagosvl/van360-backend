@@ -10,6 +10,7 @@ Este documento serve como referência única de verdade para a arquitetura do pr
 - **Tipagem Forte:** Use DTOs definidos em `src/types/dtos` para validar entradas e tipar saídas. Não use `any` a menos que estritamente necessário (ex: bibliotecas legadas).
 - **Validação com Zod:** Toda entrada de dados em rotas (body, query, params) deve ser validada usando schemas do Zod.
 - **Acesso ao Banco:** O acesso ao banco (Supabase) acontece diretamente na camada de `Services` usando `supabaseAdmin`. Não usamos um padrão de Repository separado (o Service atua como tal).
+- **Código Limpo > Comentários:** O código deve ser autoexplicativo (nomes claros de funções e variáveis). **EVITE** comentários explicativos ("// Faz X"). Use comentários apenas em casos extremos de complexidade ou hacks necessários, e avise explicitamente no PR/Chat se o fizer. O excesso de comentários polui a base de código.
 
 ---
 
