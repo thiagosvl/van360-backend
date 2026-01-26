@@ -63,8 +63,8 @@ export interface RegistroPayload {
 export interface RegistroAutomaticoResult {
   success: boolean;
   pix: {
-      qrCodePayload: string;
-      qrCodeUrl: string;
+    qrCodePayload: string;
+    qrCodeUrl: string;
   };
   inter_txid?: string; // Mantendo caso precise
   cobrancaId?: string; // Mantendo caso precise
@@ -316,7 +316,7 @@ export async function iniciaRegistroPlanoEssencial(
 
     const { data: plano, error: planoError } = await supabaseAdmin
       .from("planos")
-      .select("id, slug, preco, trial_days, promocao_ativa, preco_promocional")
+      .select("id, nome, slug, preco, trial_days, promocao_ativa, preco_promocional")
       .eq("id", payload.plano_id)
       .single();
 
@@ -393,38 +393,38 @@ export async function iniciaRegistroPlanoEssencial(
 
     // Notificação de Boas Vindas (Modular por Plano)
     if (payload.telefone) {
-        logger.info(`[AuthService] Verificando notificação de boas-vindas para: ${payload.telefone}, Plano: ${plano.slug}`);
-        let eventType: any = null;
-        let extraData: any = {};
+      logger.info(`[AuthService] Verificando notificação de boas-vindas para: ${payload.telefone}, Plano: ${plano.slug}`);
+      let eventType: any = null;
+      let extraData: any = {};
 
-        if (trialDays > 0) {
-            eventType = DRIVER_EVENT_WELCOME_TRIAL;
-            extraData = { 
-                trialDays,
-                dataVencimento: dataVencimentoCobranca
-            };
-        } else {
-            // Plano Pago sem Trial (Imediato)
-            eventType = DRIVER_EVENT_ACTIVATION;
-        }
+      if (trialDays > 0) {
+        eventType = DRIVER_EVENT_WELCOME_TRIAL;
+        extraData = {
+          trialDays,
+          dataVencimento: dataVencimentoCobranca
+        };
+      } else {
+        // Plano Pago sem Trial (Imediato)
+        eventType = DRIVER_EVENT_ACTIVATION;
+      }
 
-        if (eventType) {
-            logger.info(`[AuthService] Enviando notificação tipo: ${eventType}`);
-            notificationService.notifyDriver(payload.telefone, eventType, {
-                nomeMotorista: payload.nome,
-                nomePlano: plano.slug === PLANO_PROFISSIONAL ? "Profissional" : "Essencial",
-                valor: precoAplicado,
-                dataVencimento: dataVencimentoCobranca,
-                pixPayload: undefined,
-                ...extraData
-            })
-            .then(() => logger.info(`[AuthService] Notificação de boas-vindas enviada com sucesso.`))
-            .catch(err => logger.error({ err }, `Falha ao enviar boas vindas (${eventType})`));
-        } else {
-             logger.warn(`[AuthService] Nenhum evento de notificação definido para plano: ${plano.slug}`);
-        }
+      if (eventType) {
+        logger.info(`[AuthService] Enviando notificação tipo: ${eventType}`);
+        notificationService.notifyDriver(payload.telefone, eventType, {
+          nomeMotorista: payload.nome,
+          nomePlano: plano.nome,
+          valor: precoAplicado,
+          dataVencimento: dataVencimentoCobranca,
+          pixPayload: undefined,
+          ...extraData
+        })
+          .then(() => logger.info(`[AuthService] Notificação de boas-vindas enviada com sucesso.`))
+          .catch(err => logger.error({ err }, `Falha ao enviar boas vindas (${eventType})`));
+      } else {
+        logger.warn(`[AuthService] Nenhum evento de notificação definido para plano: ${plano.slug}`);
+      }
     } else {
-        logger.warn(`[AuthService] Telefone não informado, pulando notificação de boas-vindas.`);
+      logger.warn(`[AuthService] Telefone não informado, pulando notificação de boas-vindas.`);
     }
 
     return { success: true, session };
@@ -457,7 +457,7 @@ export async function iniciarRegistroplanoProfissional(
     const userStatus = await checkUserStatus(cpf, email, telefone);
 
     if (userStatus.action === "bloqueado_em_uso") {
-        throw new AppError(userStatus.message, 409, true, userStatus.field);
+      throw new AppError(userStatus.message, 409, true, userStatus.field);
     }
 
     if (userStatus.action === "limpar_e_prosseguir") {
@@ -504,7 +504,7 @@ export async function iniciarRegistroplanoProfissional(
       const { data: plano, error: planoError } = await supabaseAdmin
         .from("planos")
         .select(
-          "id, nome, preco, preco_promocional, promocao_ativa, franquia_cobrancas_mes"
+          "id, nome, preco, preco_promocional, promocao_ativa, franquia_cobrancas_mes, parent:parent_id(nome)"
         )
         .eq("id", planoSelecionadoId)
         .single();
@@ -551,21 +551,18 @@ export async function iniciarRegistroplanoProfissional(
     // Na contratação inicial, data de vencimento = data de contratação (hoje)
     const dataVencimentoCobranca = anchorDate;
 
-    // --- REFATORADO: Uso do CobrancaService para gerar Cobrança e PIX ---
-    // Removemos a lógica manual de insert + interService + update daqui.
-    
     // Preparar descrição
     const descricaoCobranca = `Ativação de Assinatura - Plano ${planoSelecionado.nome}`;
 
     logger.info(`[AuthService] Iniciando geração de cobrança de ativação para o usuário ${usuarioId}`);
     const activationResult = await assinaturaCobrancaService.gerarCobrancaAtivacao({
-        usuarioId: usuarioId!,
-        assinaturaId: assinaturaId!,
-        valor: precoAplicado,
-        dataVencimento: dataVencimentoCobranca,
-        descricao: descricaoCobranca,
-        cpfResponsavel: cpf,
-        nomeResponsavel: payload.nome
+      usuarioId: usuarioId!,
+      assinaturaId: assinaturaId!,
+      valor: precoAplicado,
+      dataVencimento: dataVencimentoCobranca,
+      descricao: descricaoCobranca,
+      cpfResponsavel: cpf,
+      nomeResponsavel: payload.nome
     });
     logger.info(`[AuthService] Cobrança de ativação gerada com sucesso. ID: ${activationResult.cobranca.id}`);
 
@@ -574,27 +571,29 @@ export async function iniciarRegistroplanoProfissional(
 
     // Notificação de Boas Vindas (Profissional - Ativação Imediata)
     if (payload.telefone) {
-        logger.info(`[AuthService] Enviando notificação de boas-vindas (Profissional) para: ${payload.telefone}`);
-        notificationService.notifyDriver(payload.telefone, DRIVER_EVENT_ACTIVATION, {
-            nomeMotorista: payload.nome,
-            nomePlano: "Profissional",
-            valor: precoAplicado,
-            dataVencimento: dataVencimentoCobranca,
-            pixPayload: pixData.qrCodePayload
-        })
-        .then(() => logger.info(`[AuthService] Notificação de boas-vindas (Profissional) enviada com sucesso.`))
-        .catch(err => logger.error({ err }, `Falha ao enviar boas vindas (Profissional)`));
+      const nomePlano = (planoSelecionado as any)?.parent?.nome || (planoSelecionado as any)?.nome;
+
+      logger.info(`[AuthService] Enviando notificação de boas-vindas (Profissional) para: ${payload.telefone}`);
+      notificationService.notifyDriver(payload.telefone, DRIVER_EVENT_ACTIVATION, {
+        nomeMotorista: payload.nome,
+        nomePlano: nomePlano,
+        valor: precoAplicado,
+        dataVencimento: dataVencimentoCobranca,
+        pixPayload: pixData.qrCodePayload
+      })
+        .then(() => logger.info(`[AuthService] Notificação de boas-vindas (${nomePlano}) enviada com sucesso.`))
+        .catch(err => logger.error({ err }, `Falha ao enviar boas vindas (${nomePlano})`));
     }
 
-    return { 
-        success: true, 
-        session,
-        cobrancaId: cobrancaId || undefined,
-        preco_aplicado: precoAplicado,
-        pix: { 
-            qrCodePayload: pixData.qrCodePayload, 
-            qrCodeUrl: pixData.location 
-        } 
+    return {
+      success: true,
+      session,
+      cobrancaId: cobrancaId || undefined,
+      preco_aplicado: precoAplicado,
+      pix: {
+        qrCodePayload: pixData.qrCodePayload,
+        qrCodeUrl: pixData.location
+      }
     };
   } catch (err: any) {
     logger.error({ err, usuarioId, authUid, assinaturaId, cobrancaId }, "Erro durante o registro de plano Profissional. Realizando rollback.");
@@ -610,159 +609,159 @@ export async function iniciarRegistroplanoProfissional(
 
 
 export async function login(identifier: string, password: string): Promise<AuthSession> {
-    // Apenas login via CPF é permitido
-    const cpf = onlyDigits(identifier);
+  // Apenas login via CPF é permitido
+  const cpf = onlyDigits(identifier);
 
-    if (!cpf) {
-        throw new AppError("CPF inválido.", 400);
-    }
+  if (!cpf) {
+    throw new AppError("CPF inválido.", 400);
+  }
 
-    // 1. Busca prévia no banco: Recuperar email a partir do CPF e checar Status
-    const { data: user, error } = await supabaseAdmin
-        .from("usuarios")
-        .select("email, ativo")
-        .eq("cpfcnpj", cpf)
-        .single();
+  // 1. Busca prévia no banco: Recuperar email a partir do CPF e checar Status
+  const { data: user, error } = await supabaseAdmin
+    .from("usuarios")
+    .select("email, ativo")
+    .eq("cpfcnpj", cpf)
+    .single();
 
-    if (error || !user) {
-        throw new AppError("Usuário não encontrado com este CPF.", 404);
-    }
+  if (error || !user) {
+    throw new AppError("Usuário não encontrado com este CPF.", 404);
+  }
 
-    if (!user.ativo) {
-        throw new AppError("Sua conta está inativa. Entre em contato com o suporte.", 403);
-    }
+  if (!user.ativo) {
+    throw new AppError("Sua conta está inativa. Entre em contato com o suporte.", 403);
+  }
 
-    // 2. Autenticação no Supabase Auth usando o email recuperado
-    const { data, error: authError } = await supabaseAdmin.auth.signInWithPassword({
-        email: user.email,
-        password
-    });
+  // 2. Autenticação no Supabase Auth usando o email recuperado
+  const { data, error: authError } = await supabaseAdmin.auth.signInWithPassword({
+    email: user.email,
+    password
+  });
 
-    if (authError || !data.session) {
-        throw new AppError("Credenciais inválidas.", 401);
-    }
+  if (authError || !data.session) {
+    throw new AppError("Credenciais inválidas.", 401);
+  }
 
-    return {
-        access_token: data.session.access_token,
-        refresh_token: data.session.refresh_token,
-        user: data.user as any
-    };
+  return {
+    access_token: data.session.access_token,
+    refresh_token: data.session.refresh_token,
+    user: data.user as any
+  };
 }
 
 export async function loginResponsavel(cpf: string, email: string) {
-    const cpfClean = onlyDigits(cpf);
-    const emailClean = email.trim();
+  const cpfClean = onlyDigits(cpf);
+  const emailClean = email.trim();
 
-    // 1. Encontrar um passageiro com este responsavel para identificar o motorista (usuario_id)
-    const { data: firstMatch, error } = await supabaseAdmin
-        .from("passageiros")
-        .select("usuario_id")
-        .eq("cpf_responsavel", cpfClean)
-        .eq("email_responsavel", emailClean)
-        .limit(1)
-        .single();
+  // 1. Encontrar um passageiro com este responsavel para identificar o motorista (usuario_id)
+  const { data: firstMatch, error } = await supabaseAdmin
+    .from("passageiros")
+    .select("usuario_id")
+    .eq("cpf_responsavel", cpfClean)
+    .eq("email_responsavel", emailClean)
+    .limit(1)
+    .single();
 
-    if (error || !firstMatch) {
-         // Silencioso se não achar, ou erro 401
-         if (error && error.code !== 'PGRST116') logger.error({ error: error.message }, "Erro DB loginResponsavel");
-         throw new AppError("CPF ou Email não encontrados.", 401);
-    }
+  if (error || !firstMatch) {
+    // Silencioso se não achar, ou erro 401
+    if (error && error.code !== 'PGRST116') logger.error({ error: error.message }, "Erro DB loginResponsavel");
+    throw new AppError("CPF ou Email não encontrados.", 401);
+  }
 
-    // 2. Buscar todos os passageiros deste responsavel para este motorista
-    const { data: passageiros, error: listError } = await supabaseAdmin
-        .from("passageiros")
-        .select("*, escolas(nome), veiculos(placa)")
-        .eq("cpf_responsavel", cpfClean)
-        .eq("email_responsavel", emailClean)
-        .eq("usuario_id", firstMatch.usuario_id)
-        .order("nome", { ascending: true });
+  // 2. Buscar todos os passageiros deste responsavel para este motorista
+  const { data: passageiros, error: listError } = await supabaseAdmin
+    .from("passageiros")
+    .select("*, escolas(nome), veiculos(placa)")
+    .eq("cpf_responsavel", cpfClean)
+    .eq("email_responsavel", emailClean)
+    .eq("usuario_id", firstMatch.usuario_id)
+    .order("nome", { ascending: true });
 
-    if (listError) {
-        throw new AppError("Erro ao buscar passageiros.", 500);
-    }
+  if (listError) {
+    throw new AppError("Erro ao buscar passageiros.", 500);
+  }
 
-    return passageiros;
+  return passageiros;
 }
 
 export async function updatePassword(token: string, newPassword: string, oldPassword?: string): Promise<void> {
-    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
-    
-    if (userError || !user || !user.email) {
-        throw new AppError("Token inválido ou expirado.", 401);
-    }
+  const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
 
-    // Verify old password if provided (Recommended)
-    if (oldPassword) {
-        const { error: signInError } = await supabaseAdmin.auth.signInWithPassword({
-            email: user.email,
-            password: oldPassword
-        });
+  if (userError || !user || !user.email) {
+    throw new AppError("Token inválido ou expirado.", 401);
+  }
 
-        if (signInError) {
-             throw new AppError("A senha atual está incorreta.", 401);
-        }
-    }
-
-    const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
-        password: newPassword
+  // Verify old password if provided (Recommended)
+  if (oldPassword) {
+    const { error: signInError } = await supabaseAdmin.auth.signInWithPassword({
+      email: user.email,
+      password: oldPassword
     });
 
-    if (error) {
-         logger.error({ error: error.message, userId: user.id }, "Erro ao atualizar senha.");
-         throw new AppError("Não foi possível atualizar a senha.", 500);
+    if (signInError) {
+      throw new AppError("A senha atual está incorreta.", 401);
     }
+  }
+
+  const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
+    password: newPassword
+  });
+
+  if (error) {
+    logger.error({ error: error.message, userId: user.id }, "Erro ao atualizar senha.");
+    throw new AppError("Não foi possível atualizar a senha.", 500);
+  }
 }
 
 export async function resetPassword(identifier: string, redirectTo?: string): Promise<void> {
-    let email = identifier.trim();
+  let email = identifier.trim();
 
-    const isCpf = /^\d+$/.test(identifier);
-    if (isCpf) {
-        const cpf = onlyDigits(identifier);
-        const { data: user, error } = await supabaseAdmin
-            .from("usuarios")
-            .select("email")
-            .eq("cpfcnpj", cpf)
-            .single();
+  const isCpf = /^\d+$/.test(identifier);
+  if (isCpf) {
+    const cpf = onlyDigits(identifier);
+    const { data: user, error } = await supabaseAdmin
+      .from("usuarios")
+      .select("email")
+      .eq("cpfcnpj", cpf)
+      .single();
 
-        if (error || !user) {
-            // Throw generic error or specific? Frontend expects "Email sent" even if not found?
-            // Or "CPF not found"?
-            // Current frontend checks existence.
-            throw new AppError("Usuário não encontrado.", 404);
-        }
-        email = user.email;
+    if (error || !user) {
+      // Throw generic error or specific? Frontend expects "Email sent" even if not found?
+      // Or "CPF not found"?
+      // Current frontend checks existence.
+      throw new AppError("Usuário não encontrado.", 404);
     }
+    email = user.email;
+  }
 
-    const { error } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
-        redirectTo: redirectTo
-    });
+  const { error } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
+    redirectTo: redirectTo
+  });
 
-    if (error) {
-        logger.error({ error: error.message, email }, "Erro ao solicitar redefinição de senha via Supabase Admin.");
-        throw new AppError("Não foi possível enviar o e-mail de recuperação.", 500);
-    }
+  if (error) {
+    logger.error({ error: error.message, email }, "Erro ao solicitar redefinição de senha via Supabase Admin.");
+    throw new AppError("Não foi possível enviar o e-mail de recuperação.", 500);
+  }
 }
 
 export async function logout(token: string): Promise<void> {
-    const { error } = await supabaseAdmin.auth.admin.signOut(token);
-    if (error) {
-        logger.warn({ error: error.message }, "Erro ao realizar logout no Supabase.");
-        // Não lançar erro crítico no logout
-    }
+  const { error } = await supabaseAdmin.auth.admin.signOut(token);
+  if (error) {
+    logger.warn({ error: error.message }, "Erro ao realizar logout no Supabase.");
+    // Não lançar erro crítico no logout
+  }
 }
 
 export async function refreshToken(refreshToken: string): Promise<AuthSession> {
-    const { data, error } = await supabaseAdmin.auth.refreshSession({ refresh_token: refreshToken });
+  const { data, error } = await supabaseAdmin.auth.refreshSession({ refresh_token: refreshToken });
 
-    if (error || !data.session) {
-        logger.warn({ error: error?.message }, "Falha ao renovar sessão com refresh token.");
-        throw new AppError("Sessão expirada.", 401);
-    }
+  if (error || !data.session) {
+    logger.warn({ error: error?.message }, "Falha ao renovar sessão com refresh token.");
+    throw new AppError("Sessão expirada.", 401);
+  }
 
-    return {
-        access_token: data.session.access_token,
-        refresh_token: data.session.refresh_token,
-        user: data.user as any
-    };
+  return {
+    access_token: data.session.access_token,
+    refresh_token: data.session.refresh_token,
+    user: data.user as any
+  };
 }

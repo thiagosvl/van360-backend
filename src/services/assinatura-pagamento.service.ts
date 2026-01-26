@@ -145,35 +145,32 @@ export async function processarPagamentoAssinatura(
 
     // 8. Enviar Notificação de Confirmação (WhatsApp)
     try {
-        const { data: usuario } = await supabaseAdmin
-            .from("usuarios")
-            .select("nome, telefone")
-            .eq("id", cobranca.usuario_id)
-            .single();
-        
-        // Determinar nome do plano corretamente
-        const planoRef = assinaturaPendente?.planos as any;
-        const nomePlano = planoRef?.parent?.nome || planoRef?.nome || "Plano Van360";
+      const { data: usuario } = await supabaseAdmin
+        .from("usuarios")
+        .select("nome, telefone")
+        .eq("id", cobranca.usuario_id)
+        .single();
 
-        if (usuario?.telefone) {
-             await notificationService.notifyDriver(
-                 usuario.telefone,
-                 DRIVER_EVENT_PAYMENT_CONFIRMED,
-                 {
-                     nomeMotorista: usuario.nome,
-                     nomePlano,
-                     valor: dadosPagamento.valor,
-                     dataVencimento: vigenciaFim.toISOString().split("T")[0],
-                     isActivation: isOnboardingPayment,
-                     reciboUrl,
-                     mes: new Date(dadosPagamento.dataPagamento).getMonth() + 1, 
-                     ano: new Date(dadosPagamento.dataPagamento).getFullYear()
-                 }
-             );
-        }
+      // Determinar nome do plano corretamente
+      const planoRef = assinaturaPendente?.planos as any;
+      const nomePlano = (planoRef?.parent as any)?.nome || planoRef?.nome;
+
+        await notificationService.notifyDriver(
+          usuario?.telefone,
+          DRIVER_EVENT_PAYMENT_CONFIRMED,
+          {
+            nomeMotorista: usuario?.nome,
+            nomePlano,
+            valor: dadosPagamento.valor,
+            dataVencimento: vigenciaFim.toISOString().split("T")[0],
+            isActivation: isOnboardingPayment,
+            reciboUrl,
+            mes: new Date(dadosPagamento.dataPagamento).getMonth() + 1,
+            ano: new Date(dadosPagamento.dataPagamento).getFullYear()
+          }
+        );
     } catch (notifError: any) {
-        logger.error({ ...logContext, error: notifError.message }, "Erro ao enviar notificação de confirmação de pagamento");
-        // Não falhar o processo de pagamento por erro de notificação
+      logger.error({ ...logContext, error: notifError.message }, "Erro ao enviar notificação de confirmação de pagamento");
     }
 
     logger.info({ ...logContext }, "Fluxo completo para pagamento confirmado");

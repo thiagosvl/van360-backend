@@ -97,7 +97,6 @@ export const repasseMonitorJob = {
                                 notificationService.notifyDriver(usuario.telefone, DRIVER_EVENT_REPASSE_FAILED, {
                                     nomeMotorista: usuario.nome,
                                     valor: transacao.valor_repassado,
-                                    nomePlano: "Repasse", // Opcional
                                     dataVencimento: new Date().toISOString()
                                 } as any);
                             }

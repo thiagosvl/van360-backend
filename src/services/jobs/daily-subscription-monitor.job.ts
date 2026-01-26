@@ -62,7 +62,7 @@ export const dailySubscriptionMonitorJob = {
                 .from("assinaturas_cobrancas")
                 .select(`
                     id, valor, data_vencimento, status, qr_code_payload, assinatura_usuario_id,
-                    assinaturas_usuarios!inner ( id, status, plano_id, planos(nome) ),
+                    assinaturas_usuarios!inner ( id, status, plano_id, planos(nome, parent:parent_id(nome)) ),
                     usuarios!inner ( id, nome, telefone )
                 `)
                 .eq("status", AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO)
@@ -81,7 +81,8 @@ export const dailySubscriptionMonitorJob = {
                 result.processed++;
                 const motorista = cobranca.usuarios as any;
                 const assinatura = cobranca.assinaturas_usuarios as any;
-                const planoNome = assinatura.planos?.nome || "Plano";
+                const planoRef = assinatura.planos as any;
+                const planoNome = planoRef?.parent?.nome || planoRef?.nome;
 
                 if (!motorista.telefone) continue;
 

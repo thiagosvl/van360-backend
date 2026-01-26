@@ -148,10 +148,23 @@ export const automationService = {
             
             const { data: usuario } = await supabaseAdmin.from("usuarios").select("nome, telefone").eq("id", usuarioId).single();
             
+            
+            // Buscar nome do plano atual para notificação
+            const { data: assinaturaMsg } = await supabaseAdmin
+                .from("assinaturas_usuarios")
+                .select("planos(nome, parent:parent_id(nome))")
+                .eq("usuario_id", usuarioId)
+                .eq("ativo", true)
+                .limit(1)
+                .single();
+
+            const planoRef = assinaturaMsg?.planos as any;
+            const nomePlano = planoRef?.parent?.nome || planoRef?.nome || "Profissional";
+
             if (usuario && usuario.telefone) {
                 await notificationService.notifyDriver(usuario.telefone, DRIVER_EVENT_REACTIVATION_EMBARGO as any, {
                     nomeMotorista: usuario.nome,
-                    nomePlano: "Profissional", // Genérico ou buscar do banco
+                    nomePlano: nomePlano,
                     valor: 0,
                     dataVencimento: "",
                     mes: mesAtual,

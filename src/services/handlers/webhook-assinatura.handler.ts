@@ -19,7 +19,7 @@ export const webhookAssinaturaHandler = {
       .select(`
             id, usuario_id, assinatura_usuario_id, status, data_vencimento, billing_type,
             usuarios(nome, telefone),
-            assinaturas_usuarios(planos(nome))
+            assinaturas_usuarios(planos(nome, parent:parent_id(nome)))
        `)
       .eq("inter_txid", txid)
       .maybeSingle();
@@ -60,7 +60,7 @@ export const webhookAssinaturaHandler = {
         // B) Enfileirar Geração de Recibo + Notificação
         try {
             const usuario = cobranca.usuarios as any;
-            const nomePlano = (cobranca as any).assinaturas_usuarios?.planos?.nome || "Plano Van360";
+            const nomePlano = (cobranca as any).assinaturas_usuarios?.planos?.parent?.nome || (cobranca as any).assinaturas_usuarios?.planos?.nome || "Plano Van360";
             const vigenciaFim = result?.vigenciaFim ? result.vigenciaFim.toISOString().split('T')[0] : cobranca.data_vencimento;
 
             const receiptData: ReceiptData = {
