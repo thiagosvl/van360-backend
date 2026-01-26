@@ -1,5 +1,4 @@
 import {
-  DRIVER_EVENT_PAYMENT_CONFIRMED,
   PLANO_PROFISSIONAL
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
@@ -13,7 +12,6 @@ import {
 import { automationService } from "./automation.service.js";
 import { cobrancaService } from "./cobranca.service.js";
 import { getConfigNumber } from "./configuracao.service.js";
-import { notificationService } from "./notifications/notification.service.js";
 
 interface DadosPagamento {
   valor: number;
@@ -155,6 +153,9 @@ export async function processarPagamentoAssinatura(
       const planoRef = assinaturaPendente?.planos as any;
       const nomePlano = (planoRef?.parent as any)?.nome || planoRef?.nome;
 
+        // NOTIFICAÇÃO REMOVIDA: A notificação agora é enviada pelo ReceiptWorker após gerar o comprovante.
+        // Isso evita duplicidade de mensagens (uma sem comprovante e outra com).
+        /*
         await notificationService.notifyDriver(
           usuario?.telefone,
           DRIVER_EVENT_PAYMENT_CONFIRMED,
@@ -169,6 +170,7 @@ export async function processarPagamentoAssinatura(
             ano: new Date(dadosPagamento.dataPagamento).getFullYear()
           }
         );
+        */
     } catch (notifError: any) {
       logger.error({ ...logContext, error: notifError.message }, "Erro ao enviar notificação de confirmação de pagamento");
     }
