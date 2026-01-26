@@ -15,12 +15,12 @@ export default async function handler(
   try {
     // Singleton: reutilizar instância do Fastify entre requisições
     if (!app) {
-      console.log("[Vercel Handler] Inicializando Fastify app...");
+      console.log("Inicializando Fastify app...");
       try {
         app = await createApp();
-        console.log("[Vercel Handler] Fastify app inicializado com sucesso");
+        console.log("Fastify app inicializado com sucesso");
       } catch (initError) {
-        console.error("[Vercel Handler] Erro ao inicializar app:", initError);
+        console.error("Erro ao inicializar app:", initError);
         throw initError;
       }
     }
