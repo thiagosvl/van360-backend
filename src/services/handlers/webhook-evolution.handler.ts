@@ -1,4 +1,4 @@
-import { WHATSAPP_STATUS, GLOBAL_WHATSAPP_INSTANCE } from "../../config/constants.js";
+import { GLOBAL_WHATSAPP_INSTANCE, WHATSAPP_STATUS } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
 import { whatsappQueue } from "../../queues/whatsapp.queue.js";
@@ -155,6 +155,19 @@ export const webhookEvolutionHandler = {
              updateData.pairing_code_generated_at = null;
              updateData.disconnection_notification_count = 0; // Reset counter on successful connection
              
+             // NOTIFICAR SUCESSO DE CONEXÃO
+             // Envia mensagem pela instância GLOBAL para garantir entrega
+             try {
+                const { data: usuario } = await supabaseAdmin.from("usuarios").select("nome, telefone").eq("id", usuarioId).single();
+                if (usuario && usuario.telefone) {
+                    const msgConectado = `Olá ${usuario.nome}! 🚀\n\nSeu WhatsApp foi conectado com sucesso ao Van360!\nAgora você receberá notificações automáticas por aqui.\n\nQualquer dúvida, estamos à disposição.`;
+                    await whatsappService.sendText(usuario.telefone, msgConectado, GLOBAL_WHATSAPP_INSTANCE);
+                    logger.info({ usuarioId, telefone: usuario.telefone }, "Notificação de conexão bem-sucedida enviada.");
+                }
+             } catch (notifyErr) {
+                 logger.error({ notifyErr, usuarioId }, "Falha ao enviar notificação de boas-vindas da conexão");
+             }
+
              // Reprocessar mensagens que falharam para esta instância
              try {
                   await this.reprocessFailedJobs(instanceName);
