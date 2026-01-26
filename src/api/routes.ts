@@ -17,7 +17,6 @@ import publicRoutes from "./public.routes.js";
 import usuarioRoute from "./usuario.route.js";
 import veiculoRoute from "./veiculo.routes.js";
 import webhookInterRoute from "./webhook-inter.route.js";
-import whatsappRoute from "./whatsapp.routes.js"; // Novo
 
 const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
 
@@ -55,7 +54,8 @@ const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
   // Prefix /api/jobs -> endpoints serão /api/jobs/generate-monthly-charges
   app.register(jobsRoute, { prefix: "/api/jobs" });
 
-  app.register(whatsappRoute, { prefix: "/api/whatsapp" });
+  // TUDO REMOVIDO PARA USAR INSTÂNCIA GLOBAL
+  // app.register(whatsappRoute, { prefix: "/api/whatsapp" });
 
   
   // Padronização: Webhook da Evolution agora em /api/evolution

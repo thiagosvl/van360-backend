@@ -466,15 +466,8 @@ CREATE TABLE IF NOT EXISTS "public"."usuarios" (
     "chave_pix_validada_em" timestamp with time zone,
     "nome_titular_pix_validado" "text",
     "cpf_cnpj_titular_pix_validado" "text",
-    "whatsapp_status" "public"."whatsapp_status_enum" DEFAULT 'DISCONNECTED'::"public"."whatsapp_status_enum",
-    "tipo" "public"."user_type_enum" DEFAULT 'motorista'::"public"."user_type_enum" NOT NULL,
-    "pairing_code" character varying(64),
-    "pairing_code_generated_at" timestamp with time zone DEFAULT now(),
-    "pairing_code_expires_at" timestamp with time zone,
-    "pairing_code_attempts" integer DEFAULT 0,
-    "last_disconnection_notification_at" timestamp with time zone,
-    "disconnection_notification_count" integer DEFAULT 0,
-    "whatsapp_last_status_change_at" timestamp with time zone DEFAULT now()
+    "cpf_cnpj_titular_pix_validado" "text",
+    "tipo" "public"."user_type_enum" DEFAULT 'motorista'::"public"."user_type_enum" NOT NULL
 );
 
 

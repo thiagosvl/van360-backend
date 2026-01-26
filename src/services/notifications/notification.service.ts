@@ -2,7 +2,6 @@ import QRCode from "qrcode";
 import { GLOBAL_WHATSAPP_INSTANCE } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { CompositeMessagePart } from "../../types/dtos/whatsapp.dto.js";
-import { whatsappService } from "../whatsapp.service.js";
 
 import {
     DRIVER_EVENT_ACCESS_SUSPENDED,
@@ -19,7 +18,7 @@ import {
     DRIVER_EVENT_TRIAL_ENDING,
     DRIVER_EVENT_UPGRADE,
     DRIVER_EVENT_WELCOME_TRIAL,
-    DRIVER_EVENT_WHATSAPP_DISCONNECTED,
+
     PASSENGER_EVENT_DUE_SOON,
     PASSENGER_EVENT_DUE_TODAY,
     PASSENGER_EVENT_MANUAL,
@@ -50,10 +49,6 @@ type DriverEventType =
     | typeof DRIVER_EVENT_PAYMENT_CONFIRMED
     | typeof DRIVER_EVENT_TRIAL_ENDING
     | typeof DRIVER_EVENT_REPASSE_FAILED
-    | typeof DRIVER_EVENT_WHATSAPP_DISCONNECTED
-    | typeof DRIVER_EVENT_PIX_KEY_VALIDATED
-    | typeof DRIVER_EVENT_WHATSAPP_DISCONNECTED
-    | typeof DRIVER_EVENT_PIX_KEY_VALIDATED
     | typeof DRIVER_EVENT_PIX_KEY_VALIDATED
     | typeof DRIVER_EVENT_PRE_PASSENGER_CREATED;
 
@@ -78,10 +73,9 @@ export const notificationService = {
             case PASSENGER_EVENT_MANUAL: parts = PassengerTemplates.manualCharge(ctx); break;
         }
 
-        // Tentar enviar pela instância do motorista
-        const driverInstance = whatsappService.getInstanceName(ctx.usuarioId);
-        
-        return await this._processAndEnqueue(to, parts, type, driverInstance, ctx.pixPayload);
+        // NOTIFICAR SEMPRE PELA INSTÂNCIA GLOBAL (BYPASS)
+        // Antes: usava driverInstance se conectado. Agora: Global para todos.
+        return await this._processAndEnqueue(to, parts, type, GLOBAL_WHATSAPP_INSTANCE, ctx.pixPayload);
     },
 
     /**
@@ -110,9 +104,7 @@ export const notificationService = {
             case DRIVER_EVENT_PAYMENT_CONFIRMED: parts = DriverTemplates.paymentConfirmed(ctx); break;
             case DRIVER_EVENT_TRIAL_ENDING: parts = DriverTemplates.trialEnding(ctx); break;
             case DRIVER_EVENT_REPASSE_FAILED: parts = DriverTemplates.repasseFailed(ctx); break;
-            case DRIVER_EVENT_WHATSAPP_DISCONNECTED: parts = DriverTemplates.whatsappDisconnected(ctx); break;
-            case DRIVER_EVENT_PIX_KEY_VALIDATED: parts = DriverTemplates.pixKeyValidated(ctx); break;
-            case DRIVER_EVENT_PIX_KEY_VALIDATED: parts = DriverTemplates.pixKeyValidated(ctx); break;
+
             case DRIVER_EVENT_PIX_KEY_VALIDATED: parts = DriverTemplates.pixKeyValidated(ctx); break;
             case DRIVER_EVENT_PRE_PASSENGER_CREATED: parts = DriverTemplates.prePassengerCreated(ctx); break;
         }
@@ -124,7 +116,55 @@ export const notificationService = {
     /**
      * Processa as partes da mensagem (Gera QR Codes se necessário) e Enfileira
      */
+    /**
+     * Central Dispatcher - Suporta Múltiplos Canais (WhatsApp, SMS, Email)
+     * Atualmente implementado apenas WhatsApp, mas pronto para expansão via switch/strategies.
+     */
     async _processAndEnqueue(
+        to: string, 
+        parts: CompositeMessagePart[], 
+        eventType: string, 
+        instanceName?: string,
+        pixPayload?: string,
+        channels: ("WHATSAPP" | "SMS" | "EMAIL")[] = ["WHATSAPP"] // Default channel
+    ): Promise<boolean> {
+        try {
+            const results: boolean[] = [];
+
+            // 1. Channel: WHATSAPP
+            if (channels.includes("WHATSAPP")) {
+                const whatsappSuccess = await this._dispatchWhatsapp(to, parts, eventType, instanceName, pixPayload);
+                results.push(whatsappSuccess);
+            }
+
+            // 2. Channel: SMS (Skeleton)
+            if (channels.includes("SMS")) {
+                // TODO: Implement SMS Service Integration
+                // const smsSuccess = await smsService.send(...)
+                // results.push(smsSuccess);
+                logger.debug({ to, eventType }, "Canal SMS solicitado mas ainda não implementado (Skeleton).");
+            }
+
+            // 3. Channel: EMAIL (Skeleton)
+            if (channels.includes("EMAIL")) {
+                // TODO: Implement Email Service Integration
+                // const emailSuccess = await emailService.send(...)
+                // results.push(emailSuccess);
+                logger.debug({ to, eventType }, "Canal EMAIL solicitado mas ainda não implementado (Skeleton).");
+            }
+
+            return results.some(r => r); // Retorna true se pelo menos um canal funcionou
+
+        } catch (error) {
+            logger.error({ error, to }, "Erro no NotificationService (Dispatch)");
+            return false;
+        }
+    },
+
+    /**
+     * Implementação Específica do Canal WhatsApp
+     */
+    async _dispatchWhatsapp(
         to: string, 
         parts: CompositeMessagePart[], 
         eventType: string, 
@@ -137,25 +177,22 @@ export const notificationService = {
                 if (part.meta === 'qrcode' && pixPayload) {
                     try {
                         part.mediaBase64 = await QRCode.toDataURL(pixPayload);
-                        // Remover meta para limpar o objeto antes do envio
                         delete part.meta; 
                     } catch (e) {
                          logger.error({ error: e }, "Erro ao gerar QR Code na parte da mensagem");
-                         // Em caso de erro, removemos a parte de imagem para não enviar imagem quebrada,
-                         // mas mantemos o resto (texto do copy paste vai garantir o pagamento)
                          part.mediaBase64 = undefined; 
                     }
                 }
             }
             
-            // 2. Filtrar partes que deveriam ter imagem mas falharam (opcional) ou vazias
+            // 2. Filtar partes inválidas
             const validParts = parts.filter(p => !((p.type === 'image') && !p.mediaBase64));
 
             const phone = process.env.NODE_ENV === "development" ? 
                  ("5511999999999") : // Fallback dev 
                  (to); // Production
 
-             // 3. Enviar para a Fila
+             // 3. Enviar para a Fila do WhatsApp
              const jobId = eventType !== "UNKNOWN" ? `whatsapp-${to}-${eventType}-${Date.now()}` : undefined;
 
              await addToWhatsappQueue({
@@ -165,11 +202,11 @@ export const notificationService = {
                  options: { instanceName } 
              }, jobId);
              
-             logger.info({ eventType, phone, instanceName, jobId, partsCount: validParts.length }, "Notificação Lego enfileirada com sucesso.");
+             logger.info({ eventType, phone, instanceName, jobId, channel: "WHATSAPP" }, "Notificação enfileirada.");
              return true; 
 
         } catch (error) {
-            logger.error({ error, to }, "Erro no NotificationService");
+            logger.error({ error, to }, "Erro no Dispatch WhatsApp");
             return false;
         }
     }

@@ -15,6 +15,7 @@ export interface PassengerContext {
     // New fields for flexible Lego composition
     pixPayload?: string;
     reciboUrl?: string;
+    telefoneMotorista?: string; // Para contato direto
 }
 
 import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
@@ -65,6 +66,16 @@ const textPart = (text: string): CompositeMessagePart[] => {
     return [{ type: "text", content: text }];
 };
 
+
+// Helper for System Footer
+const getSystemFooter = (ctx: PassengerContext) => {
+    const phoneLink = ctx.telefoneMotorista 
+        ? `\n📞 Dúvidas? Fale com o motorista: https://wa.me/55${ctx.telefoneMotorista.replace(/\D/g, "")}` 
+        : "";
+
+    return `\n\n_________________\n🤖 *Mensagem Automática Van360*\nEnviada em nome de: *${getFirstName(ctx.nomeMotorista)}*${phoneLink}`;
+};
+
 export const PassengerTemplates = {
     
     /**
@@ -81,7 +92,7 @@ export const PassengerTemplates = {
 
 A mensalidade de *${getFirstName(ctx.nomePassageiro)}* no valor de *${valor}* vence em *${data}*${diasMsg}.
 
-Segue abaixo o código PIX Copia e Cola. 👇`;
+Segue abaixo o código PIX Copia e Cola. 👇${getSystemFooter(ctx)}`;
 
         return buildPixMessageParts(text, ctx.pixPayload);
     },
@@ -95,7 +106,7 @@ Segue abaixo o código PIX Copia e Cola. 👇`;
         
         const text = `Olá *${nomeResp}*, passando apenas para lembrar que a mensalidade de *${getFirstName(ctx.nomePassageiro)}* (${valor}) vence *HOJE*! 🗓️
 
-Caso precise, o código PIX está logo abaixo. 👇`;
+Caso precise, o código PIX está logo abaixo. 👇${getSystemFooter(ctx)}`;
 
         return buildPixMessageParts(text, ctx.pixPayload);
     },
@@ -111,7 +122,7 @@ Caso precise, o código PIX está logo abaixo. 👇`;
         
         const text = `Olá *${nomeResp}*, notamos que a mensalidade de *${getFirstName(ctx.nomePassageiro)}* (${valor}) venceu dia *${data}* (Há ${diasAtraso} dias de atraso). ⚠️
 
-Para regularizar e evitar bloqueios, estamos reenviando o código PIX abaixo. 👇`;
+Para regularizar e evitar bloqueios, estamos reenviando o código PIX abaixo. 👇${getSystemFooter(ctx)}`;
 
         return buildPixMessageParts(text, ctx.pixPayload);
     },
@@ -126,7 +137,7 @@ Para regularizar e evitar bloqueios, estamos reenviando o código PIX abaixo. �
         
         const text = `Olá *${nomeResp}*, confirmamos o recebimento da mensalidade de *${getFirstName(ctx.nomePassageiro)}* no valor de *${valor}*${ref}. ✅
 
-Muito obrigado! 🚐💨`;
+Muito obrigado! 🚐💨${getSystemFooter(ctx)}`;
 
         // Se tiver recibo, envia a imagem com o texto na legenda (Bundle)
         if (ctx.reciboUrl) {
@@ -153,7 +164,7 @@ Muito obrigado! 🚐💨`;
 
 Mensalidade de *${getFirstName(ctx.nomePassageiro)}* (${valor}) com vencimento em *${data}*. 🚐
 
-Segue abaixo o código PIX Copia e Cola. 👇`;
+Segue abaixo o código PIX Copia e Cola. 👇${getSystemFooter(ctx)}`;
 
         return buildPixMessageParts(text, ctx.pixPayload);
     }

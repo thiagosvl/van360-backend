@@ -66,7 +66,7 @@ export const dailyChargeMonitorJob = {
                         enviar_cobranca_automatica
                     ),
                     usuarios!inner ( 
-                        nome,
+                        nome, telefone,
                         assinaturas_usuarios!inner (
                             status,
                             data_ativacao
@@ -137,7 +137,8 @@ export const dailyChargeMonitorJob = {
                             
                             // Calculo de dias de atraso se for overdue
                             diasAtraso: context === PASSENGER_EVENT_OVERDUE ? Math.floor((new Date().getTime() - new Date(cobranca.data_vencimento).getTime()) / (1000 * 3600 * 24)) : undefined,
-                            usuarioId: cobranca.usuario_id
+                            usuarioId: cobranca.usuario_id,
+                            telefoneMotorista: motorista.telefone
                         }
                     );
 

@@ -7,7 +7,6 @@ import { reconciliacaoEntradaJob } from "./reconciliacao-entrada.job.js";
 import { repasseMonitorJob } from "./repasse-monitor.job.js";
 import { repasseRetryJob } from "./repasse-retry.job.js";
 import { subscriptionGeneratorJob } from "./subscription-generator.job.js";
-import { whatsappHealthCheckJob } from "./whatsapp-health-check.job.js";
 
 export const jobOrchestratorService = {
   async runWorker() {
@@ -60,11 +59,7 @@ export const jobOrchestratorService = {
        executions.push(pixValidationMonitorJob.run());
     }
 
-    // --- JOBS DE ALTA FREQUENCIA (Whatsapp Stability) ---
-    // Health Check: Roda a cada 5 minutos para corrigir estados travados
-    if (minute % 5 === 0) {
-      executions.push(whatsappHealthCheckJob.run());
-    }
+
 
     if (executions.length === 0) {
       logger.info("[JobOrchestrator] Nada para rodar neste slot.");

@@ -1,8 +1,9 @@
 import axios, { AxiosError } from "axios";
-import { GLOBAL_WHATSAPP_INSTANCE, WHATSAPP_STATUS } from "../config/constants.js";
+import { GLOBAL_WHATSAPP_INSTANCE } from "../config/constants.js";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { CompositeMessagePart, ConnectInstanceResponse, EvolutionConnectResponse, EvolutionInstance } from "../types/dtos/whatsapp.dto.js";
+import { WhatsappStatus } from "../types/enums.js";
 export type { ConnectInstanceResponse };
 
 const EVO_URL = env.EVOLUTION_API_URL;
@@ -23,14 +24,6 @@ const DRIVER_INSTANCE_SETTINGS = {
 
 class WhatsappService {
   
-  /**
-   * Helper para montar o nome da instância do usuário: "user_{id}"
-   * Sanitiza o ID para evitar caracteres inválidos na URL
-   */
-  getInstanceName(usuarioId: string): string {
-      return `user_${usuarioId}`; 
-  }
-
   /**
    * Envia mensagem de texto simples
    */
@@ -141,18 +134,18 @@ class WhatsappService {
       const { data } = await axios.get<{ instance: EvolutionInstance }>(url, { headers: { "apikey": EVO_KEY } });
       
       // Log somente se não for conectado (para não spammar) ou se for erro
-      if (data?.instance?.state !== WHATSAPP_STATUS.CONNECTED && data?.instance?.state !== WHATSAPP_STATUS.OPEN) {
+      if (data?.instance?.state !== "connected" && data?.instance?.state !== "open") {
           logger.debug({ instanceName, state: data?.instance?.state }, "Verificando status da instância (não conectada)");
       }
 
       return { 
-          state: data?.instance?.state || WHATSAPP_STATUS.UNKNOWN,
+          state: data?.instance?.state || WhatsappStatus.UNKNOWN,
           statusReason: data?.instance?.statusReason 
       };
     } catch (error) {
       const err = error as AxiosError;
       if (err.response?.status === 404) {
-          return { state: WHATSAPP_STATUS.NOT_FOUND };
+          return { state: WhatsappStatus.NOT_FOUND };
       }
       logger.warn({ instanceName, error: err.message }, "Erro ao verificar status da instância");
       return { state: "ERROR" };
@@ -225,7 +218,7 @@ class WhatsappService {
           // 1. Verificar se já existe
           const status = await this.getInstanceStatus(instanceName);
           
-          if (status.state !== WHATSAPP_STATUS.NOT_FOUND && status.state !== "ERROR") {
+          if (status.state !== WhatsappStatus.NOT_FOUND && status.state !== "ERROR") {
               // Já existe, mas vamos garantir que o Webhook e as configurações estejam corretos
               logger.info({ instanceName, state: status.state }, "Instância já existe. Atualizando configurações...");
               await this.setWebhook(instanceName, webhookUrl, true);
@@ -288,7 +281,7 @@ class WhatsappService {
               // Só limpa se realmente necessário. Não limpa se já há um código válido em andamento.
               
               const status = await this.getInstanceStatus(instanceName);
-              const isWorking = status.state === WHATSAPP_STATUS.OPEN || status.state === WHATSAPP_STATUS.CONNECTED;
+              const isWorking = status.state === WhatsappStatus.OPEN || status.state === WhatsappStatus.CONNECTED;
 
               // Se já está conectado, não faz sentido pedir pairing code. Retorna sucesso.
               if (isWorking) {
@@ -296,12 +289,12 @@ class WhatsappService {
                    // Garante webhook atualizado mesmo se já conectado
                    await this.setWebhook(instanceName, webhookUrl, true);
                    await this.updateSettings(instanceName);
-                   return { instance: { state: WHATSAPP_STATUS.OPEN } };
+                   return { instance: { state: WhatsappStatus.OPEN } };
               }
 
               // Se está em estado de erro ou travado, fazer limpeza
-              const needsCleanup = status.state !== WHATSAPP_STATUS.NOT_FOUND && 
-                                  (status.state === "ERROR" || status.state === WHATSAPP_STATUS.CONNECTING);
+              const needsCleanup = status.state !== WhatsappStatus.NOT_FOUND && 
+                                  (status.state === "ERROR" || status.state === WhatsappStatus.CONNECTING);
               
               if (needsCleanup) {
                    logger.info({ instanceName, reason: status.state }, "Limpando instância travada para novo Pairing Code...");
@@ -373,7 +366,7 @@ class WhatsappService {
               const { data } = await axios.get<EvolutionConnectResponse>(url, { headers: { "apikey": EVO_KEY } });
               lastData = data;
 
-              if (data?.base64 || data?.qrcode?.base64 || data?.instance?.state === WHATSAPP_STATUS.OPEN) {
+              if (data?.base64 || data?.qrcode?.base64 || data?.instance?.state === WhatsappStatus.OPEN) {
                   logger.info({ instanceName }, "QR Code obtido ou Instância Conectada.");
                   break; 
               }
@@ -391,8 +384,8 @@ class WhatsappService {
                };
           }
            
-          if (lastData?.instance?.state === WHATSAPP_STATUS.OPEN) {
-              return { instance: { state: WHATSAPP_STATUS.OPEN } };
+          if (lastData?.instance?.state === WhatsappStatus.OPEN) {
+              return { instance: { state: WhatsappStatus.OPEN } };
           }
 
           return {}; 

@@ -9,7 +9,6 @@ import { reconciliacaoEntradaJob } from "../services/jobs/reconciliacao-entrada.
 import { repasseMonitorJob } from "../services/jobs/repasse-monitor.job.js";
 import { repasseRetryJob } from "../services/jobs/repasse-retry.job.js";
 import { subscriptionGeneratorJob } from "../services/jobs/subscription-generator.job.js";
-import { whatsappHealthCheckJob } from "../services/jobs/whatsapp-health-check.job.js";
 
 
 
@@ -102,15 +101,7 @@ export const jobsController = {
     }
   },
 
-  whatsappHealthCheck: async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-        const result = await whatsappHealthCheckJob.run();
-        return reply.send(result);
-    } catch (error: any) {
-        logger.error({ error }, "Erro no Job whatsapp-health-check");
-        return reply.code(500).send({ error: error.message });
-    }
-  },
+
 
   runOrchestrator: async (request: FastifyRequest, reply: FastifyReply) => {
     try {

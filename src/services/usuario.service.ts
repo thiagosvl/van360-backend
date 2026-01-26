@@ -100,22 +100,7 @@ export async function atualizarUsuario(usuarioId: string, payload: {
 }
 
 export async function excluirUsuario(usuarioId: string, authUid: string) {
-    // 1. Cleanup Whatsapp
-    // Importação dinâmica para evitar dependência circular se houver, ou mover para topo se seguro.
-    // Assumindo que whatsappService pode ser importado pois usuario.service é baixo nível.
-    // Mas whatsappService usa notificationService que usa templates... ok.
-    const { whatsappService } = await import("./whatsapp.service.js");
-    
-    // Obter nome da instância (geralmente baseada no ID)
-    const instanceName = whatsappService.getInstanceName(usuarioId);
-    
-    try {
-        logger.info({ usuarioId, instanceName }, "Tentando desconectar/remover instância WhatsApp antes da exclusão...");
-        await whatsappService.deleteInstance(instanceName);
-        logger.info({ usuarioId }, "Instância Whatsapp removida com sucesso.");
-    } catch (error: any) {
-        logger.warn({ usuarioId, error: error.message }, "Falha não-bloqueante ao remover instância Whatsapp (pode não existir).");
-    }
+
 
     // 2. Anonymize User Data (DB Logic)
     // Isso garante que o histórico financeiro seja mantido mas os dados pessoais removidos.

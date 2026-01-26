@@ -247,13 +247,7 @@ Acesse o menu *Minha Conta* e cadastre sua chave para receber os pagamentos dos 
                 delayMs: 1500
             });
 
-            // Passo 2
-            parts.push({
-                type: "text",
-                content: `2️⃣ *Conecte seu WhatsApp*
-Acesse o painel e escaneie o QR Code. Assim o sistema enviará as cobranças automaticamente por você! 🚀`,
-                delayMs: 1500
-            });
+
         }
         
         return parts;
@@ -310,17 +304,7 @@ A automação está **PAUSADA por 24 horas** para você. Esse é o tempo para vo
 
 Se não houver baixas, o sistema começará a enviar as notificações para seus passageiros automaticamente em 24h.`);
     },
-    /**
-     * Aviso de Desconexão do WhatsApp
-     */
-    whatsappDisconnected: (ctx: DriverContext): CompositeMessagePart[] => {
-        return textPart(`⚠️ *Atenção: Seu WhatsApp Desconectou!*
 
-Olá *${getFirstName(ctx.nomeMotorista)}*, notamos que sua conexão com o WhatsApp foi perdida. 📵
-
-Isso impede que o sistema envie as cobranças automáticas para seus passageiros.
-Por favor, acesse o painel e reconecte seu WhatsApp (escaneie o QR Code novamente) o mais rápido possível para evitar falhas no envio.`);
-    },
 
     /**
      * Notificação de Novo Pré-Cadastro

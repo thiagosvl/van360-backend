@@ -1,10 +1,9 @@
 import { supabaseAdmin } from "../config/supabase.js";
-import { AssinaturaCobrancaStatus, CobrancaStatus, ConfigKey, WhatsappStatus } from "../types/enums.js";
+import { AssinaturaCobrancaStatus, CobrancaStatus, ConfigKey } from "../types/enums.js";
 import { calculatePlanFlags } from "../utils/plan-flags.utils.js";
 import { getConfigNumber } from "./configuracao.service.js";
 import { planRules } from "./plan-rules.service.js";
 import { getUsuarioData } from "./usuario.service.js";
-import { whatsappService } from "./whatsapp.service.js";
 
 interface SystemSummary {
   usuario: {
@@ -30,7 +29,7 @@ interface SystemSummary {
       dias_restantes_trial: number | null;
       dias_restantes_assinatura: number | null;
       trial_dias_total: number;
-      whatsapp_status: string | null;
+
       ultima_fatura: AssinaturaCobrancaStatus | null;
       ultima_fatura_id: string | null;
       limite_franquia_atingido: boolean;
@@ -132,8 +131,8 @@ export const usuarioResumoService = {
       // Escolas
       supabaseAdmin.from("escolas").select("id, ativo", { count: "exact", head: false }).eq("usuario_id", usuarioId),
       
-      // Whatsapp (Only if allowed)
-      funcionalidades.notificacoes_whatsapp ? whatsappService.getInstanceStatus(whatsappService.getInstanceName(usuarioId)) : Promise.resolve(null),
+      // Whatsapp (Always Connected/Global)
+      Promise.resolve(null),
       
       // Passageiros (Native Select for filtering)
       supabaseAdmin.from("passageiros").select("id, ativo, enviar_cobranca_automatica").eq("usuario_id", usuarioId),
@@ -182,9 +181,7 @@ export const usuarioResumoService = {
 
     const statusFatura = (lastInvoice?.status as AssinaturaCobrancaStatus) || null;
 
-    const whatsappState = whatsappStatusReq 
-      ? (whatsappStatusReq.state === WhatsappStatus.CONNECTED ? WhatsappStatus.CONNECTED : WhatsappStatus.DISCONNECTED) 
-      : null;
+
 
 
     // 6. Financial Summary (Default to current month if not specified)
@@ -270,7 +267,7 @@ export const usuarioResumoService = {
         flags: {
           ...flags,
           trial_dias_total: trialDiasTotal,
-          whatsapp_status: whatsappState as any,
+
           ultima_fatura: statusFatura,
           ultima_fatura_id: lastInvoice?.id || null,
           limite_franquia_atingido: franquiaRestante <= 0 && planRules.canGeneratePix(slugPlano),
