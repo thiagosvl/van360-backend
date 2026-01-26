@@ -35,8 +35,6 @@ export async function jobsRoute(app: FastifyInstance) {
   
   app.post("/reconciliacao-entrada", jobsController.reconciliacaoEntrada);
   
-  app.post("/whatsapp-health-check", jobsController.whatsappHealthCheck);
-  
   app.post("/worker", jobsController.runOrchestrator);
 
 

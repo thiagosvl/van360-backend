@@ -329,10 +329,8 @@ Acesse o sistema agora para revisar os dados, definir o valor da mensalidade e a
 
         return textPart(`✅ *Chave PIX Validada!*
 
-Olá *${nomeMot}*, ótimas notícias! Sua chave PIX foi validada com sucesso pelo banco. 🎉🏢
+Sua chave PIX foi validada com sucesso pelo banco. 🎉🏢
 
-Agora você já pode ativar a cobrança automática para seus passageiros e receber seus repasses diretamente em sua conta.
-
-Acesse o painel para concluir as configurações se necessário. 🚐💨`);
+Agora você receberá os pagamentos diretamente em sua conta.`);
     }
 };
