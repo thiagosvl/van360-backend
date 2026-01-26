@@ -87,7 +87,6 @@ export const webhookEvolutionHandler = {
 
         const usuarioId = instanceName.replace("user_", "");
 
-        // Calcular expiração: Pairing Code dura ~60 segundos
         const expiresAt = new Date(Date.now() + 60000).toISOString();
         
         logger.info({ 

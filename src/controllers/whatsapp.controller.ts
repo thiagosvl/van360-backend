@@ -101,18 +101,20 @@ export const whatsappController = {
         const body = request.body as { phoneNumber?: string } | undefined;
         const phoneNumber = body?.phoneNumber;
 
-        logger.info({ authUid, phoneNumber }, "WhatsappController.connect - Request received");
+        logger.info({ authUid, phoneNumber, endpoint: "connect" }, "WhatsappController.connect - Request received");
         if (!authUid) return reply.status(401).send({ error: "Não autorizado." });
 
         const { id: usuarioId } = await getUsuarioId(authUid);
         if (!usuarioId) return reply.status(404).send({ error: "Perfil não encontrado." });
 
         const instanceName = whatsappService.getInstanceName(usuarioId);
+        logger.debug({ instanceName }, "WhatsappController.connect - Instance Name Resolved");
 
         const result: ConnectInstanceResponse = await whatsappService.connectInstance(instanceName, phoneNumber);
         
         // Se já conectado, atualizar DB local (opcional, mas bom pra cache)
         if (result.instance?.state === "open") {
+              logger.info({ instanceName }, "WhatsappController.connect - Already Open, updating DB");
               await supabaseAdmin.from("usuarios")
                 .update({ whatsapp_status: WHATSAPP_STATUS.CONNECTED })
                 .eq("id", usuarioId);
@@ -120,6 +122,7 @@ export const whatsappController = {
 
         return reply.send(result);
     } catch (err: any) {
+          logger.error({ err: err.message, stack: err.stack }, "WhatsappController.connect - Failed");
           return reply.status(500).send({ error: err.message });
     }
   },
@@ -132,7 +135,7 @@ export const whatsappController = {
 
         const { id: usuarioId, telefone } = await getUsuarioId(authUid);
         
-        logger.info({ authUid, usuarioId, hasTelefone: !!telefone }, "WhatsappController.requestPairingCode - Request received");
+        logger.info({ authUid, usuarioId, hasTelefone: !!telefone, endpoint: "requestPairingCode" }, "WhatsappController.requestPairingCode - Request received");
 
         if (!usuarioId) return reply.status(404).send({ error: "Perfil não encontrado." });
         if (!telefone) return reply.status(400).send({ error: "Número de telefone não cadastrado no perfil." });
@@ -171,6 +174,7 @@ export const whatsappController = {
 
         return reply.send(result);
     } catch (err: any) {
+          logger.error({ err: err.message, stack: err.stack }, "WhatsappController.requestPairingCode - Failed");
           return reply.status(500).send({ error: err.message });
     }
   },
@@ -178,7 +182,7 @@ export const whatsappController = {
   disconnect: async (request: FastifyRequest, reply: FastifyReply) => {
     try {
         const authUid = (request as any).user?.id;
-        logger.info({ authUid }, "WhatsappController.disconnect - Request received");
+        logger.info({ authUid, endpoint: "disconnect" }, "WhatsappController.disconnect - Request received");
         if (!authUid) return reply.status(401).send({ error: "Não autorizado." });
 
         const { id: usuarioId } = await getUsuarioId(authUid);
@@ -199,6 +203,7 @@ export const whatsappController = {
 
         return reply.send({ success: true });
     } catch (err: any) {
+        logger.error({ err: err.message }, "WhatsappController.disconnect - Failed");
         return reply.status(500).send({ error: err.message });
     }
   }
