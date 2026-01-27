@@ -293,6 +293,7 @@ export const cobrancaService = {
         .select("*, passageiro:passageiros!inner(nome, nome_responsavel)")
         .order("data_vencimento", { ascending: false });
 
+    if (filtros.usuarioId) query = query.eq("usuario_id", filtros.usuarioId);
     if (filtros.passageiroId) query = query.eq("passageiro_id", filtros.passageiroId);
     if (filtros.status) query = query.eq("status", filtros.status);
     if (filtros.dataInicio) query = query.gte("data_vencimento", filtros.dataInicio);

@@ -38,6 +38,7 @@ export const updateCobrancaSchema = z.object({
 export type UpdateCobrancaDTO = z.infer<typeof updateCobrancaSchema>;
 
 export const listCobrancasFiltersSchema = z.object({
+    usuarioId: z.string().uuid(),
     passageiroId: z.string().uuid().optional(),
     status: z.string().optional(),
     dataInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato inválido").optional(),

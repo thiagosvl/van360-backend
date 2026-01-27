@@ -17,6 +17,11 @@ export const cobrancaPagamentoService = {
        const { data: cobranca } = await supabaseAdmin.from("cobrancas").select("id, status").eq("txid_pix", txid).single();
        if (!cobranca) throw new Error("Cobrança não encontrada pelo TXID");
 
+       if (cobranca.status === CobrancaStatus.PAGO) {
+           logger.info({ txid, cobrancaId: cobranca.id }, "[cobrancaPagamentoService.processarPagamento] Cobrança já está paga. Ignorando atualização redundante.");
+           return true;
+       }
+
         logger.info({ txid, valor, cobrancaId: cobranca.id }, "[cobrancaPagamentoService.processarPagamento] Registrando pagamento via PIX");
 
         const { error } = await supabaseAdmin
