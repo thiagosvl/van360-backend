@@ -2,7 +2,7 @@ module.exports = {
   apps: [
     {
       name: "van360-api",
-      script: "./dist/server.js",
+      script: "./dist/src/server.js",
       instances: 1, // Pode aumentar para "max" quando tiver mais tráfego
       exec_mode: "cluster",
       env: {
@@ -32,7 +32,7 @@ module.exports = {
     },
     {
       name: "van360-worker",
-      script: "./dist/worker.js",
+      script: "./dist/src/worker.js",
       instances: 1,
       exec_mode: "fork",
       env: {
