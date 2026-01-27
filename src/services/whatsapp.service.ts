@@ -30,11 +30,12 @@ class WhatsappService {
   async sendText(number: string, text: string, instanceName: string = GLOBAL_WHATSAPP_INSTANCE): Promise<boolean> {
     const cleanNumber = number.replace(/\D/g, "");
     const finalNumber = cleanNumber.length <= 11 ? `55${cleanNumber}` : cleanNumber;
+    logger.info({ number: finalNumber, instance: instanceName }, "[WhatsappService.sendText] Solicitando envio de mensagem");
 
     const url = `${EVO_URL}/message/sendText/${instanceName}`;
     
     try {
-      await axios.post(url, {
+      const response = await axios.post(url, {
         number: finalNumber,
         text: text
       }, {
@@ -44,10 +45,16 @@ class WhatsappService {
         }
       });
 
+      logger.info({ number: finalNumber, instance: instanceName, messageId: response.data?.key?.id }, "✅ [WhatsappService.sendText] Mensagem enviada com sucesso");
       return true;
 
     } catch (error) {
       const err = error as AxiosError;
+      logger.error({ 
+        err: err.response?.data || err.message, 
+        number: finalNumber, 
+        instance: instanceName 
+      }, "❌ [WhatsappService.sendText] Falha no envio de texto");
       return false; 
     }
   }
@@ -58,10 +65,10 @@ class WhatsappService {
   async sendImage(number: string, media: string, caption?: string, instanceName: string = GLOBAL_WHATSAPP_INSTANCE): Promise<boolean> {
     const cleanNumber = number.replace(/\D/g, "");
     const finalNumber = cleanNumber.length <= 11 ? `55${cleanNumber}` : cleanNumber;
+    logger.info({ number: finalNumber, instance: instanceName, caption: caption?.substring(0, 30) }, "[WhatsappService.sendImage] Solicitando envio de imagem");
     const url = `${EVO_URL}/message/sendMedia/${instanceName}`;
 
     try {
-      
       const body: { number: string; media: string; mediatype: string; caption: string; fileName?: string } = {
         number: finalNumber,
         media: media,
@@ -74,13 +81,14 @@ class WhatsappService {
         body.fileName = "image.png"; 
       }
 
-      await axios.post(url, body, {
+      const response = await axios.post(url, body, {
         headers: {
           "apikey": EVO_KEY,
           "Content-Type": "application/json"
         }
       });
 
+      logger.info({ number: finalNumber, instance: instanceName, messageId: response.data?.key?.id }, "✅ [WhatsappService.sendImage] Imagem enviada com sucesso");
       return true;
     } catch (error) {
       const err = error as AxiosError;
@@ -89,7 +97,7 @@ class WhatsappService {
          status: err.response?.status,
          number: finalNumber,
          instance: instanceName
-      }, "Falha ao enviar Imagem WhatsApp");
+      }, "❌ [WhatsappService.sendImage] Falha ao enviar Imagem WhatsApp");
       return false;
     }
   }
@@ -125,29 +133,29 @@ class WhatsappService {
   /**
    * Verifica status da instância
    */
-  /**
-   * Verifica status da instância
-   */
   async getInstanceStatus(instanceName: string): Promise<{ state: string; statusReason?: number }> {
     try {
       const url = `${EVO_URL}/instance/connectionState/${instanceName}`;
       const { data } = await axios.get<{ instance: EvolutionInstance }>(url, { headers: { "apikey": EVO_KEY } });
       
-      // Log somente se não for conectado (para não spammar) ou se for erro
-      if (data?.instance?.state !== "connected" && data?.instance?.state !== "open") {
-          logger.debug({ instanceName, state: data?.instance?.state }, "Verificando status da instância (não conectada)");
+      const state = data?.instance?.state || WhatsappStatus.UNKNOWN;
+
+      // Log para auditoria de conexão (debug)
+      if (state !== "connected" && state !== "open") {
+          logger.info({ instanceName, state }, "[WhatsappService.getInstanceStatus] Instância não conectada");
       }
 
       return { 
-          state: data?.instance?.state || WhatsappStatus.UNKNOWN,
+          state,
           statusReason: data?.instance?.statusReason 
       };
     } catch (error) {
       const err = error as AxiosError;
       if (err.response?.status === 404) {
+          logger.debug({ instanceName }, "[WhatsappService.getInstanceStatus] Instância não encontrada (404)");
           return { state: WhatsappStatus.NOT_FOUND };
       }
-      logger.warn({ instanceName, error: err.message }, "Erro ao verificar status da instância");
+      logger.warn({ instanceName, error: err.message }, "[WhatsappService.getInstanceStatus] Erro ao verificar status");
       return { state: "ERROR" };
     }
   }

@@ -14,42 +14,56 @@ export const payoutWorker = new Worker<PayoutJobData>(
     QUEUE_NAME_PAYOUT,
     async (job: Job<PayoutJobData>) => {
         const { cobrancaId, motoristaId, valorRepasse, transacaoId } = job.data;
-        logger.info({ jobId: job.id, cobrancaId }, "[Worker] Iniciando processamento de repasse...");
+        logger.info({ jobId: job.id, cobrancaId, motoristaId, valorRepasse, transacaoId }, "[PayoutWorker] 🚀 Iniciando processamento de repasse");
 
         try {
-            // 1. Marcar como "Processando" no banco (se ainda não estiver)
-            // (Isso dá feedback visual caso o job demore)
+            // 1. Marcar como "Processando" no banco
+            logger.debug({ cobrancaId, jobId: job.id }, "[PayoutWorker] Atualizando status_repasse para PROCESSANDO");
             await supabaseAdmin.from("cobrancas")
                 .update({ status_repasse: RepasseStatus.PROCESSANDO })
                 .eq("id", cobrancaId);
 
-            // 2. Chamar Service de Repasse (Reutiliza lógica existente ou chama Inter direto)
-            // Vamos chamar a lógica do Inter Service direta para ter controle do erro aqui
-            
+            // 2. Chamar Service de Repasse
             // Buscar dados bancarios do motorista (Chave PIX)
-            const { data: usuario } = await supabaseAdmin.from("usuarios").select("chave_pix").eq("id", motoristaId).single();
-            if (!usuario?.chave_pix) {
+            const { data: usuario, error: userError } = await supabaseAdmin.from("usuarios").select("chave_pix, nome").eq("id", motoristaId).single();
+            
+            if (userError || !usuario) {
+                logger.error({ userError, motoristaId, jobId: job.id }, "[PayoutWorker] Erro ao buscar dados do motorista");
+                throw new Error("Motorista não encontrado");
+            }
+
+            if (!usuario.chave_pix) {
+                logger.warn({ motoristaId, jobId: job.id }, "[PayoutWorker] Chave PIX ausente");
                 throw new Error("Chave PIX do motorista não encontrada");
             }
 
-            // Realizar Transferência
-             // Nota: Estamos re-implementando parte do cobrancaService.iniciarRepasse para ter controle granular
-             // Mas idealmente o worker chamaria o serviço se ele fosse refatorado para ser "Executar Repasse".
-             // Vou chamar o interService direto aqui para simplificar a migração.
+            logger.info({ cobrancaId, motoristaId, nome: usuario.nome, jobId: job.id }, "[PayoutWorker] ✅ Dados do motorista obtidos. Preparando PIX.");
              
-             logger.debug({ cobrancaId, chavePix: usuario.chave_pix }, "[Worker] Enviando PIX para motorista...");
-             
-              const valorNormalizado = Number(Number(valorRepasse).toFixed(2));
-              
-              const pixResponse = await interService.realizarPixRepasse(supabaseAdmin, {
-                valor: valorNormalizado,
-                chaveDestino: usuario.chave_pix, // Note: The prop name in PagamentoPixParams is chaveDestino, not chavePix
-                descricao: `Repasse Van360 - Cobranca ${cobrancaId}`,
-                xIdIdempotente: randomUUID() // Adding required Idempotency Key (Must be UUID)
-             });
+            const valorNormalizado = Number(Number(valorRepasse).toFixed(2));
+            const idempotencyKey = randomUUID();
+            
+            logger.info({ 
+                cobrancaId, 
+                valor: valorNormalizado, 
+                idempotencyKey 
+            }, "[PayoutWorker] Solicitando transferência via InterService");
 
-             // 3. Sucesso! Atualizar Banco
-             if (pixResponse.endToEndId) {
+            const pixResponse = await interService.realizarPixRepasse(supabaseAdmin, {
+                valor: valorNormalizado,
+                chaveDestino: usuario.chave_pix,
+                descricao: `Repasse Van360 - Cobranca ${cobrancaId}`,
+                xIdIdempotente: idempotencyKey
+            });
+
+            // 3. Sucesso! Atualizar Banco
+            if (pixResponse.endToEndId) {
+                logger.info({ 
+                    jobId: job.id, 
+                    cobrancaId, 
+                    e2e: pixResponse.endToEndId,
+                    status: pixResponse.status 
+                }, "✅ [PayoutWorker] Repasse realizado com sucesso via Inter");
+
                 await supabaseAdmin.from("cobrancas")
                     .update({ status_repasse: RepasseStatus.REPASSADO })
                     .eq("id", cobrancaId);
@@ -64,13 +78,19 @@ export const payoutWorker = new Worker<PayoutJobData>(
                             mensagem_erro: null 
                         })
                         .eq("id", transacaoId);
+                    
+                    logger.debug({ transacaoId, e2e: pixResponse.endToEndId }, "[PayoutWorker] Registro financeiro atualizado");
                 }
-
-                logger.info({ jobId: job.id, cobrancaId, e2e: pixResponse.endToEndId }, "[Worker] Repasse realizado com sucesso");
-             }
+            }
 
         } catch (error: any) {
-            logger.error({ jobId: job.id, error: error.message }, "[Worker] Payout Job Failed");
+            const errorMsg = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+            logger.error({ 
+                jobId: job.id, 
+                cobrancaId,
+                error: errorMsg,
+                attempt: job.attemptsMade + 1
+            }, "❌ [PayoutWorker] Falha no processamento do repasse");
             
             // Persistir erro no banco para o motorista ver
             if (transacaoId) {
@@ -85,8 +105,9 @@ export const payoutWorker = new Worker<PayoutJobData>(
             // Marcar cobrança como falha
             await supabaseAdmin.from("cobrancas").update({ status_repasse: RepasseStatus.FALHA }).eq("id", cobrancaId);
 
-            // Se for erro de lógica (sem chave pix), parar retry
-            if (error.message.includes("Chave PIX")) {
+            // Se for erro de lógica (sem chave pix ou usuário não encontrado), parar retry configurando o job como falha definitiva
+            if (error.message.includes("Chave PIX") || error.message.includes("Motorista não encontrado")) {
+                 logger.warn({ motoristaId, error: error.message }, "[PayoutWorker] Abortando retentativas devido a erro de cadastro");
                  return;
             }
 

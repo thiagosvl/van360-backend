@@ -12,33 +12,38 @@ import { webhookCobrancaHandler } from '../services/handlers/webhook-cobranca.ha
 export const webhookWorker = new Worker<WebhookJobData>(
     QUEUE_NAME_WEBHOOK,
     async (job: Job<WebhookJobData>) => {
-        const { pagamento, origin } = job.data;
-        const { txid, endToEndId } = pagamento;
+        const { pagamento } = job.data;
+        const { txid, endToEndId, valor } = pagamento;
 
-        logger.info({ jobId: job.id, txid }, "[Worker] Processing Webhook Job...");
+        logger.info({ jobId: job.id, txid, endToEndId, valor }, "[WebhookWorker] 📥 Recebido evento de pagamento");
 
         try {
-            // Lógica Dispatcher (movida da rota para o worker)
-
-            // 1. Tentar Handler de Assinaturas (Prioridade: Sistema SaaS)
+            // 1. Tentar Handler de Assinaturas (SaaS)
+            logger.debug({ txid, jobId: job.id }, "[WebhookWorker] Tentando handler de Assinatura");
             const handledAssinatura = await webhookAssinaturaHandler.handle(pagamento);
             if (handledAssinatura) {
-                logger.info({ jobId: job.id, type: 'ASSINATURA' }, "[Worker] Webhook processed successfully");
+                logger.info({ jobId: job.id, txid, type: 'ASSINATURA' }, "✅ [WebhookWorker] Processado via AssinaturaHandler");
                 return;
             }
 
             // 2. Tentar Handler de Mensalidades/Pais (Repasse)
+            logger.debug({ txid, jobId: job.id }, "[WebhookWorker] Tentando handler de Cobrança (Repasse)");
             const handledCobranca = await webhookCobrancaHandler.handle(pagamento);
             if (handledCobranca) {
-                logger.info({ jobId: job.id, type: 'COBRANCA_PAI' }, "[Worker] Webhook processed successfully");
+                logger.info({ jobId: job.id, txid, type: 'COBRANCA_PAI' }, "✅ [WebhookWorker] Processado via CobrancaHandler");
                 return;
             }
 
-            // 3. Fallback: Log (Não falha o job, pois foi processado mas não encontrado)
-            logger.warn({ txid, endToEndId }, "[Worker] Webhook ignored (Target not found)");
+            // 3. Fallback: Desconhecido
+            logger.warn({ txid, endToEndId, valor, jobId: job.id }, "⚠️ [WebhookWorker] Webhook ignorado: Nenhuma cobrança correspondente encontrada no sistema");
 
         } catch (error: any) {
-            logger.error({ jobId: job.id, error: error.message }, "[Worker] Webhook Job Failed");
+            logger.error({ 
+                jobId: job.id, 
+                txid,
+                error: error.message,
+                stack: error.stack 
+            }, "❌ [WebhookWorker] Falha no processamento do webhook");
             throw error; // Retry
         }
     },

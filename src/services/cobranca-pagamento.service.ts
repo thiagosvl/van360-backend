@@ -17,6 +17,8 @@ export const cobrancaPagamentoService = {
        const { data: cobranca } = await supabaseAdmin.from("cobrancas").select("id, status").eq("txid_pix", txid).single();
        if (!cobranca) throw new Error("Cobrança não encontrada pelo TXID");
 
+        logger.info({ txid, valor, cobrancaId: cobranca.id }, "[cobrancaPagamentoService.processarPagamento] Registrando pagamento via PIX");
+
         const { error } = await supabaseAdmin
             .from("cobrancas")
             .update({
@@ -29,13 +31,18 @@ export const cobrancaPagamentoService = {
             })
             .eq("id", cobranca.id);
             
-        if (error) throw error;
+        if (error) {
+            logger.error({ error, cobrancaId: cobranca.id, txid }, "[cobrancaPagamentoService.processarPagamento] Erro ao atualizar cobrança para PAGO");
+            throw error;
+        }
         
-        logger.info({ cobrancaId: cobranca.id, txid }, "Pagamento processado e registrado com sucesso.");
+        logger.info({ cobrancaId: cobranca.id, txid }, "✅ Pagamento processado e registrado com sucesso.");
         return true;
   },
 
   async desfazerPagamento(cobrancaId: string): Promise<any> {
+    logger.info({ cobrancaId }, "[cobrancaPagamentoService.desfazerPagamento] Iniciando reversão de pagamento manual");
+
     // 1. Buscar a cobrança para validar se é pagamento manual
     const { data: cobranca, error: findError } = await supabaseAdmin
       .from("cobrancas")
@@ -44,15 +51,18 @@ export const cobrancaPagamentoService = {
       .single();
 
     if (findError || !cobranca) {
+      logger.warn({ findError, cobrancaId }, "[cobrancaPagamentoService.desfazerPagamento] Cobrança não encontrada");
       throw new AppError("Cobrança não encontrada.", 404);
     }
 
     // 2. Validar se é pagamento manual e se já foi repassado
     if (!cobranca.pagamento_manual) {
+      logger.warn({ cobrancaId, status: cobranca.status }, "[cobrancaPagamentoService.desfazerPagamento] Tentativa de desfazer pagamento não manual");
       throw new AppError("Apenas pagamentos manuais podem ser desfeitos.", 400);
     }
 
     if (cobranca.status_repasse === RepasseStatus.REPASSADO) {
+        logger.warn({ cobrancaId, status_repasse: cobranca.status_repasse }, "[cobrancaPagamentoService.desfazerPagamento] Tentativa de desfazer pagamento já repassado");
         throw new AppError("Não é possível desfazer: O valor já foi repassado ao motorista.", 400);
     }
 
@@ -84,32 +94,45 @@ export const cobrancaPagamentoService = {
   },
 
   async iniciarRepasse(cobrancaId: string): Promise<any> {
-      logger.info({ cobrancaId }, "Iniciando fluxo de repasse (Queue)...");
+      logger.info({ cobrancaId }, "[cobrancaPagamentoService.iniciarRepasse] Iniciando fluxo de repasse");
 
       // 1. Buscar Cobrança
-      const { data: cobranca } = await supabaseAdmin.from("cobrancas").select("id, usuario_id, valor, status_repasse").eq("id", cobrancaId).single();
+      const { data: cobranca } = await supabaseAdmin.from("cobrancas").select("id, usuario_id, valor, status_repasse, status").eq("id", cobrancaId).single();
       
-      if (!cobranca) throw new AppError("Cobrança não encontrada para repasse.", 404);
+      if (!cobranca) {
+          logger.error({ cobrancaId }, "[cobrancaPagamentoService.iniciarRepasse] Cobrança não encontrada");
+          throw new AppError("Cobrança não encontrada para repasse.", 404);
+      }
+
+      if (cobranca.status !== CobrancaStatus.PAGO) {
+          logger.warn({ cobrancaId, status: cobranca.status }, "[cobrancaPagamentoService.iniciarRepasse] Tentativa de repassar cobrança não paga");
+          return { success: false, reason: "cobranca_nao_paga" };
+      }
+
       if (cobranca.status_repasse === RepasseStatus.REPASSADO) {
-          logger.warn({ cobrancaId }, "Repasse já realizado.");
+          logger.warn({ cobrancaId }, "Repasse já realizado anteriormente.");
           return { success: true, alreadyDone: true };
       }
 
       // 2. Buscar Motorista e Validar Chave PIX
       const { data: usuario } = await supabaseAdmin
         .from("usuarios")
-        .select("id, chave_pix, status_chave_pix")
+        .select("id, chave_pix, status_chave_pix, nome")
         .eq("id", cobranca.usuario_id)
         .single();
 
       const hasValidPix = usuario?.chave_pix && usuario?.status_chave_pix === PixKeyStatus.VALIDADA;
+      logger.info({ cobrancaId, motoristaId: usuario?.id, hasValidPix, statusPix: usuario?.status_chave_pix }, "[cobrancaPagamentoService.iniciarRepasse] Verificação de chave PIX");
 
       // 3. Calcular Valor do Repasse (Taxa PIX)
       const taxa = await getConfigNumber(ConfigKey.TAXA_INTERMEDIACAO_PIX, 0.99); 
       // Usar calculo em centavos para evitar erros de ponto flutuante (0.010000000000000009)
       const valorRepasse = Math.round((cobranca.valor * 100) - (taxa * 100)) / 100;
+      
+      logger.info({ cobrancaId, valorOriginal: cobranca.valor, taxa, valorRepasse }, "[cobrancaPagamentoService.iniciarRepasse] Cálculo de valores");
+
       if (valorRepasse <= 0) {
-           logger.warn({ cobrancaId, valor: cobranca.valor, taxa }, "Valor do repasse zerado ou negativo.");
+           logger.warn({ cobrancaId, valor: cobranca.valor, taxa, valorRepasse }, "Valor do repasse zerado ou insuficiente.");
            return { success: false, reason: "valor_baixo" };
       }
 
@@ -135,7 +158,9 @@ export const cobrancaPagamentoService = {
         .single();
       
       if (txError) {
-          logger.error({ txError }, "Erro ao criar registro de transação de repasse");
+          logger.error({ txError, cobrancaId }, "[cobrancaPagamentoService.iniciarRepasse] Erro ao criar transação_repasse");
+      } else {
+          logger.info({ transacaoId: transacao?.id, status: transacao?.status }, "[cobrancaPagamentoService.iniciarRepasse] Registro de transação criado");
       }
 
       // 5. Se não tiver PIX válido, abortar repasse automático (avisar motorista no dashboard via status)
@@ -167,6 +192,8 @@ export const cobrancaPagamentoService = {
               transacaoId: transacao?.id
           });
           
+          logger.info({ cobrancaId, transacaoId: transacao?.id }, "✅ Repasse enviado para a fila (PayoutQueue)");
+
           // Atualizar status da cobrança e vincular transação
           await supabaseAdmin.from("cobrancas").update({ 
               status_repasse: RepasseStatus.PENDENTE,
@@ -176,7 +203,7 @@ export const cobrancaPagamentoService = {
           return { success: true, queued: true, transacaoId: transacao?.id };
 
       } catch (queueError) {
-           logger.error({ queueError }, "Erro ao enfileirar repasse");
+           logger.error({ queueError, cobrancaId }, "[cobrancaPagamentoService.iniciarRepasse] Falha ao adicionar à PayoutQueue");
            await supabaseAdmin.from("cobrancas").update({ status_repasse: RepasseStatus.FALHA }).eq("id", cobrancaId);
            throw queueError;
       }

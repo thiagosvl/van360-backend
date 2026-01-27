@@ -12,7 +12,7 @@ export const pixWorker = new Worker<PixJobData>(
     QUEUE_NAME_PIX,
     async (job: Job<PixJobData>) => {
         const { cobrancaId, valor, cpf, nome, dataVencimento } = job.data;
-        logger.debug({ jobId: job.id, cobrancaId }, "[Worker] Registrando PIX na API do Inter...");
+        logger.info({ jobId: job.id, cobrancaId, valor, dataVencimento }, "[PixWorker] 🚀 Iniciando registro de PIX (cobv)");
 
         try {
             // Chamar API do Inter
@@ -23,6 +23,8 @@ export const pixWorker = new Worker<PixJobData>(
                 nome,
                 dataVencimento
             });
+
+            logger.info({ jobId: job.id, cobrancaId, txid: pixResult.interTransactionId }, "[PixWorker] Inter API respondeu com sucesso. Salvando no banco...");
 
             // Atualizar banco de dados com os dados do PIX gerado
             const { error } = await supabaseAdmin
@@ -35,14 +37,19 @@ export const pixWorker = new Worker<PixJobData>(
                 .eq("id", cobrancaId);
 
             if (error) {
-                logger.error({ error, cobrancaId }, "[Worker] Erro ao salvar dados do PIX no banco");
-                throw error; // Falha o job para tentar de novo (ou investigar)
+                logger.error({ error, cobrancaId, jobId: job.id }, "❌ [PixWorker] Erro crítico ao salvar dados do PIX no banco");
+                throw error;
             }
             
-            logger.info({ jobId: job.id, cobrancaId, txid: pixResult.interTransactionId }, "[Worker] PIX registrado com sucesso");
+            logger.info({ jobId: job.id, cobrancaId, txid: pixResult.interTransactionId }, "✅ [PixWorker] PIX registrado e salvo com sucesso");
 
         } catch (error: any) {
-            logger.error({ jobId: job.id, error: error.message }, "[Worker] PIX Job Failed");
+            logger.error({ 
+                jobId: job.id, 
+                cobrancaId,
+                error: error.message,
+                attempt: job.attemptsMade + 1
+            }, "❌ [PixWorker] Falha no registro do PIX");
             throw error;
         }
     },

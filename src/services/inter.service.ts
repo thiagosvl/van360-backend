@@ -122,6 +122,8 @@ async function getValidInterToken(adminClient: SupabaseClient): Promise<string> 
     "cob.write cob.read cobv.write cobv.read lotecobv.write lotecobv.read pix.write pix.read webhook.write webhook.read payloadlocation.write payloadlocation.read boleto-cobranca.read boleto-cobranca.write extrato.read pagamento-pix.write pagamento-pix.read pagamento-boleto.read pagamento-boleto.write pagamento-darf.write pagamento-lote.write pagamento-lote.read webhook-banking.read webhook-banking.write";
   body.append("scope", scope);
 
+  logger.info({ url: `${INTER_API_URL}/oauth/v2/token` }, "[interService.getValidInterToken] Solicitando novo token de acesso ao Inter");
+
   const tokenResponse = await axios.post(`${INTER_API_URL}/oauth/v2/token`, body, {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     httpsAgent: getHttpsAgent(),
@@ -132,6 +134,8 @@ async function getValidInterToken(adminClient: SupabaseClient): Promise<string> 
   const expiresIn = tokenData.expires_in;
 
   const newExpiresAt = Date.now() + expiresIn * 1000;
+
+  logger.info({ expiresIn, expiresAt: new Date(newExpiresAt).toISOString() }, "[interService.getValidInterToken] Novo token obtido com sucesso");
 
   // Persistir no Redis (TTL = expiração - 5 min de margem de segurança)
   const safeTtl = Math.max(expiresIn - 300, 60); 
@@ -178,7 +182,7 @@ async function criarCobrancaPix(
 
   try {
     const createUrl = `${INTER_API_URL}/pix/v2/cob/${txid}`;
-    logger.info({ url: createUrl, txid }, "Criando cobrança PIX");
+    logger.info({ txid, valor: params.valor, cpf: onlyDigits(params.cpf) }, "[interService.criarCobrancaPix] Solicitando criação de PIX imediato");
 
     const { data } = await axios.put(createUrl, cobPayload, {
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -187,7 +191,12 @@ async function criarCobrancaPix(
 
     const locId = data?.loc?.id;
     const pixCopiaECola = data?.pixCopiaECola;
-    if (!locId || !pixCopiaECola) throw new Error("Resposta de PIX incompleta.");
+    if (!locId || !pixCopiaECola) {
+        logger.error({ data, txid }, "[interService.criarCobrancaPix] Resposta do Inter incompleta (locId ou copiaECola ausente)");
+        throw new Error("Resposta de PIX incompleta.");
+    }
+
+    logger.info({ txid, locId }, "✅ PIX imediato criado com sucesso no Inter");
 
     return {
       qrCodePayload: pixCopiaECola,
@@ -195,7 +204,8 @@ async function criarCobrancaPix(
       interTransactionId: txid,
     };
   } catch (err: any) {
-    logger.error({ err: err.response?.data || err.message, txid }, "Falha na criação de PIX");
+    const errorData = err.response?.data || err.message;
+    logger.error({ err: errorData, txid, cobPayload }, "Falha na criação de PIX");
     throw new Error("Falha ao criar cobrança PIX no Inter");
   }
 
@@ -243,7 +253,7 @@ async function criarCobrancaComVencimentoPix(
 
   try {
     const createUrl = `${INTER_API_URL}/pix/v2/cobv/${txid}`;
-    logger.info({ url: createUrl, txid, vencimento: params.dataVencimento }, "Criando cobrança PIX com Vencimento (cobv)");
+    logger.info({ txid, valor: params.valor, dataVencimento: params.dataVencimento }, "[interService.criarCobrancaComVencimentoPix] Solicitando criação de PIX cobv");
 
     const { data } = await axios.put(createUrl, cobvPayload, {
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -252,7 +262,12 @@ async function criarCobrancaComVencimentoPix(
 
     const locId = data?.loc?.id;
     const pixCopiaECola = data?.pixCopiaECola;
-    if (!locId || !pixCopiaECola) throw new Error("Resposta de PIX (cobv) incompleta.");
+    if (!locId || !pixCopiaECola) {
+        logger.error({ data, txid }, "[interService.criarCobrancaComVencimentoPix] Resposta do Inter incompleta (locId ou copiaECola ausente)");
+        throw new Error("Resposta de PIX (cobv) incompleta.");
+    }
+
+    logger.info({ txid, locId }, "✅ PIX cobv criado com sucesso no Inter");
 
     return {
       qrCodePayload: pixCopiaECola,
@@ -260,7 +275,8 @@ async function criarCobrancaComVencimentoPix(
       interTransactionId: txid,
     };
   } catch (err: any) {
-    logger.error({ err: err.response?.data || err.message, txid }, "Falha na criação de PIX com Vencimento");
+    const errorData = err.response?.data || err.message;
+    logger.error({ err: errorData, txid, cobvPayload }, "Falha na criação de PIX com Vencimento");
     throw new Error("Falha ao criar cobrança PIX (cobv) no Inter");
   }
 }
@@ -464,6 +480,8 @@ async function realizarPagamentoPix(
   };
 
   try {
+    logger.info({ valor: params.valor, chave: params.chaveDestino, idempotencyKey: params.xIdIdempotente }, "[interService.realizarPagamentoPix] Solicitando transferência via Banking API");
+
     const { data } = await axios.post(url, payload, {
       headers: { 
         Authorization: `Bearer ${token}`, 
@@ -474,18 +492,18 @@ async function realizarPagamentoPix(
     });
 
     logger.info({ 
-      msg: "Resposta do Inter ao realizar PIX",
+      msg: "✅ Resposta do Inter ao realizar PIX",
       tipoRetorno: data.tipoRetorno,
       codigoSolicitacao: data.codigoSolicitacao,
-      fullData: data 
-    }, "Inter API Response (PIX)");
+      status: data.status
+    }, "Inter API Response (PIX Success)");
 
     let nomeBeneficiario: string | undefined;
     let cpfCnpjBeneficiario: string | undefined;
     
     if (data.codigoSolicitacao && isValidation) {
       try {
-        logger.info({ codigoSolicitacao: data.codigoSolicitacao }, "Consultando dados do beneficiário");
+        logger.info({ codigoSolicitacao: data.codigoSolicitacao }, "[interService.realizarPagamentoPix] Consultando detalhes do beneficiário para validação");
         
         const consultaUrl = `${INTER_API_URL}/banking/v2/pix/${data.codigoSolicitacao}`;
         const { data: consultaData } = await axios.get(consultaUrl, {
@@ -496,25 +514,19 @@ async function realizarPagamentoPix(
           httpsAgent: getHttpsAgent(),
         });
         
-        // Log completo da resposta para debug
-        logger.info({ 
-          consultaData: JSON.stringify(consultaData, null, 2)
-        }, "Resposta completa da consulta de pagamento PIX");
-        
         nomeBeneficiario = consultaData.transacaoPix?.recebedor?.nome;
         cpfCnpjBeneficiario = consultaData.transacaoPix?.recebedor?.cpfCnpj;
         
         logger.info({ 
           nomeBeneficiario, 
-          cpfCnpjBeneficiario: cpfCnpjBeneficiario ? `${cpfCnpjBeneficiario.substring(0, 3)}***` : undefined,
-          estruturaRecebedor: consultaData.transacaoPix?.recebedor ? Object.keys(consultaData.transacaoPix.recebedor) : 'undefined'
-        }, "Dados do beneficiário obtidos");
+          cpfCnpjBeneficiario: cpfCnpjBeneficiario ? `***${cpfCnpjBeneficiario.slice(-3)}` : undefined
+        }, "✅ Dados do beneficiário validados");
         
       } catch (consultaErr: any) {
         logger.warn({ 
           err: consultaErr.response?.data || consultaErr.message,
           codigoSolicitacao: data.codigoSolicitacao
-        }, "Falha ao consultar dados do beneficiário");
+        }, "⚠️ Falha ao consultar detalhes do beneficiário (o PIX pode ter sido enviado)");
       }
     }
     
@@ -533,11 +545,13 @@ async function realizarPagamentoPix(
     };
 
   } catch (err: any) {
+    const errorData = err.response?.data || err.message;
     logger.error({ 
-      err: err.response?.data || err.message, 
+      err: errorData, 
       payload, 
-      url 
-    }, "Falha ao realizar pagamento PIX");
+      url,
+      idempotency: params.xIdIdempotente
+    }, "❌ Falha crítica ao realizar pagamento PIX");
     throw new Error("Falha ao processar pagamento PIX no Inter");
   }
 }
