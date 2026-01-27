@@ -1,4 +1,5 @@
 import { Job, Worker } from 'bullmq';
+import { randomUUID } from 'crypto';
 import { logger } from '../config/logger.js';
 import { redisConfig } from '../config/redis.js';
 import { supabaseAdmin } from '../config/supabase.js';
@@ -38,11 +39,13 @@ export const payoutWorker = new Worker<PayoutJobData>(
              
              logger.debug({ cobrancaId, chavePix: usuario.chave_pix }, "[Worker] Enviando PIX para motorista...");
              
-             const pixResponse = await interService.realizarPixRepasse(supabaseAdmin, {
-                valor: valorRepasse,
+              const valorNormalizado = Number(Number(valorRepasse).toFixed(2));
+              
+              const pixResponse = await interService.realizarPixRepasse(supabaseAdmin, {
+                valor: valorNormalizado,
                 chaveDestino: usuario.chave_pix, // Note: The prop name in PagamentoPixParams is chaveDestino, not chavePix
                 descricao: `Repasse Van360 - Cobranca ${cobrancaId}`,
-                xIdIdempotente: `PAYOUT-${cobrancaId}-${Date.now()}` // Adding required Idempotency Key
+                xIdIdempotente: randomUUID() // Adding required Idempotency Key (Must be UUID)
              });
 
              // 3. Sucesso! Atualizar Banco

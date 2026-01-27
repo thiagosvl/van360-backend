@@ -105,8 +105,8 @@ export const cobrancaPagamentoService = {
 
       // 3. Calcular Valor do Repasse (Taxa PIX)
       const taxa = await getConfigNumber(ConfigKey.TAXA_INTERMEDIACAO_PIX, 0.99); 
-      const valorRepasse = cobranca.valor - taxa; 
-
+      // Usar calculo em centavos para evitar erros de ponto flutuante (0.010000000000000009)
+      const valorRepasse = Math.round((cobranca.valor * 100) - (taxa * 100)) / 100;
       if (valorRepasse <= 0) {
            logger.warn({ cobrancaId, valor: cobranca.valor, taxa }, "Valor do repasse zerado ou negativo.");
            return { success: false, reason: "valor_baixo" };
