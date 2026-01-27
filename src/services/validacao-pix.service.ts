@@ -286,7 +286,9 @@ async function confirmarChaveUsuario(
                 nomeMotorista: userData.nome || "Motorista",
                 nomePlano: "", // Not used in this template
                 valor: 0,
-                dataVencimento: ""
+                dataVencimento: "",
+                chavePix: chave,
+                tipoChavePix: tipoFinal
             });
         }
     } catch (notifyErr) {

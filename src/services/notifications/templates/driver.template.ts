@@ -1,4 +1,4 @@
-import { formatCurrency, getFirstName } from "../../../utils/format.js";
+import { formatCurrency, formatPixKey, getFirstName } from "../../../utils/format.js";
 
 /**
  * Templates de Mensagem para Motoristas / Assinantes do Sistema
@@ -18,6 +18,8 @@ export interface DriverContext {
     // New fields for flexible Lego composition
     pixPayload?: string; 
     isActivation?: boolean; // Se é o primeiro pagamento (Onboarding)
+    chavePix?: string;
+    tipoChavePix?: string;
 }
 
 const formatDate = (dateStr: string) => {
@@ -324,12 +326,16 @@ Acesse o sistema agora para revisar os dados, definir o valor da mensalidade e a
     /**
      * Sucesso na Validação da Chave PIX
      */
+    /**
+     * Sucesso na Validação da Chave PIX
+     */
     pixKeyValidated: (ctx: DriverContext): CompositeMessagePart[] => {
         const nomeMot = getFirstName(ctx.nomeMotorista);
+        const formattedKey = ctx.chavePix && ctx.tipoChavePix ? formatPixKey(ctx.chavePix, ctx.tipoChavePix) : "cadastrada";
 
         return textPart(`✅ *Chave PIX Validada!*
 
-Sua chave PIX foi validada com sucesso pelo banco. 🎉🏢
+Sua chave PIX (*${formattedKey}*) foi validada com sucesso pelo banco. 🎉🏢
 
 Agora você receberá os pagamentos diretamente em sua conta.`);
     },

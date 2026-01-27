@@ -34,3 +34,41 @@ export function getFirstName(name?: string): string {
     if (!name) return "";
     return name.trim().split(/\s+/)[0];
 }
+
+export function maskCpf(value: string) {
+  return value
+    .replace(/\D/g, "")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d{1,2})/, "$1-$2")
+    .replace(/(-\d{2})\d+?$/, "$1");
+}
+
+export function maskCnpj(value: string) {
+  return value
+    .replace(/\D/g, "")
+    .replace(/(\d{2})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1/$2")
+    .replace(/(\d{4})(\d)/, "$1-$2")
+    .replace(/(-\d{2})\d+?$/, "$1");
+}
+
+export function maskPhone(value: string) {
+  return value
+    .replace(/\D/g, "")
+    .replace(/(\d{2})(\d)/, "($1) $2")
+    .replace(/(\d{5})(\d)/, "$1-$2")
+    .replace(/(-\d{4})\d+?$/, "$1");
+}
+
+export function formatPixKey(key: string, type: string) {
+    if (!key) return "";
+    const clean = key.replace(/\D/g, "");
+    
+    if (type === "CPF") return maskCpf(clean);
+    if (type === "CNPJ") return maskCnpj(clean);
+    if (type === "TELEFONE") return maskPhone(clean);
+    
+    return key; // E-mail or Random Key
+}
