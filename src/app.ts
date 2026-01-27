@@ -10,17 +10,11 @@ import { setupBullBoard } from "./queues/bull-board.js";
 
 export async function createApp(): Promise<FastifyInstance> {
   try {
-    // Validar logger antes de passar para o Fastify
-    const appLogger = logger || true;
-    
-    if (!logger) {
-        console.warn("⚠️  Logger compartilhado não encontrado durante createApp, usando default.");
-    }
-
     const app = Fastify({
-      logger: appLogger, 
+      // No Fastify 5, para passar uma instância do Pino usamos 'loggerInstance'
+      loggerInstance: logger as any, 
       disableRequestLogging: false,
-    });
+    }) as FastifyInstance;
     
     // Iniciar integração com Sentry para Fastify
     Sentry.setupFastifyErrorHandler(app);
