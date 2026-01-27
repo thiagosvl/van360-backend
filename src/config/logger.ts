@@ -36,7 +36,6 @@ const baseConfig: pino.LoggerOptions = {
 function getLoggerConfig(): pino.LoggerOptions {
   if (isProduction && env.LOGTAIL_TOKEN) {
     // PRODUÇÃO: Dual output (PM2 + Better Stack)
-    // IMPORTANTE: Não usar formatters personalizados com transport.targets
     return {
       ...baseConfig,
       transport: {
@@ -56,7 +55,8 @@ function getLoggerConfig(): pino.LoggerOptions {
             target: '@logtail/pino',
             level: env.LOG_LEVEL || 'info',
             options: {
-              sourceToken: env.LOGTAIL_TOKEN,
+              token: env.LOGTAIL_TOKEN, // Algumas versões usam 'token'
+              sourceToken: env.LOGTAIL_TOKEN, // Outras usam 'sourceToken'
             },
           },
         ],
@@ -79,7 +79,7 @@ function getLoggerConfig(): pino.LoggerOptions {
     };
   }
 
-  // FALLBACK: JSON puro (pode usar formatters aqui)
+  // FALLBACK: JSON puro
   return {
     ...baseConfig,
     formatters: {
@@ -91,16 +91,17 @@ function getLoggerConfig(): pino.LoggerOptions {
 }
 
 const loggerConfig = getLoggerConfig();
+
+// Criar instância estável
 const logger = pino(loggerConfig);
 
-// Log de confirmação
+// Log de confirmação via console para garantir visibilidade no PM2
 if (isProduction && env.LOGTAIL_TOKEN) {
-  console.log("✅ Logger configurado com Better Stack (Logtail)");
+  console.log("✅ Logger configurado para produção com Better Stack (Logtail)");
 } else if (isDevelopment) {
-  console.log("✅ Logger configurado com pino-pretty (desenvolvimento)");
-} else {
-  console.log("⚠️  Logger configurado sem transporte (JSON puro)");
+  console.log("✅ Logger configurado para desenvolvimento com pino-pretty");
 }
 
 // Exportar tanto a instância quanto a configuração
 export { logger, loggerConfig };
+
