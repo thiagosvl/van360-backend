@@ -1,26 +1,22 @@
 // Aplicação Fastify compartilhada
 // Usado tanto para desenvolvimento local quanto para Vercel serverless
 import fastifyCors from "@fastify/cors";
+import * as Sentry from "@sentry/node";
 import Fastify, { FastifyInstance } from "fastify";
 import routes from "./api/routes.js";
+import { loggerConfig } from "./config/logger.js";
 import { globalErrorHandler } from "./errors/errorHandler.js";
 import { setupBullBoard } from "./queues/bull-board.js";
 
 export async function createApp(): Promise<FastifyInstance> {
   try {
     const app = Fastify({
-      logger: {
-        level: process.env.LOG_LEVEL || "info",
-        transport:
-          process.env.NODE_ENV === "development"
-            ? {
-                target: "pino-pretty",
-                options: { colorize: true },
-              }
-            : undefined,
-      },
-      disableRequestLogging: true,
+      logger: loggerConfig, // Usar a configuração (Pino + Logtail)
+      disableRequestLogging: false, // Ativado para monitorar tráfego real
     });
+    
+    // Iniciar integração com Sentry para Fastify
+    Sentry.setupFastifyErrorHandler(app);
     
     // Global Error Handler
     app.setErrorHandler(globalErrorHandler);

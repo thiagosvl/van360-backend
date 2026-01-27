@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/node";
 import { FastifyError, FastifyReply, FastifyRequest } from "fastify";
 import { ZodError } from "zod";
 import { logger } from "../config/logger.js";
@@ -5,6 +6,9 @@ import { AppError } from "./AppError.js";
 
 export function globalErrorHandler(error: FastifyError, request: FastifyRequest, reply: FastifyReply) {
     const { method, url } = request;
+
+    // Reportar erro para o Sentry
+    Sentry.captureException(error);
 
     // 1. Erro Conhecido (AppError ou validações tratadas)
     if (error instanceof AppError) {

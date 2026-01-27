@@ -41,44 +41,48 @@ const baseConfig: pino.LoggerOptions = {
   }),
 };
 
-// Configuração de transporte
-let logger: pino.Logger;
-
-if (isProduction && env.LOGTAIL_TOKEN) {
-  // PRODUÇÃO: Enviar logs para Better Stack (Logtail)
-  const logtailPino = await import('@logtail/pino');
-  // @ts-ignore - ESM interop
-  const createStream = logtailPino.createPinoBetterStackStream || (logtailPino as any).default?.createPinoBetterStackStream;
-  
-  if (createStream) {
-    const stream = createStream(env.LOGTAIL_TOKEN);
-    logger = pino(baseConfig, stream);
-  } else {
-    logger = pino(baseConfig);
-  }
-  
-  console.log("✅ Logger configurado com Better Stack (Logtail)");
-} else if (isDevelopment) {
-  // DESENVOLVIMENTO: Pretty print no console
-  logger = pino({
-    ...baseConfig,
-    transport: {
-      target: 'pino-pretty',
-      options: { 
-        colorize: true,
-        translateTime: 'HH:MM:ss.l',
-        ignore: 'pid,hostname'
+// Função para obter a configuração correta de transporte
+function getLoggerConfig(): pino.LoggerOptions {
+  if (isProduction && env.LOGTAIL_TOKEN) {
+    return {
+      ...baseConfig,
+      transport: {
+        target: '@logtail/pino',
+        options: { token: env.LOGTAIL_TOKEN }
       }
-    }
-  });
+    };
+  } 
   
-  console.log("✅ Logger configurado com pino-pretty (desenvolvimento)");
-} else {
-  // FALLBACK: JSON puro
-  logger = pino(baseConfig);
-  
-  console.log("⚠️  Logger configurado sem transporte (JSON puro)");
+  if (isDevelopment) {
+    return {
+      ...baseConfig,
+      transport: {
+        target: 'pino-pretty',
+        options: { 
+          colorize: true,
+          translateTime: 'HH:MM:ss.l',
+          ignore: 'pid,hostname'
+        }
+      }
+    };
+  }
+
+  return baseConfig;
 }
 
-export { logger };
+const loggerConfig = getLoggerConfig();
+const logger = pino(loggerConfig);
+
+// Log de confirmação
+setImmediate(() => {
+    if (isProduction && env.LOGTAIL_TOKEN) {
+        logger.info("✅ Logger configurado com Better Stack (Logtail)");
+    } else if (isDevelopment) {
+        logger.info("✅ Logger configurado com pino-pretty (desenvolvimento)");
+    } else {
+        logger.info("⚠️  Logger configurado sem transporte (JSON puro)");
+    }
+});
+
+export { logger, loggerConfig };
 
