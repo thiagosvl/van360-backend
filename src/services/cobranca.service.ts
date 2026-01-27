@@ -297,7 +297,7 @@ export const cobrancaService = {
   async listCobrancasByPassageiro(passageiroId: string, ano?: string): Promise<any[]> {
     let query = supabaseAdmin
       .from("cobrancas")
-      .select("*")
+      .select("*, passageiro:passageiros!inner(nome, nome_responsavel)")
       .eq("passageiro_id", passageiroId)
       .order("data_vencimento", { ascending: false });
 
