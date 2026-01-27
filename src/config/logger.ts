@@ -102,4 +102,5 @@ if (isProduction && env.LOGTAIL_TOKEN) {
   console.log("⚠️  Logger configurado sem transporte (JSON puro)");
 }
 
-export { logger };
+// Exportar tanto a instância quanto a configuração
+export { logger, loggerConfig };

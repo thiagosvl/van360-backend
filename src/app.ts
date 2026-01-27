@@ -4,14 +4,14 @@ import fastifyCors from "@fastify/cors";
 import * as Sentry from "@sentry/node";
 import Fastify, { FastifyInstance } from "fastify";
 import routes from "./api/routes.js";
-import { logger } from "./config/logger.js";
+import { loggerConfig } from "./config/logger.js";
 import { globalErrorHandler } from "./errors/errorHandler.js";
 import { setupBullBoard } from "./queues/bull-board.js";
 
 export async function createApp(): Promise<FastifyInstance> {
   try {
     const app = Fastify({
-      logger: logger, // ✅ CORRETO: Passar instância do logger, não configuração
+      logger: loggerConfig, // ✅ CORRETO: Passar configuração do logger
       disableRequestLogging: false, // Ativado para monitorar tráfego real
     });
     
