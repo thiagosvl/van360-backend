@@ -44,16 +44,36 @@ const baseConfig: pino.LoggerOptions = {
 // Função para obter a configuração correta de transporte
 function getLoggerConfig(): pino.LoggerOptions {
   if (isProduction && env.LOGTAIL_TOKEN) {
+    // PRODUÇÃO: Dual output (PM2 + Better Stack)
     return {
       ...baseConfig,
       transport: {
-        target: '@logtail/pino',
-        options: { token: env.LOGTAIL_TOKEN }
-      }
+        targets: [
+          // Console (para PM2 logs)
+          {
+            target: 'pino-pretty',
+            level: env.LOG_LEVEL || 'info',
+            options: {
+              colorize: false,
+              translateTime: 'SYS:standard',
+              ignore: 'pid,hostname',
+            },
+          },
+          // Better Stack/Logtail
+          {
+            target: '@logtail/pino',
+            level: env.LOG_LEVEL || 'info',
+            options: {
+              sourceToken: env.LOGTAIL_TOKEN, // ✅ CORRETO: sourceToken, não token
+            },
+          },
+        ],
+      },
     };
   } 
   
   if (isDevelopment) {
+    // DESENVOLVIMENTO: Pretty print
     return {
       ...baseConfig,
       transport: {
@@ -67,6 +87,7 @@ function getLoggerConfig(): pino.LoggerOptions {
     };
   }
 
+  // FALLBACK: JSON puro
   return baseConfig;
 }
 
@@ -74,15 +95,12 @@ const loggerConfig = getLoggerConfig();
 const logger = pino(loggerConfig);
 
 // Log de confirmação
-setImmediate(() => {
-    if (isProduction && env.LOGTAIL_TOKEN) {
-        logger.info("✅ Logger configurado com Better Stack (Logtail)");
-    } else if (isDevelopment) {
-        logger.info("✅ Logger configurado com pino-pretty (desenvolvimento)");
-    } else {
-        logger.info("⚠️  Logger configurado sem transporte (JSON puro)");
-    }
-});
+if (isProduction && env.LOGTAIL_TOKEN) {
+  console.log("✅ Logger configurado com Better Stack (Logtail)");
+} else if (isDevelopment) {
+  console.log("✅ Logger configurado com pino-pretty (desenvolvimento)");
+} else {
+  console.log("⚠️  Logger configurado sem transporte (JSON puro)");
+}
 
-export { logger, loggerConfig };
-
+export { logger };

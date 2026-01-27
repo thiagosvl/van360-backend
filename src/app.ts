@@ -4,14 +4,14 @@ import fastifyCors from "@fastify/cors";
 import * as Sentry from "@sentry/node";
 import Fastify, { FastifyInstance } from "fastify";
 import routes from "./api/routes.js";
-import { loggerConfig } from "./config/logger.js";
+import { logger } from "./config/logger.js";
 import { globalErrorHandler } from "./errors/errorHandler.js";
 import { setupBullBoard } from "./queues/bull-board.js";
 
 export async function createApp(): Promise<FastifyInstance> {
   try {
     const app = Fastify({
-      logger: loggerConfig, // Usar a configuração (Pino + Logtail)
+      logger: logger, // ✅ CORRETO: Passar instância do logger, não configuração
       disableRequestLogging: false, // Ativado para monitorar tráfego real
     });
     
@@ -85,4 +85,3 @@ export default async function (req: any, res: any) {
   await app.ready();
   app.server.emit('request', req, res);
 }
-
