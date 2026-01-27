@@ -36,39 +36,60 @@ export function getFirstName(name?: string): string {
 }
 
 export function maskCpf(value: string) {
-  return value
-    .replace(/\D/g, "")
-    .replace(/(\d{3})(\d)/, "$1.$2")
-    .replace(/(\d{3})(\d)/, "$1.$2")
-    .replace(/(\d{3})(\d{1,2})/, "$1-$2")
-    .replace(/(-\d{2})\d+?$/, "$1");
+    return value
+        .replace(/\D/g, "")
+        .replace(/(\d{3})(\d)/, "$1.$2")
+        .replace(/(\d{3})(\d)/, "$1.$2")
+        .replace(/(\d{3})(\d{1,2})/, "$1-$2")
+        .replace(/(-\d{2})\d+?$/, "$1");
 }
 
 export function maskCnpj(value: string) {
-  return value
-    .replace(/\D/g, "")
-    .replace(/(\d{2})(\d)/, "$1.$2")
-    .replace(/(\d{3})(\d)/, "$1.$2")
-    .replace(/(\d{3})(\d)/, "$1/$2")
-    .replace(/(\d{4})(\d)/, "$1-$2")
-    .replace(/(-\d{2})\d+?$/, "$1");
+    return value
+        .replace(/\D/g, "")
+        .replace(/(\d{2})(\d)/, "$1.$2")
+        .replace(/(\d{3})(\d)/, "$1.$2")
+        .replace(/(\d{3})(\d)/, "$1/$2")
+        .replace(/(\d{4})(\d)/, "$1-$2")
+        .replace(/(-\d{2})\d+?$/, "$1");
 }
 
 export function maskPhone(value: string) {
-  return value
-    .replace(/\D/g, "")
-    .replace(/(\d{2})(\d)/, "($1) $2")
-    .replace(/(\d{5})(\d)/, "$1-$2")
-    .replace(/(-\d{4})\d+?$/, "$1");
+    let r = value.replace(/\D/g, "");
+    if (r.length > 11) {
+        r = r.slice(0, 11);
+    }
+    if (r.length > 10) {
+        return r.replace(/^(\d\d)(\d{5})(\d{4}).*/, "($1) $2-$3");
+    } else if (r.length > 5) {
+        return r.replace(/^(\d\d)(\d{4})(\d{0,4}).*/, "($1) $2-$3");
+    } else if (r.length > 2) {
+        return r.replace(/^(\d\d)(\d{0,5}).*/, "($1) $2");
+    } else {
+        return r.replace(/^(\d*)/, "($1");
+    }
+}
+
+export function maskEvp(value: string) {
+    const cleanValue = value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 32);
+    return cleanValue
+        .replace(/^([a-zA-Z0-9]{8})([a-zA-Z0-9])/, '$1-$2')
+        .replace(/^([a-zA-Z0-9]{8})-([a-zA-Z0-9]{4})([a-zA-Z0-9])/, '$1-$2-$3')
+        .replace(/^([a-zA-Z0-9]{8})-([a-zA-Z0-9]{4})-([a-zA-Z0-9]{4})([a-zA-Z0-9])/, '$1-$2-$3-$4')
+        .replace(/^([a-zA-Z0-9]{8})-([a-zA-Z0-9]{4})-([a-zA-Z0-9]{4})-([a-zA-Z0-9]{4})([a-zA-Z0-9])/, '$1-$2-$3-$4-$5');
 }
 
 export function formatPixKey(key: string, type: string) {
     if (!key) return "";
+
+    // Normalizar tipo 
+    const t = type ? type.toUpperCase() : "";
     const clean = key.replace(/\D/g, "");
-    
-    if (type === "CPF") return maskCpf(clean);
-    if (type === "CNPJ") return maskCnpj(clean);
-    if (type === "TELEFONE") return maskPhone(clean);
-    
-    return key; // E-mail or Random Key
+
+    if (t === "CPF") return maskCpf(clean);
+    if (t === "CNPJ") return maskCnpj(clean);
+    if (t === "TELEFONE") return maskPhone(key);
+    if (t === "ALEATORIA" || t === "EVP") return maskEvp(key);
+
+    return key;
 }

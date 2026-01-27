@@ -4,6 +4,7 @@ import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { PixKeyStatus, PixKeyType, TransactionStatus } from "../types/enums.js";
+import { formatPixKey } from "../utils/format.js";
 import { onlyDigits } from "../utils/string.utils.js";
 import { cobrancaPagamentoService } from "./cobranca-pagamento.service.js";
 import { interService } from "./inter.service.js";
@@ -287,7 +288,7 @@ async function confirmarChaveUsuario(
                 nomePlano: "", // Not used in this template
                 valor: 0,
                 dataVencimento: "",
-                chavePix: chave,
+                chavePix: formatPixKey(chave, tipoFinal),
                 tipoChavePix: tipoFinal
             });
         }
