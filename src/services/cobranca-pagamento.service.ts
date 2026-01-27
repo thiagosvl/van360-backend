@@ -116,9 +116,7 @@ export const cobrancaPagamentoService = {
       const transacaoData: any = {
           cobranca_id: cobrancaId,
           usuario_id: cobranca.usuario_id,
-          valor_bruto: cobranca.valor,
-          taxa_plataforma: taxa,
-          valor_liquido: valorRepasse,
+          valor_repassado: valorRepasse,
           status: hasValidPix ? TransactionStatus.PROCESSAMENTO : TransactionStatus.ERRO, 
           data_criacao: new Date()
       };
