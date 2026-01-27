@@ -5,7 +5,7 @@ import { env } from "./env.js";
 const isDevelopment = env.NODE_ENV !== 'production';
 const isProduction = env.NODE_ENV === 'production';
 
-// Configuração base do logger
+// Configuração base do logger (sem formatters personalizados)
 const baseConfig: pino.LoggerOptions = {
   level: env.LOG_LEVEL || "info",
   
@@ -30,21 +30,13 @@ const baseConfig: pino.LoggerOptions = {
     ],
     remove: true
   },
-  
-  // Adicionar contexto útil em produção
-  ...(isProduction && {
-    formatters: {
-      level: (label) => {
-        return { level: label.toUpperCase() };
-      },
-    },
-  }),
 };
 
 // Função para obter a configuração correta de transporte
 function getLoggerConfig(): pino.LoggerOptions {
   if (isProduction && env.LOGTAIL_TOKEN) {
     // PRODUÇÃO: Dual output (PM2 + Better Stack)
+    // IMPORTANTE: Não usar formatters personalizados com transport.targets
     return {
       ...baseConfig,
       transport: {
@@ -64,7 +56,7 @@ function getLoggerConfig(): pino.LoggerOptions {
             target: '@logtail/pino',
             level: env.LOG_LEVEL || 'info',
             options: {
-              sourceToken: env.LOGTAIL_TOKEN, // ✅ CORRETO: sourceToken, não token
+              sourceToken: env.LOGTAIL_TOKEN,
             },
           },
         ],
@@ -87,8 +79,15 @@ function getLoggerConfig(): pino.LoggerOptions {
     };
   }
 
-  // FALLBACK: JSON puro
-  return baseConfig;
+  // FALLBACK: JSON puro (pode usar formatters aqui)
+  return {
+    ...baseConfig,
+    formatters: {
+      level: (label) => {
+        return { level: label.toUpperCase() };
+      },
+    },
+  };
 }
 
 const loggerConfig = getLoggerConfig();
