@@ -1,27 +1,62 @@
 import pino from "pino";
+import { env } from "./env.js";
 
 // Usar pino-pretty em desenvolvimento para logs formatados
-const isDevelopment = process.env.NODE_ENV !== 'production';
+const isDevelopment = env.NODE_ENV !== 'production';
+const isProduction = env.NODE_ENV === 'production';
 
-export const logger = pino({ 
-  level: process.env.LOG_LEVEL || "info",
+// Configuração base do logger
+const baseConfig: pino.LoggerOptions = {
+  level: env.LOG_LEVEL || "info",
+  
   // Redação de dados sensíveis para logs de produção (e dev)
   redact: {
-      paths: [
-          "email", 
-          "password", 
-          "senha", 
-          "cpf", 
-          "cpfcnpj", 
-          "authorization", 
-          "Authorization", 
-          "headers.authorization",
-          "access_token",
-          "refresh_token"
-      ],
-      remove: true
+    paths: [
+      "email", 
+      "password", 
+      "senha", 
+      "cpf", 
+      "cpfcnpj", 
+      "authorization", 
+      "Authorization", 
+      "headers.authorization",
+      "access_token",
+      "refresh_token",
+      "chave_pix",
+      "*.password",
+      "*.senha",
+      "*.cpf",
+      "*.token"
+    ],
+    remove: true
   },
-  ...(isDevelopment && {
+  
+  // Adicionar contexto útil em produção
+  ...(isProduction && {
+    formatters: {
+      level: (label) => {
+        return { level: label.toUpperCase() };
+      },
+    },
+  }),
+};
+
+// Configuração de transporte
+let logger: pino.Logger;
+
+if (isProduction && env.LOGTAIL_TOKEN) {
+  // PRODUÇÃO: Enviar logs para Better Stack (Logtail)
+  const { createPinoBetterStackStream } = await import('@logtail/pino');
+  
+  const stream = createPinoBetterStackStream(env.LOGTAIL_TOKEN);
+  
+  logger = pino(baseConfig, stream);
+  
+  console.log("✅ Logger configurado com Better Stack (Logtail)");
+} else if (isDevelopment) {
+  // DESENVOLVIMENTO: Pretty print no console
+  logger = pino({
+    ...baseConfig,
     transport: {
       target: 'pino-pretty',
       options: { 
@@ -30,5 +65,14 @@ export const logger = pino({
         ignore: 'pid,hostname'
       }
     }
-  })
-});
+  });
+  
+  console.log("✅ Logger configurado com pino-pretty (desenvolvimento)");
+} else {
+  // FALLBACK: JSON puro
+  logger = pino(baseConfig);
+  
+  console.log("⚠️  Logger configurado sem transporte (JSON puro)");
+}
+
+export { logger };

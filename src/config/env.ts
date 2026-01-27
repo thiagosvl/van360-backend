@@ -15,4 +15,12 @@ export const env = {
   EVOLUTION_API_KEY: process.env.EVOLUTION_API_KEY!,
   CRON_SECRET: process.env.CRON_SECRET || "super_secret_cron_key",
   BACKEND_URL: process.env.BACKEND_URL || "http://host.docker.internal:3000",
+  
+  // Observability
+  SENTRY_DSN: process.env.SENTRY_DSN,
+  SENTRY_ENVIRONMENT: process.env.SENTRY_ENVIRONMENT,
+  SENTRY_TRACES_SAMPLE_RATE: process.env.SENTRY_TRACES_SAMPLE_RATE || "0.1",
+  SENTRY_PROFILES_SAMPLE_RATE: process.env.SENTRY_PROFILES_SAMPLE_RATE || "0.1",
+  LOGTAIL_TOKEN: process.env.LOGTAIL_TOKEN,
+  LOG_LEVEL: process.env.LOG_LEVEL || "info",
 };
