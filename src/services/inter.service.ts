@@ -475,25 +475,55 @@ async function realizarPagamentoPix(
 
     logger.info({ 
       msg: "Resposta do Inter ao realizar PIX",
-      status: data.status,
-      endToEndId: data.endToEndId,
+      tipoRetorno: data.tipoRetorno,
+      codigoSolicitacao: data.codigoSolicitacao,
       fullData: data 
     }, "Inter API Response (PIX)");
 
-    // Mapeamento de Status da API Banking v2 (Pagamento)
-    // Se tipoRetorno for APROVACAO, consideramos que a chave é válida e o pagamento foi aceito.
+    let nomeBeneficiario: string | undefined;
+    let cpfCnpjBeneficiario: string | undefined;
+    
+    if (data.codigoSolicitacao && isValidation) {
+      try {
+        logger.info({ codigoSolicitacao: data.codigoSolicitacao }, "Consultando dados do beneficiário");
+        
+        const consultaUrl = `${INTER_API_URL}/banking/v2/pix/${data.codigoSolicitacao}`;
+        const { data: consultaData } = await axios.get(consultaUrl, {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          httpsAgent: getHttpsAgent(),
+        });
+        
+        nomeBeneficiario = consultaData.transacaoPix?.recebedor?.nome;
+        cpfCnpjBeneficiario = consultaData.transacaoPix?.recebedor?.cpfCnpj;
+        
+        logger.info({ 
+          nomeBeneficiario, 
+          cpfCnpjBeneficiario: cpfCnpjBeneficiario ? `${cpfCnpjBeneficiario.substring(0, 3)}***` : undefined
+        }, "Dados do beneficiário obtidos");
+        
+      } catch (consultaErr: any) {
+        logger.warn({ 
+          err: consultaErr.response?.data || consultaErr.message,
+          codigoSolicitacao: data.codigoSolicitacao
+        }, "Falha ao consultar dados do beneficiário");
+      }
+    }
+    
     let statusFinal = data.status || "PROCESSAMENTO";
     if (data.tipoRetorno === "APROVACAO" || data.tipoRetorno === "PROCESSADO") {
-        statusFinal = "PAGO"; // Tratamos como Pago para fins de validação da chave
+        statusFinal = "PAGO";
     } else if (data.tipoRetorno === "AGENDADO") {
         statusFinal = "AGENDADO";
     }
 
     return {
-      endToEndId: data.endToEndId || data.codigoSolicitacao, // CodigoSolicitacao é o ID do pagamento na v2
+      endToEndId: data.endToEndId || data.codigoSolicitacao,
       status: statusFinal,
-      nomeBeneficiario: data.beneficiario?.nome,
-      cpfCnpjBeneficiario: data.beneficiario?.cpfCnpj
+      nomeBeneficiario,
+      cpfCnpjBeneficiario
     };
 
   } catch (err: any) {
