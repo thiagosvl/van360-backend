@@ -119,8 +119,8 @@ export const cobrancaPagamentoService = {
           valor_bruto: cobranca.valor,
           taxa_plataforma: taxa,
           valor_liquido: valorRepasse,
-          status: hasValidPix ? TransactionStatus.PROCESSAMENTO : RepasseStatus.FALHA, 
-          data_execucao: new Date()
+          status: hasValidPix ? TransactionStatus.PROCESSAMENTO : TransactionStatus.ERRO, 
+          data_criacao: new Date()
       };
 
       if (!hasValidPix) {
@@ -142,10 +142,20 @@ export const cobrancaPagamentoService = {
       // 5. Se não tiver PIX válido, abortar repasse automático (avisar motorista no dashboard via status)
       if (!hasValidPix) {
           logger.warn({ cobrancaId, motoristaId: cobranca.usuario_id }, "Repasse abortado: Chave PIX inválida ou ausente");
+          
+          if (transacao?.id) {
+              await supabaseAdmin.from("transacoes_repasse")
+                  .update({ 
+                      status: TransactionStatus.ERRO, 
+                      mensagem_erro: transacaoData.mensagem_erro 
+                  }).eq("id", transacao.id);
+          }
+
           await supabaseAdmin.from("cobrancas").update({ 
               status_repasse: RepasseStatus.FALHA,
               id_transacao_repasse: transacao?.id 
           }).eq("id", cobrancaId);
+
           return { success: false, reason: "pix_invalido", transacaoId: transacao?.id };
       }
 

@@ -72,7 +72,7 @@ export const payoutWorker = new Worker<PayoutJobData>(
             if (transacaoId) {
                 await supabaseAdmin.from("transacoes_repasse")
                     .update({ 
-                        status: RepasseStatus.FALHA, 
+                        status: TransactionStatus.ERRO, 
                         mensagem_erro: error.message 
                     })
                     .eq("id", transacaoId);

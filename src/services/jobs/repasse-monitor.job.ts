@@ -17,7 +17,7 @@ export const repasseMonitorJob = {
             .from("transacoes_repasse")
             .select("*")
             .eq("status", TransactionStatus.PROCESSAMENTO)
-            .gte("created_at", limite.toISOString());
+            .gte("data_criacao", limite.toISOString());
 
         if (error) {
             logger.error({ error }, "Erro ao buscar repasses pendentes");
