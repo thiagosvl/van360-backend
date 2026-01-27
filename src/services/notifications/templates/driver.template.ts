@@ -332,5 +332,20 @@ Acesse o sistema agora para revisar os dados, definir o valor da mensalidade e a
 Sua chave PIX foi validada com sucesso pelo banco. 🎉🏢
 
 Agora você receberá os pagamentos diretamente em sua conta.`);
+    },
+
+    /**
+     * Falha na Validação da Chave PIX
+     */
+    pixKeyValidationFailed: (ctx: DriverContext): CompositeMessagePart[] => {
+        const nomeMot = getFirstName(ctx.nomeMotorista);
+        
+        return textPart(`❌ *Validação da Chave PIX Falhou*
+
+Olá *${nomeMot}*, o banco rejeitou a chave PIX informada.
+
+Isso geralmente acontece quando o CPF/CNPJ da chave não é o mesmo do titular da conta bancária.
+
+Por favor, acesse o aplicativo e cadastre uma nova chave válida para receber seus pagamentos.`);
     }
 };

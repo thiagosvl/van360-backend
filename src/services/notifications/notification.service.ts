@@ -9,6 +9,7 @@ import {
     DRIVER_EVENT_PAYMENT_CONFIRMED,
     DRIVER_EVENT_PAYMENT_RECEIVED_ALERT,
     DRIVER_EVENT_PIX_KEY_VALIDATED,
+    DRIVER_EVENT_PIX_KEY_VALIDATION_FAILED,
     DRIVER_EVENT_PRE_PASSENGER_CREATED,
     DRIVER_EVENT_RENEWAL,
     DRIVER_EVENT_RENEWAL_DUE_SOON,
@@ -18,7 +19,6 @@ import {
     DRIVER_EVENT_TRIAL_ENDING,
     DRIVER_EVENT_UPGRADE,
     DRIVER_EVENT_WELCOME_TRIAL,
-
     PASSENGER_EVENT_DUE_SOON,
     PASSENGER_EVENT_DUE_TODAY,
     PASSENGER_EVENT_MANUAL,
@@ -50,6 +50,7 @@ type DriverEventType =
     | typeof DRIVER_EVENT_TRIAL_ENDING
     | typeof DRIVER_EVENT_REPASSE_FAILED
     | typeof DRIVER_EVENT_PIX_KEY_VALIDATED
+    | typeof DRIVER_EVENT_PIX_KEY_VALIDATION_FAILED
     | typeof DRIVER_EVENT_PRE_PASSENGER_CREATED;
 
 export const notificationService = {
@@ -106,6 +107,7 @@ export const notificationService = {
             case DRIVER_EVENT_REPASSE_FAILED: parts = DriverTemplates.repasseFailed(ctx); break;
 
             case DRIVER_EVENT_PIX_KEY_VALIDATED: parts = DriverTemplates.pixKeyValidated(ctx); break;
+            case DRIVER_EVENT_PIX_KEY_VALIDATION_FAILED: parts = DriverTemplates.pixKeyValidationFailed(ctx); break;
             case DRIVER_EVENT_PRE_PASSENGER_CREATED: parts = DriverTemplates.prePassengerCreated(ctx); break;
         }
 

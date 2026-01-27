@@ -171,5 +171,46 @@ export const cobrancaPagamentoService = {
            await supabaseAdmin.from("cobrancas").update({ status_repasse: RepasseStatus.FALHA }).eq("id", cobrancaId);
            throw queueError;
       }
+  },
+
+  /**
+   * Busca repasses travados (FALHA ou PENDENTE) de um usuário e retenta imediatamente.
+   * Chamado quando a chave PIX é validada com sucesso.
+   */
+  async reprocessarRepassesPendentes(usuarioId: string): Promise<{ retried: number }> {
+      logger.info({ usuarioId }, "Buscando repasses pendentes para reprocessamento imediato...");
+
+      const { data: pendencias, error } = await supabaseAdmin
+          .from("cobrancas")
+          .select("id, valor")
+          .eq("usuario_id", usuarioId)
+          .eq("status", CobrancaStatus.PAGO)
+          .in("status_repasse", [RepasseStatus.FALHA, RepasseStatus.PENDENTE]);
+
+      if (error) {
+          logger.error({ error, usuarioId }, "Erro ao buscar repasses para retry imediato");
+          return { retried: 0 };
+      }
+
+      if (!pendencias || pendencias.length === 0) {
+          logger.info({ usuarioId }, "Nenhum repasse pendente encontrado para este usuário.");
+          return { retried: 0 };
+      }
+
+      logger.info({ usuarioId, count: pendencias.length }, "Reprocessando repasses acumulados...");
+
+      let retriedCount = 0;
+      for (const cobranca of pendencias) {
+          try {
+              await this.iniciarRepasse(cobranca.id);
+              retriedCount++;
+              // Pequeno delay para evitar rate limit
+              await new Promise(r => setTimeout(r, 200));
+          } catch (err) {
+              logger.error({ err, cobrancaId: cobranca.id }, "Falha ao retentar repasse individualmente");
+          }
+      }
+
+      return { retried: retriedCount };
   }
 };

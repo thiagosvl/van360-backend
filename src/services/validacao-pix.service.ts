@@ -1,10 +1,11 @@
 import crypto from "node:crypto";
-import { DRIVER_EVENT_PIX_KEY_VALIDATED } from "../config/constants.js";
+import { DRIVER_EVENT_PIX_KEY_VALIDATED, DRIVER_EVENT_PIX_KEY_VALIDATION_FAILED } from "../config/constants.js";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { PixKeyStatus, PixKeyType, TransactionStatus } from "../types/enums.js";
 import { onlyDigits } from "../utils/string.utils.js";
+import { cobrancaPagamentoService } from "./cobranca-pagamento.service.js";
 import { interService } from "./inter.service.js";
 import { notificationService } from "./notifications/notification.service.js";
 
@@ -116,6 +117,16 @@ export async function iniciarValidacaoPix(usuarioId: string, chavePix: string, t
       endToEndId: resultado.endToEndId,
       fullResult: resultado 
     }, "Micro-pagamento enviado. Aguardando Webhook ou Processamento.");
+
+    logger.debug({ 
+        action: "micro_payment_result",
+        usuarioId,
+        status: resultado.status,
+        beneficiario: {
+            nome: resultado.nomeBeneficiario,
+            cpfCnpj: resultado.cpfCnpjBeneficiario
+        }
+    }, "Detalhes do Beneficiário retornado pelo Inter");
 
      // 3. Atualizar registro com resultado inicial
      const novoStatus = resultado.status === "PAGO" || resultado.status === "REALIZADO" ? TransactionStatus.SUCESSO : TransactionStatus.PROCESSAMENTO;
@@ -254,7 +265,14 @@ async function confirmarChaveUsuario(
         throw error;
     }
 
-    // 4. Notificar Usuário via WhatsApp
+    // 4. RETRY IMEDIATO DE REPASSES
+    // Se o usuário tinha saldo travado por falta de chave, tenta pagar agora.
+    cobrancaPagamentoService.reprocessarRepassesPendentes(usuarioId)
+        .catch(err => {
+            logger.error({ err, usuarioId }, "Erro ao disparar retry de repasses após validação PIX");
+        });
+
+    // 5. Notificar Usuário via WhatsApp
     try {
         const { data: userData } = await supabaseAdmin
             .from("usuarios")
@@ -285,6 +303,40 @@ export const validacaoPixService = {
     },
     confirmarChaveUsuario,
     rejeitarValidacao: async (usuarioId: string, motivo: string) => {
-        logger.warn({ usuarioId, motivo }, "Validação de PIX falhou definitivamente.");
+        logger.warn({ usuarioId, motivo }, "Validação de PIX falhou. Notificando usuário.");
+
+        // 1. Atualizar status no banco
+        const { error } = await supabaseAdmin
+            .from("usuarios")
+            .update({
+                status_chave_pix: "FALHA_VALIDACAO",
+                chave_pix_validada_em: null 
+            })
+            .eq("id", usuarioId);
+
+        if (error) {
+            logger.error({ error, usuarioId }, "Erro ao registrar FALHA_VALIDACAO no banco");
+            // Não impede notificação
+        }
+
+        // 2. Notificar Usuário
+        try {
+             const { data: userData } = await supabaseAdmin
+                 .from("usuarios")
+                 .select("nome, telefone")
+                 .eq("id", usuarioId)
+                 .single();
+     
+             if (userData?.telefone) {
+                 await notificationService.notifyDriver(userData.telefone, DRIVER_EVENT_PIX_KEY_VALIDATION_FAILED, {
+                     nomeMotorista: userData.nome || "Motorista",
+                     nomePlano: "",
+                     valor: 0,
+                     dataVencimento: ""
+                 });
+             }
+        } catch (notifyErr) {
+             logger.error({ notifyErr, usuarioId }, "Erro ao enviar notificação de falha PIX");
+        }
     }
 };

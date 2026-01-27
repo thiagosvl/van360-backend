@@ -444,6 +444,16 @@ async function realizarPagamentoPix(
   // NOTA: Certifique-se que o escopo 'pagamento-pix.write' está ativo
   const url = `${INTER_API_URL}/banking/v2/pix`;
 
+  // LogContext para identificar se é Micro-pagamento de validação
+  const isValidation = (params.valor === 0.01 && params.descricao?.includes("Validacao"));
+  if (isValidation) {
+      logger.info({ 
+          step: "micro_transaction_start", 
+          chaveDestino: params.chaveDestino,
+          usuarioDesc: params.descricao
+      }, "Iniciando micro-transação de validação de chave PIX");
+  }
+
   const payload = {
     valor: params.valor,
     destinatario: {

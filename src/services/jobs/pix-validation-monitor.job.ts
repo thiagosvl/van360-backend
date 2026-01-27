@@ -41,6 +41,14 @@ export const pixValidationMonitorJob = {
                 // 2. Consultar Status no Inter
                 const pixInfo = await interService.consultarPix(supabaseAdmin, item.end_to_end_id);
                 const statusInter = pixInfo.status; // EX: REALIZADO, REJEITADO, PAGO?
+                
+                logger.info({ 
+                    step: "monitor_check", 
+                    id: item.id, 
+                    e2eId: item.end_to_end_id, 
+                    statusInter,
+                    motivo: pixInfo.motivo 
+                }, "Status retornado pelo Inter");
 
                 // Mapeamento de status Inter -> SUCESSO/ERRO
                 // Depende da API do Inter. Geralmente: "REALIZADO" = Sucesso.
