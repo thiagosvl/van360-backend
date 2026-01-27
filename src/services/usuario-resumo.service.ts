@@ -152,7 +152,7 @@ export const usuarioResumoService = {
     const passAtivos = passageirosList.filter((p: any) => p.ativo).length;
     const passInativos = passTotal - passAtivos;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const passAuto = passageirosList.filter((p: any) => p.enviar_cobranca_automatica).length;
+    const passAuto = passageirosList.filter((p: any) => p.ativo && p.enviar_cobranca_automatica).length;
 
     // Veiculos
     const veicTotal = veiculosCount.data?.length || 0;

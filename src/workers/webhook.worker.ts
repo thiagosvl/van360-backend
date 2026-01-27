@@ -27,7 +27,7 @@ export const webhookWorker = new Worker<WebhookJobData>(
                 return;
             }
 
-            // 2. Tentar Handler de Cobranças/Pais (Repasse)
+            // 2. Tentar Handler de Mensalidades/Pais (Repasse)
             const handledCobranca = await webhookCobrancaHandler.handle(pagamento);
             if (handledCobranca) {
                 logger.info({ jobId: job.id, type: 'COBRANCA_PAI' }, "[Worker] Webhook processed successfully");

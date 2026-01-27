@@ -25,7 +25,7 @@ export const dailyChargeMonitorJob = {
         const hojeStr = hoje.toISOString().split('T')[0];
 
         try {
-            logger.info("Iniciando Job Diário de Monitoramento de Cobranças");
+            logger.info("Iniciando Job Diário de Monitoramento de Mensalidades");
 
             // 1. Configurações
             const diasAntecedencia = params.diasAntecedenciaOverride ?? await getConfigNumber(ConfigKey.DIAS_ANTECEDENCIA_AVISO_VENCIMENTO, 3);
@@ -53,8 +53,8 @@ export const dailyChargeMonitorJob = {
             // 2. Buscar TUDO que se encaixa nessas datas E está pendente
             const datasDeInteresse = [dataAvisoStr, hojeStr, ...datasAtraso];
             
-            // 2. Buscar Cobranças Pendentes nas datas alvo
-            // Embargo de 24h: Só processamos cobranças de motoristas cuja assinatura foi ativada há mais de 24h
+            // 2. Buscar Mensalidades Pendentes nas datas alvo
+            // Embargo de 24h: Só processamos Mensalidades de motoristas cuja assinatura foi ativada há mais de 24h
             const timestamp24hAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
             const { data: cobrancas, error: cobError } = await supabaseAdmin
