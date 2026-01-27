@@ -58,7 +58,7 @@ export const repasseMonitorJob = {
                         .update({ 
                             status: novoStatus, 
                             data_conclusao: new Date(),
-                            // Se tiver campo de erro/motivo na tabela transacoes_repasse, atualizar aqui
+                            mensagem_erro: novoStatus === TransactionStatus.SUCESSO ? null : undefined
                         })
                         .eq("id", transacao.id);
 

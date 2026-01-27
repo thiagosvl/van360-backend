@@ -60,7 +60,8 @@ export const payoutWorker = new Worker<PayoutJobData>(
                         .update({ 
                             status: TransactionStatus.SUCESSO, 
                             txid_pix_repasse: pixResponse.endToEndId, 
-                            data_conclusao: new Date() 
+                            data_conclusao: new Date(),
+                            mensagem_erro: null 
                         })
                         .eq("id", transacaoId);
                 }

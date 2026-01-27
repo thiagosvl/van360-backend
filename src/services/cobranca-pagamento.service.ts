@@ -2,7 +2,7 @@ import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
 import { addToPayoutQueue } from "../queues/payout.queue.js";
-import { CobrancaStatus, ConfigKey, PixKeyStatus, RepasseStatus, TransactionStatus } from "../types/enums.js";
+import { CobrancaStatus, CobrancaTipoPagamento, ConfigKey, PixKeyStatus, RepasseStatus, TransactionStatus } from "../types/enums.js";
 import { getConfigNumber } from "./configuracao.service.js";
 
 interface PagamentoInfo {
@@ -22,6 +22,7 @@ export const cobrancaPagamentoService = {
             .update({
                 status: CobrancaStatus.PAGO,
                 valor_pago: valor,
+                tipo_pagamento: CobrancaTipoPagamento.PIX,
                 data_pagamento: pagamento.horario || new Date(),
                 dados_auditoria_pagamento: pagamento,
                 recibo_url: reciboUrl
