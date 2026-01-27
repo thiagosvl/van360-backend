@@ -496,12 +496,18 @@ async function realizarPagamentoPix(
           httpsAgent: getHttpsAgent(),
         });
         
+        // Log completo da resposta para debug
+        logger.info({ 
+          consultaData: JSON.stringify(consultaData, null, 2)
+        }, "Resposta completa da consulta de pagamento PIX");
+        
         nomeBeneficiario = consultaData.transacaoPix?.recebedor?.nome;
         cpfCnpjBeneficiario = consultaData.transacaoPix?.recebedor?.cpfCnpj;
         
         logger.info({ 
           nomeBeneficiario, 
-          cpfCnpjBeneficiario: cpfCnpjBeneficiario ? `${cpfCnpjBeneficiario.substring(0, 3)}***` : undefined
+          cpfCnpjBeneficiario: cpfCnpjBeneficiario ? `${cpfCnpjBeneficiario.substring(0, 3)}***` : undefined,
+          estruturaRecebedor: consultaData.transacaoPix?.recebedor ? Object.keys(consultaData.transacaoPix.recebedor) : 'undefined'
         }, "Dados do beneficiário obtidos");
         
       } catch (consultaErr: any) {
