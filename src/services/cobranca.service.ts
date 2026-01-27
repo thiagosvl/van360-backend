@@ -260,8 +260,31 @@ export const cobrancaService = {
   },
 
   async deleteCobranca(id: string): Promise<void> {
+    // 1. Buscar txid_pix antes de deletar
+    const { data: cobranca, error: fetchError } = await supabaseAdmin
+        .from("cobrancas")
+        .select("txid_pix")
+        .eq("id", id)
+        .single();
+    
+    if (fetchError) {
+        logger.error({ error: fetchError.message, cobrancaId: id }, "Erro ao buscar cobrança para exclusão.");
+        throw new AppError("Erro ao buscar cobrança para exclusão.", 500);
+    }
+
+    // 2. Se tiver PIX, cancelar no Inter (Best effort)
+    if (cobranca?.txid_pix) {
+        try {
+            logger.info({ txid: cobranca.txid_pix, cobrancaId: id }, "Cancelando PIX no Inter antes de excluir...");
+            await interService.cancelarCobrancaPix(supabaseAdmin, cobranca.txid_pix);
+        } catch (err: any) {
+            logger.warn({ error: err.message, txid: cobranca.txid_pix }, "Falha ao cancelar PIX no Inter durante exclusão (ignorado para prosseguir).");
+        }
+    }
+
+    // 3. Deletar do Banco
     const { error } = await supabaseAdmin.from("cobrancas").delete().eq("id", id);
-    if (error) throw new AppError("Erro ao excluir cobrança.", 500);
+    if (error) throw new AppError("Erro ao excluir cobrança no banco de dados.", 500);
   },
 
   async listCobrancasWithFilters(filtros: any): Promise<any[]> {
