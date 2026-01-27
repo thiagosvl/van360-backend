@@ -32,7 +32,7 @@ export function initSentry() {
       nodeProfilingIntegration(),
       
       // HTTP tracking
-      Sentry.httpIntegration({ tracing: true }),
+      Sentry.httpIntegration(),
       
       // Console tracking
       Sentry.consoleIntegration(),
@@ -50,16 +50,27 @@ export function initSentry() {
       }
       
       // Remove query params sensíveis
-      if (event.request?.query_string) {
+      const request = event.request;
+      if (request?.query_string) {
         const sensitiveParams = ['token', 'password', 'senha', 'cpf', 'access_token'];
-        sensitiveParams.forEach(param => {
-          if (event.request?.query_string?.includes(param)) {
-            event.request.query_string = event.request.query_string.replace(
-              new RegExp(`${param}=[^&]*`, 'gi'),
-              `${param}=[REDACTED]`
-            );
-          }
-        });
+        
+        if (typeof request.query_string === 'string') {
+          let qs = request.query_string;
+          sensitiveParams.forEach(param => {
+            if (qs.includes(param)) {
+              qs = qs.replace(
+                new RegExp(`${param}=[^&]*`, 'gi'),
+                `${param}=[REDACTED]`
+              );
+            }
+          });
+          request.query_string = qs;
+        } else if (typeof request.query_string === 'object' && !Array.isArray(request.query_string)) {
+          const qs = request.query_string as Record<string, any>;
+          sensitiveParams.forEach(param => {
+            if (qs[param]) qs[param] = '[REDACTED]';
+          });
+        }
       }
       
       return event;

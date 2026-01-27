@@ -46,11 +46,16 @@ let logger: pino.Logger;
 
 if (isProduction && env.LOGTAIL_TOKEN) {
   // PRODUÇÃO: Enviar logs para Better Stack (Logtail)
-  const { createPinoBetterStackStream } = await import('@logtail/pino');
+  const logtailPino = await import('@logtail/pino');
+  // @ts-ignore - ESM interop
+  const createStream = logtailPino.createPinoBetterStackStream || (logtailPino as any).default?.createPinoBetterStackStream;
   
-  const stream = createPinoBetterStackStream(env.LOGTAIL_TOKEN);
-  
-  logger = pino(baseConfig, stream);
+  if (createStream) {
+    const stream = createStream(env.LOGTAIL_TOKEN);
+    logger = pino(baseConfig, stream);
+  } else {
+    logger = pino(baseConfig);
+  }
   
   console.log("✅ Logger configurado com Better Stack (Logtail)");
 } else if (isDevelopment) {
@@ -76,3 +81,4 @@ if (isProduction && env.LOGTAIL_TOKEN) {
 }
 
 export { logger };
+
