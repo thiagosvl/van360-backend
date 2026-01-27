@@ -3,7 +3,6 @@ import appRoutes from "./app.routes.js"; // Novo
 import assinaturaCobrancaRoute from "./assinatura-cobranca.route.js";
 import authRoutes from "./auth.routes.js";
 import cobrancaRoute from "./cobranca.routes.js";
-import debugRoutes from "./debug.routes.js";
 import escolaRoute from "./escola.routes.js";
 import evolutionRoute from "./evolution.routes.js";
 import gastoRoute from "./gasto.route.js";
@@ -61,9 +60,6 @@ const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
   
   // Padronização: Webhook da Evolution agora em /api/evolution
   app.register(evolutionRoute, { prefix: "/api/evolution" });
-
-  // Rotas de Diagnóstico
-  app.register(debugRoutes, { prefix: "/api/debug" });
 };
 
 export default routes;
