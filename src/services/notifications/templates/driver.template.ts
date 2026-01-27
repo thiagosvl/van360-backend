@@ -335,7 +335,7 @@ Acesse o sistema agora para revisar os dados, definir o valor da mensalidade e a
 
         return textPart(`✅ *Chave PIX Validada!*
 
-Sua chave PIX (*${formattedKey}*) foi validada com sucesso pelo banco. 🎉🏢
+Sua chave PIX (*${formattedKey}*) foi validada com sucesso. 🎉
 
 Agora você receberá os pagamentos diretamente em sua conta.`);
     },
