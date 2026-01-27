@@ -245,7 +245,7 @@ Para aproveitar ao máximo a automação do Plano Profissional:`,
             parts.push({
                 type: "text",
                 content: `1️⃣ *Cadastre sua Chave PIX*
-Acesse o menu *Minha Conta* e cadastre sua chave para receber os pagamentos dos passageiros direto na sua conta bancária. 💸`,
+Acesse o Van360 e cadastre sua chave para receber os pagamentos dos passageiros direto na sua conta bancária. 💸`,
                 delayMs: 1500
             });
 
