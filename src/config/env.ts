@@ -25,4 +25,14 @@ export const env = {
   INTER_CERT_PATH: process.env.INTER_CERT_PATH!,
   INTER_KEY_PATH: process.env.INTER_KEY_PATH!,
   INTER_PIX_KEY: process.env.INTER_PIX_KEY!, 
+
+  // C6 Bank
+  C6_CLIENT_ID: process.env.C6_CLIENT_ID!,
+  C6_CLIENT_SECRET: process.env.C6_CLIENT_SECRET!,
+  C6_PIX_KEY: process.env.C6_PIX_KEY!,
+  C6_API_URL: process.env.C6_API_URL || "https://baas-api-sandbox.c6bank.info",
+  C6_CERT_PATH: process.env.C6_CERT_PATH!,
+  C6_KEY_PATH: process.env.C6_KEY_PATH!,
+  C6_CERT_BASE64: process.env.C6_CERT_BASE64,
+  C6_KEY_BASE64: process.env.C6_KEY_BASE64,
 };

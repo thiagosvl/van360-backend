@@ -116,4 +116,5 @@ export enum ConfigKey {
 
 export enum PaymentGateway {
   INTER = "inter",
+  C6 = "c6",
 }
