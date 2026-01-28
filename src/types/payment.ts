@@ -50,4 +50,6 @@ export interface PaymentProvider {
   getFee(valor: number, tipo: 'imediato' | 'vencimento'): Promise<number>;
   
   listarPixRecebidos(inicio: string, fim: string): Promise<any[]>;
+
+  registrarWebhook(url: string): Promise<any>;
 }

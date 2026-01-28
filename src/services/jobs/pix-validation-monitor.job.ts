@@ -40,8 +40,8 @@ export const pixValidationMonitorJob = {
 
                 // 2. Consultar Status no Provedor
                 const provider = paymentService.getProvider();
-                const pixInfo = await provider.consultarCobranca(item.end_to_end_id);
-                const statusInter = pixInfo.status; // EX: REALIZADO, REJEITADO, PAGO?
+                const pixInfo = await provider.consultarTransferencia(item.end_to_end_id);
+                const statusInter = pixInfo.status; // Mapeado pelo Provider/Service (ex: PAGO, REALIZADO)
                 
                 logger.info({ 
                     step: "monitor_check", 

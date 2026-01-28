@@ -1,4 +1,3 @@
-import { SupabaseClient } from "@supabase/supabase-js";
 import axios from "axios";
 import fs from "fs";
 import https from "https";
@@ -7,6 +6,7 @@ import path from "path";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { redisConfig } from "../config/redis.js";
+import { supabaseAdmin } from "../config/supabase.js";
 import { CobrancaStatus, ConfigKey } from "../types/enums.js";
 import { onlyDigits } from "../utils/string.utils.js";
 import { getConfigNumber } from "./configuracao.service.js";
@@ -41,9 +41,9 @@ function getCertificates(): { cert: string | Buffer; key: string | Buffer } {
     try {
       const resolvedCertPath = path.resolve(certPath);
       const resolvedKeyPath = path.resolve(keyPath);
-      
+
       logger.info({ certPath: resolvedCertPath, keyPath: resolvedKeyPath }, "Usando certificados via arquivos");
-      
+
       return {
         cert: fs.readFileSync(resolvedCertPath),
         key: fs.readFileSync(resolvedKeyPath),
@@ -87,31 +87,9 @@ function gerarTxid(cobrancaId: string): string {
   return txid;
 }
 
-async function getValidInterToken(adminClient: SupabaseClient): Promise<string> {
+async function getValidInterToken(): Promise<string> {
   const cachedToken = await redis.get("inter:token");
-  if (cachedToken) {
-    return cachedToken;
-  }
-
-  // Fallback para o Banco de Dados (Legacy ou Cold Start)
-  const { data, error } = await adminClient
-    .from("configuracao_interna")
-    .select("chave, valor")
-    .in("chave", ["INTER_ACCESS_TOKEN", "INTER_TOKEN_EXPIRES_AT"]);
-
-  if (!error && data) {
-      const accessToken = data.find(d => d.chave === "INTER_ACCESS_TOKEN")?.valor;
-      const expiresAt = parseInt(data.find(d => d.chave === "INTER_TOKEN_EXPIRES_AT")?.valor || "0");
-
-      if (accessToken && expiresAt > Date.now() + 5 * 60 * 1000) {
-        // Cachear no Redis para a próxima (TTL = tempo restante - margem)
-        const ttlSeconds = Math.floor((expiresAt - Date.now()) / 1000) - 300; 
-        if (ttlSeconds > 0) {
-            await redis.set("inter:token", accessToken, "EX", ttlSeconds);
-        }
-        return accessToken;
-      }
-  }
+  if (cachedToken) return cachedToken;
 
   const body = new URLSearchParams();
   body.append("client_id", INTER_CLIENT_ID);
@@ -122,39 +100,24 @@ async function getValidInterToken(adminClient: SupabaseClient): Promise<string> 
     "cob.write cob.read cobv.write cobv.read lotecobv.write lotecobv.read pix.write pix.read webhook.write webhook.read payloadlocation.write payloadlocation.read boleto-cobranca.read boleto-cobranca.write extrato.read pagamento-pix.write pagamento-pix.read pagamento-boleto.read pagamento-boleto.write pagamento-darf.write pagamento-lote.write pagamento-lote.read webhook-banking.read webhook-banking.write";
   body.append("scope", scope);
 
-  logger.info({ url: `${INTER_API_URL}/oauth/v2/token` }, "[interService.getValidInterToken] Solicitando novo token de acesso ao Inter");
+  logger.info("[interService] Solicitando novo token de acesso ao Inter");
 
-  const tokenResponse = await axios.post(`${INTER_API_URL}/oauth/v2/token`, body, {
+  const { data } = await axios.post(`${INTER_API_URL}/oauth/v2/token`, body, {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     httpsAgent: getHttpsAgent(),
   });
 
-  const tokenData = tokenResponse.data;
-  const newAccessToken = tokenData.access_token;
-  const expiresIn = tokenData.expires_in;
+  const accessToken = data.access_token;
+  const expiresIn = data.expires_in; // Segundos
 
-  const newExpiresAt = Date.now() + expiresIn * 1000;
+  // Persistir no Redis (margem de segurança de 5 min)
+  const safeTtl = Math.max(expiresIn - 300, 60);
+  await redis.set("inter:token", accessToken, "EX", safeTtl);
 
-  logger.info({ expiresIn, expiresAt: new Date(newExpiresAt).toISOString() }, "[interService.getValidInterToken] Novo token obtido com sucesso");
-
-  // Persistir no Redis (TTL = expiração - 5 min de margem de segurança)
-  const safeTtl = Math.max(expiresIn - 300, 60); 
-  await redis.set("inter:token", newAccessToken, "EX", safeTtl);
-
-  // Persistir no Banco (Backup)
-  await adminClient.from("configuracao_interna").upsert(
-    [
-      { chave: "INTER_ACCESS_TOKEN", valor: newAccessToken },
-      { chave: "INTER_TOKEN_EXPIRES_AT", valor: newExpiresAt.toString() },
-    ],
-    { onConflict: "chave" }
-  );
-
-  return newAccessToken;
+  return accessToken;
 }
 
 async function criarCobrancaPix(
-  adminClient: SupabaseClient,
   params: { cobrancaId: string; valor: number; cpf: string; nome: string }
 ): Promise<{ qrCodePayload: string; location: string; interTransactionId: string }> {
   const txid = gerarTxid(params.cobrancaId);
@@ -168,7 +131,7 @@ async function criarCobrancaPix(
     };
   }
 
-  const token = await getValidInterToken(adminClient);
+  const token = await getValidInterToken();
   const expirationSeconds = await getConfigNumber(ConfigKey.PIX_EXPIRACAO_SEGUNDOS, 3600);
 
   const cobPayload = {
@@ -192,8 +155,8 @@ async function criarCobrancaPix(
     const locId = data?.loc?.id;
     const pixCopiaECola = data?.pixCopiaECola;
     if (!locId || !pixCopiaECola) {
-        logger.error({ data, txid }, "[interService.criarCobrancaPix] Resposta do Inter incompleta (locId ou copiaECola ausente)");
-        throw new Error("Resposta de PIX incompleta.");
+      logger.error({ data, txid }, "[interService.criarCobrancaPix] Resposta do Inter incompleta (locId ou copiaECola ausente)");
+      throw new Error("Resposta de PIX incompleta.");
     }
 
     logger.info({ txid, locId }, "✅ PIX imediato criado com sucesso no Inter");
@@ -221,7 +184,6 @@ interface CriarCobrancaComVencimentoParams {
 }
 
 async function criarCobrancaComVencimentoPix(
-  adminClient: SupabaseClient,
   params: CriarCobrancaComVencimentoParams
 ): Promise<{ qrCodePayload: string; location: string; interTransactionId: string }> {
   const txid = gerarTxid(params.cobrancaId);
@@ -235,14 +197,14 @@ async function criarCobrancaComVencimentoPix(
     };
   }
 
-  const token = await getValidInterToken(adminClient);
-  
+  const token = await getValidInterToken();
+
   const validadePadrao = await getConfigNumber(ConfigKey.PIX_VALIDADE_APOS_VENCIMENTO, 30);
 
   const cobvPayload = {
-    calendario: { 
-        dataDeVencimento: params.dataVencimento,
-        validadeAposVencimento: params.validadeAposVencimentoDias || validadePadrao
+    calendario: {
+      dataDeVencimento: params.dataVencimento,
+      validadeAposVencimento: params.validadeAposVencimentoDias || validadePadrao
     },
     devedor: { cpf: onlyDigits(params.cpf), nome: params.nome },
     valor: { original: params.valor.toFixed(2) },
@@ -263,8 +225,8 @@ async function criarCobrancaComVencimentoPix(
     const locId = data?.loc?.id;
     const pixCopiaECola = data?.pixCopiaECola;
     if (!locId || !pixCopiaECola) {
-        logger.error({ data, txid }, "[interService.criarCobrancaComVencimentoPix] Resposta do Inter incompleta (locId ou copiaECola ausente)");
-        throw new Error("Resposta de PIX (cobv) incompleta.");
+      logger.error({ data, txid }, "[interService.criarCobrancaComVencimentoPix] Resposta do Inter incompleta (locId ou copiaECola ausente)");
+      throw new Error("Resposta de PIX (cobv) incompleta.");
     }
 
     logger.info({ txid, locId }, "✅ PIX cobv criado com sucesso no Inter");
@@ -281,8 +243,8 @@ async function criarCobrancaComVencimentoPix(
   }
 }
 
-async function consultarWebhookPix(adminClient: SupabaseClient) {
-  const token = await getValidInterToken(adminClient);
+async function consultarWebhookPix() {
+  const token = await getValidInterToken();
   const url = `${INTER_API_URL}/pix/v2/webhook/${INTER_PIX_KEY}`;
 
   try {
@@ -298,12 +260,12 @@ async function consultarWebhookPix(adminClient: SupabaseClient) {
   }
 }
 
-async function registrarWebhookPix(adminClient: SupabaseClient, webhookUrl: string) {
+async function registrarWebhookPix(webhookUrl: string) {
   try {
-    const existente = await consultarWebhookPix(adminClient);
+    const existente = await consultarWebhookPix();
 
     if (existente?.webhookUrl === webhookUrl) {
-      await adminClient
+      await supabaseAdmin
         .from("configuracao_interna")
         .upsert(
           [{ chave: "INTER_WEBHOOK_URL", valor: webhookUrl }],
@@ -318,7 +280,7 @@ async function registrarWebhookPix(adminClient: SupabaseClient, webhookUrl: stri
       "Registrando/Atualizando webhook PIX no Inter."
     );
 
-    const token = await getValidInterToken(adminClient);
+    const token = await getValidInterToken();
     const url = `${INTER_API_URL}/pix/v2/webhook/${INTER_PIX_KEY}`;
     const payload = { webhookUrl, tipoWebhook: "PIX_RECEBIDO" };
 
@@ -327,7 +289,7 @@ async function registrarWebhookPix(adminClient: SupabaseClient, webhookUrl: stri
       httpsAgent: getHttpsAgent(),
     });
 
-    await adminClient
+    await supabaseAdmin
       .from("configuracao_interna")
       .upsert(
         [{ chave: "INTER_WEBHOOK_URL", valor: webhookUrl }],
@@ -362,8 +324,8 @@ async function registrarWebhookPix(adminClient: SupabaseClient, webhookUrl: stri
   }
 }
 
-async function consultarCallbacks(adminClient: SupabaseClient, dataInicio: string, dataFim: string) {
-  const token = await getValidInterToken(adminClient);
+async function consultarCallbacks(dataInicio: string, dataFim: string) {
+  const token = await getValidInterToken();
   const url = `${INTER_API_URL}/pix/v2/webhook/callbacks`;
 
   try {
@@ -379,18 +341,18 @@ async function consultarCallbacks(adminClient: SupabaseClient, dataInicio: strin
   }
 }
 
-async function listarPixRecebidos(adminClient: SupabaseClient, dataInicio: string, dataFim: string) {
-  const token = await getValidInterToken(adminClient);
+async function listarPixRecebidos(dataInicio: string, dataFim: string) {
+  const token = await getValidInterToken();
   const url = `${INTER_API_URL}/pix/v2/pix`;
 
   try {
     const { data } = await axios.get(url, {
       headers: { Authorization: `Bearer ${token}` },
       httpsAgent: getHttpsAgent(),
-      params: { 
-          inicio: dataInicio, 
-          fim: dataFim,
-          status: "CONCLUIDA" // Retorna apenas os pagos
+      params: {
+        inicio: dataInicio,
+        fim: dataFim,
+        status: "CONCLUIDA" // Retorna apenas os pagos
       },
     });
     // A API retorna { parametros: {...}, cobrancas: [...] }
@@ -401,9 +363,7 @@ async function listarPixRecebidos(adminClient: SupabaseClient, dataInicio: strin
   }
 }
 
-
-
-async function consultarPix(adminClient: SupabaseClient, e2eId: string) {
+async function consultarPix(e2eId: string) {
   if (PAYMENT_MOCK_MODE) {
     return {
       endToEndId: e2eId,
@@ -415,7 +375,7 @@ async function consultarPix(adminClient: SupabaseClient, e2eId: string) {
     };
   }
 
-  const token = await getValidInterToken(adminClient);
+  const token = await getValidInterToken();
   const url = `${INTER_API_URL}/pix/v2/pix/${e2eId}`;
 
   try {
@@ -443,7 +403,6 @@ interface PagamentoPixParams {
  * Usado para validação de chave (micro-transação).
  */
 async function realizarPagamentoPix(
-  adminClient: SupabaseClient,
   params: PagamentoPixParams
 ): Promise<{ endToEndId: string; status: string; nomeBeneficiario?: string; cpfCnpjBeneficiario?: string }> {
   if (PAYMENT_MOCK_MODE) {
@@ -454,8 +413,8 @@ async function realizarPagamentoPix(
     };
   }
 
-  const token = await getValidInterToken(adminClient);
-  
+  const token = await getValidInterToken();
+
   // Endpoint de Banking para realizar pagamento PIX
   // NOTA: Certifique-se que o escopo 'pagamento-pix.write' está ativo
   const url = `${INTER_API_URL}/banking/v2/pix`;
@@ -463,11 +422,11 @@ async function realizarPagamentoPix(
   // LogContext para identificar se é Micro-pagamento de validação
   const isValidation = (params.valor === 0.01 && params.descricao?.includes("Validacao"));
   if (isValidation) {
-      logger.info({ 
-          step: "micro_transaction_start", 
-          chaveDestino: params.chaveDestino,
-          usuarioDesc: params.descricao
-      }, "Iniciando micro-transação de validação de chave PIX");
+    logger.info({
+      step: "micro_transaction_start",
+      chaveDestino: params.chaveDestino,
+      usuarioDesc: params.descricao
+    }, "Iniciando micro-transação de validação de chave PIX");
   }
 
   const payload = {
@@ -483,15 +442,15 @@ async function realizarPagamentoPix(
     logger.info({ valor: params.valor, chave: params.chaveDestino, idempotencyKey: params.xIdIdempotente }, "[interService.realizarPagamentoPix] Solicitando transferência via Banking API");
 
     const { data } = await axios.post(url, payload, {
-      headers: { 
-        Authorization: `Bearer ${token}`, 
+      headers: {
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
         "x-id-idempotente": params.xIdIdempotente // Fundamental para segurança
       },
       httpsAgent: getHttpsAgent(),
     });
 
-    logger.info({ 
+    logger.info({
       msg: "✅ Resposta do Inter ao realizar PIX",
       tipoRetorno: data.tipoRetorno,
       codigoSolicitacao: data.codigoSolicitacao,
@@ -500,41 +459,41 @@ async function realizarPagamentoPix(
 
     let nomeBeneficiario: string | undefined;
     let cpfCnpjBeneficiario: string | undefined;
-    
+
     if (data.codigoSolicitacao && isValidation) {
       try {
         logger.info({ codigoSolicitacao: data.codigoSolicitacao }, "[interService.realizarPagamentoPix] Consultando detalhes do beneficiário para validação");
-        
+
         const consultaUrl = `${INTER_API_URL}/banking/v2/pix/${data.codigoSolicitacao}`;
         const { data: consultaData } = await axios.get(consultaUrl, {
-          headers: { 
+          headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json"
           },
           httpsAgent: getHttpsAgent(),
         });
-        
+
         nomeBeneficiario = consultaData.transacaoPix?.recebedor?.nome;
         cpfCnpjBeneficiario = consultaData.transacaoPix?.recebedor?.cpfCnpj;
-        
-        logger.info({ 
-          nomeBeneficiario, 
+
+        logger.info({
+          nomeBeneficiario,
           cpfCnpjBeneficiario: cpfCnpjBeneficiario ? `***${cpfCnpjBeneficiario.slice(-3)}` : undefined
         }, "✅ Dados do beneficiário validados");
-        
+
       } catch (consultaErr: any) {
-        logger.warn({ 
+        logger.warn({
           err: consultaErr.response?.data || consultaErr.message,
           codigoSolicitacao: data.codigoSolicitacao
         }, "⚠️ Falha ao consultar detalhes do beneficiário (o PIX pode ter sido enviado)");
       }
     }
-    
+
     let statusFinal = data.status || "PROCESSAMENTO";
     if (data.tipoRetorno === "APROVACAO" || data.tipoRetorno === "PROCESSADO") {
-        statusFinal = "PAGO";
+      statusFinal = "PAGO";
     } else if (data.tipoRetorno === "AGENDADO") {
-        statusFinal = "AGENDADO";
+      statusFinal = "AGENDADO";
     }
 
     return {
@@ -546,9 +505,9 @@ async function realizarPagamentoPix(
 
   } catch (err: any) {
     const errorData = err.response?.data || err.message;
-    logger.error({ 
-      err: errorData, 
-      payload, 
+    logger.error({
+      err: errorData,
+      payload,
       url,
       idempotency: params.xIdIdempotente
     }, "❌ Falha crítica ao realizar pagamento PIX");
@@ -561,15 +520,14 @@ async function realizarPagamentoPix(
  * Wrapper específico para Repasse a Motoristas (Banking API)
  */
 async function realizarPixRepasse(
-  adminClient: SupabaseClient,
   params: PagamentoPixParams
 ): Promise<{ endToEndId: string; status: string }> {
   logger.info({ params }, "Iniciando Repasse PIX para Motorista");
   // Reutiliza a função de pagamento bancário, mas com log contextual
   try {
-      return await realizarPagamentoPix(adminClient, params);
+    return await realizarPagamentoPix(params);
   } catch (error) {
-      throw error;
+    throw error;
   }
 }
 
@@ -579,11 +537,10 @@ async function realizarPixRepasse(
  * Status: REMOVIDA_PELO_USUARIO_RECEBEDOR
  */
 async function cancelarCobrancaPix(
-  adminClient: SupabaseClient,
   txid: string,
   tipo: "cob" | "cobv" = "cobv"
 ): Promise<boolean> {
-  const token = await getValidInterToken(adminClient);
+  const token = await getValidInterToken();
   // Endpoint depende do tipo (imediatas ou com vencimento)
   const url = `${INTER_API_URL}/pix/v2/${tipo}/${txid}`;
 
@@ -593,7 +550,7 @@ async function cancelarCobrancaPix(
 
   try {
     logger.info({ txid, tipo }, "Solicitando cancelamento de PIX no Inter");
-    
+
     await axios.patch(url, payload, {
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       httpsAgent: getHttpsAgent(),
@@ -605,10 +562,10 @@ async function cancelarCobrancaPix(
   } catch (err: any) {
     // Se der 404, já não existe, então "sucesso" no cancelamento reativo
     if (err.response?.status === 404) {
-        logger.warn({ txid }, "Tentativa de cancelar PIX inexistente ou já removido (404)");
-        return true; 
+      logger.warn({ txid }, "Tentativa de cancelar PIX inexistente ou já removido (404)");
+      return true;
     }
-    
+
     // Se já estiver concluída ou removida, pode dar 409 ou erro específico
     logger.error({ err: err.response?.data || err.message, txid }, "Erro ao cancelar PIX");
     return false;
@@ -620,10 +577,9 @@ async function cancelarCobrancaPix(
  * Endpoint: GET /banking/v2/pix/{codigoSolicitacao}
  */
 async function consultarPagamentoPix(
-  adminClient: SupabaseClient,
   codigoSolicitacao: string
 ) {
-  const token = await getValidInterToken(adminClient);
+  const token = await getValidInterToken();
   const url = `${INTER_API_URL}/banking/v2/pix/${codigoSolicitacao}`;
 
   try {

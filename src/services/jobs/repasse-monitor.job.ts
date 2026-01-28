@@ -41,8 +41,8 @@ export const repasseMonitorJob = {
                 // 2. Consultar Status no Provedor
                 // gateway_txid armazena o End2EndId do PIX
                 const provider = paymentService.getProvider();
-                const pixInfo = await provider.consultarCobranca(transacao.gateway_txid);
-                const statusInter = pixInfo.status; // REALIZADO, REJEITADO, FALHA... (Vem da API do Provedor)
+                const pixInfo = await provider.consultarTransferencia(transacao.gateway_txid);
+                const statusInter = pixInfo.status; // Mapeado pelo Provider/Service (ex: PAGO, REALIZADO, WAITING_APPROVAL)
 
                 let novoStatus = TransactionStatus.PROCESSAMENTO;
                 

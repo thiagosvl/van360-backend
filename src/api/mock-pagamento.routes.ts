@@ -37,8 +37,40 @@ const mockPagamentoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
       }
 
       if (!cobrancaAssinatura && !cobrancaPai) {
-          logger.warn({ cobrancaId }, "Cobrança não encontrada em nenhuma tabela (Assinatura ou Pais)");
-          return reply.status(404).send({ error: "Cobrança não encontrada." });
+          // 2.5. Tentar na tabela de Repasses (Transferências)
+          const { data: repasse } = await supabaseAdmin
+            .from("transacoes_repasse")
+            .select("*")
+            .eq("id", cobrancaId)
+            .maybeSingle();
+
+          if (repasse) {
+            logger.info({ repasseId: cobrancaId }, "Mock: Repasse encontrado. Forçando SUCESSO.");
+            
+            await supabaseAdmin
+              .from("transacoes_repasse")
+              .update({ 
+                status: "SUCESSO", 
+                data_conclusao: new Date() 
+              })
+              .eq("id", cobrancaId);
+
+            if (repasse.cobranca_id) {
+              await supabaseAdmin
+                .from("cobrancas")
+                .update({ status_repasse: "REPASSADO" })
+                .eq("id", repasse.cobranca_id);
+            }
+
+            return reply.status(200).send({
+              success: true,
+              message: `Simulação processada como REPASSE. ID: ${cobrancaId}`,
+              status: "SUCESSO"
+            });
+          }
+
+          logger.warn({ cobrancaId }, "Cobrança/Repasse não encontrada em nenhuma tabela");
+          return reply.status(404).send({ error: "Registro não encontrado." });
       }
 
       // 3. Montar Payload do Webhook
@@ -68,7 +100,7 @@ const mockPagamentoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
         amount: valor,
         paymentDate: horario,
         rawPayload: { mocked: true, cobrancaId },
-        gateway: 'mock'
+        gateway: 'mock' // Handlers treat 'mock' as valid if txid matches
       };
 
       // 4. Delegar para os Handlers Oficiais (Universal)

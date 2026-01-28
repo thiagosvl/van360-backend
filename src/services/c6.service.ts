@@ -6,73 +6,53 @@ import path from "path";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { redisConfig } from "../config/redis.js";
+import { supabaseAdmin } from "../config/supabase.js";
 
 const redis = new Redis(redisConfig as any);
+const MOCK_MODE = env.PAYMENT_MOCK_MODE === "true" || (env.PAYMENT_MOCK_MODE as any) === true;
+const C6_SCHEDULE_URL = `${env.C6_API_URL}/v1/schedule_payments`;
 
-const PAYMENT_MOCK_MODE = env.PAYMENT_MOCK_MODE === "true" || (env.PAYMENT_MOCK_MODE as any) === true;
-
-// Helper para obter certificados (similar ao Inter)
-function getC6Certificates(): { cert: string | Buffer; key: string | Buffer } {
-  // 1. Base64 (Prioridade Prod/Vercel)
+function getC6Certificates() {
   if (env.C6_CERT_BASE64 && env.C6_KEY_BASE64) {
-    logger.info("C6: Usando certificados via Base64");
     return {
       cert: Buffer.from(env.C6_CERT_BASE64, "base64").toString("utf-8"),
       key: Buffer.from(env.C6_KEY_BASE64, "base64").toString("utf-8"),
     };
   }
 
-  // 2. Arquivos (Prioridade Dev Local)
   if (env.C6_CERT_PATH && env.C6_KEY_PATH) {
     try {
-      const resolvedCertPath = path.resolve(env.C6_CERT_PATH);
-      const resolvedKeyPath = path.resolve(env.C6_KEY_PATH);
-      logger.info({ cert: resolvedCertPath }, "C6: Usando certificados via Arquivo");
       return {
-        cert: fs.readFileSync(resolvedCertPath),
-        key: fs.readFileSync(resolvedKeyPath),
+        cert: fs.readFileSync(path.resolve(env.C6_CERT_PATH)),
+        key: fs.readFileSync(path.resolve(env.C6_KEY_PATH)),
       };
     } catch (err) {
-      logger.error({ err }, "C6: Erro ao ler arquivos de certificado");
+      logger.error({ err }, "C6: Erro ao ler certificados");
     }
   }
 
-  throw new Error("C6: Certificados não configurados (Base64 ou Path).");
+  throw new Error("C6: Certificados não configurados.");
 }
 
 function getHttpsAgent() {
   const { cert, key } = getC6Certificates();
-  return new https.Agent({
-    cert,
-    key,
-    // C6 Sandbox pode exigir, mas rejectUnauthorized: false não é recomendado em prod sem cuidado.
-    // Geralmente C6 tem cadeia completa válida, mas em sandbox as vezes varia.
-    rejectUnauthorized: false
-  });
+  return new https.Agent({ cert, key, rejectUnauthorized: false });
 }
 
 export const c6Service = {
-  
   async getAccessToken(): Promise<string> {
-    if (PAYMENT_MOCK_MODE) return "MOCK-ACCESS-TOKEN";
+    if (MOCK_MODE) return "MOCK-ACCESS-TOKEN";
 
-    // Cache no Redis
     const cached = await redis.get("c6:token");
     if (cached) return cached;
 
-    const url = `${env.C6_API_URL}/v1/auth/`; // Slash no final é importante em alguns bancos, verificar.
-    // Doc C6 Auth: POST /auth/oauth/v2/token ou similar? Verificando endpoint baseado no request do user.
-    // User request image: POST https://baas-api-sandbox.c6bank.info/v1/auth/
-    
+    const url = `${env.C6_API_URL}/v1/auth/`;
     const body = new URLSearchParams();
     body.append("client_id", env.C6_CLIENT_ID);
     body.append("client_secret", env.C6_CLIENT_SECRET);
     body.append("grant_type", "client_credentials");
-    // Scope pode ser necessário. Na imagem do user: "scope": "bankslip.write webhook.read ..."
-    // Vamos tentar sem scope explícito primeiro ou usar o da imagem se falhar.
     
     try {
-      logger.info("C6: Solicitando novo Token...");
       const { data } = await axios.post(url, body, {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         httpsAgent: getHttpsAgent()
@@ -81,35 +61,29 @@ export const c6Service = {
       const token = data.access_token;
       const expiresIn = data.expires_in || 3600;
 
-      // Cache com margem de segurança (5 min)
       await redis.set("c6:token", token, "EX", expiresIn - 300);
       return token;
-
     } catch (error: any) {
       logger.error({ 
         msg: "Erro ao autenticar C6", 
         data: error.response?.data, 
-        status: error.response?.status,
-        errorMessage: error.message,
-        errorCode: error.code
+        err: error.message 
       });
       throw error;
     }
   },
 
   async criarCobrancaImediata(txid: string, valor: number, devedor?: { cpf: string; nome: string }) {
-    if (PAYMENT_MOCK_MODE) {
+    if (MOCK_MODE) {
       return {
         txid,
-        pixCopiaECola: "00020126580014br.gov.bcb.pix0136123e4567-e89b-12d3...MOCK-C6",
+        pixCopiaECola: "000201...MOCK-C6",
         location: `https://mock.c6bank.com/${txid}`,
         interTransactionId: `MOCK-C6-${txid}`
       };
     }
 
     const token = await this.getAccessToken();
-    const url = `${env.C6_API_URL}/v2/pix/cob`; 
-
     const payload: any = {
       calendario: { expiracao: 3600 },
       valor: { original: valor.toFixed(2) },
@@ -124,128 +98,280 @@ export const c6Service = {
       };
     }
 
-    try {
-      const { data } = await axios.put(`${url}/${txid}`, payload, {
-        headers: { Authorization: `Bearer ${token}` },
-        httpsAgent: getHttpsAgent()
-      });
+    const { data } = await axios.put(`${env.C6_API_URL}/v2/pix/cob/${txid}`, payload, {
+      headers: { Authorization: `Bearer ${token}` },
+      httpsAgent: getHttpsAgent()
+    });
 
-      return {
-        txid: data.txid,
-        pixCopiaECola: data.pixCopiaECola,
-        location: data.loc?.location,
-        interTransactionId: data.txid // Uniformizando retorno
-      };
-
-    } catch (error: any) {
-      logger.error({ 
-        msg: "Erro criar cobranca C6", 
-        data: error.response?.data,
-        status: error.response?.status
-      });
-      throw error;
-    }
+    return {
+      txid: data.txid,
+      pixCopiaECola: data.pixCopiaECola,
+      location: data.loc?.location,
+      interTransactionId: data.txid
+    };
   },
 
   async consultarPix(txid: string) {
-    if (PAYMENT_MOCK_MODE) return { status: "CONCLUIDA", txid };
+    if (MOCK_MODE) return { status: "CONCLUIDA", txid };
 
     const token = await this.getAccessToken();
+    const { data } = await axios.get(`${env.C6_API_URL}/v2/pix/cob/${txid}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      httpsAgent: getHttpsAgent()
+    });
+    return data;
+  },
+
+  async cancelarCobranca(txid: string) {
+    if (MOCK_MODE) return true;
+
+    const token = await this.getAccessToken();
+    const headers = { Authorization: `Bearer ${token}` };
+    const agent = getHttpsAgent();
+
     try {
-      const { data } = await axios.get(`${env.C6_API_URL}/v2/pix/cob/${txid}`, {
-        headers: { Authorization: `Bearer ${token}` },
-        httpsAgent: getHttpsAgent()
-      });
-      return data;
+      await axios.patch(`${env.C6_API_URL}/v2/pix/cob/${txid}`, 
+        { status: "REMOVIDA_PELO_USUARIO_RECEBEDOR" },
+        { headers, httpsAgent: agent }
+      );
+      return true;
     } catch (error: any) {
-      logger.error({ msg: "Erro consultar Pix C6", txid, err: error.message });
+      try {
+        await axios.patch(`${env.C6_API_URL}/v2/pix/cobv/${txid}`, 
+          { status: "REMOVIDA_PELO_USUARIO_RECEBEDOR" },
+          { headers, httpsAgent: agent }
+        );
+        return true;
+      } catch (err) {
+        return false;
+      }
+    }
+  },
+
+  async listarPixRecebidos(inicio: string, fim: string) {
+    if (MOCK_MODE) return [];
+    
+    const token = await this.getAccessToken();
+    const { data } = await axios.get(`${env.C6_API_URL}/v2/pix`, {
+      params: { inicio, fim },
+      headers: { Authorization: `Bearer ${token}` },
+      httpsAgent: getHttpsAgent()
+    });
+    
+    // Normalização para o formato esperado pelo Job/Provider
+    const pixList = data.pix || [];
+    return pixList.map((pix: any) => ({
+      txid: pix.txid,
+      pix: [pix]
+    }));
+  },
+
+  async configurarWebhook(webhookUrl: string) {
+    if (MOCK_MODE) return { status: "sincronizado", webhookUrl };
+
+    const chave = env.C6_PIX_KEY;
+    const token = await this.getAccessToken();
+    const headers = { Authorization: `Bearer ${token}` };
+    const agent = getHttpsAgent();
+
+    try {
+      const { data: existente } = await axios.get(`${env.C6_API_URL}/v2/pix/webhook/${chave}`, {
+        headers, httpsAgent: agent
+      }).catch(() => ({ data: null }));
+
+      if (existente?.webhookUrl === webhookUrl) {
+        await this.syncWebhookDb(webhookUrl);
+        return { status: "sincronizado", webhookUrl };
+      }
+
+      await axios.put(`${env.C6_API_URL}/v2/pix/webhook/${chave}`, { webhookUrl }, {
+        headers, httpsAgent: agent
+      });
+
+      await this.syncWebhookDb(webhookUrl);
+      return { status: "registrado", webhookUrl };
+    } catch (error: any) {
+      logger.error({ msg: "Erro configurar Webhook C6", err: error.message });
       throw error;
     }
   },
 
-  async cancelarCobranca(txid: string) {
-    // C6 pode não suportar cancelamento via API Pix padrão sem implementar patch?
-    // Placeholder.
-    logger.warn({ txid }, "C6: Cancelamento de cobrança não implementado.");
-    return true; 
-  },
+  async realizarPagamentoPix(params: { valor: number; chaveDestino: string; descricao?: string; xIdIdempotente?: string; transaction_date?: string }): Promise<any> {
+    if (MOCK_MODE) {
+      return { endToEndId: `MOCK-C6-GRP-${Date.now()}`, status: "WAITING_APPROVAL" };
+    }
 
-  async realizarPagamentoPix(params: any): Promise<any> {
-    // Transferencia (Webhook/Split no futuro)
-    throw new Error("C6: Pagamento/Transferência não implementado.");
-  },
-
-  async consultarPagamentoPix(endToEndId: string): Promise<any> {
-    throw new Error("C6: Consultar Pagamento não implementado.");
-  },
-
-  async listarPixRecebidos(inicio: string, fim: string) {
-    if (PAYMENT_MOCK_MODE) return [];
-    
-    // GET /v2/pix?inicio=...&fim=...
     const token = await this.getAccessToken();
+    const headers = { Authorization: `Bearer ${token}`, "x-id-idempotente": params.xIdIdempotente };
+    const agent = getHttpsAgent();
+
     try {
-      const { data } = await axios.get(`${env.C6_API_URL}/v2/pix`, {
-        params: { inicio, fim },
-        headers: { Authorization: `Bearer ${token}` },
-        httpsAgent: getHttpsAgent()
+      // 1. Enviar para consulta inicial (decode)
+      const payload = {
+        items: [{
+          amount: params.valor, // Deve ser number conforme a doc
+          transaction_date: params.transaction_date || new Date().toISOString().split("T")[0],
+          description: params.descricao || "Repasse Van360",
+          content: params.chaveDestino // Chave Pix ou Código de Barras
+        }]
+      };
+
+      const { data: group } = await axios.post(`${C6_SCHEDULE_URL}/decode`, payload, { 
+        headers: {
+          ...headers,
+          "partner-software-name": "Van360",
+          "partner-software-version": "1.0.0"
+        }, 
+        httpsAgent: agent 
       });
-      return data.pix || [];
+      const groupId = group.group_id;
+
+      // 2. Submeter para aprovação (conforme imagem 5 da doc)
+      await axios.post(`${C6_SCHEDULE_URL}/submit`, {
+        group_id: groupId,
+        uploader_name: "Van360 System"
+      }, { headers, httpsAgent: agent });
+
+      return {
+        endToEndId: groupId,
+        status: "WAITING_APPROVAL",
+        msg: "Pagamento agendado. Requer aprovação manual no Web Banking C6."
+      };
     } catch (error: any) {
-      logger.error({ msg: "Erro listar Pix C6", err: error.message });
-      return [];
+      logger.error({ msg: "Erro realizarPagamentoPix C6", err: error.response?.data || error.message });
+      throw error;
     }
   },
 
-  // ... (manter cobranca vencimento placeholder)
+  async consultarPagamentoPix(id: string): Promise<any> {
+    if (MOCK_MODE) return { status: "PAGO", id };
+
+    const token = await this.getAccessToken();
+    const agent = getHttpsAgent();
+
+    try {
+      const { data } = await axios.get(`${C6_SCHEDULE_URL}/${id}`, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "partner-software-name": "Van360",
+          "partner-software-version": "1.0.0"
+        },
+        httpsAgent: agent
+      });
+
+      // Mapeamento de status do C6 para o padrão do sistema
+      let statusFinal = "WAITING_APPROVAL";
+      if (data.status === "EXECUTED" || data.status === "SETTLED") {
+        statusFinal = "PAGO";
+      } else if (data.status === "REJECTED" || data.status === "CANCELED" || data.status === "DECODE_ERROR") {
+        statusFinal = "FALHOU";
+      }
+
+      return {
+        ...data,
+        status: statusFinal,
+        rawStatus: data.status,
+        endToEndId: data.group_id || id
+      };
+    } catch (error: any) {
+      logger.error({ err: error.response?.data || error.message, id }, "Erro ao consultar pagamento C6");
+      throw error;
+    }
+  },
+
+  /**
+   * Validação de Chave via Pré-processamento (Zero-Cost Disclosure)
+   * Cria o lote, captura os dados do DICT e deleta o lote em seguida.
+   */
+  async validarChavePix(chave: string): Promise<{ nome: string; cpfCnpj: string }> {
+    if (MOCK_MODE) return { nome: "Motorista Mock C6", cpfCnpj: "***.123.456-**" };
+
+    const token = await this.getAccessToken();
+    const headers = { Authorization: `Bearer ${token}` };
+    const agent = getHttpsAgent();
+
+    try {
+      // 1. Cria lote temporário via /decode
+      const payload = {
+        items: [{
+          amount: 0.01,
+          transaction_date: new Date().toISOString().split("T")[0],
+          description: "Validacao de Chave",
+          content: chave
+        }]
+      };
+
+      const { data: group } = await axios.post(`${C6_SCHEDULE_URL}/decode`, payload, { 
+        headers: {
+          ...headers,
+          "partner-software-name": "Van360",
+          "partner-software-version": "1.0.0"
+        }, 
+        httpsAgent: agent 
+      });
+      const groupId = group.group_id;
+
+      // 2. Busca detalhes do item para obter Nome/CPF (DICT)
+      const { data: itemsResponse } = await axios.get(`${C6_SCHEDULE_URL}/${groupId}/items`, { headers, httpsAgent: agent });
+      
+      const item = itemsResponse.items?.[0] || itemsResponse?.[0];
+      
+      if (item?.status === "DECODE_ERROR") {
+        throw new Error(`Erro C6 Decode: ${item.error_message || "Dados inválidos"}`);
+      }
+
+      const nome = item?.beneficiary_name || item?.receiver_name;
+      const cpfCnpj = item?.receiver_tax_id || item?.content;
+
+      // 3. Deleta o lote imediatamente
+      await axios.delete(`${C6_SCHEDULE_URL}/${groupId}/items`, { 
+        headers, 
+        httpsAgent: agent,
+        data: { id: item?.id || groupId }
+      }).catch(() => {});
+
+      if (!nome) throw new Error("Não foi possível validar os dados desta chave PIX no C6.");
+
+      return { nome, cpfCnpj };
+    } catch (error: any) {
+      logger.error({ msg: "Erro validarChavePix C6", err: error.response?.data || error.message });
+      throw error;
+    }
+  },
+
+  async syncWebhookDb(url: string) {
+    await supabaseAdmin
+      .from("configuracao_interna")
+      .upsert([{ chave: "C6_WEBHOOK_URL", valor: url }], { onConflict: "chave" });
+  },
+
   async criarCobrancaVencimento(txid: string, valor: number, vencimento: string, devedor: any) {
-    if (PAYMENT_MOCK_MODE) {
+    if (MOCK_MODE) {
        return {
         txid,
-        pixCopiaECola: "00020126580014...MOCK-COBV-C6",
+        pixCopiaECola: "000201...MOCK-COBV-C6",
         location: `https://mock.c6bank.com/cobv/${txid}`,
         interTransactionId: `MOCK-C6-COBV-${txid}`
       };
     }
     
-    // Implementação Padrão Bacen para CobV (C6 suporta PUT)
     const token = await this.getAccessToken();
-    const url = `${env.C6_API_URL}/v2/pix/cobv`;
-
-    const payload: any = {
-      calendario: { 
-        dataDeVencimento: vencimento, // YYYY-MM-DD
-        validadeAposVencimento: 30 // Padrão 30 dias se não especificado
-      },
-      devedor: {
-        cpf: devedor.cpf.replace(/\D/g, ""),
-        nome: devedor.nome
-      },
+    const payload = {
+      calendario: { dataDeVencimento: vencimento, validadeAposVencimento: 30 },
+      devedor: { cpf: devedor.cpf.replace(/\D/g, ""), nome: devedor.nome },
       valor: { original: valor.toFixed(2) },
       chave: env.C6_PIX_KEY,
       solicitacaoPagador: "Cobranca Van360 (Vencimento)"
     };
 
-    try {
-      const { data } = await axios.put(`${url}/${txid}`, payload, {
-        headers: { Authorization: `Bearer ${token}` },
-        httpsAgent: getHttpsAgent()
-      });
+    const { data } = await axios.put(`${env.C6_API_URL}/v2/pix/cobv/${txid}`, payload, {
+      headers: { Authorization: `Bearer ${token}` },
+      httpsAgent: getHttpsAgent()
+    });
 
-      return {
-        txid: data.txid,
-        pixCopiaECola: data.pixCopiaECola,
-        location: data.loc?.location,
-        interTransactionId: data.txid
-      };
-    } catch (error: any) {
-      logger.error({ 
-        msg: "Erro criar cobranca Vencimento C6", 
-        data: error.response?.data,
-        status: error.response?.status
-      });
-      throw error;
-    }
+    return {
+      txid: data.txid, pixCopiaECola: data.pixCopiaECola,
+      location: data.loc?.location, interTransactionId: data.txid
+    };
   }
-
 };

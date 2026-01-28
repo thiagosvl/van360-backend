@@ -1,5 +1,4 @@
 
-import { SupabaseClient } from "@supabase/supabase-js";
 import { PaymentGateway } from "../../types/enums.js";
 import {
   PaymentCobrancaComVencimentoParams,
@@ -14,14 +13,11 @@ import { interService } from "../inter.service.js";
 
 export class InterPaymentProvider implements PaymentProvider {
   name = PaymentGateway.INTER;
-  private adminClient: SupabaseClient;
 
-  constructor(adminClient: SupabaseClient) {
-    this.adminClient = adminClient;
-  }
+  constructor() {}
 
   async criarCobrancaImediata(params: PaymentCobrancaParams): Promise<PaymentResponse> {
-    const response = await interService.criarCobrancaPix(this.adminClient, params);
+    const response = await interService.criarCobrancaPix(params);
     return {
       qrCodePayload: response.qrCodePayload,
       location: response.location,
@@ -30,7 +26,7 @@ export class InterPaymentProvider implements PaymentProvider {
   }
 
   async criarCobrancaComVencimento(params: PaymentCobrancaComVencimentoParams): Promise<PaymentResponse> {
-    const response = await interService.criarCobrancaComVencimentoPix(this.adminClient, params);
+    const response = await interService.criarCobrancaComVencimentoPix(params);
     return {
       qrCodePayload: response.qrCodePayload,
       location: response.location,
@@ -39,15 +35,15 @@ export class InterPaymentProvider implements PaymentProvider {
   }
 
   async cancelarCobranca(txid: string, tipo: 'cob' | 'cobv'): Promise<boolean> {
-    return interService.cancelarCobrancaPix(this.adminClient, txid, tipo);
+    return interService.cancelarCobrancaPix(txid, tipo);
   }
 
   async consultarCobranca(txid: string): Promise<any> {
-    return interService.consultarPix(this.adminClient, txid);
+    return interService.consultarPix(txid);
   }
 
   async realizarTransferencia(params: PaymentPagamentoParams): Promise<TransferResponse> {
-    const response = await interService.realizarPagamentoPix(this.adminClient, params);
+    const response = await interService.realizarPagamentoPix(params);
     return {
       endToEndId: response.endToEndId,
       status: response.status,
@@ -57,7 +53,7 @@ export class InterPaymentProvider implements PaymentProvider {
   }
 
   async consultarTransferencia(codigoSolicitacao: string): Promise<any> {
-    return interService.consultarPagamentoPix(this.adminClient, codigoSolicitacao);
+    return interService.consultarPagamentoPix(codigoSolicitacao);
   }
 
   async getFee(valor: number, tipo: 'imediato' | 'vencimento'): Promise<number> {
@@ -65,6 +61,10 @@ export class InterPaymentProvider implements PaymentProvider {
   }
 
   async listarPixRecebidos(inicio: string, fim: string): Promise<any[]> {
-    return interService.listarPixRecebidos(this.adminClient, inicio, fim);
+    return interService.listarPixRecebidos(inicio, fim);
+  }
+
+  async registrarWebhook(url: string): Promise<any> {
+    return interService.registrarWebhookPix(url);
   }
 }

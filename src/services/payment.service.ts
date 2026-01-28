@@ -1,6 +1,5 @@
 
 import { logger } from "../config/logger.js";
-import { supabaseAdmin } from "../config/supabase.js";
 import { ConfigKey, PaymentGateway } from "../types/enums.js";
 import { PaymentProvider } from "../types/payment.js";
 import { getConfig } from "./configuracao.service.js";
@@ -49,7 +48,7 @@ class PaymentService {
   private resolveProvider(gateway: PaymentGateway) {
     switch (gateway) {
       case PaymentGateway.INTER:
-        this.currentProvider = new InterPaymentProvider(supabaseAdmin);
+        this.currentProvider = new InterPaymentProvider();
         break;
 
       case PaymentGateway.C6:
@@ -70,6 +69,26 @@ class PaymentService {
       throw new Error(`PaymentService não inicializado ou gateway '${this.activeGateway}' inválido/não suportado.`);
     }
     return this.currentProvider;
+  }
+
+  /**
+   * Enfileira os pagamentos recebidos via Webhook para processamento assíncrono.
+   * Centraliza a lógica que antes ficava no Controller.
+   */
+  async enqueueWebhooks(pixList: any[], gateway: PaymentGateway) {
+    const { addToWebhookQueue } = await import("../queues/webhook.queue.js");
+    
+    for (const pagamento of pixList) {
+      try {
+        await addToWebhookQueue({
+          pagamento,
+          origin: gateway
+        });
+      } catch (err) {
+        logger.error({ err, txid: pagamento.txid, gateway }, "Falha ao enfileirar webhook no Service");
+        throw err;
+      }
+    }
   }
 
   /**

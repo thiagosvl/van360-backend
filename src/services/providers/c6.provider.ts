@@ -14,6 +14,8 @@ import { feeService } from "../fee.service.js";
 export class C6PaymentProvider implements PaymentProvider {
   name = PaymentGateway.C6;
 
+  constructor() {}
+
   async criarCobrancaImediata(params: PaymentCobrancaParams): Promise<PaymentResponse> {
     const response = await c6Service.criarCobrancaImediata(
         params.cobrancaId, 
@@ -56,6 +58,18 @@ export class C6PaymentProvider implements PaymentProvider {
   }
 
   async realizarTransferencia(params: PaymentPagamentoParams): Promise<TransferResponse> {
+    const isValidation = (params.valor === 0.01 && params.descricao?.toLowerCase().includes("validacao"));
+
+    if (isValidation) {
+      const data = await c6Service.validarChavePix(params.chaveDestino);
+      return {
+        endToEndId: 'VALIDATION-C6',
+        status: 'CONCLUIDA',
+        nomeBeneficiario: data.nome,
+        cpfCnpjBeneficiario: data.cpfCnpj
+      };
+    }
+
     const response = await c6Service.realizarPagamentoPix(params);
     return {
       endToEndId: response.endToEndId,
@@ -71,6 +85,10 @@ export class C6PaymentProvider implements PaymentProvider {
 
   async getFee(valor: number, tipo: 'imediato' | 'vencimento'): Promise<number> {
     return feeService.calcularTaxaC6(valor, tipo);
+  }
+
+  async registrarWebhook(url: string): Promise<any> {
+    return c6Service.configurarWebhook(url);
   }
 
   async listarPixRecebidos(inicio: string, fim: string): Promise<any[]> {

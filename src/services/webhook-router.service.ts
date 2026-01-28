@@ -23,6 +23,18 @@ export const webhookRouterService = {
       };
     }
 
+    if (gatewayId === PaymentGateway.C6) {
+      // C6 segue padrão Bacen, estrutura similar ao Inter
+      return {
+        gatewayTransactionId: rawPayload.txid,
+        endToEndId: rawPayload.endToEndId,
+        amount: Number(rawPayload.valor),
+        paymentDate: rawPayload.horario || new Date().toISOString(),
+        rawPayload: rawPayload,
+        gateway: PaymentGateway.C6
+      };
+    }
+
     // Fallback ou outros provedores viriam aqui
     throw new Error(`Origem de webhook desconhecida: ${origin}`);
   },

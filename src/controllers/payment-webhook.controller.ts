@@ -1,54 +1,65 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
-import { addToWebhookQueue } from "../queues/webhook.queue.js";
 import { paymentService } from "../services/payment.service.js";
+import { PixWebhookDTO, pixWebhookSchema } from "../types/dtos/payment.dto.js";
+import { PaymentGateway } from "../types/enums.js";
+
+async function processPixWebhook(req: FastifyRequest, reply: FastifyReply, gateway: PaymentGateway) {
+  try {
+    // 1. Validação com Zod (Diretriz #11)
+    const body = pixWebhookSchema.parse(req.body) as PixWebhookDTO;
+    
+    // 2. Extração da lista de pagamentos
+    let pixList: any[] = [];
+    if (body.pix) {
+      pixList = body.pix;
+    } else if (body.txid && body.valor) {
+      pixList = [body]; 
+    } else {
+      logger.warn({ gateway }, "Webhook ignorado: Formato de payload incompleto");
+      return reply.status(200).send({ received: true });
+    }
+
+    logger.info({ count: pixList.length, gateway }, "[Webhook] Processando pagamentos recebidos");
+
+    // 3. Delegar lógica para o Service (Diretriz #9)
+    await paymentService.enqueueWebhooks(pixList, gateway);
+
+    return reply.status(200).send({ received: true, queued: true });
+
+  } catch (err: any) {
+    logger.error({ err: err.message, gateway }, "Erro no processamento do Webhook");
+    
+    // Se for erro de validação do Zod, retornamos 400
+    if (err.name === "ZodError") {
+      return reply.status(400).send({ error: "Payload inválido", details: err.errors });
+    }
+
+    return reply.status(500).send({ error: "Erro interno no processamento" });
+  }
+}
 
 export const paymentWebhookController = {
+  /**
+   * Webhook genérico (usa gateway ativo)
+   */
   async handlePix(req: FastifyRequest, reply: FastifyReply) {
-    try {
-      const body = req.body as any;
-      
-      // Validação básica do Payload para evitar lixo
-      let pixList: any[] = [];
-      if (body?.pix && Array.isArray(body.pix)) {
-        pixList = body.pix;
-      } else if (body?.txid && body?.valor) {
-        pixList = [body]; 
-      } else {
-        logger.warn("Webhook ignorado: Formato desconhecido");
-        reply.status(200).send({ received: true });
-        return;
-      }
+    const activeGateway = paymentService.getActiveGateway();
+    return processPixWebhook(req, reply, activeGateway);
+  },
 
-      logger.info({ count: pixList.length }, "=== [API] Webhook Recebido (Enfileirando) ===");
+  /**
+   * Webhook específico Banco Inter
+   */
+  async handlePixInter(req: FastifyRequest, reply: FastifyReply) {
+    return processPixWebhook(req, reply, PaymentGateway.INTER);
+  },
 
-      const activeGateway = paymentService.getActiveGateway();
-      
-      if (!activeGateway) {
-          throw new Error("ERRO CRÍTICO: Nenhum gateway ativo configurado no sistema (ACTIVE_GATEWAY).");
-      }
-
-      // Enfileirar cada PIX individualmente
-      for (const pagamento of pixList) {
-          try {
-              await addToWebhookQueue({
-                  pagamento,
-                  origin: activeGateway
-              });
-          } catch (qErr) {
-              logger.error({ qErr, txid: pagamento.txid }, "Erro ao enfileirar webhook");
-              // Nota: Se o Redis estiver fora, a API vai falhar aqui e retornar 500 pro banco.
-              // Isso é o comportamento correto: "Não consegui salvar, tente depois".
-              throw qErr; 
-          }
-      }
-
-      // Responder Rápido
-      reply.status(200).send({ received: true, queued: true });
-
-    } catch (err: any) {
-      logger.error({ err }, "Erro crítico no Endpoint do Webhook");
-      reply.status(500).send({ error: "Erro interno no processamento" });
-    }
+  /**
+   * Webhook específico C6 Bank
+   */
+  async handlePixC6(req: FastifyRequest, reply: FastifyReply) {
+    return processPixWebhook(req, reply, PaymentGateway.C6);
   }
 };
+
