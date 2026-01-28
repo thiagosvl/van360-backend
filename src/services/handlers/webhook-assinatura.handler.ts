@@ -4,14 +4,15 @@ import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
 import { addToReceiptQueue } from "../../queues/receipt.queue.js";
 import { AssinaturaTipoPagamento } from "../../types/enums.js";
+import { StandardPaymentPayload } from "../../types/webhook.js";
 import { formatDate } from "../../utils/format.js";
 import { processarPagamentoAssinatura } from "../assinatura-pagamento.service.js";
 import { ReceiptData } from "../receipt.service.js";
 import { processarRetornoValidacaoPix } from "../validacao-pix.service.js";
 
 export const webhookAssinaturaHandler = {
-  async handle(pagamento: any): Promise<boolean> {
-    const { txid, valor, horario, endToEndId } = pagamento;
+  async handle(pagamento: StandardPaymentPayload): Promise<boolean> {
+    const { gatewayTransactionId, amount, paymentDate, endToEndId } = pagamento;
 
     // 1. Tentar buscar em assinaturas_cobrancas
     const { data: cobranca, error: findError } = await supabaseAdmin
@@ -21,11 +22,11 @@ export const webhookAssinaturaHandler = {
             usuarios(nome, telefone),
             assinaturas_usuarios(planos(nome, parent:parent_id(nome)))
        `)
-      .eq("inter_txid", txid)
+      .eq("gateway_txid", gatewayTransactionId)
       .maybeSingle();
 
     if (findError) {
-      logger.error({ txid, error: findError.message }, "Erro ao buscar assinatura no banco");
+      logger.error({ gatewayTransactionId, error: findError.message }, "Erro ao buscar assinatura no banco");
       return false; 
     }
 
@@ -43,17 +44,15 @@ export const webhookAssinaturaHandler = {
     logger.info({ cobrancaId: cobranca.id, context: "ASSINATURA" }, "Cobrança de assinatura encontrada.");
     
     try {
-        const dataPagamento = horario || new Date().toISOString();
-
         // A) Processar Pagamento (Lógica de Negócio: Ativar Assinatura, etc)
         const result = await processarPagamentoAssinatura(
             cobranca as any,
             {
-                valor,
-                dataPagamento,
-                txid,
+                valor: amount,
+                dataPagamento: paymentDate,
+                txid: gatewayTransactionId,
             },
-            { txid },
+            { txid: gatewayTransactionId },
             undefined // NÃO passar reciboUrl aqui, pois ainda não existe
         );
 
@@ -67,8 +66,8 @@ export const webhookAssinaturaHandler = {
                 id: cobranca.id,
                 titulo: "Recibo de Pagamento",
                 subtitulo: "Van360 - Sistema de Gestão",
-                valor: valor,
-                data: formatDate(dataPagamento),
+                valor: amount,
+                data: formatDate(paymentDate),
                 pagadorNome: usuario?.nome || "Assinante",
                 descricao: `Mensalidade - ${nomePlano}`,
                 metodoPagamento: AssinaturaTipoPagamento.PIX,
@@ -95,7 +94,7 @@ export const webhookAssinaturaHandler = {
 
         return true;
     } catch (err) {
-        logger.error({ err, cobrancaId: cobranca.id }, "Erro ao processar pagamento de assinatura");
+        logger.error({ err, cobrancaId: cobranca.id, gatewayTransactionId }, "Erro ao processar pagamento de assinatura");
         throw err;
     }
   }

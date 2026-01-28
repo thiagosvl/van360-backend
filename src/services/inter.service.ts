@@ -17,7 +17,7 @@ const INTER_API_URL = env.INTER_API_URL!;
 const INTER_PIX_KEY = env.INTER_PIX_KEY!;
 const INTER_CLIENT_ID = env.INTER_CLIENT_ID!;
 const INTER_CLIENT_SECRET = env.INTER_CLIENT_SECRET!;
-const INTER_MOCK_MODE = env.INTER_MOCK_MODE === "true";
+const PAYMENT_MOCK_MODE = env.PAYMENT_MOCK_MODE === "true" || (env.PAYMENT_MOCK_MODE as any) === true;
 
 // Função para obter certificados (suporta Base64 via env ou arquivos)
 function getCertificates(): { cert: string | Buffer; key: string | Buffer } {
@@ -159,7 +159,7 @@ async function criarCobrancaPix(
 ): Promise<{ qrCodePayload: string; location: string; interTransactionId: string }> {
   const txid = gerarTxid(params.cobrancaId);
 
-  if (INTER_MOCK_MODE) {
+  if (PAYMENT_MOCK_MODE) {
     logger.warn("MOCK INTER ATIVO: Simulando PIX");
     return {
       qrCodePayload: "00020101021226...MOCK",
@@ -226,7 +226,7 @@ async function criarCobrancaComVencimentoPix(
 ): Promise<{ qrCodePayload: string; location: string; interTransactionId: string }> {
   const txid = gerarTxid(params.cobrancaId);
 
-  if (INTER_MOCK_MODE) {
+  if (PAYMENT_MOCK_MODE) {
     logger.warn("MOCK INTER ATIVO: Simulando PIX (COBV)");
     return {
       qrCodePayload: "00020101021226...MOCK-COBV",
@@ -404,7 +404,7 @@ async function listarPixRecebidos(adminClient: SupabaseClient, dataInicio: strin
 
 
 async function consultarPix(adminClient: SupabaseClient, e2eId: string) {
-  if (INTER_MOCK_MODE) {
+  if (PAYMENT_MOCK_MODE) {
     return {
       endToEndId: e2eId,
       valor: "0.01",
@@ -446,7 +446,7 @@ async function realizarPagamentoPix(
   adminClient: SupabaseClient,
   params: PagamentoPixParams
 ): Promise<{ endToEndId: string; status: string; nomeBeneficiario?: string; cpfCnpjBeneficiario?: string }> {
-  if (INTER_MOCK_MODE) {
+  if (PAYMENT_MOCK_MODE) {
     logger.warn({ params }, "MOCK INTER ATIVO: Simulando Pagamento PIX");
     return {
       endToEndId: `MOCK-E2E-${Date.now()}`,

@@ -4,7 +4,7 @@ import { logger } from '../config/logger.js';
 import { redisConfig } from '../config/redis.js';
 import { supabaseAdmin } from '../config/supabase.js';
 import { PayoutJobData, QUEUE_NAME_PAYOUT } from '../queues/payout.queue.js';
-import { interService } from '../services/inter.service.js';
+import { paymentService } from '../services/payment.service.js';
 import { RepasseStatus, TransactionStatus } from '../types/enums.js';
 
 /**
@@ -42,13 +42,8 @@ export const payoutWorker = new Worker<PayoutJobData>(
             const valorNormalizado = Number(Number(valorRepasse).toFixed(2));
             const idempotencyKey = randomUUID();
             
-            logger.info({ 
-                cobrancaId, 
-                valor: valorNormalizado, 
-                idempotencyKey 
-            }, "[PayoutWorker] Solicitando transferência via InterService");
-
-            const pixResponse = await interService.realizarPixRepasse(supabaseAdmin, {
+            const provider = paymentService.getProvider();
+            const pixResponse = await provider.realizarTransferencia({
                 valor: valorNormalizado,
                 chaveDestino: usuario.chave_pix,
                 descricao: `Repasse Van360 - Cobranca ${cobrancaId}`,
@@ -62,7 +57,7 @@ export const payoutWorker = new Worker<PayoutJobData>(
                     cobrancaId, 
                     e2e: pixResponse.endToEndId,
                     status: pixResponse.status 
-                }, "✅ [PayoutWorker] Repasse realizado com sucesso via Inter");
+                }, "✅ [PayoutWorker] Repasse realizado com sucesso via Provedor");
 
                 await supabaseAdmin.from("cobrancas")
                     .update({ status_repasse: RepasseStatus.REPASSADO })
@@ -73,7 +68,7 @@ export const payoutWorker = new Worker<PayoutJobData>(
                     await supabaseAdmin.from("transacoes_repasse")
                         .update({ 
                             status: TransactionStatus.SUCESSO, 
-                            txid_pix_repasse: pixResponse.endToEndId, 
+                            gateway_txid: pixResponse.endToEndId, 
                             data_conclusao: new Date(),
                             mensagem_erro: null 
                         })

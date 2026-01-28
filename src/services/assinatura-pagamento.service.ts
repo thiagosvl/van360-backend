@@ -6,12 +6,11 @@ import { supabaseAdmin } from "../config/supabase.js";
 import {
   AssinaturaBillingType,
   AssinaturaCobrancaStatus,
-  AssinaturaTipoPagamento,
-  ConfigKey
+  AssinaturaTipoPagamento
 } from "../types/enums.js";
 import { automationService } from "./automation.service.js";
 import { cobrancaService } from "./cobranca.service.js";
-import { getConfigNumber } from "./configuracao.service.js";
+import { paymentService } from "./payment.service.js";
 
 interface DadosPagamento {
   valor: number;
@@ -26,7 +25,9 @@ interface AssinaturaCobrancaInfo {
   status: string;
   data_vencimento?: string;
   billing_type?: string;
-  inter_txid?: string;
+  gateway_txid?: string;
+  valor?: number;
+  valor_pago?: number;
 }
 
 interface ContextoLog {
@@ -49,8 +50,10 @@ export async function processarPagamentoAssinatura(
   const logContext = txid ? { txid } : { cobrancaId };
 
   try {
-    // 0. Buscar taxa de intermediação vigente
-    const taxaIntermediacao = await getConfigNumber(ConfigKey.TAXA_INTERMEDIACAO_PIX, 0.99);
+    // 0. Calcular taxa de intermediação real do Gateway
+    // Assinaturas do Van360 sempre usam PIX com Vencimento (COBV)
+    const provider = paymentService.getProvider();
+    const gatewayFee = await provider.getFee(dadosPagamento.valor || cobranca.valor_pago || 0, 'vencimento');
 
     // 1. Atualizar status da cobrança para pago e registrar taxa (COM VERIFICAÇÃO DE IDEMPOTÊNCIA)
     const { error: updateCobrancaError, data: updatedCobranca } = await supabaseAdmin
@@ -60,7 +63,7 @@ export async function processarPagamentoAssinatura(
         data_pagamento: dadosPagamento.dataPagamento,
         valor_pago: dadosPagamento.valor,
         tipo_pagamento: AssinaturaTipoPagamento.PIX,
-        taxa_intermediacao_banco: taxaIntermediacao,
+        gateway_fee: gatewayFee,
         dados_auditoria_pagamento: {
           ...dadosPagamento,
           ...contextoLog,

@@ -7,7 +7,7 @@ export const webhookQueue = createQueue(QUEUE_NAME_WEBHOOK);
 
 export interface WebhookJobData {
     pagamento: any; // Payload do PIX (txid, valor, etc)
-    origin: 'INTER_V4' | 'OTHER';
+    origin: string; // Origem do webhook
 }
 
 /**

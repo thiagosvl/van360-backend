@@ -1,8 +1,8 @@
 import {
-  DRIVER_EVENT_ACTIVATION,
-  DRIVER_EVENT_UPGRADE,
-  PLANO_ESSENCIAL,
-  PLANO_PROFISSIONAL
+    DRIVER_EVENT_ACTIVATION,
+    DRIVER_EVENT_UPGRADE,
+    PLANO_ESSENCIAL,
+    PLANO_PROFISSIONAL
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
@@ -11,22 +11,22 @@ import { AssinaturaBillingType, AssinaturaCobrancaStatus, AssinaturaStatus } fro
 import { onlyDigits } from "../utils/string.utils.js";
 import { automationService } from "./automation.service.js";
 import { getBillingConfig } from "./configuracao.service.js";
-import { interService } from "./inter.service.js";
 import { notificationService } from "./notifications/notification.service.js";
+import { paymentService } from "./payment.service.js";
 import { pricingService } from "./pricing.service.js";
 import {
-  cancelarCobrancaPendente,
-  getAssinaturaAtiva,
-  getUsuarioData,
-  isUpgrade,
-  limparAssinaturasPendentes
+    cancelarCobrancaPendente,
+    getAssinaturaAtiva,
+    getUsuarioData,
+    isUpgrade,
+    limparAssinaturasPendentes
 } from "./subscription.common.js";
 
 // Result Interfaces
 export interface UpgradePlanoResult {
   qrCodePayload?: string;
   location?: string;
-  inter_txid?: string;
+  gateway_txid?: string;
   cobrancaId?: string;
   success?: boolean;
 
@@ -46,7 +46,7 @@ export interface DowngradePlanoResult {
 export interface TrocaSubplanoResult {
   qrCodePayload?: string;
   location?: string;
-  inter_txid?: string;
+  gateway_txid?: string;
   cobrancaId?: string;
   success: boolean;
 
@@ -62,7 +62,7 @@ export interface TrocaSubplanoResult {
 export interface CriarAssinaturaPersonalizadaResult {
   qrCodePayload?: string;
   location?: string;
-  inter_txid?: string;
+  gateway_txid?: string;
   cobrancaId?: string;
   success?: boolean;
 
@@ -182,7 +182,8 @@ export const subscriptionUpgradeService = {
           const usuario = await getUsuarioData(usuarioId);
           const cpf = onlyDigits(usuario.cpfcnpj);
       
-          const pixData = await interService.criarCobrancaPix(supabaseAdmin, {
+          const provider = paymentService.getProvider();
+          const pixData = await provider.criarCobrancaImediata({
             cobrancaId: cobranca.id,
             valor: valorCobrar,
             cpf,
@@ -192,7 +193,7 @@ export const subscriptionUpgradeService = {
           await supabaseAdmin
             .from("assinaturas_cobrancas")
             .update({
-              inter_txid: pixData.interTransactionId,
+              gateway_txid: pixData.gatewayTransactionId,
               qr_code_payload: pixData.qrCodePayload,
               location_url: pixData.location,
             })
@@ -217,7 +218,7 @@ export const subscriptionUpgradeService = {
           return {
             qrCodePayload: pixData.qrCodePayload,
             location: pixData.location,
-            inter_txid: pixData.interTransactionId,
+            gateway_txid: pixData.gatewayTransactionId,
             cobrancaId: cobranca.id,
             success: true,
             message: "Upgrade iniciado. O novo limite entrará em vigor IMEDIATAMENTE após a confirmação do pagamento do PIX Pro-rata."
@@ -321,7 +322,8 @@ export const subscriptionUpgradeService = {
                 .single();
       
               if (userPix) {
-                const pixData = await interService.criarCobrancaPix(supabaseAdmin, {
+                const provider = paymentService.getProvider();
+                const pixData = await provider.criarCobrancaImediata({
                   cobrancaId: cobrancaNova.id,
                   valor: precoAplicado,
                   cpf: onlyDigits(userPix.cpfcnpj),
@@ -331,7 +333,7 @@ export const subscriptionUpgradeService = {
                 await supabaseAdmin
                   .from("assinaturas_cobrancas")
                   .update({
-                    inter_txid: pixData.interTransactionId,
+                    gateway_txid: pixData.gatewayTransactionId,
                     qr_code_payload: pixData.qrCodePayload,
                     location_url: pixData.location,
                   })
@@ -449,7 +451,8 @@ export const subscriptionUpgradeService = {
             const usuario = await getUsuarioData(usuarioId);
             const cpf = onlyDigits(usuario.cpfcnpj);
       
-            const pixData = await interService.criarCobrancaPix(supabaseAdmin, {
+            const provider = paymentService.getProvider();
+            const pixData = await provider.criarCobrancaImediata({
               cobrancaId: cobranca.id,
               valor: precoAplicado,
               cpf,
@@ -459,7 +462,7 @@ export const subscriptionUpgradeService = {
             await supabaseAdmin
               .from("assinaturas_cobrancas")
               .update({
-                inter_txid: pixData.interTransactionId,
+                gateway_txid: pixData.gatewayTransactionId,
                 qr_code_payload: pixData.qrCodePayload,
                 location_url: pixData.location,
               })
@@ -483,7 +486,7 @@ export const subscriptionUpgradeService = {
             return {
               qrCodePayload: pixData.qrCodePayload,
               location: pixData.location,
-              inter_txid: pixData.interTransactionId,
+              gateway_txid: pixData.gatewayTransactionId,
               cobrancaId: cobranca.id,
               success: true,
             };
@@ -557,7 +560,8 @@ export const subscriptionUpgradeService = {
             const usuario = await getUsuarioData(usuarioId);
             const cpf = onlyDigits(usuario.cpfcnpj);
       
-            const pixData = await interService.criarCobrancaPix(supabaseAdmin, {
+            const provider = paymentService.getProvider();
+            const pixData = await provider.criarCobrancaImediata({
               cobrancaId: cobranca.id,
               valor: diferenca,
               cpf,
@@ -567,7 +571,7 @@ export const subscriptionUpgradeService = {
             await supabaseAdmin
               .from("assinaturas_cobrancas")
               .update({
-                inter_txid: pixData.interTransactionId,
+                gateway_txid: pixData.gatewayTransactionId,
                 qr_code_payload: pixData.qrCodePayload,
                 location_url: pixData.location,
               })
@@ -591,7 +595,7 @@ export const subscriptionUpgradeService = {
             return {
               qrCodePayload: pixData.qrCodePayload,
               location: pixData.location,
-              inter_txid: pixData.interTransactionId,
+              gateway_txid: pixData.gatewayTransactionId,
               cobrancaId: cobranca.id,
               success: true,
             };
@@ -739,7 +743,8 @@ export const subscriptionUpgradeService = {
           const usuario = await getUsuarioData(usuarioId);
           const cpf = onlyDigits(usuario.cpfcnpj);
       
-          const pixData = await interService.criarCobrancaPix(supabaseAdmin, {
+          const provider = paymentService.getProvider();
+          const pixData = await provider.criarCobrancaImediata({
             cobrancaId: cobranca.id,
             valor: valorCobranca,
             cpf,
@@ -749,7 +754,7 @@ export const subscriptionUpgradeService = {
           await supabaseAdmin
             .from("assinaturas_cobrancas")
             .update({
-              inter_txid: pixData.interTransactionId,
+              gateway_txid: pixData.gatewayTransactionId,
               qr_code_payload: pixData.qrCodePayload,
               location_url: pixData.location,
             })
@@ -774,7 +779,7 @@ export const subscriptionUpgradeService = {
             return {
               qrCodePayload: pixData.qrCodePayload,
               location: pixData.location,
-              inter_txid: pixData.interTransactionId,
+              gateway_txid: pixData.gatewayTransactionId,
               cobrancaId: cobranca.id,
               success: true,
             };

@@ -2,8 +2,7 @@ import { Job, Worker } from 'bullmq';
 import { logger } from '../config/logger.js';
 import { redisConfig } from '../config/redis.js';
 import { QUEUE_NAME_WEBHOOK, WebhookJobData } from '../queues/webhook.queue.js';
-import { webhookAssinaturaHandler } from '../services/handlers/webhook-assinatura.handler.js';
-import { webhookCobrancaHandler } from '../services/handlers/webhook-cobranca.handler.js';
+import { webhookRouterService } from '../services/webhook-router.service.js';
 
 /**
  * Worker responsável por processar Webhooks (PIX)
@@ -18,24 +17,17 @@ export const webhookWorker = new Worker<WebhookJobData>(
         logger.info({ jobId: job.id, txid, endToEndId, valor }, "[WebhookWorker] 📥 Recebido evento de pagamento");
 
         try {
-            // 1. Tentar Handler de Assinaturas (SaaS)
-            logger.debug({ txid, jobId: job.id }, "[WebhookWorker] Tentando handler de Assinatura");
-            const handledAssinatura = await webhookAssinaturaHandler.handle(pagamento);
-            if (handledAssinatura) {
-                logger.info({ jobId: job.id, txid, type: 'ASSINATURA' }, "✅ [WebhookWorker] Processado via AssinaturaHandler");
-                return;
-            }
+            // 1. Traduzir payload para o formato padrão
+            const standardPayload = webhookRouterService.translate(job.data.origin, pagamento);
 
-            // 2. Tentar Handler de Mensalidades/Pais (Repasse)
-            logger.debug({ txid, jobId: job.id }, "[WebhookWorker] Tentando handler de Cobrança (Repasse)");
-            const handledCobranca = await webhookCobrancaHandler.handle(pagamento);
-            if (handledCobranca) {
-                logger.info({ jobId: job.id, txid, type: 'COBRANCA_PAI' }, "✅ [WebhookWorker] Processado via CobrancaHandler");
-                return;
-            }
+            // 2. Rotear para os handlers adequados
+            const handled = await webhookRouterService.route(standardPayload);
 
-            // 3. Fallback: Desconhecido
-            logger.warn({ txid, endToEndId, valor, jobId: job.id }, "⚠️ [WebhookWorker] Webhook ignorado: Nenhuma cobrança correspondente encontrada no sistema");
+            if (handled) {
+                logger.info({ jobId: job.id, txid: standardPayload.gatewayTransactionId }, "✅ [WebhookWorker] Webhook processado com sucesso");
+            } else {
+                logger.warn({ jobId: job.id, txid: standardPayload.gatewayTransactionId }, "⚠️ [WebhookWorker] Webhook ignorado: Nenhuma cobrança correspondente encontrada");
+            }
 
         } catch (error: any) {
             logger.error({ 

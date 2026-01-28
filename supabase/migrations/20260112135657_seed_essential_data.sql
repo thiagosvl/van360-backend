@@ -19,13 +19,13 @@ ON CONFLICT (id) DO UPDATE SET
     preco = EXCLUDED.preco;
 
 -- 3. SEED CONFIGURACAO INTERNA
--- Note: Sensitive tokens (INTER_ACCESS_TOKEN) and environment specific URLs are OMITTED safely.
+-- Note: ACTIVE_GATEWAY and gateway-specific fees are NOT seeded to avoid hardcoded defaults.
+-- These MUST be configured via Environment Variables (ACTIVE_GATEWAY) or manually in this table.
 INSERT INTO public.configuracao_interna (chave, valor)
 VALUES
 ('PRO_RATA_VALOR_MINIMO', '0.1'),
 ('PRO_RATA_DIAS_MES', '30'),
 ('VALOR_INCREMENTO_PASSAGEIRO_EXCESSO', '2.50'),
-('TAXA_INTERMEDIACAO_PIX', '0.99'),
 ('DIA_GERACAO_MENSALIDADES', '25'),
 ('DIAS_ANTECEDENCIA_AVISO_VENCIMENTO', '2'),
 ('DIAS_ANTECEDENCIA_RENOVACAO', '5'),

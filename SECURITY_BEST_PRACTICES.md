@@ -83,9 +83,9 @@ Este documento mapeia as estratégias de defesa, vulnerabilidades potenciais e p
 *   **Senha Forte:** O Redis deve exigir senha (via `REDIS_PASSWORD`).
 *   **Rede Privada:** O Redis não deve estar exposto para a internet pública (apenas para a VPC do Backend).
 
-### 🛡️ Webhooks (Evolution API / Inter)
+### 🛡️ Webhooks (Evolution API / Banco)
 *   **Assinatura Digital (HMAC):**
-    *   Verificar se o webhook vem realmente da Evolution/Inter.
+    *   Verificar se o webhook vem realmente da Evolution/Banco.
     *   A Evolution permite definir um `API KEY` global. Verificar esse header.
     *   Não confiar cegamente em qualquer POST recebido em `/webhook`.
 

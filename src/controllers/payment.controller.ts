@@ -1,16 +1,16 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
-import { supabaseAdmin } from "../config/supabase.js";
-import { interService } from "../services/inter.service.js";
+import { paymentService } from "../services/payment.service.js";
 
-export const interController = {
+export const paymentController = {
   criarPix: async (request: FastifyRequest, reply: FastifyReply) => {
     const body = request.body as { cobrancaId: string; valor: number; cpf: string; nome: string };
     try {
-      const cobranca = await interService.criarCobrancaPix(supabaseAdmin, body);
+      const provider = paymentService.getProvider();
+      const cobranca = await provider.criarCobrancaImediata(body);
       return reply.status(200).send(cobranca);
     } catch (err: any) {
-      logger.error({ err }, "Falha ao criar cobrança PIX no Inter");
+      logger.error({ err }, `Falha ao criar cobrança PIX no ${paymentService.getProvider().name}`);
       return reply.status(500).send({ error: err.message });
     }
   },
@@ -20,10 +20,13 @@ export const interController = {
     if (!url) return reply.status(400).send({ error: "URL do webhook é obrigatória" });
 
     try {
-      const result = await interService.registrarWebhookPix(supabaseAdmin, url);
-      return reply.status(200).send(result);
+      const provider = paymentService.getProvider();
+      // Nota: Nem todos os provedores podem ter este método direto, 
+      // mas mantemos para compatibilidade com o fluxo atual do Inter.
+      const result = await (provider as any).registrarWebhook?.(url);
+      return reply.status(200).send(result || { message: "Webhook registrado (se aplicável)" });
     } catch (err: any) {
-      logger.error({ err }, "Falha ao registrar webhook PIX");
+      logger.error({ err }, "Falha ao registrar webhook de pagamento");
       return reply.status(500).send({ error: err.message });
     }
   },
@@ -43,10 +46,11 @@ export const interController = {
     }
 
     try {
-      const result = await interService.consultarCallbacks(supabaseAdmin, start, end);
-      return reply.status(200).send(result);
+      const provider = paymentService.getProvider();
+      const result = await (provider as any).consultarCallbacks?.(start, end);
+      return reply.status(200).send(result || []);
     } catch (err: any) {
-      logger.error({ err }, "Falha ao consultar callbacks PIX");
+      logger.error({ err }, "Falha ao consultar callbacks de pagamento");
       return reply.status(500).send({ error: err.message });
     }
   }

@@ -7,6 +7,7 @@ import { initSentry } from "./config/sentry.js";
 initSentry();
 
 import { createApp } from "./app.js";
+import { paymentService } from "./services/payment.service.js";
 import { queueService } from "./services/queue.service.js";
 
 const start = async () => {
@@ -14,8 +15,11 @@ const start = async () => {
     const app = await createApp();
     const port = Number(process.env.PORT) || 3000;
 
-    // Inicializa filas
-    await queueService.initialize();
+    // Inicializa filas e serviços
+    await Promise.all([
+      queueService.initialize(),
+      paymentService.initialize()
+    ]);
 
     await app.listen({ port, host: "0.0.0.0" });
     console.log(`🚀 Servidor rodando em http://localhost:${port}`);

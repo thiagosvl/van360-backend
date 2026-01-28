@@ -3,6 +3,7 @@ import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { webhookAssinaturaHandler } from "../services/handlers/webhook-assinatura.handler.js";
 import { webhookCobrancaHandler } from "../services/handlers/webhook-cobranca.handler.js";
+import { StandardPaymentPayload } from "../types/webhook.js";
 
 const mockPagamentoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post("/mock-pagamento", async (request, reply) => {
@@ -20,7 +21,7 @@ const mockPagamentoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
       // 1. Tentar achar na tabela de Assinaturas (Prioridade Alta)
       let { data: cobrancaAssinatura } = await supabaseAdmin
         .from("assinaturas_cobrancas")
-        .select("id, valor, inter_txid")
+        .select("id, valor, gateway_txid")
         .eq("id", cobrancaId)
         .maybeSingle();
 
@@ -29,7 +30,7 @@ const mockPagamentoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!cobrancaAssinatura) {
           const { data: paiResult } = await supabaseAdmin
             .from("cobrancas")
-            .select("id, valor, txid_pix")
+            .select("id, valor, gateway_txid")
             .eq("id", cobrancaId)
             .maybeSingle();
           cobrancaPai = paiResult;
@@ -42,7 +43,7 @@ const mockPagamentoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
       // 3. Montar Payload do Webhook
       const targetCobranca = (cobrancaAssinatura || cobrancaPai) as any;
-      const txid = targetCobranca.inter_txid || targetCobranca.txid_pix;
+      const txid = targetCobranca.gateway_txid;
       
       if (!txid) {
           logger.error({ cobrancaId, foundRecord: targetCobranca }, "Mock: Cobrança encontrada mas sem TXID.");
@@ -62,15 +63,12 @@ const mockPagamentoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
       logger.info({ cobrancaId, tipo: cobrancaAssinatura ? 'ASSINATURA' : 'PAI', txid }, "Mock: Despachando para Webhook Handler");
 
-      const webhookPayload = {
-        txid,
-        valor,
-        horario,
-        // Campos extras que o Banco Inter manda e podem ser úteis
-        nossoNumero: cobrancaId,
-        pagador: {
-            nome: "MOCK USER"
-        }
+      const webhookPayload: StandardPaymentPayload = {
+        gatewayTransactionId: txid,
+        amount: valor,
+        paymentDate: horario,
+        rawPayload: { mocked: true, cobrancaId },
+        gateway: 'mock'
       };
 
       // 4. Delegar para os Handlers Oficiais (Universal)

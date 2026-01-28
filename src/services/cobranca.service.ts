@@ -5,8 +5,8 @@ import { AppError } from "../errors/AppError.js";
 import { addToPixQueue } from "../queues/pix.queue.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { cobrancaNotificacaoService } from "./cobranca-notificacao.service.js";
-import { interService } from "./inter.service.js";
 import { notificationService } from "./notifications/notification.service.js";
+import { paymentService } from "./payment.service.js";
 import { planRules } from "./plan-rules.service.js";
 
 import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
@@ -104,7 +104,8 @@ export const cobrancaService = {
             // MODO MANUAL (SÍNCRONO) - Padrão
             // Tenta gerar na hora. Se falhar, estoura erro pro usuário ver.
             try {
-                const pixResult = await interService.criarCobrancaComVencimentoPix(supabaseAdmin, {
+                const provider = paymentService.getProvider();
+                const pixResult = await provider.criarCobrancaComVencimento({
                     cobrancaId: cobrancaId,
                     valor: valorNumerico,
                     cpf: passageiro.cpf_responsavel,
@@ -113,9 +114,9 @@ export const cobrancaService = {
                 });
                 
                 pixData = {
-                    txid_pix: pixResult.interTransactionId,
+                    gateway_txid: pixResult.gatewayTransactionId,
                     qr_code_payload: pixResult.qrCodePayload,
-                    url_qr_code: pixResult.location
+                    location_url: pixResult.location
                 };
             } catch (error: any) {
                 logger.error({ error: error.message, passageiroId: data.passageiro_id }, "Falha ao gerar PIX Síncrono.");
@@ -184,14 +185,15 @@ export const cobrancaService = {
     const valorChanged = data.valor !== undefined && moneyToNumber(data.valor) !== cobrancaOriginal.valor;
     const vencimentoChanged = data.data_vencimento !== undefined && data.data_vencimento !== cobrancaOriginal.data_vencimento;
 
-    if ((valorChanged || vencimentoChanged) && cobrancaOriginal.txid_pix) {
+    if ((valorChanged || vencimentoChanged) && cobrancaOriginal.gateway_txid) {
         logger.info({ cobrancaId: id, valorChanged, vencimentoChanged }, "Alteração crítica detectada. Regenerando PIX...");
 
         // 1. Cancelar PIX Antigo (Best effort - não trava se falhar cancelamento, mas loga)
         try {
-            await interService.cancelarCobrancaPix(supabaseAdmin, cobrancaOriginal.txid_pix);
+            const provider = paymentService.getProvider();
+            await provider.cancelarCobranca(cobrancaOriginal.gateway_txid, 'cobv');
         } catch (ignore) { 
-            logger.warn({ cobrancaId: id, txid: cobrancaOriginal.txid_pix }, "Falha ao cancelar PIX antigo (ignorado para prosseguir).");
+            logger.warn({ cobrancaId: id, txid: cobrancaOriginal.gateway_txid }, "Falha ao cancelar PIX antigo (ignorado para prossegue).");
         }
 
         // 2. Gerar Novo PIX
@@ -200,14 +202,15 @@ export const cobrancaService = {
             
             if (!passageiro?.cpf_responsavel) {
                 logger.warn({ cobrancaId: id }, "Impossível regenerar PIX: Dados do responsável ausentes. O PIX será removido.");
-                cobrancaData.txid_pix = null;
+                cobrancaData.gateway_txid = null;
                 cobrancaData.qr_code_payload = null;
-                cobrancaData.url_qr_code = null;
+                cobrancaData.location_url = null;
             } else {
                 const novoValor = data.valor !== undefined ? moneyToNumber(data.valor) : cobrancaOriginal.valor;
                 const novoVencimento = data.data_vencimento !== undefined ? data.data_vencimento : cobrancaOriginal.data_vencimento;
 
-                const pixResult = await interService.criarCobrancaComVencimentoPix(supabaseAdmin, {
+                const provider = paymentService.getProvider();
+                const pixResult = await provider.criarCobrancaComVencimento({
                     cobrancaId: id,
                     valor: novoValor,
                     cpf: passageiro.cpf_responsavel,
@@ -216,9 +219,9 @@ export const cobrancaService = {
                 });
 
                 // Atualizar payload do update
-                cobrancaData.txid_pix = pixResult.interTransactionId;
+                cobrancaData.gateway_txid = pixResult.gatewayTransactionId;
                 cobrancaData.qr_code_payload = pixResult.qrCodePayload;
-                cobrancaData.url_qr_code = pixResult.location;
+                cobrancaData.location_url = pixResult.location;
 
                 // 3. Verificar necessidade de Reenvio de Notificação
                 const notificacoesAnteriores = await cobrancaNotificacaoService.listByCobrancaId(id);
@@ -260,10 +263,10 @@ export const cobrancaService = {
   },
 
   async deleteCobranca(id: string): Promise<void> {
-    // 1. Buscar txid_pix antes de deletar
+    // 1. Buscar gateway_txid antes de deletar
     const { data: cobranca, error: fetchError } = await supabaseAdmin
         .from("cobrancas")
-        .select("txid_pix")
+        .select("gateway_txid")
         .eq("id", id)
         .single();
     
@@ -272,13 +275,14 @@ export const cobrancaService = {
         throw new AppError("Erro ao buscar cobrança para exclusão.", 500);
     }
 
-    // 2. Se tiver PIX, cancelar no Inter (Best effort)
-    if (cobranca?.txid_pix) {
+    // 2. Se tiver PIX, cancelar no Provedor (Best effort)
+    if (cobranca?.gateway_txid) {
         try {
-            logger.info({ txid: cobranca.txid_pix, cobrancaId: id }, "Cancelando PIX no Inter antes de excluir...");
-            await interService.cancelarCobrancaPix(supabaseAdmin, cobranca.txid_pix);
+            logger.info({ txid: cobranca.gateway_txid, cobrancaId: id }, "Cancelando PIX no Provedor antes de excluir...");
+            const provider = paymentService.getProvider();
+            await provider.cancelarCobranca(cobranca.gateway_txid, 'cobv');
         } catch (err: any) {
-            logger.warn({ error: err.message, txid: cobranca.txid_pix }, "Falha ao cancelar PIX no Inter durante exclusão (ignorado para prosseguir).");
+            logger.warn({ error: err.message, txid: cobranca.gateway_txid }, "Falha ao cancelar PIX no Provedor durante exclusão (ignorado para prosseguir).");
         }
     }
 
@@ -505,7 +509,7 @@ export const cobrancaService = {
       `)
       .eq("usuario_id", usuarioId)
       .eq("status", CobrancaStatus.PENDENTE)
-      .is("txid_pix", null);
+      .is("gateway_txid", null);
 
     if (cobError) {
       logger.error({ error: cobError.message, usuarioId }, "Erro ao buscar cobranças para PIX retroativo");

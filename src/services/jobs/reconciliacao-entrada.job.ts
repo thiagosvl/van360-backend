@@ -1,7 +1,6 @@
 import { logger } from "../../config/logger.js";
-import { supabaseAdmin } from "../../config/supabase.js";
 import { webhookCobrancaHandler } from "../handlers/webhook-cobranca.handler.js";
-import { interService } from "../inter.service.js";
+import { paymentService } from "../payment.service.js";
 
 interface JobResult {
     processed: number;
@@ -25,13 +24,14 @@ export const reconciliacaoEntradaJob = {
             const inicioStr = inicio.toISOString();
             const fimStr = fim.toISOString();
 
-            logger.info({ inicioStr, fimStr }, "Buscando pagamentos confirmados no Inter...");
+            logger.info({ inicioStr, fimStr }, "Buscando pagamentos confirmados no Provedor...");
 
-            // 2. Buscar no Inter
-            const cobrancasPagas = await interService.listarPixRecebidos(supabaseAdmin, inicioStr, fimStr);
+            // 2. Buscar no Provedor
+            const provider = paymentService.getProvider();
+            const cobrancasPagas = await provider.listarPixRecebidos(inicioStr, fimStr);
 
             if (!cobrancasPagas || cobrancasPagas.length === 0) {
-                logger.info("Nenhum pagamento encontrado no período no Inter.");
+                logger.info("Nenhum pagamento encontrado no período no Provedor.");
                 return result;
             }
 
@@ -49,10 +49,12 @@ export const reconciliacaoEntradaJob = {
                 for (const pagamento of item.pix) {
                     try {
                         const payloadReconciliacao = {
-                            txid: txid,
-                            valor: pagamento.valor,
-                            horario: pagamento.horario,
-                            endToEndId: pagamento.endToEndId
+                            gatewayTransactionId: txid,
+                            amount: Number(pagamento.valor),
+                            paymentDate: pagamento.horario,
+                            endToEndId: pagamento.endToEndId,
+                            gateway: paymentService.getActiveGateway(),
+                            rawPayload: pagamento
                         };
 
                         // 4. Invocar Handler (Mesma lógica do Webhook)

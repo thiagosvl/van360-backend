@@ -1,7 +1,7 @@
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
 import { TransactionStatus } from "../../types/enums.js";
-import { interService } from "../inter.service.js";
+import { paymentService } from "../payment.service.js";
 import { validacaoPixService } from "../validacao-pix.service.js";
 
 export const pixValidationMonitorJob = {
@@ -38,8 +38,9 @@ export const pixValidationMonitorJob = {
                     continue;
                 }
 
-                // 2. Consultar Status no Inter
-                const pixInfo = await interService.consultarPix(supabaseAdmin, item.end_to_end_id);
+                // 2. Consultar Status no Provedor
+                const provider = paymentService.getProvider();
+                const pixInfo = await provider.consultarCobranca(item.end_to_end_id);
                 const statusInter = pixInfo.status; // EX: REALIZADO, REJEITADO, PAGO?
                 
                 logger.info({ 
@@ -48,10 +49,10 @@ export const pixValidationMonitorJob = {
                     e2eId: item.end_to_end_id, 
                     statusInter,
                     motivo: pixInfo.motivo 
-                }, "Status retornado pelo Inter");
+                }, "Status retornado pelo Provedor");
 
-                // Mapeamento de status Inter -> SUCESSO/ERRO
-                // Depende da API do Inter. Geralmente: "REALIZADO" = Sucesso.
+                // Mapeamento de status Provedor -> SUCESSO/ERRO
+                // Depende da API do Provedor. Geralmente: "REALIZADO" = Sucesso.
                 // "REJEITADO", "DEVOLVIDO", "CANCELADO" = Falha.
                 
                 let novoStatus = TransactionStatus.PROCESSAMENTO; // Mantém se ainda estiver processando

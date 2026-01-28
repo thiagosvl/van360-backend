@@ -7,8 +7,8 @@ import { PixKeyStatus, PixKeyType, TransactionStatus } from "../types/enums.js";
 import { formatPixKey } from "../utils/format.js";
 import { onlyDigits } from "../utils/string.utils.js";
 import { cobrancaPagamentoService } from "./cobranca-pagamento.service.js";
-import { interService } from "./inter.service.js";
 import { notificationService } from "./notifications/notification.service.js";
+import { paymentService } from "./payment.service.js";
 
 // Interface interna
 interface SolicitacaoValidacao {
@@ -104,7 +104,8 @@ export async function iniciarValidacaoPix(usuarioId: string, chavePix: string, t
     }
 
     // 2. Realizar Micro-Pagamento (R$ 0,01)
-    const resultado = await interService.realizarPagamentoPix(supabaseAdmin, {
+    const provider = paymentService.getProvider();
+    const resultado = await provider.realizarTransferencia({
       valor: 0.01,
       chaveDestino: chavePix,
       descricao: `Validacao Van360 ${usuarioId.substring(0, 8)}`,
@@ -114,7 +115,7 @@ export async function iniciarValidacaoPix(usuarioId: string, chavePix: string, t
     logger.info({ 
       usuarioId, 
       xIdIdempotente, 
-      statusInter: resultado.status, 
+      gatewayStatus: resultado.status, 
       endToEndId: resultado.endToEndId,
       fullResult: resultado 
     }, "Micro-pagamento enviado. Aguardando Webhook ou Processamento.");
@@ -127,7 +128,7 @@ export async function iniciarValidacaoPix(usuarioId: string, chavePix: string, t
             nome: resultado.nomeBeneficiario,
             cpfCnpj: resultado.cpfCnpjBeneficiario
         }
-    }, "Detalhes do Beneficiário retornado pelo Inter");
+    }, "Detalhes do Beneficiário retornados pelo Gateway");
 
      // 3. Atualizar registro com resultado inicial
      const novoStatus = resultado.status === "PAGO" || resultado.status === "REALIZADO" ? TransactionStatus.SUCESSO : TransactionStatus.PROCESSAMENTO;
@@ -141,7 +142,7 @@ export async function iniciarValidacaoPix(usuarioId: string, chavePix: string, t
          .eq("x_id_idempotente", xIdIdempotente);
 
      // Se SUCESSO imediato, atualizar usuário
-     // Passamos os dados do beneficiário retornados pelo Inter, se disponíveis
+     // Passamos os dados do beneficiário retornados pelo Gateway, se disponíveis
      if (novoStatus === TransactionStatus.SUCESSO) {
          await confirmarChaveUsuario(
              usuarioId, 
@@ -154,7 +155,7 @@ export async function iniciarValidacaoPix(usuarioId: string, chavePix: string, t
 
     // BLOCK MOCK: Auto-validar se estiver em ambiente de teste E falhou/ficou processando
     // (Se já deu sucesso acima, não precisa mock)
-    const isMock = env.INTER_MOCK_MODE === "true" || (env.INTER_MOCK_MODE as any) === true;
+    const isMock = env.PAYMENT_MOCK_MODE === "true" || (env.PAYMENT_MOCK_MODE as any) === true;
     if (isMock && novoStatus !== TransactionStatus.SUCESSO) {
       logger.warn({ usuarioId }, "MOCK MODE: Auto-validando chave PIX em 3 segundos...");
 
@@ -199,8 +200,8 @@ export async function processarRetornoValidacaoPix(
   if (identificador.e2eId) {
       query = query.eq("end_to_end_id", identificador.e2eId);
   } else if (identificador.txid) {
-    // Fallback: se salvamos o txid em algum lugar (mas usamos xIdIdempotente como txid no interService normalmente)
-    // O Inter retorna o nosso txid (xIdIdempotente) no campo 'txid' do webhook? Sim.
+    // Fallback: se salvamos o gateway_txid em algum lugar (mas usamos xIdIdempotente como gateway_txid no provider normalmente)
+    // O Inter retorna o nosso gateway_txid (xIdIdempotente) no campo 'txid' do webhook? Sim.
     query = query.eq("x_id_idempotente", identificador.txid);
   } else {
       logger.warn("Identificador inválido para validação PIX");

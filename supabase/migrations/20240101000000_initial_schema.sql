@@ -158,12 +158,12 @@ CREATE TABLE IF NOT EXISTS "public"."assinaturas_cobrancas" (
     "updated_at" timestamp with time zone DEFAULT "now"(),
     "tipo_pagamento" "text",
     "valor_pago" numeric(10,2),
-    "inter_txid" "text",
+    "gateway_txid" "text",
     "qr_code_payload" "text",
     "location_url" "text",
     "billing_type" "public"."billing_type_enum" DEFAULT 'subscription'::"public"."billing_type_enum" NOT NULL,
     "descricao" "text",
-    "taxa_intermediacao_banco" numeric(10,2) DEFAULT 0.00,
+    "gateway_fee" numeric(10,2) DEFAULT 0.00,
     "dados_auditoria_pagamento" "jsonb" DEFAULT '{}'::"jsonb",
     "recibo_url" "text",
 
@@ -174,7 +174,7 @@ CREATE TABLE IF NOT EXISTS "public"."assinaturas_cobrancas" (
 ALTER TABLE "public"."assinaturas_cobrancas" OWNER TO "postgres";
 
 
-COMMENT ON COLUMN "public"."assinaturas_cobrancas"."taxa_intermediacao_banco" IS 'Valor da taxa cobrada pelo banco (ex: Inter) na transação PIX';
+COMMENT ON COLUMN "public"."assinaturas_cobrancas"."gateway_fee" IS 'Valor da taxa cobrada pelo provedor de pagamento na transação PIX';
 
 
 
@@ -232,11 +232,11 @@ CREATE TABLE IF NOT EXISTS "public"."cobrancas" (
     "usuario_id" "uuid",
     "origem" "text" DEFAULT '''automatica''::text'::"text" NOT NULL,
     "tipo_pagamento" "public"."tipo_pagamento_enum",
-    "txid_pix" "text",
+    "gateway_txid" "text",
     "qr_code_payload" "text",
-    "url_qr_code" "text",
+    "location_url" "text",
     "valor_pago" numeric(10,2),
-    "taxa_intermediacao_banco" numeric(10,2),
+    "gateway_fee" numeric(10,2),
     "valor_a_repassar" numeric(10,2),
     "status_repasse" character varying(50) DEFAULT 'PENDENTE'::character varying,
     "data_repasse" timestamp without time zone,
@@ -438,11 +438,13 @@ CREATE TABLE IF NOT EXISTS "public"."transacoes_repasse" (
     "usuario_id" "uuid",
     "cobranca_id" "uuid",
     "valor_repassado" numeric(10,2) NOT NULL,
-    "txid_pix_repasse" "text",
-    "status" character varying(50) DEFAULT 'PROCESSANDO'::character varying NOT NULL,
-    "data_criacao" timestamp without time zone DEFAULT "now"(),
-    "data_conclusao" timestamp without time zone,
-    "mensagem_erro" "text"
+    "gateway_txid" "text",
+    "status" character varying(50) DEFAULT 'PENDENTE'::character varying NOT NULL,
+    "data_criacao" timestamp with time zone DEFAULT "now"(),
+    "data_conclusao" timestamp with time zone,
+    "mensagem_erro" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
 );
 
 
@@ -1409,7 +1411,7 @@ BEGIN
   SET
     "dados_auditoria_pagamento" = '{}'::jsonb,
     "recibo_url" = NULL,
-    "url_qr_code" = NULL,
+    "location_url" = NULL,
     "qr_code_payload" = NULL
   WHERE "usuario_id" = target_user_id;
 

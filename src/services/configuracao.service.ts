@@ -44,6 +44,20 @@ export async function getConfigNumber(key: ConfigKey, defaultValue: number): Pro
 }
 
 /**
+ * Busca configuração e converte para JSON
+ */
+export async function getConfigJSON<T>(key: string, defaultValue: T): Promise<T> {
+  const valor = await getConfig(key, "");
+  if (!valor) return defaultValue;
+  try {
+    return JSON.parse(valor) as T;
+  } catch (err) {
+    logger.error({ key, valor, err }, "Falha ao analisar JSON de configuração");
+    return defaultValue;
+  }
+}
+
+/**
  * Helper específico para configurações de Billing
  */
 export async function getBillingConfig() {
@@ -51,12 +65,11 @@ export async function getBillingConfig() {
     diasProRata,
     valorMinimoProRata,
     incrementoBloco,
-    taxaIntermediacaoPix
+    diasAntecedenciaRenovacao
   ] = await Promise.all([
     getConfigNumber(ConfigKey.PRO_RATA_DIAS_MES, 30),
     getConfigNumber(ConfigKey.PRO_RATA_VALOR_MINIMO, 0.01),
     getConfigNumber(ConfigKey.VALOR_INCREMENTO_PASSAGEIRO_EXCESSO, 2.50),
-    getConfigNumber(ConfigKey.TAXA_INTERMEDIACAO_PIX, 0.99),
     getConfigNumber(ConfigKey.DIAS_ANTECEDENCIA_RENOVACAO, 5)
   ]);
 
@@ -68,7 +81,6 @@ export async function getBillingConfig() {
     valorMinimoProRata,
     planoBaseId: null, 
     valorIncrementoPassageiro,
-    taxaIntermediacaoPix,
-    diasAntecedenciaRenovacao: (await Promise.all([getConfigNumber(ConfigKey.DIAS_ANTECEDENCIA_RENOVACAO, 5)]))[0] // Fallback safe retrieval if not in array destructuring above (simplificado abaixo)
+    diasAntecedenciaRenovacao
   };
 }

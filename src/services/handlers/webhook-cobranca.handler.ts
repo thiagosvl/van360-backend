@@ -3,6 +3,7 @@ import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
 import { addToReceiptQueue } from "../../queues/receipt.queue.js";
 import { AssinaturaTipoPagamento } from "../../types/enums.js";
+import { StandardPaymentPayload } from "../../types/webhook.js";
 import { formatDate } from "../../utils/format.js";
 import { cobrancaPagamentoService } from "../cobranca-pagamento.service.js";
 // Actually checking usages below.. notifications use cobrancaService? No, notificationService.
@@ -11,18 +12,18 @@ import { notificationService } from "../notifications/notification.service.js";
 import { ReceiptData } from "../receipt.service.js";
 
 export const webhookCobrancaHandler = {
-  async handle(pagamento: any): Promise<boolean> {
-    const { txid, valor, horario } = pagamento;
+  async handle(pagamento: StandardPaymentPayload): Promise<boolean> {
+    const { gatewayTransactionId, amount, paymentDate } = pagamento;
 
     // 1. Buscar na tabela de cobranças (Pais)
     const { data: cobrancaPai, error: findPaiError } = await supabaseAdmin
         .from("cobrancas")
         .select("id, status")
-        .eq("txid_pix", txid)
+        .eq("gateway_txid", gatewayTransactionId)
         .maybeSingle();
 
     if (findPaiError) {
-        logger.error({ txid, findPaiError }, "Erro ao buscar cobrança de pai no banco");
+        logger.error({ gatewayTransactionId, findPaiError }, "Erro ao buscar cobrança de pai no banco");
         return false;
     }
 
@@ -40,8 +41,7 @@ export const webhookCobrancaHandler = {
     try {
         // b) Atualizar status para PAGO (Imediato)
         // Nota: O reciboUrl será atualizado depois pelo Worker
-        const dataPagamento = horario || new Date().toISOString();
-        await cobrancaPagamentoService.processarPagamento(txid, valor, pagamento, undefined); 
+        await cobrancaPagamentoService.processarPagamento(gatewayTransactionId, amount, pagamento.rawPayload, undefined); 
         
         // c) Iniciar Repasse (Fire & Forget seguro com catch individual)
         cobrancaPagamentoService.iniciarRepasse(cobrancaPai.id)
@@ -71,8 +71,8 @@ export const webhookCobrancaHandler = {
                     id: fullData.id,
                     titulo: "Recibo de Transporte",
                     subtitulo: `Transporte Escolar - ${nomeExibicao}`,
-                    valor: valor,
-                    data: formatDate(dataPagamento),
+                    valor: amount,
+                    data: formatDate(paymentDate),
                     pagadorNome: pass?.nome_responsavel || "Responsável",
                     passageiroNome: pass?.nome || "Passageiro",
                     mes: fullData.mes,
@@ -101,23 +101,17 @@ export const webhookCobrancaHandler = {
                     }
                 });
 
-                // Notificar Motorista sobre recebimento (Separado, pode ser direto ou via fila tbm, mas vamos focar no fluxo principal do recibo)
-                // A notificação do motorista NÃO precisa do recibo, então podemos manter síncrono ou criar outro job. 
-                // Para simplificar, vou deixar a notificação do PAI via worker (pq precisa do recibo)
-                // E a do MOTORISTA via notificationService direto (pq é só texto informativo).
-                // ...pensando melhor, o NotificationService agora joga na fila, então é rápido.
-                
+                // Notificar Motorista sobre recebimento
                 notificationService.notifyDriver(moto.telefone, DRIVER_EVENT_PAYMENT_RECEIVED_ALERT, {
                      nomeMotorista: moto.nome,
                      nomePagador: pass?.nome_responsavel,
                      nomePassageiro: pass?.nome,
-                     valor: valor,
+                     valor: amount,
                      mes: fullData.mes,
                      ano: fullData.ano,
                      nomePlano: "", // Not used in this template
                      dataVencimento: fullData.data_vencimento || ""
                 }); 
-               // Descomentar acima se quiser notificar motorista instantaneamente. O worker pode notificar o pai com o recibo.
             }
 
         } catch (queueErr) {
@@ -126,10 +120,8 @@ export const webhookCobrancaHandler = {
 
         return true;
     } catch (err) {
-        logger.error({ err, cobrancaId: cobrancaPai.id }, "Erro crítico ao processar pagamento de pai");
+        logger.error({ err, cobrancaId: cobrancaPai.id, gatewayTransactionId }, "Erro ao processar pagamento de pai");
         return false;
     }
   },
-
-
 };

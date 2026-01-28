@@ -1,8 +1,9 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
 import { addToWebhookQueue } from "../queues/webhook.queue.js";
+import { paymentService } from "../services/payment.service.js";
 
-export const webhookInterController = {
+export const paymentWebhookController = {
   async handlePix(req: FastifyRequest, reply: FastifyReply) {
     try {
       const body = req.body as any;
@@ -21,12 +22,18 @@ export const webhookInterController = {
 
       logger.info({ count: pixList.length }, "=== [API] Webhook Recebido (Enfileirando) ===");
 
+      const activeGateway = paymentService.getActiveGateway();
+      
+      if (!activeGateway) {
+          throw new Error("ERRO CRÍTICO: Nenhum gateway ativo configurado no sistema (ACTIVE_GATEWAY).");
+      }
+
       // Enfileirar cada PIX individualmente
       for (const pagamento of pixList) {
           try {
               await addToWebhookQueue({
                   pagamento,
-                  origin: 'INTER_V4'
+                  origin: activeGateway
               });
           } catch (qErr) {
               logger.error({ qErr, txid: pagamento.txid }, "Erro ao enfileirar webhook");

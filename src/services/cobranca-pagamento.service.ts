@@ -2,8 +2,8 @@ import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
 import { addToPayoutQueue } from "../queues/payout.queue.js";
-import { CobrancaStatus, CobrancaTipoPagamento, ConfigKey, PixKeyStatus, RepasseStatus, TransactionStatus } from "../types/enums.js";
-import { getConfigNumber } from "./configuracao.service.js";
+import { CobrancaStatus, CobrancaTipoPagamento, PixKeyStatus, RepasseStatus, TransactionStatus } from "../types/enums.js";
+import { paymentService } from "./payment.service.js";
 
 interface PagamentoInfo {
     horario?: string | Date;
@@ -14,7 +14,7 @@ export const cobrancaPagamentoService = {
   
   async processarPagamento(txid: string, valor: number, pagamento: PagamentoInfo, reciboUrl?: string): Promise<boolean> {
        // Buscar Cobrança pelo TXID
-       const { data: cobranca } = await supabaseAdmin.from("cobrancas").select("id, status").eq("txid_pix", txid).single();
+       const { data: cobranca } = await supabaseAdmin.from("cobrancas").select("id, status").eq("gateway_txid", txid).single();
        if (!cobranca) throw new Error("Cobrança não encontrada pelo TXID");
 
        if (cobranca.status === CobrancaStatus.PAGO) {
@@ -129,15 +129,23 @@ export const cobrancaPagamentoService = {
       const hasValidPix = usuario?.chave_pix && usuario?.status_chave_pix === PixKeyStatus.VALIDADA;
       logger.info({ cobrancaId, motoristaId: usuario?.id, hasValidPix, statusPix: usuario?.status_chave_pix }, "[cobrancaPagamentoService.iniciarRepasse] Verificação de chave PIX");
 
-      // 3. Calcular Valor do Repasse (Taxa PIX)
-      const taxa = await getConfigNumber(ConfigKey.TAXA_INTERMEDIACAO_PIX, 0.99); 
-      // Usar calculo em centavos para evitar erros de ponto flutuante (0.010000000000000009)
-      const valorRepasse = Math.round((cobranca.valor * 100) - (taxa * 100)) / 100;
+      // 3. Calcular Valor do Repasse (Valor Integral)
+      // O motorista deve receber o valor total pago pelo pai. 
+      // A taxa do Inter (custo variável) é absorvida pelo Van360.
+      const valorRepasse = cobranca.valor;
+      const provider = paymentService.getProvider();
+      const taxaAbsorvida = await provider.getFee(cobranca.valor, 'vencimento'); 
       
-      logger.info({ cobrancaId, valorOriginal: cobranca.valor, taxa, valorRepasse }, "[cobrancaPagamentoService.iniciarRepasse] Cálculo de valores");
+      logger.info({ 
+        cobrancaId, 
+        valorOriginal: cobranca.valor, 
+        valorRepasse, 
+        taxaAbsorvida,
+        tipoPix: 'vencimento' 
+      }, "[cobrancaPagamentoService.iniciarRepasse] Repasse integral (Taxa absorvida pelo Van360)");
 
       if (valorRepasse <= 0) {
-           logger.warn({ cobrancaId, valor: cobranca.valor, taxa, valorRepasse }, "Valor do repasse zerado ou insuficiente.");
+           logger.warn({ cobrancaId, valorOriginal: cobranca.valor, taxaAbsorvida, valorRepasse }, "Valor do repasse zerado ou insuficiente.");
            return { success: false, reason: "valor_baixo" };
       }
 

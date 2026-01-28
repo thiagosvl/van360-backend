@@ -6,7 +6,7 @@ import { PLANO_PROFISSIONAL } from "../config/constants.js";
  */
 export const planRules = {
   /**
-   * Verifica se o plano permite geração de PIX/Cobrança via Inter.
+   * Verifica se o plano permite geração de PIX/Cobrança
    * Regra: Apenas Profissional.
    */
   canGeneratePix: (planSlug: string): boolean => {

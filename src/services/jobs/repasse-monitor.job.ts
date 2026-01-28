@@ -2,8 +2,8 @@ import { DRIVER_EVENT_REPASSE_FAILED } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
 import { PixKeyStatus, RepasseStatus, TransactionStatus } from "../../types/enums.js";
-import { interService } from "../inter.service.js";
 import { notificationService } from "../notifications/notification.service.js";
+import { paymentService } from "../payment.service.js";
 
 export const repasseMonitorJob = {
     async run() {
@@ -29,23 +29,24 @@ export const repasseMonitorJob = {
             return;
         }
 
-        logger.info({ count: pendentes.length }, "Verificando status de repasses...");
+        logger.info({ count: pendentes.length }, "Verificando status de repasses no Provedor...");
 
         for (const transacao of pendentes) {
             try {
-                if (!transacao.txid_pix_repasse) {
+                if (!transacao.gateway_txid) {
                     logger.warn({ id: transacao.id }, "Repasse processando sem EndToEndId. Verificando falha manual.");
                     continue;
                 }
 
-                // 2. Consultar Status no Inter
-                // txid_pix_repasse armazena o End2EndId do PIX
-                const pixInfo = await interService.consultarPix(supabaseAdmin, transacao.txid_pix_repasse);
-                const statusInter = pixInfo.status; // REALIZADO, REJEITADO, FALHA...
+                // 2. Consultar Status no Provedor
+                // gateway_txid armazena o End2EndId do PIX
+                const provider = paymentService.getProvider();
+                const pixInfo = await provider.consultarCobranca(transacao.gateway_txid);
+                const statusInter = pixInfo.status; // REALIZADO, REJEITADO, FALHA... (Vem da API do Provedor)
 
                 let novoStatus = TransactionStatus.PROCESSAMENTO;
                 
-                if (statusInter === "REALIZADO" || statusInter === "PAGO") { // statusInter comes from Inter API
+                if (statusInter === "REALIZADO" || statusInter === "PAGO") { // statusInter comes from Provider API
                     novoStatus = TransactionStatus.SUCESSO;
                 } else if (["REJEITADO", "CANCELADO", "DEVOLVIDO", "FALHA"].includes(statusInter)) {
                     novoStatus = TransactionStatus.ERRO;
@@ -74,7 +75,7 @@ export const repasseMonitorJob = {
                     if (novoStatus === TransactionStatus.SUCESSO) {
                         logger.info({ id: transacao.id, valor: transacao.valor_repassado }, "Repasse confirmado com sucesso!");
                     } else {
-                        logger.warn({ id: transacao.id, statusInter, usuarioId: transacao.usuario_id }, "Repasse FALHOU. Invalidando chave PIX e notificando motorista.");
+                        logger.warn({ id: transacao.id, statusInter, usuarioId: transacao.usuario_id }, "Repasse FALHOU no Provedor. Invalidando chave PIX e notificando motorista.");
                         
                         // 1. Invalidar Chave PIX do Motorista (Segurança)
                         await supabaseAdmin

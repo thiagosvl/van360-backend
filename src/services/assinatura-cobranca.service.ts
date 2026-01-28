@@ -3,7 +3,7 @@ import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
 import { AssinaturaBillingType, AssinaturaCobrancaStatus, ConfigKey } from "../types/enums.js";
 import { getConfigNumber } from "./configuracao.service.js";
-import { interService } from "./inter.service.js";
+import { paymentService } from "./payment.service.js";
 
 export const assinaturaCobrancaService = {
     async getAssinaturaCobranca(id: string): Promise<any> {
@@ -56,7 +56,7 @@ export const assinaturaCobrancaService = {
     async gerarPixParaCobranca(cobrancaId: string): Promise<{
         qrCodePayload: string;
         location: string;
-        inter_txid: string;
+        gateway_txid: string;
         cobrancaId: string;
         tipo?: "upgrade" | "downgrade";
         franquia?: number;
@@ -70,7 +70,7 @@ export const assinaturaCobrancaService = {
                 created_at,
                 status,
                 qr_code_payload,
-                inter_txid,
+                gateway_txid,
                 location_url,
                 usuario_id,
                 assinatura_usuario_id,
@@ -107,7 +107,7 @@ export const assinaturaCobrancaService = {
              new Date(cobranca.data_vencimento + 'T12:00:00') > new Date());
 
         // VERIFICAÇÃO DE CACHE E EXPIRAÇÃO
-        if (cobranca.qr_code_payload && cobranca.inter_txid) {
+        if (cobranca.qr_code_payload && cobranca.gateway_txid) {
             // Se for cobrança imediata (upgrade), verificar se expirou (1h / 3600s)
             if (!isCobrancaComVencimento) {
                 const createdAt = new Date(cobranca.created_at).getTime();
@@ -123,7 +123,7 @@ export const assinaturaCobrancaService = {
                     return {
                         qrCodePayload: cobranca.qr_code_payload,
                         location: cobranca.location_url || "",
-                        inter_txid: cobranca.inter_txid,
+                        gateway_txid: cobranca.gateway_txid,
                         cobrancaId: cobranca.id,
                     };
                 }
@@ -140,7 +140,7 @@ export const assinaturaCobrancaService = {
                     return {
                         qrCodePayload: cobranca.qr_code_payload,
                         location: cobranca.location_url || "",
-                        inter_txid: cobranca.inter_txid,
+                        gateway_txid: cobranca.gateway_txid,
                         cobrancaId: cobranca.id,
                     };
                 }
@@ -153,16 +153,17 @@ export const assinaturaCobrancaService = {
             throw new Error("Dados do usuário incompletos para gerar PIX.");
         }
 
+        const provider = paymentService.getProvider();
         let pixData;
 
-        // GERAÇÃO DO PIX NO INTER (COB ou COBV)
+        // GERAÇÃO DO PIX (COB ou COBV)
         if (isCobrancaComVencimento) {
-             logger.info({ cobrancaId, billingType: cobranca.billing_type }, "Gerando PIX com Vencimento (cobv)");
+             logger.info({ cobrancaId, billingType: cobranca.billing_type }, `Gerando PIX com Vencimento (cobv) via ${provider.name}`);
              
              // Definir vencimento (se não tiver na cobrança, usar hoje + 3 dias como fallback seguro, ou tratar erro)
              const dataVencimento = cobranca.data_vencimento || new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-             pixData = await interService.criarCobrancaComVencimentoPix(supabaseAdmin, {
+             pixData = await provider.criarCobrancaComVencimento({
                 cobrancaId: cobranca.id,
                 valor: Number(cobranca.valor),
                 cpf: usuario.cpfcnpj,
@@ -172,9 +173,9 @@ export const assinaturaCobrancaService = {
              });
 
         } else {
-            logger.info({ cobrancaId, billingType: cobranca.billing_type }, "Gerando PIX Imediato (cob)");
+            logger.info({ cobrancaId, billingType: cobranca.billing_type }, `Gerando PIX Imediato (cob) via ${provider.name}`);
             
-            pixData = await interService.criarCobrancaPix(supabaseAdmin, {
+            pixData = await provider.criarCobrancaImediata({
                 cobrancaId: cobranca.id,
                 valor: Number(cobranca.valor),
                 cpf: usuario.cpfcnpj,
@@ -186,7 +187,7 @@ export const assinaturaCobrancaService = {
         const { error: updateError } = await supabaseAdmin
             .from("assinaturas_cobrancas")
             .update({
-                inter_txid: pixData.interTransactionId,
+                gateway_txid: pixData.gatewayTransactionId,
                 qr_code_payload: pixData.qrCodePayload,
                 location_url: pixData.location,
             })
@@ -200,7 +201,7 @@ export const assinaturaCobrancaService = {
         return {
             qrCodePayload: pixData.qrCodePayload,
             location: pixData.location,
-            inter_txid: pixData.interTransactionId,
+            gateway_txid: pixData.gatewayTransactionId,
             cobrancaId: cobranca.id,
         };
     },
@@ -236,10 +237,11 @@ export const assinaturaCobrancaService = {
         
         if (cobrancaError) throw new AppError(`Erro ao criar cobrança de ativação: ${cobrancaError.message}`, 500);
         
-        // 2. Gerar PIX via Inter
+        // 2. Gerar PIX via Provider
         let pixData: any = {};
         try {
-            pixData = await interService.criarCobrancaComVencimentoPix(supabaseAdmin, {
+            const provider = paymentService.getProvider();
+            pixData = await provider.criarCobrancaComVencimento({
                 cobrancaId: cobranca.id,
                 valor: valor,
                 cpf: cpfResponsavel,
@@ -252,7 +254,7 @@ export const assinaturaCobrancaService = {
             const { error: updateError } = await supabaseAdmin
                 .from("assinaturas_cobrancas")
                 .update({
-                    inter_txid: pixData.interTransactionId,
+                    gateway_txid: pixData.gatewayTransactionId,
                     qr_code_payload: pixData.qrCodePayload,
                     location_url: pixData.location
                 })

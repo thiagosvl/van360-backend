@@ -1,8 +1,8 @@
 import {
-  DRIVER_EVENT_ACTIVATION,
-  DRIVER_EVENT_WELCOME_TRIAL,
-  PLANO_ESSENCIAL,
-  PLANO_PROFISSIONAL
+    DRIVER_EVENT_ACTIVATION,
+    DRIVER_EVENT_WELCOME_TRIAL,
+    PLANO_ESSENCIAL,
+    PLANO_PROFISSIONAL
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
@@ -66,7 +66,7 @@ export interface RegistroAutomaticoResult {
     qrCodePayload: string;
     qrCodeUrl: string;
   };
-  inter_txid?: string; // Mantendo caso precise
+  gateway_txid?: string; // Mantendo caso precise
   cobrancaId?: string; // Mantendo caso precise
   valor?: number;      // Mantendo caso precise
   preco_aplicado?: number;
@@ -567,7 +567,7 @@ export async function iniciarRegistroplanoProfissional(
     logger.info(`[AuthService] Cobrança de ativação gerada com sucesso. ID: ${activationResult.cobranca.id}`);
 
     cobrancaId = activationResult.cobranca.id;
-    const pixData = activationResult.pixData; // Já vem formatado { qrCode, qrCodeUrl, inter_txid }
+    const pixData = activationResult.pixData; // Já vem formatado { qrCodePayload, location, gatewayTransactionId }
 
     // Notificação de Boas Vindas (Profissional - Ativação Imediata)
     if (payload.telefone) {
