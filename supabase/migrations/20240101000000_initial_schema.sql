@@ -1424,3 +1424,119 @@ BEGIN
 END;
 $$;
 
+
+
+-- =====================================================
+-- CONTRATOS DIGITAIS
+-- =====================================================
+
+-- Tabela: contratos
+CREATE TABLE IF NOT EXISTS "public"."contratos" (
+    "id" UUID DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    "usuario_id" UUID NOT NULL REFERENCES "public"."usuarios"("id") ON DELETE CASCADE,
+    "passageiro_id" UUID NOT NULL REFERENCES "public"."passageiros"("id") ON DELETE CASCADE,
+    "token_acesso" VARCHAR(255) UNIQUE NOT NULL,
+    "status" VARCHAR(50) NOT NULL DEFAULT 'pendente',
+    "provider" VARCHAR(50) NOT NULL DEFAULT 'inhouse',
+    "minuta_url" TEXT,
+    "contrato_final_url" TEXT,
+    "dados_contrato" JSONB NOT NULL,
+    "assinatura_metadados" JSONB,
+    "provider_document_id" TEXT,
+    "provider_link_assinatura" TEXT,
+    "created_at" TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    "assinado_em" TIMESTAMP WITH TIME ZONE,
+    "expira_em" TIMESTAMP WITH TIME ZONE DEFAULT (NOW() + INTERVAL '30 days'),
+    "updated_at" TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    
+    CONSTRAINT "contratos_status_check" CHECK ("status" IN ('pendente', 'assinado', 'cancelado', 'expirado'))
+);
+
+ALTER TABLE "public"."contratos" OWNER TO "postgres";
+
+CREATE INDEX "idx_contratos_token" ON "public"."contratos"("token_acesso");
+CREATE INDEX "idx_contratos_status" ON "public"."contratos"("status");
+CREATE INDEX "idx_contratos_usuario" ON "public"."contratos"("usuario_id");
+CREATE INDEX "idx_contratos_passageiro" ON "public"."contratos"("passageiro_id");
+CREATE INDEX "idx_contratos_provider" ON "public"."contratos"("provider");
+
+COMMENT ON TABLE "public"."contratos" IS 'Contratos de transporte escolar gerados e assinados digitalmente';
+COMMENT ON COLUMN "public"."contratos"."provider" IS 'Provedor de assinatura: inhouse, assinafy, docusign, etc';
+COMMENT ON COLUMN "public"."contratos"."dados_contrato" IS 'Dados do contrato (nome, valor, datas, endereço, etc)';
+COMMENT ON COLUMN "public"."contratos"."assinatura_metadados" IS 'Metadados de auditoria (IP, user-agent, timestamp, hash)';
+COMMENT ON COLUMN "public"."contratos"."provider_document_id" IS 'ID do documento no provedor externo (se aplicável)';
+
+-- Trigger para atualizar updated_at
+CREATE TRIGGER "update_contratos_updated_at"
+BEFORE UPDATE ON "public"."contratos"
+FOR EACH ROW
+EXECUTE FUNCTION "public"."update_updated_at_column"();
+
+-- Tabela: contratos_templates
+CREATE TABLE IF NOT EXISTS "public"."contratos_templates" (
+    "id" UUID DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    "nome" VARCHAR(255) NOT NULL,
+    "descricao" TEXT,
+    "arquivo_url" TEXT NOT NULL,
+    "ativo" BOOLEAN DEFAULT TRUE NOT NULL,
+    "campos_variaveis" JSONB DEFAULT '[]'::jsonb,
+    "created_at" TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    "updated_at" TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+ALTER TABLE "public"."contratos_templates" OWNER TO "postgres";
+
+COMMENT ON TABLE "public"."contratos_templates" IS 'Templates de contratos (PDFs base)';
+COMMENT ON COLUMN "public"."contratos_templates"."campos_variaveis" IS 'Lista de campos que podem ser preenchidos dinamicamente';
+
+-- Trigger para atualizar updated_at
+CREATE TRIGGER "update_contratos_templates_updated_at"
+BEFORE UPDATE ON "public"."contratos_templates"
+FOR EACH ROW
+EXECUTE FUNCTION "public"."update_updated_at_column"();
+
+-- Tabela: contratos_notificacoes
+CREATE TABLE IF NOT EXISTS "public"."contratos_notificacoes" (
+    "id" UUID DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    "contrato_id" UUID NOT NULL REFERENCES "public"."contratos"("id") ON DELETE CASCADE,
+    "tipo_evento" VARCHAR(50) NOT NULL,
+    "canal" VARCHAR(20) DEFAULT 'WHATSAPP' NOT NULL,
+    "data_envio" TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    "sucesso" BOOLEAN DEFAULT TRUE NOT NULL,
+    "mensagem_erro" TEXT,
+    
+    CONSTRAINT "chk_contratos_notificacoes_canal" CHECK ("canal" IN ('whatsapp', 'email', 'sms'))
+);
+
+ALTER TABLE "public"."contratos_notificacoes" OWNER TO "postgres";
+
+CREATE INDEX "idx_contratos_notificacoes_contrato" ON "public"."contratos_notificacoes"("contrato_id");
+
+COMMENT ON TABLE "public"."contratos_notificacoes" IS 'Registro de notificações enviadas relacionadas a contratos';
+COMMENT ON COLUMN "public"."contratos_notificacoes"."tipo_evento" IS 'Tipo de evento: contrato_criado, link_enviado, assinado, cancelado';
+
+-- Storage bucket para contratos
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('contratos', 'contratos', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Políticas de acesso ao storage
+CREATE POLICY "Usuarios podem fazer upload de contratos"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (bucket_id = 'contratos');
+
+CREATE POLICY "Contratos são publicamente acessíveis"
+ON storage.objects FOR SELECT
+TO public
+USING (bucket_id = 'contratos');
+
+CREATE POLICY "Usuarios podem atualizar seus contratos"
+ON storage.objects FOR UPDATE
+TO authenticated
+USING (bucket_id = 'contratos');
+
+CREATE POLICY "Usuarios podem deletar seus contratos"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (bucket_id = 'contratos');

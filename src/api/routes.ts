@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { appRoutes } from "./app.routes.js";
+import { contractRoutes } from "./contract.routes.js";
 import assinaturaCobrancaRoute from "./assinatura-cobranca.route.js";
 import authRoutes from "./auth.routes.js";
 import cobrancaRoutes from "./cobranca.routes.js";
@@ -47,6 +48,9 @@ const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.register(gastoRoute, { prefix: "/api/gastos" });
 
   app.register(assinaturaCobrancaRoute, { prefix: "/api/assinatura-cobrancas" });
+  
+  // Rotas de Contratos
+  app.register(contractRoutes, { prefix: "/api" });
   
   // Rotas de Jobs (Automação)
   app.register(jobsRoute, { prefix: "/api/jobs" });

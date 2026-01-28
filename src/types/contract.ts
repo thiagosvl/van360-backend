@@ -1,0 +1,83 @@
+
+export interface ContractGenerationParams {
+  contratoId: string;
+  templateId?: string;
+  dadosContrato: DadosContrato;
+}
+
+export interface DadosContrato {
+  // Dados do passageiro
+  nomeAluno: string;
+  nomeResponsavel: string;
+  cpfResponsavel: string;
+  telefoneResponsavel: string;
+  emailResponsavel: string;
+  enderecoCompleto: string;
+  
+  // Dados da escola
+  nomeEscola: string;
+  enderecoEscola: string;
+  
+  // Dados do serviço
+  periodo: string; // "Integral", "Manhã", "Tarde"
+  modalidade: string; // "Ida e Volta", "Só Ida", "Só Volta"
+  valorMensal: number;
+  diaVencimento: number;
+  dataInicio: string; // YYYY-MM-DD
+  dataFim: string; // YYYY-MM-DD
+  
+  // Dados do condutor
+  nomeCondutor: string;
+  cpfCnpjCondutor: string;
+  telefoneCondutor: string;
+  
+  // Dados do veículo
+  placaVeiculo: string;
+  modeloVeiculo: string;
+}
+
+export interface ContractGenerationResponse {
+  documentUrl?: string; // URL do PDF gerado (in-house)
+  providerDocumentId?: string; // ID no provedor externo
+  providerSignatureLink?: string; // Link de assinatura do provedor
+}
+
+export interface ContractSignatureParams {
+  contratoId: string;
+  assinaturaBase64?: string; // Para in-house
+  nomeAssinante?: string;
+  cpfAssinante?: string;
+  metadados: SignatureMetadata;
+}
+
+export interface SignatureMetadata {
+  ip: string;
+  userAgent: string;
+  timestamp: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+export interface ContractSignatureResponse {
+  documentoFinalUrl: string;
+  assinadoEm: string;
+}
+
+export interface ContractProvider {
+  name: string;
+  
+  // Gerar contrato (minuta)
+  gerarContrato(params: ContractGenerationParams): Promise<ContractGenerationResponse>;
+  
+  // Processar assinatura
+  processarAssinatura(params: ContractSignatureParams): Promise<ContractSignatureResponse>;
+  
+  // Cancelar contrato
+  cancelarContrato(contratoId: string): Promise<boolean>;
+  
+  // Consultar status
+  consultarStatus(contratoId: string): Promise<any>;
+  
+  // Baixar documento final
+  baixarDocumento(contratoId: string): Promise<Buffer>;
+}
