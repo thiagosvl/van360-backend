@@ -468,7 +468,6 @@ CREATE TABLE IF NOT EXISTS "public"."usuarios" (
     "chave_pix_validada_em" timestamp with time zone,
     "nome_titular_pix_validado" "text",
     "cpf_cnpj_titular_pix_validado" "text",
-    "cpf_cnpj_titular_pix_validado" "text",
     "tipo" "public"."user_type_enum" DEFAULT 'motorista'::"public"."user_type_enum" NOT NULL
 );
 
