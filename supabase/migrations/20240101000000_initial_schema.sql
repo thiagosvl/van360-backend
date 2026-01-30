@@ -1531,7 +1531,7 @@ CREATE TABLE IF NOT EXISTS "public"."contratos" (
     "multa_rescisao_valor" NUMERIC(10,2),
     "multa_rescisao_tipo" VARCHAR(20),
     
-    CONSTRAINT "contratos_status_check" CHECK ("status" IN ('pendente', 'assinado', 'cancelado', 'expirado', 'substituido'))
+    CONSTRAINT "contratos_status_check" CHECK ("status" IN ('pendente', 'assinado', 'substituido'))
 );
 
 

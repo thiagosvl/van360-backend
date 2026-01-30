@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ContratoProvider } from '../enums.js';
+import { ContratoProvider, ContratoStatus } from '../enums.js';
 
 export const createContractSchema = z.object({
   passageiroId: z.string().uuid('ID do passageiro inválido'),
@@ -30,7 +30,7 @@ export const signContractSchema = z.object({
 export type SignContractDTO = z.infer<typeof signContractSchema>;
 
 export const listContractsSchema = z.object({
-  status: z.enum(['pendente', 'assinado', 'cancelado', 'expirado']).optional(),
+  status: z.enum([ContratoStatus.PENDENTE, ContratoStatus.ASSINADO, ContratoStatus.CANCELADO]).optional(),
   passageiroId: z.string().uuid().optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),

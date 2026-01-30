@@ -123,8 +123,6 @@ export enum PaymentGateway {
 export enum ContratoStatus {
   PENDENTE = "pendente",
   ASSINADO = "assinado",
-  CANCELADO = "cancelado",
-  EXPIRADO = "expirado",
   SUBSTITUIDO = "substituido"
 }
 
