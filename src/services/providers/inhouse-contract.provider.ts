@@ -12,7 +12,7 @@ import {
   ContractSignatureResponse,
   DadosContrato,
 } from '../../types/contract.js';
-import { ContractMultaTipo, ContratoProvider, ContratoStatus } from '../../types/enums.js';
+import { ContractMultaTipo, ContratoProvider } from '../../types/enums.js';
 
 export class InHouseContractProvider implements ContractProvider {
   name = ContratoProvider.INHOUSE;
@@ -119,14 +119,6 @@ export class InHouseContractProvider implements ContractProvider {
       documentoFinalUrl: publicUrl,
       assinadoEm: new Date().toISOString(),
     };
-  }
-
-  async cancelarContrato(contratoId: string): Promise<boolean> {
-    const { error } = await supabaseAdmin
-      .from('contratos')
-      .update({ status: ContratoStatus.CANCELADO })
-      .eq('id', contratoId);
-    return !error;
   }
 
   async consultarStatus(contratoId: string): Promise<any> {

@@ -11,11 +11,17 @@ export const contractController = {
     return reply.status(201).send(contrato);
   },
 
+  getKPIs: async (req: FastifyRequest, reply: FastifyReply) => {
+    const usuarioId = (req as any).user.id;
+    const kpis = await contractService.getKPIs(usuarioId);
+    return reply.status(200).send(kpis);
+  },
+
   list: async (req: FastifyRequest, reply: FastifyReply) => {
     const filters = listContractsSchema.parse(req.query);
     const usuarioId = (req as any).user.id;
 
-    const result = await contractService.listarContratos(usuarioId, filters);
+    const result = await contractService.listarContratos(usuarioId, filters as any);
     return reply.status(200).send(result);
   },
 
@@ -37,7 +43,33 @@ export const contractController = {
     const { id } = req.params as { id: string };
     const usuarioId = (req as any).user.id;
 
-    const result = await contractService.cancelarContrato(id, usuarioId);
+    // Conforme pedido, cancelamento agora é EXCLUSÃO ou SUBSTITUIÇÃO
+    // Mas manteremos o método para compatibilidade se necessário ou redirecionamos para delete
+    const result = await contractService.excluirContrato(id, usuarioId);
+    return reply.status(200).send(result);
+  },
+
+  excluir: async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const usuarioId = (req as any).user.id;
+
+    const result = await contractService.excluirContrato(id, usuarioId);
+    return reply.status(200).send(result);
+  },
+
+  substituir: async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const usuarioId = (req as any).user.id;
+
+    const result = await contractService.substituirContrato(usuarioId, id);
+    return reply.status(200).send(result);
+  },
+
+  reenviar: async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const usuarioId = (req as any).user.id;
+
+    const result = await contractService.reenviarNotificacao(usuarioId, id);
     return reply.status(200).send(result);
   },
 

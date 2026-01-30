@@ -256,62 +256,228 @@ class ContractService {
     return data;
   }
 
-  async listarContratos(authId: string, filters: ListContractsDTO) {
+  async listarContratos(authId: string, filters: ListContractsDTO & { tab?: string; search?: string }) {
     const usuario = await this.getUsuarioByAuthId(authId);
     const usuarioId = usuario.id;
 
+    const { tab = 'pendentes', search, page = 1, limit = 20 } = filters;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    if (tab === 'sem_contrato') {
+      // Buscar passageiros ativos que NÃO têm contrato pendente ou assinado
+      // Usamos uma subquery ou um join negado
+      let query = supabaseAdmin
+        .from('passageiros')
+        .select(`
+          id, 
+          nome, 
+          nome_responsavel, 
+          telefone_responsavel,
+          valor_cobranca,
+          dia_vencimento
+        `, { count: 'exact' })
+        .eq('usuario_id', usuarioId)
+        .eq('ativo', true);
+
+      if (search) {
+        query = query.or(`nome.ilike.%${search}%,nome_responsavel.ilike.%${search}%`);
+      }
+
+      // Filtro para excluir quem já tem contrato "válido"
+      // Nota: No Supabase/PostgREST, fazer um "not in subquery" é complexo via query builder direto.
+      // Vamos buscar os IDs de quem TEM contrato válido primeiro (geralmente poucos passageiros por motorista)
+      const { data: comContrato } = await supabaseAdmin
+        .from('contratos')
+        .select('passageiro_id')
+        .eq('usuario_id', usuarioId)
+        .in('status', [ContratoStatus.PENDENTE, ContratoStatus.ASSINADO]);
+      
+      const idsIgnorar = (comContrato?.map(c => c.passageiro_id) || []);
+      
+      if (idsIgnorar.length > 0) {
+        query = query.not('id', 'in', `(${idsIgnorar.join(',')})`);
+      }
+
+      const { data, error, count } = await query.range(from, to).order('nome');
+      
+      if (error) throw error;
+
+      return {
+        data: data.map(p => ({
+          id: p.id,
+          tipo: 'passageiro',
+          passageiro: {
+            nome: p.nome,
+            nome_responsavel: p.nome_responsavel
+          },
+          dados_contrato: {
+            valorMensal: Number(p.valor_cobranca),
+            diaVencimento: p.dia_vencimento
+          }
+        })),
+        pagination: {
+          page,
+          limit,
+          total: count || 0,
+          totalPages: Math.ceil((count || 0) / limit),
+        },
+      };
+    }
+
+    // Listagem de Contratos Reais (Pendentes ou Assinados)
     let query = supabaseAdmin
       .from('contratos')
-      .select('*, passageiro:passageiros(nome, nome_responsavel)', { count: 'exact' })
+      .select('*, passageiro:passageiros!inner(nome, nome_responsavel)', { count: 'exact' })
       .eq('usuario_id', usuarioId)
       .order('created_at', { ascending: false });
     
-    if (filters.status) {
-      query = query.eq('status', filters.status);
+    if (tab === 'pendentes') {
+      query = query.eq('status', ContratoStatus.PENDENTE);
+    } else if (tab === 'assinados') {
+      query = query.eq('status', ContratoStatus.ASSINADO);
+    }
+
+    if (search) {
+      query = query.or(`nome.ilike.%${search}%,nome_responsavel.ilike.%${search}%`, { foreignTable: 'passageiro' });
     }
     
-    if (filters.passageiroId) {
-      query = query.eq('passageiro_id', filters.passageiroId);
-    }
-    
-    const from = (filters.page - 1) * filters.limit;
-    const to = from + filters.limit - 1;
-    
-    query = query.range(from, to);
-    
-    const { data, error, count } = await query;
+    const { data, error, count } = await query.range(from, to);
     
     if (error) throw error;
     
     return {
-      data,
+      data: data.map(c => ({ ...c, tipo: 'contrato' })),
       pagination: {
-        page: filters.page,
-        limit: filters.limit,
+        page,
+        limit,
         total: count || 0,
-        totalPages: Math.ceil((count || 0) / filters.limit),
+        totalPages: Math.ceil((count || 0) / limit),
       },
     };
   }
 
-  async cancelarContrato(contratoId: string, authId: string) {
+  async getKPIs(authId: string) {
     const usuario = await this.getUsuarioByAuthId(authId);
     const usuarioId = usuario.id;
 
-    const { data: contrato } = await supabaseAdmin
+    // 1. Contratos Pendentes
+    const { count: pendentes } = await supabaseAdmin
       .from('contratos')
-      .select('provider')
-      .eq('id', contratoId)
+      .select('*', { count: 'exact', head: true })
       .eq('usuario_id', usuarioId)
+      .eq('status', ContratoStatus.PENDENTE);
+
+    // 2. Contratos Assinados
+    const { count: assinados } = await supabaseAdmin
+      .from('contratos')
+      .select('*', { count: 'exact', head: true })
+      .eq('usuario_id', usuarioId)
+      .eq('status', ContratoStatus.ASSINADO);
+
+    // 3. Sem Contrato (Passageiros Ativos sem contrato válido)
+    // Primeiro pegamos os passageiros que TEM contrato válido
+    const { data: comContrato } = await supabaseAdmin
+      .from('contratos')
+      .select('passageiro_id')
+      .eq('usuario_id', usuarioId)
+      .in('status', [ContratoStatus.PENDENTE, ContratoStatus.ASSINADO]);
+    
+    const idsIgnorar = (comContrato?.map(c => c.passageiro_id) || []);
+
+    let querySemContrato = supabaseAdmin
+      .from('passageiros')
+      .select('*', { count: 'exact', head: true })
+      .eq('usuario_id', usuarioId)
+      .eq('ativo', true);
+
+    if (idsIgnorar.length > 0) {
+      querySemContrato = querySemContrato.not('id', 'in', `(${idsIgnorar.join(',')})`);
+    }
+
+    const { count: semContrato } = await querySemContrato;
+
+    return {
+      pendentes: pendentes || 0,
+      assinados: assinados || 0,
+      semContrato: semContrato || 0
+    };
+  }
+
+  async substituirContrato(authId: string, contratoId: string) {
+    const usuario = await this.getUsuarioByAuthId(authId);
+    
+    // 1. Buscar contrato atual
+    const { data: contratoOriginal } = await supabaseAdmin
+      .from('contratos')
+      .select('*')
+      .eq('id', contratoId)
+      .eq('usuario_id', usuario.id)
       .single();
+
+    if (!contratoOriginal) throw new AppError('Contrato não encontrado', 404);
+
+    // 2. Aposentar todos os contratos ativos do passageiro
+    await supabaseAdmin
+      .from('contratos')
+      .update({ status: ContratoStatus.SUBSTITUIDO })
+      .eq('passageiro_id', contratoOriginal.passageiro_id)
+      .in('status', [ContratoStatus.PENDENTE, ContratoStatus.ASSINADO]);
+
+    // 3. Criar novo contrato baseado nos dados atuais do passageiro
+    return this.criarContrato(authId, {
+      passageiroId: contratoOriginal.passageiro_id,
+      provider: contratoOriginal.provider as ContratoProvider
+    });
+  }
+
+  async excluirContrato(contratoId: string, authId: string) {
+    const usuario = await this.getUsuarioByAuthId(authId);
+    const usuarioId = usuario.id;
+
+    const { error } = await supabaseAdmin
+      .from('contratos')
+      .delete()
+      .eq('id', contratoId)
+      .eq('usuario_id', usuarioId);
     
-    if (!contrato) throw new AppError('Contrato não encontrado', 404);
+    if (error) throw error;
     
-    const provider = this.getProvider(contrato.provider);
-    await provider.cancelarContrato(contratoId);
+    logger.info({ contratoId }, 'Contrato excluído');
     
-    logger.info({ contratoId }, 'Contrato cancelado');
+    return { success: true };
+  }
+
+  async reenviarNotificacao(authId: string, contratoId: string) {
+    const usuario = await this.getUsuarioByAuthId(authId);
     
+    const { data: contrato, error } = await supabaseAdmin
+      .from('contratos')
+      .select('*, passageiro:passageiros(*)')
+      .eq('id', contratoId)
+      .eq('usuario_id', usuario.id)
+      .single();
+
+    if (error || !contrato) throw new AppError('Contrato não encontrado', 404);
+    if (contrato.status !== ContratoStatus.PENDENTE) throw new AppError('Apenas contratos pendentes podem ser reenviados', 400);
+
+    const { passageiro } = contrato as any;
+
+    if (!passageiro.telefone_responsavel) throw new AppError('Passageiro sem telefone do responsável', 400);
+
+    // Enfileirar novamente
+    await addToContractQueue({
+      contratoId: contrato.id,
+      providerName: contrato.provider as ContratoProvider,
+      dadosContrato: contrato.dados_contrato,
+      passageiro: {
+          nome: passageiro.nome,
+          nome_responsavel: passageiro.nome_responsavel,
+          telefone_responsavel: passageiro.telefone_responsavel
+      },
+      tokenAcesso: contrato.token_acesso
+    });
+
     return { success: true };
   }
 

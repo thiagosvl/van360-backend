@@ -30,7 +30,9 @@ export const signContractSchema = z.object({
 export type SignContractDTO = z.infer<typeof signContractSchema>;
 
 export const listContractsSchema = z.object({
-  status: z.enum([ContratoStatus.PENDENTE, ContratoStatus.ASSINADO, ContratoStatus.CANCELADO]).optional(),
+  status: z.enum([ContratoStatus.PENDENTE, ContratoStatus.ASSINADO]).optional(),
+  tab: z.enum(['pendentes', 'assinados', 'sem_contrato']).optional(),
+  search: z.string().optional(),
   passageiroId: z.string().uuid().optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),

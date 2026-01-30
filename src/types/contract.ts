@@ -96,9 +96,6 @@ export interface ContractProvider {
   // Processar assinatura
   processarAssinatura(params: ContractSignatureParams): Promise<ContractSignatureResponse>;
   
-  // Cancelar contrato
-  cancelarContrato(contratoId: string): Promise<boolean>;
-  
   // Consultar status
   consultarStatus(contratoId: string): Promise<unknown>;
   
