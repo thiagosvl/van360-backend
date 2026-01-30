@@ -418,7 +418,7 @@ export const cobrancaService = {
       }
 
       // Calcular Vencimento
-      const diaVencimento = passageiro.dia_vencimento || 10;
+      const diaVencimento = passageiro.dia_vencimento;
       const lastDayOfMonth = new Date(targetYear, targetMonth, 0).getDate();
       const diaFinal = Math.min(diaVencimento, lastDayOfMonth);
       const dataVencimentoStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(diaFinal).padStart(2, '0')}`;
