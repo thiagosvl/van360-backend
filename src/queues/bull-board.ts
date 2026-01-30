@@ -2,6 +2,7 @@ import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { FastifyAdapter } from '@bull-board/fastify';
 import { FastifyInstance } from 'fastify';
+import { contractQueue } from './contract.queue.js';
 import { generationQueue } from './generation.queue.js';
 import { payoutQueue } from './payout.queue.js';
 import { pixQueue } from './pix.queue.js';
@@ -20,6 +21,7 @@ export const setupBullBoard = (app: FastifyInstance) => {
       new BullMQAdapter(generationQueue),
       new BullMQAdapter(pixQueue),
       new BullMQAdapter(payoutQueue),
+      new BullMQAdapter(contractQueue),
     ],
     serverAdapter,
   });

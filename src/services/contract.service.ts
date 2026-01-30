@@ -3,6 +3,7 @@ import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
 import { supabaseAdmin } from '../config/supabase.js';
 import { AppError } from '../errors/AppError.js';
+import { addToContractQueue } from '../queues/contract.queue.js';
 import { ContractProvider, DadosContrato, SignatureMetadata } from '../types/contract.js';
 import { CreateContractDTO, ListContractsDTO } from '../types/dtos/contract.dto.js';
 import { ContractMultaTipo, ContratoProvider, ContratoStatus, PassageiroModalidade, PeriodoEnum } from '../types/enums.js';
@@ -142,46 +143,30 @@ class ContractService {
     
     if (contratoError) throw contratoError;
     
-    // 6. Gerar contrato provider
-    const provider = this.getProvider(providerName);
-    const response = await provider.gerarContrato({
-      contratoId: contrato.id,
-      dadosContrato,
+    // 6. Enfileirar para Geração de PDF e Notificações (Assíncrono via BullMQ)
+    await addToContractQueue({
+        contratoId: contrato.id,
+        providerName: providerName,
+        dadosContrato,
+        passageiro: {
+            nome: passageiro.nome,
+            nome_responsavel: passageiro.nome_responsavel,
+            telefone_responsavel: passageiro.telefone_responsavel
+        },
+        tokenAcesso
     });
     
-    await supabaseAdmin
-      .from('contratos')
-      .update({
-        minuta_url: response.documentUrl,
-        provider_document_id: response.providerDocumentId,
-        provider_link_assinatura: response.providerSignatureLink,
-      })
-      .eq('id', contrato.id);
-    
-    logger.info({ contratoId: contrato.id }, 'Contrato criado com sucesso');
-    
+    logger.info({ contratoId: contrato.id }, 'Fomento de contrato enfileirado com sucesso');
+
     const linkAssinatura = providerName === ContratoProvider.INHOUSE 
       ? `${env.FRONTEND_URL}/assinar/${tokenAcesso}`
-      : response.providerSignatureLink;
+      : undefined; // Será atualizado pelo worker se for externo
 
-    if (passageiro.telefone_responsavel) {
-      const nomeResponsavel = getFirstName(passageiro.nome_responsavel);
-      const mensagem = `Oi *${nomeResponsavel}*! Tudo bem? 👋\n\n` +
-        `Estou enviando o contrato de transporte escolar do(a) passageiro(a) *${passageiro.nome}* para assinatura digital.\n\n` +
-        `👉 Acesse o link abaixo para visualizar e assinar:\n\n` +
-        `${linkAssinatura}\n\n` +
-        `O contrato terá validade após a assinatura de ambas as partes.\n\n` +
-        `🤝 Fico à disposição em caso de dúvidas.`;
-        
-      whatsappService.sendText(passageiro.telefone_responsavel, mensagem)
-        .catch(err => logger.error({ err }, 'Erro ao enviar WhatsApp do contrato'));
-    }
-    
     return { 
       ...contrato, 
-      minuta_url: response.documentUrl, 
       linkAssinatura,
-      contrato_url: response.documentUrl 
+      minuta_url: null, // Ainda não gerada
+      contrato_url: null 
     };
   }
 

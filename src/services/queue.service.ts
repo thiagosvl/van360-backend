@@ -1,4 +1,5 @@
 import { logger } from "../config/logger.js";
+import { contractWorker } from "../workers/contract.worker.js";
 import { generationWorker } from "../workers/generation.worker.js";
 import { payoutWorker } from "../workers/payout.worker.js";
 import { pixWorker } from "../workers/pix.worker.js";
@@ -20,6 +21,7 @@ export const queueService = {
         if (generationWorker) logger.info(`[QueueService] Worker started: ${generationWorker.name}`);
         if (pixWorker) logger.info(`[QueueService] Worker started: ${pixWorker.name}`);
         if (payoutWorker) logger.info(`[QueueService] Worker started: ${payoutWorker.name}`);
+        if (contractWorker) logger.info(`[QueueService] Worker started: ${contractWorker.name}`);
 
         logger.info("[QueueService] All workers initialized.");
     },
@@ -32,7 +34,8 @@ export const queueService = {
             webhookWorker.close(),
             generationWorker.close(),
             pixWorker.close(),
-            payoutWorker.close()
+            payoutWorker.close(),
+            contractWorker.close()
         ]);
         logger.info("[QueueService] Workers stopped.");
     }
