@@ -1,3 +1,5 @@
+import { PassageiroGenero, PassageiroModalidade, PeriodoEnum, PixKeyType } from "../types/enums.js";
+
 /**
  * Formata um número para o padrão de moeda brasileiro (BRL)
  */
@@ -12,8 +14,17 @@ export function formatCurrency(value: number): string {
  * Formata uma data para o padrão brasileiro (DD/MM/YYYY)
  */
 export function formatDate(date: string | Date): string {
-    const d = typeof date === 'string' ? new Date(date) : date;
-    return new Intl.DateTimeFormat('pt-BR').format(d);
+    let d = date;
+    if (typeof date === 'string') {
+        // Adicionar meio-dia para evitar problemas de fuso horário em strings de data simples (YYYY-MM-DD)
+        // Isso garante que "2026-12-31" não vire "30/12/2026" devido ao deslocamento UTC-3
+        if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+            d = new Date(date + 'T12:00:00');
+        } else {
+            d = new Date(date);
+        }
+    }
+    return new Intl.DateTimeFormat('pt-BR').format(d as Date);
 }
 
 /**
@@ -86,37 +97,37 @@ export function formatPixKey(key: string, type: string) {
     const t = type ? type.toUpperCase() : "";
     const clean = key.replace(/\D/g, "");
 
-    if (t === "CPF") return maskCpf(clean);
-    if (t === "CNPJ") return maskCnpj(clean);
-    if (t === "TELEFONE") return maskPhone(key);
-    if (t === "ALEATORIA" || t === "EVP") return maskEvp(key);
+    if (t === PixKeyType.CPF) return maskCpf(clean);
+    if (t === PixKeyType.CNPJ) return maskCnpj(clean);
+    if (t === PixKeyType.TELEFONE) return maskPhone(key);
+    if (t === PixKeyType.ALEATORIA) return maskEvp(key);
 
     return key;
 }
 
 export const formatPeriodo = (periodo: string): string => {
-  if (periodo === "integral") return "Integral";
-  if (periodo === "manha") return "Manhã";
-  if (periodo === "tarde") return "Tarde";
-  if (periodo === "noite") return "Noite";
+  if (periodo === PeriodoEnum.INTEGRAL) return "Integral";
+  if (periodo === PeriodoEnum.MANHA) return "Manhã";
+  if (periodo === PeriodoEnum.TARDE) return "Tarde";
+  if (periodo === PeriodoEnum.NOITE) return "Noite";
 
   return "Não Identificado";
 };
 
 export const formatModalidade = (modalidade: string): string => {
   switch (modalidade) {
-    case 'ida': return 'Ida';
-    case 'volta': return 'Volta';
-    case 'ida_volta': return 'Ida e Volta';
+    case PassageiroModalidade.IDA: return 'Ida';
+    case PassageiroModalidade.VOLTA: return 'Volta';
+    case PassageiroModalidade.IDA_VOLTA: return 'Ida e Volta';
     default: return modalidade || 'Não informada';
   }
 };
 
 export const formatGenero = (genero: string): string => {
   switch (genero) {
-    case 'masculino': return 'Masculino';
-    case 'feminino': return 'Feminino';
-    case 'prefiro_nao_informar': return 'Prefiro não informar';
+    case PassageiroGenero.MASCULINO: return 'Masculino';
+    case PassageiroGenero.FEMININO: return 'Feminino';
+    case PassageiroGenero.PREFIRO_NAO_INFORMAR: return 'Prefiro não informar';
     default: return genero || 'Não informado';
   }
 };
@@ -135,4 +146,14 @@ export const formatParentesco = (parentesco: string): string => {
     case 'outro': return 'Outro';
     default: return parentesco || 'Não informado';
   }
+};
+
+export const formatAddress = (data: { logradouro?: string; numero?: string; bairro?: string; cidade?: string; estado?: string }): string => {
+    if (!data.logradouro) return "";
+    const parts = [
+        `${data.logradouro}${data.numero ? `, ${data.numero}` : ""}`,
+        data.bairro,
+        `${data.cidade}${data.estado ? `/${data.estado}` : ""}`
+    ].filter(Boolean);
+    return parts.join(" - ");
 };

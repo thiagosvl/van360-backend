@@ -37,8 +37,7 @@ interface ContextoLog {
 
 /**
  * Processa o pagamento de uma cobrança, ativando assinatura, usuário e passageiros quando aplicável.
- * Esta função centraliza toda a lógica de processamento de pagamento, sendo usada tanto pelo
- * webhook real quanto pelo mock de pagamento.
+ * Esta função centraliza toda a lógica de processamento de pagamento, sendo usada pelo webhook real
  */
 export async function processarPagamentoAssinatura(
   cobranca: AssinaturaCobrancaInfo,

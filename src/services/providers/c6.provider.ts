@@ -94,4 +94,22 @@ export class C6PaymentProvider implements PaymentProvider {
   async listarPixRecebidos(inicio: string, fim: string): Promise<any[]> {
     return c6Service.listarPixRecebidos(inicio, fim);
   }
+
+  async validarChavePix(chave: string, idempotencia?: string): Promise<{ valido: boolean; nome?: string; cpfCnpj?: string; erro?: string; idempotenciaUsed?: string }> {
+    try {
+      const data = await c6Service.validarChavePix(chave);
+      return {
+        valido: true,
+        nome: data.nome,
+        cpfCnpj: data.cpfCnpj,
+        idempotenciaUsed: idempotencia
+      };
+    } catch (err: any) {
+      return {
+        valido: false,
+        erro: err.message || "Chave PIX inválida (C6)",
+        idempotenciaUsed: idempotencia
+      };
+    }
+  }
 }

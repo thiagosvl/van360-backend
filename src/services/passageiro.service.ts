@@ -4,7 +4,7 @@ import { automationService } from "./automation.service.js";
 import { subscriptionLifecycleService } from "./subscription-lifecycle.service.js";
 
 import { CreatePassageiroDTO, ListPassageirosFiltersDTO, UpdatePassageiroDTO } from "../types/dtos/passageiro.dto.js";
-import { ContratoStatus, PassageiroDesativacaoCobrancaAutomaticaMotivo } from "../types/enums.js";
+import { ContratoProvider, ContratoStatus, PassageiroDesativacaoCobrancaAutomaticaMotivo } from "../types/enums.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 
@@ -113,7 +113,7 @@ const createPassageiro = async (data: CreatePassageiroDTO): Promise<any> => {
             // Dispara criação (async sem await blocking total se quisermos performance, mas melhor garantir aqui)
             await contractService.criarContrato(usuario.auth_uid, {
                 passageiroId: inserted.id,
-                provider: 'inhouse'
+                provider: ContratoProvider.INHOUSE
             });
         } catch (err) {
             console.error("[createPassageiro] Falha ao disparar contrato automático", err);
@@ -185,23 +185,23 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO): Promise<
     // Helper simples para valor do DTO
     const getValorNumerico = (v: any) => typeof v === 'string' ? moneyToNumber(v) : v;
 
-    const valorNovo = data.valor_cobranca !== undefined ? getValorNumerico(data.valor_cobranca) : Number(estadoAnterior.valor_cobranca);
-    const valorAntigo = Number(estadoAnterior.valor_cobranca);
-    
-    const vencimentoNovo = data.dia_vencimento !== undefined ? Number(data.dia_vencimento) : Number(estadoAnterior.dia_vencimento);
-    const vencimentoAntigo = Number(estadoAnterior.dia_vencimento);
-
-    const nomeNovo = data.nome ? cleanString(data.nome, true) : estadoAnterior.nome;
-    const nomeAntigo = estadoAnterior.nome;
-
-    const nomeRespNovo = data.nome_responsavel ? cleanString(data.nome_responsavel, true) : estadoAnterior.nome_responsavel;
-    const nomeRespAntigo = estadoAnterior.nome_responsavel;
-
     const houveMudancaContratual = 
-        (Math.abs(valorNovo - valorAntigo) > 0.01) || 
-        (vencimentoNovo !== vencimentoAntigo) ||
-        (nomeNovo !== nomeAntigo) ||
-        (nomeRespNovo !== nomeRespAntigo);
+        (data.valor_cobranca !== undefined && Math.abs(getValorNumerico(data.valor_cobranca) - Number(estadoAnterior.valor_cobranca)) > 0.01) ||
+        (data.dia_vencimento !== undefined && Number(data.dia_vencimento) !== Number(estadoAnterior.dia_vencimento)) ||
+        (data.nome ? cleanString(data.nome, true) !== estadoAnterior.nome : false) ||
+        (data.nome_responsavel ? cleanString(data.nome_responsavel, true) !== estadoAnterior.nome_responsavel : false) ||
+        (data.parentesco_responsavel !== undefined && data.parentesco_responsavel !== estadoAnterior.parentesco_responsavel) ||
+        (data.cpf_responsavel !== undefined && data.cpf_responsavel !== estadoAnterior.cpf_responsavel) ||
+        (data.escola_id !== undefined && data.escola_id !== estadoAnterior.escola_id) ||
+        (data.periodo !== undefined && data.periodo !== estadoAnterior.periodo) ||
+        (data.modalidade !== undefined && data.modalidade !== estadoAnterior.modalidade) ||
+        (data.data_inicio_transporte !== undefined && data.data_inicio_transporte !== estadoAnterior.data_inicio_transporte) ||
+        (data.logradouro !== undefined && data.logradouro !== estadoAnterior.logradouro) ||
+        (data.numero !== undefined && data.numero !== estadoAnterior.numero) ||
+        (data.bairro !== undefined && data.bairro !== estadoAnterior.bairro) ||
+        (data.cidade !== undefined && data.cidade !== estadoAnterior.cidade) ||
+        (data.estado !== undefined && data.estado !== estadoAnterior.estado) ||
+        (data.cep !== undefined && data.cep !== estadoAnterior.cep);
 
     if (houveMudancaContratual) {
         // Trigger de substituição
@@ -255,7 +255,7 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO): Promise<
                 
                 await contractService.criarContrato(usuario.auth_uid, {
                     passageiroId: id,
-                    provider: 'inhouse'
+                    provider: ContratoProvider.INHOUSE
                 });
             } catch (err) {
                 console.error("[updatePassageiro] Falha ao substituir contrato", err);

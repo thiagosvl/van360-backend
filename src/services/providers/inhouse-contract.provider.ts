@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-import { formatDate, formatPeriodo, maskCnpj, maskCpf } from '../../utils/format.js';
+import { formatDate, formatModalidade, formatParentesco, formatPeriodo, maskCnpj, maskCpf, maskPhone } from '../../utils/format.js';
 
 import { supabaseAdmin } from '../../config/supabase.js';
 import {
@@ -12,9 +12,10 @@ import {
   ContractSignatureResponse,
   DadosContrato,
 } from '../../types/contract.js';
+import { ContractMultaTipo, ContratoProvider } from '../../types/enums.js';
 
 export class InHouseContractProvider implements ContractProvider {
-  name = 'inhouse';
+  name = ContratoProvider.INHOUSE;
 
   async gerarContrato(params: ContractGenerationParams): Promise<ContractGenerationResponse> {
     const pdfDoc = await this.criarPdfBase(params.dadosContrato);
@@ -93,7 +94,10 @@ export class InHouseContractProvider implements ContractProvider {
       });
     }
     
-    await this.adicionarRodapeAuditoria(pdfDoc, params);
+    await this.adicionarRodapeAuditoria(pdfDoc, {
+      ...params,
+      nomeAssinante: params.nomeAssinante || contrato.dados_contrato.nomeResponsavel
+    });
     
     const finalPdfBytes = await pdfDoc.save();
     const finalFileName = `assinados/${params.contratoId}.pdf`;
@@ -115,34 +119,6 @@ export class InHouseContractProvider implements ContractProvider {
       documentoFinalUrl: publicUrl,
       assinadoEm: new Date().toISOString(),
     };
-  }
-// ...
-  async criarPdfBase(dados: DadosContrato): Promise<PDFDocument> {
-// ...
-    // Linhas de Assinatura
-    const signatureLineY = currentY;
-    page.drawLine({ start: { x: margin, y: currentY }, end: { x: margin + 200, y: currentY }, thickness: 1 });
-    page.drawLine({ start: { x: 335, y: currentY }, end: { x: 545, y: currentY }, thickness: 1 });
-    
-    // Salvar posição Y nos metadados para uso posterior
-    pdfDoc.setKeywords([`SIG_Y:${signatureLineY}`]);
-
-    currentY -= 15;
-    
-    page.drawText(`CONTRATADA (${dados.apelidoCondutor || 'Motorista'})`, { x: margin, y: currentY, size: 9, font: fontBold });
-    page.drawText(`CONTRATANTE (${dados.nomeResponsavel || 'Responsável'})`, { x: 335, y: currentY, size: 9, font: fontBold });
-
-    if (dados.assinaturaCondutorUrl) {
-        try {
-            const resp = await fetch(dados.assinaturaCondutorUrl);
-            const signatureBytes = await resp.arrayBuffer();
-            const signatureImage = await pdfDoc.embedPng(signatureBytes);
-            // Melhor posicionamento da assinatura do motorista (usando a mesma referência Y da linha)
-            page.drawImage(signatureImage, { x: margin + 10, y: signatureLineY + 2, width: 120, height: 40 });
-        } catch (e) { console.error('Error signature', e); }
-    }
-
-    return pdfDoc;
   }
 
   async cancelarContrato(contratoId: string): Promise<boolean> {
@@ -284,8 +260,6 @@ export class InHouseContractProvider implements ContractProvider {
     const margin = 50;
     const width = 495; // Largura útil
 
-    // Logo removido do cabeçalho (movido para o rodapé final)
-
     page.drawText('CONTRATO DE PRESTAÇÃO DE SERVIÇO DE TRANSPORTE', { x: margin, y: 770, size: fontSizeTitle, font: fontBold });
     currentY = 730;
 
@@ -310,26 +284,38 @@ export class InHouseContractProvider implements ContractProvider {
     
     const smallTextSize = 10;
     
+    // CONTRATANTE
     page.drawText('CONTRATANTE (Responsável)', { x: margin, y: currentY, size: smallTextSize, font: fontBold });
     page.drawText(`Nome: ${dados.nomeResponsavel}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
-    page.drawText(`CPF: ${maskCpf(dados.cpfResponsavel)}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
+    page.drawText(`Documento (CPF): ${maskCpf(dados.cpfResponsavel)}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
+    page.drawText(`Telefone: ${maskPhone(dados.telefoneResponsavel)}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
+    page.drawText(`Parentesco do Passageiro: ${formatParentesco(dados.parentescoResponsavel || '')}`, { x: margin, y: currentY - 42, size: smallTextSize, font });
     
-    // CONTRATADA
-    page.drawText('CONTRATADA (Transportador)', { x: 300, y: currentY, size: smallTextSize, font: fontBold });
-    page.drawText(`Nome: ${dados.apelidoCondutor || dados.nomeCondutor}`, { x: 300, y: currentY - 14, size: smallTextSize, font });
-    page.drawText(`CPF/CNPJ: ${maskDoc(dados.cpfCnpjCondutor)}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
-    
-    currentY -= 60;
+    currentY -= 65;
 
-    currentY = drawHeader('PASSAGEIRO E ESCOLA', currentY);
-    page.drawText(`Passageiro: ${dados.nomePassageiro}`, { x: margin, y: currentY, size: smallTextSize, font });
+    // CONTRATADA
+    page.drawText('CONTRATADA (Transportador)', { x: margin, y: currentY, size: smallTextSize, font: fontBold });
+    page.drawText(`Nome: ${dados.apelidoCondutor || dados.nomeCondutor}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
+    page.drawText(`Documento (CPF/CNPJ): ${maskDoc(dados.cpfCnpjCondutor)}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
+    page.drawText(`Telefone: ${maskPhone(dados.telefoneCondutor)}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
+    
+    currentY -= 50;
+
+    currentY = drawHeader('PASSAGEIRO(A)', currentY);
+    page.drawText(`Nome: ${dados.nomePassageiro}`, { x: margin, y: currentY, size: smallTextSize, font });
     page.drawText(`Escola: ${dados.nomeEscola}`, { x: 300, y: currentY, size: smallTextSize, font });
     
-    // Add extra info if available roughly
     page.drawText(`Período: ${formatPeriodo(dados.periodo)}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
-    page.drawText(`Modalidade: ${dados.modalidade}`, { x: 300, y: currentY - 14, size: smallTextSize, font });
+    page.drawText(`Modalidade: ${formatModalidade(dados.modalidade)}`, { x: 300, y: currentY - 14, size: smallTextSize, font });
     
-    currentY -= 45; // Adjusted spacing
+    page.drawText(`Endereço: ${dados.enderecoCompleto}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
+    
+    currentY -= 50; // Adjusted spacing
+
+    currentY = drawHeader('VEÍCULO', currentY);
+    page.drawText(`Modelo: ${dados.modeloVeiculo}`, { x: margin, y: currentY, size: smallTextSize, font });
+    page.drawText(`Placa: ${dados.placaVeiculo}`, { x: 300, y: currentY, size: smallTextSize, font });
+    currentY -= 30;
 
     currentY = drawHeader('DO PERÍODO DO CONTRATO', currentY);
     const currentYear = new Date().getFullYear();
@@ -339,24 +325,33 @@ export class InHouseContractProvider implements ContractProvider {
     currentY -= 45;
 
     currentY = drawHeader('DAS CONDIÇÕES DE VALOR', currentY);
-    page.drawText(`Valor total do contrato (R$): ${dados.valorTotal.toFixed(2)}`, { x: margin, y: currentY, size: smallTextSize, font });
+    page.drawText(`Valor total do contrato (R$): ${dados.valorTotal.toLocaleString("pt-BR", {
+                  style: "currency",
+                  currency: "BRL",
+                })}`, { x: margin, y: currentY, size: smallTextSize, font });
     page.drawText(`Quantidade de parcelas: ${dados.qtdParcelas}`, { x: 300, y: currentY, size: smallTextSize, font });
-    page.drawText(`Valor das parcelas (R$): ${dados.valorParcela.toFixed(2)}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
+    page.drawText(`Valor das parcelas (R$): ${dados.valorParcela.toLocaleString("pt-BR", {
+                  style: "currency",
+                  currency: "BRL",
+                })}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
     page.drawText(`Dia do vencimento: ${dados.diaVencimento}`, { x: 300, y: currentY - 14, size: smallTextSize, font });
     
     // Lógica para formatação de valores de multas
-    const formatMulta = (tipo: string, valor: number) => {
-        if (tipo === 'percentual') {
-            return valor.toFixed(0).replace('.', ','); // Sem decimais se %
+    const formatMulta = (tipo: ContractMultaTipo, valor: number) => {
+        if (tipo === ContractMultaTipo.PERCENTUAL) {
+            return valor.toFixed(0).replace('.', ',')+'%'; // Sem decimais se %
         }
-        return valor.toFixed(2).replace('.', ','); // Com decimais se R$
+        return valor.toLocaleString("pt-BR", {
+                  style: "currency",
+                  currency: "BRL",
+                }); // Com decimais se R$
     };
 
-    const multaAtrasoLabel = `Multa mensal para atraso de pagamento (${dados.multaAtraso.tipo === 'percentual' ? '%' : 'R$'}):`;
+    const multaAtrasoLabel = `Multa mensal para atraso de pagamento (${dados.multaAtraso.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}):`;
     const multaAtrasoValor = formatMulta(dados.multaAtraso.tipo, dados.multaAtraso.valor);
     page.drawText(`${multaAtrasoLabel} ${multaAtrasoValor}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
     
-    const multaRescisaoLabel = `Multa para cancelamento de contrato (${dados.multaRescisao.tipo === 'percentual' ? '%' : 'R$'}):`;
+    const multaRescisaoLabel = `Multa para cancelamento de contrato (${dados.multaRescisao.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}):`;
     const multaRescisaoValor = formatMulta(dados.multaRescisao.tipo, dados.multaRescisao.valor);
     page.drawText(`${multaRescisaoLabel} ${multaRescisaoValor}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
     currentY -= 60;
@@ -424,7 +419,7 @@ export class InHouseContractProvider implements ContractProvider {
     currentY -= 40;
     const today = new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
     
-    page.drawText(`Brasil, ${today}`, { x: margin, y: currentY, size: smallTextSize, font });
+    page.drawText(`${today}`, { x: margin, y: currentY, size: smallTextSize, font });
     currentY -= 80; // Mais espaço para assinar
     
     // Linhas de Assinatura
@@ -485,7 +480,7 @@ export class InHouseContractProvider implements ContractProvider {
         minute: '2-digit'
     });
 
-    const text = `Assinado pelo CONTRATANTE (${params.nomeAssinante || 'Responsável'}) em ${dataFormatada} | IP: ${params.metadados.ip}`;
+    const text = `Assinado pelo CONTRATANTE (${params.nomeAssinante}) em ${dataFormatada} | IP: ${params.metadados.ip}`;
     lastPage.drawText(text, { x: 50, y: 30, size: 7, font, color: rgb(0.5, 0.5, 0.5) });
   }
 }

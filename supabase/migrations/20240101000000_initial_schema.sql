@@ -1597,29 +1597,3 @@ CREATE INDEX "idx_contratos_notificacoes_contrato" ON "public"."contratos_notifi
 
 COMMENT ON TABLE "public"."contratos_notificacoes" IS 'Registro de notificações enviadas relacionadas a contratos';
 COMMENT ON COLUMN "public"."contratos_notificacoes"."tipo_evento" IS 'Tipo de evento: contrato_criado, link_enviado, assinado, cancelado';
-
--- Storage bucket para contratos
-INSERT INTO storage.buckets (id, name, public) 
-VALUES ('contratos', 'contratos', true)
-ON CONFLICT (id) DO NOTHING;
-
--- Políticas de acesso ao storage
-CREATE POLICY "Usuarios podem fazer upload de contratos"
-ON storage.objects FOR INSERT
-TO authenticated
-WITH CHECK (bucket_id = 'contratos');
-
-CREATE POLICY "Contratos são publicamente acessíveis"
-ON storage.objects FOR SELECT
-TO public
-USING (bucket_id = 'contratos');
-
-CREATE POLICY "Usuarios podem atualizar seus contratos"
-ON storage.objects FOR UPDATE
-TO authenticated
-USING (bucket_id = 'contratos');
-
-CREATE POLICY "Usuarios podem deletar seus contratos"
-ON storage.objects FOR DELETE
-TO authenticated
-USING (bucket_id = 'contratos');

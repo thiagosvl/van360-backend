@@ -52,4 +52,6 @@ export interface PaymentProvider {
   listarPixRecebidos(inicio: string, fim: string): Promise<any[]>;
 
   registrarWebhook(url: string): Promise<any>;
+
+  validarChavePix(chave: string, idempotencia?: string): Promise<{ valido: boolean; nome?: string; cpfCnpj?: string; erro?: string; idempotenciaUsed?: string }>;
 }

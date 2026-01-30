@@ -1,3 +1,4 @@
+import { ContractMultaTipo } from "./enums.js";
 
 export interface ContractGenerationParams {
   contratoId: string;
@@ -12,6 +13,7 @@ export interface DadosContrato {
   cpfResponsavel: string;
   telefoneResponsavel: string;
   emailResponsavel: string;
+  parentescoResponsavel?: string;
   enderecoCompleto: string;
   
   // Dados da escola
@@ -35,11 +37,11 @@ export interface DadosContrato {
   // Multas
   multaAtraso: {
     valor: number;
-    tipo: 'percentual' | 'fixo';
+    tipo: ContractMultaTipo;
   };
   multaRescisao: {
     valor: number;
-    tipo: 'percentual' | 'fixo';
+    tipo: ContractMultaTipo;
   };
   
   // Dados do condutor

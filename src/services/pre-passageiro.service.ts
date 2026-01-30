@@ -64,7 +64,14 @@ export const prePassageiroService = {
       estado: payload.estado || null,
       cep: payload.cep || null,
       referencia: payload.referencia || null,
-      observacoes: payload.observacoes || null
+      observacoes: payload.observacoes || null,
+      
+      // Novos Campos
+      modalidade: payload.modalidade || null,
+      genero: payload.genero || null,
+      parentesco_responsavel: payload.parentesco_responsavel || null,
+      data_inicio_transporte: payload.data_inicio_transporte || null,
+      data_nascimento: payload.data_nascimento || null
     };
 
     const { data, error } = await supabaseAdmin

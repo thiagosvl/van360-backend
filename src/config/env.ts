@@ -3,7 +3,6 @@ export const env = {
   NODE_ENV: process.env.NODE_ENV || "development",
   ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS || "http://localhost:8080",
 
-  PAYMENT_MOCK_MODE: process.env.PAYMENT_MOCK_MODE || "false",
   SUPABASE_URL: process.env.SUPABASE_URL!,
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY!,
   EVOLUTION_API_URL: process.env.EVOLUTION_API_URL || "http://localhost:8081",

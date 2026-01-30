@@ -66,7 +66,7 @@ export const dailyChargeMonitorJob = {
                         enviar_cobranca_automatica
                     ),
                     usuarios!inner ( 
-                        nome, telefone,
+                        nome, apelido, telefone,
                         assinaturas_usuarios!inner (
                             status,
                             data_ativacao
@@ -130,6 +130,7 @@ export const dailyChargeMonitorJob = {
                             nomeResponsavel: passageiro.nome_responsavel || "Responsável",
                             nomePassageiro: passageiro.nome || "Passageiro",
                             nomeMotorista: motorista.nome || "Motorista",
+                            apelidoMotorista: motorista.apelido,
                             valor: cobranca.valor,
                             dataVencimento: cobranca.data_vencimento,
                             diasAntecedencia: context === PASSENGER_EVENT_DUE_SOON ? diasAntecedencia : undefined,

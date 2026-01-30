@@ -94,6 +94,7 @@ export const webhookCobrancaHandler = {
                             nomeResponsavel: pass?.nome_responsavel,
                             nomePassageiro: pass?.nome,
                             nomeMotorista: moto?.nome,
+                            apelidoMotorista: moto?.apelido,
                             dataVencimento: fullData.data_vencimento,
                             mes: fullData.mes,
                             ano: fullData.ano

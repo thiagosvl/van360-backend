@@ -7,7 +7,7 @@ import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { redisConfig } from "../config/redis.js";
 import { supabaseAdmin } from "../config/supabase.js";
-import { CobrancaStatus, ConfigKey } from "../types/enums.js";
+import { ConfigKey } from "../types/enums.js";
 import { onlyDigits } from "../utils/string.utils.js";
 import { getConfigNumber } from "./configuracao.service.js";
 
@@ -17,7 +17,6 @@ const INTER_API_URL = env.INTER_API_URL!;
 const INTER_PIX_KEY = env.INTER_PIX_KEY!;
 const INTER_CLIENT_ID = env.INTER_CLIENT_ID!;
 const INTER_CLIENT_SECRET = env.INTER_CLIENT_SECRET!;
-const PAYMENT_MOCK_MODE = env.PAYMENT_MOCK_MODE === "true" || (env.PAYMENT_MOCK_MODE as any) === true;
 
 // Função para obter certificados (suporta Base64 via env ou arquivos)
 function getCertificates(): { cert: string | Buffer; key: string | Buffer } {
@@ -122,15 +121,6 @@ async function criarCobrancaPix(
 ): Promise<{ qrCodePayload: string; location: string; interTransactionId: string }> {
   const txid = gerarTxid(params.cobrancaId);
 
-  if (PAYMENT_MOCK_MODE) {
-    logger.warn("MOCK INTER ATIVO: Simulando PIX");
-    return {
-      qrCodePayload: "00020101021226...MOCK",
-      location: "https://mock.inter/pix",
-      interTransactionId: `MOCK-TXID-${Date.now()}`,
-    };
-  }
-
   const token = await getValidInterToken();
   const expirationSeconds = await getConfigNumber(ConfigKey.PIX_EXPIRACAO_SEGUNDOS, 3600);
 
@@ -187,15 +177,6 @@ async function criarCobrancaComVencimentoPix(
   params: CriarCobrancaComVencimentoParams
 ): Promise<{ qrCodePayload: string; location: string; interTransactionId: string }> {
   const txid = gerarTxid(params.cobrancaId);
-
-  if (PAYMENT_MOCK_MODE) {
-    logger.warn("MOCK INTER ATIVO: Simulando PIX (COBV)");
-    return {
-      qrCodePayload: "00020101021226...MOCK-COBV",
-      location: "https://mock.inter/pix-cobv",
-      interTransactionId: `MOCK-TXID-COBV-${Date.now()}`,
-    };
-  }
 
   const token = await getValidInterToken();
 
@@ -364,17 +345,6 @@ async function listarPixRecebidos(dataInicio: string, dataFim: string) {
 }
 
 async function consultarPix(e2eId: string) {
-  if (PAYMENT_MOCK_MODE) {
-    return {
-      endToEndId: e2eId,
-      valor: "0.01",
-      recebedor: {
-        nome: "MOCK USER",
-        cpfCnpj: "00000000000"
-      }
-    };
-  }
-
   const token = await getValidInterToken();
   const url = `${INTER_API_URL}/pix/v2/pix/${e2eId}`;
 
@@ -405,14 +375,6 @@ interface PagamentoPixParams {
 async function realizarPagamentoPix(
   params: PagamentoPixParams
 ): Promise<{ endToEndId: string; status: string; nomeBeneficiario?: string; cpfCnpjBeneficiario?: string }> {
-  if (PAYMENT_MOCK_MODE) {
-    logger.warn({ params }, "MOCK INTER ATIVO: Simulando Pagamento PIX");
-    return {
-      endToEndId: `MOCK-E2E-${Date.now()}`,
-      status: CobrancaStatus.PAGO
-    };
-  }
-
   const token = await getValidInterToken();
 
   // Endpoint de Banking para realizar pagamento PIX

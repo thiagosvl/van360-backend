@@ -9,7 +9,6 @@ import { redisConfig } from "../config/redis.js";
 import { supabaseAdmin } from "../config/supabase.js";
 
 const redis = new Redis(redisConfig as any);
-const MOCK_MODE = env.PAYMENT_MOCK_MODE === "true" || (env.PAYMENT_MOCK_MODE as any) === true;
 const C6_SCHEDULE_URL = `${env.C6_API_URL}/v1/schedule_payments`;
 
 function getC6Certificates() {
@@ -41,8 +40,6 @@ function getHttpsAgent() {
 
 export const c6Service = {
   async getAccessToken(): Promise<string> {
-    if (MOCK_MODE) return "MOCK-ACCESS-TOKEN";
-
     const cached = await redis.get("c6:token");
     if (cached) return cached;
 
@@ -74,15 +71,6 @@ export const c6Service = {
   },
 
   async criarCobrancaImediata(txid: string, valor: number, devedor?: { cpf: string; nome: string }) {
-    if (MOCK_MODE) {
-      return {
-        txid,
-        pixCopiaECola: "000201...MOCK-C6",
-        location: `https://mock.c6bank.com/${txid}`,
-        interTransactionId: `MOCK-C6-${txid}`
-      };
-    }
-
     const token = await this.getAccessToken();
     const payload: any = {
       calendario: { expiracao: 3600 },
@@ -112,8 +100,6 @@ export const c6Service = {
   },
 
   async consultarPix(txid: string) {
-    if (MOCK_MODE) return { status: "CONCLUIDA", txid };
-
     const token = await this.getAccessToken();
     const { data } = await axios.get(`${env.C6_API_URL}/v2/pix/cob/${txid}`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -123,8 +109,6 @@ export const c6Service = {
   },
 
   async cancelarCobranca(txid: string) {
-    if (MOCK_MODE) return true;
-
     const token = await this.getAccessToken();
     const headers = { Authorization: `Bearer ${token}` };
     const agent = getHttpsAgent();
@@ -149,8 +133,6 @@ export const c6Service = {
   },
 
   async listarPixRecebidos(inicio: string, fim: string) {
-    if (MOCK_MODE) return [];
-    
     const token = await this.getAccessToken();
     const { data } = await axios.get(`${env.C6_API_URL}/v2/pix`, {
       params: { inicio, fim },
@@ -167,8 +149,6 @@ export const c6Service = {
   },
 
   async configurarWebhook(webhookUrl: string) {
-    if (MOCK_MODE) return { status: "sincronizado", webhookUrl };
-
     const chave = env.C6_PIX_KEY;
     const token = await this.getAccessToken();
     const headers = { Authorization: `Bearer ${token}` };
@@ -197,10 +177,6 @@ export const c6Service = {
   },
 
   async realizarPagamentoPix(params: { valor: number; chaveDestino: string; descricao?: string; xIdIdempotente?: string; transaction_date?: string }): Promise<any> {
-    if (MOCK_MODE) {
-      return { endToEndId: `MOCK-C6-GRP-${Date.now()}`, status: "WAITING_APPROVAL" };
-    }
-
     const token = await this.getAccessToken();
     const headers = { Authorization: `Bearer ${token}`, "x-id-idempotente": params.xIdIdempotente };
     const agent = getHttpsAgent();
@@ -244,8 +220,6 @@ export const c6Service = {
   },
 
   async consultarPagamentoPix(id: string): Promise<any> {
-    if (MOCK_MODE) return { status: "PAGO", id };
-
     const token = await this.getAccessToken();
     const agent = getHttpsAgent();
 
@@ -284,8 +258,6 @@ export const c6Service = {
    * Cria o lote, captura os dados do DICT e deleta o lote em seguida.
    */
   async validarChavePix(chave: string): Promise<{ nome: string; cpfCnpj: string }> {
-    if (MOCK_MODE) return { nome: "Motorista Mock C6", cpfCnpj: "***.123.456-**" };
-
     const token = await this.getAccessToken();
     const headers = { Authorization: `Bearer ${token}` };
     const agent = getHttpsAgent();
@@ -346,15 +318,6 @@ export const c6Service = {
   },
 
   async criarCobrancaVencimento(txid: string, valor: number, vencimento: string, devedor: any) {
-    if (MOCK_MODE) {
-       return {
-        txid,
-        pixCopiaECola: "000201...MOCK-COBV-C6",
-        location: `https://mock.c6bank.com/cobv/${txid}`,
-        interTransactionId: `MOCK-C6-COBV-${txid}`
-      };
-    }
-    
     const token = await this.getAccessToken();
     const payload = {
       calendario: { dataDeVencimento: vencimento, validadeAposVencimento: 30 },

@@ -5,8 +5,8 @@ import { supabaseAdmin } from '../config/supabase.js';
 import { AppError } from '../errors/AppError.js';
 import { ContractProvider, DadosContrato, SignatureMetadata } from '../types/contract.js';
 import { CreateContractDTO, ListContractsDTO } from '../types/dtos/contract.dto.js';
-import { ContratoStatus } from '../types/enums.js';
-import { getFirstName } from '../utils/format.js';
+import { ContractMultaTipo, ContratoProvider, ContratoStatus, PassageiroModalidade, PeriodoEnum } from '../types/enums.js';
+import { formatAddress, getFirstName } from '../utils/format.js';
 import { InHouseContractProvider } from './providers/inhouse-contract.provider.js';
 import { whatsappService } from './whatsapp.service.js';
 
@@ -14,7 +14,7 @@ class ContractService {
   private providers: Map<string, ContractProvider> = new Map();
 
   constructor() {
-    this.providers.set('inhouse', new InHouseContractProvider());
+    this.providers.set(ContratoProvider.INHOUSE, new InHouseContractProvider());
   }
 
   private getProvider(providerName: string): ContractProvider {
@@ -38,7 +38,7 @@ class ContractService {
   }
 
   async criarContrato(authId: string, data: CreateContractDTO) {
-    const { passageiroId, provider: providerName = 'inhouse', ...customTerms } = data;
+    const { passageiroId, provider: providerName = ContratoProvider.INHOUSE, ...customTerms } = data;
     
     // 1. Resolver usuário (condutor)
     const usuario = await this.getUsuarioByAuthId(authId);
@@ -63,17 +63,21 @@ class ContractService {
       throw new AppError('Passageiro não encontrado', 404);
     }
     
-    // 3. Cálculos dinâmicos
+    // 3. Cálculos dinâmicos (Default: 12 meses seguindo o ano escolar)
     const hoje = new Date();
-    const anoVigente = hoje.getFullYear();
-    const mesAtual = hoje.getMonth() + 1;
+    const dataInicio = customTerms.dataInicio || passageiro.data_inicio_transporte || hoje.toISOString().split('T')[0];
     
-    const qtdParcelas = 12 - mesAtual + 1;
+    // Período padrão de 12 meses (ou o que o usuário definir)
+    const qtdParcelas = customTerms.qtdParcelas || 12;
     const valorMensal = customTerms.valorMensal || Number(passageiro.valor_cobranca);
     const valorTotal = valorMensal * qtdParcelas;
     
-    const dataInicio = customTerms.dataInicio || hoje.toISOString().split('T')[0];
-    const dataFim = `${anoVigente}-12-31`;
+    // Calcular data fim baseada em data início + (qtdParcelas - 1) meses para terminar no final do ciclo
+    const dInicio = new Date(dataInicio + 'T12:00:00');
+    const dFim = new Date(dInicio);
+    dFim.setMonth(dInicio.getMonth() + qtdParcelas);
+    dFim.setDate(0); // Último dia do mês anterior ao mês do vencimento final
+    const dataFim = customTerms.dataFim || dFim.toISOString().split('T')[0];
     
     // 4. Preparar dados do contrato
     const dadosContrato: DadosContrato = {
@@ -82,22 +86,23 @@ class ContractService {
       cpfResponsavel: passageiro.cpf_responsavel,
       telefoneResponsavel: passageiro.telefone_responsavel,
       emailResponsavel: passageiro.email_responsavel,
-      enderecoCompleto: `${passageiro.logradouro}, ${passageiro.numero} - ${passageiro.bairro}, ${passageiro.cidade}/${passageiro.estado}`,
+      parentescoResponsavel: passageiro.parentesco_responsavel,
+      enderecoCompleto: formatAddress(passageiro),
       nomeEscola: passageiro.escola.nome,
-      enderecoEscola: `${passageiro.escola.logradouro}, ${passageiro.escola.numero} - ${passageiro.escola.bairro}`,
+      enderecoEscola: formatAddress(passageiro.escola),
       periodo: passageiro.periodo,
-      modalidade: customTerms.modalidade || passageiro.modalidade || 'Ida e Volta',
+      modalidade: customTerms.modalidade || passageiro.modalidade || 'ida_volta',
       valorMensal: valorMensal,
       diaVencimento: customTerms.diaVencimento || passageiro.dia_vencimento,
       
-      ano: anoVigente,
-      dataInicio: customTerms.dataInicio || passageiro.data_inicio_transporte || hoje.toISOString().split('T')[0],
+      ano: dInicio.getFullYear(),
+      dataInicio,
       dataFim,
       valorTotal,
       qtdParcelas,
       valorParcela: valorMensal,
-      multaAtraso: usuario.config_contrato?.multa_atraso || { valor: 10, tipo: 'percentual' },
-      multaRescisao: usuario.config_contrato?.multa_rescisao || { valor: 15, tipo: 'percentual' },
+      multaAtraso: usuario.config_contrato?.multa_atraso || { valor: 10, tipo: ContractMultaTipo.PERCENTUAL },
+      multaRescisao: usuario.config_contrato?.multa_rescisao || { valor: 15, tipo: ContractMultaTipo.PERCENTUAL },
       nomeCondutor: usuario.nome,
       cpfCnpjCondutor: usuario.cpfcnpj,
       telefoneCondutor: usuario.telefone,
@@ -105,6 +110,7 @@ class ContractService {
       modeloVeiculo: `${passageiro.veiculo.marca} ${passageiro.veiculo.modelo}`,
       clausulas: usuario.config_contrato?.clausulas,
       assinaturaCondutorUrl: usuario.assinatura_url,
+      apelidoCondutor: usuario.apelido,
     };
     
     // 5. Gerar token único e criar registro
@@ -119,7 +125,7 @@ class ContractService {
         provider: providerName,
         dados_contrato: dadosContrato,
         status: ContratoStatus.PENDENTE,
-        ano: anoVigente,
+        ano: dInicio.getFullYear(),
         data_inicio: dataInicio,
         data_fim: dataFim,
         valor_total: valorTotal,
@@ -154,12 +160,19 @@ class ContractService {
     
     logger.info({ contratoId: contrato.id }, 'Contrato criado com sucesso');
     
-    const linkAssinatura = providerName === 'inhouse' 
+    const linkAssinatura = providerName === ContratoProvider.INHOUSE 
       ? `${env.FRONT_URL_RESPONSAVEL || env.FRONTEND_URL}/assinar/${tokenAcesso}`
       : response.providerSignatureLink;
 
     if (passageiro.telefone_responsavel) {
-      const mensagem = `Olá ${getFirstName(passageiro.nome_responsavel)}, o contrato do passageiro ${getFirstName(passageiro.nome)} para ${anoVigente} está pronto. Assine aqui: ${linkAssinatura}`;
+      const nomeResponsavel = getFirstName(passageiro.nome_responsavel);
+      const mensagem = `Oi *${nomeResponsavel}*! Tudo bem? 👋\n\n` +
+        `Estou enviando o contrato de transporte escolar do(a) passageiro(a) *${passageiro.nome}* para assinatura digital.\n\n` +
+        `👉 Acesse o link abaixo para visualizar e assinar:\n\n` +
+        `${linkAssinatura}\n\n` +
+        `O contrato terá validade após a assinatura de ambas as partes.\n\n` +
+        `🤝 Fico à disposição em caso de dúvidas.`;
+        
       whatsappService.sendText(passageiro.telefone_responsavel, mensagem)
         .catch(err => logger.error({ err }, 'Erro ao enviar WhatsApp do contrato'));
     }
@@ -213,9 +226,11 @@ class ContractService {
     
     // 4.1 Notificar Responsável
     if (passageiro.telefone_responsavel) {
-      const msgResponsavel = `Olá ${passageiro.nome_responsavel}! Seu contrato de transporte escolar para *${passageiro.nome}* foi assinado com sucesso.\n\n` +
-          `Você pode visualizar o documento final no link abaixo:\n` +
-          `${response.documentoFinalUrl}`;
+      const msgResponsavel = `✅ *Contrato Assinado!*\n\n` +
+          `Oi *${getFirstName(passageiro.nome_responsavel)}*! Seu contrato de transporte escolar para *${getFirstName(passageiro.nome)}* foi assinado com sucesso.\n\n` +
+          `Você pode visualizar o documento final no link abaixo:\n\n` +
+          `${response.documentoFinalUrl}\n\n` +
+          `Desejamos uma ótima parceria! 🚀`;
       
       whatsappService.sendText(passageiro.telefone_responsavel, msgResponsavel)
         .catch(err => logger.error({ err }, 'Erro ao notificar responsável sobre assinatura'));
@@ -224,9 +239,10 @@ class ContractService {
     // 4.2 Notificar Motorista
     if (usuario.telefone) {
       const msgMotorista = `✅ *Contrato Assinado!*\n\n` +
-          `O responsável do passageiro *${getFirstName(passageiro.nome)}*, *${getFirstName(passageiro.nome_responsavel)}*, acaba de assinar o contrato do passageiro *${passageiro.nome}*.\n\n` +
-          `Acesse o documento assinado aqui:\n` +
-          `${response.documentoFinalUrl}`;
+          `*${getFirstName(passageiro.nome_responsavel)}* acabou de assinar o contrato do passageiro *${getFirstName(passageiro.nome)}*.\n\n` +
+          `Acesse o documento assinado aqui:\n\n` +
+          `${response.documentoFinalUrl}\n\n` +
+          `Bora rodar! 🚐💨`;
       
       whatsappService.sendText(usuario.telefone, msgMotorista)
         .catch(err => logger.error({ err }, 'Erro ao notificar motorista sobre assinatura'));
@@ -347,11 +363,28 @@ class ContractService {
     const config = draftConfig || {};
     const savedConfig = usuario.config_contrato || {};
 
-    const multaAtraso = config.multaAtraso || savedConfig.multa_atraso || { valor: 10, tipo: 'percentual' };
-    const multaRescisao = config.multaRescisao || savedConfig.multa_rescisao || { valor: 15, tipo: 'percentual' };
+    const multaAtraso = config.multaAtraso || savedConfig.multa_atraso || { valor: 10, tipo: ContractMultaTipo.PERCENTUAL };
+    const multaRescisao = config.multaRescisao || savedConfig.multa_rescisao || { valor: 15, tipo: ContractMultaTipo.PERCENTUAL };
     const clausulas = config.clausulas || savedConfig.clausulas || [
-        "O serviço consiste no transporte do passageiro no trajeto acordado.",
-        "O pagamento deve ser efetuado até o dia de vencimento escolhido."
+        "O serviço contratado consiste no transporte do passageiro acima citado, no trajeto com origem e destino acordado entre as partes.",
+        "Somente o passageiro CONTRATANTE está autorizado a utilizar-se do objeto deste contrato, sendo vedado o passageiro se fazer acompanhar de colegas, parentes, amigos e etc.",
+        "O transporte ora contratado se refere exclusivamente ao horário regular da escola pré-determinado, não sendo de responsabilidade da CONTRATADA o transporte do passageiro em turno diferente do contratado, em horários de atividades extracurriculares ou que por determinação da escola seja alterado.",
+        "O procedimento de retirada e entrega do passageiro na residência ou local combinado deverá ser acordado entre as partes, definindo um responsável para acompanhar o passageiro.",
+        "A partir do momento que for realizada a entrega do passageiro na escola, a CONTRATADA não é mais responsável pela segurança do passageiro, bem como de seus pertences.",
+        "As partes deverão respeitar os horários previamente combinados de saída dos locais de origem e destino, ficando estabelecido que, caso ocorra mudança no local de origem, destino ou retorno, a CONTRATADA reserva-se o direito de aceitar ou não tais alterações, em razão da modificação de rota, podendo, inclusive, ficar desobrigada da prestação dos serviços previstos neste contrato.",
+        "Fica estabelecido que, caso a CONTRATANTE ou algum outro responsável pelo passageiro for buscá-lo no lugar da CONTRATADA, a CONTRATANTE deverá comunicar à CONTRATADA e à escola previamente.",
+        "A CONTRATANTE obriga-se a informar a CONTRATADA com um prazo de até duas horas antes do horário se o passageiro não for comparecer à escola naquele dia.",
+        "Está proibido o consumo de alimentos no interior do veículo escolar, com a finalidade de evitar e prevenir acidentes, como engasgos, ou constrangimento de outros passageiros, além de manter a limpeza do veículo.",
+        "Para os efeitos deste contrato, o transporte pactuado ficará temporariamente suspenso no caso de o passageiro apresentar doença infectocontagiosa, visando preservar a saúde e a segurança das crianças transportadas e dos prestadores do serviço.",
+        "O veículo passa por duas vistorias anuais ( uma em cada semestre), onde nesse dia não haverá transporte e assim visando a segurança do mesmo. Avisaremos com antecedência a data das vistorias.",
+        "A CONTRATANTE pagará à CONTRATADA o valor total de R$ 2280,00 (dois mil e duzentos e oitenta reais), conforme forma de pagamento e parcelamento previamente acordados entre as partes, sendo o pagamento devido integralmente e de forma regular inclusive durante os períodos de férias dos meses de julho, dezembro e janeiro, bem como em casos de recessos, greves, afastamento temporário do passageiro por motivo de doença, férias, viagens, pandemia ou qualquer outro motivo, inclusive de força maior.",
+        "As parcelas deverão ser pagas até o dia estabelecido nas CONDIÇÕES DE VALOR, durante todo o período de vigência do contrato. Em caso de atraso no pagamento, a CONTRATANTE poderá estar sujeita à multa prevista nas CONDIÇÕES DE VALOR, sendo que, após a notificação do atraso, a CONTRATADA poderá conceder um prazo para regularização. Persistindo o não pagamento da parcela em atraso, a prestação do serviço poderá ser suspensa até que a situação seja regularizada.",
+        "Início do ano terá reajuste da mensalidade e um novo contrato será emitido.",
+        "Em caso de comportamento inadequado, desobediência às normas de segurança ou atitude antissocial, o passageiro poderá sofrer advertência por escrito e, em caso de reincidência, ocorrerá a rescisão do contrato motivada.",
+        "O contrato pode ser rescindido imotivadamente por qualquer das partes, com aplicação de multa rescisória conforme percentual descrito nas condições de valor sobre as parcelas pendentes, exceto quando a rescisão for motivada.",
+        "É convencionado que a CONTRATADA não será responsabilizada pela vigilância de objetos pessoais, material escolar, dinheiro, joias ou quaisquer pertences eventualmente esquecidos pelo passageiro no veículo ou no estabelecimento escolar.",
+        "As partes reconhecem o presente contrato como título executivo extrajudicial nos termos do artigo 784, XI, do Código de Processo Civil, sem prejuízo da opção pelo processo de conhecimento para obtenção de título executivo judicial, nos termos do artigo 785.",
+        "O serviço do transporte escolar será prestado até o dia 15 de Dezembro."
     ];
 
     const dadosContrato: DadosContrato = {
@@ -360,11 +393,12 @@ class ContractService {
       cpfResponsavel: "000.000.000-00",
       telefoneResponsavel: "(11) 99999-9999",
       emailResponsavel: "exemplo@email.com",
+      parentescoResponsavel: "pai",
       enderecoCompleto: "Rua das Flores, 123 - Centro, Cidade/EST",
       nomeEscola: "Escola Municipal de Exemplo",
       enderecoEscola: "Av. Principal, 456 - Bairro",
-      periodo: "Manhã",
-      modalidade: 'Ida e Volta',
+      periodo: PeriodoEnum.MANHA,
+      modalidade: PassageiroModalidade.IDA_VOLTA,
       valorMensal: 200,
       diaVencimento: 10,
       ano: anoVigente,
@@ -390,7 +424,7 @@ class ContractService {
     };
 
     // 3. Gerar PDF temporário usando o provider InHouse
-    const provider = this.getProvider('inhouse') as InHouseContractProvider;
+    const provider = this.getProvider(ContratoProvider.INHOUSE) as InHouseContractProvider;
     const pdfDoc = await provider.criarPdfBase(dadosContrato);
     return pdfDoc.save();
   }

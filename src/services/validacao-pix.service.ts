@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 import { DRIVER_EVENT_PIX_KEY_VALIDATED, DRIVER_EVENT_PIX_KEY_VALIDATION_FAILED } from "../config/constants.js";
-import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { PixKeyStatus, PixKeyType, TransactionStatus } from "../types/enums.js";
@@ -82,12 +81,13 @@ export async function cadastrarOuAtualizarChavePix(
  * Realiza a validação ativa (envia R$ 0,01)
  */
 export async function iniciarValidacaoPix(usuarioId: string, chavePix: string, tipoChave?: string) {
-  logger.info({ usuarioId, chavePix }, "Iniciando validação de Chave PIX (Micro-pagamento)");
+  logger.info({ usuarioId, chavePix }, "Iniciando validação de Chave PIX");
 
   const xIdIdempotente = crypto.randomUUID();
 
   try {
     // 1. Registrar intenção de validação (Tabela Temporária)
+    // Importante para webhooks (caso Inter/Async)
     const { error: insertError } = await supabaseAdmin
       .from("pix_validacao_pendente")
       .insert({
@@ -98,89 +98,66 @@ export async function iniciarValidacaoPix(usuarioId: string, chavePix: string, t
       });
 
     if (insertError) {
-        // Logar e falhar
         logger.error({ error: insertError.message }, "Erro DB ao registrar validação pendente");
         throw new Error(`Erro ao criar registro de validação pendente: ${insertError.message}`);
     }
 
-    // 2. Realizar Micro-Pagamento (R$ 0,01)
+    // 2. Chamar Validação do Provider (Abstraída)
     const provider = paymentService.getProvider();
-    const resultado = await provider.realizarTransferencia({
-      valor: 0.01,
-      chaveDestino: chavePix,
-      descricao: `Validacao Van360 ${usuarioId.substring(0, 8)}`,
-      xIdIdempotente
-    });
+    const resultado = await provider.validarChavePix(chavePix, xIdIdempotente);
 
     logger.info({ 
       usuarioId, 
-      xIdIdempotente, 
-      gatewayStatus: resultado.status, 
-      endToEndId: resultado.endToEndId,
-      fullResult: resultado 
-    }, "Micro-pagamento enviado. Aguardando Webhook ou Processamento.");
+      resultado,
+      provider: provider.name
+    }, "Resultado da Validação do Provider");
 
-    logger.debug({ 
-        action: "micro_payment_result",
-        usuarioId,
-        status: resultado.status,
-        beneficiario: {
-            nome: resultado.nomeBeneficiario,
-            cpfCnpj: resultado.cpfCnpjBeneficiario
-        }
-    }, "Detalhes do Beneficiário retornados pelo Gateway");
+    if (resultado.valido) {
+         // Se temos nome, é sucesso instantâneo (C6, Mock ou Inter síncrono)
+         if (resultado.nome) {
+             await supabaseAdmin
+                 .from("pix_validacao_pendente")
+                 .update({
+                     status: TransactionStatus.SUCESSO,
+                     end_to_end_id: `VALIDADO-${provider.name}`, // C6 não gera E2E de pagto, mas Inter gera.
+                 })
+                 .eq("x_id_idempotente", xIdIdempotente);
 
-     // 3. Atualizar registro com resultado inicial
-     const novoStatus = resultado.status === "PAGO" || resultado.status === "REALIZADO" ? TransactionStatus.SUCESSO : TransactionStatus.PROCESSAMENTO;
-            
-     await supabaseAdmin
-         .from("pix_validacao_pendente")
-         .update({
-             status: novoStatus,
-             end_to_end_id: resultado.endToEndId,
-         })
-         .eq("x_id_idempotente", xIdIdempotente);
+             await confirmarChaveUsuario(
+                 usuarioId, 
+                 chavePix, 
+                 tipoChave || "DESCONHECIDO", 
+                 resultado.nome, 
+                 resultado.cpfCnpj || ""
+             );
+             
+             logger.info({ usuarioId }, "Chave PIX validada com sucesso (Síncrono).");
+         } else {
+             // Válido mas sem nome = Processamento Async (Inter Pendente)
+             // O webhook virá depois com o xIdIdempotente
+             await supabaseAdmin
+             .from("pix_validacao_pendente")
+             .update({ status: TransactionStatus.PROCESSAMENTO })
+             .eq("x_id_idempotente", xIdIdempotente);
 
-     // Se SUCESSO imediato, atualizar usuário
-     // Passamos os dados do beneficiário retornados pelo Gateway, se disponíveis
-     if (novoStatus === TransactionStatus.SUCESSO) {
-         await confirmarChaveUsuario(
-             usuarioId, 
-             chavePix, 
-             tipoChave || "DESCONHECIDO", 
-             resultado.nomeBeneficiario || "VALIDADO AUTO", 
-             resultado.cpfCnpjBeneficiario || ""
-         );
-     }
-
-    // BLOCK MOCK: Auto-validar se estiver em ambiente de teste E falhou/ficou processando
-    // (Se já deu sucesso acima, não precisa mock)
-    const isMock = env.PAYMENT_MOCK_MODE === "true" || (env.PAYMENT_MOCK_MODE as any) === true;
-    if (isMock && novoStatus !== TransactionStatus.SUCESSO) {
-      logger.warn({ usuarioId }, "MOCK MODE: Auto-validando chave PIX em 3 segundos...");
-
-      setTimeout(async () => {
-        try {
-          // Atualiza usuário
-           await confirmarChaveUsuario(usuarioId, chavePix, tipoChave || "DESCONHECIDO", "MOCK USER AUTO", chavePix);
-
-          // Limpa pendencia
-          await supabaseAdmin.from("pix_validacao_pendente")
-            .delete()
-            .eq("x_id_idempotente", xIdIdempotente);
-
-          logger.info({ usuarioId }, "MOCK MODE: Chave PIX auto-validada com sucesso.");
-        } catch (mockErr) {
-          logger.error({ mockErr }, "Erro ao auto-validar em MOCK MODE");
-        }
-      }, 3000);
+             logger.info({ usuarioId }, "Validação PIX iniciada (Async). Aguardando Webhook.");
+         }
+    } else {
+        // Inválido (Erro imediato)
+        logger.warn({ usuarioId, erro: resultado.erro }, "Chave PIX considerada inválida pelo Provider.");
+        
+        // Marcar falha no pendente
+        await supabaseAdmin
+             .from("pix_validacao_pendente")
+             .update({ status: TransactionStatus.ERRO })
+             .eq("x_id_idempotente", xIdIdempotente);
+             
+        // Notificar falha e atualizar status do usuário (FALHA_VALIDACAO)
+        await validacaoPixService.rejeitarValidacao(usuarioId, resultado.erro || "Falha na validação do Provedor");
     }
 
   } catch (err: any) {
-    // Falha Imediata
-    logger.error({ error: err.message, usuarioId }, "Falha ao iniciar validação PIX.");
-      // Registrar falha no banco se possível
-      // Mas como usamos xIdIdempotente gerado agora, se falhar o insert inicial, nem temos ID para update.
+    logger.error({ error: err.message, usuarioId }, "Falha crítica ao executar validação PIX.");
   }
 }
 

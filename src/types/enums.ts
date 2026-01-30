@@ -117,6 +117,7 @@ export enum ConfigKey {
 export enum PaymentGateway {
   INTER = "inter",
   C6 = "c6",
+  MOCK = "mock",
 }
 
 export enum ContratoStatus {
@@ -150,4 +151,22 @@ export enum ParentescoResponsavel {
   MADRASTA = "madrasta",
   RESPONSAVEL_LEGAL = "responsavel_legal",
   OUTRO = "outro"
+}
+
+export enum ContratoProvider {
+  INHOUSE = "inhouse",
+  ASSINAFY = "assinafy",
+  DOCUSIGN = "docusign"
+}
+
+export enum ContractMultaTipo {
+  PERCENTUAL = "percentual",
+  FIXO = "fixo"
+}
+
+export enum PeriodoEnum {
+  MANHA = "manha",
+  TARDE = "tarde",
+  NOITE = "noite",
+  INTEGRAL = "integral"
 }
