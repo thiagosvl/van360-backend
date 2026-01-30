@@ -10,7 +10,6 @@ export const env = {
   CRON_SECRET: process.env.CRON_SECRET || "super_secret_cron_key",
   BACKEND_URL: process.env.BACKEND_URL || "http://host.docker.internal:3000",
   FRONTEND_URL: process.env.FRONTEND_URL || "http://localhost:8080",
-  FRONT_URL_RESPONSAVEL: process.env.FRONT_URL_RESPONSAVEL || "http://localhost:8080",
   
   // Observability
 

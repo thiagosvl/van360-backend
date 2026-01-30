@@ -3,6 +3,7 @@ import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
 import { AssinaturaBillingType, AssinaturaCobrancaStatus, ConfigKey } from "../types/enums.js";
 import { getConfigNumber } from "./configuracao.service.js";
+import { MockPaymentType, mockAutomationService } from "./mock-automation.service.js";
 import { paymentService } from "./payment.service.js";
 
 export const assinaturaCobrancaService = {
@@ -196,6 +197,15 @@ export const assinaturaCobrancaService = {
         if (updateError) {
             logger.error({ error: updateError.message, cobrancaId }, "Erro ao atualizar cobrança com dados do PIX");
             throw new Error("Erro ao salvar dados do PIX.");
+        }
+
+        // --- AUTOMAÇÃO MOCK ---
+        if (paymentService.isMock()) {
+            mockAutomationService.schedulePayment(
+              pixData.gatewayTransactionId,
+              Number(cobranca.valor),
+              MockPaymentType.ASSINATURA
+            );
         }
 
         return {

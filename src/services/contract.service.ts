@@ -161,7 +161,7 @@ class ContractService {
     logger.info({ contratoId: contrato.id }, 'Contrato criado com sucesso');
     
     const linkAssinatura = providerName === ContratoProvider.INHOUSE 
-      ? `${env.FRONT_URL_RESPONSAVEL || env.FRONTEND_URL}/assinar/${tokenAcesso}`
+      ? `${env.FRONTEND_URL}/assinar/${tokenAcesso}`
       : response.providerSignatureLink;
 
     if (passageiro.telefone_responsavel) {

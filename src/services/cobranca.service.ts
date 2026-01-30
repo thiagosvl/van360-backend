@@ -11,6 +11,7 @@ import { planRules } from "./plan-rules.service.js";
 
 import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
 import { CobrancaOrigem, CobrancaStatus } from "../types/enums.js";
+import { MockPaymentType, mockAutomationService } from "./mock-automation.service.js";
 
 interface CreateCobrancaOptions {
   gerarPixAsync?: boolean; // Se true, apenas enfileira. Se false, gera na hora (síncrono).
@@ -118,6 +119,15 @@ export const cobrancaService = {
             qr_code_payload: pixResult.qrCodePayload,
             location_url: pixResult.location
           };
+
+          // --- AUTOMAÇÃO MOCK ---
+          if (paymentService.isMock()) {
+            mockAutomationService.schedulePayment(
+              pixResult.gatewayTransactionId,
+              valorNumerico,
+              MockPaymentType.COBRANCA
+            );
+          }
         } catch (error: any) {
           logger.error({ error: error.message, passageiroId: data.passageiro_id }, "Falha ao gerar PIX Síncrono.");
           throw new AppError(`Falha ao gerar PIX (Banco): ${error.message}`, 502); // 502 Bad Gateway (Upstream error)
