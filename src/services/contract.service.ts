@@ -177,7 +177,12 @@ class ContractService {
         .catch(err => logger.error({ err }, 'Erro ao enviar WhatsApp do contrato'));
     }
     
-    return { ...contrato, minuta_url: response.documentUrl, linkAssinatura };
+    return { 
+      ...contrato, 
+      minuta_url: response.documentUrl, 
+      linkAssinatura,
+      contrato_url: response.documentUrl 
+    };
   }
 
   async processarAssinatura(tokenAcesso: string, assinaturaBase64: string, metadados: SignatureMetadata) {
@@ -245,10 +250,13 @@ class ContractService {
           `Bora rodar! 🚐💨`;
       
       whatsappService.sendText(usuario.telefone, msgMotorista)
-        .catch(err => logger.error({ err }, 'Erro ao notificar motorista sobre assinatura'));
+        .catch(err => logger.error({ err }, 'Erro ao notify driver about signature'));
     }
     
-    return response;
+    return {
+      ...response,
+      contrato_url: response.documentoFinalUrl
+    };
 
   }
 

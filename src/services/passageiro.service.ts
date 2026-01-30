@@ -318,7 +318,9 @@ const getPassageiro = async (id: string): Promise<any> => {
         ...data,
         status_contrato: statusContrato,
         contrato_id: contratoId,
-        contrato_url: contratoUrl
+        contrato_url: contratoUrl,
+        minuta_url: ultimoContrato?.minuta_url,
+        contrato_final_url: ultimoContrato?.contrato_final_url
     };
 };
 
@@ -374,6 +376,8 @@ const listPassageiros = async (
                  status_contrato: ultimo.status,
                  contrato_id: ultimo.id,
                  contrato_url: ultimo.contrato_final_url || ultimo.minuta_url,
+                 minuta_url: ultimo.minuta_url,
+                 contrato_final_url: ultimo.contrato_final_url,
                  contratos: undefined // remove raw array to clean up
              };
         }

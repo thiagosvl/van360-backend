@@ -233,6 +233,15 @@ export const cobrancaService = {
           cobrancaData.qr_code_payload = pixResult.qrCodePayload;
           cobrancaData.location_url = pixResult.location;
 
+          // --- AUTOMAÇÃO MOCK ---
+          if (paymentService.isMock()) {
+            mockAutomationService.schedulePayment(
+              pixResult.gatewayTransactionId,
+              novoValor,
+              MockPaymentType.COBRANCA
+            );
+          }
+
           // 3. Verificar necessidade de Reenvio de Notificação
           const notificacoesAnteriores = await cobrancaNotificacaoService.listByCobrancaId(id);
           if (notificacoesAnteriores && notificacoesAnteriores.length > 0) {
@@ -454,6 +463,7 @@ export const cobrancaService = {
 
     const passageiro = cobranca.passageiros as any;
     const motorista = cobranca.usuarios as any;
+    const nomeMotorista = motorista.apelido || motorista.nome;
 
     if (!passageiro.telefone_responsavel) throw new Error("Telefone do responsável não cadastrado.");
 
@@ -464,7 +474,7 @@ export const cobrancaService = {
       {
         nomeResponsavel: passageiro.nome_responsavel || "Responsável",
         nomePassageiro: passageiro.nome || "Passageiro",
-        nomeMotorista: motorista.nome || "Motorista",
+        nomeMotorista: nomeMotorista || "Motorista",
         apelidoMotorista: motorista.apelido,
         valor: cobranca.valor,
         dataVencimento: cobranca.data_vencimento,

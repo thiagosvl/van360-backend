@@ -274,6 +274,15 @@ export const assinaturaCobrancaService = {
                 logger.error({ updateError, cobrancaId: cobranca.id }, "Erro ao atualizar cobrança com dados do PIX");
             }
 
+            // --- AUTOMAÇÃO MOCK ---
+            if (paymentService.isMock()) {
+                mockAutomationService.schedulePayment(
+                    pixData.gatewayTransactionId,
+                    valor,
+                    MockPaymentType.ASSINATURA
+                );
+            }
+
         } catch (err: any) {
             logger.error({ err, cobrancaId: cobranca.id }, "Falha ao gerar PIX para ativação.");
             throw new AppError("Não foi possível gerar os dados para pagamento PIX. Por favor, tente novamente.");
