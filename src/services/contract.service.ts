@@ -271,14 +271,14 @@ class ContractService {
         .from('passageiros')
         .select(`
           id, 
-          nome, 
+          nome,
+          ativo, 
           nome_responsavel, 
           telefone_responsavel,
           valor_cobranca,
           dia_vencimento
         `, { count: 'exact' })
-        .eq('usuario_id', usuarioId)
-        .eq('ativo', true);
+        .eq('usuario_id', usuarioId);
 
       if (search) {
         query = query.or(`nome.ilike.%${search}%,nome_responsavel.ilike.%${search}%`);
@@ -309,7 +309,8 @@ class ContractService {
           tipo: 'passageiro',
           passageiro: {
             nome: p.nome,
-            nome_responsavel: p.nome_responsavel
+            nome_responsavel: p.nome_responsavel,
+            ativo: p.ativo
           },
           dados_contrato: {
             valorMensal: Number(p.valor_cobranca),
@@ -328,7 +329,7 @@ class ContractService {
     // Listagem de Contratos Reais (Pendentes ou Assinados)
     let query = supabaseAdmin
       .from('contratos')
-      .select('*, passageiro:passageiros!inner(nome, nome_responsavel)', { count: 'exact' })
+      .select('*, passageiro:passageiros!inner(nome, nome_responsavel, ativo)', { count: 'exact' })
       .eq('usuario_id', usuarioId)
       .order('created_at', { ascending: false });
     
@@ -388,8 +389,7 @@ class ContractService {
     let querySemContrato = supabaseAdmin
       .from('passageiros')
       .select('*', { count: 'exact', head: true })
-      .eq('usuario_id', usuarioId)
-      .eq('ativo', true);
+      .eq('usuario_id', usuarioId);
 
     if (idsIgnorar.length > 0) {
       querySemContrato = querySemContrato.not('id', 'in', `(${idsIgnorar.join(',')})`);
