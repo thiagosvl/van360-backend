@@ -1,4 +1,5 @@
 import { FastifyInstance } from "fastify";
+import { AppController } from "../controllers/app.controller.js";
 import authRoutes from "./auth.routes.js";
 import cobrancaRoutes from "./cobranca.routes.js";
 import escolaRoutes from "./escola.routes.js";
@@ -15,6 +16,9 @@ import veiculoRoutes from "./veiculo.routes.js";
 export async function appRoutes(app: FastifyInstance) {
   // Public routes
   app.register(publicRoutes);
+  
+  // OTA Updates
+  app.get("/updates", AppController.checkUpdates);
   
   // Auth routes
   app.register(authRoutes, { prefix: "/auth" });
