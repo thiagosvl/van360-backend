@@ -28,7 +28,6 @@ export async function createApp(): Promise<FastifyInstance> {
       : [];
 
     const defaultOrigins = [
-      "http://localhost:5173", 
       "http://localhost:8080",
       "https://localhost", // Android Capacitor
       "capacitor://localhost", // iOS Capacitor

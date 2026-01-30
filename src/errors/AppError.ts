@@ -11,5 +11,6 @@ export class AppError extends Error {
 
     // Captura o stack trace, excluindo o construtor dessa classe
     Error.captureStackTrace(this, this.constructor);
+    this.name = 'AppError';
   }
 }

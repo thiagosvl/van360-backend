@@ -1,7 +1,7 @@
 export const env = {
   PORT: process.env.PORT || 3000,
   NODE_ENV: process.env.NODE_ENV || "development",
-  ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS || "http://localhost:5173,http://localhost:8080",
+  ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS || "http://localhost:8080",
 
   PAYMENT_MOCK_MODE: process.env.PAYMENT_MOCK_MODE || "false",
   SUPABASE_URL: process.env.SUPABASE_URL!,
@@ -10,8 +10,11 @@ export const env = {
   EVOLUTION_API_KEY: process.env.EVOLUTION_API_KEY!,
   CRON_SECRET: process.env.CRON_SECRET || "super_secret_cron_key",
   BACKEND_URL: process.env.BACKEND_URL || "http://host.docker.internal:3000",
+  FRONTEND_URL: process.env.FRONTEND_URL || "http://localhost:8080",
+  FRONT_URL_RESPONSAVEL: process.env.FRONT_URL_RESPONSAVEL || "http://localhost:8080",
   
   // Observability
+
   SENTRY_DSN: process.env.SENTRY_DSN,
   SENTRY_ENVIRONMENT: process.env.SENTRY_ENVIRONMENT,
   SENTRY_TRACES_SAMPLE_RATE: process.env.SENTRY_TRACES_SAMPLE_RATE || "0.1",

@@ -3,9 +3,16 @@ import { z } from 'zod';
 export const createContractSchema = z.object({
   passageiroId: z.string().uuid('ID do passageiro inválido'),
   provider: z.enum(['inhouse', 'assinafy']).default('inhouse'),
+  // Termos opcionais para sobrescrever os dados do passageiro/padrão
+  valorMensal: z.number().positive().optional(),
+  diaVencimento: z.number().int().min(1).max(31).optional(),
+  dataInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  dataFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  modalidade: z.string().optional(),
 });
 
 export type CreateContractDTO = z.infer<typeof createContractSchema>;
+
 
 export const signContractSchema = z.object({
   assinatura: z.string().min(1, 'Assinatura é obrigatória'),

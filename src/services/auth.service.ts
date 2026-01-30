@@ -1,8 +1,8 @@
 import {
-    DRIVER_EVENT_ACTIVATION,
-    DRIVER_EVENT_WELCOME_TRIAL,
-    PLANO_ESSENCIAL,
-    PLANO_PROFISSIONAL
+  DRIVER_EVENT_ACTIVATION,
+  DRIVER_EVENT_WELCOME_TRIAL,
+  PLANO_ESSENCIAL,
+  PLANO_PROFISSIONAL
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
@@ -551,8 +551,10 @@ export async function iniciarRegistroplanoProfissional(
     // Na contratação inicial, data de vencimento = data de contratação (hoje)
     const dataVencimentoCobranca = anchorDate;
 
+    const nomePlano = (planoSelecionado as any)?.parent?.nome || (planoSelecionado as any)?.nome;
+
     // Preparar descrição
-    const descricaoCobranca = `Ativação de Assinatura - Plano ${planoSelecionado.nome}`;
+    const descricaoCobranca = `Ativação de Assinatura - Plano ${nomePlano}`;
 
     logger.info(`[AuthService] Iniciando geração de cobrança de ativação para o usuário ${usuarioId}`);
     const activationResult = await assinaturaCobrancaService.gerarCobrancaAtivacao({

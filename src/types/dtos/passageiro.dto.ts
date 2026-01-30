@@ -39,6 +39,13 @@ export const createPassageiroSchema = z.object({
 
     periodo: z.string().optional().or(z.literal("")).transform(v => v ? v.toLowerCase() : undefined),
     genero: optionalString,
+    
+    // Novos Campos
+    modalidade: z.string().min(1, "Modalidade é obrigatória").optional().or(z.literal("")).transform(v => v === "" ? undefined : v),
+    data_nascimento: z.string().optional().or(z.literal("")).transform(v => v ? new Date(v) : undefined), // Aceita string ISO e converte
+    parentesco_responsavel: optionalString,
+    data_inicio_transporte: z.string().optional().or(z.literal("")).transform(v => v ? new Date(v) : undefined),
+
 }).passthrough(); // Permite outros campos não estritos por enquanto (migração suave)
 
 export type CreatePassageiroDTO = z.infer<typeof createPassageiroSchema>;

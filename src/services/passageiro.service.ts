@@ -4,7 +4,7 @@ import { automationService } from "./automation.service.js";
 import { subscriptionLifecycleService } from "./subscription-lifecycle.service.js";
 
 import { CreatePassageiroDTO, ListPassageirosFiltersDTO, UpdatePassageiroDTO } from "../types/dtos/passageiro.dto.js";
-import { PassageiroDesativacaoCobrancaAutomaticaMotivo } from "../types/enums.js";
+import { ContratoStatus, PassageiroDesativacaoCobrancaAutomaticaMotivo } from "../types/enums.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 
@@ -40,10 +40,17 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO> & Record<stri
     if (data.observacoes !== undefined) prepared.observacoes = data.observacoes ? cleanString(data.observacoes, true) : null;
     
     // Detalhes
-    if (data.periodo !== undefined) prepared.periodo = data.periodo ? cleanString(data.periodo.toLocaleLowerCase(), false) : null;
-    if (data.genero !== undefined) prepared.genero = data.genero ? cleanString(data.genero, true) : null;
+    if (data.periodo !== undefined) prepared.periodo = data.periodo ? cleanString(data.periodo.toLocaleLowerCase()) : null;
+    if (data.genero !== undefined) prepared.genero = data.genero ? cleanString(data.genero) : null;
     if (data.valor_cobranca !== undefined) prepared.valor_cobranca = typeof data.valor_cobranca === "string" ? moneyToNumber(data.valor_cobranca) : (data.valor_cobranca || 0);
     if (data.dia_vencimento !== undefined) prepared.dia_vencimento = data.dia_vencimento;
+    
+    // Novos Campos
+    if (data.modalidade !== undefined) prepared.modalidade = data.modalidade;
+    if (data.data_nascimento !== undefined) prepared.data_nascimento = data.data_nascimento;
+    if (data.parentesco_responsavel !== undefined) prepared.parentesco_responsavel = data.parentesco_responsavel;
+    if (data.data_inicio_transporte !== undefined) prepared.data_inicio_transporte = data.data_inicio_transporte;
+    
     
     // Controle
     if (data.ativo !== undefined) prepared.ativo = data.ativo;
@@ -60,7 +67,7 @@ const createPassageiro = async (data: CreatePassageiroDTO): Promise<any> => {
     // Validar limites se Cobrança Automática estiver ativada
     if (data.enviar_cobranca_automatica) {
         try {
-            await subscriptionLifecycleService.verificarLimiteAutonacao(data.usuario_id, 1);
+            await subscriptionLifecycleService.verificarLimiteAutomacao(data.usuario_id, 1);
         } catch (error: any) {
              // Traduzir erro ou repassar
              if (error.message.includes("LIMIT_EXCEEDED")) {
@@ -91,11 +98,38 @@ const createPassageiro = async (data: CreatePassageiroDTO): Promise<any> => {
         }
     }
 
+    // 2. Trigger de Contrato Automático (Se Profissional e Configurado)
+    // Buscamos configuração do usuário
+    const { data: usuario } = await supabaseAdmin
+        .from("usuarios")
+        .select("config_contrato, auth_uid")
+        .eq("id", data.usuario_id)
+        .single();
+    
+    if (usuario?.config_contrato?.usar_contratos && usuario?.config_contrato?.configurado && usuario?.auth_uid) {
+        try {
+            // Import dinâmico ou garantir que contractService esteja no topo
+            const { contractService } = await import("./contract.service.js");
+            // Dispara criação (async sem await blocking total se quisermos performance, mas melhor garantir aqui)
+            await contractService.criarContrato(usuario.auth_uid, {
+                passageiroId: inserted.id,
+                provider: 'inhouse'
+            });
+        } catch (err) {
+            console.error("[createPassageiro] Falha ao disparar contrato automático", err);
+            // Não falha a criação do passageiro se o contrato der erro, apenas loga
+        }
+    }
+
     return inserted;
 };
 
 const updatePassageiro = async (id: string, data: UpdatePassageiroDTO): Promise<any> => {
     if (!id) throw new Error("ID do passageiro é obrigatório");
+
+    // 1. Buscar estado ATUAL (antes do update) para comparações
+    const estadoAnterior = await getPassageiro(id);
+    if (!estadoAnterior) throw new AppError("Passageiro não encontrado", 404);
 
     const passageiroData = _preparePassageiroData(data, undefined, true);
     
@@ -103,16 +137,12 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO): Promise<
     if (data.enviar_cobranca_automatica !== undefined) {
         // Se tentando ativar, validar se tem plano Profissional e Limites
         if (data.enviar_cobranca_automatica === true) {
-            // Se o passageiro já estava marcado como automático E ativo, não conta como "+1" novo, 
-            // mas a função verificarLimiteAutonacao do service conta quantos JÁ existem no banco.
-            
-            // Buscar estado atual para saber se é incremento
-            const estadoAtual = await getPassageiro(id);
-            const isIncremento = !estadoAtual.enviar_cobranca_automatica; // Se era false, vira true => +1
+            // Se o passageiro já estava marcado como automático E ativo, não conta como "+1" novo
+            const isIncremento = !estadoAnterior.enviar_cobranca_automatica; // Se era false, vira true => +1
 
             if (isIncremento) {
                 try {
-                    await subscriptionLifecycleService.verificarLimiteAutonacao(estadoAtual.usuario_id, 1);
+                    await subscriptionLifecycleService.verificarLimiteAutomacao(estadoAnterior.usuario_id, 1);
                 } catch (err: any) {
                      // Repassar erro de limite
                      throw new Error(err.message);
@@ -139,11 +169,97 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO): Promise<
     if (error) throw error;
 
     // Safety Net: Verificar se precisa gerar cobrança do Mês Seguinte (Pós dia 25) após ativação
-    if (data.enviar_cobranca_automatica === true) {
+    // Só executamos se a automação foi ATIVADA nesta transação (não estava ativa antes)
+    const automacaoFoiAtivada = data.enviar_cobranca_automatica === true && estadoAnterior.enviar_cobranca_automatica !== true;
+    
+    if (automacaoFoiAtivada) {
         try {
+            console.log("[updatePassageiro] Automação ativada tardiamente. Verificando geração mês seguinte...");
             await automationService.verificarGerarCobrancaMesSeguinte(updated.id, updated, updated.usuario_id);
         } catch (err) {
              console.error("[updatePassageiro] Falha na safety net de cobrança futura", err);
+        }
+    }
+
+    // 2. Lógica de Substituição de Contrato
+    // Helper simples para valor do DTO
+    const getValorNumerico = (v: any) => typeof v === 'string' ? moneyToNumber(v) : v;
+
+    const valorNovo = data.valor_cobranca !== undefined ? getValorNumerico(data.valor_cobranca) : Number(estadoAnterior.valor_cobranca);
+    const valorAntigo = Number(estadoAnterior.valor_cobranca);
+    
+    const vencimentoNovo = data.dia_vencimento !== undefined ? Number(data.dia_vencimento) : Number(estadoAnterior.dia_vencimento);
+    const vencimentoAntigo = Number(estadoAnterior.dia_vencimento);
+
+    const nomeNovo = data.nome ? cleanString(data.nome, true) : estadoAnterior.nome;
+    const nomeAntigo = estadoAnterior.nome;
+
+    const nomeRespNovo = data.nome_responsavel ? cleanString(data.nome_responsavel, true) : estadoAnterior.nome_responsavel;
+    const nomeRespAntigo = estadoAnterior.nome_responsavel;
+
+    const houveMudancaContratual = 
+        (Math.abs(valorNovo - valorAntigo) > 0.01) || 
+        (vencimentoNovo !== vencimentoAntigo) ||
+        (nomeNovo !== nomeAntigo) ||
+        (nomeRespNovo !== nomeRespAntigo);
+
+    if (houveMudancaContratual) {
+        // Trigger de substituição
+        const { data: usuario } = await supabaseAdmin
+            .from("usuarios")
+            .select("config_contrato, auth_uid")
+            .eq("id", updated.usuario_id)
+            .single();
+
+        if (usuario?.config_contrato?.usar_contratos && usuario?.config_contrato?.configurado && usuario?.auth_uid) {
+            try {
+                const { contractService } = await import("./contract.service.js");
+                
+                console.log(`[updatePassageiro] Substituindo contrato passageiro ${id}. Mudanças detectadas.`);
+
+                // Lógica de Histórico Limpo:
+                // Se o último contrato ativo for PENDENTE (não assinado), excluímos ele (pois é "draft" irrelevante).
+                // Se for ASSINADO, marcamos como substituído (histórico real).
+                const { data: activeContracts } = await supabaseAdmin
+                    .from("contratos")
+                    .select("id, status")
+                    .eq("passageiro_id", id)
+                    .in("status", [ContratoStatus.PENDENTE, ContratoStatus.ASSINADO])
+                    .order("created_at", { ascending: false });
+
+                if (activeContracts && activeContracts.length > 0) {
+                    const latest = activeContracts[0];
+
+                    if (latest.status === ContratoStatus.PENDENTE) {
+                        // Contrato pendente anterior é descartável
+                        console.log(`[updatePassageiro] Removendo contrato pendente anterior (${latest.id}) para limpeza.`);
+                        await supabaseAdmin.from("contratos").delete().eq("id", latest.id);
+
+                        // Se existirem outros "sobrando" (ex: bug de múltiplos ativos), aposentamos eles
+                        if (activeContracts.length > 1) {
+                            const othersIds = activeContracts.slice(1).map(c => c.id);
+                            await supabaseAdmin
+                                .from("contratos")
+                                .update({ status: ContratoStatus.SUBSTITUIDO })
+                                .in("id", othersIds);
+                        }
+                    } else {
+                        // Último era Assinado (Histórico válido). Aposentamos todos os ativos para criar o novo.
+                        const allIds = activeContracts.map(c => c.id);
+                        await supabaseAdmin
+                            .from("contratos")
+                            .update({ status: ContratoStatus.SUBSTITUIDO })
+                            .in("id", allIds);
+                    }
+                } 
+                
+                await contractService.criarContrato(usuario.auth_uid, {
+                    passageiroId: id,
+                    provider: 'inhouse'
+                });
+            } catch (err) {
+                console.error("[updatePassageiro] Falha ao substituir contrato", err);
+            }
         }
     }
 
@@ -179,12 +295,31 @@ const getPassageiro = async (id: string): Promise<any> => {
         .select(`
             *,
             escola:escolas(id, nome),
-            veiculo:veiculos(id, placa, modelo)
+            veiculo:veiculos(id, placa, modelo),
+            contratos(id, status, created_at, minuta_url, contrato_final_url)
         `)
         .eq("id", id)
+        .order('created_at', { foreignTable: 'contratos', ascending: false })
+        .limit(1, { foreignTable: 'contratos' })
         .single();
+
     if (error) throw error;
-    return data;
+    
+    // Transform to flat property for convenience/security? 
+    // Or just return the array.
+    // Let's attach a 'status_contrato_atual' field computed.
+    const ultimoContrato = data.contratos?.[0];
+    const statusContrato = ultimoContrato ? ultimoContrato.status : null;
+    const contratoId = ultimoContrato ? ultimoContrato.id : null;
+    // Preferencia para contrato final assinado, senao minuta
+    const contratoUrl = ultimoContrato ? (ultimoContrato.contrato_final_url || ultimoContrato.minuta_url) : null;
+
+    return {
+        ...data,
+        status_contrato: statusContrato,
+        contrato_id: contratoId,
+        contrato_url: contratoUrl
+    };
 };
 
 const listPassageiros = async (
@@ -198,7 +333,8 @@ const listPassageiros = async (
         .select(`
             *,
             escola:escolas(id, nome),
-            veiculo:veiculos(id, placa)
+            veiculo:veiculos(id, placa),
+            contratos(id, status, created_at, minuta_url, contrato_final_url)
         `)
         .eq("usuario_id", usuarioId)
         .order("nome", { ascending: true });
@@ -223,7 +359,28 @@ const listPassageiros = async (
     const { data, error } = await query;
     if (error) throw error;
 
-    return data || [];
+    // Map contract status to flat properties
+    const passageiros = (data || []).map((p: any) => {
+        // Find latest contract if multiple returned (though simpler to just take array logic if supabase returns array)
+        if (p.contratos && p.contratos.length > 0) {
+             // Sort just in case supabase didn't (though we can't easily sort in foreign table select without specific query)
+             // Ideally we should use a view or a separate query, but for now let's sort in JS
+             const contratosOnPassageiro = p.contratos.sort((a: any, b: any) => 
+                new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+             );
+             const ultimo = contratosOnPassageiro[0];
+             return {
+                 ...p,
+                 status_contrato: ultimo.status,
+                 contrato_id: ultimo.id,
+                 contrato_url: ultimo.contrato_final_url || ultimo.minuta_url,
+                 contratos: undefined // remove raw array to clean up
+             };
+        }
+        return p;
+    });
+
+    return passageiros;
 };
 
 const toggleAtivo = async (passageiroId: string, novoStatus: boolean): Promise<boolean> => {
@@ -234,7 +391,7 @@ const toggleAtivo = async (passageiroId: string, novoStatus: boolean): Promise<b
         if (passageiro?.enviar_cobranca_automatica === true) {
             // Se ele tem flag automática e está sendo ativado, consome 1 slot.
             try {
-                 await subscriptionLifecycleService.verificarLimiteAutonacao(passageiro.usuario_id, 1);
+                 await subscriptionLifecycleService.verificarLimiteAutomacao(passageiro.usuario_id, 1);
             } catch (err: any) {
                  // Repassar erro de limite
                  throw new Error(err.message);
@@ -324,7 +481,10 @@ const finalizePreCadastro = async (
     // 3. Criar Passageiro
     const novoPassageiro = await createPassageiro(payload);
 
-    // 4. Deletar Pré-Cadastro
+    // 4. Trigger de Contrato Automático
+    // Removido pois createPassageiro já realiza essa verificação e criação
+    
+    // 5. Deletar Pré-Cadastro
     await supabaseAdmin.from("pre_passageiros").delete().eq("id", prePassageiroId);
 
     return novoPassageiro;

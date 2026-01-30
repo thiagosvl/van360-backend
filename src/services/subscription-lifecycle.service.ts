@@ -5,7 +5,7 @@ import { AssinaturaStatus } from "../types/enums.js";
 export const subscriptionLifecycleService = {
 
 
-    async verificarLimiteAutonacao(usuarioId: string, quantidadeAAtivar: number = 1): Promise<void> {
+    async verificarLimiteAutomacao(usuarioId: string, quantidadeAAtivar: number = 1): Promise<void> {
         // 1. Buscar assinatura ativa
         const { data: assinaturas, error: assinaturaError } = await supabaseAdmin
             .from("assinaturas_usuarios")

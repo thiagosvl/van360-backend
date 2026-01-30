@@ -1,92 +1,67 @@
-import { FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyReply, FastifyRequest } from 'fastify';
 import { contractService } from '../services/contract.service.js';
-import { createContractSchema, signContractSchema, listContractsSchema } from '../types/dtos/contract.dto.js';
-import { logger } from '../config/logger.js';
+import { createContractSchema, listContractsSchema, signContractSchema } from '../types/dtos/contract.dto.js';
 
 export const contractController = {
   create: async (req: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const data = createContractSchema.parse(req.body);
-      const usuarioId = (req.user as any).id;
-      
-      const contrato = await contractService.criarContrato(usuarioId, data.passageiroId, data.provider);
-      
-      return reply.status(201).send(contrato);
-    } catch (error: any) {
-      logger.error({ error }, 'Erro ao criar contrato');
-      return reply.status(400).send({ error: error.message });
-    }
+    const data = createContractSchema.parse(req.body);
+    const usuarioId = (req as any).user.id;
+
+    const contrato = await contractService.criarContrato(usuarioId, data);
+    return reply.status(201).send(contrato);
   },
 
   list: async (req: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const filters = listContractsSchema.parse(req.query);
-      const usuarioId = (req.user as any).id;
-      
-      const result = await contractService.listarContratos(usuarioId, filters);
-      
-      return reply.status(200).send(result);
-    } catch (error: any) {
-      logger.error({ error }, 'Erro ao listar contratos');
-      return reply.status(400).send({ error: error.message });
-    }
+    const filters = listContractsSchema.parse(req.query);
+    const usuarioId = (req as any).user.id;
+
+    const result = await contractService.listarContratos(usuarioId, filters);
+    return reply.status(200).send(result);
   },
 
   getByToken: async (req: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const { token } = req.params as { token: string };
-      
-      const contrato = await contractService.consultarContrato(token);
-      
-      return reply.status(200).send(contrato);
-    } catch (error: any) {
-      logger.error({ error }, 'Erro ao consultar contrato');
-      return reply.status(404).send({ error: 'Contrato nao encontrado' });
-    }
+    const { token } = req.params as { token: string };
+    const contrato = await contractService.consultarContrato(token);
+    return reply.status(200).send(contrato);
   },
 
   sign: async (req: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const { token } = req.params as { token: string };
-      const data = signContractSchema.parse(req.body);
-      
-      const result = await contractService.processarAssinatura(token, data.assinatura, data.metadados);
-      
-      return reply.status(200).send(result);
-    } catch (error: any) {
-      logger.error({ error }, 'Erro ao assinar contrato');
-      return reply.status(400).send({ error: error.message });
-    }
+    const { token } = req.params as { token: string };
+    const data = signContractSchema.parse(req.body);
+    
+    const result = await contractService.processarAssinatura(token, data.assinatura, data.metadados);
+    return reply.status(200).send(result);
   },
 
   cancel: async (req: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const { id } = req.params as { id: string };
-      const usuarioId = (req.user as any).id;
-      
-      const result = await contractService.cancelarContrato(id, usuarioId);
-      
-      return reply.status(200).send(result);
-    } catch (error: any) {
-      logger.error({ error }, 'Erro ao cancelar contrato');
-      return reply.status(400).send({ error: error.message });
-    }
+    const { id } = req.params as { id: string };
+    const usuarioId = (req as any).user.id;
+
+    const result = await contractService.cancelarContrato(id, usuarioId);
+    return reply.status(200).send(result);
   },
 
   download: async (req: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const { id } = req.params as { id: string };
-      const usuarioId = (req.user as any).id;
-      
-      const pdfBuffer = await contractService.baixarContrato(id, usuarioId);
-      
-      reply.header('Content-Type', 'application/pdf');
-      reply.header('Content-Disposition', `attachment; filename="contrato-${id}.pdf"`);
-      
-      return reply.send(pdfBuffer);
-    } catch (error: any) {
-      logger.error({ error }, 'Erro ao baixar contrato');
-      return reply.status(400).send({ error: error.message });
-    }
+    const { id } = req.params as { id: string };
+    const usuarioId = (req as any).user.id;
+
+    const pdfBuffer = await contractService.baixarContrato(id, usuarioId);
+    
+    reply.header('Content-Type', 'application/pdf');
+    reply.header('Content-Disposition', `attachment; filename="contrato-${id}.pdf"`);
+    
+    return reply.send(pdfBuffer);
+  },
+  
+  preview: async (req: FastifyRequest, reply: FastifyReply) => {
+    const authId = (req as any).user.id;
+    const draftConfig = req.body as any; // Allow relaxed typing for now or define a schema
+    
+    const pdfBuffer = await contractService.gerarPreview(authId, draftConfig);
+    
+    reply.header('Content-Type', 'application/pdf');
+    reply.header('Content-Disposition', `inline; filename="preview-contrato.pdf"`);
+    
+    return reply.send(pdfBuffer);
   },
 };

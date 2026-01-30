@@ -7,7 +7,7 @@ export interface ContractGenerationParams {
 
 export interface DadosContrato {
   // Dados do passageiro
-  nomeAluno: string;
+  nomePassageiro: string;
   nomeResponsavel: string;
   cpfResponsavel: string;
   telefoneResponsavel: string;
@@ -23,18 +23,40 @@ export interface DadosContrato {
   modalidade: string; // "Ida e Volta", "Só Ida", "Só Volta"
   valorMensal: number;
   diaVencimento: number;
+  
+  // Condições do Período e Valor (Ano vigente)
+  ano: number;
   dataInicio: string; // YYYY-MM-DD
   dataFim: string; // YYYY-MM-DD
+  valorTotal: number;
+  qtdParcelas: number;
+  valorParcela: number;
+
+  // Multas
+  multaAtraso: {
+    valor: number;
+    tipo: 'percentual' | 'fixo';
+  };
+  multaRescisao: {
+    valor: number;
+    tipo: 'percentual' | 'fixo';
+  };
   
   // Dados do condutor
   nomeCondutor: string;
   cpfCnpjCondutor: string;
   telefoneCondutor: string;
+  apelidoCondutor?: string;
   
   // Dados do veículo
   placaVeiculo: string;
   modeloVeiculo: string;
+
+  // Configurações personalizadas
+  clausulas?: string[];
+  assinaturaCondutorUrl?: string;
 }
+
 
 export interface ContractGenerationResponse {
   documentUrl?: string; // URL do PDF gerado (in-house)
@@ -76,7 +98,7 @@ export interface ContractProvider {
   cancelarContrato(contratoId: string): Promise<boolean>;
   
   // Consultar status
-  consultarStatus(contratoId: string): Promise<any>;
+  consultarStatus(contratoId: string): Promise<unknown>;
   
   // Baixar documento final
   baixarDocumento(contratoId: string): Promise<Buffer>;

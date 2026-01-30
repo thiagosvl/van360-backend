@@ -99,6 +99,37 @@ CREATE TYPE "public"."user_type_enum" AS ENUM (
 
 ALTER TYPE "public"."user_type_enum" OWNER TO "postgres";
 
+CREATE TYPE "public"."modalidade_enum" AS ENUM (
+    'ida',
+    'volta',
+    'ida_volta'
+);
+
+ALTER TYPE "public"."modalidade_enum" OWNER TO "postgres";
+
+CREATE TYPE "public"."parentesco_enum" AS ENUM (
+    'pai',
+    'mae',
+    'avo',
+    'tio',
+    'irmao',
+    'primo',
+    'padrastro',
+    'madrasta',
+    'responsavel_legal',
+    'outro'
+);
+
+ALTER TYPE "public"."parentesco_enum" OWNER TO "postgres";
+
+CREATE TYPE "public"."genero_enum" AS ENUM (
+    'masculino',
+    'feminino',
+    'prefiro_nao_informar'
+);
+
+ALTER TYPE "public"."genero_enum" OWNER TO "postgres";
+
 
 CREATE OR REPLACE FUNCTION "public"."update_updated_at_column"() RETURNS "trigger"
     LANGUAGE "plpgsql"
@@ -338,10 +369,14 @@ CREATE TABLE IF NOT EXISTS "public"."passageiros" (
     "cpf_responsavel" "text" NOT NULL,
     "usuario_id" "uuid" NOT NULL,
     "email_responsavel" "text" NOT NULL,
-    "genero" "text",
+    "genero" "public"."genero_enum",
     "observacoes" "text",
     "veiculo_id" "uuid" NOT NULL,
     "periodo" "text" NOT NULL,
+    "modalidade" "public"."modalidade_enum",
+    "data_nascimento" "date",
+    "parentesco_responsavel" "public"."parentesco_enum",
+    "data_inicio_transporte" "date",
     "enviar_cobranca_automatica" boolean DEFAULT false,
     "origem_desativacao_cobranca_automatica" character varying(50) DEFAULT NULL::character varying,
     CONSTRAINT "passageiros_dia_vencimento_check" CHECK ((("dia_vencimento" >= 1) AND ("dia_vencimento" <= 31)))
@@ -404,7 +439,7 @@ CREATE TABLE IF NOT EXISTS "public"."pre_passageiros" (
     "email_responsavel" "text" NOT NULL,
     "cpf_responsavel" "text" NOT NULL,
     "telefone_responsavel" "text" NOT NULL,
-    "genero" "text",
+    "genero" "public"."genero_enum",
     "logradouro" "text",
     "numero" "text",
     "bairro" "text",
@@ -418,7 +453,11 @@ CREATE TABLE IF NOT EXISTS "public"."pre_passageiros" (
     "dia_vencimento" integer,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "periodo" "text"
+    "periodo" "text",
+    "modalidade" "public"."modalidade_enum",
+    "data_nascimento" "date",
+    "parentesco_responsavel" "public"."parentesco_enum",
+    "data_inicio_transporte" "date"
 );
 
 
@@ -468,8 +507,37 @@ CREATE TABLE IF NOT EXISTS "public"."usuarios" (
     "chave_pix_validada_em" timestamp with time zone,
     "nome_titular_pix_validado" "text",
     "cpf_cnpj_titular_pix_validado" "text",
-    "tipo" "public"."user_type_enum" DEFAULT 'motorista'::"public"."user_type_enum" NOT NULL
+    "tipo" "public"."user_type_enum" DEFAULT 'motorista'::"public"."user_type_enum" NOT NULL,
+    "assinatura_url" "text",
+    "config_contrato" "jsonb" DEFAULT '{
+      "usar_contratos": true,
+      "configurado": false,
+      "multa_atraso": { "valor": 10.00, "tipo": "percentual" },
+      "multa_rescisao": { "valor": 15.00, "tipo": "percentual" },
+      "clausulas": [
+        "O serviço contratado consiste no transporte do passageiro acima citado, no trajeto com origem e destino acordado entre as partes.",
+        "Somente o passageiro CONTRATANTE está autorizado a utilizar-se do objeto deste contrato, sendo vedado o passageiro se fazer acompanhar de colegas, parentes, amigos e etc.",
+        "O transporte ora contratado se refere exclusivamente ao horário regular da escola pré-determinado, não sendo de responsabilidade da CONTRATADA o transporte do passageiro em turno diferente do contratado, em horários de atividades extracurriculares ou que por determinação da escola seja alterado.",
+        "O procedimento de retirada e entrega do passageiro na residência ou local combinado deverá ser acordado entre as partes, definindo um responsável para acompanhar o passageiro.",
+        "A partir do momento que for realizada a entrega do passageiro na escola, a CONTRATADA não é mais responsável pela segurança do passageiro, bem como de seus pertences.",
+        "As partes deverão respeitar os horários previamente combinados de saída dos locais de origem e destino, ficando estabelecido que, caso ocorra mudança no local de origem, destino ou retorno, a CONTRATADA reserva-se o direito de aceitar ou não tais alterações, em razão da modificação de rota, podendo, inclusive, ficar desobrigada da prestação dos serviços previstos neste contrato.",
+        "Fica estabelecido que, caso a CONTRATANTE ou algum outro responsável pelo passageiro for buscá-lo no lugar da CONTRATADA, a CONTRATANTE deverá comunicar à CONTRATADA e à escola previamente.",
+        "A CONTRATANTE obriga-se a informar a CONTRATADA com um prazo de até duas horas antes do horário se o passageiro não for comparecer à escola naquele dia.",
+        "Está proibido o consumo de alimentos no interior do veículo escolar, com a finalidade de evitar e prevenir acidentes, como engasgos, ou constrangimento de outros passageiros, além de manter a limpeza do veículo.",
+        "Para os efeitos deste contrato, o transporte pactuado ficará temporariamente suspenso no caso de o passageiro apresentar doença infectocontagiosa, visando preservar a saúde e a segurança das crianças transportadas e dos prestadores do serviço.",
+        "O veículo passa por duas vistorias anuais (uma em cada semestre), onde nesse dia não haverá transporte e assim visando a segurança do mesmo. Avisaremos com antecedência a data das vistorias.",
+        "A CONTRATANTE pagará à CONTRATADA o valor mensal acordado, conforme forma de pagamento e parcelamento previamente acordados entre as partes, sendo o pagamento devido integralmente e de forma regular inclusive durante os períodos de férias dos meses de julho, dezembro e janeiro, bem como em casos de recessos, greves, afastamento temporário do passageiro por motivo de doença, férias, viagens, pandemia ou qualquer outro motivo, inclusive de força maior.",
+        "As parcelas deverão ser pagas até o dia estabelecido nas CONDIÇÕES DE VALOR, durante todo o período de vigência do contrato. Em caso de atraso no pagamento, a CONTRATANTE poderá estar sujeita à multa prevista nas CONDIÇÕES DE VALOR, sendo que, após a notificação do atraso, a CONTRATADA poderá conceder um prazo para regularização. Persistindo o não pagamento da parcela em atraso, a prestação do serviço poderá ser suspensa até que a situação seja regularizada.",
+        "Início do ano terá reajuste da mensalidade e um novo contrato será emitido.",
+        "Em caso de comportamento inadequado, desobediência às normas de segurança ou atitude antissocial, o passageiro poderá sofrer advertência por escrito e, em caso de reincidência, ocorrerá a rescisão do contrato motivada.",
+        "O contrato pode ser rescindido imotivadamente por qualquer das partes, com aplicação de multa rescisória conforme percentual descrito nas condições de valor sobre as parcelas pendentes, exceto quando a rescisão for motivada.",
+        "É convencionado que a CONTRATADA não será responsabilizada pela vigilância de objetos pessoais, material escolar, dinheiro, joias ou quaisquer pertences eventualmente esquecidos pelo passageiro no veículo ou no estabelecimento escolar.",
+        "As partes reconhecem o presente contrato como título executivo extrajudicial nos termos do artigo 784, XI, do Código de Processo Civil, sem prejuízo da opção pelo processo de conhecimento para obtenção de título executivo judicial, nos termos do artigo 785.",
+        "O serviço do transporte escolar será prestado até a data de término estabelecida nas CONDIÇÕES DO PERÍODO."
+      ]
+    }'::jsonb
 );
+
 
 
 ALTER TABLE "public"."usuarios" OWNER TO "postgres";
@@ -1332,6 +1400,7 @@ BEGIN
     SELECT id FROM "public"."cobrancas" WHERE "usuario_id" = target_user_id
   );
   DELETE FROM "public"."assinatura_notificacoes" WHERE "usuario_id" = target_user_id;
+  DELETE FROM "public"."contratos" WHERE "usuario_id" = target_user_id;
 
   -- 2. ANONYMIZE Core User Data
   UPDATE "public"."usuarios"
@@ -1341,13 +1410,15 @@ BEGIN
     "email" = 'deleted_' || "id"::text || '@van360.anon',
     "cpfcnpj" = 'DEL' || substring("id"::text, 1, 11),
     "telefone" = '00000000000_' || substring("id"::text, 1, 5),
-    "chave_pix" = NULL,
-    "tipo_chave_pix" = NULL,
-    "status_chave_pix" = 'NAO_CADASTRADA',
-    "nome_titular_pix_validado" = NULL,
-    "cpf_cnpj_titular_pix_validado" = NULL,
-    "auth_uid" = NULL,
-    "ativo" = false,
+    "chave_pix_validada_em" = NULL,
+    "assinatura_url" = NULL,
+    "config_contrato" = '{
+      "usar_contratos": false,
+      "configurado": false,
+      "multa_atraso": { "valor": 0, "tipo": "percentual" },
+      "multa_rescisao": { "valor": 0, "tipo": "percentual" },
+      "clausulas": []
+    }'::jsonb,
     "whatsapp_status" = 'DISCONNECTED'
   WHERE "id" = target_user_id;
 
@@ -1448,9 +1519,21 @@ CREATE TABLE IF NOT EXISTS "public"."contratos" (
     "assinado_em" TIMESTAMP WITH TIME ZONE,
     "expira_em" TIMESTAMP WITH TIME ZONE DEFAULT (NOW() + INTERVAL '30 days'),
     "updated_at" TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    "ano" INTEGER,
+    "data_inicio" DATE,
+    "data_fim" DATE,
+    "valor_total" NUMERIC(10,2),
+    "qtd_parcelas" INTEGER,
+    "valor_parcela" NUMERIC(10,2),
+    "dia_vencimento" INTEGER,
+    "multa_atraso_valor" NUMERIC(10,2),
+    "multa_atraso_tipo" VARCHAR(20),
+    "multa_rescisao_valor" NUMERIC(10,2),
+    "multa_rescisao_tipo" VARCHAR(20),
     
-    CONSTRAINT "contratos_status_check" CHECK ("status" IN ('pendente', 'assinado', 'cancelado', 'expirado'))
+    CONSTRAINT "contratos_status_check" CHECK ("status" IN ('pendente', 'assinado', 'cancelado', 'expirado', 'substituido'))
 );
+
 
 ALTER TABLE "public"."contratos" OWNER TO "postgres";
 

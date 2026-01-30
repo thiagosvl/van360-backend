@@ -93,3 +93,46 @@ export function formatPixKey(key: string, type: string) {
 
     return key;
 }
+
+export const formatPeriodo = (periodo: string): string => {
+  if (periodo === "integral") return "Integral";
+  if (periodo === "manha") return "Manhã";
+  if (periodo === "tarde") return "Tarde";
+  if (periodo === "noite") return "Noite";
+
+  return "Não Identificado";
+};
+
+export const formatModalidade = (modalidade: string): string => {
+  switch (modalidade) {
+    case 'ida': return 'Ida';
+    case 'volta': return 'Volta';
+    case 'ida_volta': return 'Ida e Volta';
+    default: return modalidade || 'Não informada';
+  }
+};
+
+export const formatGenero = (genero: string): string => {
+  switch (genero) {
+    case 'masculino': return 'Masculino';
+    case 'feminino': return 'Feminino';
+    case 'prefiro_nao_informar': return 'Prefiro não informar';
+    default: return genero || 'Não informado';
+  }
+};
+
+export const formatParentesco = (parentesco: string): string => {
+  switch (parentesco) {
+    case 'pai': return 'Pai';
+    case 'mae': return 'Mãe';
+    case 'avo': return 'Avô/Avó';
+    case 'tio': return 'Tio/Tia';
+    case 'irmao': return 'Irmão/Irmã';
+    case 'primo': return 'Primo/Prima';
+    case 'padrastro': return 'Padrasto';
+    case 'madrasta': return 'Madrasta';
+    case 'responsavel_legal': return 'Responsável Legal';
+    case 'outro': return 'Outro';
+    default: return parentesco || 'Não informado';
+  }
+};

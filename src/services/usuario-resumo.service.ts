@@ -42,6 +42,8 @@ interface SystemSummary {
       is_cancelada: boolean;
       is_profissional: boolean;
       is_essencial: boolean;
+      contrato_configurado: boolean;
+      usar_contratos: boolean;
     };
   };
   contadores: {
@@ -272,6 +274,8 @@ export const usuarioResumoService = {
           ultima_fatura_id: lastInvoice?.id || null,
           limite_franquia_atingido: franquiaRestante <= 0 && planRules.canGeneratePix(slugPlano),
           pix_key_configurada: !!usuario.chave_pix,
+          contrato_configurado: !!usuario.config_contrato?.configurado,
+          usar_contratos: !!usuario.config_contrato?.usar_contratos,
         }
       },
       contadores: {

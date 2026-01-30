@@ -11,7 +11,7 @@ import { iniciarValidacaoPix } from "./validacao-pix.service.js";
 export async function getUsuarioData(usuarioId: string) {
   const { data: usuario, error } = await supabaseAdmin
     .from("usuarios")
-    .select("id, nome, cpfcnpj, telefone, chave_pix")
+    .select("id, nome, cpfcnpj, telefone, chave_pix, config_contrato")
     .eq("id", usuarioId)
     .single();
 
@@ -41,6 +41,8 @@ export async function atualizarUsuario(usuarioId: string, payload: {
   telefone?: string;
   chave_pix?: string;
   tipo_chave_pix?: string;
+  assinatura_url?: string;
+  config_contrato?: any;
 }) {
   if (!usuarioId) throw new AppError("ID do usuário é obrigatório.", 400);
 
@@ -48,6 +50,8 @@ export async function atualizarUsuario(usuarioId: string, payload: {
   if (payload.nome) updates.nome = cleanString(payload.nome, true);
   if (payload.apelido) updates.apelido = cleanString(payload.apelido, true);
   if (payload.telefone) updates.telefone = onlyDigits(payload.telefone);
+  if (payload.assinatura_url !== undefined) updates.assinatura_url = payload.assinatura_url;
+  if (payload.config_contrato !== undefined) updates.config_contrato = payload.config_contrato;
 
   // Atualização de PIX com Sanitização Obrigatória e TRIGGER DE VALIDAÇÃO
   if (payload.chave_pix !== undefined) {

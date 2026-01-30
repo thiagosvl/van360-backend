@@ -28,16 +28,26 @@ const _verificarGerarCobrancaMesSeguinte = async (
         const diaFinal = Math.min(diaVencimento, lastDayOfMonth);
         const dataVencimentoStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(diaFinal).padStart(2, '0')}`;
 
-        return await cobrancaService.createCobranca({
-            passageiro_id: passageiroId,
-            mes: targetMonth,
-            ano: targetYear,
-            valor: passageiroData.valor_cobranca,
-            data_vencimento: dataVencimentoStr,
-            status: CobrancaStatus.PENDENTE,
-            usuario_id: usuarioId,
-            origem: CobrancaOrigem.AUTOMATICA
-        });
+        // Verificar se já existe cobrança para o mês/ano/passageiro
+        const existeCobranca = await cobrancaService.listCobrancasWithFilters({
+            usuarioId, 
+            passageiroId, 
+            mes: targetMonth, 
+            ano: targetYear 
+        }).then(res => res.length > 0).catch(() => false);
+
+        if (!existeCobranca) {
+            return await cobrancaService.createCobranca({
+                passageiro_id: passageiroId,
+                mes: targetMonth,
+                ano: targetYear,
+                valor: passageiroData.valor_cobranca,
+                data_vencimento: dataVencimentoStr,
+                status: CobrancaStatus.PENDENTE,
+                usuario_id: usuarioId,
+                origem: CobrancaOrigem.AUTOMATICA
+            });
+        }
     }
     return null;
 };

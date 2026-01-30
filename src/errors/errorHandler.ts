@@ -11,17 +11,21 @@ export function globalErrorHandler(error: FastifyError, request: FastifyRequest,
     Sentry.captureException(error);
 
     // 1. Erro Conhecido (AppError ou validações tratadas)
-    if (error instanceof AppError) {
+    // Check for instanceof OR duck typing (if serialized or prototype lost)
+    if (error instanceof AppError || error.name === 'AppError' || (error as any).isOperational) {
+        const statusCode = (error as any).statusCode || 500;
+        const message = error.message || "Erro desconhecido";
+
         logger.warn({
             msg: "Erro Operacional",
-            error: error.message,
-            statusCode: error.statusCode,
+            error: message,
+            statusCode: statusCode,
             method,
             url
         });
-        return reply.status(error.statusCode).send({
+        return reply.status(statusCode).send({
             status: "error",
-            message: error.message
+            message: message
         });
     }
 
