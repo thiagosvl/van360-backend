@@ -375,6 +375,7 @@ const listPassageiros = async (
                  ...p,
                  status_contrato: ultimo.status,
                  contrato_id: ultimo.id,
+                 contrato_status: ultimo.status,
                  contrato_url: ultimo.contrato_final_url || ultimo.minuta_url,
                  minuta_url: ultimo.minuta_url,
                  contrato_final_url: ultimo.contrato_final_url,
