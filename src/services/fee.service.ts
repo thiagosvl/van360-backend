@@ -28,6 +28,10 @@ const DEFAULT_FEE_RULES: Record<PaymentGateway, Record<PixType, FeeConfig>> = {
     // C6 Taxa Zero (Janeiro/2026) - Pode ser alterado via banco de dados
     imediato: { pct: 0, min: 0, max: 0 },
     vencimento: { pct: 0, min: 0, max: 0 }
+  },
+  [PaymentGateway.MOCK]: {
+    imediato: { pct: 0, min: 0, max: 0 },
+    vencimento: { pct: 0, min: 0, max: 0 }
   }
 };
 
