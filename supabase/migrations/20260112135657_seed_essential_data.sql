@@ -11,9 +11,9 @@ ON CONFLICT (id) DO UPDATE SET
 -- 2. SEED PLANOS (Sub Plans - Dependents)
 INSERT INTO public.planos (id, parent_id, tipo, nome, slug, descricao_curta, ordem_exibicao, ativo, limite_passageiros, franquia_cobrancas_mes, preco, preco_promocional, promocao_ativa, permite_cobrancas, created_at, trial_days, beneficios)
 VALUES
-('1c632a37-8f6a-4fa1-a734-c12e1ddaf44d', 'e0961539-3186-43e8-adac-4f009720d428', 'sub', 'Até 25 Cobranças', 'completo_25', NULL, 1, true, 0, 25, 107.00, 0.01, true, true, '2025-10-30 15:13:14.772511+00', 0, '[]'),
-('21a70496-9769-48dd-857e-98726ab81292', 'e0961539-3186-43e8-adac-4f009720d428', 'sub', 'Até 50 Cobranças', 'completo_50', NULL, 2, true, 0, 60, 147.00, 0.02, true, true, '2025-10-30 15:13:14.772511+00', 0, '[]'),
-('484db34f-23c3-4731-a11c-e85074ce1b23', 'e0961539-3186-43e8-adac-4f009720d428', 'sub', 'Até 90 Cobranças', 'completo_90', NULL, 3, true, 0, 90, 227.00, 0.03, true, true, '2025-10-30 15:13:14.772511+00', 0, '[]')
+('1c632a37-8f6a-4fa1-a734-c12e1ddaf44d', 'e0961539-3186-43e8-adac-4f009720d428', 'sub', 'Até 25 Cobranças', 'completo_25', NULL, 1, true, 0, 3, 107.00, 0.01, true, true, '2025-10-30 15:13:14.772511+00', 0, '[]'),
+('21a70496-9769-48dd-857e-98726ab81292', 'e0961539-3186-43e8-adac-4f009720d428', 'sub', 'Até 50 Cobranças', 'completo_50', NULL, 2, true, 0, 5, 147.00, 0.02, true, true, '2025-10-30 15:13:14.772511+00', 0, '[]'),
+('484db34f-23c3-4731-a11c-e85074ce1b23', 'e0961539-3186-43e8-adac-4f009720d428', 'sub', 'Até 90 Cobranças', 'completo_90', NULL, 3, true, 0, 8, 227.00, 0.03, true, true, '2025-10-30 15:13:14.772511+00', 0, '[]')
 ON CONFLICT (id) DO UPDATE SET
     nome = EXCLUDED.nome,
     preco = EXCLUDED.preco;
