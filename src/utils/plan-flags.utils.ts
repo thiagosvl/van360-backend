@@ -44,7 +44,7 @@ export function calculatePlanFlags(assinatura: any): PlanFlags {
   }
 
   // 2. Flags de Estado
-  const is_trial_valido = isTrial && (diasRestantesTrial ?? 0) >= 0;
+  const is_trial_valido = isTrial && assinatura?.trial_end_at && (new Date(assinatura.trial_end_at) > now);
   const is_ativo = status === AssinaturaStatus.ATIVA && ativo === true;
   const is_pendente = status === AssinaturaStatus.PENDENTE_PAGAMENTO;
   const is_suspensa = status === AssinaturaStatus.SUSPENSA;

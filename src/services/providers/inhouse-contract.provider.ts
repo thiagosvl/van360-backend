@@ -339,11 +339,11 @@ export class InHouseContractProvider implements ContractProvider {
                 }); // Com decimais se R$
     };
 
-    const multaAtrasoLabel = `Multa mensal para atraso de pagamento (${dados.multaAtraso.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}):`;
+    const multaAtrasoLabel = `Multa mensal atraso de pagamento (${dados.multaAtraso.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}):`;
     const multaAtrasoValor = formatMulta(dados.multaAtraso.tipo, dados.multaAtraso.valor);
     page.drawText(`${multaAtrasoLabel} ${multaAtrasoValor}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
     
-    const multaRescisaoLabel = `Multa para cancelamento de contrato (${dados.multaRescisao.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}):`;
+    const multaRescisaoLabel = `Multa cancelamento de contrato (${dados.multaRescisao.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}):`;
     const multaRescisaoValor = formatMulta(dados.multaRescisao.tipo, dados.multaRescisao.valor);
     page.drawText(`${multaRescisaoLabel} ${multaRescisaoValor}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
     currentY -= 60;
