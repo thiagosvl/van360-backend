@@ -1,0 +1,14 @@
+MAPEAMENTO DE SCRIPTS - HOMOLOGAÇÃO C6 BANK
+
+PASSO 7: Pix Cash-In, Cobranças e Webhooks
+------------------------------------------
+Script: npx tsx scripts/test-c6.ts
+Onde ver os logs: No terminal. O script organiza por "[PASSO 7.1]", "[PASSO 7.2]", etc.
+
+PASSO 8: DDA, Agendamento e Lotes
+------------------------------------------
+Script: npx tsx scripts/gerar-logs-conformidade.ts
+Onde ver os logs: No arquivo "scripts/conformidade_c6_limpo.txt".
+Este arquivo já vem com os Status HTTP e JSONs formatados para o documento.
+
+OBSERVAÇÃO: Lembre-se de atualizar os certificados e o .env antes de rodar!

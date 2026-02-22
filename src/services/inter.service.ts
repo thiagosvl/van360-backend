@@ -124,14 +124,18 @@ async function criarCobrancaPix(
   const token = await getValidInterToken();
   const expirationSeconds = await getConfigNumber(ConfigKey.PIX_EXPIRACAO_SEGUNDOS, 3600);
 
-  const cobPayload = {
-    calendario: { expiracao: expirationSeconds },
-    devedor: { cpf: onlyDigits(params.cpf), nome: params.nome },
-    valor: { original: params.valor.toFixed(2) },
-    chave: INTER_PIX_KEY,
-    solicitacaoPagador: "Pagamento Assinatura Van360",
-    infoAdicionais: [{ nome: "cobrancaId", valor: params.cobrancaId }],
-  };
+    const doc = onlyDigits(params.cpf);
+    const cobPayload = {
+      calendario: { expiracao: expirationSeconds },
+      devedor: { 
+        [doc.length === 14 ? "cnpj" : "cpf"]: doc, 
+        nome: params.nome 
+      },
+      valor: { original: params.valor.toFixed(2) },
+      chave: INTER_PIX_KEY,
+      solicitacaoPagador: "Pagamento Assinatura Van360",
+      infoAdicionais: [{ nome: "cobrancaId", valor: params.cobrancaId }],
+    };
 
   try {
     const createUrl = `${INTER_API_URL}/pix/v2/cob/${txid}`;
@@ -182,17 +186,21 @@ async function criarCobrancaComVencimentoPix(
 
   const validadePadrao = await getConfigNumber(ConfigKey.PIX_VALIDADE_APOS_VENCIMENTO, 30);
 
-  const cobvPayload = {
-    calendario: {
-      dataDeVencimento: params.dataVencimento,
-      validadeAposVencimento: params.validadeAposVencimentoDias || validadePadrao
-    },
-    devedor: { cpf: onlyDigits(params.cpf), nome: params.nome },
-    valor: { original: params.valor.toFixed(2) },
-    chave: INTER_PIX_KEY,
-    solicitacaoPagador: "Assinatura Van360 (Vencimento)",
-    infoAdicionais: [{ nome: "cobrancaId", valor: params.cobrancaId }],
-  };
+    const doc = onlyDigits(params.cpf);
+    const cobvPayload = {
+      calendario: {
+        dataDeVencimento: params.dataVencimento,
+        validadeAposVencimento: params.validadeAposVencimentoDias || validadePadrao
+      },
+      devedor: { 
+        [doc.length === 14 ? "cnpj" : "cpf"]: doc, 
+        nome: params.nome 
+      },
+      valor: { original: params.valor.toFixed(2) },
+      chave: INTER_PIX_KEY,
+      solicitacaoPagador: "Assinatura Van360 (Vencimento)",
+      infoAdicionais: [{ nome: "cobrancaId", valor: params.cobrancaId }],
+    };
 
   try {
     const createUrl = `${INTER_API_URL}/pix/v2/cobv/${txid}`;

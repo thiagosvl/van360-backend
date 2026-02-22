@@ -16,7 +16,7 @@ const C6_KEY_PATH = process.env.C6_KEY_PATH || "";
 
 // Webhook URL - Use ngrok para testes locais ou sua URL de produção
 // Exemplo ngrok: https://abc123.ngrok.io/api/pagamento/webhook/c6
-const WEBHOOK_URL = process.env.C6_WEBHOOK_URL || "https://api.van360.com.br/api/pagamento/webhook/c6";
+const WEBHOOK_URL = process.env.C6_WEBHOOK_URL || "https://api.van360.com.br/api/webhook/pagamento/c6";
 
 // Devedor Dummy (CPF Válido para testes)
 const DEVEDOR_DUMMY = {

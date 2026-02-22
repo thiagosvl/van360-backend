@@ -1,0 +1,97 @@
+=== LOGS REAIS E BRUTOS (RAW) - CHECKOUT C6 BANK ===
+Ambiente: SANDBOX
+Data da Execucao: 18/02/2026, 15:41:15
+
+---------------------------------------------------------
+PASSO 9.a: Criar checkout com cartão de crédito sem autenticação
+---------------------------------------------------------
+HTTP Status: 201 Created
+Response Body (JSON):
+{
+  "id": "45d89b29-90fe-4b61-b25c-b2b9bdf5dead",
+  "url": "https://payment-h.c6pay.com.br/payment/45d89b29-90fe-4b61-b25c-b2b9bdf5dead"
+}
+---------------------------------------------------------
+
+---------------------------------------------------------
+PASSO 9.b: Criar checkout com cartão de débito
+---------------------------------------------------------
+HTTP Status: 201 Created
+Response Body (JSON):
+{
+  "id": "be4cf444-b808-4930-9b8f-d71951fa98db",
+  "url": "https://payment-h.c6pay.com.br/payment/be4cf444-b808-4930-9b8f-d71951fa98db"
+}
+---------------------------------------------------------
+
+---------------------------------------------------------
+PASSO 9.c: Criar checkout com cartão de crédito com autenticação (Opcional)
+---------------------------------------------------------
+HTTP Status: 201 Created
+Response Body (JSON):
+{
+  "id": "00b2e6d5-5caf-43a9-add7-8c14f1f306d2",
+  "url": "https://payment-h.c6pay.com.br/payment/00b2e6d5-5caf-43a9-add7-8c14f1f306d2"
+}
+---------------------------------------------------------
+
+---------------------------------------------------------
+PASSO 10.a: Realizar consulta de um checkout existente
+---------------------------------------------------------
+HTTP Status: 200 OK
+Response Body (JSON):
+{
+  "id": "45d89b29-90fe-4b61-b25c-b2b9bdf5dead",
+  "external_reference_id": "AMLSDONK2",
+  "emission_date_time": "2026-02-18T18:41:14.000Z",
+  "expiration_date_time": "2026-02-25T21:41:13.000Z",
+  "amount": 15.5,
+  "status": "CREATED"
+}
+---------------------------------------------------------
+
+---------------------------------------------------------
+PASSO 11.a: Realizar o cancelamento de um checkout
+---------------------------------------------------------
+HTTP Status: 204 No Content
+Response Body: (Vazio)
+---------------------------------------------------------
+
+---------------------------------------------------------
+PASSO 12.a: Criar link com cartão de crédito e save_card: true
+---------------------------------------------------------
+HTTP Status: 201 Created
+Response Body (JSON):
+{
+  "id": "61f78c0c-f001-45db-ac7b-f824ceaed652",
+  "url": "https://payment-h.c6pay.com.br/payment/61f78c0c-f001-45db-ac7b-f824ceaed652"
+}
+---------------------------------------------------------
+
+---------------------------------------------------------
+PASSO 12.b: Capturar transação realizada no teste 12.a informando o token criado (Falha - Requer Token Real)
+---------------------------------------------------------
+HTTP Status: 404 Not Found
+Response Body (JSON):
+{
+  "type": "https://developers.c6bank.com.br/v1/error/not_found",
+  "title": "Recurso não encontrado.",
+  "status": 404,
+  "detail": "Consulte a documentação. Not Found",
+  "correlation_id": "9cffa8785740a17c-GRU",
+  "timestamp": "2026-02-18T18:41:22.194Z"
+}
+---------------------------------------------------------
+
+---------------------------------------------------------
+PASSO 13.a: Cadastrar url para notificação acerca das alterações no status do checkout
+---------------------------------------------------------
+HTTP Status: 200 OK
+Response Body (JSON):
+{
+  "webhookUrl": "https://api.van360.com.br/api/webhook/pagamento/c6",
+  "chave": "fa32fa2f-403c-4218-ae9e-ad1b145576af",
+  "criacao": "2026-02-18T18:41:24.595679901Z"
+}
+---------------------------------------------------------
+

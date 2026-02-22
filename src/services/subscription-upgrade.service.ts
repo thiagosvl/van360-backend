@@ -145,6 +145,43 @@ export const subscriptionUpgradeService = {
             vigenciaFimInsert = null;
           }
       
+          if (valorCobrar <= 0) {
+            // Case 1: No financial difference (Side-grade or pricing edge case)
+            // We just deactivate the old one and activate the new one immediately
+            if (assinaturaAtual) {
+              await supabaseAdmin
+                .from("assinaturas_usuarios")
+                .update({ ativo: false })
+                .eq("id", assinaturaAtual.id);
+            }
+
+            const { data: novaAssinatura, error: assinaturaError } = await supabaseAdmin
+              .from("assinaturas_usuarios")
+              .insert({
+                usuario_id: usuarioId,
+                plano_id: novoPlano.id,
+                franquia_contratada_cobrancas: franquiaContratada,
+                ativo: true,
+                status: AssinaturaStatus.ATIVA,
+                preco_aplicado: precoAplicado,
+                preco_origem: precoOrigem,
+                anchor_date: anchorDate,
+                vigencia_fim: vigenciaFimInsert,
+              })
+              .select()
+              .single();
+
+            if (assinaturaError) throw assinaturaError;
+
+            return {
+              success: true,
+              message: "Upgrade concluído com sucesso. Como não há diferença de valores para o período atual, o novo limite já está liberado!",
+              planoId: novoPlano.id,
+              franquia: franquiaContratada
+            };
+          }
+
+          // Case 2: There is a pro-rata to pay
           const { data: novaAssinatura, error: assinaturaError } = await supabaseAdmin
             .from("assinaturas_usuarios")
             .insert({

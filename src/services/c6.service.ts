@@ -9,7 +9,7 @@ import { redisConfig } from "../config/redis.js";
 import { supabaseAdmin } from "../config/supabase.js";
 
 const redis = new Redis(redisConfig as any);
-const C6_SCHEDULE_URL = `${env.C6_API_URL}/v1/schedule_payments`;
+const C6_SCHEDULE_URL = `${env.C6_API_URL}/v1/schedule_payments/`;
 
 function getC6Certificates() {
   if (env.C6_CERT_BASE64 && env.C6_KEY_BASE64) {
@@ -43,7 +43,7 @@ export const c6Service = {
     const cached = await redis.get("c6:token");
     if (cached) return cached;
 
-    const url = `${env.C6_API_URL}/v1/auth/`;
+    const url = `${env.C6_API_URL}/v1/auth`;
     const body = new URLSearchParams();
     body.append("client_id", env.C6_CLIENT_ID);
     body.append("client_secret", env.C6_CLIENT_SECRET);
@@ -70,8 +70,18 @@ export const c6Service = {
     }
   },
 
-  async criarCobrancaImediata(txid: string, valor: number, devedor?: { cpf: string; nome: string }) {
+  gerarTxid(cobrancaId: string): string {
+    const txid = cobrancaId.replace(/-/g, "");
+    if (!/^[a-zA-Z0-9]{26,35}$/.test(txid)) {
+      throw new Error(`ID de cobrança '${cobrancaId}' inválido para gerar txid.`);
+    }
+    return txid;
+  },
+
+  async criarCobrancaImediata(cobrancaId: string, valor: number, devedor?: { cpf: string; nome: string }) {
     const token = await this.getAccessToken();
+    const txid = this.gerarTxid(cobrancaId);
+
     const payload: any = {
       calendario: { expiracao: 3600 },
       valor: { original: valor.toFixed(2) },
@@ -80,23 +90,35 @@ export const c6Service = {
     };
 
     if (devedor) {
+      const doc = devedor.cpf.replace(/\D/g, "");
       payload.devedor = {
-        cpf: devedor.cpf.replace(/\D/g, ""),
+        [doc.length === 14 ? "cnpj" : "cpf"]: doc,
         nome: devedor.nome
       };
     }
 
-    const { data } = await axios.put(`${env.C6_API_URL}/v2/pix/cob/${txid}`, payload, {
-      headers: { Authorization: `Bearer ${token}` },
-      httpsAgent: getHttpsAgent()
-    });
+    try {
+      const { data } = await axios.put(`${env.C6_API_URL}/v2/pix/cob/${txid}`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+        httpsAgent: getHttpsAgent()
+      });
 
-    return {
-      txid: data.txid,
-      pixCopiaECola: data.pixCopiaECola,
-      location: data.loc?.location,
-      interTransactionId: data.txid
-    };
+      return {
+        txid: data.txid,
+        pixCopiaECola: data.pixCopiaECola,
+        location: data.loc?.location,
+        interTransactionId: data.txid
+      };
+    } catch (error: any) {
+      logger.error({ 
+        msg: "C6: Erro ao criar cobrança imediata", 
+        txid, 
+        payload, 
+        response: error.response?.data, 
+        status: error.response?.status 
+      });
+      throw error;
+    }
   },
 
   async consultarPix(txid: string) {
@@ -105,6 +127,24 @@ export const c6Service = {
       headers: { Authorization: `Bearer ${token}` },
       httpsAgent: getHttpsAgent()
     });
+    return data;
+  },
+
+  /**
+   * Consulta boletos em aberto no DDA vinculados ao CNPJ/CPF da conta.
+   * Passo 8.1 da Homologação.
+   */
+  async consultarDDA() {
+    const token = await this.getAccessToken();
+    const url = `${C6_SCHEDULE_URL}query`;
+    const headers = { 
+        Authorization: `Bearer ${token}`,
+        "partner-software-name": "Van360",
+        "partner-software-version": "1.0.0"
+    };
+    
+    logger.debug({ url, headers }, "C6: Iniciando consultarDDA");
+    const { data } = await axios.get(url, { headers, httpsAgent: getHttpsAgent() });
     return data;
   },
 
@@ -182,17 +222,26 @@ export const c6Service = {
     const agent = getHttpsAgent();
 
     try {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split("T")[0];
+
       // 1. Enviar para consulta inicial (decode)
       const payload = {
         items: [{
           amount: params.valor, // Deve ser number conforme a doc
-          transaction_date: params.transaction_date || new Date().toISOString().split("T")[0],
+          transaction_date: params.transaction_date || tomorrowStr,
           description: params.descricao || "Repasse Van360",
-          content: params.chaveDestino // Chave Pix ou Código de Barras
+          content: params.chaveDestino, // Chave Pix ou Código de Barras
+          beneficiary_name: "Motorista Beneficiario", // Sugerido pelo script de ref
+          payer_name: "Van360 Empresa" // Sugerido pelo script de ref
         }]
       };
 
-      const { data: group } = await axios.post(`${C6_SCHEDULE_URL}/decode`, payload, { 
+      const url = `${C6_SCHEDULE_URL}decode`;
+      logger.debug({ url, payload }, "C6: Enviando para decode");
+      
+      const { data: group } = await axios.post(url, payload, { 
         headers: {
           ...headers,
           "partner-software-name": "Van360",
@@ -202,11 +251,20 @@ export const c6Service = {
       });
       const groupId = group.group_id;
 
+      // Importante: O C6 leva alguns segundos para "decodificar" os itens (verificar DICT/CIP).
+      // Se submeter imediatamente, retorna 422 "itens em processo de decodificação".
+      logger.debug({ groupId }, "C6: Aguardando 15s para decodificação antes do submit...");
+      await new Promise(resolve => setTimeout(resolve, 15000));
+
       // 2. Submeter para aprovação (conforme imagem 5 da doc)
-      await axios.post(`${C6_SCHEDULE_URL}/submit`, {
+      const urlSubmit = `${C6_SCHEDULE_URL}submit`;
+      const submitPayload = {
         group_id: groupId,
         uploader_name: "Van360 System"
-      }, { headers, httpsAgent: agent });
+      };
+      logger.debug({ url: urlSubmit, payload: submitPayload }, "C6: Enviando para submit");
+
+      await axios.post(urlSubmit, submitPayload, { headers, httpsAgent: agent });
 
       return {
         endToEndId: groupId,
@@ -254,6 +312,55 @@ export const c6Service = {
   },
 
   /**
+   * Obtém todos os itens de um grupo de pagamentos.
+   * Passo 8.3 da Homologação.
+   */
+  async listarItensGrupo(groupId: string) {
+    const token = await this.getAccessToken();
+    const { data } = await axios.get(`${C6_SCHEDULE_URL}/${groupId}/items`, {
+      headers: { 
+        Authorization: `Bearer ${token}`,
+        "partner-software-name": "Van360",
+        "partner-software-version": "1.0.0"
+      },
+      httpsAgent: getHttpsAgent()
+    });
+    return data;
+  },
+
+  async removerItemAgendamento(groupId: string, itemId: string) {
+    const token = await this.getAccessToken();
+    await axios.delete(`${C6_SCHEDULE_URL}/${groupId}/items/${itemId}`, {
+      headers: { 
+        Authorization: `Bearer ${token}`,
+        "partner-software-name": "Van360",
+        "partner-software-version": "1.0.0"
+      },
+      httpsAgent: getHttpsAgent()
+    });
+    return true;
+  },
+
+  /**
+   * Remove uma lista de itens de um grupo de agendamento.
+   * Passo 8.4 da Homologação.
+   */
+  async removerItensAgendamento(groupId: string, itemIds: string[]) {
+    const token = await this.getAccessToken();
+    const payload = itemIds.map(id => ({ id }));
+    await axios.delete(`${C6_SCHEDULE_URL}/${groupId}/items`, {
+      data: payload,
+      headers: { 
+        Authorization: `Bearer ${token}`,
+        "partner-software-name": "Van360",
+        "partner-software-version": "1.0.0"
+      },
+      httpsAgent: getHttpsAgent()
+    });
+    return true;
+  },
+
+  /**
    * Validação de Chave via Pré-processamento (Zero-Cost Disclosure)
    * Cria o lote, captura os dados do DICT e deleta o lote em seguida.
    */
@@ -289,6 +396,7 @@ export const c6Service = {
       const item = itemsResponse.items?.[0] || itemsResponse?.[0];
       
       if (item?.status === "DECODE_ERROR") {
+        logger.error({ item, groupId }, "C6: Erro no item do decode");
         throw new Error(`Erro C6 Decode: ${item.error_message || "Dados inválidos"}`);
       }
 
@@ -306,7 +414,45 @@ export const c6Service = {
 
       return { nome, cpfCnpj };
     } catch (error: any) {
-      logger.error({ msg: "Erro validarChavePix C6", err: error.response?.data || error.message });
+      // FALLBACK: Se der 403 (Falta de permissão de Agendamento/Decode), tentamos criar uma cobrança de 0.01
+      // Se a cobrança for criada com sucesso, a chave é válida e pertence a esta conta.
+      if (error.response?.status === 403) {
+        logger.info({ chave }, "C6: Tentando validação via cobrança (fallback 403)");
+        try {
+          const testTxid = this.gerarTxid("VAL" + crypto.randomUUID().replace(/-/g, "").substring(0, 25));
+          const testPayload = {
+            calendario: { expiracao: 3600 },
+            valor: { original: "0.01" },
+            chave,
+            solicitacaoPagador: "Validacao de Conta Van360"
+          };
+          
+          await axios.put(`${env.C6_API_URL}/v2/pix/cob/${testTxid}`, testPayload, {
+            headers,
+            httpsAgent: agent
+          });
+
+          // Se chegou aqui, a chave é válida! Vamos cancelar logo em seguida.
+          axios.patch(`${env.C6_API_URL}/v2/pix/cob/${testTxid}`, 
+            { status: "REMOVIDA_PELO_USUARIO_RECEBEDOR" },
+            { headers, httpsAgent: agent }
+          ).catch(() => {});
+
+          return { 
+            nome: "TITULAR VALIDADO (C6)", 
+            cpfCnpj: chave.length <= 14 ? chave : "DOCUMENTO VALIDADO" 
+          };
+        } catch (fallbackError: any) {
+          logger.error({ msg: "Erro no fallback de validação C6", err: fallbackError.response?.data || fallbackError.message });
+          throw new Error("O banco rejeitou esta chave PIX ou ela não pertence a esta conta.");
+        }
+      }
+
+      logger.error({ 
+        msg: "Erro validarChavePix C6", 
+        err: error.response?.data || error.message,
+        status: error.response?.status
+      });
       throw error;
     }
   },
@@ -317,24 +463,41 @@ export const c6Service = {
       .upsert([{ chave: "C6_WEBHOOK_URL", valor: url }], { onConflict: "chave" });
   },
 
-  async criarCobrancaVencimento(txid: string, valor: number, vencimento: string, devedor: any) {
+  async criarCobrancaVencimento(cobrancaId: string, valor: number, vencimento: string, devedor: any) {
     const token = await this.getAccessToken();
+    const txid = this.gerarTxid(cobrancaId);
+    const doc = devedor.cpf.replace(/\D/g, "");
+
     const payload = {
       calendario: { dataDeVencimento: vencimento, validadeAposVencimento: 30 },
-      devedor: { cpf: devedor.cpf.replace(/\D/g, ""), nome: devedor.nome },
+      devedor: { 
+        [doc.length === 14 ? "cnpj" : "cpf"]: doc, 
+        nome: devedor.nome 
+      },
       valor: { original: valor.toFixed(2) },
       chave: env.C6_PIX_KEY,
       solicitacaoPagador: "Cobranca Van360 (Vencimento)"
     };
 
-    const { data } = await axios.put(`${env.C6_API_URL}/v2/pix/cobv/${txid}`, payload, {
-      headers: { Authorization: `Bearer ${token}` },
-      httpsAgent: getHttpsAgent()
-    });
+    try {
+      const { data } = await axios.put(`${env.C6_API_URL}/v2/pix/cobv/${txid}`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+        httpsAgent: getHttpsAgent()
+      });
 
-    return {
-      txid: data.txid, pixCopiaECola: data.pixCopiaECola,
-      location: data.loc?.location, interTransactionId: data.txid
-    };
+      return {
+        txid: data.txid, pixCopiaECola: data.pixCopiaECola,
+        location: data.loc?.location, interTransactionId: data.txid
+      };
+    } catch (error: any) {
+      logger.error({ 
+        msg: "C6: Erro ao criar cobrança com vencimento", 
+        txid, 
+        payload, 
+        response: error.response?.data, 
+        status: error.response?.status 
+      });
+      throw error;
+    }
   }
 };

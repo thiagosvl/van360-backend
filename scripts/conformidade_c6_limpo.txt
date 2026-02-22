@@ -1,0 +1,65 @@
+=== LOGS REAIS E BRUTOS (RAW) DO C6 BANK ===
+Ambiente: SANDBOX
+Data da Execucao: 18/02/2026, 14:43:33
+
+---------------------------------------------------------
+PASSO 8.1: Obter boletos em aberto (DDA)
+---------------------------------------------------------
+HTTP Status: 200 OK
+Response Body (JSON):
+{
+  "items": []
+}
+---------------------------------------------------------
+
+---------------------------------------------------------
+PASSO 8.2: Submeter um grupo de pagamentos (Decode)
+---------------------------------------------------------
+HTTP Status: 200 OK
+Response Body (JSON):
+{
+  "group_id": "01KHRXK5S19X2FZ4J0C0FBXEQS"
+}
+---------------------------------------------------------
+
+---------------------------------------------------------
+PASSO 8.3: Obter todos os itens de um grupo
+---------------------------------------------------------
+HTTP Status: 200 OK
+Response Body (JSON):
+{
+  "items": [
+    {
+      "amount": 7.5,
+      "description": "Homologacao Conformidade RAW",
+      "group_id": "01KHRXK5S19X2FZ4J0C0FBXEQS",
+      "id": "01KHRXK5SCSEDRDXZGDFWTDQ4M",
+      "product_type": "PIX",
+      "status": "READ_DATA",
+      "transaction_date": "2026-02-23"
+    }
+  ]
+}
+---------------------------------------------------------
+
+---------------------------------------------------------
+PASSO 8.4: Remover uma lista de pagamentos do grupo
+---------------------------------------------------------
+HTTP Status: 204 No Content
+Response Body: (Vazio - No Content)
+---------------------------------------------------------
+
+---------------------------------------------------------
+PASSO 8.5: Remover um pagamento do grupo
+---------------------------------------------------------
+HTTP Status: 204 No Content
+Response Body: (Vazio - No Content)
+---------------------------------------------------------
+
+---------------------------------------------------------
+PASSO 8.6: Enviar um grupo de pagamentos para aprovacao
+---------------------------------------------------------
+HTTP Status: 204 No Content
+Response Body: (Vazio - No Content)
+---------------------------------------------------------
+

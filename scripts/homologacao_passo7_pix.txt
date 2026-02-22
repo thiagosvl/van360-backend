@@ -1,0 +1,514 @@
+﻿[i] Verificando arquivos de certificado...
+   C6_CERT_PATH: ./certificates/c6-cert.pem
+   C6_KEY_PATH: ./certificates/c6-key.pem
+   C6_API_URL: https://baas-api-sandbox.c6bank.info
+   C6_PIX_KEY: fa32fa2f-403c-4218-ae9e-ad1b145576af
+[OK] Certificados OK!
+
+[RUN] INICIANDO ROTEIRO DE HOMOLOGACAO PIX C6 BANK
+   Data/Hora: 2026-02-18T17:59:53.350Z
+   Ambiente: SANDBOX
+
+
+[AUTH] Autenticando...
+[OK] Token obtido com sucesso!
+
+
+========================================
+[PASSO 7.1] - Criar cobranca imediata (Simples)
+----------------------------------------
+REQ (Resumo): PUT /v2/pix/cob/cobsimpmlsc7ga2ie7euaggdl5yds83
+TXID Usado: cobsimpmlsc7ga2ie7euaggdl5yds83
+----------------------------------------
+RESPOSTA (Copiar para Doc):
+{
+  "chave": "fa32fa2f-403c-4218-ae9e-ad1b145576af",
+  "solicitacaoPagador": "Homologacao C6 - Cob Simples",
+  "pixCopiaECola": "00020101021226990014br.gov.bcb.pix2577qrcode-h.c6pix.com/qrs1/v2/01ZkNcBB2N8M9nMriOIQtb9yu8oyMYteqHK0Nhk2LKsiXR9swO520400005303986540510.005802BR5916REGRESSIVO TESTE6009Sao Paulo62070503***630413B2",
+  "calendario": {
+    "criacao": "2026-02-18T17:59:52.483Z",
+    "expiracao": 3600
+  },
+  "txid": "cobsimpmlsc7ga2ie7euaggdl5yds83",
+  "revisao": 0,
+  "location": "qrcode-h.c6pix.com/qrs1/v2/01ZkNcBB2N8M9nMriOIQtb9yu8oyMYteqHK0Nhk2LKsiXR9swO",
+  "status": "ATIVA",
+  "valor": {
+    "original": "10.00",
+    "modalidadeAlteracao": 0
+  }
+}
+========================================
+
+
+========================================
+[PASSO 7.2] - Criar cobranca imediata com Devedor
+----------------------------------------
+REQ (Resumo): PUT /v2/pix/cob/cobdevmlsc7iksfkthh3lvearzjrhq
+TXID Usado: cobdevmlsc7iksfkthh3lvearzjrhq
+----------------------------------------
+RESPOSTA (Copiar para Doc):
+{
+  "chave": "fa32fa2f-403c-4218-ae9e-ad1b145576af",
+  "solicitacaoPagador": "Homologacao C6 - Cob com Devedor",
+  "pixCopiaECola": "00020101021226990014br.gov.bcb.pix2577qrcode-h.c6pix.com/qrs1/v2/01m0VJLN04cUjj7SHxxBmxEZ0Tkq3IRAMqcmyo0zTH9EHFw3dm520400005303986540525.505802BR5916REGRESSIVO TESTE6009Sao Paulo62070503***63048249",
+  "calendario": {
+    "criacao": "2026-02-18T17:59:54.986Z",
+    "expiracao": 3600
+  },
+  "txid": "cobdevmlsc7iksfkthh3lvearzjrhq",
+  "revisao": 0,
+  "devedor": {
+    "nome": "Fulano de Tal Homologacao",
+    "cpf": "12345678909"
+  },
+  "location": "qrcode-h.c6pix.com/qrs1/v2/01m0VJLN04cUjj7SHxxBmxEZ0Tkq3IRAMqcmyo0zTH9EHFw3dm",
+  "status": "ATIVA",
+  "valor": {
+    "original": "25.50",
+    "modalidadeAlteracao": 0
+  }
+}
+========================================
+
+
+========================================
+[PASSO 7.3] - Consultar cobranca imediata
+----------------------------------------
+REQ (Resumo): GET /v2/pix/cob/cobdevmlsc7iksfkthh3lvearzjrhq
+TXID Usado: cobdevmlsc7iksfkthh3lvearzjrhq
+----------------------------------------
+RESPOSTA (Copiar para Doc):
+{
+  "calendario": {
+    "criacao": "2026-02-18T17:59:55.000Z",
+    "expiracao": 3600
+  },
+  "devedor": {
+    "nome": "Fulano de Tal Homologacao",
+    "cpf": "12345678909"
+  },
+  "chave": "fa32fa2f-403c-4218-ae9e-ad1b145576af",
+  "valor": {
+    "original": "25.50",
+    "modalidadeAlteracao": 0
+  },
+  "solicitacaoPagador": "Homologacao C6 - Cob com Devedor",
+  "txid": "cobdevmlsc7iksfkthh3lvearzjrhq",
+  "revisao": 0,
+  "location": "qrcode-h.c6pix.com/qrs1/v2/01m0VJLN04cUjj7SHxxBmxEZ0Tkq3IRAMqcmyo0zTH9EHFw3dm",
+  "status": "ATIVA",
+  "pixCopiaECola": "00020101021226990014br.gov.bcb.pix2577qrcode-h.c6pix.com/qrs1/v2/01m0VJLN04cUjj7SHxxBmxEZ0Tkq3IRAMqcmyo0zTH9EHFw3dm520400005303986540525.505802BR5916REGRESSIVO TESTE6009Sao Paulo62070503***63048249"
+}
+========================================
+
+
+========================================
+[PASSO 7.4] - Consultar lista de cobrancas imediatas
+----------------------------------------
+REQ (Resumo): GET /v2/pix/cob?inicio=...&fim=...
+----------------------------------------
+RESPOSTA (Copiar para Doc):
+{
+  "parametros": {
+    "inicio": "2026-02-17T18:00:02.191Z",
+    "fim": "2026-02-18T18:00:02.191Z",
+    "paginacao": {
+      "paginaAtual": 0,
+      "itensPorPagina": 100,
+      "quantidadeDePaginas": 1,
+      "quantidadeTotalDeItens": 6
+    }
+  },
+  "cobs": [
+    {
+      "calendario": {
+        "criacao": "2026-02-17T23:39:56.000Z",
+        "expiracao": 3600
+      },
+      "chave": "fa32fa2f-403c-4218-ae9e-ad1b145576af",
+      "valor": {
+        "original": "10.00",
+        "modalidadeAlteracao": 0
+      },
+      "solicitacaoPagador": "Homologacao C6 - Cob Simples",
+      "txid": "cobsimpmlr8wwp41c70iaz2d5jwjbte",
+      "revisao": 0,
+      "location": "qrcode-h.c6pix.com/qrs1/v2/01vllhx9d2EpgQsc4D23uI2fk7NyRB1X4qbdNGV0yIrtblpLfO",
+      "status": "ATIVA",
+      "pixCopiaECola": "00020101021226990014br.gov.bcb.pix2577qrcode-h.c6pix.com/qrs1/v2/01vllhx9d2EpgQsc4D23uI2fk7NyRB1X4qbdNGV0yIrtblpLfO520400005303986540510.005802BR5916REGRESSIVO TESTE6009Sao Paulo62070503***63044A03"
+    },
+    {
+      "calendario": {
+        "criacao": "2026-02-17T23:39:57.000Z",
+        "expiracao": 3600
+      },
+      "devedor": {
+        "nome": "Fulano de Tal Homologacao",
+        "cpf": "12345678909"
+      },
+      "chave": "fa32fa2f-403c-4218-ae9e-ad1b145576af",
+      "valor": {
+        "original": "25.50",
+        "modalidadeAlteracao": 0
+      },
+      "solicitacaoPagador": "Homologacao C6 - Cob com Devedor",
+      "txid": "cobdevmlr8wz91b7n3u3yzkliddxgh",
+      "revisao": 0,
+      "location": "qrcode-h.c6pix.com/qrs1/v2/01GlBSFVlE7P5VDwwFloLzv9l9coUiWDGkCJhvbfJm9AwsLCwM",
+      "status": "ATIVA",
+      "pixCopiaECola": "00020101021226990014br.gov.bcb.pix2577qrcode-h.c6pix.com/qrs1/v2/01GlBSFVlE7P5VDwwFloLzv9l9coUiWDGkCJhvbfJm9AwsLCwM520400005303986540525.505802BR5916REGRESSIVO TESTE6009Sao Paulo62070503***63041E23"
+    },
+    {
+      "calendario": {
+        "criacao": "2026-02-18T17:39:40.000Z",
+        "expiracao": 3600
+      },
+      "chave": "fa32fa2f-403c-4218-ae9e-ad1b145576af",
+      "valor": {
+        "original": "10.00",
+        "modalidadeAlteracao": 0
+      },
+      "solicitacaoPagador": "Homologacao C6 - Cob Simples",
+      "txid": "cobsimpmlsbhgvrnr1qpchyieotfnt5",
+      "revisao": 0,
+      "location": "qrcode-h.c6pix.com/qrs1/v2/01MxqkajGvpp2xE5OUy6hBeKrc2L8g6ESykzhTDrZw9GCpvU1x",
+      "status": "ATIVA",
+      "pixCopiaECola": "00020101021226990014br.gov.bcb.pix2577qrcode-h.c6pix.com/qrs1/v2/01MxqkajGvpp2xE5OUy6hBeKrc2L8g6ESykzhTDrZw9GCpvU1x520400005303986540510.005802BR5916REGRESSIVO TESTE6009Sao Paulo62070503***6304778D"
+    },
+    {
+      "calendario": {
+        "criacao": "2026-02-18T17:39:45.000Z",
+        "expiracao": 3600
+      },
+      "devedor": {
+        "nome": "Fulano de Tal Homologacao",
+        "cpf": "12345678909"
+      },
+      "chave": "fa32fa2f-403c-4218-ae9e-ad1b145576af",
+      "valor": {
+        "original": "25.50",
+        "modalidadeAlteracao": 0
+      },
+      "solicitacaoPagador": "Homologacao C6 - Cob com Devedor",
+      "txid": "cobdevmlsbhkldxkggl8kpf04kxag3",
+      "revisao": 0,
+      "location": "qrcode-h.c6pix.com/qrs1/v2/01JkOSYMx5nmrOFqbvsQStJ5Zz4XSnbq2kYF10EZCTioWba96m",
+      "status": "ATIVA",
+      "pixCopiaECola": "00020101021226990014br.gov.bcb.pix2577qrcode-h.c6pix.com/qrs1/v2/01JkOSYMx5nmrOFqbvsQStJ5Zz4XSnbq2kYF10EZCTioWba96m520400005303986540525.505802BR5916REGRESSIVO TESTE6009Sao Paulo62070503***63045EC7"
+    },
+    {
+      "calendario": {
+        "criacao": "2026-02-18T17:59:52.000Z",
+        "expiracao": 3600
+      },
+      "chave": "fa32fa2f-403c-4218-ae9e-ad1b145576af",
+      "valor": {
+        "original": "10.00",
+        "modalidadeAlteracao": 0
+      },
+      "solicitacaoPagador": "Homologacao C6 - Cob Simples",
+      "txid": "cobsimpmlsc7ga2ie7euaggdl5yds83",
+      "revisao": 0,
+      "location": "qrcode-h.c6pix.com/qrs1/v2/01ZkNcBB2N8M9nMriOIQtb9yu8oyMYteqHK0Nhk2LKsiXR9swO",
+      "status": "ATIVA",
+      "pixCopiaECola": "00020101021226990014br.gov.bcb.pix2577qrcode-h.c6pix.com/qrs1/v2/01ZkNcBB2N8M9nMriOIQtb9yu8oyMYteqHK0Nhk2LKsiXR9swO520400005303986540510.005802BR5916REGRESSIVO TESTE6009Sao Paulo62070503***630413B2"
+    },
+    {
+      "calendario": {
+        "criacao": "2026-02-18T17:59:55.000Z",
+        "expiracao": 3600
+      },
+      "devedor": {
+        "nome": "Fulano de Tal Homologacao",
+        "cpf": "12345678909"
+      },
+      "chave": "fa32fa2f-403c-4218-ae9e-ad1b145576af",
+      "valor": {
+        "original": "25.50",
+        "modalidadeAlteracao": 0
+      },
+      "solicitacaoPagador": "Homologacao C6 - Cob com Devedor",
+      "txid": "cobdevmlsc7iksfkthh3lvearzjrhq",
+      "revisao": 0,
+      "location": "qrcode-h.c6pix.com/qrs1/v2/01m0VJLN04cUjj7SHxxBmxEZ0Tkq3IRAMqcmyo0zTH9EHFw3dm",
+      "status": "ATIVA",
+      "pixCopiaECola": "00020101021226990014br.gov.bcb.pix2577qrcode-h.c6pix.com/qrs1/v2/01m0VJLN04cUjj7SHxxBmxEZ0Tkq3IRAMqcmyo0zTH9EHFw3dm520400005303986540525.505802BR5916REGRESSIVO TESTE6009Sao Paulo62070503***63048249"
+    }
+  ]
+}
+========================================
+
+
+========================================
+[PASSO 7.5] - Criar cobranca com vencimento (CobV)
+----------------------------------------
+REQ (Resumo): PUT /v2/pix/cobv/cobvmlsc7nh96m4fas34z3pvr51c
+TXID Usado: cobvmlsc7nh96m4fas34z3pvr51c
+----------------------------------------
+RESPOSTA (Copiar para Doc):
+{
+  "chave": "fa32fa2f-403c-4218-ae9e-ad1b145576af",
+  "solicitacaoPagador": "Homologacao C6 - CobV com Vencimento",
+  "pixCopiaECola": "00020101021226990014br.gov.bcb.pix2577qrcode-h.c6pix.com/qrs1/v2/cobv/017AiEsXmL4wIe9JdxgFeuaZYUCH7zG4h5UbaeUcfm7Q05204000053039865406150.005802BR5916REGRESSIVO TESTE6009Sao Paulo62070503***63044B98",
+  "calendario": {
+    "criacao": "2026-02-18T18:00:01.667Z",
+    "dataDeVencimento": "2026-02-25",
+    "validadeAposVencimento": 30
+  },
+  "txid": "cobvmlsc7nh96m4fas34z3pvr51c",
+  "revisao": 0,
+  "devedor": {
+    "nome": "Fulano de Tal Homologacao",
+    "cpf": "12345678909"
+  },
+  "recebedor": {
+    "nome": "Regressivo Teste",
+    "cnpj": "52636345000130",
+    "nomeFantasia": "Regressivo Teste",
+    "logradouro": "Avenida Nove de Julho 3186",
+    "cidade": "Sao Paulo",
+    "uf": "SP",
+    "cep": "1406000"
+  },
+  "loc": {
+    "id": 0,
+    "location": "qrcode-h.c6pix.com/qrs1/v2/cobv/017AiEsXmL4wIe9JdxgFeuaZYUCH7zG4h5UbaeUcfm7Q0",
+    "tipoCob": "cobv",
+    "criacao": "2026-02-18T18:00:01.667Z"
+  },
+  "status": "ATIVA",
+  "valor": {
+    "original": "150.00"
+  }
+}
+========================================
+
+
+========================================
+[PASSO 7.6] - Consultar lista de cobrancas com vencimento
+----------------------------------------
+REQ (Resumo): GET /v2/pix/cobv?inicio=...&fim=...
+----------------------------------------
+RESPOSTA (Copiar para Doc):
+{
+  "parametros": {
+    "inicio": "2026-02-17T18:00:07.174Z",
+    "fim": "2026-02-25T18:00:07.174Z",
+    "paginacao": {
+      "paginaAtual": 0,
+      "itensPorPagina": 100,
+      "quantidadeDePaginas": 1,
+      "quantidadeTotalDeItens": 3
+    }
+  },
+  "cobs": [
+    {
+      "calendario": {
+        "criacao": "2026-02-17T23:40:05.000Z",
+        "dataDeVencimento": "2026-02-24",
+        "validadeAposVencimento": 30
+      },
+      "devedor": {
+        "nome": "Fulano de Tal Homologacao",
+        "cpf": "12345678909"
+      },
+      "chave": "fa32fa2f-403c-4218-ae9e-ad1b145576af",
+      "loc": {
+        "id": 0,
+        "location": "qrcode-h.c6pix.com/qrs1/v2/cobv/01KCaOJm5Rl9MiXb5gPh0vXHjOIooE9oJTx84VS3UTzC5",
+        "tipoCob": "cobv",
+        "criacao": "2026-02-17T23:40:05.000Z"
+      },
+      "valor": {
+        "original": "150.00"
+      },
+      "solicitacaoPagador": "Homologacao C6 - CobV com Vencimento",
+      "txid": "cobvmlr8x3xgratpuk3s3uk4slt8",
+      "revisao": 0,
+      "recebedor": {
+        "nome": "Regressivo Teste",
+        "cnpj": "52636345000130",
+        "nomeFantasia": "Regressivo Teste",
+        "logradouro": "Avenida Nove de Julho 3186",
+        "cidade": "Sao Paulo",
+        "uf": "SP",
+        "cep": "1406000"
+      },
+      "status": "ATIVA",
+      "pixCopiaECola": "00020101021226990014br.gov.bcb.pix2577qrcode-h.c6pix.com/qrs1/v2/cobv/01KCaOJm5Rl9MiXb5gPh0vXHjOIooE9oJTx84VS3UTzC55204000053039865406150.005802BR5916REGRESSIVO TESTE6009Sao Paulo62070503***6304129E"
+    },
+    {
+      "calendario": {
+        "criacao": "2026-02-18T17:39:51.000Z",
+        "dataDeVencimento": "2026-02-25",
+        "validadeAposVencimento": 30
+      },
+      "devedor": {
+        "nome": "Fulano de Tal Homologacao",
+        "cpf": "12345678909"
+      },
+      "chave": "fa32fa2f-403c-4218-ae9e-ad1b145576af",
+      "loc": {
+        "id": 0,
+        "location": "qrcode-h.c6pix.com/qrs1/v2/cobv/01h4CSIWDVGmL9VGW9xfss3xyyao8SaqBLAinbleTHKFJ",
+        "tipoCob": "cobv",
+        "criacao": "2026-02-18T17:39:51.000Z"
+      },
+      "valor": {
+        "original": "150.00"
+      },
+      "solicitacaoPagador": "Homologacao C6 - CobV com Vencimento",
+      "txid": "cobvmlsbhqlzpkkb94xyr3gtajcu",
+      "revisao": 0,
+      "recebedor": {
+        "nome": "Regressivo Teste",
+        "cnpj": "52636345000130",
+        "nomeFantasia": "Regressivo Teste",
+        "logradouro": "Avenida Nove de Julho 3186",
+        "cidade": "Sao Paulo",
+        "uf": "SP",
+        "cep": "1406000"
+      },
+      "status": "ATIVA",
+      "pixCopiaECola": "00020101021226990014br.gov.bcb.pix2577qrcode-h.c6pix.com/qrs1/v2/cobv/01h4CSIWDVGmL9VGW9xfss3xyyao8SaqBLAinbleTHKFJ5204000053039865406150.005802BR5916REGRESSIVO TESTE6009Sao Paulo62070503***6304AA36"
+    },
+    {
+      "calendario": {
+        "criacao": "2026-02-18T18:00:02.000Z",
+        "dataDeVencimento": "2026-02-25",
+        "validadeAposVencimento": 30
+      },
+      "devedor": {
+        "nome": "Fulano de Tal Homologacao",
+        "cpf": "12345678909"
+      },
+      "chave": "fa32fa2f-403c-4218-ae9e-ad1b145576af",
+      "loc": {
+        "id": 0,
+        "location": "qrcode-h.c6pix.com/qrs1/v2/cobv/017AiEsXmL4wIe9JdxgFeuaZYUCH7zG4h5UbaeUcfm7Q0",
+        "tipoCob": "cobv",
+        "criacao": "2026-02-18T18:00:02.000Z"
+      },
+      "valor": {
+        "original": "150.00"
+      },
+      "solicitacaoPagador": "Homologacao C6 - CobV com Vencimento",
+      "txid": "cobvmlsc7nh96m4fas34z3pvr51c",
+      "revisao": 0,
+      "recebedor": {
+        "nome": "Regressivo Teste",
+        "cnpj": "52636345000130",
+        "nomeFantasia": "Regressivo Teste",
+        "logradouro": "Avenida Nove de Julho 3186",
+        "cidade": "Sao Paulo",
+        "uf": "SP",
+        "cep": "1406000"
+      },
+      "status": "ATIVA",
+      "pixCopiaECola": "00020101021226990014br.gov.bcb.pix2577qrcode-h.c6pix.com/qrs1/v2/cobv/017AiEsXmL4wIe9JdxgFeuaZYUCH7zG4h5UbaeUcfm7Q05204000053039865406150.005802BR5916REGRESSIVO TESTE6009Sao Paulo62070503***63044B98"
+    }
+  ]
+}
+========================================
+
+
+========================================
+[PASSO 7.7] - Consultar cobranca com vencimento
+----------------------------------------
+REQ (Resumo): GET /v2/pix/cobv/cobvmlsc7nh96m4fas34z3pvr51c
+TXID Usado: cobvmlsc7nh96m4fas34z3pvr51c
+----------------------------------------
+RESPOSTA (Copiar para Doc):
+{
+  "calendario": {
+    "criacao": "2026-02-18T18:00:02.000Z",
+    "dataDeVencimento": "2026-02-25",
+    "validadeAposVencimento": 30
+  },
+  "devedor": {
+    "nome": "Fulano de Tal Homologacao",
+    "cpf": "12345678909"
+  },
+  "chave": "fa32fa2f-403c-4218-ae9e-ad1b145576af",
+  "loc": {
+    "id": 0,
+    "location": "qrcode-h.c6pix.com/qrs1/v2/cobv/017AiEsXmL4wIe9JdxgFeuaZYUCH7zG4h5UbaeUcfm7Q0",
+    "tipoCob": "cobv",
+    "criacao": "2026-02-18T18:00:02.000Z"
+  },
+  "valor": {
+    "original": "150.00"
+  },
+  "solicitacaoPagador": "Homologacao C6 - CobV com Vencimento",
+  "txid": "cobvmlsc7nh96m4fas34z3pvr51c",
+  "revisao": 0,
+  "recebedor": {
+    "nome": "Regressivo Teste",
+    "cnpj": "52636345000130",
+    "nomeFantasia": "Regressivo Teste",
+    "logradouro": "Avenida Nove de Julho 3186",
+    "cidade": "Sao Paulo",
+    "uf": "SP",
+    "cep": "1406000"
+  },
+  "status": "ATIVA",
+  "pixCopiaECola": "00020101021226990014br.gov.bcb.pix2577qrcode-h.c6pix.com/qrs1/v2/cobv/017AiEsXmL4wIe9JdxgFeuaZYUCH7zG4h5UbaeUcfm7Q05204000053039865406150.005802BR5916REGRESSIVO TESTE6009Sao Paulo62070503***63044B98"
+}
+========================================
+
+
+========================================
+[PASSO 7.8a] - Consultar Webhooks existentes
+----------------------------------------
+REQ (Resumo): GET /v2/pix/webhook
+----------------------------------------
+RESPOSTA (Copiar para Doc):
+{
+  "parametros": {
+    "paginacao": {
+      "paginaAtual": 0,
+      "itensPorPagina": 0,
+      "quantidadeDePaginas": 0,
+      "quantidadeTotalDeItens": 0
+    }
+  },
+  "webhooks": []
+}
+========================================
+
+   Tentando registrar webhook: https://unfactually-intercatenated-shannan.ngrok-free.dev/api/webhook/pagamento/c6
+
+========================================
+[PASSO 7.8b] - Configurar Webhook
+----------------------------------------
+REQ (Resumo): PUT /v2/pix/webhook/{chave}
+----------------------------------------
+RESPOSTA (Copiar para Doc):
+{
+  "status": 200,
+  "data": {
+    "webhookUrl": "https://unfactually-intercatenated-shannan.ngrok-free.dev/api/webhook/pagamento/c6",
+    "chave": "fa32fa2f-403c-4218-ae9e-ad1b145576af",
+    "criacao": "2026-02-18T18:00:08.688725955Z"
+  }
+}
+========================================
+
+
+========================================
+[PASSO 7.8c] - Consultar Webhook por Chave
+----------------------------------------
+REQ (Resumo): GET /v2/pix/webhook/{chave}
+----------------------------------------
+RESPOSTA (Copiar para Doc):
+{
+  "webhookUrl": "https://unfactually-intercatenated-shannan.ngrok-free.dev/api/webhook/pagamento/c6",
+  "chave": "fa32fa2f-403c-4218-ae9e-ad1b145576af",
+  "criacao": "2026-02-18T18:00:08.688725955Z"
+}
+========================================
+
+
+[FINISH] ROTEIRO DE HOMOLOGACAO FINALIZADO!
+   Copie os JSONs acima para o documento de homologacao.

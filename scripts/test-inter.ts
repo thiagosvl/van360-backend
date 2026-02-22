@@ -15,7 +15,7 @@ const INTER_CERT_PATH = process.env.INTER_CERT_PATH || "";
 const INTER_KEY_PATH = process.env.INTER_KEY_PATH || "";
 
 // Webhook URL
-const WEBHOOK_URL = process.env.INTER_WEBHOOK_URL || "https://api.van360.com.br/api/pagamento/webhook/inter";
+const WEBHOOK_URL = process.env.INTER_WEBHOOK_URL || "https://api.van360.com.br/api/webhook/pagamento/inter";
 
 // Devedor Dummy
 const DEVEDOR_DUMMY = {
