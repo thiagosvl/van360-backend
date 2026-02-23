@@ -364,6 +364,10 @@ export const c6Service = {
    * Validação de Chave via Pré-processamento (Zero-Cost Disclosure)
    * Cria o lote, captura os dados do DICT e deleta o lote em seguida.
    */
+  isSandbox(): boolean {
+    return env.C6_API_URL.toLowerCase().includes("sandbox");
+  },
+
   async validarChavePix(chave: string): Promise<{ nome: string; cpfCnpj: string }> {
     const token = await this.getAccessToken();
     const headers = { Authorization: `Bearer ${token}` };
@@ -414,6 +418,20 @@ export const c6Service = {
 
       return { nome, cpfCnpj };
     } catch (error: any) {
+      // SANDBOX BYPASS: Se estivermos em sandbox, permitimos o erro de validação (DICT é limitado)
+      if (this.isSandbox()) {
+        logger.warn({ 
+          chave, 
+          originalError: error.response?.data || error.message,
+          status: error.response?.status
+        }, "C6 Sandbox: Bypassing validation failure for testing purposes.");
+
+        return { 
+          nome: "TITULAR VALIDADO (SANDBOX)", 
+          cpfCnpj: chave.length <= 14 ? chave : "DOCUMENTO VALIDADO" 
+        };
+      }
+
       // FALLBACK: Se der 403 (Falta de permissão de Agendamento/Decode), tentamos criar uma cobrança de 0.01
       // Se a cobrança for criada com sucesso, a chave é válida e pertence a esta conta.
       if (error.response?.status === 403) {
