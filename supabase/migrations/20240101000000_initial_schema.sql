@@ -505,8 +505,6 @@ CREATE TABLE IF NOT EXISTS "public"."usuarios" (
     "tipo_chave_pix" "text",
     "status_chave_pix" character varying(50) DEFAULT 'NAO_CADASTRADA'::character varying NOT NULL,
     "chave_pix_validada_em" timestamp with time zone,
-    "nome_titular_pix_validado" "text",
-    "cpf_cnpj_titular_pix_validado" "text",
     "tipo" "public"."user_type_enum" DEFAULT 'motorista'::"public"."user_type_enum" NOT NULL,
     "assinatura_url" "text",
     "config_contrato" "jsonb" DEFAULT '{
