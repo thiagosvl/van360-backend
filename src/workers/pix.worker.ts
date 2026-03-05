@@ -1,9 +1,9 @@
 import { Job, Worker } from 'bullmq';
+import crypto from 'node:crypto';
 import { logger } from '../config/logger.js';
 import { redisConfig } from '../config/redis.js';
 import { supabaseAdmin } from '../config/supabase.js';
 import { PixJobData, QUEUE_NAME_PIX } from '../queues/pix.queue.js';
-import { MockPaymentType, mockAutomationService } from '../services/mock-automation.service.js';
 import { paymentService } from '../services/payment.service.js';
 
 /**
@@ -18,8 +18,10 @@ export const pixWorker = new Worker<PixJobData>(
         try {
             // Chamar API do Provedor
             const provider = paymentService.getProvider();
+            
+            const novoTxid = crypto.randomUUID();
             const pixResult = await provider.criarCobrancaComVencimento({
-                cobrancaId,
+                cobrancaId: novoTxid,
                 valor,
                 cpf,
                 nome,
@@ -43,15 +45,6 @@ export const pixWorker = new Worker<PixJobData>(
                 throw error;
             }
             
-            // --- AUTOMAÇÃO MOCK ---
-            if (paymentService.isMock()) {
-                mockAutomationService.schedulePayment(
-                    pixResult.gatewayTransactionId,
-                    valor,
-                    MockPaymentType.COBRANCA
-                );
-            }
-
             logger.info({ jobId: job.id, cobrancaId, txid: pixResult.gatewayTransactionId }, "✅ [PixWorker] PIX registrado e salvo com sucesso");
 
         } catch (error: any) {

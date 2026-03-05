@@ -110,7 +110,7 @@ class ContractService {
       placaVeiculo: passageiro.veiculo.placa,
       modeloVeiculo: `${passageiro.veiculo.marca} ${passageiro.veiculo.modelo}`,
       clausulas: usuario.config_contrato?.clausulas,
-      assinaturaCondutorUrl: usuario.assinatura_url,
+      assinaturaCondutorUrl: usuario.assinatura_digital_url,
       apelidoCondutor: usuario.apelido,
     };
     
@@ -578,7 +578,7 @@ class ContractService {
       
       clausulas,
       
-      assinaturaCondutorUrl: config.assinaturaCondutorUrl || usuario.assinatura_url,
+      assinaturaCondutorUrl: config.assinaturaCondutorUrl || usuario.assinatura_digital_url,
       apelidoCondutor: usuario.apelido,
     };
 

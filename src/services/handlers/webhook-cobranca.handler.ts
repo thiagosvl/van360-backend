@@ -1,4 +1,4 @@
-import { DRIVER_EVENT_PAYMENT_RECEIVED_ALERT, PASSENGER_EVENT_PAYMENT_RECEIVED } from "../../config/constants.js";
+import { DRIVER_EVENT_REPASSE_PROCESSING, PASSENGER_EVENT_PAYMENT_RECEIVED } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
 import { addToReceiptQueue } from "../../queues/receipt.queue.js";
@@ -102,17 +102,17 @@ export const webhookCobrancaHandler = {
                     }
                 });
 
-                // Notificar Motorista sobre recebimento
-                notificationService.notifyDriver(moto.telefone, DRIVER_EVENT_PAYMENT_RECEIVED_ALERT, {
+                // Notificar Motorista sobre status do Repasse (Dinheiro em trânsito)
+                notificationService.notifyDriver(moto.telefone, DRIVER_EVENT_REPASSE_PROCESSING, {
                      nomeMotorista: moto.nome,
                      nomePagador: pass?.nome_responsavel,
                      nomePassageiro: pass?.nome,
                      valor: amount,
                      mes: fullData.mes,
                      ano: fullData.ano,
-                     nomePlano: "", // Not used in this template
-                     dataVencimento: fullData.data_vencimento || ""
-                }); 
+                     nomePlano: "",
+                     dataVencimento: ""
+                });
             }
 
         } catch (queueErr) {

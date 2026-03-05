@@ -18,8 +18,7 @@ export enum AssinaturaStatus {
 
 export enum CobrancaStatus {
   PAGO = "pago",
-  PENDENTE = "pendente",
-  CANCELADA = "cancelada"
+  PENDENTE = "pendente"
 }
 
 export enum AssinaturaCobrancaStatus {
@@ -81,15 +80,33 @@ export enum PixKeyStatus {
 export enum TransactionStatus {
   SUCESSO = "SUCESSO",
   ERRO = "ERRO",
+  EM_PROCESSAMENTO = "EM_PROCESSAMENTO_BANCARIO",
   PROCESSAMENTO = "PROCESSAMENTO",
+  AGUARDANDO_APROVACAO = "AGUARDANDO_APROVACAO",
   PENDENTE = "PENDENTE"
 }
 
 export enum RepasseStatus {
   PENDENTE = "PENDENTE",
   PROCESSANDO = "PROCESSANDO",
+  AGUARDANDO_APROVACAO = "AGUARDANDO_APROVACAO",
+  EM_PROCESSAMENTO = "EM_PROCESSAMENTO_BANCARIO",
   REPASSADO = "REPASSADO",
   FALHA = "FALHA_REPASSE"
+}
+
+export enum RepasseState {
+  CRIADO = 'CRIADO',
+  DECODIFICANDO = 'DECODIFICANDO',
+  DECODIFICADO = 'DECODIFICADO',
+  SUBMETIDO = 'SUBMETIDO',
+  AGUARDANDO_APROVACAO = 'AGUARDANDO_APROVACAO',
+  EM_LIQUIDACAO = 'EM_LIQUIDACAO',
+  LIQUIDADO = 'LIQUIDADO',
+  ERRO_DECODIFICACAO = 'ERRO_DECODIFICACAO',
+  ERRO_TRANSFERENCIA = 'ERRO_TRANSFERENCIA',
+  EXPIRADO = 'EXPIRADO',
+  CANCELADO = 'CANCELADO',
 }
 
 export enum PixKeyType {
@@ -117,7 +134,6 @@ export enum ConfigKey {
 export enum PaymentGateway {
   INTER = "inter",
   C6 = "c6",
-  MOCK = "mock",
 }
 
 export enum ContratoStatus {
@@ -167,4 +183,32 @@ export enum PeriodoEnum {
   TARDE = "tarde",
   NOITE = "noite",
   INTEGRAL = "integral"
+}
+
+export enum ProviderTransferStatus {
+  REALIZADO = "REALIZADO",
+  PAGO = "PAGO",
+  REJEITADO = "REJEITADO",
+  DEVOLVIDO = "DEVOLVIDO",
+  FALHA = "FALHA",
+  WAITING_APPROVAL = "WAITING_APPROVAL",
+  PROCESSING_BANK = "PROCESSING_BANK",
+  CANCELADO = "CANCELADO"
+}
+
+export enum C6TransferStatus {
+  READ_DATA = "READ_DATA",
+  ERROR = "ERROR",
+  DECODE_ERROR = "DECODE_ERROR",
+  PROCESSED = "PROCESSED",
+  SCHEDULED = "SCHEDULED",
+  PROCESSING = "PROCESSING",
+  SCHEDULING_CANCELLED = "SCHEDULING_CANCELLED",
+  CANCELED = "CANCELED" // Mantido por precaução caso ainda seja usado em outras respostas antigas
+}
+
+export enum InterTransferStatus {
+  APROVACAO = "APROVACAO",
+  PROCESSADO = "PROCESSADO",
+  AGENDADO = "AGENDADO"
 }

@@ -42,7 +42,7 @@ const buildPixMessageParts = (text: string, pixPayload?: string): CompositeMessa
     const parts: CompositeMessagePart[] = [];
 
     // Adiciona dica de pagamento automático
-    const caption = `${text}\n\n💡 Pague pelo app do seu banco. Não precisa enviar comprovante, o sistema identifica automaticamente! ✨`;
+    const caption = `${text}\n\n💡 Pague pelo app do seu banco. Não precisa enviar comprovante, o sistema identifica automaticamente.`;
 
     // 1. Bundle: Image Placeholder (QR Code) with Caption (Instructions)
     // Service recognizes 'qrcode' meta and generate the image
@@ -76,7 +76,7 @@ const getSystemFooter = (ctx: PassengerContext) => {
 
     const nomeExibicao = ctx.apelidoMotorista || getFirstName(ctx.nomeMotorista);
 
-    return `\n\n_________________\n🤖 *Mensagem Automática Van360*\nEnviada em nome de: *${nomeExibicao}*${phoneLink}`;
+    return `\n\n_________________\n🤖 *Sistema Van360*\nEnviada em nome de: *${nomeExibicao}*${phoneLink}`;
 };
 
 export const PassengerTemplates = {
@@ -89,13 +89,13 @@ export const PassengerTemplates = {
         const data = formatDate(ctx.dataVencimento);
         const diasMsg = ctx.diasAntecedencia ? ` (daqui a ${ctx.diasAntecedencia} dias)` : "";
         const nomeResp = getFirstName(ctx.nomeResponsavel);
-        const nomeMotorista = ctx.apelidoMotorista || getFirstName(ctx.nomeMotorista);
 
-        const text = `Oi *${nomeResp}*! Tudo bem? 👋\n\n` +
-            `Passando para enviar o lembrete da mensalidade do(a) *${ctx.nomePassageiro}* referente ao transporte com o(a) Tio(a) *${nomeMotorista}*.\n\n` +
+        const text = `🗓️ *Mensalidade Disponível para Pagamento*\n\n` +
+            `Responsável: *${nomeResp}*\n` +
+            `Passageiro(a): *${ctx.nomePassageiro}*\n\n` +
             `🔹 Valor: *${valor}*\n` +
             `🔹 Vencimento: *${data}*${diasMsg}\n\n` +
-            `Segue abaixo o código PIX para sua comodidade. 👇${getSystemFooter(ctx)}`;
+            `Copie o código PIX abaixo para realizar o pagamento.${getSystemFooter(ctx)}`;
 
         return buildPixMessageParts(text, ctx.pixPayload);
     },
@@ -105,11 +105,14 @@ export const PassengerTemplates = {
      */
     dueToday: (ctx: PassengerContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
+        const data = formatDate(ctx.dataVencimento);
         const nomeResp = getFirstName(ctx.nomeResponsavel);
         
-        const text = `Oi *${nomeResp}*! Tudo bem? 👋\n\n` +
-            `Lembrete rapidinho: a mensalidade do(a) *${ctx.nomePassageiro}* no valor de *${valor}* vence *HOJE*! 🗓️\n\n` +
-            `Se precisar, o código PIX está logo abaixo. 👇${getSystemFooter(ctx)}`;
+        const text = `⚠️ *Vencimento Hoje*\n\n` +
+            `Responsável: *${nomeResp}*\n` +
+            `Passageiro(a): *${ctx.nomePassageiro}*\n\n` +
+            `A mensalidade no valor de *${valor}* vence hoje (*${data}*).\n` +
+            `Copie o código PIX abaixo para realizar o pagamento.${getSystemFooter(ctx)}`;
 
         return buildPixMessageParts(text, ctx.pixPayload);
     },
@@ -123,9 +126,11 @@ export const PassengerTemplates = {
         const diasAtraso = ctx.diasAtraso || 1;
         const nomeResp = getFirstName(ctx.nomeResponsavel);
         
-        const text = `Oi *${nomeResp}*! Tudo bem? 👋\n\n` +
-            `Notamos que a mensalidade do(a) *${ctx.nomePassageiro}* (${valor}) ainda não foi identificada e está vencida desde o dia *${data}* (${diasAtraso} dias de atraso). ⚠️\n\n` +
-            `Para manter tudo em dia e facilitar para você, estamos reenviando o código PIX abaixo. 👇${getSystemFooter(ctx)}`;
+        const text = `⚠️ *Mensalidade Pendente*\n\n` +
+            `Responsável: *${nomeResp}*\n` +
+            `Passageiro(a): *${ctx.nomePassageiro}*\n\n` +
+            `A mensalidade no valor de *${valor}* encontra-se em aberto desde *${data}* (${diasAtraso} dias de atraso).\n` +
+            `Copie o código PIX abaixo para regularizar e evitar suspensão do serviço.${getSystemFooter(ctx)}`;
 
         return buildPixMessageParts(text, ctx.pixPayload);
     },
@@ -135,12 +140,13 @@ export const PassengerTemplates = {
      */
     paymentReceived: (ctx: PassengerContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
-        const ref = ctx.mes ? ` referente a *${getMeshName(ctx.mes)}/${ctx.ano}*` : "";
+        const ref = ctx.mes ? `\nReferência: *${getMeshName(ctx.mes)}/${ctx.ano}*` : "";
         const nomeResp = getFirstName(ctx.nomeResponsavel);
         
-        const text = `Oi *${nomeResp}*! Tudo bem? 👋\n\n` +
-            `Confirmamos o recebimento da mensalidade do(a) *${ctx.nomePassageiro}* no valor de *${valor}*${ref}. ✅\n\n` +
-            `Muito obrigado e uma ótima semana! 🚐💨${getSystemFooter(ctx)}`;
+        const text = `✅ *Pagamento Confirmado*\n\n` +
+            `Responsável: *${nomeResp}*\n` +
+            `Passageiro(a): *${ctx.nomePassageiro}*\n\n` +
+            `O recebimento da mensalidade de *${valor}* foi confirmado com sucesso.${ref}${getSystemFooter(ctx)}`;
 
         // Se tiver recibo, envia a imagem com o texto na legenda (Bundle)
         if (ctx.reciboUrl) {
@@ -161,13 +167,13 @@ export const PassengerTemplates = {
         const valor = formatCurrency(ctx.valor);
         const data = formatDate(ctx.dataVencimento);
         const nomeResp = getFirstName(ctx.nomeResponsavel);
-        const nomeMotorista = ctx.apelidoMotorista || getFirstName(ctx.nomeMotorista);
 
-        const text = `Oi *${nomeResp}*! Tudo bem? 👋\n\n` +
-            `Conforme solicitado, segue o código da mensalidade do(a) *${ctx.nomePassageiro}* com o(a) Tio(a) *${nomeMotorista}*:\n\n` +
+        const text = `🗓️ *Mensalidade para Pagamento*\n\n` +
+            `Responsável: *${nomeResp}*\n` +
+            `Passageiro(a): *${ctx.nomePassageiro}*\n\n` +
             `🔹 Valor: *${valor}*\n` +
             `🔹 Vencimento: *${data}*\n\n` +
-            `O código PIX está logo abaixo. 👇${getSystemFooter(ctx)}`;
+            `Copie o código PIX abaixo para realizar o pagamento.${getSystemFooter(ctx)}`;
 
         return buildPixMessageParts(text, ctx.pixPayload);
     }

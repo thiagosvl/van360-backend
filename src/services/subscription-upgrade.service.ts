@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import {
     DRIVER_EVENT_ACTIVATION,
     DRIVER_EVENT_UPGRADE,
@@ -11,7 +12,6 @@ import { AssinaturaBillingType, AssinaturaCobrancaStatus, AssinaturaStatus } fro
 import { onlyDigits } from "../utils/string.utils.js";
 import { automationService } from "./automation.service.js";
 import { getBillingConfig } from "./configuracao.service.js";
-import { MockPaymentType, mockAutomationService } from "./mock-automation.service.js";
 import { notificationService } from "./notifications/notification.service.js";
 import { paymentService } from "./payment.service.js";
 import { pricingService } from "./pricing.service.js";
@@ -221,21 +221,15 @@ export const subscriptionUpgradeService = {
           const cpf = onlyDigits(usuario.cpfcnpj);
       
           const provider = paymentService.getProvider();
+          
+          const novoTxid = crypto.randomUUID();
           const pixData = await provider.criarCobrancaImediata({
-            cobrancaId: cobranca.id,
+            cobrancaId: novoTxid,
             valor: valorCobrar,
             cpf,
             nome: usuario.nome,
           });
       
-          // --- AUTOMAÇÃO MOCK ---
-          if (paymentService.isMock()) {
-            mockAutomationService.schedulePayment(
-              pixData.gatewayTransactionId,
-              valorCobrar,
-              MockPaymentType.ASSINATURA
-            );
-          }
       
           await supabaseAdmin
             .from("assinaturas_cobrancas")
@@ -370,21 +364,15 @@ export const subscriptionUpgradeService = {
       
               if (userPix) {
                 const provider = paymentService.getProvider();
+                
+                const novoTxid = crypto.randomUUID();
                 const pixData = await provider.criarCobrancaImediata({
-                  cobrancaId: cobrancaNova.id,
+                  cobrancaId: novoTxid,
                   valor: precoAplicado,
                   cpf: onlyDigits(userPix.cpfcnpj),
                   nome: userPix.nome,
                 });
 
-                // --- AUTOMAÇÃO MOCK ---
-                if (paymentService.isMock()) {
-                  mockAutomationService.schedulePayment(
-                    pixData.gatewayTransactionId,
-                    precoAplicado,
-                    MockPaymentType.ASSINATURA
-                  );
-                }
       
                 await supabaseAdmin
                   .from("assinaturas_cobrancas")
@@ -508,21 +496,15 @@ export const subscriptionUpgradeService = {
             const cpf = onlyDigits(usuario.cpfcnpj);
       
             const provider = paymentService.getProvider();
+            
+            const novoTxid = crypto.randomUUID();
             const pixData = await provider.criarCobrancaImediata({
-              cobrancaId: cobranca.id,
+              cobrancaId: novoTxid,
               valor: precoAplicado,
               cpf,
               nome: usuario.nome,
             });
       
-            // --- AUTOMAÇÃO MOCK ---
-            if (paymentService.isMock()) {
-              mockAutomationService.schedulePayment(
-                pixData.gatewayTransactionId,
-                precoAplicado,
-                MockPaymentType.ASSINATURA
-              );
-            }
       
             await supabaseAdmin
               .from("assinaturas_cobrancas")
@@ -626,21 +608,15 @@ export const subscriptionUpgradeService = {
             const cpf = onlyDigits(usuario.cpfcnpj);
       
             const provider = paymentService.getProvider();
+            
+            const novoTxid = crypto.randomUUID();
             const pixData = await provider.criarCobrancaImediata({
-              cobrancaId: cobranca.id,
+              cobrancaId: novoTxid,
               valor: diferenca,
               cpf,
               nome: usuario.nome,
             });
       
-            // --- AUTOMAÇÃO MOCK ---
-            if (paymentService.isMock()) {
-              mockAutomationService.schedulePayment(
-                pixData.gatewayTransactionId,
-                diferenca,
-                MockPaymentType.ASSINATURA
-              );
-            }
       
             await supabaseAdmin
               .from("assinaturas_cobrancas")
@@ -818,21 +794,15 @@ export const subscriptionUpgradeService = {
           const cpf = onlyDigits(usuario.cpfcnpj);
       
           const provider = paymentService.getProvider();
+          
+          const novoTxid = crypto.randomUUID();
           const pixData = await provider.criarCobrancaImediata({
-            cobrancaId: cobranca.id,
+            cobrancaId: novoTxid,
             valor: valorCobranca,
             cpf,
             nome: usuario.nome,
           });
       
-          // --- AUTOMAÇÃO MOCK ---
-          if (paymentService.isMock()) {
-            mockAutomationService.schedulePayment(
-              pixData.gatewayTransactionId,
-              valorCobranca,
-              MockPaymentType.ASSINATURA
-            );
-          }
       
           await supabaseAdmin
             .from("assinaturas_cobrancas")

@@ -1,9 +1,9 @@
+import crypto from "node:crypto";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
 import { AssinaturaBillingType, AssinaturaCobrancaStatus, ConfigKey } from "../types/enums.js";
 import { getConfigNumber } from "./configuracao.service.js";
-import { MockPaymentType, mockAutomationService } from "./mock-automation.service.js";
 import { paymentService } from "./payment.service.js";
 
 export const assinaturaCobrancaService = {
@@ -164,8 +164,9 @@ export const assinaturaCobrancaService = {
              // Definir vencimento (se não tiver na cobrança, usar hoje + 3 dias como fallback seguro, ou tratar erro)
              const dataVencimento = cobranca.data_vencimento || new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
+             const novoTxid = crypto.randomUUID();
              pixData = await provider.criarCobrancaComVencimento({
-                cobrancaId: cobranca.id,
+                cobrancaId: novoTxid,
                 valor: Number(cobranca.valor),
                 cpf: usuario.cpfcnpj,
                 nome: usuario.nome,
@@ -176,8 +177,9 @@ export const assinaturaCobrancaService = {
         } else {
             logger.info({ cobrancaId, billingType: cobranca.billing_type }, `Gerando PIX Imediato (cob) via ${provider.name}`);
             
+            const novoTxid = crypto.randomUUID();
             pixData = await provider.criarCobrancaImediata({
-                cobrancaId: cobranca.id,
+                cobrancaId: novoTxid,
                 valor: Number(cobranca.valor),
                 cpf: usuario.cpfcnpj,
                 nome: usuario.nome,
@@ -199,14 +201,6 @@ export const assinaturaCobrancaService = {
             throw new Error("Erro ao salvar dados do PIX.");
         }
 
-        // --- AUTOMAÇÃO MOCK ---
-        if (paymentService.isMock()) {
-            mockAutomationService.schedulePayment(
-              pixData.gatewayTransactionId,
-              Number(cobranca.valor),
-              MockPaymentType.ASSINATURA
-            );
-        }
 
         return {
             qrCodePayload: pixData.qrCodePayload,
@@ -251,8 +245,10 @@ export const assinaturaCobrancaService = {
         let pixData: any = {};
         try {
             const provider = paymentService.getProvider();
+            
+            const novoTxid = crypto.randomUUID();
             pixData = await provider.criarCobrancaComVencimento({
-                cobrancaId: cobranca.id,
+                cobrancaId: novoTxid,
                 valor: valor,
                 cpf: cpfResponsavel,
                 nome: nomeResponsavel,
@@ -274,14 +270,6 @@ export const assinaturaCobrancaService = {
                 logger.error({ updateError, cobrancaId: cobranca.id }, "Erro ao atualizar cobrança com dados do PIX");
             }
 
-            // --- AUTOMAÇÃO MOCK ---
-            if (paymentService.isMock()) {
-                mockAutomationService.schedulePayment(
-                    pixData.gatewayTransactionId,
-                    valor,
-                    MockPaymentType.ASSINATURA
-                );
-            }
 
         } catch (err: any) {
             logger.error({ err, cobrancaId: cobranca.id }, "Falha ao gerar PIX para ativação.");

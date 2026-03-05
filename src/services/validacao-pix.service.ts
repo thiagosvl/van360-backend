@@ -49,23 +49,33 @@ export async function cadastrarOuAtualizarChavePix(
     chaveSanitizada = onlyDigits(chavePix);
   }
 
-  // 3. Salvar no Banco como PENDENTE
-  const { error } = await supabaseAdmin
+  // 3. Salvar no Banco como PENDENTE (Somente se não estiver validada ou for nova)
+  // Se já estiver validada, NÃO sobrescrevemos a chave antiga agora. 
+  // A nova chave será validada em background e o 'confirmarChaveUsuario' fará o swap final.
+  const { data: userCurrentStatus } = await supabaseAdmin
     .from("usuarios")
-    .update({
-      chave_pix: chaveSanitizada,
-      tipo_chave_pix: tipoChave,
-      status_chave_pix: PixKeyStatus.PENDENTE_VALIDACAO,
-      chave_pix_validada_em: null,
-      nome_titular_pix_validado: null,
-      cpf_cnpj_titular_pix_validado: null,
-      updated_at: new Date().toISOString()
-    })
-    .eq("id", usuarioId);
+    .select("status_chave_pix")
+    .eq("id", usuarioId)
+    .single();
 
-  if (error) {
-    logger.error({ error: error.message, usuarioId }, "Erro ao salvar chave PIX pendente.");
-    throw new Error("Erro ao salvar chave PIX.");
+  if (userCurrentStatus?.status_chave_pix !== PixKeyStatus.VALIDADA) {
+    const { error } = await supabaseAdmin
+      .from("usuarios")
+      .update({
+        chave_pix: chaveSanitizada,
+        tipo_chave_pix: tipoChave,
+        status_chave_pix: PixKeyStatus.PENDENTE_VALIDACAO,
+        chave_pix_validada_em: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", usuarioId);
+
+    if (error) {
+      logger.error({ error: error.message, usuarioId }, "Erro ao salvar chave PIX pendente.");
+      throw new Error("Erro ao salvar chave PIX.");
+    }
+  } else {
+    logger.info({ usuarioId }, "Usuário já possui chave validada. Iniciando fluxo de troca segura (background).");
   }
 
   // 4. Iniciar Validação Async (Micro-pagamento)
@@ -87,7 +97,6 @@ export async function iniciarValidacaoPix(usuarioId: string, chavePix: string, t
 
   try {
     // 1. Registrar intenção de validação (Tabela Temporária)
-    // Importante para webhooks (caso Inter/Async)
     const { error: insertError } = await supabaseAdmin
       .from("pix_validacao_pendente")
       .insert({
@@ -126,9 +135,7 @@ export async function iniciarValidacaoPix(usuarioId: string, chavePix: string, t
              await confirmarChaveUsuario(
                  usuarioId, 
                  chavePix, 
-                 tipoChave || "DESCONHECIDO", 
-                 resultado.nome, 
-                 resultado.cpfCnpj || ""
+                 tipoChave || "N/A"
              );
              
              logger.info({ usuarioId }, "Chave PIX validada com sucesso (Síncrono).");
@@ -196,7 +203,7 @@ export async function processarRetornoValidacaoPix(
   const { usuario_id, chave_pix_enviada } = pendente;
 
   // Confirmar
-  await confirmarChaveUsuario(usuario_id, chave_pix_enviada, "DESCONHECIDO"); // Tipo desconhecido aqui, mas o banco já tem o tipo salvo no registro do usuário. A função apenas confirma.
+  await confirmarChaveUsuario(usuario_id, chave_pix_enviada, "N/A"); // Tipo N/A aqui, pois o swap final usa o que já está salvo ou o que veio no registro
 
   // Limpar registro pendente
   await supabaseAdmin
@@ -214,9 +221,7 @@ export async function processarRetornoValidacaoPix(
 async function confirmarChaveUsuario(
     usuarioId: string, 
     chave: string, 
-    tipo: string, 
-    nomeTitular: string = "VALIDADO AUTO", 
-    cpfTitular: string = ""
+    tipo: string
 ) {
     // Primeiro buscamos o tipo atual se não passarmos (para não sobrescrever com DESCONHECIDO se já existir)
     let tipoFinal = tipo;
@@ -224,13 +229,11 @@ async function confirmarChaveUsuario(
     // Se update
     const updates: any = {
         chave_pix: chave,
-        status_chave_pix: "VALIDADA",
-        chave_pix_validada_em: new Date().toISOString(),
-        nome_titular_pix_validado: nomeTitular,
-        cpf_cnpj_titular_pix_validado: cpfTitular
+        status_chave_pix: PixKeyStatus.VALIDADA,
+        chave_pix_validada_em: new Date().toISOString()
     };
 
-    if (tipo !== "DESCONHECIDO") {
+    if (tipo !== "N/A") {
         updates.tipo_chave_pix = tipo;
     }
 
@@ -286,18 +289,28 @@ export const validacaoPixService = {
     rejeitarValidacao: async (usuarioId: string, motivo: string) => {
         logger.warn({ usuarioId, motivo }, "Validação de PIX falhou. Notificando usuário.");
 
-        // 1. Atualizar status no banco
-        const { error } = await supabaseAdmin
+        // 1. Verificar status atual antes de 'rejeitar'
+        const { data: user } = await supabaseAdmin
             .from("usuarios")
-            .update({
-                status_chave_pix: "FALHA_VALIDACAO",
-                chave_pix_validada_em: null 
-            })
-            .eq("id", usuarioId);
+            .select("status_chave_pix")
+            .eq("id", usuarioId)
+            .single();
 
-        if (error) {
-            logger.error({ error, usuarioId }, "Erro ao registrar FALHA_VALIDACAO no banco");
-            // Não impede notificação
+        // Só marcamos FALHA_VALIDACAO se o usuário não tiver uma chave já validada (fluxo de troca segura)
+        if (user?.status_chave_pix !== PixKeyStatus.VALIDADA) {
+            const { error } = await supabaseAdmin
+                .from("usuarios")
+                .update({
+                    status_chave_pix: PixKeyStatus.FALHA_VALIDACAO,
+                    chave_pix_validada_em: null 
+                })
+                .eq("id", usuarioId);
+
+            if (error) {
+                logger.error({ error, usuarioId }, "Erro ao registrar FALHA_VALIDACAO no banco");
+            }
+        } else {
+            logger.info({ usuarioId }, "Mantendo status VALIDADA após falha na tentativa de troca de chave.");
         }
 
         // 2. Notificar Usuário

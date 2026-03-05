@@ -1,12 +1,12 @@
 
 import { PaymentGateway } from "../../types/enums.js";
 import {
-    PaymentCobrancaComVencimentoParams,
-    PaymentCobrancaParams,
-    PaymentPagamentoParams,
-    PaymentProvider,
-    PaymentResponse,
-    TransferResponse
+  PaymentCobrancaComVencimentoParams,
+  PaymentCobrancaParams,
+  PaymentPagamentoParams,
+  PaymentProvider,
+  PaymentResponse,
+  TransferResponse
 } from "../../types/payment.js";
 import { feeService } from "../fee.service.js";
 import { interService } from "../inter.service.js";
@@ -54,6 +54,10 @@ export class InterPaymentProvider implements PaymentProvider {
 
   async consultarTransferencia(codigoSolicitacao: string): Promise<any> {
     return interService.consultarPagamentoPix(codigoSolicitacao);
+  }
+
+  async submeterTransferencia(codigoSolicitacao: string): Promise<boolean> {
+    return true; // Inter não exige submissão por lote
   }
 
   async getFee(valor: number, tipo: 'imediato' | 'vencimento'): Promise<number> {

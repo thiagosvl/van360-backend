@@ -138,10 +138,14 @@ class WhatsappService {
       const url = `${EVO_URL}/instance/connectionState/${instanceName}`;
       const { data } = await axios.get<{ instance: EvolutionInstance }>(url, { headers: { "apikey": EVO_KEY } });
       
-      const state = data?.instance?.state || WhatsappStatus.UNKNOWN;
+      let state = data?.instance?.state || (data as any)?.state || WhatsappStatus.UNKNOWN;
+      
+      // Normalização para Local API (Casing)
+      if (typeof state === 'string' && state.toLowerCase() === "connected") state = WhatsappStatus.CONNECTED;
+      if (typeof state === 'string' && state.toLowerCase() === "open") state = WhatsappStatus.OPEN;
 
       // Log para auditoria de conexão (debug)
-      if (state !== "connected" && state !== "open") {
+      if (state !== WhatsappStatus.CONNECTED && state !== WhatsappStatus.OPEN) {
           logger.info({ instanceName, state }, "[WhatsappService.getInstanceStatus] Instância não conectada");
       }
 

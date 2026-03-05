@@ -1,58 +1,70 @@
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
-import { CobrancaStatus, PixKeyStatus, RepasseStatus } from "../../types/enums.js";
-import { cobrancaPagamentoService } from "../cobranca-pagamento.service.js";
+import { addToPayoutQueue } from "../../queues/payout.queue.js";
+import { PixKeyStatus, RepasseState } from "../../types/enums.js";
+import { repasseFsmService } from "../repasse-fsm.service.js";
 
+/**
+ * Job de retentativa: busca repasses em estado de erro ou expirados
+ * cujos motoristas agora têm chave PIX validada.
+ */
 export const repasseRetryJob = {
     async run() {
-        logger.info("Iniciando Job de Retry de Repasses (Fila de Acumulados)");
+        logger.info("[RepasseRetry] Verificando repasses elegíveis para retentativa...");
 
-        // 1. Buscar cobranças PAGAS mas com repasse FALHO ou PENDENTE
-        // Precisamos filtrar apenas motoristas que AGORA estão com chave VALIDADA.
-        // O Supabase permite filtrar em tabela relacionada.
+        const estadosRetentaveis = [
+            RepasseState.ERRO_DECODIFICACAO,
+            RepasseState.ERRO_TRANSFERENCIA,
+            RepasseState.EXPIRADO,
+        ];
 
-        const { data: pendencias, error } = await supabaseAdmin
-            .from("cobrancas")
-            .select(`
-                id, status_repasse, valor, 
-                usuarios!inner (
-                    id, nome, status_chave_pix
-                )
-            `)
-            .eq("status", CobrancaStatus.PAGO) // Dinheiro já entrou
-            .in("status_repasse", [RepasseStatus.FALHA, RepasseStatus.PENDENTE]) // Repasse travado
-            .eq("usuarios.status_chave_pix", PixKeyStatus.VALIDADA); // Chave agora está OK
+        const repasses = await repasseFsmService.buscarPorEstados(estadosRetentaveis);
 
-        if (error) {
-            logger.error({ error }, "Erro ao buscar fila de repasses para retry");
+        if (!repasses || repasses.length === 0) {
+            logger.info("[RepasseRetry] Nenhum repasse elegível para retentativa.");
             return;
         }
 
-        if (!pendencias || pendencias.length === 0) {
-            logger.info("Nenhum repasse acumulado elegível para reprocessamento.");
-            return;
-        }
+        let retried = 0;
 
-        logger.info({ count: pendencias.length }, "Repasses elegíveis encontrados. Iniciando processamento...");
-
-        for (const cobranca of pendencias) {
+        for (const repasse of repasses) {
             try {
-                // Double check (redundante mas seguro)
-                const motorista = cobranca.usuarios as any;
-                if (motorista.status_chave_pix !== PixKeyStatus.VALIDADA) continue;
+                if (repasse.tentativa >= repasse.max_tentativas) {
+                    logger.debug({ id: repasse.id, tentativa: repasse.tentativa }, "[RepasseRetry] Max tentativas atingido. Ignorando.");
+                    continue;
+                }
 
-                logger.info({ cobrancaId: cobranca.id, motorista: motorista.nome }, "Retentando repasse...");
+                const { data: usuario } = await supabaseAdmin
+                    .from("usuarios")
+                    .select("id, chave_pix, status_chave_pix")
+                    .eq("id", repasse.usuario_id)
+                    .single();
 
-                // Chama logica original de repasse
-                await cobrancaPagamentoService.iniciarRepasse(cobranca.id);
-                
-                // Aguarda um pouco entre requisições para não estourar rate limit do Inter
-                await new Promise(resolve => setTimeout(resolve, 500));
+                if (!usuario || !usuario.chave_pix || usuario.status_chave_pix !== PixKeyStatus.VALIDADA) {
+                    logger.debug({ repasseId: repasse.id, motoristaId: repasse.usuario_id, statusPix: usuario?.status_chave_pix }, "[RepasseRetry] Chave PIX não validada. Ignorando.");
+                    continue;
+                }
+
+                await repasseFsmService.transicionar(repasse.id, RepasseState.CRIADO, {
+                    ator: "repasse_retry",
+                    motivo: `Retentativa automática (tentativa ${repasse.tentativa + 1}): chave PIX agora validada`,
+                });
+
+                await addToPayoutQueue({
+                    cobrancaId: repasse.cobranca_id,
+                    repasseId: repasse.id,
+                    valorRepasse: Number(repasse.valor),
+                    motoristaId: repasse.usuario_id,
+                });
+
+                retried++;
+                logger.info({ repasseId: repasse.id, tentativa: repasse.tentativa + 1 }, "[RepasseRetry] ✅ Repasse reenfileirado para retentativa.");
 
             } catch (err: any) {
-                logger.error({ err, cobrancaId: cobranca.id }, "Falha ao reprocessar repasse da fila");
-                // Continua para o próximo. Se falhar de novo, status_repasse vai ser atualizado para FALHA_REPASSE dentro do service.
+                logger.error({ error: err.message, repasseId: repasse.id }, "[RepasseRetry] Erro ao retentar repasse");
             }
         }
+
+        logger.info({ retried, total: repasses.length }, `[RepasseRetry] Finalizado. ${retried} repasse(s) reenfileirado(s).`);
     }
 };

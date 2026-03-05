@@ -83,6 +83,10 @@ export class C6PaymentProvider implements PaymentProvider {
     return c6Service.consultarPagamentoPix(codigoSolicitacao);
   }
 
+  async submeterTransferencia(codigoSolicitacao: string): Promise<boolean> {
+    return c6Service.submeterGrupo(codigoSolicitacao);
+  }
+
   async getFee(valor: number, tipo: 'imediato' | 'vencimento'): Promise<number> {
     return feeService.calcularTaxaC6(valor, tipo);
   }

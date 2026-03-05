@@ -3,6 +3,7 @@ import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { webhookAssinaturaHandler } from "../services/handlers/webhook-assinatura.handler.js";
 import { webhookCobrancaHandler } from "../services/handlers/webhook-cobranca.handler.js";
+import { RepasseState } from "../types/enums.js";
 import { StandardPaymentPayload } from "../types/webhook.js";
 
 const mockPagamentoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
@@ -15,8 +16,6 @@ const mockPagamentoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
     try {
       logger.info({ cobrancaId }, "Iniciando mock de pagamento");
-
-      logger.info({ cobrancaId }, "Mock Pagamento iniciado");
 
       // 1. Tentar achar na tabela de Assinaturas (Prioridade Alta)
       let { data: cobrancaAssinatura } = await supabaseAdmin
@@ -37,39 +36,32 @@ const mockPagamentoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
       }
 
       if (!cobrancaAssinatura && !cobrancaPai) {
-          // 2.5. Tentar na tabela de Repasses (Transferências)
+          // 2.5. Tentar na tabela de Repasses (FSM Ledger)
           const { data: repasse } = await supabaseAdmin
-            .from("transacoes_repasse")
+            .from("repasses")
             .select("*")
             .eq("id", cobrancaId)
             .maybeSingle();
 
           if (repasse) {
-            logger.info({ repasseId: cobrancaId }, "Mock: Repasse encontrado. Forçando SUCESSO.");
+            logger.info({ repasseId: cobrancaId }, "Mock: Repasse encontrado. Forçando LIQUIDADO.");
             
-            await supabaseAdmin
-              .from("transacoes_repasse")
-              .update({ 
-                status: "SUCESSO", 
-                data_conclusao: new Date() 
-              })
-              .eq("id", cobrancaId);
-
-            if (repasse.cobranca_id) {
-              await supabaseAdmin
-                .from("cobrancas")
-                .update({ status_repasse: "REPASSADO" })
-                .eq("id", repasse.cobranca_id);
-            }
+            const { repasseFsmService } = await import("../services/repasse-fsm.service.js");
+            
+            // Forzar transição até o fim para testes
+            await repasseFsmService.transicionar(repasse.id, RepasseState.LIQUIDADO, {
+              ator: "mock_dev_tool",
+              motivo: "Simulação de sucesso via rota de mock",
+            });
 
             return reply.status(200).send({
               success: true,
-              message: `Simulação processada como REPASSE. ID: ${cobrancaId}`,
-              status: "SUCESSO"
+              message: `Simulação processada como REPASSE FSM. ID: ${cobrancaId}`,
+              status: "LIQUIDADO"
             });
           }
 
-          logger.warn({ cobrancaId }, "Cobrança/Repasse não encontrada em nenhuma tabela");
+          logger.warn({ cobrancaId }, "Registro não encontrado em cobrancas ou repasses");
           return reply.status(404).send({ error: "Registro não encontrado." });
       }
 

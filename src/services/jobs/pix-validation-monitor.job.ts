@@ -1,6 +1,6 @@
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
-import { TransactionStatus } from "../../types/enums.js";
+import { ProviderTransferStatus, TransactionStatus } from "../../types/enums.js";
 import { paymentService } from "../payment.service.js";
 import { validacaoPixService } from "../validacao-pix.service.js";
 
@@ -41,13 +41,13 @@ export const pixValidationMonitorJob = {
                 // 2. Consultar Status no Provedor
                 const provider = paymentService.getProvider();
                 const pixInfo = await provider.consultarTransferencia(item.end_to_end_id);
-                const statusInter = pixInfo.status; // Mapeado pelo Provider/Service (ex: PAGO, REALIZADO)
+                const status = pixInfo.status; // Mapeado pelo Provider/Service (ex: PAGO, REALIZADO)
                 
                 logger.info({ 
                     step: "monitor_check", 
                     id: item.id, 
                     e2eId: item.end_to_end_id, 
-                    statusInter,
+                    status,
                     motivo: pixInfo.motivo 
                 }, "Status retornado pelo Provedor");
 
@@ -57,9 +57,9 @@ export const pixValidationMonitorJob = {
                 
                 let novoStatus = TransactionStatus.PROCESSAMENTO; // Mantém se ainda estiver processando
 
-                if (statusInter === "REALIZADO" || statusInter === "PAGO") {
+                if (status === ProviderTransferStatus.REALIZADO || status === ProviderTransferStatus.PAGO) {
                     novoStatus = TransactionStatus.SUCESSO;
-                } else if (["REJEITADO", "CANCELADO", "DEVOLVIDO", "FALHA"].includes(statusInter)) {
+                } else if ([ProviderTransferStatus.REJEITADO, ProviderTransferStatus.CANCELADO, ProviderTransferStatus.DEVOLVIDO, ProviderTransferStatus.FALHA].includes(status as ProviderTransferStatus)) {
                     novoStatus = TransactionStatus.ERRO;
                 }
 
@@ -69,7 +69,7 @@ export const pixValidationMonitorJob = {
                         .from("pix_validacao_pendente")
                         .update({ 
                             status: novoStatus, 
-                            motivo_falha: novoStatus === TransactionStatus.ERRO ? (pixInfo.motivo || statusInter) : null
+                            motivo_falha: novoStatus === TransactionStatus.ERRO ? (pixInfo.motivo || status) : null
                         })
                         .eq("id", item.id);
 
@@ -79,8 +79,8 @@ export const pixValidationMonitorJob = {
                         // Estou assumindo que adicionaremos 'tipo_chave'
                         await validacaoPixService.confirmarChaveUsuario(item.usuario_id, item.chave_pix_enviada, item.tipo_chave || "DESCONHECIDO");
                     } else {
-                        logger.warn({ id: item.id, statusInter }, "Validação PIX falhou.");
-                        await validacaoPixService.rejeitarValidacao(item.usuario_id, `Validação falhou: ${statusInter}`);
+                        logger.warn({ id: item.id, status }, "Validação PIX falhou.");
+                        await validacaoPixService.rejeitarValidacao(item.usuario_id, `Validação falhou: ${status}`);
                     }
                 }
 

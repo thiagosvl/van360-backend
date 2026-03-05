@@ -7,7 +7,7 @@ import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { redisConfig } from "../config/redis.js";
 import { supabaseAdmin } from "../config/supabase.js";
-import { ConfigKey } from "../types/enums.js";
+import { ConfigKey, InterTransferStatus, ProviderTransferStatus } from "../types/enums.js";
 import { onlyDigits } from "../utils/string.utils.js";
 import { getConfigNumber } from "./configuracao.service.js";
 
@@ -459,11 +459,11 @@ async function realizarPagamentoPix(
       }
     }
 
-    let statusFinal = data.status || "PROCESSAMENTO";
-    if (data.tipoRetorno === "APROVACAO" || data.tipoRetorno === "PROCESSADO") {
-      statusFinal = "PAGO";
-    } else if (data.tipoRetorno === "AGENDADO") {
-      statusFinal = "AGENDADO";
+    let statusFinal = (data.status as ProviderTransferStatus) || ProviderTransferStatus.PROCESSING_BANK;
+    if (data.tipoRetorno === InterTransferStatus.APROVACAO || data.tipoRetorno === InterTransferStatus.PROCESSADO) {
+      statusFinal = ProviderTransferStatus.PAGO;
+    } else if (data.tipoRetorno === InterTransferStatus.AGENDADO) {
+      statusFinal = ProviderTransferStatus.PROCESSING_BANK;
     }
 
     return {

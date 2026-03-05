@@ -6,7 +6,6 @@ import { cobrancaService } from "../services/cobranca.service.js";
 import {
     createCobrancaSchema,
     listCobrancasFiltersSchema,
-    notificacaoPayloadSchema,
     toggleNotificacoesSchema,
     updateCobrancaSchema
 } from "../types/dtos/cobranca.dto.js";
@@ -73,9 +72,14 @@ export const cobrancaController = {
 
   createNotificacao: async (request: FastifyRequest, reply: FastifyReply) => {
     const { cobrancaId } = request.params as { cobrancaId: string };
-    const payload = notificacaoPayloadSchema.parse(request.body);
-    await cobrancaNotificacaoService.create(cobrancaId, payload);
-    return reply.status(201).send({ success: true });
+    // Opcional validar payload, mas a logica inteira de envio + log esta englobada no service
+    const success = await cobrancaService.enviarNotificacaoManual(cobrancaId);
+    
+    if (success) {
+      return reply.status(201).send({ success: true });
+    } else {
+      return reply.status(500).send({ success: false, error: "Failed to send notification" });
+    }
   },
 
   toggleNotificacoes: async (request: FastifyRequest, reply: FastifyReply) => {

@@ -7,7 +7,7 @@ export const payoutQueue = createQueue(QUEUE_NAME_PAYOUT);
 
 export interface PayoutJobData {
     cobrancaId: string;
-    transacaoId?: string; // Se já existir registro de transação
+    repasseId: string;
     valorRepasse: number;
     motoristaId: string;
 }

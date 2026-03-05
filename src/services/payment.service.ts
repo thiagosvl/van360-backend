@@ -5,7 +5,6 @@ import { PaymentProvider } from "../types/payment.js";
 import { getConfig } from "./configuracao.service.js";
 import { C6PaymentProvider } from "./providers/c6.provider.js";
 import { InterPaymentProvider } from "./providers/inter.provider.js";
-import { MockPaymentProvider } from "./providers/mock.provider.js";
 
 class PaymentService {
   private currentProvider: PaymentProvider | null = null;
@@ -55,11 +54,6 @@ class PaymentService {
       case PaymentGateway.C6:
         this.currentProvider = new C6PaymentProvider();
         break;
-      
-      case PaymentGateway.MOCK:
-        logger.info("PaymentService: Modo MOCK ativado.");
-        this.currentProvider = new MockPaymentProvider();
-        break;
 
       default:
         throw new Error(`Gateway de pagamento '${gateway}' não é suportado pelo sistema.`);
@@ -107,9 +101,6 @@ class PaymentService {
     return this.activeGateway;
   }
 
-  isMock(): boolean {
-    return this.activeGateway === PaymentGateway.MOCK;
-  }
 }
 
 export const paymentService = new PaymentService();

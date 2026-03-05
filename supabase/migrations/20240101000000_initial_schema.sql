@@ -268,16 +268,13 @@ CREATE TABLE IF NOT EXISTS "public"."cobrancas" (
     "location_url" "text",
     "valor_pago" numeric(10,2),
     "gateway_fee" numeric(10,2),
-    "valor_a_repassar" numeric(10,2),
-    "status_repasse" character varying(50) DEFAULT 'PENDENTE'::character varying,
-    "data_repasse" timestamp without time zone,
-    "id_transacao_repasse" "uuid",
+
     "dados_auditoria_pagamento" "jsonb" DEFAULT '{}'::"jsonb",
     "data_envio_ultima_notificacao" timestamp without time zone,
     "recibo_url" "text",
     CONSTRAINT "cobrancas_mes_check" CHECK ((("mes" >= 1) AND ("mes" <= 12))),
     CONSTRAINT "cobrancas_origem_check" CHECK (("origem" = ANY (ARRAY['automatica'::"text", 'manual'::"text"]))),
-    CONSTRAINT "cobrancas_status_check" CHECK (("status" = ANY (ARRAY['pendente'::"text", 'pago'::"text", 'atrasado'::"text"])))
+    CONSTRAINT "cobrancas_status_check" CHECK (("status" = ANY (ARRAY['pendente'::"text", 'pago'::"text"])))
 );
 
 
@@ -472,22 +469,6 @@ COMMENT ON COLUMN "public"."pre_passageiros"."dia_vencimento" IS 'Dia do mês pa
 
 
 
-CREATE TABLE IF NOT EXISTS "public"."transacoes_repasse" (
-    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "usuario_id" "uuid",
-    "cobranca_id" "uuid",
-    "valor_repassado" numeric(10,2) NOT NULL,
-    "gateway_txid" "text",
-    "status" character varying(50) DEFAULT 'PENDENTE'::character varying NOT NULL,
-    "data_criacao" timestamp with time zone DEFAULT "now"(),
-    "data_conclusao" timestamp with time zone,
-    "mensagem_erro" "text",
-    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
-);
-
-
-ALTER TABLE "public"."transacoes_repasse" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."usuarios" (
@@ -506,7 +487,7 @@ CREATE TABLE IF NOT EXISTS "public"."usuarios" (
     "status_chave_pix" character varying(50) DEFAULT 'NAO_CADASTRADA'::character varying NOT NULL,
     "chave_pix_validada_em" timestamp with time zone,
     "tipo" "public"."user_type_enum" DEFAULT 'motorista'::"public"."user_type_enum" NOT NULL,
-    "assinatura_url" "text",
+    "assinatura_digital_url" "text",
     "config_contrato" "jsonb" DEFAULT '{
       "usar_contratos": true,
       "configurado": false,
@@ -649,8 +630,6 @@ ALTER TABLE ONLY "public"."pre_passageiros"
 
 
 
-ALTER TABLE ONLY "public"."transacoes_repasse"
-    ADD CONSTRAINT "transacoes_repasse_pkey" PRIMARY KEY ("id");
 
 
 
@@ -713,8 +692,6 @@ CREATE INDEX "idx_cobrancas_data_envio_ultima_notificacao" ON "public"."cobranca
 
 
 
-CREATE INDEX "idx_cobrancas_status_repasse" ON "public"."cobrancas" USING "btree" ("status_repasse");
-
 
 
 CREATE INDEX "idx_passageiros_origem_desativacao_cobranca_automatica" ON "public"."passageiros" USING "btree" ("origem_desativacao_cobranca_automatica") WHERE ("origem_desativacao_cobranca_automatica" IS NOT NULL);
@@ -727,13 +704,6 @@ CREATE INDEX "idx_pix_validacao_pendente_usuario_id" ON "public"."pix_validacao_
 
 CREATE INDEX "idx_pix_validacao_pendente_x_id_idempotente" ON "public"."pix_validacao_pendente" USING "btree" ("x_id_idempotente");
 
-
-
-CREATE INDEX "idx_transacoes_repasse_cobranca_id" ON "public"."transacoes_repasse" USING "btree" ("cobranca_id");
-
-
-
-CREATE INDEX "idx_transacoes_repasse_usuario_id" ON "public"."transacoes_repasse" USING "btree" ("usuario_id");
 
 
 
@@ -803,9 +773,6 @@ ALTER TABLE ONLY "public"."cobranca_notificacoes"
 
 
 
-ALTER TABLE ONLY "public"."cobrancas"
-    ADD CONSTRAINT "cobrancas_id_transacao_repasse_fkey" FOREIGN KEY ("id_transacao_repasse") REFERENCES "public"."transacoes_repasse"("id") ON UPDATE CASCADE ON DELETE RESTRICT;
-
 
 
 ALTER TABLE ONLY "public"."cobrancas"
@@ -867,14 +834,6 @@ ALTER TABLE ONLY "public"."pre_passageiros"
     ADD CONSTRAINT "pre_passageiros_usuario_id_fkey" FOREIGN KEY ("usuario_id") REFERENCES "public"."usuarios"("id") ON UPDATE CASCADE ON DELETE CASCADE;
 
 
-
-ALTER TABLE ONLY "public"."transacoes_repasse"
-    ADD CONSTRAINT "transacoes_repasse_cobranca_id_fkey" FOREIGN KEY ("cobranca_id") REFERENCES "public"."cobrancas"("id") ON UPDATE CASCADE ON DELETE SET NULL;
-
-
-
-ALTER TABLE ONLY "public"."transacoes_repasse"
-    ADD CONSTRAINT "transacoes_repasse_usuario_id_fkey" FOREIGN KEY ("usuario_id") REFERENCES "public"."usuarios"("id") ON UPDATE CASCADE ON DELETE CASCADE;
 
 
 
@@ -1297,9 +1256,6 @@ GRANT ALL ON TABLE "public"."pre_passageiros" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."transacoes_repasse" TO "anon";
-GRANT ALL ON TABLE "public"."transacoes_repasse" TO "authenticated";
-GRANT ALL ON TABLE "public"."transacoes_repasse" TO "service_role";
 
 
 
@@ -1409,7 +1365,7 @@ BEGIN
     "cpfcnpj" = 'DEL' || substring("id"::text, 1, 11),
     "telefone" = '00000000000_' || substring("id"::text, 1, 5),
     "chave_pix_validada_em" = NULL,
-    "assinatura_url" = NULL,
+    "assinatura_digital_url" = NULL,
     "config_contrato" = '{
       "usar_contratos": false,
       "configurado": false,
@@ -1469,6 +1425,15 @@ BEGIN
     "qr_code_payload" = NULL
   WHERE "usuario_id" = target_user_id;
 
+  -- 6b. SANITIZE Repasse Records
+  UPDATE "public"."repasses"
+  SET
+    "erro_mensagem" = NULL,
+    "gateway_group_id" = NULL,
+    "gateway_item_id" = NULL,
+    "gateway_raw_status" = NULL
+  WHERE "usuario_id" = target_user_id;
+
   -- 7. ANONYMIZE/CANCEL SaaS Subscriptions (Stop future billing)
   UPDATE "public"."assinaturas_usuarios"
   SET
@@ -1488,6 +1453,15 @@ BEGIN
 
   UPDATE "public"."gastos"
   SET "descricao" = 'Gasto histórico (Conta excluída)'
+  WHERE "usuario_id" = target_user_id;
+
+  -- 9. SANITIZE Repasse Records (FSM Ledger)
+  UPDATE "public"."repasses"
+  SET 
+    "erro_mensagem" = NULL,
+    "gateway_group_id" = NULL,
+    "gateway_item_id" = NULL,
+    "gateway_raw_status" = NULL
   WHERE "usuario_id" = target_user_id;
 
 END;
@@ -1595,3 +1569,94 @@ CREATE INDEX "idx_contratos_notificacoes_contrato" ON "public"."contratos_notifi
 
 COMMENT ON TABLE "public"."contratos_notificacoes" IS 'Registro de notificações enviadas relacionadas a contratos';
 COMMENT ON COLUMN "public"."contratos_notificacoes"."tipo_evento" IS 'Tipo de evento: contrato_criado, link_enviado, assinado, cancelado';
+
+
+-- =====================================================
+-- MÁQUINA DE ESTADOS DE REPASSE (FSM)
+-- =====================================================
+
+CREATE TYPE "public"."repasse_state" AS ENUM (
+  'CRIADO',
+  'DECODIFICANDO',
+  'DECODIFICADO',
+  'SUBMETIDO',
+  'AGUARDANDO_APROVACAO',
+  'EM_LIQUIDACAO',
+  'LIQUIDADO',
+  'ERRO_DECODIFICACAO',
+  'ERRO_TRANSFERENCIA',
+  'EXPIRADO',
+  'CANCELADO'
+);
+
+-- Tabela principal de repasses (FSM Ledger)
+CREATE TABLE IF NOT EXISTS "public"."repasses" (
+    "id"                  UUID DEFAULT gen_random_uuid() NOT NULL,
+    "cobranca_id"         UUID NOT NULL,
+    "usuario_id"          UUID NOT NULL,
+    "valor"               NUMERIC(10,2) NOT NULL,
+    "estado"              "public"."repasse_state" NOT NULL DEFAULT 'CRIADO',
+    "versao"              INTEGER NOT NULL DEFAULT 1,
+    "gateway_group_id"    TEXT,
+    "gateway_item_id"     TEXT,
+    "gateway_raw_status"  TEXT,
+    "gateway"             TEXT,
+    "tentativa"           INTEGER NOT NULL DEFAULT 1,
+    "max_tentativas"      INTEGER NOT NULL DEFAULT 3,
+    "erro_mensagem"       TEXT,
+    "erro_codigo"         TEXT,
+    "created_at"          TIMESTAMPTZ DEFAULT now(),
+    "updated_at"          TIMESTAMPTZ DEFAULT now(),
+    "liquidado_at"        TIMESTAMPTZ,
+    CONSTRAINT "repasses_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "repasses_cobranca_id_fkey" FOREIGN KEY ("cobranca_id")
+      REFERENCES "public"."cobrancas"("id") ON UPDATE CASCADE ON DELETE RESTRICT,
+    CONSTRAINT "repasses_usuario_id_fkey" FOREIGN KEY ("usuario_id")
+      REFERENCES "public"."usuarios"("id") ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+ALTER TABLE "public"."repasses" OWNER TO "postgres";
+
+-- Impede 2 repasses ativos para mesma cobrança
+CREATE UNIQUE INDEX "idx_repasse_ativo_cobranca"
+  ON "public"."repasses"("cobranca_id")
+  WHERE "estado" NOT IN ('LIQUIDADO','CANCELADO','ERRO_DECODIFICACAO','ERRO_TRANSFERENCIA');
+
+CREATE INDEX "idx_repasses_estado" ON "public"."repasses"("estado");
+CREATE INDEX "idx_repasses_usuario_id" ON "public"."repasses"("usuario_id");
+CREATE INDEX "idx_repasses_created_at" ON "public"."repasses"("created_at");
+
+CREATE TRIGGER "update_repasses_updated_at"
+  BEFORE UPDATE ON "public"."repasses"
+  FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
+
+-- Tabela de audit trail de transições
+CREATE TABLE IF NOT EXISTS "public"."repasse_transicoes" (
+    "id"          UUID DEFAULT gen_random_uuid() NOT NULL,
+    "repasse_id"  UUID NOT NULL,
+    "estado_de"   "public"."repasse_state" NOT NULL,
+    "estado_para" "public"."repasse_state" NOT NULL,
+    "motivo"      TEXT,
+    "ator"        TEXT NOT NULL,
+    "metadata"    JSONB DEFAULT '{}'::jsonb,
+    "created_at"  TIMESTAMPTZ DEFAULT now(),
+    CONSTRAINT "repasse_transicoes_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "repasse_transicoes_repasse_id_fkey" FOREIGN KEY ("repasse_id")
+      REFERENCES "public"."repasses"("id") ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+ALTER TABLE "public"."repasse_transicoes" OWNER TO "postgres";
+
+CREATE INDEX "idx_repasse_transicoes_repasse_id" ON "public"."repasse_transicoes"("repasse_id");
+
+GRANT ALL ON TABLE "public"."repasses" TO "anon";
+GRANT ALL ON TABLE "public"."repasses" TO "authenticated";
+GRANT ALL ON TABLE "public"."repasses" TO "service_role";
+GRANT ALL ON TABLE "public"."repasse_transicoes" TO "anon";
+GRANT ALL ON TABLE "public"."repasse_transicoes" TO "authenticated";
+GRANT ALL ON TABLE "public"."repasse_transicoes" TO "service_role";
+
+COMMENT ON TABLE "public"."repasses" IS 'Máquina de estados de repasse (transferência ao motorista). Fonte única de verdade.';
+COMMENT ON COLUMN "public"."repasses"."versao" IS 'Lock otimista: incrementado a cada transição para prevenir race conditions.';
+COMMENT ON COLUMN "public"."repasses"."gateway_group_id" IS 'ID do lote/grupo no gateway bancário (genérico).';
+COMMENT ON TABLE "public"."repasse_transicoes" IS 'Audit trail completo de todas as transições de estado dos repasses.';

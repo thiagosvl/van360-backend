@@ -46,6 +46,8 @@ export interface PaymentProvider {
   realizarTransferencia(params: PaymentPagamentoParams): Promise<TransferResponse>;
   
   consultarTransferencia(codigoSolicitacao: string): Promise<any>;
+  
+  submeterTransferencia(codigoSolicitacao: string): Promise<boolean>;
 
   getFee(valor: number, tipo: 'imediato' | 'vencimento'): Promise<number>;
   

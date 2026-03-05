@@ -7,9 +7,13 @@ import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { redisConfig } from "../config/redis.js";
 import { supabaseAdmin } from "../config/supabase.js";
+import { C6TransferStatus, ProviderTransferStatus } from "../types/enums.js";
 
 const redis = new Redis(redisConfig as any);
-const C6_SCHEDULE_URL = `${env.C6_API_URL}/v1/schedule_payments/`;
+const C6_SCHEDULE_URL = `${env.C6_API_URL}/v1/schedule_payments`;
+const C6_STATUS_READ_DATA = "READ_DATA";
+const C6_STATUS_DECODE_ERROR = "DECODE_ERROR";
+const TXID_REGEX = /^[a-zA-Z0-9]{26,35}$/;
 
 function getC6Certificates() {
   if (env.C6_CERT_BASE64 && env.C6_KEY_BASE64) {
@@ -72,7 +76,7 @@ export const c6Service = {
 
   gerarTxid(cobrancaId: string): string {
     const txid = cobrancaId.replace(/-/g, "");
-    if (!/^[a-zA-Z0-9]{26,35}$/.test(txid)) {
+    if (!TXID_REGEX.test(txid)) {
       throw new Error(`ID de cobrança '${cobrancaId}' inválido para gerar txid.`);
     }
     return txid;
@@ -222,15 +226,16 @@ export const c6Service = {
     const agent = getHttpsAgent();
 
     try {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().split("T")[0];
+      const today = new Date();
+      // Garante a data correta no fuso de Brasília (onde o C6 opera)
+      const todayStr = new Date(today.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }))
+        .toISOString().split("T")[0];
 
       // 1. Enviar para consulta inicial (decode)
       const payload = {
         items: [{
           amount: params.valor, // Deve ser number conforme a doc
-          transaction_date: params.transaction_date || tomorrowStr,
+          transaction_date: params.transaction_date || todayStr,
           description: params.descricao || "Repasse Van360",
           content: params.chaveDestino, // Chave Pix ou Código de Barras
           beneficiary_name: "Motorista Beneficiario", // Sugerido pelo script de ref
@@ -238,10 +243,10 @@ export const c6Service = {
         }]
       };
 
-      const url = `${C6_SCHEDULE_URL}decode`;
+      const url = `${C6_SCHEDULE_URL}/decode`;
       logger.debug({ url, payload }, "C6: Enviando para decode");
       
-      const { data: group } = await axios.post(url, payload, { 
+      const response = await axios.post(url, payload, { 
         headers: {
           ...headers,
           "partner-software-name": "Van360",
@@ -249,27 +254,20 @@ export const c6Service = {
         }, 
         httpsAgent: agent 
       });
+
+      const group = response.data;
       const groupId = group.group_id;
 
       // Importante: O C6 leva alguns segundos para "decodificar" os itens (verificar DICT/CIP).
       // Se submeter imediatamente, retorna 422 "itens em processo de decodificação".
-      logger.debug({ groupId }, "C6: Aguardando 15s para decodificação antes do submit...");
-      await new Promise(resolve => setTimeout(resolve, 15000));
-
-      // 2. Submeter para aprovação (conforme imagem 5 da doc)
-      const urlSubmit = `${C6_SCHEDULE_URL}submit`;
-      const submitPayload = {
-        group_id: groupId,
-        uploader_name: "Van360 System"
-      };
-      logger.debug({ url: urlSubmit, payload: submitPayload }, "C6: Enviando para submit");
-
-      await axios.post(urlSubmit, submitPayload, { headers, httpsAgent: agent });
+      // Removemos o setTimeout de 15s bloqueante daqui! O submission passará a ocorrer 
+      // de forma assíncrona pelo nosso Job de RepasseMonitor, caso o item já tenha sido decodificado (READ_DATA -> PROCESSING).
+      logger.debug({ groupId }, "C6: Payload de decode recebido. Aguardando processamento assíncrono.");
 
       return {
         endToEndId: groupId,
-        status: "WAITING_APPROVAL",
-        msg: "Pagamento agendado. Requer aprovação manual no Web Banking C6."
+        status: ProviderTransferStatus.WAITING_APPROVAL, // Nosso "Aguardando Banco (Decode / Submit)"
+        msg: "Pagamento em decodificação. Será submetido pelo Worker."
       };
     } catch (error: any) {
       logger.error({ msg: "Erro realizarPagamentoPix C6", err: error.response?.data || error.message });
@@ -277,36 +275,51 @@ export const c6Service = {
     }
   },
 
-  async consultarPagamentoPix(id: string): Promise<any> {
-    const token = await this.getAccessToken();
-    const agent = getHttpsAgent();
-
+  async consultarPagamentoPix(groupId: string): Promise<any> {
     try {
-      const { data } = await axios.get(`${C6_SCHEDULE_URL}/${id}`, {
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          "partner-software-name": "Van360",
-          "partner-software-version": "1.0.0"
-        },
-        httpsAgent: agent
-      });
+      const data = await this.listarItensGrupo(groupId);
+      const items = data.items || [];
+
+      if (items.length === 0) {
+        return {
+          status: ProviderTransferStatus.WAITING_APPROVAL, // Em Sandbox o C6 às vezes retorna [] enquanto não processa
+          rawStatus: "EMPTY_ITEMS",
+          endToEndId: groupId
+        };
+      }
+
+      const itemInfo = items[0];
 
       // Mapeamento de status do C6 para o padrão do sistema
-      let statusFinal = "WAITING_APPROVAL";
-      if (data.status === "EXECUTED" || data.status === "SETTLED") {
-        statusFinal = "PAGO";
-      } else if (data.status === "REJECTED" || data.status === "CANCELED" || data.status === "DECODE_ERROR") {
-        statusFinal = "FALHOU";
+      let statusFinal: ProviderTransferStatus = ProviderTransferStatus.WAITING_APPROVAL;
+      if (itemInfo.status === C6TransferStatus.PROCESSED) {
+        statusFinal = ProviderTransferStatus.PAGO;
+      } else if (itemInfo.status === C6TransferStatus.PROCESSING || itemInfo.status === C6TransferStatus.SCHEDULED) {
+        statusFinal = ProviderTransferStatus.PROCESSING_BANK;
+      } else if (itemInfo.status === C6TransferStatus.ERROR || itemInfo.status === C6TransferStatus.DECODE_ERROR) {
+        statusFinal = ProviderTransferStatus.FALHA;
+      } else if (itemInfo.status === C6TransferStatus.SCHEDULING_CANCELLED || itemInfo.status === C6TransferStatus.CANCELED) {
+        statusFinal = ProviderTransferStatus.CANCELADO;
       }
 
       return {
-        ...data,
+        ...itemInfo,
         status: statusFinal,
-        rawStatus: data.status,
-        endToEndId: data.group_id || id
+        rawStatus: itemInfo.status,
+        endToEndId: groupId
       };
     } catch (error: any) {
-      logger.error({ err: error.response?.data || error.message, id }, "Erro ao consultar pagamento C6");
+      // Se for 422, é porque o C6 ainda está decodificando o lote.
+      // Não tratamos como erro fatal, mas sim como "ainda processando no banco".
+      if (error.response?.status === 422) {
+        return {
+          status: ProviderTransferStatus.WAITING_APPROVAL,
+          rawStatus: "DECODING", // Status interno nosso para indicar que o C6 ainda está trabalhando
+          endToEndId: groupId
+        };
+      }
+
+      logger.error({ err: error.response?.data || error.message, id: groupId }, "Erro ao consultar pagamento C6 (Items)");
       throw error;
     }
   },
@@ -338,6 +351,30 @@ export const c6Service = {
       },
       httpsAgent: getHttpsAgent()
     });
+    return true;
+  },
+
+  /**
+   * Submete o grupo de agendamento para aprovação após a decodificação (READ_DATA).
+   * Sem este passo, o PIX fica travado no C6 e não aparece no App para aprovação.
+   */
+  async submeterGrupo(groupId: string) {
+    const token = await this.getAccessToken();
+    const url = `${C6_SCHEDULE_URL}/submit`; // Correção: API Docs indicam /submit no root path
+    logger.debug({ groupId, url }, "C6: Submetendo grupo para aprovação");
+    
+    const response = await axios.post(url, {
+      group_id: groupId,
+      uploader_name: "Van360 Repasse Automático"
+    }, {
+      headers: { 
+        Authorization: `Bearer ${token}`,
+        "partner-software-name": "Van360",
+        "partner-software-version": "1.0.0"
+      },
+      httpsAgent: getHttpsAgent()
+    });
+
     return true;
   },
 
@@ -375,12 +412,18 @@ export const c6Service = {
 
     try {
       // 1. Cria lote temporário via /decode
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split("T")[0];
+
       const payload = {
         items: [{
           amount: 0.01,
-          transaction_date: new Date().toISOString().split("T")[0],
-          description: "Validacao de Chave",
-          content: chave
+          transaction_date: tomorrowStr, // Alguns bancos exigem agendamento p/ T+1
+          description: "Validacao de Chave - Van360",
+          content: chave,
+          payer_name: "Van360 Administracao", // Identidade do pagador pode ajudar
+          beneficiary_name: "VALIDACAO_PIX"   // Placeholder p/ incentivar o overwrite pelo banco
         }]
       };
 
@@ -394,30 +437,97 @@ export const c6Service = {
       });
       const groupId = group.group_id;
 
-      // 2. Busca detalhes do item para obter Nome/CPF (DICT)
-      const { data: itemsResponse } = await axios.get(`${C6_SCHEDULE_URL}/${groupId}/items`, { headers, httpsAgent: agent });
-      
-      const item = itemsResponse.items?.[0] || itemsResponse?.[0];
-      
-      if (item?.status === "DECODE_ERROR") {
-        logger.error({ item, groupId }, "C6: Erro no item do decode");
-        throw new Error(`Erro C6 Decode: ${item.error_message || "Dados inválidos"}`);
+      // 2. Busca detalhes do item para obter Nome/CPF (DICT) - Polling para aguardar decodificação
+      let item: any;
+      const partnerHeaders = {
+        ...headers,
+        "partner-software-name": "Van360",
+        "partner-software-version": "1.0.0"
+      };
+
+      for (let attempt = 1; attempt <= 15; attempt++) {
+        try {
+          const { data: itemsResponse } = await axios.get(`${C6_SCHEDULE_URL}/${groupId}/items`, { 
+            headers: partnerHeaders, 
+            httpsAgent: agent 
+          });
+          
+          item = itemsResponse.items?.[0] || itemsResponse?.[0];
+          
+          // Debug: Se estiver travado no READ_DATA mas sem nome, logamos o item inteiro
+          if (item?.status === "READ_DATA" && !item?.beneficiary_name) {
+             logger.debug({ attempt, item: JSON.parse(JSON.stringify(item)) }, "C6: Item em READ_DATA mas sem beneficiary_name ainda.");
+          }
+
+          if (item?.status === C6_STATUS_READ_DATA) {
+             logger.info({ attempt, status: item.status }, "C6: Chave validada como existente (READ_DATA)");
+             break;
+          }
+
+          if (item?.status === C6_STATUS_DECODE_ERROR) {
+             // Mapeamento de erro amigável para o usuário
+             const c6Msg = item.error_message?.toLowerCase() || "";
+             let msg = "Chave PIX não encontrada ou inexistente.";
+             
+             if (c6Msg.includes("limit") || c6Msg.includes("tente novamente")) {
+                msg = "O Banco Central está processando muitas requisições. Tente novamente em alguns instantes.";
+             }
+             
+             logger.error({ item }, `C6 Decode Error: ${msg}`);
+             throw new Error(msg);
+          }
+
+          logger.info({ attempt, status: item?.status }, "C6: Aguardando decodificação (DICT)...");
+        } catch (e: any) {
+          if (e.response?.status !== 422) {
+             logger.warn({ attempt, msg: e.message }, "C6: Erro inesperado no polling");
+             if (attempt > 3) throw e;
+          } else {
+             logger.info({ attempt }, "C6: Item ainda em processamento (422)...");
+             if (attempt >= 15) {
+                logger.warn("C6: Timeout limite atingido esperando o DICT validar os dados desta chave PIX.");
+                break; // Sai do for para lançar erro elegantemente embaixo.
+             }
+          }
+        }
+        await new Promise(r => setTimeout(r, 3000));
       }
 
-      const nome = item?.beneficiary_name || item?.receiver_name;
+      let nome = item?.beneficiary_name && item.beneficiary_name !== "VALIDACAO_PIX" ? item.beneficiary_name : null;
       const cpfCnpj = item?.receiver_tax_id || item?.content;
 
-      // 3. Deleta o lote imediatamente
-      await axios.delete(`${C6_SCHEDULE_URL}/${groupId}/items`, { 
-        headers, 
-        httpsAgent: agent,
-        data: { id: item?.id || groupId }
-      }).catch(() => {});
+      // Se chegamos no status READ_DATA mas o banco omitiu o nome, consideramos válida (visto que o C6 mascara dados sensíveis)
+      if (!nome && item?.status === C6_STATUS_READ_DATA) {
+         nome = "TITULAR VALIDADO (C6)";
+      }
 
-      if (!nome) throw new Error("Não foi possível validar os dados desta chave PIX no C6.");
+      // 3. Deleta o lote imediatamente (formato array conforme YAML)
+      if (item?.id) {
+        await axios.delete(`${C6_SCHEDULE_URL}/${groupId}/items`, { 
+          headers: partnerHeaders, 
+          httpsAgent: agent,
+          data: [{ id: item.id }]
+        }).catch((err) => logger.warn({ err: err.message }, "C6: Erro ao limpar agendamento temporário"));
+      }
+
+      if (!nome) {
+         if (item?.status === 'READ_DATA') {
+           logger.warn("C6: DICT retornou Ok, mas nome omitido pelo banco. Aprovando genericamente.");
+           nome = "TITULAR VALIDADO (C6)";
+           return { nome, cpfCnpj: item?.receiver_tax_id || item?.content || chave };
+         }
+         throw new Error("Timeout: O banco demorou muito para validar sua chave. Tente novamente mais tarde.");
+      }
 
       return { nome, cpfCnpj };
     } catch (error: any) {
+      let errorMsg = error.message;
+
+      // Captura erro de formato do C6 (400 Bad Request)
+      if (error.response?.status === 400) {
+        errorMsg = "Formato de chave Pix inválido para o tipo selecionado.";
+      }
+
       // SANDBOX BYPASS: Se estivermos em sandbox, permitimos o erro de validação (DICT é limitado)
       if (this.isSandbox()) {
         logger.warn({ 
@@ -433,7 +543,6 @@ export const c6Service = {
       }
 
       // FALLBACK: Se der 403 (Falta de permissão de Agendamento/Decode), tentamos criar uma cobrança de 0.01
-      // Se a cobrança for criada com sucesso, a chave é válida e pertence a esta conta.
       if (error.response?.status === 403) {
         logger.info({ chave }, "C6: Tentando validação via cobrança (fallback 403)");
         try {
@@ -445,6 +554,10 @@ export const c6Service = {
             solicitacaoPagador: "Validacao de Conta Van360"
           };
           
+          const token = await this.getAccessToken();
+          const agent = getHttpsAgent();
+          const headers = { Authorization: `Bearer ${token}` };
+
           await axios.put(`${env.C6_API_URL}/v2/pix/cob/${testTxid}`, testPayload, {
             headers,
             httpsAgent: agent
@@ -469,9 +582,10 @@ export const c6Service = {
       logger.error({ 
         msg: "Erro validarChavePix C6", 
         err: error.response?.data || error.message,
-        status: error.response?.status
+        status: error.response?.status,
+        errorMsg
       });
-      throw error;
+      throw new Error(errorMsg);
     }
   },
 

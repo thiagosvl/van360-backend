@@ -10,6 +10,7 @@
     "build:worker": "tsc",
     "build": "echo \"[INIT] Compilando Backend...\" && tsc && echo \"[SUCCESS] Backend Compilado!\"",
     "convert-certs": "node scripts/converter-certificados-base64.js",
+    "cron:dev": "tsx --env-file=.env scripts/dev-cron.ts",
     "test": "vitest"
   },
   "keywords": [],

@@ -7,7 +7,6 @@ import {
     DRIVER_EVENT_ACCESS_SUSPENDED,
     DRIVER_EVENT_ACTIVATION,
     DRIVER_EVENT_PAYMENT_CONFIRMED,
-    DRIVER_EVENT_PAYMENT_RECEIVED_ALERT,
     DRIVER_EVENT_PIX_KEY_VALIDATED,
     DRIVER_EVENT_PIX_KEY_VALIDATION_FAILED,
     DRIVER_EVENT_PRE_PASSENGER_CREATED,
@@ -16,6 +15,8 @@ import {
     DRIVER_EVENT_RENEWAL_DUE_TODAY,
     DRIVER_EVENT_RENEWAL_OVERDUE,
     DRIVER_EVENT_REPASSE_FAILED,
+    DRIVER_EVENT_REPASSE_PROCESSING,
+    DRIVER_EVENT_REPASSE_SUCCESS,
     DRIVER_EVENT_TRIAL_ENDING,
     DRIVER_EVENT_UPGRADE,
     DRIVER_EVENT_WELCOME_TRIAL,
@@ -41,7 +42,6 @@ type DriverEventType =
     | typeof DRIVER_EVENT_WELCOME_TRIAL 
     | typeof DRIVER_EVENT_RENEWAL 
     | typeof DRIVER_EVENT_UPGRADE 
-    | typeof DRIVER_EVENT_PAYMENT_RECEIVED_ALERT
     | typeof DRIVER_EVENT_RENEWAL_DUE_SOON
     | typeof DRIVER_EVENT_RENEWAL_DUE_TODAY
     | typeof DRIVER_EVENT_RENEWAL_OVERDUE
@@ -49,6 +49,8 @@ type DriverEventType =
     | typeof DRIVER_EVENT_PAYMENT_CONFIRMED
     | typeof DRIVER_EVENT_TRIAL_ENDING
     | typeof DRIVER_EVENT_REPASSE_FAILED
+    | typeof DRIVER_EVENT_REPASSE_SUCCESS
+    | typeof DRIVER_EVENT_REPASSE_PROCESSING
     | typeof DRIVER_EVENT_PIX_KEY_VALIDATED
     | typeof DRIVER_EVENT_PIX_KEY_VALIDATION_FAILED
     | typeof DRIVER_EVENT_PRE_PASSENGER_CREATED;
@@ -95,9 +97,6 @@ export const notificationService = {
             case DRIVER_EVENT_WELCOME_TRIAL: parts = DriverTemplates.welcomeTrial(ctx); break;
             case DRIVER_EVENT_RENEWAL: parts = DriverTemplates.renewal(ctx); break;
             case DRIVER_EVENT_UPGRADE: parts = DriverTemplates.upgradeRequest(ctx); break;
-            case DRIVER_EVENT_PAYMENT_RECEIVED_ALERT: 
-                parts = DriverTemplates.paymentReceivedBySystem(ctx as any); 
-                break;
             case DRIVER_EVENT_RENEWAL_DUE_SOON: parts = DriverTemplates.renewalDueSoon(ctx); break;
             case DRIVER_EVENT_RENEWAL_DUE_TODAY: parts = DriverTemplates.renewalDueToday(ctx); break;
             case DRIVER_EVENT_RENEWAL_OVERDUE: parts = DriverTemplates.renewalOverdue(ctx); break;
@@ -105,6 +104,8 @@ export const notificationService = {
             case DRIVER_EVENT_PAYMENT_CONFIRMED: parts = DriverTemplates.paymentConfirmed(ctx); break;
             case DRIVER_EVENT_TRIAL_ENDING: parts = DriverTemplates.trialEnding(ctx); break;
             case DRIVER_EVENT_REPASSE_FAILED: parts = DriverTemplates.repasseFailed(ctx); break;
+            case DRIVER_EVENT_REPASSE_SUCCESS: parts = DriverTemplates.repasseSuccess(ctx as any); break;
+            case DRIVER_EVENT_REPASSE_PROCESSING: parts = DriverTemplates.repasseProcessing(ctx as any); break;
 
             case DRIVER_EVENT_PIX_KEY_VALIDATED: parts = DriverTemplates.pixKeyValidated(ctx); break;
             case DRIVER_EVENT_PIX_KEY_VALIDATION_FAILED: parts = DriverTemplates.pixKeyValidationFailed(ctx); break;
@@ -190,21 +191,17 @@ export const notificationService = {
             // 2. Filtar partes inválidas
             const validParts = parts.filter(p => !((p.type === 'image') && !p.mediaBase64));
 
-            const phone = process.env.NODE_ENV === "development" ? 
-                 ("5511999999999") : // Fallback dev 
-                 (to); // Production
-
-             // 3. Enviar para a Fila do WhatsApp
+            // 3. Enviar para a Fila do WhatsApp
              const jobId = eventType !== "UNKNOWN" ? `whatsapp-${to}-${eventType}-${Date.now()}` : undefined;
 
              await addToWhatsappQueue({
-                 phone,
+                 phone: to,
                  compositeMessage: validParts, 
                  context: eventType,
                  options: { instanceName } 
              }, jobId);
              
-             logger.info({ eventType, phone, instanceName, jobId, channel: "WHATSAPP" }, "Notificação enfileirada.");
+             logger.info({ eventType, phone: to, instanceName, jobId, channel: "WHATSAPP" }, "Notificação enfileirada.");
              return true; 
 
         } catch (error) {

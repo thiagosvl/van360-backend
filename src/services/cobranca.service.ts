@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { JOB_ORIGIN_MANUAL, PASSENGER_EVENT_MANUAL } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
@@ -11,7 +12,6 @@ import { planRules } from "./plan-rules.service.js";
 
 import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
 import { CobrancaOrigem, CobrancaStatus } from "../types/enums.js";
-import { MockPaymentType, mockAutomationService } from "./mock-automation.service.js";
 
 interface CreateCobrancaOptions {
   gerarPixAsync?: boolean; // Se true, apenas enfileira. Se false, gera na hora (síncrono).
@@ -106,8 +106,9 @@ export const cobrancaService = {
         // Tenta gerar na hora. Se falhar, estoura erro pro usuário ver.
         try {
           const provider = paymentService.getProvider();
+          const novoIdProvedor = crypto.randomUUID();
           const pixResult = await provider.criarCobrancaComVencimento({
-            cobrancaId: cobrancaId,
+            cobrancaId: novoIdProvedor,
             valor: valorNumerico,
             cpf: passageiro.cpf_responsavel,
             nome: passageiro.nome_responsavel,
@@ -120,14 +121,6 @@ export const cobrancaService = {
             location_url: pixResult.location
           };
 
-          // --- AUTOMAÇÃO MOCK ---
-          if (paymentService.isMock()) {
-            mockAutomationService.schedulePayment(
-              pixResult.gatewayTransactionId,
-              valorNumerico,
-              MockPaymentType.COBRANCA
-            );
-          }
         } catch (error: any) {
           logger.error({ error: error.message, passageiroId: data.passageiro_id }, "Falha ao gerar PIX Síncrono.");
           throw new AppError(`Falha ao gerar PIX (Banco): ${error.message}`, 502); // 502 Bad Gateway (Upstream error)
@@ -195,15 +188,60 @@ export const cobrancaService = {
     const valorChanged = data.valor !== undefined && moneyToNumber(data.valor) !== cobrancaOriginal.valor;
     const vencimentoChanged = data.data_vencimento !== undefined && data.data_vencimento !== cobrancaOriginal.data_vencimento;
 
+    let shouldGenerateNewPix = false;
+
+    // 1. Mudança Crítica num PIX existente
     if ((valorChanged || vencimentoChanged) && cobrancaOriginal.gateway_txid) {
-      logger.info({ cobrancaId: id, valorChanged, vencimentoChanged }, "Alteração crítica detectada. Regenerando PIX...");
+      shouldGenerateNewPix = true;
+    }
+
+    // 2. Não tinha PIX, mas editou cobrança (PIX Tardio)
+    if (!cobrancaOriginal.gateway_txid && (valorChanged || vencimentoChanged)) {
+      // Checar se o motorista agora tem permissão para PIX
+      const { data: assinatura } = await supabaseAdmin
+        .from("assinaturas_usuarios")
+        .select("planos(slug, parent:parent_id(slug))")
+        .eq("usuario_id", cobrancaOriginal.usuario_id)
+        .eq("ativo", true)
+        .maybeSingle();
+
+      const planoData = assinatura?.planos as any;
+      const slugBase = planoData?.parent?.slug ?? planoData?.slug;
+      const canGeneratePixNow = planRules.canGeneratePix(slugBase);
+
+      const passageiro = cobrancaOriginal.passageiro || cobrancaOriginal.passageiros;
+      const novoStatus = data.status || cobrancaOriginal.status;
+      
+      if (canGeneratePixNow && passageiro?.cpf_responsavel && passageiro?.nome_responsavel && novoStatus !== CobrancaStatus.PAGO) {
+        shouldGenerateNewPix = true;
+      }
+    }
+
+    // 3. Desfazer pagamento de PIX vencido
+    const isDesfazerPagamento = data.status === CobrancaStatus.PENDENTE && cobrancaOriginal.status === CobrancaStatus.PAGO;
+    if (isDesfazerPagamento && cobrancaOriginal.gateway_txid) {
+      const dtVencimentoRaw = data.data_vencimento !== undefined ? data.data_vencimento : cobrancaOriginal.data_vencimento;
+      const dtVencimento = new Date(dtVencimentoRaw + "T12:00:00");
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // Se a data de vencimento da cobrança for menor que hoje, o PIX provavelmente está vencido
+      if (dtVencimento < today) {
+        shouldGenerateNewPix = true;
+      }
+    }
+
+    if (shouldGenerateNewPix) {
+      logger.info({ cobrancaId: id }, "Alteração crítica ou evento detectado. Gerando/Regenerando PIX...");
 
       // 1. Cancelar PIX Antigo (Best effort - não trava se falhar cancelamento, mas loga)
-      try {
-        const provider = paymentService.getProvider();
-        await provider.cancelarCobranca(cobrancaOriginal.gateway_txid, 'cobv');
-      } catch (ignore) {
-        logger.warn({ cobrancaId: id, txid: cobrancaOriginal.gateway_txid }, "Falha ao cancelar PIX antigo (ignorado para prossegue).");
+      if (cobrancaOriginal.gateway_txid) {
+        try {
+          const provider = paymentService.getProvider();
+          await provider.cancelarCobranca(cobrancaOriginal.gateway_txid, 'cobv');
+        } catch (ignore) {
+          logger.warn({ cobrancaId: id, txid: cobrancaOriginal.gateway_txid }, "Falha ao cancelar PIX antigo (ignorado para prosseguir).");
+        }
       }
 
       // 2. Gerar Novo PIX
@@ -220,8 +258,13 @@ export const cobrancaService = {
           const novoVencimento = data.data_vencimento !== undefined ? data.data_vencimento : cobrancaOriginal.data_vencimento;
 
           const provider = paymentService.getProvider();
+          
+          // Como cancelamos o PIX anterior no provedor, gerar uma nova ID para ele não entrar em conflito
+          // de txid (bancos recusam o mesmo ID de um PIX já deletado).
+          const novoIdProvedor = crypto.randomUUID();
+
           const pixResult = await provider.criarCobrancaComVencimento({
-            cobrancaId: id,
+            cobrancaId: novoIdProvedor,
             valor: novoValor,
             cpf: passageiro.cpf_responsavel,
             nome: passageiro.nome_responsavel || "Responsável Financeiro",
@@ -233,14 +276,6 @@ export const cobrancaService = {
           cobrancaData.qr_code_payload = pixResult.qrCodePayload;
           cobrancaData.location_url = pixResult.location;
 
-          // --- AUTOMAÇÃO MOCK ---
-          if (paymentService.isMock()) {
-            mockAutomationService.schedulePayment(
-              pixResult.gatewayTransactionId,
-              novoValor,
-              MockPaymentType.COBRANCA
-            );
-          }
 
           // 3. Verificar necessidade de Reenvio de Notificação
           const notificacoesAnteriores = await cobrancaNotificacaoService.listByCobrancaId(id);
@@ -250,7 +285,7 @@ export const cobrancaService = {
           }
         }
       } catch (err: any) {
-        logger.error({ err, cobrancaId: id }, "Erro crítico ao regenerar PIX durante edição.");
+        logger.error({ err, cobrancaId: id }, "Erro crítico ao regenerar PIX durante edição/desfazer.");
         throw new AppError("Não foi possível atualizar o PIX da cobrança. Verifique os dados e tente novamente.", 502);
       }
     }
@@ -276,9 +311,25 @@ export const cobrancaService = {
   },
 
   async getCobranca(id: string): Promise<any> {
-    const { data, error } = await supabaseAdmin.from("cobrancas").select("*, passageiro:passageiros(*, escola:escolas(nome), veiculo:veiculos(placa))").eq("id", id).single();
+    const { data, error } = await supabaseAdmin
+      .from("cobrancas")
+      .select("*, passageiro:passageiros(*, escola:escolas(nome), veiculo:veiculos(placa)), repasses(estado, created_at)")
+      .eq("id", id)
+      .single();
+
     if (error) throw new AppError("Cobrança não encontrada.", 404);
-    return data;
+
+    const repasses = data.repasses || [];
+    const ultimoRepasse = repasses.sort((a: any, b: any) => 
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    )[0];
+
+    return {
+      ...data,
+      status_repasse: ultimoRepasse?.estado ?? null,
+      repasse: ultimoRepasse || null,
+      repasses: undefined
+    };
   },
 
   async deleteCobranca(id: string): Promise<void> {
@@ -294,14 +345,15 @@ export const cobrancaService = {
       throw new AppError("Erro ao buscar cobrança para exclusão.", 500);
     }
 
-    // 2. Se tiver PIX, cancelar no Provedor (Best effort)
+    // 2. Se tiver PIX, cancelar no Provedor (Bloqueio rigoroso se falhar)
     if (cobranca?.gateway_txid) {
       try {
         logger.info({ txid: cobranca.gateway_txid, cobrancaId: id }, "Cancelando PIX no Provedor antes de excluir...");
         const provider = paymentService.getProvider();
         await provider.cancelarCobranca(cobranca.gateway_txid, 'cobv');
       } catch (err: any) {
-        logger.warn({ error: err.message, txid: cobranca.gateway_txid }, "Falha ao cancelar PIX no Provedor durante exclusão (ignorado para prosseguir).");
+        logger.error({ error: err.message, txid: cobranca.gateway_txid }, "Falha ao cancelar PIX no Provedor durante exclusão. Abortando exclusão.");
+        throw new AppError("Não foi possível cancelar o registro bancário no sistema do C6 Bank no momento. Por favor, tente novamente em alguns minutos.", 502);
       }
     }
 
@@ -313,7 +365,7 @@ export const cobrancaService = {
   async listCobrancasWithFilters(filtros: any): Promise<any[]> {
     let query = supabaseAdmin
       .from("cobrancas")
-      .select("*, passageiro:passageiros!inner(nome, nome_responsavel)")
+      .select("*, passageiro:passageiros!inner(nome, nome_responsavel), repasses(estado, created_at)")
       .order("data_vencimento", { ascending: false });
 
     if (filtros.usuarioId) query = query.eq("usuario_id", filtros.usuarioId);
@@ -338,13 +390,30 @@ export const cobrancaService = {
 
     const { data, error } = await query;
     if (error) throw error;
-    return data || [];
+    
+    // Mapear o status do repasse para manter compatibilidade com o frontend
+    const mappedData = (data || []).map((cobranca: any) => {
+      const repasses = cobranca.repasses || [];
+      // Pegar o último repasse criado
+      const ultimoRepasse = repasses.sort((a: any, b: any) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )[0];
+      
+      return {
+        ...cobranca,
+        status_repasse: ultimoRepasse?.estado ?? null,
+        repasse: ultimoRepasse || null, // Disponibiliza o objeto completo conforme plano
+        repasses: undefined 
+      };
+    });
+
+    return mappedData;
   },
 
   async listCobrancasByPassageiro(passageiroId: string, ano?: string): Promise<any[]> {
     let query = supabaseAdmin
       .from("cobrancas")
-      .select("*, passageiro:passageiros!inner(nome, nome_responsavel)")
+      .select("*, passageiro:passageiros!inner(nome, nome_responsavel), repasses(estado, created_at)")
       .eq("passageiro_id", passageiroId)
       .order("data_vencimento", { ascending: false });
 
@@ -354,7 +423,22 @@ export const cobrancaService = {
 
     const { data, error } = await query;
     if (error) throw error;
-    return data || [];
+
+    const mappedData = (data || []).map((cobranca: any) => {
+      const repasses = cobranca.repasses || [];
+      const ultimoRepasse = repasses.sort((a: any, b: any) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )[0];
+      
+      return {
+        ...cobranca,
+        status_repasse: ultimoRepasse?.estado ?? null,
+        repasse: ultimoRepasse || null,
+        repasses: undefined
+      };
+    });
+
+    return mappedData;
   },
 
   async listAvailableYearsByPassageiro(passageiroId: string): Promise<number[]> {
@@ -396,8 +480,7 @@ export const cobrancaService = {
       .from("passageiros")
       .select("id, nome, valor_mensalidade, dia_vencimento, cpf_responsavel, nome_responsavel")
       .eq("usuario_id", motoristaId)
-      .eq("ativo", true)
-      .eq("enviar_cobranca_automatica", true);
+      .eq("ativo", true);
 
     if (passError) throw passError;
     if (!passageiros) return { created, skipped };
