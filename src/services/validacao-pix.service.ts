@@ -27,26 +27,16 @@ export async function cadastrarOuAtualizarChavePix(
   if (!usuarioId) throw new Error("ID do usuário é obrigatório.");
   if (!chavePix) throw new Error("Chave PIX é obrigatória.");
 
-  // 1. RATE LIMITING: Verificar tentativas recentes (滥uso)
-  // 1. RATE LIMITING: Verificar tentativas recentes (滥uso)
-  /* 
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  const { count, error: countError } = await supabaseAdmin
-      .from("pix_validacao_pendente")
-      .select("*", { count: "exact", head: true })
-      .eq("usuario_id", usuarioId)
-      .gt("created_at", oneHourAgo);
-
-  if (!countError && count !== null && count >= 3) {
-      logger.warn({ usuarioId, count }, "Bloqueio de Rate Limit para validação PIX");
-      throw new Error("Muitas tentativas de validação. Aguarde 1 hora para tentar novamente.");
-  }
-  */
-
-  // 2. Sanitizar
   let chaveSanitizada = chavePix.trim();
   if ([PixKeyType.CPF, PixKeyType.CNPJ, PixKeyType.TELEFONE].includes(tipoChave as any)) {
     chaveSanitizada = onlyDigits(chavePix);
+    if (tipoChave === PixKeyType.TELEFONE) {
+      if (chaveSanitizada.length === 10 || chaveSanitizada.length === 11) {
+        chaveSanitizada = `+55${chaveSanitizada}`;
+      } else if (!chaveSanitizada.startsWith('+')) {
+        chaveSanitizada = `+${chaveSanitizada}`;
+      }
+    }
   }
 
   // 3. Salvar no Banco como PENDENTE (Somente se não estiver validada ou for nova)
