@@ -25,7 +25,6 @@ export const DRIVER_EVENT_PAYMENT_CONFIRMED = "PAYMENT_CONFIRMED";
 export const DRIVER_EVENT_TRIAL_ENDING = "TRIAL_ENDING";
 export const DRIVER_EVENT_PAYMENT_SUCCESS = "payment_success";
 export const DRIVER_EVENT_REPASSE_SUCCESS = "repasse_success";
-export const DRIVER_EVENT_REPASSE_PROCESSING = "repasse_processing";
 export const DRIVER_EVENT_REPASSE_FAILED = "repasse_failed";
 export const DRIVER_EVENT_PIX_KEY_FAILED = "pix_key_validation_failed";
 export const DRIVER_EVENT_NEW_PASSENGER = "new_passenger_waiting";

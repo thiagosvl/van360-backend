@@ -1,4 +1,4 @@
-import { DRIVER_EVENT_REPASSE_PROCESSING, PASSENGER_EVENT_PAYMENT_RECEIVED } from "../../config/constants.js";
+import { PASSENGER_EVENT_PAYMENT_RECEIVED } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
 import { addToReceiptQueue } from "../../queues/receipt.queue.js";
@@ -8,7 +8,6 @@ import { formatDate } from "../../utils/format.js";
 import { cobrancaPagamentoService } from "../cobranca-pagamento.service.js";
 // Actually checking usages below.. notifications use cobrancaService? No, notificationService.
 // Let's keep it safe, but looks like we might remove it if unused.
-import { notificationService } from "../notifications/notification.service.js";
 import { ReceiptData } from "../receipt.service.js";
 
 export const webhookCobrancaHandler = {
@@ -102,19 +101,7 @@ export const webhookCobrancaHandler = {
                     }
                 });
 
-                // Notificar Motorista sobre status do Repasse (Dinheiro em trânsito)
-                notificationService.notifyDriver(moto.telefone, DRIVER_EVENT_REPASSE_PROCESSING, {
-                     nomeMotorista: moto.nome,
-                     nomePagador: pass?.nome_responsavel,
-                     nomePassageiro: pass?.nome,
-                     valor: amount,
-                     mes: fullData.mes,
-                     ano: fullData.ano,
-                     nomePlano: "",
-                     dataVencimento: ""
-                });
             }
-
         } catch (queueErr) {
             logger.error({ queueErr }, "Erro ao enfileirar recibo (Notificação falhou, mas pagamento ok)");
         }

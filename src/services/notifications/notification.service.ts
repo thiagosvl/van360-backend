@@ -15,7 +15,6 @@ import {
     DRIVER_EVENT_RENEWAL_DUE_TODAY,
     DRIVER_EVENT_RENEWAL_OVERDUE,
     DRIVER_EVENT_REPASSE_FAILED,
-    DRIVER_EVENT_REPASSE_PROCESSING,
     DRIVER_EVENT_REPASSE_SUCCESS,
     DRIVER_EVENT_TRIAL_ENDING,
     DRIVER_EVENT_UPGRADE,
@@ -50,7 +49,6 @@ type DriverEventType =
     | typeof DRIVER_EVENT_TRIAL_ENDING
     | typeof DRIVER_EVENT_REPASSE_FAILED
     | typeof DRIVER_EVENT_REPASSE_SUCCESS
-    | typeof DRIVER_EVENT_REPASSE_PROCESSING
     | typeof DRIVER_EVENT_PIX_KEY_VALIDATED
     | typeof DRIVER_EVENT_PIX_KEY_VALIDATION_FAILED
     | typeof DRIVER_EVENT_PRE_PASSENGER_CREATED;
@@ -105,7 +103,6 @@ export const notificationService = {
             case DRIVER_EVENT_TRIAL_ENDING: parts = DriverTemplates.trialEnding(ctx); break;
             case DRIVER_EVENT_REPASSE_FAILED: parts = DriverTemplates.repasseFailed(ctx); break;
             case DRIVER_EVENT_REPASSE_SUCCESS: parts = DriverTemplates.repasseSuccess(ctx as any); break;
-            case DRIVER_EVENT_REPASSE_PROCESSING: parts = DriverTemplates.repasseProcessing(ctx as any); break;
 
             case DRIVER_EVENT_PIX_KEY_VALIDATED: parts = DriverTemplates.pixKeyValidated(ctx); break;
             case DRIVER_EVENT_PIX_KEY_VALIDATION_FAILED: parts = DriverTemplates.pixKeyValidationFailed(ctx); break;

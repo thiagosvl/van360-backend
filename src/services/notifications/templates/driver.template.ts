@@ -248,10 +248,16 @@ export const DriverTemplates = {
     repasseSuccess: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
         const data = ctx.dataVencimento ? formatDate(ctx.dataVencimento) : formatDate(new Date().toISOString());
+        const ref = ctx.mes ? `*${getMeshName(ctx.mes)}/${ctx.ano}*` : "";
+        const passageiro = ctx.nomePassageiro ? `\n👤 Passageiro: *${getFirstName(ctx.nomePassageiro)}*` : "";
 
         return textPart(`💰 *Transferência Finalizada*\n\n` +
-            `O valor de *${valor}* foi depositado em sua conta bancária.\n` +
-            `Referência do depósito: *${data}*`);
+            `O valor de *${valor}* foi depositado em sua conta bancária.\n\n` +
+            `*Detalhes do Pagamento:*` +
+            `${passageiro}` +
+            (ref ? `\n📅 Referência: ${ref}` : "") +
+            `\n🏦 Data do depósito: *${data}*\n\n` +
+            `_O valor já deve estar disponível em sua conta via PIX._`);
     },
     reactivationWithEmbargo: (ctx: DriverContext): CompositeMessagePart[] => {
         const mes = getMeshName(ctx.mes);
@@ -274,23 +280,6 @@ export const DriverTemplates = {
         return textPart(`🔔 *Novo Pré-Cadastro Recebido*\n\n` +
             `O pré-cadastro de *${nomePas}*${nomeResp} foi efetuado via link da sua Van.\n` +
             `Acesse o sistema para revisar os dados, definir os valores e aprovar o cadastro.`);
-    },
-
-    /**
-     * Repasse Processing (Intermediário - O Pai Pagou)
-     */
-    repasseProcessing: (ctx: DriverContext & { nomePagador?: string }): CompositeMessagePart[] => {
-        const valor = formatCurrency(ctx.valor);
-        const nomePassageiro = getFirstName(ctx.nomePassageiro) || "Passageiro";
-        const nomePag = getFirstName(ctx.nomeResponsavel || ctx.nomePagador);
-        const ref = ctx.mes ? `Referência: *${getMeshName(ctx.mes)}/${ctx.ano}*` : "";
-        
-        return textPart(`⏱️ *Pagamento em Processamento*\n\n` +
-            `Mensalidade recebida e confirmada:\n` +
-            `Passageiro: *${nomePassageiro}*${nomePag ? ` (${nomePag})` : ''}\n` +
-            `Valor: *${valor}*\n` +
-            `${ref}\n\n` +
-            `O valor encontra-se em processamento e será repassado imediatamente à sua chave PIX com a liquidação do banco.`);
     },
 
     /**

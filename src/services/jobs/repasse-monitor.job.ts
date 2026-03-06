@@ -139,11 +139,30 @@ export const repasseMonitorJob = {
                     if (novoEstado === RepasseState.LIQUIDADO) {
                         logger.info({ id: repasse.id, valor: repasse.valor }, "✅ Repasse LIQUIDADO com sucesso!");
                         try {
-                            const { data: usuario } = await supabaseAdmin.from("usuarios").select("nome, telefone").eq("id", repasse.usuario_id).single();
-                            if (usuario?.telefone) {
-                                notificationService.notifyDriver(usuario.telefone, DRIVER_EVENT_REPASSE_SUCCESS, {
-                                    nomeMotorista: usuario.nome,
+                            const { data: fullData } = await supabaseAdmin
+                                .from("repasses")
+                                .select(`
+                                    id, valor, usuario_id,
+                                    usuarios(nome, telefone),
+                                    cobrancas(
+                                        mes, ano,
+                                        passageiros(nome)
+                                    )
+                                `)
+                                .eq("id", repasse.id)
+                                .single();
+
+                            const user = fullData?.usuarios as any;
+                            const cob = fullData?.cobrancas as any;
+                            const pass = cob?.passageiros as any;
+
+                            if (user?.telefone) {
+                                await notificationService.notifyDriver(user.telefone, DRIVER_EVENT_REPASSE_SUCCESS, {
+                                    nomeMotorista: user.nome,
                                     valor: repasse.valor,
+                                    mes: cob?.mes,
+                                    ano: cob?.ano,
+                                    nomePassageiro: pass?.nome,
                                     dataVencimento: new Date().toISOString()
                                 } as any);
                             }
