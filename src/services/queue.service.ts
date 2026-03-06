@@ -1,5 +1,7 @@
 import { logger } from "../config/logger.js";
+import { setupCronJobs } from "../queues/cron.queue.js";
 import { contractWorker } from "../workers/contract.worker.js";
+import { cronWorker } from "../workers/cron.worker.js";
 import { generationWorker } from "../workers/generation.worker.js";
 import { payoutWorker } from "../workers/payout.worker.js";
 import { pixWorker } from "../workers/pix.worker.js";
@@ -22,8 +24,12 @@ export const queueService = {
         if (pixWorker) logger.info(`[QueueService] Worker started: ${pixWorker.name}`);
         if (payoutWorker) logger.info(`[QueueService] Worker started: ${payoutWorker.name}`);
         if (contractWorker) logger.info(`[QueueService] Worker started: ${contractWorker.name}`);
+        if (cronWorker) logger.info(`[QueueService] Worker started: ${cronWorker.name}`);
 
-        logger.info("[QueueService] All workers initialized.");
+        // Configura agendamentos repetitivos (Cron) na VPS
+        await setupCronJobs();
+
+        logger.info("[QueueService] All workers initialized and Cron Jobs scheduled.");
     },
 
     async shutdown() {
@@ -35,7 +41,8 @@ export const queueService = {
             generationWorker.close(),
             pixWorker.close(),
             payoutWorker.close(),
-            contractWorker.close()
+            contractWorker.close(),
+            cronWorker.close()
         ]);
         logger.info("[QueueService] Workers stopped.");
     }
