@@ -308,8 +308,10 @@ export const DriverTemplates = {
      * Falha na Validação da Chave PIX
      */
     pixKeyValidationFailed: (ctx: DriverContext): CompositeMessagePart[] => {
+        const formattedKey = ctx.chavePix && ctx.tipoChavePix ? formatPixKey(ctx.chavePix, ctx.tipoChavePix) : (ctx.chavePix || "informada");
+
         return textPart(`❌ *Falha de Validação PIX*\n\n` +
-            `O banco não pôde aprovar a chave PIX informada. O documento atrelado à chave deve ser idêntico ao titular da conta.\n` +
+            `O banco não pôde aprovar a chave PIX (*${formattedKey}*). O documento atrelado à chave deve ser idêntico ao titular da conta.\n` +
             `Cadastre uma nova chave PIX ativa no aplicativo.`);
     }
 };

@@ -307,7 +307,7 @@ export const validacaoPixService = {
         try {
              const { data: userData } = await supabaseAdmin
                  .from("usuarios")
-                 .select("nome, telefone")
+                 .select("nome, telefone, chave_pix, tipo_chave_pix")
                  .eq("id", usuarioId)
                  .single();
      
@@ -316,7 +316,9 @@ export const validacaoPixService = {
                      nomeMotorista: userData.nome || "Motorista",
                      nomePlano: "",
                      valor: 0,
-                     dataVencimento: ""
+                     dataVencimento: "",
+                     chavePix: userData.chave_pix,
+                     tipoChavePix: userData.tipo_chave_pix
                  });
              }
         } catch (notifyErr) {
