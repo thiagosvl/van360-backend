@@ -3,6 +3,7 @@ import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
 import { AssinaturaBillingType, AssinaturaCobrancaStatus, ConfigKey } from "../types/enums.js";
+import { toLocalDateString } from '../utils/date.utils.js';
 import { getConfigNumber } from "./configuracao.service.js";
 import { paymentService } from "./payment.service.js";
 
@@ -103,9 +104,9 @@ export const assinaturaCobrancaService = {
         // DECISÃO DE ESTRATÉGIA (COB vs COBV)
         const isCobrancaComVencimento = 
             cobranca.billing_type === "subscription" || 
-            (cobranca.billing_type === "activation" && 
-             cobranca.data_vencimento && 
-             new Date(cobranca.data_vencimento + 'T12:00:00') > new Date());
+             (cobranca.billing_type === "activation" && 
+              cobranca.data_vencimento && 
+              new Date(`${cobranca.data_vencimento}T23:59:59-03:00`) > new Date());
 
         // VERIFICAÇÃO DE CACHE E EXPIRAÇÃO
         if (cobranca.qr_code_payload && cobranca.gateway_txid) {
@@ -162,7 +163,7 @@ export const assinaturaCobrancaService = {
              logger.info({ cobrancaId, billingType: cobranca.billing_type }, `Gerando PIX com Vencimento (cobv) via ${provider.name}`);
              
              // Definir vencimento (se não tiver na cobrança, usar hoje + 3 dias como fallback seguro, ou tratar erro)
-             const dataVencimento = cobranca.data_vencimento || new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+             const dataVencimento = cobranca.data_vencimento || toLocalDateString(new Date(Date.now() + 3 * 24 * 60 * 60 * 1000));
 
              // IDEMPOTÊNCIA STABLE: Usamos um hash do ID + valor + vencimento.
              // Se o valor ou data mudar, o txid muda e o banco aceita a nova cobrança.

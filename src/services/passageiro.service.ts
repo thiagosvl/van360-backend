@@ -495,6 +495,27 @@ const finalizePreCadastro = async (
     return novoPassageiro;
 };
 
+const lookupResponsavelByCpf = async (usuarioId: string, cpf: string): Promise<any> => {
+    if (!usuarioId) throw new AppError("Usuário não identificado", 401);
+    if (!cpf) throw new AppError("CPF obrigatório", 400);
+
+    const cpfClean = onlyDigits(cpf);
+
+    const { data, error } = await supabaseAdmin
+        .from("passageiros")
+        .select("nome_responsavel, email_responsavel, telefone_responsavel")
+        .eq("usuario_id", usuarioId)
+        .eq("cpf_responsavel", cpfClean)
+        .limit(1)
+        .maybeSingle();
+
+    if (error) {
+        throw new AppError("Erro ao buscar responsável.", 500);
+    }
+
+    return data;
+};
+
 // Exportar objeto unificado no final
 export const passageiroService = {
     createPassageiro,
@@ -505,5 +526,6 @@ export const passageiroService = {
     toggleAtivo,
     getNumeroCobrancas,
     countListPassageirosByUsuario,
-    finalizePreCadastro
+    finalizePreCadastro,
+    lookupResponsavelByCpf
 };

@@ -8,6 +8,7 @@ import {
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
 import { AssinaturaCobrancaStatus, AssinaturaStatus, ConfigKey } from "../../types/enums.js";
+import { toLocalDateString } from "../../utils/date.utils.js";
 import { getConfigNumber } from "../configuracao.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 
@@ -23,7 +24,7 @@ export const dailySubscriptionMonitorJob = {
     async run(params: { force?: boolean; diasAntecedenciaOverride?: number } = {}): Promise<JobResult> {
         const result: JobResult = { processed: 0, notifications: 0, suspended: 0, errors: 0, details: [] };
         const hoje = new Date();
-        const hojeStr = hoje.toISOString().split('T')[0];
+        const hojeStr = toLocalDateString(hoje);
 
         try {
             logger.info("Iniciando Monitoramento Diário de Assinaturas (Motoristas)");
@@ -34,25 +35,25 @@ export const dailySubscriptionMonitorJob = {
             // Datas de Interesse
             
             // A) Vence em Breve (Hoje + N)
-            const dataAviso = new Date();
+            const dataAviso = new Date(hoje);
             dataAviso.setDate(hoje.getDate() + diasAntecedencia);
-            const dataAvisoStr = dataAviso.toISOString().split('T')[0];
+            const dataAvisoStr = toLocalDateString(dataAviso);
 
             // B) Vence Hoje (Hoje) -> hojeStr
 
-            // C) Bloqueio (Regra: 1 dia após vencimento - D+1)
-            const bloqueio = new Date();
-            bloqueio.setDate(hoje.getDate() - 1);
-            const dataBloqueioStr = bloqueio.toISOString().split('T')[0];
+            // C) Bloqueio (Regra: 3 dias após vencimento - D+3)
+            const bloqueio = new Date(hoje);
+            bloqueio.setDate(hoje.getDate() - 3);
+            const dataBloqueioStr = toLocalDateString(bloqueio);
 
-            // D) Atrasados (Regra: até X dias após vencimento)
-            const diasPosVencimento = await getConfigNumber(ConfigKey.DIAS_COBRANCA_POS_VENCIMENTO, 3);
+            // D) Atrasados (Regra: dias de aviso antes do bloqueio efetivo)
+            const diasPosVencimento = 2; // Dias 1 e 2 após vencimento recebem aviso de atraso
             const datasAtraso: string[] = [];
             
             for (let i = 1; i <= diasPosVencimento; i++) {
-                const d = new Date();
+                const d = new Date(hoje);
                 d.setDate(hoje.getDate() - i);
-                datasAtraso.push(d.toISOString().split('T')[0]);
+                datasAtraso.push(toLocalDateString(d));
             }
 
             const datasDeInteresse = [dataAvisoStr, hojeStr, dataBloqueioStr, ...datasAtraso];
@@ -114,8 +115,8 @@ export const dailySubscriptionMonitorJob = {
                             .select("id", { count: "exact", head: true })
                             .eq("assinatura_cobranca_id", cobranca.id)
                             .eq("tipo_evento", context)
-                            // Para Bloqueio e Vencimento, queremos garantir que enviou hoje/neste ciclo
-                            .gte("data_envio", hojeStr + "T00:00:00"); 
+                            // Para Bloqueio e Vencimento, queremos garantir que enviou no dia atual
+                            .gte("data_envio", hojeStr); 
 
                         if (histError) {
                             if (histError.message.includes("does not exist")) {
@@ -176,9 +177,9 @@ export const dailySubscriptionMonitorJob = {
             }
 
             // 6. Inativação de Contas Abandonadas (Suspensas há mais de 30 dias)
-            const dataLimiteInativacao = new Date();
+            const dataLimiteInativacao = new Date(hoje);
             dataLimiteInativacao.setDate(hoje.getDate() - 30);
-            const dataLimiteInativacaoStr = dataLimiteInativacao.toISOString().split('T')[0];
+            const dataLimiteInativacaoStr = toLocalDateString(dataLimiteInativacao);
 
             logger.info({ dataLimite: dataLimiteInativacaoStr }, "Buscando contas abandonadas para inativação...");
 

@@ -5,7 +5,7 @@ import { supabaseAdmin } from "../../config/supabase.js";
 import { addToReceiptQueue } from "../../queues/receipt.queue.js";
 import { AssinaturaTipoPagamento } from "../../types/enums.js";
 import { StandardPaymentPayload } from "../../types/webhook.js";
-import { formatDate } from "../../utils/format.js";
+import { toLocalDateString } from "../../utils/date.utils.js";
 import { processarPagamentoAssinatura } from "../assinatura-pagamento.service.js";
 import { ReceiptData } from "../receipt.service.js";
 import { processarRetornoValidacaoPix } from "../validacao-pix.service.js";
@@ -60,14 +60,14 @@ export const webhookAssinaturaHandler = {
         try {
             const usuario = cobranca.usuarios as any;
             const nomePlano = (cobranca as any).assinaturas_usuarios?.planos?.parent?.nome || (cobranca as any).assinaturas_usuarios?.planos?.nome || "Plano Van360";
-            const vigenciaFim = result?.vigenciaFim ? result.vigenciaFim.toISOString().split('T')[0] : cobranca.data_vencimento;
+            const vigenciaFim = result?.vigenciaFim ? toLocalDateString(result.vigenciaFim) : cobranca.data_vencimento;
 
             const receiptData: ReceiptData = {
                 id: cobranca.id,
                 titulo: "Recibo de Pagamento",
                 subtitulo: "Van360 - Sistema de Gestão",
                 valor: amount,
-                data: formatDate(paymentDate),
+                data: toLocalDateString(paymentDate),
                 pagadorNome: usuario?.nome || "Assinante",
                 descricao: `Mensalidade - ${nomePlano}`,
                 metodoPagamento: AssinaturaTipoPagamento.PIX,

@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { AssinaturaCobrancaStatus, CobrancaStatus, ConfigKey } from "../types/enums.js";
+import { toLocalDateString } from "../utils/date.utils.js";
 import { calculatePlanFlags } from "../utils/plan-flags.utils.js";
 import { getConfigNumber } from "./configuracao.service.js";
 import { planRules } from "./plan-rules.service.js";
@@ -194,8 +195,8 @@ export const usuarioResumoService = {
     const targetMes = mes ?? (now.getMonth() + 1);
     const targetAno = ano ?? now.getFullYear();
 
-    const start = new Date(targetAno, targetMes - 1, 1).toISOString().split("T")[0];
-    const end = new Date(targetAno, targetMes, 0).toISOString().split("T")[0];
+    const start = toLocalDateString(new Date(targetAno, targetMes - 1, 1));
+    const end = toLocalDateString(new Date(targetAno, targetMes, 0));
 
     const [cobrancasRes, gastosRes] = await Promise.all([
       supabaseAdmin
@@ -225,7 +226,7 @@ export const usuarioResumoService = {
     const totalDespesas = gastos.reduce((acc: number, g: any) => acc + Number(g.valor || 0), 0);
     const margemOperacional = receitaRealizada > 0 ? ((receitaRealizada - totalDespesas) / receitaRealizada) * 100 : 0;
 
-    const hoje = new Date().toISOString().split("T")[0];
+    const hoje = toLocalDateString(new Date());
     const atrasos = cobrancasAbertas.filter((c: any) => c.data_vencimento < hoje);
     const valorAtrasos = atrasos.reduce((acc: number, c: any) => acc + Number(c.valor || 0), 0);
 

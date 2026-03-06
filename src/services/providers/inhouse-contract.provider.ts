@@ -1,16 +1,17 @@
 import fs from 'fs';
 import path from 'path';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-import { formatDate, formatModalidade, formatParentesco, formatPeriodo, maskCnpj, maskCpf, maskPhone } from '../../utils/format.js';
+import { formatToBrazilianDate } from '../../utils/date.utils.js';
+import { formatModalidade, formatParentesco, formatPeriodo, maskCnpj, maskCpf, maskPhone } from '../../utils/format.js';
 
 import { supabaseAdmin } from '../../config/supabase.js';
 import {
-  ContractGenerationParams,
-  ContractGenerationResponse,
-  ContractProvider,
-  ContractSignatureParams,
-  ContractSignatureResponse,
-  DadosContrato,
+    ContractGenerationParams,
+    ContractGenerationResponse,
+    ContractProvider,
+    ContractSignatureParams,
+    ContractSignatureResponse,
+    DadosContrato,
 } from '../../types/contract.js';
 import { ContractMultaTipo, ContratoProvider } from '../../types/enums.js';
 
@@ -312,8 +313,8 @@ export class InHouseContractProvider implements ContractProvider {
     currentY = drawHeader('DO PERÍODO DO CONTRATO', currentY);
     const currentYear = new Date().getFullYear();
     page.drawText(`Ano Letivo: ${dados.ano || currentYear}`, { x: margin, y: currentY, size: smallTextSize, font });
-    page.drawText(`Início: ${formatDate(dados.dataInicio)}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
-    page.drawText(`Término: ${formatDate(dados.dataFim)}`, { x: 300, y: currentY - 14, size: smallTextSize, font });
+    page.drawText(`Início: ${formatToBrazilianDate(dados.dataInicio)}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
+    page.drawText(`Término: ${formatToBrazilianDate(dados.dataFim)}`, { x: 300, y: currentY - 14, size: smallTextSize, font });
     currentY -= 45;
 
     currentY = drawHeader('DAS CONDIÇÕES DE VALOR', currentY);

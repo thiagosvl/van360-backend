@@ -124,6 +124,36 @@ export async function getUsuarioData(usuarioId: string) {
   return usuario;
 }
 
+export async function validarFranquiaPassageiros(
+  usuarioId: string,
+  novaFranquia: number
+): Promise<void> {
+  const { count: passageirosAtivos } = await supabaseAdmin
+    .from("passageiros")
+    .select("id", { count: "exact", head: true })
+    .eq("usuario_id", usuarioId)
+    .eq("ativo", true);
+
+  if (passageirosAtivos && passageirosAtivos > novaFranquia) {
+    throw new AppError(
+      `Você possui ${passageirosAtivos} passageiros ativos, mas o plano selecionado suporta apenas ${novaFranquia}. ` +
+      `Desative o envio automático de cobrança em ${passageirosAtivos - novaFranquia} passageiro(s) e tente novamente.`,
+      400
+    );
+  }
+}
+
+export async function contarPassageirosComAutomacao(usuarioId: string): Promise<number> {
+  const { count } = await supabaseAdmin
+    .from("passageiros")
+    .select("id", { count: "exact", head: true })
+    .eq("usuario_id", usuarioId)
+    .eq("ativo", true)
+    .eq("enviar_cobranca_automatica", true);
+
+  return count || 0;
+}
+
 export function isUpgrade(slugAtual: string, slugNovo: string): boolean {
   const ordem: Record<string, number> = {
     [PLANO_ESSENCIAL]: 2,

@@ -1,7 +1,10 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { passageiroController } from "../controllers/passageiro.controller.js";
+import { authenticate } from "../middleware/auth.js";
 
 const passageiroRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
+    app.addHook("onRequest", authenticate);
+
     // Rotas CRUD Básicas
     app.post("/", passageiroController.create);
     app.put("/:id", passageiroController.update);

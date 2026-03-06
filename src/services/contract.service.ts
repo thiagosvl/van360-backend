@@ -7,6 +7,7 @@ import { addToContractQueue } from '../queues/contract.queue.js';
 import { ContractProvider, DadosContrato, SignatureMetadata } from '../types/contract.js';
 import { CreateContractDTO, ListContractsDTO } from '../types/dtos/contract.dto.js';
 import { ContractMultaTipo, ContratoProvider, ContratoStatus, PassageiroModalidade, PeriodoEnum } from '../types/enums.js';
+import { toLocalDateString } from '../utils/date.utils.js';
 import { formatAddress, getFirstName } from '../utils/format.js';
 import { InHouseContractProvider } from './providers/inhouse-contract.provider.js';
 import { whatsappService } from './whatsapp.service.js';
@@ -66,7 +67,7 @@ class ContractService {
     
     // 3. Cálculos dinâmicos (Default: 12 meses seguindo o ano escolar)
     const hoje = new Date();
-    const dataInicio = customTerms.dataInicio || passageiro.data_inicio_transporte || hoje.toISOString().split('T')[0];
+    const dataInicio = customTerms.dataInicio || passageiro.data_inicio_transporte || toLocalDateString(hoje);
     
     // Período padrão de 12 meses (ou o que o usuário definir)
     const qtdParcelas = customTerms.qtdParcelas || 12;
@@ -78,7 +79,7 @@ class ContractService {
     const dFim = new Date(dInicio);
     dFim.setMonth(dInicio.getMonth() + qtdParcelas);
     dFim.setDate(0); // Último dia do mês anterior ao mês do vencimento final
-    const dataFim = customTerms.dataFim || dFim.toISOString().split('T')[0];
+    const dataFim = customTerms.dataFim || toLocalDateString(dFim);
     
     // 4. Preparar dados do contrato
     const dadosContrato: DadosContrato = {
@@ -561,7 +562,7 @@ class ContractService {
       valorMensal: 200,
       diaVencimento: 10,
       ano: anoVigente,
-      dataInicio: hoje.toISOString().split('T')[0],
+      dataInicio: toLocalDateString(hoje),
       dataFim: `${anoVigente}-12-31`,
       valorTotal: 2400,
       qtdParcelas: 12,

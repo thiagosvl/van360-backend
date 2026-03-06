@@ -1,6 +1,5 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
-import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
 import { cobrancaService } from "../services/cobranca.service.js";
 import { passageiroService } from "../services/passageiro.service.js";
@@ -11,7 +10,6 @@ import {
     toggleAtivoSchema,
     updatePassageiroSchema
 } from "../types/dtos/passageiro.dto.js";
-import { onlyDigits } from "../utils/string.utils.js";
 
 import { accessControlService } from "../services/access-control.service.js";
 
@@ -121,27 +119,14 @@ export const passageiroController = {
 
   lookupResponsavel: async (request: FastifyRequest, reply: FastifyReply) => {
     const { cpf } = request.query as { cpf: string };
-    const authHeader = request.headers.authorization;
-    if (!authHeader) return reply.status(401).send({ error: "Token ausente" });
-    
-    const { data: { user } } = await supabaseAdmin.auth.getUser(authHeader.split(" ")[1]);
-    if (!user) return reply.status(401).send({ error: "Usuário não identificado" });
-    
-    if (!cpf) return reply.status(400).send({ error: "CPF obrigatório" });
+    const authUid = (request as any).user?.id;
 
-    const cpfClean = onlyDigits(cpf);
-
-    const { data, error } = await supabaseAdmin
-        .from("passageiros")
-        .select("nome_responsavel, email_responsavel, telefone_responsavel")
-        .eq("usuario_id", user.user_metadata?.usuario_id || user.app_metadata?.usuario_id)
-        .eq("cpf_responsavel", cpfClean)
-        .limit(1)
-        .maybeSingle();
-
-    if (error) {
-        throw new AppError("Erro ao buscar responsável.", 500);
+    if (!authUid) {
+        throw new AppError("Não autorizado", 401);
     }
+    
+    const usuarioId = await accessControlService.resolveUsuarioId(authUid);
+    const data = await passageiroService.lookupResponsavelByCpf(usuarioId, cpf);
 
     return reply.status(200).send(data); 
   }

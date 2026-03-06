@@ -255,7 +255,7 @@ CREATE TABLE IF NOT EXISTS "public"."cobrancas" (
     "valor" numeric(10,2) NOT NULL,
     "status" "text" DEFAULT 'pendente'::"text" NOT NULL,
     "data_vencimento" "date" NOT NULL,
-    "data_pagamento" "date",
+    "data_pagamento" timestamp with time zone,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "pagamento_manual" boolean DEFAULT false,

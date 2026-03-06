@@ -4,10 +4,8 @@ import { supabaseAdmin } from "../../config/supabase.js";
 import { addToReceiptQueue } from "../../queues/receipt.queue.js";
 import { AssinaturaTipoPagamento } from "../../types/enums.js";
 import { StandardPaymentPayload } from "../../types/webhook.js";
-import { formatDate } from "../../utils/format.js";
+import { toLocalDateString } from "../../utils/date.utils.js";
 import { cobrancaPagamentoService } from "../cobranca-pagamento.service.js";
-// Actually checking usages below.. notifications use cobrancaService? No, notificationService.
-// Let's keep it safe, but looks like we might remove it if unused.
 import { ReceiptData } from "../receipt.service.js";
 
 export const webhookCobrancaHandler = {
@@ -71,7 +69,7 @@ export const webhookCobrancaHandler = {
                     titulo: "Recibo de Transporte",
                     subtitulo: `Transporte Escolar - ${nomeExibicao}`,
                     valor: amount,
-                    data: formatDate(paymentDate),
+                    data: toLocalDateString(paymentDate),
                     pagadorNome: pass?.nome_responsavel || "Responsável",
                     passageiroNome: pass?.nome || "Passageiro",
                     mes: fullData.mes,

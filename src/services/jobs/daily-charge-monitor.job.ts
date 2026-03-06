@@ -8,6 +8,7 @@ import {
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
 import { AssinaturaStatus, CobrancaStatus, ConfigKey } from "../../types/enums.js";
+import { toLocalDateString } from "../../utils/date.utils.js";
 import { getConfigNumber } from "../configuracao.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 
@@ -22,7 +23,7 @@ export const dailyChargeMonitorJob = {
     async run(params: { force?: boolean; diasAntecedenciaOverride?: number } = {}): Promise<JobResult> {
         const result: JobResult = { processed: 0, sent: 0, errors: 0, details: [] };
         const hoje = new Date();
-        const hojeStr = hoje.toISOString().split('T')[0];
+        const hojeStr = toLocalDateString(hoje);
 
         try {
             logger.info("Iniciando Job Diário de Monitoramento de Mensalidades");
@@ -35,7 +36,7 @@ export const dailyChargeMonitorJob = {
             // A) Vence em Breve (Hoje + N)
             const dataAviso = new Date();
             dataAviso.setDate(hoje.getDate() + diasAntecedencia);
-            const dataAvisoStr = dataAviso.toISOString().split('T')[0];
+            const dataAvisoStr = toLocalDateString(dataAviso);
 
             // B) Vence Hoje (Hoje)
             // hojeStr ja temos
@@ -47,7 +48,7 @@ export const dailyChargeMonitorJob = {
             for (let i = 1; i <= diasPosVencimento; i++) {
                 const d = new Date();
                 d.setDate(hoje.getDate() - i);
-                datasAtraso.push(d.toISOString().split('T')[0]);
+                datasAtraso.push(toLocalDateString(d));
             }
 
             // 2. Buscar TUDO que se encaixa nessas datas E está pendente
@@ -95,13 +96,13 @@ export const dailyChargeMonitorJob = {
 
                 // Definir Contexto
                 let context: string | null = null;
-                const vecimentoStr = cobranca.data_vencimento;
+                const vencimentoStr = cobranca.data_vencimento;
 
-                if (vecimentoStr === dataAvisoStr) {
+                if (vencimentoStr === dataAvisoStr) {
                     context = PASSENGER_EVENT_DUE_SOON;
-                } else if (vecimentoStr === hojeStr) {
+                } else if (vencimentoStr === hojeStr) {
                     context = PASSENGER_EVENT_DUE_TODAY;
-                } else if (vecimentoStr < hojeStr) {
+                } else if (vencimentoStr < hojeStr) {
                     context = PASSENGER_EVENT_OVERDUE;
                 }
 

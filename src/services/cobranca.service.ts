@@ -5,6 +5,7 @@ import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
 import { addToPixQueue } from "../queues/pix.queue.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
+import { toLocalDateString } from "../utils/date.utils.js";
 import { cobrancaNotificacaoService } from "./cobranca-notificacao.service.js";
 import { notificationService } from "./notifications/notification.service.js";
 import { paymentService } from "./payment.service.js";
@@ -49,11 +50,7 @@ export const cobrancaService = {
 
     // --- Lógica de Geração PIX ---
     const now = new Date();
-    // FIX: Ajuste para Fuso Horário do Brasil (UTC-3)
-    // Isso garante que cobranças geradas à noite (ex: 22h) sejam consideradas "hoje" e não "amanhã"
-    const diffBrasilia = -3;
-    const nowBrasilia = new Date(now.getTime() + (diffBrasilia * 60 * 60 * 1000));
-    const todayStr = nowBrasilia.toISOString().split('T')[0];
+    const todayStr = toLocalDateString(now);
     const isPastDue = data.data_vencimento < todayStr;
     // status não existe no DTO de criação, assumimos pendente por padrão se não for passado explicitamente
     // mas aqui estamos validando regras de negócio
@@ -226,7 +223,7 @@ export const cobrancaService = {
     const isDesfazerPagamento = data.status === CobrancaStatus.PENDENTE && cobrancaOriginal.status === CobrancaStatus.PAGO;
     if (isDesfazerPagamento && cobrancaOriginal.gateway_txid) {
       const dtVencimentoRaw = data.data_vencimento !== undefined ? data.data_vencimento : cobrancaOriginal.data_vencimento;
-      const dtVencimento = new Date(dtVencimentoRaw + "T12:00:00");
+      const dtVencimento = new Date(`${dtVencimentoRaw}T00:00:00-03:00`);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       
@@ -382,8 +379,8 @@ export const cobrancaService = {
     if (filtros.mes && filtros.ano) {
       const start = new Date(filtros.ano, filtros.mes - 1, 1);
       const endObj = new Date(filtros.ano, filtros.mes, 0);
-      const startStr = start.toISOString().split("T")[0];
-      const endStr = endObj.toISOString().split("T")[0];
+      const startStr = toLocalDateString(start);
+      const endStr = toLocalDateString(endObj);
 
       query = query.gte("data_vencimento", startStr);
       query = query.lte("data_vencimento", endStr);
@@ -600,7 +597,7 @@ export const cobrancaService = {
   async gerarPixRetroativo(usuarioId: string): Promise<any> {
     logger.info({ usuarioId }, "[CobrancaService] Iniciando geração de PIX retroativo...");
 
-    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStr = toLocalDateString(new Date());
 
     // 1. Buscar cobranças pendentes sem PIX que não venceram, incluindo dados do passageiro
     const { data: cobrancas, error: cobError } = await supabaseAdmin

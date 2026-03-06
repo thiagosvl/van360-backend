@@ -1,3 +1,4 @@
+import { formatToBrazilianDate, getMonthNameBR } from "../../../utils/date.utils.js";
 import { formatCurrency, getFirstName } from "../../../utils/format.js";
 
 export interface PassengerContext {
@@ -21,16 +22,7 @@ export interface PassengerContext {
 
 import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
 
-const formatDate = (dateStr: string) => {
-    const [y, m, d] = dateStr.split("-");
-    return `${d}/${m}/${y}`;
-};
-
-const getMeshName = (mes?: number) => {
-    if (!mes) return "";
-    const names = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-    return names[mes - 1] || "";
-};
+// Removidos métodos locais pois agora usamos os utilitários centralizados
 
 // Helper to construct standard PIX message parts for Passengers
 const buildPixMessageParts = (text: string, pixPayload?: string): CompositeMessagePart[] => {
@@ -86,7 +78,7 @@ export const PassengerTemplates = {
      */
     dueSoon: (ctx: PassengerContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
-        const data = formatDate(ctx.dataVencimento);
+        const data = formatToBrazilianDate(ctx.dataVencimento);
         const diasMsg = ctx.diasAntecedencia ? ` (daqui a ${ctx.diasAntecedencia} dias)` : "";
         const nomeResp = getFirstName(ctx.nomeResponsavel);
 
@@ -105,7 +97,7 @@ export const PassengerTemplates = {
      */
     dueToday: (ctx: PassengerContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
-        const data = formatDate(ctx.dataVencimento);
+        const data = formatToBrazilianDate(ctx.dataVencimento);
         const nomeResp = getFirstName(ctx.nomeResponsavel);
         
         const text = `⚠️ *Vencimento Hoje*\n\n` +
@@ -122,7 +114,7 @@ export const PassengerTemplates = {
      */
     overdue: (ctx: PassengerContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
-        const data = formatDate(ctx.dataVencimento);
+        const data = formatToBrazilianDate(ctx.dataVencimento);
         const diasAtraso = ctx.diasAtraso || 1;
         const nomeResp = getFirstName(ctx.nomeResponsavel);
         
@@ -140,7 +132,7 @@ export const PassengerTemplates = {
      */
     paymentReceived: (ctx: PassengerContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
-        const ref = ctx.mes ? `\nReferência: *${getMeshName(ctx.mes)}/${ctx.ano}*` : "";
+        const ref = ctx.mes ? `\nReferência: *${getMonthNameBR(ctx.mes)}/${ctx.ano}*` : "";
         const nomeResp = getFirstName(ctx.nomeResponsavel);
         
         const text = `✅ *Pagamento Confirmado*\n\n` +
@@ -165,7 +157,7 @@ export const PassengerTemplates = {
      */
     manualCharge: (ctx: PassengerContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
-        const data = formatDate(ctx.dataVencimento);
+        const data = formatToBrazilianDate(ctx.dataVencimento);
         const nomeResp = getFirstName(ctx.nomeResponsavel);
 
         const text = `🗓️ *Mensalidade para Pagamento*\n\n` +

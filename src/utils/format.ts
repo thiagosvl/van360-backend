@@ -10,22 +10,6 @@ export function formatCurrency(value: number): string {
     }).format(value);
 }
 
-/**
- * Formata uma data para o padrão brasileiro (DD/MM/YYYY)
- */
-export function formatDate(date: string | Date): string {
-    let d = date;
-    if (typeof date === 'string') {
-        // Adicionar meio-dia para evitar problemas de fuso horário em strings de data simples (YYYY-MM-DD)
-        // Isso garante que "2026-12-31" não vire "30/12/2026" devido ao deslocamento UTC-3
-        if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-            d = new Date(date + 'T12:00:00');
-        } else {
-            d = new Date(date);
-        }
-    }
-    return new Intl.DateTimeFormat('pt-BR').format(d as Date);
-}
 
 /**
  * Formata uma data e hora para o padrão brasileiro

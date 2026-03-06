@@ -4,6 +4,7 @@ import path from "path";
 import satori from "satori";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
+import { getMonthNameBR } from "../utils/date.utils.js";
 import { formatCurrency } from "../utils/format.js";
 
 // Tipo para os dados do recibo
@@ -60,11 +61,7 @@ class ReceiptService {
         return null;
     }
 
-    private getMeshName(mes?: number) {
-        if (!mes) return "";
-        const names = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-        return names[mes - 1] || "";
-    }
+    // Métodos de formatação agora são centralizados em date.utils.js
 
     /**
      * Gera a imagem do recibo e salva no Storage
@@ -84,7 +81,7 @@ class ReceiptService {
             const logoBase64 = await this.getLogo();
             logger.info({ logId, hasLogo: !!logoBase64 }, "Logo carregado");
             
-            const mesNome = this.getMeshName(data.mes);
+            const mesNome = getMonthNameBR(data.mes);
             const referencia = data.mes ? `${mesNome}/${data.ano}` : "";
 
             // 1. Definir o Layout (JSX-like)

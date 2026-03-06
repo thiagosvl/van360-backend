@@ -8,6 +8,7 @@ import { logger } from "../config/logger.js";
 import { redisConfig } from "../config/redis.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { C6TransferStatus, ProviderTransferStatus } from "../types/enums.js";
+import { toLocalDateString } from "../utils/date.utils.js";
 
 const redis = new Redis(redisConfig as any);
 const C6_SCHEDULE_URL = `${env.C6_API_URL}/v1/schedule_payments`;
@@ -227,9 +228,8 @@ export const c6Service = {
 
     try {
       const today = new Date();
-      // Garante a data correta no fuso de Brasília (onde o C6 opera)
-      const todayStr = new Date(today.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }))
-        .toISOString().split("T")[0];
+      // Garante a data correta no fuso de Brasília (onde o C6 opera) via utilitário padrão
+      const todayStr = toLocalDateString(today);
 
       // 1. Enviar para consulta inicial (decode)
       const payload = {
@@ -414,7 +414,7 @@ export const c6Service = {
       // 1. Cria lote temporário via /decode
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().split("T")[0];
+      const tomorrowStr = toLocalDateString(tomorrow);
 
       const payload = {
         items: [{

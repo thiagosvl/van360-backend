@@ -1,13 +1,14 @@
 import {
-  DRIVER_EVENT_ACTIVATION,
-  DRIVER_EVENT_WELCOME_TRIAL,
-  PLANO_ESSENCIAL,
-  PLANO_PROFISSIONAL
+    DRIVER_EVENT_ACTIVATION,
+    DRIVER_EVENT_WELCOME_TRIAL,
+    PLANO_ESSENCIAL,
+    PLANO_PROFISSIONAL
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
 import { AssinaturaCobrancaStatus, AssinaturaStatus, ConfigKey, UserType } from "../types/enums.js";
+import { toLocalDateString } from "../utils/date.utils.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { assinaturaCobrancaService } from "./assinatura-cobranca.service.js";
 import { getConfigNumber } from "./configuracao.service.js";
@@ -337,7 +338,7 @@ export async function iniciaRegistroPlanoEssencial(
     const precoOrigem = plano.promocao_ativa ? "promocional" : "normal";
 
     const hoje = new Date();
-    const anchorDate = hoje.toISOString().split("T")[0];
+    const anchorDate = toLocalDateString(hoje);
 
     // Modificado para usar configuração dinâmica ou valor do plano
     const trialDays = await getConfigNumber(ConfigKey.TRIAL_DIAS_ESSENCIAL, plano.trial_days);
@@ -372,7 +373,7 @@ export async function iniciaRegistroPlanoEssencial(
     assinaturaId = assinatura.id;
 
     const dataVencimentoCobranca = trialEndAt
-      ? trialEndAt.split("T")[0] // Usar fim do trial como data de vencimento
+      ? toLocalDateString(new Date(trialEndAt)) // Usar fim do trial como data de vencimento
       : anchorDate; // Sem trial, usar data de contratação
 
     const { data: cobranca, error: cobrancaError } = await supabaseAdmin
@@ -521,12 +522,12 @@ export async function iniciarRegistroplanoProfissional(
     }
 
     const hoje = new Date();
-    const anchorDate = hoje.toISOString().split("T")[0];
+    const anchorDate = toLocalDateString(hoje);
 
     // Calcular vigencia_fim: anchor_date + 1 mês (preservando o dia)
     const vigenciaFim = new Date(hoje);
     vigenciaFim.setMonth(vigenciaFim.getMonth() + 1);
-    const vigenciaFimStr = vigenciaFim.toISOString().split("T")[0];
+    const vigenciaFimStr = toLocalDateString(vigenciaFim);
 
     const { data: assinatura, error: assinaturaError } = await supabaseAdmin
       .from("assinaturas_usuarios")

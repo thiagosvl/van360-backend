@@ -1,13 +1,14 @@
 import {
-  PLANO_PROFISSIONAL
+    PLANO_PROFISSIONAL
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import {
-  AssinaturaBillingType,
-  AssinaturaCobrancaStatus,
-  AssinaturaTipoPagamento
+    AssinaturaBillingType,
+    AssinaturaCobrancaStatus,
+    AssinaturaTipoPagamento
 } from "../types/enums.js";
+import { toLocalDateString } from "../utils/date.utils.js";
 import { automationService } from "./automation.service.js";
 import { cobrancaService } from "./cobranca.service.js";
 import { paymentService } from "./payment.service.js";
@@ -165,7 +166,7 @@ export async function processarPagamentoAssinatura(
             nomeMotorista: usuario?.nome,
             nomePlano,
             valor: dadosPagamento.valor,
-            dataVencimento: vigenciaFim.toISOString().split("T")[0],
+            dataVencimento: toLocalDateString(vigenciaFim),
             isActivation: isOnboardingPayment,
             reciboUrl,
             mes: new Date(dadosPagamento.dataPagamento).getMonth() + 1,
@@ -256,7 +257,7 @@ async function calcularVigenciaFimEAnchorDate(
         ...logContext,
         dataPagamento: dataPagamentoStr,
         novoAnchorDate,
-        vigenciaFimNova: vigenciaFim.toISOString().split("T")[0],
+        vigenciaFimNova: toLocalDateString(vigenciaFim),
         billingType
       },
       "Activation/Expansion: Novo ciclo iniciado (Data Pagamento + 1 Mês)"
@@ -271,7 +272,7 @@ async function calcularVigenciaFimEAnchorDate(
       logger.info(
         {
           ...logContext,
-          vigenciaFimPreservada: vigenciaFim.toISOString().split("T")[0],
+          vigenciaFimPreservada: toLocalDateString(vigenciaFim),
           billingType
         },
         "Upgrade Pro-Rata: Ciclo preservado (Mantendo vigencia_fim)"
@@ -301,7 +302,7 @@ async function calcularVigenciaFimEAnchorDate(
           ...logContext,
           dataPagamento: dataPagamentoStr,
           novoAnchorDate,
-          vigenciaFimNova: vigenciaFim.toISOString().split("T")[0],
+          vigenciaFimNova: toLocalDateString(vigenciaFim),
         },
         "Subscription (primeira trial): data_pagamento + 1 mês e atualizando anchor_date"
       );
@@ -313,7 +314,7 @@ async function calcularVigenciaFimEAnchorDate(
         {
           ...logContext,
           vigenciaFimAnterior: vigenciaFimAtual,
-          vigenciaFimNova: vigenciaFim.toISOString().split("T")[0],
+          vigenciaFimNova: toLocalDateString(vigenciaFim),
           dataVencimentoCobranca: cobranca.data_vencimento,
         },
         "Subscription (renovação): vigencia_fim atual + 1 mês (preserva dia do ciclo)"
@@ -329,7 +330,7 @@ async function calcularVigenciaFimEAnchorDate(
           ...logContext,
           dataPagamento: dataPagamentoStr,
           novoAnchorDate,
-          vigenciaFimNova: vigenciaFim.toISOString().split("T")[0],
+          vigenciaFimNova: toLocalDateString(vigenciaFim),
         },
         "Subscription (primeira não trial): data_pagamento + 1 mês e atualizando anchor_date"
       );
@@ -431,7 +432,7 @@ async function ativarAssinatura(
     status: "ativa",
     ativo: true,
     data_ativacao: new Date().toISOString(),
-    vigencia_fim: vigenciaFim.toISOString().split("T")[0],
+    vigencia_fim: toLocalDateString(vigenciaFim),
     trial_end_at: null,
   };
 
@@ -450,7 +451,7 @@ async function ativarAssinatura(
   }
 
   logger.info(
-    { ...logContext, vigenciaFim: vigenciaFim.toISOString().split("T")[0] },
+    { ...logContext, vigenciaFim: toLocalDateString(vigenciaFim) },
     "Assinatura do usuário ativada e vigência atualizada"
   );
 }

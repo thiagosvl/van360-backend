@@ -9,7 +9,9 @@ import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
 import { AssinaturaBillingType, AssinaturaCobrancaStatus, AssinaturaStatus } from "../types/enums.js";
+import { toLocalDateString } from "../utils/date.utils.js";
 import { onlyDigits } from "../utils/string.utils.js";
+import { assinaturaCobrancaService } from "./assinatura-cobranca.service.js";
 import { automationService } from "./automation.service.js";
 import { getBillingConfig } from "./configuracao.service.js";
 import { notificationService } from "./notifications/notification.service.js";
@@ -17,10 +19,12 @@ import { paymentService } from "./payment.service.js";
 import { pricingService } from "./pricing.service.js";
 import {
   cancelarCobrancaPendente,
+  contarPassageirosComAutomacao,
   getAssinaturaAtiva,
   getUsuarioData,
   isUpgrade,
-  limparAssinaturasPendentes
+  limparAssinaturasPendentes,
+  validarFranquiaPassageiros
 } from "./subscription.common.js";
 
 // Result Interfaces
@@ -110,12 +114,47 @@ export const subscriptionUpgradeService = {
             throw new AppError("Esta operação não é um upgrade. Use o endpoint de downgrade.", 400);
           }
       
+          const { franquiaContratada: franquiaNovoPlano } = pricingService.calcularPrecosEFranquia(novoPlano);
+          await validarFranquiaPassageiros(usuarioId, franquiaNovoPlano);
+
+          // --- ITEM 2: REAPROVEITAMENTO ---
+          // Buscar se já existe uma assinatura pendente idêntica (mesmo plano e franquia)
+          const { data: assinaturaExistente } = await supabaseAdmin
+            .from("assinaturas_usuarios")
+            .select("id, status, plano_id, franquia_contratada_cobrancas")
+            .eq("usuario_id", usuarioId)
+            .eq("status", AssinaturaStatus.PENDENTE_PAGAMENTO)
+            .eq("plano_id", novoPlanoId)
+            .eq("franquia_contratada_cobrancas", pricingService.calcularPrecosEFranquia(novoPlano).franquiaContratada)
+            .maybeSingle();
+
+          if (assinaturaExistente) {
+             const { data: cobrancaExistente } = await supabaseAdmin
+                .from("assinaturas_cobrancas")
+                .select("id, status")
+                .eq("assinatura_usuario_id", assinaturaExistente.id)
+                .eq("status", AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO)
+                .maybeSingle();
+
+             if (cobrancaExistente) {
+                logger.info({ usuarioId, cobrancaId: cobrancaExistente.id }, "Reutilizando PIX de upgrade pendente já existente.");
+                const result = await assinaturaCobrancaService.gerarPixParaCobranca(cobrancaExistente.id);
+                return {
+                    ...result,
+                    success: true,
+                    message: "Você já possui um upgrade deste plano pendente. Use o QR Code abaixo para concluir."
+                };
+             }
+          }
+
           await limparAssinaturasPendentes(usuarioId);
+
       
           const { precoAplicado, precoOrigem, franquiaContratada } = pricingService.calcularPrecosEFranquia(novoPlano);
       
           const hoje = new Date();
-          const anchorDate = assinaturaAtual?.anchor_date || hoje.toISOString().split("T")[0];
+          const hojeStr = toLocalDateString(hoje);
+          const anchorDate = assinaturaAtual?.anchor_date || hojeStr;
       
 
       
@@ -208,7 +247,7 @@ export const subscriptionUpgradeService = {
               assinatura_usuario_id: novaAssinatura.id,
               valor: valorCobrar,
               status: AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO,
-              data_vencimento: hoje.toISOString().split("T")[0],
+              data_vencimento: hojeStr,
               billing_type: billingType,
               descricao: descricaoCobranca,
             })
@@ -251,7 +290,7 @@ export const subscriptionUpgradeService = {
                 nomeMotorista: usuario.nome,
                 nomePlano: (novoPlano.parent as any)?.nome || novoPlano.nome,
                 valor: precoAplicado,
-                dataVencimento: hoje.toISOString().split("T")[0],
+                dataVencimento: hojeStr,
                 pixPayload: pixData.qrCodePayload
               }).catch(err => logger.error({ err }, "Falha ao enviar PIX imediato no upgrade"));
             }
@@ -302,7 +341,7 @@ export const subscriptionUpgradeService = {
       
           const { precoAplicado, precoOrigem, franquiaContratada } = pricingService.calcularPrecosEFranquia(novoPlano);
       
-          const anchorDate = assinaturaAtual.anchor_date || new Date().toISOString().split("T")[0];
+          const anchorDate = assinaturaAtual.anchor_date || toLocalDateString(new Date());
           const vigenciaFim = assinaturaAtual.vigencia_fim || null;
       
           await supabaseAdmin
@@ -340,7 +379,7 @@ export const subscriptionUpgradeService = {
             const hojeDate = new Date();
             const vigenciaFimDate = assinaturaAtual.vigencia_fim ? new Date(assinaturaAtual.vigencia_fim) : hojeDate;
             const cobrancaDate = vigenciaFimDate > hojeDate ? vigenciaFimDate : hojeDate;
-            const dataVencimentoCobranca = cobrancaDate.toISOString().split("T")[0];
+            const dataVencimentoCobranca = toLocalDateString(cobrancaDate);
       
             const { data: cobrancaNova, error: cobrancaError } = await supabaseAdmin
               .from("assinaturas_cobrancas")
@@ -445,13 +484,40 @@ export const subscriptionUpgradeService = {
             throw new Error("Subplano inválido. Deve pertencer ao plano Profissional.");
           }
       
+          const novaFranquiaSub = pricingService.calcularPrecosEFranquia(novoSubplano).franquiaContratada;
+          await validarFranquiaPassageiros(usuarioId, novaFranquiaSub);
+
           if (!estaNoProfissional) {
+            // Reaproveitamento no Subplano (Upgrade Inicial)
+            const { data: existingSub } = await supabaseAdmin
+                .from("assinaturas_usuarios")
+                .select("id")
+                .eq("usuario_id", usuarioId)
+                .eq("status", AssinaturaStatus.PENDENTE_PAGAMENTO)
+                .eq("plano_id", novoSubplanoId)
+                .maybeSingle();
+            
+            if (existingSub) {
+                const { data: cobSub } = await supabaseAdmin
+                    .from("assinaturas_cobrancas")
+                    .select("id")
+                    .eq("assinatura_usuario_id", existingSub.id)
+                    .eq("status", AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO)
+                    .maybeSingle();
+                
+                if (cobSub) {
+                    const res = await assinaturaCobrancaService.gerarPixParaCobranca(cobSub.id);
+                    return { ...res, success: true };
+                }
+            }
+
             await limparAssinaturasPendentes(usuarioId);
+
             await cancelarCobrancaPendente(usuarioId);
       
             const { precoAplicado, precoOrigem, franquiaContratada } = pricingService.calcularPrecosEFranquia(novoSubplano);
       
-            const anchorDate = assinaturaAtual.anchor_date || new Date().toISOString().split("T")[0];
+            const anchorDate = assinaturaAtual.anchor_date || toLocalDateString(new Date());
             const vigenciaFim = assinaturaAtual.vigencia_fim || null;
       
             const { data: novaAssinatura, error: assinaturaError } = await supabaseAdmin
@@ -481,7 +547,7 @@ export const subscriptionUpgradeService = {
                 assinatura_usuario_id: novaAssinatura.id,
                 valor: precoAplicado,
                 status: AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO,
-                data_vencimento: hoje.toISOString().split("T")[0],
+                data_vencimento: toLocalDateString(hoje),
                 billing_type: AssinaturaBillingType.UPGRADE_PLAN,
                 descricao: `Upgrade de Plano: ${planoAtual.nome} → ${novoSubplano.nome}`,
               })
@@ -492,7 +558,12 @@ export const subscriptionUpgradeService = {
       
             const franquiaAtual = assinaturaAtual.franquia_contratada_cobrancas || 0;
             if (franquiaContratada < franquiaAtual) {
-              throw new Error("Não é permitido reduzir a franquia do plano Profissional. Entre em contato com o suporte.");
+              const automacaoAtiva = await contarPassageirosComAutomacao(usuarioId);
+              const excedente = automacaoAtiva - franquiaContratada;
+              throw new AppError(
+                `Para reduzir sua franquia para ${franquiaContratada}, é necessário desativar o envio automático de cobrança em pelo menos ${excedente > 0 ? excedente : franquiaAtual - franquiaContratada} passageiro(s). Após ajustar, tente novamente.`,
+                400
+              );
             }
       
             const usuario = await getUsuarioData(usuarioId);
@@ -525,7 +596,7 @@ export const subscriptionUpgradeService = {
                        nomeMotorista: usuario.nome,
                        nomePlano: (novoSubplano.parent as any)?.nome || novoSubplano.nome,
                        valor: precoAplicado,
-                       dataVencimento: new Date().toISOString().split("T")[0],
+                       dataVencimento: toLocalDateString(new Date()),
                        pixPayload: pixData.qrCodePayload
                    });
                }
@@ -561,14 +632,44 @@ export const subscriptionUpgradeService = {
           }
       
           if (franquiaContratada < franquiaAtual) {
-            throw new Error("Não é permitido reduzir a franquia do plano Profissional. Entre em contato com o suporte.");
+            const automacaoAtiva = await contarPassageirosComAutomacao(usuarioId);
+            const excedente = automacaoAtiva - franquiaContratada;
+            throw new AppError(
+              `Para reduzir sua franquia para ${franquiaContratada}, é necessário desativar o envio automático de cobrança em pelo menos ${excedente > 0 ? excedente : franquiaAtual - franquiaContratada} passageiro(s). Após ajustar, tente novamente.`,
+              400
+            );
           }
       
-          const anchorDate = assinaturaAtual.anchor_date || new Date().toISOString().split("T")[0];
+          const anchorDate = assinaturaAtual.anchor_date || toLocalDateString(new Date());
           const vigenciaFim = assinaturaAtual.vigencia_fim || null;
       
           if (diferenca > 0) {
+            // Reaproveitamente em Expansão Profissional
+            const { data: existingExp } = await supabaseAdmin
+                .from("assinaturas_usuarios")
+                .select("id")
+                .eq("usuario_id", usuarioId)
+                .eq("status", AssinaturaStatus.PENDENTE_PAGAMENTO)
+                .eq("plano_id", novoSubplano.id)
+                .eq("franquia_contratada_cobrancas", franquiaContratada)
+                .maybeSingle();
+            
+            if (existingExp) {
+                const { data: cobExp } = await supabaseAdmin
+                    .from("assinaturas_cobrancas")
+                    .select("id")
+                    .eq("assinatura_usuario_id", existingExp.id)
+                    .eq("status", AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO)
+                    .maybeSingle();
+                
+                if (cobExp) {
+                    const res = await assinaturaCobrancaService.gerarPixParaCobranca(cobExp.id);
+                    return { ...res, success: true };
+                }
+            }
+
             await limparAssinaturasPendentes(usuarioId);
+
             await cancelarCobrancaPendente(usuarioId);
       
             const { data: novaAssinatura, error: assinaturaError } = await supabaseAdmin
@@ -598,7 +699,7 @@ export const subscriptionUpgradeService = {
                 assinatura_usuario_id: novaAssinatura.id,
                 valor: diferenca,
                 status: AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO,
-                data_vencimento: hoje.toISOString().split("T")[0],
+                data_vencimento: toLocalDateString(new Date()),
                 billing_type: AssinaturaBillingType.EXPANSION,
                 descricao: `Expansão de Limite: ${assinaturaAtual.franquia_contratada_cobrancas} → ${franquiaContratada} passageiros`,
               })
@@ -637,7 +738,7 @@ export const subscriptionUpgradeService = {
                        nomeMotorista: usuario.nome,
                        nomePlano: (novoSubplano.parent as any)?.nome || novoSubplano.nome,
                        valor: diferenca,
-                       dataVencimento: new Date().toISOString().split("T")[0],
+                       dataVencimento: toLocalDateString(new Date()),
                        pixPayload: pixData.qrCodePayload
                    });
                }
@@ -723,13 +824,44 @@ export const subscriptionUpgradeService = {
           }
       
           if (isDowngrade && assinaturaAtual) {
-            throw new Error("Não é permitido reduzir a franquia do plano Profissional. Entre em contato com o suporte.");
+            const automacaoAtiva = await contarPassageirosComAutomacao(usuarioId);
+            const excedente = automacaoAtiva - quantidade;
+            throw new AppError(
+              `Para reduzir sua franquia para ${quantidade}, é necessário desativar o envio automático de cobrança em pelo menos ${excedente > 0 ? excedente : (assinaturaAtual.franquia_contratada_cobrancas || 0) - quantidade} passageiro(s). Após ajustar, tente novamente.`,
+              400
+            );
           }
+
+          await validarFranquiaPassageiros(usuarioId, quantidade);
       
+          const { data: subPersonalizadaExistente } = await supabaseAdmin
+            .from("assinaturas_usuarios")
+            .select("id")
+            .eq("usuario_id", usuarioId)
+            .eq("status", AssinaturaStatus.PENDENTE_PAGAMENTO)
+            .eq("plano_id", planoProfissionalBase.id)
+            .eq("franquia_contratada_cobrancas", quantidade)
+            .maybeSingle();
+          
+          if (subPersonalizadaExistente) {
+             const { data: cobPers } = await supabaseAdmin
+                .from("assinaturas_cobrancas")
+                .select("id")
+                .eq("assinatura_usuario_id", subPersonalizadaExistente.id)
+                .eq("status", AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO)
+                .maybeSingle();
+             
+             if (cobPers) {
+                const res = await assinaturaCobrancaService.gerarPixParaCobranca(cobPers.id);
+                return { ...res, success: true, quantidadePersonalizada: quantidade };
+             }
+          }
+
           await limparAssinaturasPendentes(usuarioId);
+
           await cancelarCobrancaPendente(usuarioId);
       
-          const anchorDate = assinaturaAtual?.anchor_date || new Date().toISOString().split("T")[0];
+          const anchorDate = assinaturaAtual?.anchor_date || toLocalDateString(new Date());
           const vigenciaFim = assinaturaAtual?.vigencia_fim || null;
       
           const { data: novaAssinatura, error: assinaturaError } = await supabaseAdmin
@@ -782,7 +914,7 @@ export const subscriptionUpgradeService = {
               assinatura_usuario_id: novaAssinatura.id,
               valor: valorCobranca,
               status: AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO,
-              data_vencimento: hoje.toISOString().split("T")[0],
+              data_vencimento: toLocalDateString(new Date()),
               billing_type: billingType === AssinaturaBillingType.SUBSCRIPTION ? AssinaturaBillingType.ACTIVATION : AssinaturaBillingType.EXPANSION,
               descricao: billingType === AssinaturaBillingType.SUBSCRIPTION
                 ? `Ativação de Plano Profissional (${quantidade} passageiros)`
@@ -824,7 +956,7 @@ export const subscriptionUpgradeService = {
                        nomeMotorista: usuario.nome,
                        nomePlano: nomePlano,
                        valor: valorCobranca,
-                       dataVencimento: hoje.toISOString().split("T")[0],
+                       dataVencimento: toLocalDateString(hoje),
                        pixPayload: pixData.qrCodePayload
                    });
                }

@@ -1,3 +1,4 @@
+import { formatToBrazilianDate, getMonthNameBR, toLocalDateString } from "../../../utils/date.utils.js";
 import { formatCurrency, formatPixKey, getFirstName } from "../../../utils/format.js";
 
 /**
@@ -22,18 +23,7 @@ export interface DriverContext {
     tipoChavePix?: string;
 }
 
-const formatDate = (dateStr: string) => {
-    // Tratamento para data ISO ou YYYY-MM-DD
-    const isoDate = dateStr.includes("T") ? dateStr.split("T")[0] : dateStr;
-    const [y, m, d] = isoDate.split("-");
-    return `${d}/${m}/${y}`;
-};
-
-const getMeshName = (mes?: number) => {
-    if (!mes) return "";
-    const names = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-    return names[mes - 1] || "";
-};
+// Removidos métodos locais pois agora usamos os utilitários centralizados
 
 import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
 
@@ -80,7 +70,7 @@ export const DriverTemplates = {
      */
     welcomeTrial: (ctx: DriverContext): CompositeMessagePart[] => {
         const dias = ctx.trialDays || 7;
-        const validade = ctx.dataVencimento ? formatDate(ctx.dataVencimento) : "";
+        const validade = ctx.dataVencimento ? formatToBrazilianDate(ctx.dataVencimento) : "";
         const validadeMsg = validade ? ` válido até *${validade}*` : "";
 
         return textPart(`🚀 *Bem-vindo(a) à Van360*\n\n` +
@@ -106,7 +96,7 @@ export const DriverTemplates = {
      */
     renewal: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
-        const data = formatDate(ctx.dataVencimento);
+        const data = formatToBrazilianDate(ctx.dataVencimento);
         const text = `🗓️ *Renovação Próxima*\n\n` +
             `Sua assinatura do plano *${ctx.nomePlano}* vence em *${data}*.\n` +
             `Valor: *${valor}*\n\n` +
@@ -120,7 +110,7 @@ export const DriverTemplates = {
      */
     renewalDueSoon: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
-        const data = formatDate(ctx.dataVencimento);
+        const data = formatToBrazilianDate(ctx.dataVencimento);
         const text = `🗓️ *Renovação Próxima*\n\n` +
             `Sua assinatura do plano *${ctx.nomePlano}* vence em *${data}*.\n` +
             `Valor: *${valor}*\n\n` +
@@ -134,7 +124,7 @@ export const DriverTemplates = {
      */
     renewalDueToday: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
-        const data = formatDate(ctx.dataVencimento);
+        const data = formatToBrazilianDate(ctx.dataVencimento);
         const text = `⚠️ *Vencimento Hoje*\n\n` +
             `Sua assinatura do plano *${ctx.nomePlano}* vence *HOJE* (*${data}*).\n` +
             `Valor: *${valor}*\n\n` +
@@ -181,8 +171,8 @@ export const DriverTemplates = {
      */
     paymentConfirmed: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
-        const ref = ctx.mes ? `\nReferência: *${getMeshName(ctx.mes)}/${ctx.ano}*` : "";
-        const validade = ctx.dataVencimento ? `\nNova validade: *${formatDate(ctx.dataVencimento)}*` : "";
+        const ref = ctx.mes ? `\nReferência: *${getMonthNameBR(ctx.mes)}/${ctx.ano}*` : "";
+        const validade = ctx.dataVencimento ? `\nNova validade: *${formatToBrazilianDate(ctx.dataVencimento)}*` : "";
 
         const text = `✅ *Assinatura Confirmada*\n\n` +
             `Pagamento de *${valor}* recebido com sucesso.\n` +
@@ -223,7 +213,7 @@ export const DriverTemplates = {
      */
     trialEnding: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
-        const data = formatDate(ctx.dataVencimento);
+        const data = formatToBrazilianDate(ctx.dataVencimento);
         
         const text = `⏳ *Fim do Período de Testes*\n\n` +
             `Seu teste grátis do plano *${ctx.nomePlano}* termina em *${data}*.\n` +
@@ -247,8 +237,8 @@ export const DriverTemplates = {
      */
     repasseSuccess: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
-        const data = ctx.dataVencimento ? formatDate(ctx.dataVencimento) : formatDate(new Date().toISOString());
-        const ref = ctx.mes ? `*${getMeshName(ctx.mes)}/${ctx.ano}*` : "";
+        const data = ctx.dataVencimento ? formatToBrazilianDate(ctx.dataVencimento) : formatToBrazilianDate(toLocalDateString(new Date()));
+        const ref = ctx.mes ? `*${getMonthNameBR(ctx.mes)}/${ctx.ano}*` : "";
         const passageiro = ctx.nomePassageiro ? `\n👤 Passageiro: *${getFirstName(ctx.nomePassageiro)}*` : "";
 
         return textPart(`💰 *Transferência Finalizada*\n\n` +
@@ -260,7 +250,7 @@ export const DriverTemplates = {
             `_O valor já deve estar disponível em sua conta via PIX._`);
     },
     reactivationWithEmbargo: (ctx: DriverContext): CompositeMessagePart[] => {
-        const mes = getMeshName(ctx.mes);
+        const mes = getMonthNameBR(ctx.mes);
         const ref = mes ? ` de *${mes}/${ctx.ano}*` : "";
 
         return textPart(`✅ *Conta Reativada*\n\n` +

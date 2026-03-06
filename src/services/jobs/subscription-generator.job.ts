@@ -1,6 +1,7 @@
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
 import { AssinaturaCobrancaStatus, AssinaturaStatus, ConfigKey } from "../../types/enums.js";
+import { toLocalDateString } from "../../utils/date.utils.js";
 import { assinaturaCobrancaService } from "../assinatura-cobranca.service.js";
 import { getConfigNumber } from "../configuracao.service.js";
 
@@ -24,10 +25,10 @@ export const subscriptionGeneratorJob = {
 
             // 2. Calcular Data Alvo (Hoje + Dias Anteceência)
             const hoje = new Date();
-            const dataAlvo = new Date();
+            const dataAlvo = new Date(hoje);
             dataAlvo.setDate(hoje.getDate() + diasAntecedencia);
             
-            const dataAlvoStr = dataAlvo.toISOString().split('T')[0];
+            const dataAlvoStr = toLocalDateString(dataAlvo);
 
             logger.info({ diasAntecedencia, dataAlvoStr }, "Buscando assinaturas que vencem na data alvo");
 
