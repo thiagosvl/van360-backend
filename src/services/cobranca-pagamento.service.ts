@@ -107,6 +107,19 @@ export const cobrancaPagamentoService = {
           return { success: false, reason: "cobranca_nao_paga" };
       }
 
+      // IDEMPOTÊNCIA: Busca se já existe um repasse em andamento ou se já foi liquidado
+      const { data: repasseResolvido } = await supabaseAdmin
+        .from("repasses")
+        .select("id, estado")
+        .eq("cobranca_id", cobrancaId)
+        .eq("estado", RepasseState.LIQUIDADO)
+        .maybeSingle();
+
+      if (repasseResolvido) {
+          logger.info({ cobrancaId }, "Repasse já foi LIQUIDADO anteriormente. Evitando duplicidade.");
+          return { success: true, alreadyLiquidated: true, repasseId: repasseResolvido.id };
+      }
+
       const repasseExistente = await repasseFsmService.buscarRepasseAtivo(cobrancaId);
       if (repasseExistente) {
           logger.info({ cobrancaId, repasseId: repasseExistente.id }, "Repasse ativo já existe.");

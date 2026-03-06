@@ -1,5 +1,4 @@
 import { Job, Worker } from 'bullmq';
-import { randomUUID } from 'crypto';
 import { logger } from '../config/logger.js';
 import { redisConfig } from '../config/redis.js';
 import { PayoutJobData, QUEUE_NAME_PAYOUT } from '../queues/payout.queue.js';
@@ -19,64 +18,75 @@ export const payoutWorker = new Worker<PayoutJobData>(
 
         try {
             // 1. Transicionar para DECODIFICANDO (worker pegou da fila)
-            await repasseFsmService.transicionar(repasseId, RepasseState.DECODIFICANDO, {
-                ator: "payout_worker",
-                motivo: "Worker iniciou processamento",
-                metadata: { 
-                  jobId: job.id, 
-                  attempts: job.attemptsMade + 1,
-                  motoristaId,
-                  cobrancaId
-                }
-            });
-
-            // 2. Buscar dados bancários do motorista (Chave PIX)
-            const { data: usuario, error: userError } = await (await import('../config/supabase.js')).supabaseAdmin
-                .from("usuarios")
-                .select("chave_pix, nome")
-                .eq("id", motoristaId)
-                .single();
-            
-            if (userError || !usuario) {
-                logger.error({ userError, motoristaId, jobId: job.id }, "[PayoutWorker] Erro ao buscar dados do motorista");
-                throw new Error("Motorista não encontrado");
-            }
-
-            if (!usuario.chave_pix) {
-                logger.warn({ motoristaId, jobId: job.id }, "[PayoutWorker] Chave PIX ausente");
-                throw new Error("Chave PIX do motorista não encontrada");
-            }
-
-            logger.info({ cobrancaId, motoristaId, nome: usuario.nome, jobId: job.id }, "[PayoutWorker] ✅ Dados do motorista obtidos. Preparando PIX.");
-             
-            // 3. Realizar transferência via provider
-            const valorNormalizado = Number(Number(valorRepasse).toFixed(2));
-            const idempotencyKey = randomUUID();
-            
-            const provider = paymentService.getProvider();
-            const pixResponse = await provider.realizarTransferencia({
-                valor: valorNormalizado,
-                chaveDestino: usuario.chave_pix,
-                descricao: `Repasse Van360 - Cobranca ${cobrancaId}`,
-                xIdIdempotente: idempotencyKey
-            });
-
-            // 4. Salvar o ID do gateway no repasse
-            if (pixResponse.endToEndId) {
-                logger.info({ 
+            try {
+              await repasseFsmService.transicionar(repasseId, RepasseState.DECODIFICANDO, {
+                  ator: "payout_worker",
+                  motivo: "Worker iniciou processamento",
+                  metadata: { 
                     jobId: job.id, 
-                    cobrancaId, 
-                    e2e: pixResponse.endToEndId,
-                    status: pixResponse.status 
-                }, "✅ [PayoutWorker] Repasse enviado para o gateway");
+                    attempts: job.attemptsMade + 1,
+                    motoristaId,
+                    cobrancaId
+                  }
+              });
+            } catch (fsmErr: any) {
+              // Se já estiver decodificando ou em estado posterior (ex: crashou depois do submit), ignoramos o erro de transição
+              if (fsmErr.message.includes("TRANSICAO_INVALIDA") || fsmErr.message === "CONFLITO_CONCORRENCIA") {
+                  logger.info({ repasseId }, "[PayoutWorker] Repasse já em processamento ou transicionado. Continuando...");
+              } else {
+                  throw fsmErr;
+              }
+            }
 
-                await repasseFsmService.atualizarGatewayInfo(repasseId, {
-                    gateway_group_id: pixResponse.endToEndId,
+            // 2. Verificar se já possuímos o ID do gateway (idempotência)
+            const { data: repasseAtual, error: fetchErr } = await (await import('../config/supabase.js')).supabaseAdmin
+                .from("repasses")
+                .select("gateway_group_id, tentativa")
+                .eq("id", repasseId)
+                .single();
+
+            if (fetchErr) throw fetchErr;
+
+            let groupId = repasseAtual?.gateway_group_id;
+
+            if (!groupId) {
+                // 3. Buscar dados bancários do motorista (Chave PIX)
+                const { data: usuario, error: userError } = await (await import('../config/supabase.js')).supabaseAdmin
+                    .from("usuarios")
+                    .select("chave_pix, nome")
+                    .eq("id", motoristaId)
+                    .single();
+                
+                if (userError || !usuario) throw new Error("Motorista não encontrado");
+                if (!usuario.chave_pix) throw new Error("Chave PIX do motorista não encontrada");
+
+                logger.info({ cobrancaId, motoristaId, nome: usuario.nome, jobId: job.id }, "[PayoutWorker] ✅ Dados do motorista obtidos. Preparando PIX.");
+                
+                const valorNormalizado = Number(Number(valorRepasse).toFixed(2));
+                
+                // IDEMPOTÊNCIA STABLE: Usamos repasseId + tentativa.
+                // Se o worker crashar e o BullMQ retentar o MESMO job, a chave é a mesma.
+                // Se a FSM transicionar de volta para CRIADO (novo ciclo), a tentativa aumenta e a chave muda.
+                const idempotencyKey = `${repasseId}-${repasseAtual.tentativa}`;
+                
+                const provider = paymentService.getProvider();
+                const pixResponse = await provider.realizarTransferencia({
+                    valor: valorNormalizado,
+                    chaveDestino: usuario.chave_pix,
+                    descricao: `Repasse Van360 - Cobranca ${cobrancaId}`,
+                    xIdIdempotente: idempotencyKey
                 });
 
-                // SMART POLL: Tentar submeter imediatamente caso o banco decodifique rápido
-                // Isso evita o delay de 30min do Job de Monitoramento
-                const groupId = pixResponse.endToEndId;
+                groupId = pixResponse.endToEndId;
+
+                if (groupId) {
+                    logger.info({ jobId: job.id, cobrancaId, groupId }, "✅ [PayoutWorker] Repasse enviado para o gateway");
+                    await repasseFsmService.atualizarGatewayInfo(repasseId, { gateway_group_id: groupId });
+                }
+            }
+
+            if (groupId) {
+                const provider = paymentService.getProvider();
                 logger.info({ groupId, jobId: job.id, repasseId }, "[PayoutWorker] ⏳ Iniciando Smart Poll para submissão imediata...");
 
                 for (let i = 0; i < 8; i++) { // Tenta por ~40 segundos (8 x 5s)

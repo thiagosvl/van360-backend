@@ -83,22 +83,41 @@ export async function cadastrarOuAtualizarChavePix(
 export async function iniciarValidacaoPix(usuarioId: string, chavePix: string, tipoChave?: string) {
   logger.info({ usuarioId, chavePix }, "Iniciando validação de Chave PIX");
 
-  const xIdIdempotente = crypto.randomUUID();
+  // IDEMPOTÊNCIA STABLE: Usamos um hash do usuário + chave. 
+  // Se o usuário clicar 'Salvar' várias vezes com a mesma chave, ou o worker retentar,
+  // geramos o mesmo ID e o Banco/Provedor evita disparar dois pagamentos de R$ 0,01.
+  const xIdIdempotente = crypto.createHash('md5').update(`${usuarioId}-${chavePix}`).digest('hex');
 
   try {
-    // 1. Registrar intenção de validação (Tabela Temporária)
-    const { error: insertError } = await supabaseAdmin
+    // 1. Verificar se já existe uma validação em andamento ou concluída para este xIdIdempotente
+    const { data: existente } = await supabaseAdmin
       .from("pix_validacao_pendente")
-      .insert({
+      .select("status")
+      .eq("x_id_idempotente", xIdIdempotente)
+      .maybeSingle();
+
+    if (existente?.status === TransactionStatus.SUCESSO) {
+        logger.info({ usuarioId, chavePix }, "Chave PIX já validada anteriormente via esta transação.");
+        return;
+    }
+
+    if (existente?.status === TransactionStatus.PROCESSAMENTO) {
+        logger.info({ usuarioId, chavePix }, "Validação já está em processamento no gateway. Aguardando.");
+        return;
+    }
+
+    const { error: upsertError } = await supabaseAdmin
+      .from("pix_validacao_pendente")
+      .upsert({
         usuario_id: usuarioId,
         x_id_idempotente: xIdIdempotente,
         chave_pix_enviada: chavePix,
         status: TransactionStatus.PENDENTE
-      });
+      }, { onConflict: 'x_id_idempotente' });
 
-    if (insertError) {
-        logger.error({ error: insertError.message }, "Erro DB ao registrar validação pendente");
-        throw new Error(`Erro ao criar registro de validação pendente: ${insertError.message}`);
+    if (upsertError) {
+        logger.error({ error: upsertError.message }, "Erro DB ao registrar validação pendente");
+        throw new Error(`Erro ao criar registro de validação pendente: ${upsertError.message}`);
     }
 
     // 2. Chamar Validação do Provider (Abstraída)
@@ -195,10 +214,10 @@ export async function processarRetornoValidacaoPix(
   // Confirmar
   await confirmarChaveUsuario(usuario_id, chave_pix_enviada, "N/A"); // Tipo N/A aqui, pois o swap final usa o que já está salvo ou o que veio no registro
 
-  // Limpar registro pendente
+  // Marcar como SUCESSO
   await supabaseAdmin
       .from("pix_validacao_pendente")
-      .delete()
+      .update({ status: TransactionStatus.SUCESSO })
       .eq("id", pendente.id);
 
   logger.info({ usuario_id }, "Chave PIX validada via Webhook com sucesso.");

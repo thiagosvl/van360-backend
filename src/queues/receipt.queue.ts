@@ -20,11 +20,16 @@ export interface ReceiptJobData {
 
 /**
  * Adiciona um job de geração de recibo na fila.
+ * IDEMPOTÊNCIA: JobId = `receipt-{tipo}-{id}` assegura que não geramos recibos
+ * duplicados para o mesmo evento de pagamento/assinatura.
  */
 export const addToReceiptQueue = async (data: ReceiptJobData) => {
     try {
-        await receiptQueue.add('generate-receipt', data);
-        logger.debug({ cobrancaId: data.receiptData.id }, "[Queue] Job added to receipt-queue");
+        const jobId = `receipt-${data.receiptData.tipo || 'default'}-${data.receiptData.id}`;
+        
+        await receiptQueue.add('generate-receipt', data, { jobId });
+        
+        logger.debug({ jobId }, "[Queue] Job added to receipt-queue");
     } catch (error: any) {
         logger.error({ error: error.message }, "[Queue] Failed to add job to receipt-queue");
         throw error;

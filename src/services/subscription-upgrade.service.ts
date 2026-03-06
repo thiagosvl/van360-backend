@@ -1,9 +1,9 @@
 import crypto from "node:crypto";
 import {
-    DRIVER_EVENT_ACTIVATION,
-    DRIVER_EVENT_UPGRADE,
-    PLANO_ESSENCIAL,
-    PLANO_PROFISSIONAL
+  DRIVER_EVENT_ACTIVATION,
+  DRIVER_EVENT_UPGRADE,
+  PLANO_ESSENCIAL,
+  PLANO_PROFISSIONAL
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
@@ -16,11 +16,11 @@ import { notificationService } from "./notifications/notification.service.js";
 import { paymentService } from "./payment.service.js";
 import { pricingService } from "./pricing.service.js";
 import {
-    cancelarCobrancaPendente,
-    getAssinaturaAtiva,
-    getUsuarioData,
-    isUpgrade,
-    limparAssinaturasPendentes
+  cancelarCobrancaPendente,
+  getAssinaturaAtiva,
+  getUsuarioData,
+  isUpgrade,
+  limparAssinaturasPendentes
 } from "./subscription.common.js";
 
 // Result Interfaces
@@ -222,9 +222,12 @@ export const subscriptionUpgradeService = {
       
           const provider = paymentService.getProvider();
           
-          const novoTxid = crypto.randomUUID();
+          // IDEMPOTÊNCIA STABLE: Hash do ID + valor.
+          // Como limpamos pendentes antes, o cobranca.id é único para esta tentativa de upgrade.
+          const txidToUse = crypto.createHash('md5').update(`${cobranca.id}-${valorCobrar}`).digest('hex');
+
           const pixData = await provider.criarCobrancaImediata({
-            cobrancaId: novoTxid,
+            cobrancaId: txidToUse,
             valor: valorCobrar,
             cpf,
             nome: usuario.nome,
@@ -365,9 +368,9 @@ export const subscriptionUpgradeService = {
               if (userPix) {
                 const provider = paymentService.getProvider();
                 
-                const novoTxid = crypto.randomUUID();
+                const txidToUse = crypto.createHash('md5').update(`${cobrancaNova.id}-${precoAplicado}`).digest('hex');
                 const pixData = await provider.criarCobrancaImediata({
-                  cobrancaId: novoTxid,
+                  cobrancaId: txidToUse,
                   valor: precoAplicado,
                   cpf: onlyDigits(userPix.cpfcnpj),
                   nome: userPix.nome,
@@ -497,9 +500,9 @@ export const subscriptionUpgradeService = {
       
             const provider = paymentService.getProvider();
             
-            const novoTxid = crypto.randomUUID();
+            const txidToUse = crypto.createHash('md5').update(`${cobranca.id}-${precoAplicado}`).digest('hex');
             const pixData = await provider.criarCobrancaImediata({
-              cobrancaId: novoTxid,
+              cobrancaId: txidToUse,
               valor: precoAplicado,
               cpf,
               nome: usuario.nome,
@@ -609,9 +612,9 @@ export const subscriptionUpgradeService = {
       
             const provider = paymentService.getProvider();
             
-            const novoTxid = crypto.randomUUID();
+            const txidToUse = crypto.createHash('md5').update(`${cobranca.id}-${diferenca}`).digest('hex');
             const pixData = await provider.criarCobrancaImediata({
-              cobrancaId: novoTxid,
+              cobrancaId: txidToUse,
               valor: diferenca,
               cpf,
               nome: usuario.nome,
@@ -795,9 +798,9 @@ export const subscriptionUpgradeService = {
       
           const provider = paymentService.getProvider();
           
-          const novoTxid = crypto.randomUUID();
+          const txidToUse = crypto.createHash('md5').update(`${cobranca.id}-${valorCobranca}`).digest('hex');
           const pixData = await provider.criarCobrancaImediata({
-            cobrancaId: novoTxid,
+            cobrancaId: txidToUse,
             valor: valorCobranca,
             cpf,
             nome: usuario.nome,

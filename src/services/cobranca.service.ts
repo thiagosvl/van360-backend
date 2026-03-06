@@ -106,9 +106,14 @@ export const cobrancaService = {
         // Tenta gerar na hora. Se falhar, estoura erro pro usuário ver.
         try {
           const provider = paymentService.getProvider();
-          const novoIdProvedor = crypto.randomUUID();
+          
+          // IDEMPOTÊNCIA STABLE: Usamos um hash do ID + valor + vencimento.
+          // Se o valor ou data mudar, o txid muda e o provedor aceita a nova cobrança (atualizada).
+          // Se for uma retentativa com mesmos dados, o txid se mantém, garantindo status único no gateway.
+          const txidToUse = crypto.createHash('md5').update(`${cobrancaId}-${valorNumerico}-${data.data_vencimento}`).digest('hex');
+
           const pixResult = await provider.criarCobrancaComVencimento({
-            cobrancaId: novoIdProvedor,
+            cobrancaId: txidToUse,
             valor: valorNumerico,
             cpf: passageiro.cpf_responsavel,
             nome: passageiro.nome_responsavel,

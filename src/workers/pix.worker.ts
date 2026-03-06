@@ -1,5 +1,4 @@
 import { Job, Worker } from 'bullmq';
-import crypto from 'node:crypto';
 import { logger } from '../config/logger.js';
 import { redisConfig } from '../config/redis.js';
 import { supabaseAdmin } from '../config/supabase.js';
@@ -19,9 +18,11 @@ export const pixWorker = new Worker<PixJobData>(
             // Chamar API do Provedor
             const provider = paymentService.getProvider();
             
-            const novoTxid = crypto.randomUUID();
+            // O txid vem do job data (é estável para retries, mas muda se o valor/vencimento mudar no addToPixQueue)
+            const txidToUse = job.data.txid || job.data.cobrancaId;
+
             const pixResult = await provider.criarCobrancaComVencimento({
-                cobrancaId: novoTxid,
+                cobrancaId: txidToUse,
                 valor,
                 cpf,
                 nome,

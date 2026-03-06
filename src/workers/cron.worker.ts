@@ -8,6 +8,7 @@ import { dailySubscriptionMonitorJob } from '../services/jobs/daily-subscription
 import { pixValidationMonitorJob } from '../services/jobs/pix-validation-monitor.job.js';
 import { reconciliacaoEntradaJob } from '../services/jobs/reconciliacao-entrada.job.js';
 import { repasseMonitorJob } from '../services/jobs/repasse-monitor.job.js';
+import { repasseReconciliatorJob } from '../services/jobs/repasse-reconciliator.job.js';
 import { repasseRetryJob } from '../services/jobs/repasse-retry.job.js';
 import { subscriptionGeneratorJob } from '../services/jobs/subscription-generator.job.js';
 
@@ -31,6 +32,10 @@ export const cronWorker = new Worker(
 
                 case 'repasse-retry':
                     await repasseRetryJob.run();
+                    break;
+                
+                case 'repasse-reconciliator':
+                    await repasseReconciliatorJob.run();
                     break;
                 
                 case 'reconciliacao-entrada':

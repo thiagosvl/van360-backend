@@ -164,9 +164,13 @@ export const assinaturaCobrancaService = {
              // Definir vencimento (se não tiver na cobrança, usar hoje + 3 dias como fallback seguro, ou tratar erro)
              const dataVencimento = cobranca.data_vencimento || new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-             const novoTxid = crypto.randomUUID();
+             // IDEMPOTÊNCIA STABLE: Usamos um hash do ID + valor + vencimento.
+             // Se o valor ou data mudar, o txid muda e o banco aceita a nova cobrança.
+             // Se houver um retry do sistema com os mesmos dados, o txid é o mesmo e o banco evita duplicidade.
+             const contentHash = crypto.createHash('md5').update(`${cobranca.id}-${cobranca.valor}-${dataVencimento}`).digest('hex');
+
              pixData = await provider.criarCobrancaComVencimento({
-                cobrancaId: novoTxid,
+                cobrancaId: contentHash,
                 valor: Number(cobranca.valor),
                 cpf: usuario.cpfcnpj,
                 nome: usuario.nome,
@@ -177,9 +181,11 @@ export const assinaturaCobrancaService = {
         } else {
             logger.info({ cobrancaId, billingType: cobranca.billing_type }, `Gerando PIX Imediato (cob) via ${provider.name}`);
             
-            const novoTxid = crypto.randomUUID();
+            // IDEMPOTÊNCIA STABLE: No caso de PIX imediato, o valor é o principal driver.
+            const contentHash = crypto.createHash('md5').update(`${cobranca.id}-${cobranca.valor}`).digest('hex');
+
             pixData = await provider.criarCobrancaImediata({
-                cobrancaId: novoTxid,
+                cobrancaId: contentHash,
                 valor: Number(cobranca.valor),
                 cpf: usuario.cpfcnpj,
                 nome: usuario.nome,
