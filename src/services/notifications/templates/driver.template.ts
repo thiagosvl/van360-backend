@@ -76,7 +76,9 @@ export const DriverTemplates = {
 
         return textPart(`🚀 *Bem-vindo(a) à Van360*\n\n` +
             `O plano *${ctx.nomePlano}* foi ativado com sucesso.\n` +
-            `Seu acesso completo de *${dias} dias* de teste grátis é${validadeMsg}.\n` +
+            `Seu acesso completo de *${dias} dias* de teste grátis é${validadeMsg}.\n\n` +
+            `⚠️ *Próximos Passos*\n` +
+            `• *Configure seu Contrato:* Deixe seu modelo pronto para os clientes assinarem digitalmente com total segurança.\n\n` +
             `Bora decolar! 🚐💨`);
     },
 
@@ -85,11 +87,27 @@ export const DriverTemplates = {
      */
     activation: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
+        const isProfessional = ctx.nomePlano.toLowerCase().includes("profissional");
+
+        const parts: CompositeMessagePart[] = [];
+
+        // No plano Profissional, fala sobre Próximos Passos antes do pagamento
+        if (isProfessional) {
+            parts.push({
+                type: "text",
+                content: `⚠️ *Próximos Passos*\n` +
+                    `• *Configure seu Contrato:* Os pais recebem e assinam digitalmente pelo WhatsApp de forma automática.\n` +
+                    `• *Cadastre seu PIX:* Comece a receber os pagamentos dos pais direto na sua conta bancária.`
+            });
+        }
+
         const text = `⏳ *Ativação Pendente*\n\n` +
             `Seu plano *${ctx.nomePlano}* no valor de *${valor}* aguarda pagamento para ativação.\n` +
             `Realize o pagamento pelo PIX abaixo para liberar o acesso imediatamente.`;
 
-        return buildPixMessageParts(text, ctx.pixPayload);
+        parts.push(...buildPixMessageParts(text, ctx.pixPayload));
+
+        return parts;
     },
 
     /**
@@ -194,16 +212,27 @@ export const DriverTemplates = {
             parts.push({ type: "text", content: text });
         }
 
-        // 2. Lembretes Importantes (APENAS NA ATIVAÇÃO E PLANO PROFISSIONAL)
+        // 2. Lembretes Importantes (APENAS NA ATIVAÇÃO)
         const isProfessional = ctx.nomePlano.toLowerCase().includes("profissional");
+        const isEssencial = ctx.nomePlano.toLowerCase().includes("essencial");
         
-        if (ctx.isActivation && isProfessional && !ctx.skipPixStep) {
-            parts.push({
-                type: "text",
-                content: `⚠️ *Próximos Passos*\n\n` +
-                    `Acesse o aplicativo e cadastre sua Chave PIX para receber os pagamentos dos responsáveis diretamente em sua conta bancária.`,
-                delayMs: 1500
-            });
+        if (ctx.isActivation && !ctx.skipPixStep) {
+            if (isProfessional) {
+                parts.push({
+                    type: "text",
+                    content: `⚠️ *Próximos Passos*\n` +
+                        `• *Configure seu Contrato:* Deixe seu modelo pronto para os pais assinarem digitalmente.\n` +
+                        `• *Cadastre sua Chave PIX:* Ative o recebimento automático das mensalidades em sua conta.`,
+                    delayMs: 1500
+                });
+            } else if (isEssencial) {
+                parts.push({
+                    type: "text",
+                    content: `⚠️ *Próximos Passos*\n` +
+                        `• *Configure seu Contrato:* Deixe seu modelo pronto para os pais assinarem digitalmente pelo WhatsApp.`,
+                    delayMs: 1500
+                });
+            }
         }
         
         return parts;
