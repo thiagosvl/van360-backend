@@ -78,8 +78,7 @@ export const DriverTemplates = {
             `O plano *${ctx.nomePlano}* foi ativado com sucesso.\n` +
             `Seu acesso de *${dias} dias* grátis é${validadeMsg}.\n\n` +
             `⚠️ *Próximos Passos*\n` +
-            `• *Configurar Contrato*\n\n` +
-            `Bora decolar! 🚐💨`);
+            `• Configurar Contrato`);
     },
 
     /**
@@ -87,11 +86,9 @@ export const DriverTemplates = {
      */
     activation: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
-        const isProfessional = ctx.nomePlano.toLowerCase().includes("profissional");
-        const extraInfo = isProfessional ? " (c/ gestão de contratos digital)" : "";
 
         const text = `⏳ *Ativação Pendente*\n\n` +
-            `Seu plano *${ctx.nomePlano}${extraInfo}* no valor de *${valor}* aguarda pagamento para ativação.\n` +
+            `Seu plano no valor de *${valor}* aguarda pagamento para ativação.\n` +
             `Realize o pagamento pelo PIX abaixo para liberar o acesso.`;
 
         return buildPixMessageParts(text, ctx.pixPayload);
@@ -199,27 +196,17 @@ export const DriverTemplates = {
             parts.push({ type: "text", content: text });
         }
 
-        // 2. Lembretes Importantes (APENAS NA ATIVAÇÃO)
+        // 2. Lembretes Importantes (APENAS NA ATIVAÇÃO DO PLANO PROFISSIONAL)
         const isProfessional = ctx.nomePlano.toLowerCase().includes("profissional");
-        const isEssencial = ctx.nomePlano.toLowerCase().includes("essencial");
         
-        if (ctx.isActivation && !ctx.skipPixStep) {
-            if (isProfessional) {
-                parts.push({
-                    type: "text",
-                    content: `⚠️ *Próximos Passos*\n` +
-                        `• *Configurar Contrato*\n` +
-                        `• *Cadastrar Chave PIX*`,
-                    delayMs: 1500
-                });
-            } else if (isEssencial) {
-                parts.push({
-                    type: "text",
-                    content: `⚠️ *Próximos Passos*\n` +
-                        `• *Configurar Contrato*`,
-                    delayMs: 1500
-                });
-            }
+        if (ctx.isActivation && !ctx.skipPixStep && isProfessional) {
+            parts.push({
+                type: "text",
+                content: `⚠️ *Próximos Passos*\n` +
+                    `• Configurar Contrato\n` +
+                    `• Cadastrar Chave PIX`,
+                delayMs: 1500
+            });
         }
         
         return parts;
