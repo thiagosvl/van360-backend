@@ -76,9 +76,9 @@ export const DriverTemplates = {
 
         return textPart(`🚀 *Bem-vindo(a) à Van360*\n\n` +
             `O plano *${ctx.nomePlano}* foi ativado com sucesso.\n` +
-            `Seu acesso completo de *${dias} dias* de teste grátis é${validadeMsg}.\n\n` +
+            `Seu acesso de *${dias} dias* grátis é${validadeMsg}.\n\n` +
             `⚠️ *Próximos Passos*\n` +
-            `• *Configure seu Contrato:* Deixe seu modelo pronto para os clientes assinarem digitalmente com total segurança.\n\n` +
+            `• *Configurar Contrato*\n\n` +
             `Bora decolar! 🚐💨`);
     },
 
@@ -88,26 +88,13 @@ export const DriverTemplates = {
     activation: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
         const isProfessional = ctx.nomePlano.toLowerCase().includes("profissional");
-
-        const parts: CompositeMessagePart[] = [];
-
-        // No plano Profissional, fala sobre Próximos Passos antes do pagamento
-        if (isProfessional) {
-            parts.push({
-                type: "text",
-                content: `⚠️ *Próximos Passos*\n` +
-                    `• *Configure seu Contrato:* Os pais recebem e assinam digitalmente pelo WhatsApp de forma automática.\n` +
-                    `• *Cadastre seu PIX:* Comece a receber os pagamentos dos pais direto na sua conta bancária.`
-            });
-        }
+        const extraInfo = isProfessional ? " (c/ gestão de contratos digital)" : "";
 
         const text = `⏳ *Ativação Pendente*\n\n` +
-            `Seu plano *${ctx.nomePlano}* no valor de *${valor}* aguarda pagamento para ativação.\n` +
-            `Realize o pagamento pelo PIX abaixo para liberar o acesso imediatamente.`;
+            `Seu plano *${ctx.nomePlano}${extraInfo}* no valor de *${valor}* aguarda pagamento para ativação.\n` +
+            `Realize o pagamento pelo PIX abaixo para liberar o acesso.`;
 
-        parts.push(...buildPixMessageParts(text, ctx.pixPayload));
-
-        return parts;
+        return buildPixMessageParts(text, ctx.pixPayload);
     },
 
     /**
@@ -221,15 +208,15 @@ export const DriverTemplates = {
                 parts.push({
                     type: "text",
                     content: `⚠️ *Próximos Passos*\n` +
-                        `• *Configure seu Contrato:* Deixe seu modelo pronto para os pais assinarem digitalmente.\n` +
-                        `• *Cadastre sua Chave PIX:* Ative o recebimento automático das mensalidades em sua conta.`,
+                        `• *Configurar Contrato*\n` +
+                        `• *Cadastrar Chave PIX*`,
                     delayMs: 1500
                 });
             } else if (isEssencial) {
                 parts.push({
                     type: "text",
                     content: `⚠️ *Próximos Passos*\n` +
-                        `• *Configure seu Contrato:* Deixe seu modelo pronto para os pais assinarem digitalmente pelo WhatsApp.`,
+                        `• *Configurar Contrato*`,
                     delayMs: 1500
                 });
             }
