@@ -1,6 +1,7 @@
 // Aplicação Fastify compartilhada
 // Usado tanto para desenvolvimento local quanto para Vercel serverless
 import fastifyCors from "@fastify/cors";
+import { fastifyRequestContext } from "@fastify/request-context";
 import * as Sentry from "@sentry/node";
 import Fastify, { FastifyInstance } from "fastify";
 import routes from "./api/routes.js";
@@ -8,13 +9,29 @@ import { logger } from "./config/logger.js";
 import { globalErrorHandler } from "./errors/errorHandler.js";
 import { setupBullBoard } from "./queues/bull-board.js";
 
+export { };
+declare module "@fastify/request-context" {
+  interface RequestData {
+    ip: string;
+  }
+}
+
 export async function createApp(): Promise<FastifyInstance> {
   try {
     const app = Fastify({
       // No Fastify 5, para passar uma instância do Pino usamos 'loggerInstance'
       loggerInstance: logger as any, 
       disableRequestLogging: false,
+      trustProxy: true,
     }) as FastifyInstance;
+
+    // --- CONTEXT PROVIDER (IP Tracking via Plugin) ---
+    // Envolve cada request em um store do AsyncLocalStorage de forma robusta
+    await app.register(fastifyRequestContext);
+
+    app.addHook('onRequest', async (request) => {
+      (request as any).requestContext.set('ip', request.ip);
+    });
     
     // Iniciar integração com Sentry para Fastify
     Sentry.setupFastifyErrorHandler(app);

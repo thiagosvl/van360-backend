@@ -6,9 +6,10 @@ import { AppError } from '../errors/AppError.js';
 import { addToContractQueue } from '../queues/contract.queue.js';
 import { ContractProvider, DadosContrato, SignatureMetadata } from '../types/contract.js';
 import { CreateContractDTO, ListContractsDTO } from '../types/dtos/contract.dto.js';
-import { ContractMultaTipo, ContratoProvider, ContratoStatus, PassageiroModalidade, PeriodoEnum } from '../types/enums.js';
+import { AtividadeAcao, AtividadeEntidadeTipo, ContractMultaTipo, ContratoProvider, ContratoStatus, PassageiroModalidade, PeriodoEnum } from '../types/enums.js';
 import { toLocalDateString } from '../utils/date.utils.js';
 import { formatAddress, getFirstName } from '../utils/format.js';
+import { historicoService } from './historico.service.js';
 import { InHouseContractProvider } from './providers/inhouse-contract.provider.js';
 import { whatsappService } from './whatsapp.service.js';
 
@@ -147,9 +148,11 @@ class ContractService {
     // 6. Enfileirar para Geração de PDF e Notificações (Assíncrono via BullMQ)
     await addToContractQueue({
         contratoId: contrato.id,
+        usuarioId: usuarioId,
         providerName: providerName,
         dadosContrato,
         passageiro: {
+            id: passageiro.id,
             nome: passageiro.nome,
             nome_responsavel: passageiro.nome_responsavel,
             telefone_responsavel: passageiro.telefone_responsavel
@@ -158,6 +161,16 @@ class ContractService {
     });
     
     logger.info({ contratoId: contrato.id }, 'Fomento de contrato enfileirado com sucesso');
+
+    // --- LOG DE AUDITORIA ---
+    historicoService.log({
+        usuario_id: usuarioId,
+        entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
+        entidade_id: passageiroId,
+        acao: AtividadeAcao.CONTRATO_GERADO,
+        descricao: `Novo contrato gerado para ${passageiro.nome}.`,
+        meta: { contrato_id: contrato.id, valor_mensal: valorMensal }
+    });
 
     const linkAssinatura = providerName === ContratoProvider.INHOUSE 
       ? `${env.FRONTEND_URL}/assinar/${tokenAcesso}`
@@ -211,9 +224,19 @@ class ContractService {
       .eq('id', contrato.id);
     
     logger.info({ contratoId: contrato.id }, 'Contrato assinado com sucesso');
-    
+
     // 4. Notificar via WhatsApp
     const { usuario, passageiro } = contrato;
+
+    // --- LOG DE AUDITORIA ---
+    historicoService.log({
+        usuario_id: usuario.id,
+        entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
+        entidade_id: passageiro.id,
+        acao: AtividadeAcao.CONTRATO_ASSINADO,
+        descricao: `Contrato de ${passageiro.nome} foi assinado digitalmente pelo responsável.`,
+        meta: { contrato_id: contrato.id, documento_final: response.documentoFinalUrl }
+    });
     
     // 4.1 Notificar Responsável
     if (passageiro.telefone_responsavel) {
@@ -436,6 +459,14 @@ class ContractService {
     const usuario = await this.getUsuarioByAuthId(authId);
     const usuarioId = usuario.id;
 
+    // 1. Buscar dados do passageiro antes de excluir para auditoria
+    const { data: contrato } = await supabaseAdmin
+      .from('contratos')
+      .select('passageiro_id')
+      .eq('id', contratoId)
+      .eq('usuario_id', usuarioId)
+      .single();
+
     const { error } = await supabaseAdmin
       .from('contratos')
       .delete()
@@ -445,6 +476,18 @@ class ContractService {
     if (error) throw error;
     
     logger.info({ contratoId }, 'Contrato excluído');
+
+    // --- LOG DE AUDITORIA ---
+    if (contrato) {
+        historicoService.log({
+            usuario_id: usuarioId,
+            entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
+            entidade_id: contrato.passageiro_id,
+            acao: AtividadeAcao.CONTRATO_EXCLUIDO,
+            descricao: `Contrato foi excluído pelo motorista.`,
+            meta: { contrato_id: contratoId }
+        });
+    }
     
     return { success: true };
   }
@@ -469,9 +512,11 @@ class ContractService {
     // Enfileirar novamente
     await addToContractQueue({
       contratoId: contrato.id,
+      usuarioId: usuario.id,
       providerName: contrato.provider as ContratoProvider,
       dadosContrato: contrato.dados_contrato,
       passageiro: {
+          id: passageiro.id,
           nome: passageiro.nome,
           nome_responsavel: passageiro.nome_responsavel,
           telefone_responsavel: passageiro.telefone_responsavel

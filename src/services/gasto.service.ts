@@ -1,7 +1,9 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { CreateGastoDTO, ListGastosFiltersDTO, UpdateGastoDTO } from "../types/dtos/gasto.dto.js";
+import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { cleanString } from "../utils/string.utils.js";
+import { historicoService } from "./historico.service.js";
 
 // Helper Methods
 const _prepareGastoData = (data: Partial<CreateGastoDTO>, usuarioId?: string, isUpdate: boolean = false): any => {
@@ -40,6 +42,16 @@ export const gastoService = {
             .single();
         if (error) throw error;
 
+        // --- LOG DE AUDITORIA ---
+        historicoService.log({
+            usuario_id: inserted.usuario_id,
+            entidade_tipo: AtividadeEntidadeTipo.GASTO,
+            entidade_id: inserted.id,
+            acao: AtividadeAcao.GASTO_REGISTRADO,
+            descricao: `Gasto de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(inserted.valor)} registrado em ${inserted.categoria}.`,
+            meta: { valor: inserted.valor, categoria: inserted.categoria, descricao: inserted.descricao }
+        });
+
         return inserted;
     },
 
@@ -53,7 +65,18 @@ export const gastoService = {
             .update(gastoData)
             .eq("id", id)
             .select()
+            .single();
         if (error) throw error;
+
+        // --- LOG DE AUDITORIA ---
+        historicoService.log({
+            usuario_id: updated.usuario_id,
+            entidade_tipo: AtividadeEntidadeTipo.GASTO,
+            entidade_id: id,
+            acao: AtividadeAcao.GASTO_EDITADO,
+            descricao: `Registro de gasto (${updated.categoria}) foi atualizado.`,
+            meta: { valor: updated.valor, categoria: updated.categoria, campos: Object.keys(data) }
+        });
 
         return updated;
     },
@@ -66,6 +89,16 @@ export const gastoService = {
         if (gasto?.id) {
             const { error } = await supabaseAdmin.from("gastos").delete().eq("id", id);
             if (error) throw error;
+
+            // --- LOG DE AUDITORIA ---
+            historicoService.log({
+                usuario_id: gasto.usuario_id,
+                entidade_tipo: AtividadeEntidadeTipo.GASTO,
+                entidade_id: id,
+                acao: AtividadeAcao.GASTO_EXCLUIDO,
+                descricao: `Gasto de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(gasto.valor)} (${gasto.categoria}) removido.`,
+                meta: { valor: gasto.valor, categoria: gasto.categoria, backup: gasto }
+            });
         }
     },
 

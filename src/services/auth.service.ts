@@ -7,11 +7,12 @@ import {
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
-import { AssinaturaCobrancaStatus, AssinaturaStatus, ConfigKey, UserType } from "../types/enums.js";
+import { AssinaturaCobrancaStatus, AssinaturaStatus, AtividadeAcao, AtividadeEntidadeTipo, ConfigKey, PrecoOrigem, UserType } from "../types/enums.js";
 import { toLocalDateString } from "../utils/date.utils.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { assinaturaCobrancaService } from "./assinatura-cobranca.service.js";
 import { getConfigNumber } from "./configuracao.service.js";
+import { historicoService } from "./historico.service.js";
 import { notificationService } from "./notifications/notification.service.js";
 import { pricingService } from "./pricing.service.js";
 
@@ -335,7 +336,7 @@ export async function iniciaRegistroPlanoEssencial(
     authUid = session.user.id;
 
     const precoAplicado = plano.promocao_ativa ? plano.preco_promocional : plano.preco;
-    const precoOrigem = plano.promocao_ativa ? "promocional" : "normal";
+    const precoOrigem = plano.promocao_ativa ? PrecoOrigem.PROMOCIONAL : PrecoOrigem.NORMAL;
 
     const hoje = new Date();
     const anchorDate = toLocalDateString(hoje);
@@ -517,7 +518,7 @@ export async function iniciarRegistroplanoProfissional(
       precoAplicado = Number(
         plano.promocao_ativa ? plano.preco_promocional ?? plano.preco : plano.preco
       );
-      precoOrigem = plano.promocao_ativa ? "promocional" : "normal";
+      precoOrigem = plano.promocao_ativa ? PrecoOrigem.PROMOCIONAL : PrecoOrigem.NORMAL;
       franquiaContratada = plano.franquia_cobrancas_mes || 0;
     }
 
@@ -622,7 +623,7 @@ export async function login(identifier: string, password: string): Promise<AuthS
   // 1. Busca prévia no banco: Recuperar email a partir do CPF e checar Status
   const { data: user, error } = await supabaseAdmin
     .from("usuarios")
-    .select("email, ativo")
+    .select("id, email, ativo")
     .eq("cpfcnpj", cpf)
     .single();
 
@@ -643,6 +644,15 @@ export async function login(identifier: string, password: string): Promise<AuthS
   if (authError || !data.session) {
     throw new AppError("Credenciais inválidas.", 401);
   }
+
+  // --- LOG DE AUDITORIA ---
+  historicoService.log({
+    usuario_id: user.id,
+    entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+    entidade_id: user.id,
+    acao: AtividadeAcao.LOGIN,
+    descricao: `Usuário realizou login com sucesso.`
+  });
 
   return {
     access_token: data.session.access_token,
@@ -713,6 +723,24 @@ export async function updatePassword(token: string, newPassword: string, oldPass
     logger.error({ error: error.message, userId: user.id }, "Erro ao atualizar senha.");
     throw new AppError("Não foi possível atualizar a senha.", 500);
   }
+
+  // --- LOG DE AUDITORIA ---
+  // Precisamos recuperar o id do usuário real (public.usuarios) do auth_uid
+  const { data: profile } = await supabaseAdmin
+    .from("usuarios")
+    .select("id")
+    .eq("auth_uid", user.id)
+    .single();
+
+  if (profile) {
+    historicoService.log({
+      usuario_id: profile.id,
+      entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+      entidade_id: profile.id,
+      acao: AtividadeAcao.SENHA_ALTERADA,
+      descricao: `Senha alterada pelo usuário.`
+    });
+  }
 }
 
 export async function resetPassword(identifier: string, redirectTo?: string): Promise<void> {
@@ -744,13 +772,41 @@ export async function resetPassword(identifier: string, redirectTo?: string): Pr
     logger.error({ error: error.message, email }, "Erro ao solicitar redefinição de senha via Supabase Admin.");
     throw new AppError("Não foi possível enviar o e-mail de recuperação.", 500);
   }
+
+  // --- LOG DE AUDITORIA ---
+  const { data: user } = await supabaseAdmin
+    .from("usuarios")
+    .select("id")
+    .eq("email", email)
+    .single();
+
+  if (user) {
+    historicoService.log({
+      usuario_id: user.id,
+      entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+      entidade_id: user.id,
+      acao: AtividadeAcao.RECUPERACAO_SENHA,
+      descricao: `Solicitação de redefinição de senha enviada para o e-mail.`
+    });
+  }
 }
 
-export async function logout(token: string): Promise<void> {
+export async function logout(token: string, usuarioId?: string): Promise<void> {
   const { error } = await supabaseAdmin.auth.admin.signOut(token);
   if (error) {
     logger.warn({ error: error.message }, "Erro ao realizar logout no Supabase.");
     // Não lançar erro crítico no logout
+  }
+
+  // --- LOG DE AUDITORIA ---
+  if (usuarioId) {
+    historicoService.log({
+      usuario_id: usuarioId,
+      entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+      entidade_id: usuarioId,
+      acao: AtividadeAcao.LOGOUT,
+      descricao: `Usuário realizou logout do sistema.`
+    });
   }
 }
 

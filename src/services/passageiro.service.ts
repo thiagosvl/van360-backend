@@ -4,9 +4,10 @@ import { automationService } from "./automation.service.js";
 import { subscriptionLifecycleService } from "./subscription-lifecycle.service.js";
 
 import { CreatePassageiroDTO, ListPassageirosFiltersDTO, UpdatePassageiroDTO } from "../types/dtos/passageiro.dto.js";
-import { ContratoProvider, ContratoStatus, PassageiroDesativacaoCobrancaAutomaticaMotivo } from "../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, ContratoProvider, ContratoStatus, PassageiroDesativacaoCobrancaAutomaticaMotivo } from "../types/enums.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
+import { historicoService } from "./historico.service.js";
 
 // Métodos privados auxiliares
 const _preparePassageiroData = (data: Partial<CreatePassageiroDTO> & Record<string, any>, usuarioId?: string, isUpdate: boolean = false): any => {
@@ -87,6 +88,20 @@ const createPassageiro = async (data: CreatePassageiroDTO): Promise<any> => {
 
     if (error) throw error;
     
+    // --- LOG DE AUDITORIA ---
+    historicoService.log({
+        usuario_id: inserted.usuario_id,
+        entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
+        entidade_id: inserted.id,
+        acao: AtividadeAcao.PASSAGEIRO_CRIADO,
+        descricao: `Novo passageiro ${inserted.nome} cadastrado.`,
+        meta: {
+            nome: inserted.nome,
+            responsavel: inserted.nome_responsavel,
+            valor_cobranca: inserted.valor_cobranca
+        }
+    });
+
     // Safety Net: Verificar se precisa gerar cobrança do Mês Seguinte (Pós dia 25)
     if (inserted.enviar_cobranca_automatica) {
         try {
@@ -203,7 +218,21 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO): Promise<
         (data.estado !== undefined && data.estado !== estadoAnterior.estado) ||
         (data.cep !== undefined && data.cep !== estadoAnterior.cep);
 
+    // 2. LOG DE AUDITORIA (Qualquer edição)
+    historicoService.log({
+        usuario_id: updated.usuario_id,
+        entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
+        entidade_id: id,
+        acao: AtividadeAcao.PASSAGEIRO_EDITADO,
+        descricao: `Cadastro de ${updated.nome} atualizado.`,
+        meta: {
+            houve_mudanca_contratual: houveMudancaContratual,
+            campos_enviados: Object.keys(data)
+        }
+    });
+
     if (houveMudancaContratual) {
+
         // Trigger de substituição
         const { data: usuario } = await supabaseAdmin
             .from("usuarios")
@@ -286,8 +315,20 @@ const deletePassageiro = async (id: string): Promise<void> => {
 
         const { error } = await supabaseAdmin.from("passageiros").delete().eq("id", id);
         if (error) throw error;
+
+        // --- LOG DE AUDITORIA ---
+        historicoService.log({
+            usuario_id: passageiro.usuario_id,
+            entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
+            entidade_id: id,
+            acao: AtividadeAcao.PASSAGEIRO_EXCLUIDO,
+            descricao: `Passageiro ${passageiro.nome} removido permanentemente.`,
+            meta: {
+                backup: passageiro
+            }
+        });
     }
-};
+}
 
 const getPassageiro = async (id: string): Promise<any> => {
     const { data, error } = await supabaseAdmin
@@ -411,8 +452,21 @@ const toggleAtivo = async (passageiroId: string, novoStatus: boolean): Promise<b
 
     if (error) throw new Error(`Falha ao alterar status do passageiro: ${error.message}`);
     
+    // --- LOG DE AUDITORIA ---
+    const { data: pass } = await supabaseAdmin.from("passageiros").select("usuario_id, nome").eq("id", passageiroId).single();
+    if (pass) {
+        historicoService.log({
+            usuario_id: pass.usuario_id,
+            entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
+            entidade_id: passageiroId,
+            acao: AtividadeAcao.PASSAGEIRO_STATUS,
+            descricao: `Cadastro de ${pass.nome} foi ${novoStatus ? 'ATIVADO' : 'DESATIVADO'}.`,
+            meta: { ativo: novoStatus }
+        });
+    }
+
     return true;
-};
+}
 
 const getNumeroCobrancas = async (passageiroId: string): Promise<number> => {
     if (!passageiroId) throw new Error("ID do passageiro é obrigatório");
@@ -492,8 +546,18 @@ const finalizePreCadastro = async (
     // 5. Deletar Pré-Cadastro
     await supabaseAdmin.from("pre_passageiros").delete().eq("id", prePassageiroId);
 
+    // --- LOG DE AUDITORIA ---
+    historicoService.log({
+        usuario_id: usuarioId,
+        entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
+        entidade_id: novoPassageiro.id,
+        acao: AtividadeAcao.PRE_CADASTRO_CONCLUIDO,
+        descricao: `Interesse de vaga (${novoPassageiro.nome}) convertido em passageiro.`,
+        meta: { pre_id: prePassageiroId }
+    });
+
     return novoPassageiro;
-};
+}
 
 const lookupResponsavelByCpf = async (usuarioId: string, cpf: string): Promise<any> => {
     if (!usuarioId) throw new AppError("Usuário não identificado", 401);

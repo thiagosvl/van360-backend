@@ -1,8 +1,9 @@
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
-import { CobrancaOrigem, CobrancaStatus, ConfigKey, PassageiroDesativacaoCobrancaAutomaticaMotivo } from "../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaOrigem, CobrancaStatus, ConfigKey, PassageiroDesativacaoCobrancaAutomaticaMotivo } from "../types/enums.js";
 import { cobrancaService } from "./cobranca.service.js";
 import { getConfigNumber } from "./configuracao.service.js";
+import { historicoService } from "./historico.service.js";
 
 /**
  * Verifica se já passou do dia de geração automática e cria a do mês seguinte se necessário
@@ -117,6 +118,16 @@ export const automationService = {
             throw new Error(`Erro ao atualizar passageiros: ${updateError.message}`);
         }
 
+        // --- LOG DE AUDITORIA ---
+        historicoService.log({
+            usuario_id: usuarioId,
+            entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
+            entidade_id: usuarioId, // Log no nível do motorista/unidade
+            acao: AtividadeAcao.PASSAGEIRO_STATUS,
+            descricao: `${idsParaAtivar.length} passageiros foram ATIVADOS automaticamente para a franquia do plano.`,
+            meta: { ids: idsParaAtivar, franquia }
+        });
+
         // Lógica de Catch-up (Upgrade / Ativação)
         // 1. Tentar gerar cobranças para o mês ATUAL se ainda não existirem
         // 2. Para as cobranças existentes (atuais ou futuras), garantir que tenham PIX
@@ -219,6 +230,16 @@ export const automationService = {
             .in("id", ids);
 
         if (updateError) throw new Error("Erro ao desativar automação: " + updateError.message);
+
+        // --- LOG DE AUDITORIA ---
+        historicoService.log({
+            usuario_id: usuarioId,
+            entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
+            entidade_id: usuarioId,
+            acao: AtividadeAcao.PASSAGEIRO_STATUS,
+            descricao: `${ids.length} passageiros tiveram a automação de cobranças DESATIVADA (Ajuste de Plano/Downgrade).`,
+            meta: { ids, motivo: PassageiroDesativacaoCobrancaAutomaticaMotivo.AUTOMATICA }
+        });
 
         return ids.length;
     }

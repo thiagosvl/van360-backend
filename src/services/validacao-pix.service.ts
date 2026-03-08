@@ -2,10 +2,11 @@ import crypto from "node:crypto";
 import { DRIVER_EVENT_PIX_KEY_VALIDATED, DRIVER_EVENT_PIX_KEY_VALIDATION_FAILED } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
-import { PixKeyStatus, PixKeyType, TransactionStatus } from "../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, PixKeyStatus, PixKeyType, TransactionStatus } from "../types/enums.js";
 import { formatPixKey } from "../utils/format.js";
 import { onlyDigits } from "../utils/string.utils.js";
 import { cobrancaPagamentoService } from "./cobranca-pagamento.service.js";
+import { historicoService } from "./historico.service.js";
 import { notificationService } from "./notifications/notification.service.js";
 import { paymentService } from "./payment.service.js";
 
@@ -256,6 +257,16 @@ async function confirmarChaveUsuario(
         throw error;
     }
 
+    // --- LOG DE AUDITORIA ---
+    historicoService.log({
+        usuario_id: usuarioId,
+        entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+        entidade_id: usuarioId,
+        acao: AtividadeAcao.CHAVE_PIX_ALTERADA, // Ver se adiciono VALIDADA depois
+        descricao: `Chave PIX ${chave} validada com sucesso.`,
+        meta: { chave, tipo, status: 'validada' }
+    });
+
     // 4. RETRY IMEDIATO DE REPASSES
     // Se o usuário tinha saldo travado por falta de chave, tenta pagar agora.
     cobrancaPagamentoService.reprocessarRepassesPendentes(usuarioId)
@@ -321,6 +332,16 @@ export const validacaoPixService = {
         } else {
             logger.info({ usuarioId }, "Mantendo status VALIDADA após falha na tentativa de troca de chave.");
         }
+
+        // --- LOG DE AUDITORIA ---
+        historicoService.log({
+            usuario_id: usuarioId,
+            entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+            entidade_id: usuarioId,
+            acao: AtividadeAcao.CHAVE_PIX_ALTERADA,
+            descricao: `Falha na validação da chave PIX: ${motivo}.`,
+            meta: { motivo, status: 'falha' }
+        });
 
         // 2. Notificar Usuário
         try {

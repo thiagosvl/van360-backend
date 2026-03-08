@@ -6,11 +6,14 @@ import { supabaseAdmin } from "../config/supabase.js";
 import {
     AssinaturaBillingType,
     AssinaturaCobrancaStatus,
-    AssinaturaTipoPagamento
+    AssinaturaTipoPagamento,
+    AtividadeAcao,
+    AtividadeEntidadeTipo
 } from "../types/enums.js";
 import { toLocalDateString } from "../utils/date.utils.js";
 import { automationService } from "./automation.service.js";
 import { cobrancaService } from "./cobranca.service.js";
+import { historicoService } from "./historico.service.js";
 import { paymentService } from "./payment.service.js";
 
 interface DadosPagamento {
@@ -156,6 +159,20 @@ export async function processarPagamentoAssinatura(
       const planoRef = assinaturaPendente?.planos as any;
       const nomePlano = (planoRef?.parent as any)?.nome || planoRef?.nome;
 
+      // --- LOG DE AUDITORIA ---
+      historicoService.log({
+          usuario_id: cobranca.usuario_id,
+          entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+          entidade_id: cobranca.usuario_id,
+          acao: AtividadeAcao.ASSINATURA_PAGAMENTO,
+          descricao: `Assinatura de ${nomePlano || 'Plano'} confirmada (Vencimento: ${toLocalDateString(vigenciaFim)}).`,
+          meta: { 
+              cobranca_id: cobranca.id, 
+              valor: dadosPagamento.valor,
+              is_onboarding: isOnboardingPayment
+          }
+      });
+
         // NOTIFICAÇÃO REMOVIDA: A notificação agora é enviada pelo ReceiptWorker após gerar o comprovante.
         // Isso evita duplicidade de mensagens (uma sem comprovante e outra com).
         /*
@@ -177,8 +194,6 @@ export async function processarPagamentoAssinatura(
     } catch (notifError: any) {
       logger.error({ ...logContext, error: notifError.message }, "Erro ao enviar notificação de confirmação de pagamento");
     }
-
-    logger.info({ ...logContext }, "Fluxo completo para pagamento confirmado");
 
     return { vigenciaFim, isOnboardingPayment };
   } catch (error: any) {

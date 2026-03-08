@@ -1,22 +1,23 @@
 import crypto from "node:crypto";
-import { JOB_ORIGIN_MANUAL, PASSENGER_EVENT_MANUAL } from "../config/constants.js";
+import { PASSENGER_EVENT_MANUAL } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
 import { addToPixQueue } from "../queues/pix.queue.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { toLocalDateString } from "../utils/date.utils.js";
-import { cobrancaNotificacaoService } from "./cobranca-notificacao.service.js";
 import { notificationService } from "./notifications/notification.service.js";
 import { paymentService } from "./payment.service.js";
 import { planRules } from "./plan-rules.service.js";
 
 import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
-import { CobrancaOrigem, CobrancaStatus } from "../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaOrigem, CobrancaStatus } from "../types/enums.js";
+import { historicoService } from "./historico.service.js";
 
 interface CreateCobrancaOptions {
   gerarPixAsync?: boolean; // Se true, apenas enfileira. Se false, gera na hora (síncrono).
   planoSlug?: string;      // Opcional: slug do plano do motorista para otimizar query
+  skipLog?: boolean;       // Se true, não registra log individual de auditoria
 }
 
 export const cobrancaService = {
@@ -52,12 +53,10 @@ export const cobrancaService = {
     const now = new Date();
     const todayStr = toLocalDateString(now);
     const isPastDue = data.data_vencimento < todayStr;
-    // status não existe no DTO de criação, assumimos pendente por padrão se não for passado explicitamente
-    // mas aqui estamos validando regras de negócio
-    const isPaid = false; // Na criação, nunca é pago por padrão via API
+    const isPaid = data.status === CobrancaStatus.PAGO;
 
-    // Regra 1: Passado não gera PIX.
-    // Regra 2: Pago não gera PIX (Pagamento Manual Externo).
+    // Regra 1: Passado não gera PIX (vencimento retroativo).
+    // Regra 2: Pago não gera PIX (Baixa manual no ato da criação).
     // Regra 3: Se não tiver CPF/Nome, não gera.
     // REQUISITO: Centralizado no planRules
 
@@ -146,10 +145,27 @@ export const cobrancaService = {
     const { data: inserted, error } = await supabaseAdmin
       .from("cobrancas")
       .insert([cobrancaData])
-      .select()
+      .select("*, passageiros(nome)")
       .single();
 
     if (error) throw new AppError(`Erro ao criar cobrança no banco: ${error.message}`, 500);
+
+    // --- LOG DE AUDITORIA ---
+    if (!options.skipLog) {
+      historicoService.log({
+        usuario_id: inserted.usuario_id,
+        entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
+        entidade_id: inserted.id,
+        acao: AtividadeAcao.COBRANCA_CRIADA,
+        descricao: `Cobrança de ${inserted.mes}/${inserted.ano} do passageiro ${(inserted as any).passageiros?.nome} criada (${inserted.origem === 'automatica' ? 'Automática' : 'Manual'}).`,
+        meta: {
+          valor: inserted.valor,
+          vencimento: inserted.data_vencimento,
+          origem: inserted.origem,
+          passageiro: (inserted as any).passageiros?.nome
+        }
+      });
+    }
 
     // Enviar notificação imediata se solicitado
     if (data.enviar_notificacao_agora) {
@@ -174,11 +190,15 @@ export const cobrancaService = {
 
     const cobrancaData: any = {};
 
-    // Mapeamento de campos
+    // Mapeamento de campos permitidos para edição de metadados
     if (data.valor !== undefined) cobrancaData.valor = data.valor;
     if (data.data_vencimento !== undefined) cobrancaData.data_vencimento = data.data_vencimento;
-    if (data.status !== undefined) cobrancaData.status = data.status;
-    if (data.pagamento_manual !== undefined) cobrancaData.pagamento_manual = data.pagamento_manual;
+    
+    // Bloqueio de transição de status via PUT (Diretrizes de Arquitetura)
+    if (data.status !== undefined && data.status !== cobrancaOriginal.status) {
+      logger.warn({ cobrancaId: id, from: cobrancaOriginal.status, to: data.status }, "Tentativa de alteração de status via PUT (updateCobranca) ignorada. Use os endpoints especializados.");
+    }
+
     if (data.tipo_pagamento !== undefined) cobrancaData.tipo_pagamento = data.tipo_pagamento;
     if (data.data_pagamento !== undefined) cobrancaData.data_pagamento = data.data_pagamento;
     if (data.valor_pago !== undefined) cobrancaData.valor_pago = moneyToNumber(data.valor_pago);
@@ -212,23 +232,9 @@ export const cobrancaService = {
       const canGeneratePixNow = planRules.canGeneratePix(slugBase);
 
       const passageiro = cobrancaOriginal.passageiro || cobrancaOriginal.passageiros;
-      const novoStatus = data.status || cobrancaOriginal.status;
+      const isStillPending = (data.status || cobrancaOriginal.status) !== CobrancaStatus.PAGO;
       
-      if (canGeneratePixNow && passageiro?.cpf_responsavel && passageiro?.nome_responsavel && novoStatus !== CobrancaStatus.PAGO) {
-        shouldGenerateNewPix = true;
-      }
-    }
-
-    // 3. Desfazer pagamento de PIX vencido
-    const isDesfazerPagamento = data.status === CobrancaStatus.PENDENTE && cobrancaOriginal.status === CobrancaStatus.PAGO;
-    if (isDesfazerPagamento && cobrancaOriginal.gateway_txid) {
-      const dtVencimentoRaw = data.data_vencimento !== undefined ? data.data_vencimento : cobrancaOriginal.data_vencimento;
-      const dtVencimento = new Date(`${dtVencimentoRaw}T00:00:00-03:00`);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      // Se a data de vencimento da cobrança for menor que hoje, o PIX provavelmente está vencido
-      if (dtVencimento < today) {
+      if (canGeneratePixNow && passageiro?.cpf_responsavel && passageiro?.nome_responsavel && isStillPending) {
         shouldGenerateNewPix = true;
       }
     }
@@ -280,10 +286,12 @@ export const cobrancaService = {
 
 
           // 3. Verificar necessidade de Reenvio de Notificação
-          const notificacoesAnteriores = await cobrancaNotificacaoService.listByCobrancaId(id);
-          if (notificacoesAnteriores && notificacoesAnteriores.length > 0) {
+          const historico = await historicoService.listByEntidade(AtividadeEntidadeTipo.COBRANCA, id);
+          const jaNotificado = historico.some(h => h.acao === AtividadeAcao.NOTIFICACAO_WHATSAPP);
+
+          if (jaNotificado) {
             shouldResendNotification = true;
-            logger.info({ cobrancaId: id }, "Cobrança já notificada anteriormente. Agendando reenvio.");
+            logger.info({ cobrancaId: id }, "Cobrança já notificada anteriormente (log historico). Agendando reenvio.");
           }
         }
       } catch (err: any) {
@@ -300,6 +308,20 @@ export const cobrancaService = {
       .single();
 
     if (error) throw new AppError(`Erro ao atualizar cobrança: ${error.message}`, 500);
+
+    // --- LOG DE AUDITORIA ---
+    historicoService.log({
+      usuario_id: cobrancaOriginal.usuario_id,
+      entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
+      entidade_id: id,
+      acao: AtividadeAcao.COBRANCA_EDITADA,
+      descricao: `Cobrança de ${cobrancaOriginal.mes}/${cobrancaOriginal.ano} do passageiro ${cobrancaOriginal.passageiros?.nome || cobrancaOriginal.passageiro?.nome} editada pelo motorista.`,
+      meta: {
+        antes: { valor: cobrancaOriginal.valor, vencimento: cobrancaOriginal.data_vencimento },
+        depois: { valor: updated.valor, vencimento: updated.data_vencimento },
+        passageiro: cobrancaOriginal.passageiros?.nome || cobrancaOriginal.passageiro?.nome
+      }
+    });
 
     // 4. Reenviar notificação se necessário (Após save do DB para garantir leitura correta)
     if (shouldResendNotification) {
@@ -335,20 +357,20 @@ export const cobrancaService = {
   },
 
   async deleteCobranca(id: string): Promise<void> {
-    // 1. Buscar gateway_txid antes de deletar
+    // 1. Buscar dados antes de deletar (p/ log e cancelamento)
     const { data: cobranca, error: fetchError } = await supabaseAdmin
       .from("cobrancas")
-      .select("gateway_txid")
+      .select("*, passageiros(nome)")
       .eq("id", id)
       .single();
 
-    if (fetchError) {
-      logger.error({ error: fetchError.message, cobrancaId: id }, "Erro ao buscar cobrança para exclusão.");
+    if (fetchError || !cobranca) {
+      logger.error({ error: fetchError?.message, cobrancaId: id }, "Erro ao buscar cobrança para exclusão.");
       throw new AppError("Erro ao buscar cobrança para exclusão.", 500);
     }
 
     // 2. Se tiver PIX, cancelar no Provedor (Bloqueio rigoroso se falhar)
-    if (cobranca?.gateway_txid) {
+    if (cobranca.gateway_txid) {
       try {
         logger.info({ txid: cobranca.gateway_txid, cobrancaId: id }, "Cancelando PIX no Provedor antes de excluir...");
         const provider = paymentService.getProvider();
@@ -362,6 +384,21 @@ export const cobrancaService = {
     // 3. Deletar do Banco
     const { error } = await supabaseAdmin.from("cobrancas").delete().eq("id", id);
     if (error) throw new AppError("Erro ao excluir cobrança no banco de dados.", 500);
+
+    // --- LOG DE AUDITORIA ---
+    historicoService.log({
+      usuario_id: cobranca.usuario_id,
+      entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
+      entidade_id: id,
+      acao: AtividadeAcao.COBRANCA_EXCLUIDA,
+      descricao: `Mensalidade de ${cobranca.mes}/${cobranca.ano} do passageiro ${(cobranca as any).passageiros?.nome} foi removida.`,
+      meta: {
+        valor: cobranca.valor,
+        mes: cobranca.mes,
+        ano: cobranca.ano,
+        backup: cobranca // Guarda o estado final antes da deleção física
+      }
+    });
   },
 
   async listCobrancasWithFilters(filtros: any): Promise<any[]> {
@@ -462,13 +499,23 @@ export const cobrancaService = {
       .from("cobrancas")
       .update({ desativar_lembretes: novoStatus })
       .eq("id", cobrancaId)
-      .select("desativar_lembretes")
+      .select("desativar_lembretes, usuario_id")
       .single();
 
     if (error) {
       logger.error({ error, cobrancaId }, "Erro ao alterar status de notificação da cobrança");
       throw new AppError("Erro ao alterar notificações.", 500);
     }
+
+    // --- LOG DE AUDITORIA ---
+    historicoService.log({
+      usuario_id: data.usuario_id, // Precisamos garantir que usuario_id esteja disponível ou buscar
+      entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
+      entidade_id: cobrancaId,
+      acao: AtividadeAcao.CONFIG_LEMBRETE,
+      descricao: `Lembretes automáticos para esta mensalidade foram ${novoStatus ? 'DESATIVADOS' : 'REATIVADOS'}.`,
+      meta: { desativar_lembretes: novoStatus }
+    });
 
     return data.desativar_lembretes;
   },
@@ -519,12 +566,24 @@ export const cobrancaService = {
           data_vencimento: dataVencimentoStr,
           origem: CobrancaOrigem.AUTOMATICA,
           gerarPixAsync: true
-        }, { gerarPixAsync: true, planoSlug });
+        }, { gerarPixAsync: true, planoSlug, skipLog: true });
 
         created++;
       } catch (e) {
         logger.error({ error: e, passageiroId: passageiro.id }, "Erro ao gerar cobrança automática no loop");
       }
+    }
+
+    if (created > 0) {
+      // --- LOG DE AUDITORIA ---
+      historicoService.log({
+          usuario_id: motoristaId,
+          entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
+          entidade_id: motoristaId,
+          acao: AtividadeAcao.COBRANCAS_GERADAS,
+          descricao: `Geração automática de ${created} cobranças concluída para ${targetMonth}/${targetYear}.`,
+          meta: { mes: targetMonth, ano: targetYear, criadas: created, puladas: skipped }
+      });
     }
 
     return { created, skipped };
@@ -568,7 +627,7 @@ export const cobrancaService = {
       }
     );
 
-    // 3. Log de Histórico e Atualizar Tabela Mestra
+    // 3. Log de Histórico de Atividades
     if (success) {
       // Atualizar data da última notificação na cobrança
       await supabaseAdmin
@@ -576,11 +635,14 @@ export const cobrancaService = {
         .update({ data_envio_ultima_notificacao: new Date() })
         .eq("id", cobrancaId);
 
-      // Gravar log detalhado
-      await cobrancaNotificacaoService.create(cobrancaId, {
-        tipo_origem: JOB_ORIGIN_MANUAL,
-        tipo_evento: PASSENGER_EVENT_MANUAL,
-        canal: "whatsapp"
+      // --- LOG DE AUDITORIA ---
+      historicoService.log({
+          usuario_id: cobranca.usuario_id,
+          entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
+          entidade_id: cobrancaId,
+          acao: AtividadeAcao.NOTIFICACAO_WHATSAPP,
+          descricao: `Lembrete de cobrança enviado manualmente via WhatsApp para ${passageiro.nome_responsavel}.`,
+          meta: { telefone: passageiro.telefone_responsavel, passageiro: passageiro.nome }
       });
     }
 

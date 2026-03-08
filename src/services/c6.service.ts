@@ -128,11 +128,21 @@ export const c6Service = {
 
   async consultarPix(txid: string) {
     const token = await this.getAccessToken();
-    const { data } = await axios.get(`${env.C6_API_URL}/v2/pix/cob/${txid}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      httpsAgent: getHttpsAgent()
-    });
-    return data;
+    try {
+      const { data } = await axios.get(`${env.C6_API_URL}/v2/pix/cob/${txid}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        httpsAgent: getHttpsAgent()
+      });
+      return data;
+    } catch (error: any) {
+      logger.error({ 
+        msg: "C6: Erro ao consultar cobrança", 
+        txid, 
+        response: error.response?.data, 
+        status: error.response?.status 
+      });
+      throw error;
+    }
   },
 
   /**
@@ -141,16 +151,25 @@ export const c6Service = {
    */
   async consultarDDA() {
     const token = await this.getAccessToken();
-    const url = `${C6_SCHEDULE_URL}query`;
+    const url = `${C6_SCHEDULE_URL}/query`;
     const headers = { 
         Authorization: `Bearer ${token}`,
         "partner-software-name": "Van360",
         "partner-software-version": "1.0.0"
     };
     
-    logger.debug({ url, headers }, "C6: Iniciando consultarDDA");
-    const { data } = await axios.get(url, { headers, httpsAgent: getHttpsAgent() });
-    return data;
+    logger.debug({ url }, "C6: Iniciando consultarDDA");
+    try {
+      const { data } = await axios.get(url, { headers, httpsAgent: getHttpsAgent() });
+      return data;
+    } catch (error: any) {
+      logger.error({ 
+        msg: "C6: Erro ao consultar DDA", 
+        response: error.response?.data, 
+        status: error.response?.status 
+      });
+      throw error;
+    }
   },
 
   async cancelarCobranca(txid: string) {
@@ -159,38 +178,73 @@ export const c6Service = {
     const agent = getHttpsAgent();
 
     try {
+      // Tenta na API de cobrança imediata (cob)
       await axios.patch(`${env.C6_API_URL}/v2/pix/cob/${txid}`, 
         { status: "REMOVIDA_PELO_USUARIO_RECEBEDOR" },
         { headers, httpsAgent: agent }
       );
       return true;
     } catch (error: any) {
-      try {
-        await axios.patch(`${env.C6_API_URL}/v2/pix/cobv/${txid}`, 
-          { status: "REMOVIDA_PELO_USUARIO_RECEBEDOR" },
-          { headers, httpsAgent: agent }
-        );
-        return true;
-      } catch (err) {
-        return false;
+      if (error.response?.status === 404) {
+        // Se não era imediata, tenta na com vencimento (cobv)
+        try {
+          await axios.patch(`${env.C6_API_URL}/v2/pix/cobv/${txid}`, 
+            { status: "REMOVIDA_PELO_USUARIO_RECEBEDOR" },
+            { headers, httpsAgent: agent }
+          );
+          return true;
+        } catch (errCobv: any) {
+          logger.error({ 
+            msg: "C6: Erro ao cancelar cobrança (cobv)", 
+            txid, 
+            response: errCobv.response?.data, 
+            status: errCobv.response?.status 
+          });
+          throw errCobv;
+        }
       }
+      logger.error({ 
+        msg: "C6: Erro ao cancelar cobrança (cob)", 
+        txid, 
+        response: error.response?.data, 
+        status: error.response?.status 
+      });
+      throw error;
     }
   },
 
   async listarPixRecebidos(inicio: string, fim: string) {
     const token = await this.getAccessToken();
-    const { data } = await axios.get(`${env.C6_API_URL}/v2/pix`, {
-      params: { inicio, fim },
-      headers: { Authorization: `Bearer ${token}` },
-      httpsAgent: getHttpsAgent()
-    });
-    
-    // Normalização para o formato esperado pelo Job/Provider
-    const pixList = data.pix || [];
-    return pixList.map((pix: any) => ({
-      txid: pix.txid,
-      pix: [pix]
-    }));
+
+    // O C6 e o padrão BACEN costumam rejeitar milisegundos no formato date-time
+    const formattedInicio = inicio.replace(/\.\d{3}Z$/, 'Z');
+    const formattedFim = fim.replace(/\.\d{3}Z$/, 'Z');
+
+    try {
+      const fullUrl = `${env.C6_API_URL}/v2/pix/pix`;
+      const { data } = await axios.get(fullUrl, {
+        params: { inicio: formattedInicio, fim: formattedFim },
+        headers: { Authorization: `Bearer ${token}` },
+        httpsAgent: getHttpsAgent()
+      });
+      
+      logger.info({ url: fullUrl, params: { inicio: formattedInicio, fim: formattedFim } }, "PIX recebidos listados com sucesso");
+
+      // Normalização para o formato esperado pelo Job/Provider
+      const pixList = data.pix || [];
+      return pixList.map((pix: any) => ({
+        txid: pix.txid,
+        pix: [pix]
+      }));
+    } catch (err: any) {
+      const errorData = err.response?.data || err.message;
+      logger.error({ 
+        err: errorData, 
+        url: `${env.C6_API_URL}/v2/pix/pix`,
+        params: { inicio: formattedInicio, fim: formattedFim }
+      }, "Erro ao listar PIX recebidos no C6");
+      throw new Error(`Falha ao consultar extrato de PIX recebidos no C6: ${JSON.stringify(errorData)}`);
+    }
   },
 
   async configurarWebhook(webhookUrl: string) {
@@ -216,7 +270,12 @@ export const c6Service = {
       await this.syncWebhookDb(webhookUrl);
       return { status: "registrado", webhookUrl };
     } catch (error: any) {
-      logger.error({ msg: "Erro configurar Webhook C6", err: error.message });
+      logger.error({ 
+        msg: "C6: Erro ao configurar Webhook", 
+        url: webhookUrl,
+        response: error.response?.data, 
+        status: error.response?.status 
+      });
       throw error;
     }
   },
@@ -330,28 +389,49 @@ export const c6Service = {
    */
   async listarItensGrupo(groupId: string) {
     const token = await this.getAccessToken();
-    const { data } = await axios.get(`${C6_SCHEDULE_URL}/${groupId}/items`, {
-      headers: { 
-        Authorization: `Bearer ${token}`,
-        "partner-software-name": "Van360",
-        "partner-software-version": "1.0.0"
-      },
-      httpsAgent: getHttpsAgent()
-    });
-    return data;
+    try {
+      const { data } = await axios.get(`${C6_SCHEDULE_URL}/${groupId}/items`, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "partner-software-name": "Van360",
+          "partner-software-version": "1.0.0"
+        },
+        httpsAgent: getHttpsAgent()
+      });
+      return data;
+    } catch (error: any) {
+      logger.error({ 
+        msg: "C6: Erro ao listar itens do grupo", 
+        groupId, 
+        response: error.response?.data, 
+        status: error.response?.status 
+      });
+      throw error;
+    }
   },
 
   async removerItemAgendamento(groupId: string, itemId: string) {
     const token = await this.getAccessToken();
-    await axios.delete(`${C6_SCHEDULE_URL}/${groupId}/items/${itemId}`, {
-      headers: { 
-        Authorization: `Bearer ${token}`,
-        "partner-software-name": "Van360",
-        "partner-software-version": "1.0.0"
-      },
-      httpsAgent: getHttpsAgent()
-    });
-    return true;
+    try {
+      await axios.delete(`${C6_SCHEDULE_URL}/${groupId}/items/${itemId}`, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "partner-software-name": "Van360",
+          "partner-software-version": "1.0.0"
+        },
+        httpsAgent: getHttpsAgent()
+      });
+      return true;
+    } catch (error: any) {
+      logger.error({ 
+        msg: "C6: Erro ao remover item individual do agendamento", 
+        groupId,
+        itemId,
+        response: error.response?.data, 
+        status: error.response?.status 
+      });
+      throw error;
+    }
   },
 
   /**
@@ -360,22 +440,32 @@ export const c6Service = {
    */
   async submeterGrupo(groupId: string) {
     const token = await this.getAccessToken();
-    const url = `${C6_SCHEDULE_URL}/submit`; // Correção: API Docs indicam /submit no root path
+    const url = `${C6_SCHEDULE_URL}/submit`;
     logger.debug({ groupId, url }, "C6: Submetendo grupo para aprovação");
     
-    const response = await axios.post(url, {
-      group_id: groupId,
-      uploader_name: "Van360 Repasse Automático"
-    }, {
-      headers: { 
-        Authorization: `Bearer ${token}`,
-        "partner-software-name": "Van360",
-        "partner-software-version": "1.0.0"
-      },
-      httpsAgent: getHttpsAgent()
-    });
+    try {
+      const response = await axios.post(url, {
+        group_id: groupId,
+        uploader_name: "Van360 Repasse Automático"
+      }, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "partner-software-name": "Van360",
+          "partner-software-version": "1.0.0"
+        },
+        httpsAgent: getHttpsAgent()
+      });
 
-    return true;
+      return true;
+    } catch (error: any) {
+      logger.error({ 
+        msg: "C6: Erro ao submeter grupo para aprovação", 
+        groupId, 
+        response: error.response?.data, 
+        status: error.response?.status 
+      });
+      throw error;
+    }
   },
 
   /**
@@ -385,16 +475,27 @@ export const c6Service = {
   async removerItensAgendamento(groupId: string, itemIds: string[]) {
     const token = await this.getAccessToken();
     const payload = itemIds.map(id => ({ id }));
-    await axios.delete(`${C6_SCHEDULE_URL}/${groupId}/items`, {
-      data: payload,
-      headers: { 
-        Authorization: `Bearer ${token}`,
-        "partner-software-name": "Van360",
-        "partner-software-version": "1.0.0"
-      },
-      httpsAgent: getHttpsAgent()
-    });
-    return true;
+    try {
+      await axios.delete(`${C6_SCHEDULE_URL}/${groupId}/items`, {
+        data: payload,
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "partner-software-name": "Van360",
+          "partner-software-version": "1.0.0"
+        },
+        httpsAgent: getHttpsAgent()
+      });
+      return true;
+    } catch (error: any) {
+      logger.error({ 
+        msg: "C6: Erro ao remover lista de itens do agendamento", 
+        groupId, 
+        itemCount: itemIds.length,
+        response: error.response?.data, 
+        status: error.response?.status 
+      });
+      throw error;
+    }
   },
 
   /**
@@ -410,183 +511,193 @@ export const c6Service = {
     const headers = { Authorization: `Bearer ${token}` };
     const agent = getHttpsAgent();
 
-    try {
-      // 1. Cria lote temporário via /decode
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = toLocalDateString(tomorrow);
+    for (let globalAttempt = 1; globalAttempt <= 2; globalAttempt++) {
+      try {
+        // 1. Cria lote temporário via /decode
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowStr = toLocalDateString(tomorrow);
 
-      const payload = {
-        items: [{
-          amount: 0.01,
-          transaction_date: tomorrowStr, // Alguns bancos exigem agendamento p/ T+1
-          description: "Validacao de Chave - Van360",
-          content: chave,
-          payer_name: "Van360 Administracao", // Identidade do pagador pode ajudar
-          beneficiary_name: "VALIDACAO_PIX"   // Placeholder p/ incentivar o overwrite pelo banco
-        }]
-      };
+        const payload = {
+          items: [{
+            amount: 0.01,
+            transaction_date: tomorrowStr, // Alguns bancos exigem agendamento p/ T+1
+            description: "Validacao de Chave - Van360",
+            content: chave,
+            payer_name: "Van360 Administracao", // Identidade do pagador pode ajudar
+            beneficiary_name: "VALIDACAO_PIX"   // Placeholder p/ incentivar o overwrite pelo banco
+          }]
+        };
 
-      const { data: group } = await axios.post(`${C6_SCHEDULE_URL}/decode`, payload, { 
-        headers: {
+        const { data: group } = await axios.post(`${C6_SCHEDULE_URL}/decode`, payload, { 
+          headers: {
+            ...headers,
+            "partner-software-name": "Van360",
+            "partner-software-version": "1.0.0"
+          }, 
+          httpsAgent: agent 
+        });
+        const groupId = group.group_id;
+
+        // 2. Busca detalhes do item para obter Nome/CPF (DICT) - Polling para aguardar decodificação
+        let item: any;
+        const partnerHeaders = {
           ...headers,
           "partner-software-name": "Van360",
           "partner-software-version": "1.0.0"
-        }, 
-        httpsAgent: agent 
-      });
-      const groupId = group.group_id;
-
-      // 2. Busca detalhes do item para obter Nome/CPF (DICT) - Polling para aguardar decodificação
-      let item: any;
-      const partnerHeaders = {
-        ...headers,
-        "partner-software-name": "Van360",
-        "partner-software-version": "1.0.0"
-      };
-
-      for (let attempt = 1; attempt <= 15; attempt++) {
-        try {
-          const { data: itemsResponse } = await axios.get(`${C6_SCHEDULE_URL}/${groupId}/items`, { 
-            headers: partnerHeaders, 
-            httpsAgent: agent 
-          });
-          
-          item = itemsResponse.items?.[0] || itemsResponse?.[0];
-          
-          // Debug: Se estiver travado no READ_DATA mas sem nome, logamos o item inteiro
-          if (item?.status === "READ_DATA" && !item?.beneficiary_name) {
-             logger.debug({ attempt, item: JSON.parse(JSON.stringify(item)) }, "C6: Item em READ_DATA mas sem beneficiary_name ainda.");
-          }
-
-          if (item?.status === C6_STATUS_READ_DATA) {
-             logger.info({ attempt, status: item.status }, "C6: Chave validada como existente (READ_DATA)");
-             break;
-          }
-
-          if (item?.status === C6_STATUS_DECODE_ERROR) {
-             // Mapeamento de erro amigável para o usuário
-             const c6Msg = item.error_message?.toLowerCase() || "";
-             let msg = "Chave PIX não encontrada ou inexistente.";
-             
-             if (c6Msg.includes("limit") || c6Msg.includes("tente novamente")) {
-                msg = "O Banco Central está processando muitas requisições. Tente novamente em alguns instantes.";
-             }
-             
-             logger.error({ item }, `C6 Decode Error: ${msg}`);
-             throw new Error(msg);
-          }
-
-          logger.info({ attempt, status: item?.status }, "C6: Aguardando decodificação (DICT)...");
-        } catch (e: any) {
-          if (e.response?.status !== 422) {
-             logger.warn({ attempt, msg: e.message }, "C6: Erro inesperado no polling");
-             if (attempt > 3) throw e;
-          } else {
-             logger.info({ attempt }, "C6: Item ainda em processamento (422)...");
-             if (attempt >= 15) {
-                logger.warn("C6: Timeout limite atingido esperando o DICT validar os dados desta chave PIX.");
-                break; // Sai do for para lançar erro elegantemente embaixo.
-             }
-          }
-        }
-        await new Promise(r => setTimeout(r, 3000));
-      }
-
-      let nome = item?.beneficiary_name && item.beneficiary_name !== "VALIDACAO_PIX" ? item.beneficiary_name : null;
-      const cpfCnpj = item?.receiver_tax_id || item?.content;
-
-      // Se chegamos no status READ_DATA mas o banco omitiu o nome, consideramos válida (visto que o C6 mascara dados sensíveis)
-      if (!nome && item?.status === C6_STATUS_READ_DATA) {
-         nome = "TITULAR VALIDADO (C6)";
-      }
-
-      // 3. Deleta o lote imediatamente (formato array conforme YAML)
-      if (item?.id) {
-        await axios.delete(`${C6_SCHEDULE_URL}/${groupId}/items`, { 
-          headers: partnerHeaders, 
-          httpsAgent: agent,
-          data: [{ id: item.id }]
-        }).catch((err) => logger.warn({ err: err.message }, "C6: Erro ao limpar agendamento temporário"));
-      }
-
-      if (!nome) {
-         if (item?.status === 'READ_DATA') {
-           logger.warn("C6: DICT retornou Ok, mas nome omitido pelo banco. Aprovando genericamente.");
-           nome = "TITULAR VALIDADO (C6)";
-           return { nome, cpfCnpj: item?.receiver_tax_id || item?.content || chave };
-         }
-         throw new Error("Timeout: O banco demorou muito para validar sua chave. Tente novamente mais tarde.");
-      }
-
-      return { nome, cpfCnpj };
-    } catch (error: any) {
-      let errorMsg = error.message;
-
-      // Captura erro de formato do C6 (400 Bad Request)
-      if (error.response?.status === 400) {
-        errorMsg = "Formato de chave Pix inválido para o tipo selecionado.";
-      }
-
-      // SANDBOX BYPASS: Se estivermos em sandbox, permitimos o erro de validação (DICT é limitado)
-      if (this.isSandbox()) {
-        logger.warn({ 
-          chave, 
-          originalError: error.response?.data || error.message,
-          status: error.response?.status
-        }, "C6 Sandbox: Bypassing validation failure for testing purposes.");
-
-        return { 
-          nome: "TITULAR VALIDADO (SANDBOX)", 
-          cpfCnpj: chave.length <= 14 ? chave : "DOCUMENTO VALIDADO" 
         };
-      }
 
-      // FALLBACK: Se der 403 (Falta de permissão de Agendamento/Decode), tentamos criar uma cobrança de 0.01
-      if (error.response?.status === 403) {
-        logger.info({ chave }, "C6: Tentando validação via cobrança (fallback 403)");
-        try {
-          const testTxid = this.gerarTxid("VAL" + crypto.randomUUID().replace(/-/g, "").substring(0, 25));
-          const testPayload = {
-            calendario: { expiracao: 3600 },
-            valor: { original: "0.01" },
-            chave,
-            solicitacaoPagador: "Validacao de Conta Van360"
-          };
-          
-          const token = await this.getAccessToken();
-          const agent = getHttpsAgent();
-          const headers = { Authorization: `Bearer ${token}` };
+        for (let attempt = 1; attempt <= 15; attempt++) {
+          try {
+            const { data: itemsResponse } = await axios.get(`${C6_SCHEDULE_URL}/${groupId}/items`, { 
+              headers: partnerHeaders, 
+              httpsAgent: agent 
+            });
+            
+            item = itemsResponse.items?.[0] || itemsResponse?.[0];
+            
+            // Debug: Se estiver travado no READ_DATA mas sem nome, logamos o item inteiro
+            if (item?.status === "READ_DATA" && !item?.beneficiary_name) {
+               logger.debug({ attempt, item: JSON.parse(JSON.stringify(item)) }, "C6: Item em READ_DATA mas sem beneficiary_name ainda.");
+            }
 
-          await axios.put(`${env.C6_API_URL}/v2/pix/cob/${testTxid}`, testPayload, {
-            headers,
-            httpsAgent: agent
-          });
+            if (item?.status === C6_STATUS_READ_DATA) {
+               logger.info({ attempt, status: item.status }, "C6: Chave validada como existente (READ_DATA)");
+               break;
+            }
 
-          // Se chegou aqui, a chave é válida! Vamos cancelar logo em seguida.
-          axios.patch(`${env.C6_API_URL}/v2/pix/cob/${testTxid}`, 
-            { status: "REMOVIDA_PELO_USUARIO_RECEBEDOR" },
-            { headers, httpsAgent: agent }
-          ).catch(() => {});
+            if (item?.status === C6_STATUS_DECODE_ERROR) {
+               // Mapeamento de erro amigável para o usuário
+               const c6Msg = item.error_message?.toLowerCase() || "";
+               let msg = "Chave PIX não encontrada ou inexistente.";
+               
+               if (c6Msg.includes("limit") || c6Msg.includes("tente novamente") || c6Msg.includes("muitas requisições")) {
+                  msg = "O Banco Central está processando muitas requisições. Tente novamente em alguns instantes.";
+               }
+               
+               logger.error({ item }, `C6 Decode Error: ${msg}`);
+               throw new Error(msg);
+            }
+
+            logger.info({ attempt, status: item?.status }, "C6: Aguardando decodificação (DICT)...");
+          } catch (e: any) {
+            if (e.response?.status !== 422) {
+               logger.warn({ attempt, msg: e.message }, "C6: Erro inesperado no polling");
+               if (attempt > 3) throw e;
+            } else {
+               logger.info({ attempt }, "C6: Item ainda em processamento (422)...");
+               if (attempt >= 15) {
+                  logger.warn("C6: Timeout limite atingido esperando o DICT validar os dados desta chave PIX.");
+                  break; // Sai do for para lançar erro elegantemente embaixo.
+               }
+            }
+          }
+          await new Promise(r => setTimeout(r, 2500));
+        }
+
+        let nome = item?.beneficiary_name && item.beneficiary_name !== "VALIDACAO_PIX" ? item.beneficiary_name : null;
+        const cpfCnpj = item?.receiver_tax_id || item?.content;
+
+        // Se chegamos no status READ_DATA mas o banco omitiu o nome, consideramos válida (visto que o C6 mascara dados sensíveis)
+        if (!nome && item?.status === C6_STATUS_READ_DATA) {
+           nome = "TITULAR VALIDADO (C6)";
+        }
+
+        // 3. Deleta o lote imediatamente (formato array conforme YAML)
+        if (item?.id) {
+          await axios.delete(`${C6_SCHEDULE_URL}/${groupId}/items`, { 
+            headers: partnerHeaders, 
+            httpsAgent: agent,
+            data: [{ id: item.id }]
+          }).catch((err) => logger.warn({ err: err.message }, "C6: Erro ao limpar agendamento temporário"));
+        }
+
+        if (!nome) {
+           if (item?.status === 'READ_DATA') {
+             logger.warn("C6: DICT retornou Ok, mas nome omitido pelo banco. Aprovando genericamente.");
+             nome = "TITULAR VALIDADO (C6)";
+             return { nome, cpfCnpj: item?.receiver_tax_id || item?.content || chave };
+           }
+           throw new Error("Timeout: O banco demorou muito para validar sua chave. Tente novamente mais tarde.");
+        }
+
+        return { nome, cpfCnpj };
+      } catch (error: any) {
+        // Se for o erro transiente do BC, tentamos de novo 1 vez
+        if (error.message?.includes("processando muitas requisições") && globalAttempt === 1) {
+          logger.warn({ chave, globalAttempt }, "C6: Chave sofreu instabilidade no Banco Central. Tentando novamente em 5 segundos...");
+          await new Promise(r => setTimeout(r, 5000));
+          continue;
+        }
+
+        let errorMsg = error.message;
+
+        // Captura erro de formato do C6 (400 Bad Request)
+        if (error.response?.status === 400) {
+          errorMsg = "Formato de chave Pix inválido para o tipo selecionado.";
+        }
+
+        // SANDBOX BYPASS: Se estivermos em sandbox, permitimos o erro de validação (DICT é limitado)
+        if (this.isSandbox()) {
+          logger.warn({ 
+            chave, 
+            originalError: error.response?.data || error.message,
+            status: error.response?.status
+          }, "C6 Sandbox: Bypassing validation failure for testing purposes.");
 
           return { 
-            nome: "TITULAR VALIDADO (C6)", 
+            nome: "TITULAR VALIDADO (SANDBOX)", 
             cpfCnpj: chave.length <= 14 ? chave : "DOCUMENTO VALIDADO" 
           };
-        } catch (fallbackError: any) {
-          logger.error({ msg: "Erro no fallback de validação C6", err: fallbackError.response?.data || fallbackError.message });
-          throw new Error("O banco rejeitou esta chave PIX ou ela não pertence a esta conta.");
         }
-      }
 
-      logger.error({ 
-        msg: "Erro validarChavePix C6", 
-        err: error.response?.data || error.message,
-        status: error.response?.status,
-        errorMsg
-      });
-      throw new Error(errorMsg);
+        // FALLBACK: Se der 403 (Falta de permissão de Agendamento/Decode), tentamos criar uma cobrança de 0.01
+        if (error.response?.status === 403) {
+          logger.info({ chave }, "C6: Tentando validação via cobrança (fallback 403)");
+          try {
+            const testTxid = this.gerarTxid("VAL" + crypto.randomUUID().replace(/-/g, "").substring(0, 25));
+            const testPayload = {
+              calendario: { expiracao: 3600 },
+              valor: { original: "0.01" },
+              chave,
+              solicitacaoPagador: "Validacao de Conta Van360"
+            };
+            
+            const token = await this.getAccessToken();
+            const agent = getHttpsAgent();
+            const headers = { Authorization: `Bearer ${token}` };
+
+            await axios.put(`${env.C6_API_URL}/v2/pix/cob/${testTxid}`, testPayload, {
+              headers,
+              httpsAgent: agent
+            });
+
+            // Se chegou aqui, a chave é válida! Vamos cancelar logo em seguida.
+            axios.patch(`${env.C6_API_URL}/v2/pix/cob/${testTxid}`, 
+              { status: "REMOVIDA_PELO_USUARIO_RECEBEDOR" },
+              { headers, httpsAgent: agent }
+            ).catch(() => {});
+
+            return { 
+              nome: "TITULAR VALIDADO (C6)", 
+              cpfCnpj: chave.length <= 14 ? chave : "DOCUMENTO VALIDADO" 
+            };
+          } catch (fallbackError: any) {
+            logger.error({ msg: "Erro no fallback de validação C6", err: fallbackError.response?.data || fallbackError.message });
+            throw new Error("O banco rejeitou esta chave PIX ou ela não pertence a esta conta.");
+          }
+        }
+
+        logger.error({ 
+          msg: "Erro validarChavePix C6", 
+          err: error.response?.data || error.message,
+          status: error.response?.status,
+          errorMsg
+        });
+        throw new Error(errorMsg);
+      }
     }
+    throw new Error("Não foi possível validar sua chave PIX no momento devido a instabilidade no Banco Central. Tente novamente em instantes.");
   },
 
   async syncWebhookDb(url: string) {

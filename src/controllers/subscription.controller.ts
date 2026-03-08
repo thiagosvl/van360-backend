@@ -99,6 +99,29 @@ export const SubscriptionController = {
         }
     },
 
+    async regularizarAssinatura(request: FastifyRequest, reply: FastifyReply) {
+        const authUid = (request as AuthenticatedRequest).user?.id;
+        const { usuario_id } = request.body as { usuario_id?: string };
+
+        let usuarioId = usuario_id;
+        if (!usuarioId && authUid) {
+            const { data: usuario, error } = await supabaseAdmin
+                .from("usuarios").select("id").eq("auth_uid", authUid).single();
+            if (error || !usuario) return reply.status(404).send({ error: "Usuário não encontrado." });
+            usuarioId = usuario.id;
+        }
+
+        if (!usuarioId) return reply.status(400).send({ error: "Usuário não identificado." });
+
+        try {
+            const result = await subscriptionService.regularizarAssinatura(usuarioId);
+            return reply.status(200).send(result);
+        } catch (err: any) {
+            logger.error({ error: err.message, usuarioId }, "Falha na regularização de assinatura.");
+            return reply.status(400).send({ error: err.message });
+        }
+    },
+
     async criarAssinaturaPersonalizada(request: FastifyRequest, reply: FastifyReply) {
         const authUid = (request as AuthenticatedRequest).user?.id;
         const { quantidade, usuario_id } = request.body as { quantidade: number; usuario_id?: string };

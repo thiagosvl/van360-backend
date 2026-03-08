@@ -1,14 +1,16 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
-import { cobrancaNotificacaoService } from "../services/cobranca-notificacao.service.js";
 import { cobrancaPagamentoService } from "../services/cobranca-pagamento.service.js";
 import { cobrancaService } from "../services/cobranca.service.js";
+import { historicoService } from "../services/historico.service.js";
 import {
     createCobrancaSchema,
     listCobrancasFiltersSchema,
+    registrarPagamentoManualSchema,
     toggleNotificacoesSchema,
     updateCobrancaSchema
 } from "../types/dtos/cobranca.dto.js";
+import { AtividadeEntidadeTipo } from "../types/enums.js";
 
 export const cobrancaController = {
   create: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -66,8 +68,22 @@ export const cobrancaController = {
 
   listNotificacoes: async (request: FastifyRequest, reply: FastifyReply) => {
     const { cobrancaId } = request.params as { cobrancaId: string };
-    const notificacoes = await cobrancaNotificacaoService.listByCobrancaId(cobrancaId);
-    return reply.status(200).send(notificacoes);
+    const historico = await historicoService.listByEntidade(AtividadeEntidadeTipo.COBRANCA, cobrancaId);
+    
+    // Mapeia para o formato que o frontend antigo ou legados esperariam,
+    // mas priorizando o conteúdo do histórico de atividades.
+    const notificacoesOldFormat = historico
+      .filter(h => h.acao === 'NOTIFICACAO_WHATSAPP')
+      .map(h => ({
+        id: h.id,
+        cobranca_id: h.entidade_id,
+        tipo_evento: h.meta?.tipo_evento || 'MANUAL',
+        canal: h.meta?.canal || 'WHATSAPP',
+        data_envio: h.created_at,
+        tipo_origem: h.meta?.tipo_origem || 'manual'
+      }));
+
+    return reply.status(200).send(notificacoesOldFormat);
   },
 
   createNotificacao: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -97,6 +113,14 @@ export const cobrancaController = {
     const { id } = request.params as { id: string };
     logger.info({ cobrancaId: id }, "CobrancaController.desfazerPagamentoManual - Starting");
     const cobranca = await cobrancaPagamentoService.desfazerPagamento(id);
+    return reply.status(200).send(cobranca);
+  },
+
+  registrarPagamentoManual: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    logger.info({ cobrancaId: id }, "CobrancaController.registrarPagamentoManual - Starting");
+    const data = registrarPagamentoManualSchema.parse(request.body);
+    const cobranca = await cobrancaPagamentoService.registrarPagamentoManual(id, data);
     return reply.status(200).send(cobranca);
   }
 };

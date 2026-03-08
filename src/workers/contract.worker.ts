@@ -5,7 +5,8 @@ import { redisConfig } from '../config/redis.js';
 import { supabaseAdmin } from '../config/supabase.js';
 import { ContractJobData, QUEUE_NAME_CONTRACT } from '../queues/contract.queue.js';
 import { addToWhatsappQueue } from '../queues/whatsapp.queue.js';
-import { ContratoProvider } from '../types/enums.js';
+import { historicoService } from '../services/historico.service.js';
+import { AtividadeAcao, AtividadeEntidadeTipo, ContratoProvider } from '../types/enums.js';
 import { getFirstName } from '../utils/format.js';
 
 /**
@@ -14,7 +15,7 @@ import { getFirstName } from '../utils/format.js';
 export const contractWorker = new Worker<ContractJobData>(
     QUEUE_NAME_CONTRACT,
     async (job: Job<ContractJobData>) => {
-        const { contratoId, providerName, dadosContrato, passageiro, tokenAcesso } = job.data;
+        const { contratoId, usuarioId, providerName, dadosContrato, passageiro, tokenAcesso } = job.data;
         
         logger.info({ jobId: job.id, contratoId }, "[Worker] Iniciando processamento de contrato...");
 
@@ -62,7 +63,21 @@ export const contractWorker = new Worker<ContractJobData>(
                     phone: passageiro.telefone_responsavel,
                     message: mensagem,
                     context: "CONTRACT_GENERATION",
-                    userId: dadosContrato.usuarioId // Se disponível nos dados
+                    userId: usuarioId
+                });
+
+                // --- LOG DE AUDITORIA ---
+                historicoService.log({
+                    usuario_id: usuarioId,
+                    entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
+                    entidade_id: passageiro.id,
+                    acao: AtividadeAcao.NOTIFICACAO_WHATSAPP,
+                    descricao: `Link do contrato enviado via WhatsApp para ${passageiro.nome_responsavel}.`,
+                    meta: { 
+                        contrato_id: contratoId, 
+                        contexto: "CONTRATO_GERADO",
+                        canal: "WHATSAPP"
+                    }
                 });
 
                 logger.info({ jobId: job.id, phone: passageiro.telefone_responsavel }, "[Worker] Notificação de contrato enfileirada.");

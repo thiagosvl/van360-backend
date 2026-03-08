@@ -63,3 +63,10 @@ export const notificacaoPayloadSchema = z.object({
 }).passthrough();
 
 export type NotificacaoPayloadDTO = z.infer<typeof notificacaoPayloadSchema>;
+export const registrarPagamentoManualSchema = z.object({
+    valor_pago: z.union([z.number(), z.string()]).transform(v => typeof v === 'string' ? moneyToNumber(v) : v).optional(),
+    data_pagamento: z.string().optional(),
+    tipo_pagamento: z.string().optional(),
+});
+
+export type RegistrarPagamentoManualDTO = z.infer<typeof registrarPagamentoManualSchema>;

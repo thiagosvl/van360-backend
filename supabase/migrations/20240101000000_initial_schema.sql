@@ -164,19 +164,6 @@ CREATE TABLE IF NOT EXISTS "public"."app_updates" (
 ALTER TABLE "public"."app_updates" OWNER TO "postgres";
 
 
-CREATE TABLE IF NOT EXISTS "public"."assinatura_notificacoes" (
-    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "assinatura_cobranca_id" "uuid",
-    "tipo_evento" character varying(50) NOT NULL,
-    "canal" character varying(20) DEFAULT 'WHATSAPP'::character varying,
-    "data_envio" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()),
-    "usuario_id" "uuid"
-);
-
-
-ALTER TABLE "public"."assinatura_notificacoes" OWNER TO "postgres";
-
-
 CREATE TABLE IF NOT EXISTS "public"."assinaturas_cobrancas" (
     "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
     "usuario_id" "uuid",
@@ -230,21 +217,6 @@ CREATE TABLE IF NOT EXISTS "public"."assinaturas_usuarios" (
 
 
 ALTER TABLE "public"."assinaturas_usuarios" OWNER TO "postgres";
-
-
-CREATE TABLE IF NOT EXISTS "public"."cobranca_notificacoes" (
-    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "cobranca_id" "uuid" NOT NULL,
-    "tipo_origem" character varying(10) NOT NULL,
-    "tipo_evento" character varying(50) NOT NULL,
-    "canal" character varying(20) NOT NULL,
-    "data_envio" timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT "chk_canal" CHECK ((("canal")::"text" = ANY ((ARRAY['whatsapp'::character varying, 'email'::character varying, 'sms'::character varying])::"text"[]))),
-    CONSTRAINT "chk_tipo_origem" CHECK ((("tipo_origem")::"text" = ANY ((ARRAY['automatica'::character varying, 'manual'::character varying])::"text"[])))
-);
-
-
-ALTER TABLE "public"."cobranca_notificacoes" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."cobrancas" (
@@ -550,8 +522,7 @@ ALTER TABLE ONLY "public"."app_updates"
 
 
 
-ALTER TABLE ONLY "public"."assinatura_notificacoes"
-    ADD CONSTRAINT "assinatura_notificacoes_pkey" PRIMARY KEY ("id");
+-- Primary key removida
 
 
 
@@ -565,8 +536,7 @@ ALTER TABLE ONLY "public"."assinaturas_usuarios"
 
 
 
-ALTER TABLE ONLY "public"."cobranca_notificacoes"
-    ADD CONSTRAINT "cobranca_notificacoes_pkey" PRIMARY KEY ("id");
+-- Primary key removida
 
 
 
@@ -684,7 +654,7 @@ CREATE UNIQUE INDEX "assinaturas_usuarios_usuario_id_idx1" ON "public"."assinatu
 
 
 
-CREATE INDEX "idx_ass_notificacoes_cobranca" ON "public"."assinatura_notificacoes" USING "btree" ("assinatura_cobranca_id", "tipo_evento");
+-- Index removido
 
 
 
@@ -738,13 +708,7 @@ CREATE OR REPLACE TRIGGER "update_escolas_updated_at" BEFORE UPDATE ON "public".
 
 
 
-ALTER TABLE ONLY "public"."assinatura_notificacoes"
-    ADD CONSTRAINT "assinatura_notificacoes_assinatura_cobranca_id_fkey" FOREIGN KEY ("assinatura_cobranca_id") REFERENCES "public"."assinaturas_cobrancas"("id") ON UPDATE CASCADE ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."assinatura_notificacoes"
-    ADD CONSTRAINT "assinatura_notificacoes_usuario_id_fkey" FOREIGN KEY ("usuario_id") REFERENCES "public"."usuarios"("id") ON UPDATE CASCADE ON DELETE SET NULL;
+-- Foreign keys removidas
 
 
 
@@ -768,8 +732,7 @@ ALTER TABLE ONLY "public"."assinaturas_usuarios"
 
 
 
-ALTER TABLE ONLY "public"."cobranca_notificacoes"
-    ADD CONSTRAINT "cobranca_notificacoes_cobranca_id_fkey" FOREIGN KEY ("cobranca_id") REFERENCES "public"."cobrancas"("id") ON UPDATE CASCADE ON DELETE CASCADE;
+-- Foreign key removida
 
 
 
@@ -1178,12 +1141,6 @@ GRANT ALL ON TABLE "public"."app_updates" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."assinatura_notificacoes" TO "anon";
-GRANT ALL ON TABLE "public"."assinatura_notificacoes" TO "authenticated";
-GRANT ALL ON TABLE "public"."assinatura_notificacoes" TO "service_role";
-
-
-
 GRANT ALL ON TABLE "public"."assinaturas_cobrancas" TO "anon";
 GRANT ALL ON TABLE "public"."assinaturas_cobrancas" TO "authenticated";
 GRANT ALL ON TABLE "public"."assinaturas_cobrancas" TO "service_role";
@@ -1193,12 +1150,6 @@ GRANT ALL ON TABLE "public"."assinaturas_cobrancas" TO "service_role";
 GRANT ALL ON TABLE "public"."assinaturas_usuarios" TO "anon";
 GRANT ALL ON TABLE "public"."assinaturas_usuarios" TO "authenticated";
 GRANT ALL ON TABLE "public"."assinaturas_usuarios" TO "service_role";
-
-
-
-GRANT ALL ON TABLE "public"."cobranca_notificacoes" TO "anon";
-GRANT ALL ON TABLE "public"."cobranca_notificacoes" TO "authenticated";
-GRANT ALL ON TABLE "public"."cobranca_notificacoes" TO "service_role";
 
 
 
@@ -1350,11 +1301,8 @@ BEGIN
   -- 1. DELETE non-critical data (Physical Deletion)
   DELETE FROM "public"."pre_passageiros" WHERE "usuario_id" = target_user_id;
   DELETE FROM "public"."pix_validacao_pendente" WHERE "usuario_id" = target_user_id;
-  DELETE FROM "public"."cobranca_notificacoes" WHERE "cobranca_id" IN (
-    SELECT id FROM "public"."cobrancas" WHERE "usuario_id" = target_user_id
-  );
-  DELETE FROM "public"."assinatura_notificacoes" WHERE "usuario_id" = target_user_id;
   DELETE FROM "public"."contratos" WHERE "usuario_id" = target_user_id;
+  DELETE FROM "public"."historico_atividades" WHERE "usuario_id" = target_user_id;
 
   -- 2. ANONYMIZE Core User Data
   UPDATE "public"."usuarios"
@@ -1527,48 +1475,6 @@ BEFORE UPDATE ON "public"."contratos"
 FOR EACH ROW
 EXECUTE FUNCTION "public"."update_updated_at_column"();
 
--- Tabela: contratos_templates
-CREATE TABLE IF NOT EXISTS "public"."contratos_templates" (
-    "id" UUID DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
-    "nome" VARCHAR(255) NOT NULL,
-    "descricao" TEXT,
-    "arquivo_url" TEXT NOT NULL,
-    "ativo" BOOLEAN DEFAULT TRUE NOT NULL,
-    "campos_variaveis" JSONB DEFAULT '[]'::jsonb,
-    "created_at" TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-    "updated_at" TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
-);
-
-ALTER TABLE "public"."contratos_templates" OWNER TO "postgres";
-
-COMMENT ON TABLE "public"."contratos_templates" IS 'Templates de contratos (PDFs base)';
-COMMENT ON COLUMN "public"."contratos_templates"."campos_variaveis" IS 'Lista de campos que podem ser preenchidos dinamicamente';
-
--- Trigger para atualizar updated_at
-CREATE TRIGGER "update_contratos_templates_updated_at"
-BEFORE UPDATE ON "public"."contratos_templates"
-FOR EACH ROW
-EXECUTE FUNCTION "public"."update_updated_at_column"();
-
--- Tabela: contratos_notificacoes
-CREATE TABLE IF NOT EXISTS "public"."contratos_notificacoes" (
-    "id" UUID DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
-    "contrato_id" UUID NOT NULL REFERENCES "public"."contratos"("id") ON DELETE CASCADE,
-    "tipo_evento" VARCHAR(50) NOT NULL,
-    "canal" VARCHAR(20) DEFAULT 'WHATSAPP' NOT NULL,
-    "data_envio" TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-    "sucesso" BOOLEAN DEFAULT TRUE NOT NULL,
-    "mensagem_erro" TEXT,
-    
-    CONSTRAINT "chk_contratos_notificacoes_canal" CHECK ("canal" IN ('whatsapp', 'email', 'sms'))
-);
-
-ALTER TABLE "public"."contratos_notificacoes" OWNER TO "postgres";
-
-CREATE INDEX "idx_contratos_notificacoes_contrato" ON "public"."contratos_notificacoes"("contrato_id");
-
-COMMENT ON TABLE "public"."contratos_notificacoes" IS 'Registro de notificações enviadas relacionadas a contratos';
-COMMENT ON COLUMN "public"."contratos_notificacoes"."tipo_evento" IS 'Tipo de evento: contrato_criado, link_enviado, assinado, cancelado';
 
 
 -- =====================================================
@@ -1660,3 +1566,32 @@ COMMENT ON TABLE "public"."repasses" IS 'Máquina de estados de repasse (transfe
 COMMENT ON COLUMN "public"."repasses"."versao" IS 'Lock otimista: incrementado a cada transição para prevenir race conditions.';
 COMMENT ON COLUMN "public"."repasses"."gateway_group_id" IS 'ID do lote/grupo no gateway bancário (genérico).';
 COMMENT ON TABLE "public"."repasse_transicoes" IS 'Audit trail completo de todas as transições de estado dos repasses.';
+
+
+-- =====================================================
+-- SISTEMA UNIFICADO DE AUDITORIA E HISTÓRICO
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS "public"."historico_atividades" (
+    "id" UUID DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    "usuario_id" UUID NOT NULL REFERENCES "public"."usuarios"("id") ON DELETE CASCADE,
+    "entidade_id" UUID NOT NULL,
+    "entidade_tipo" TEXT NOT NULL,
+    "acao" TEXT NOT NULL,
+    "descricao" TEXT NOT NULL,
+    "meta" JSONB DEFAULT '{}'::jsonb,
+    "ip_address" TEXT,
+    "created_at" TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+ALTER TABLE "public"."historico_atividades" OWNER TO "postgres";
+
+CREATE INDEX "idx_hist_entidade" ON "public"."historico_atividades" ("entidade_tipo", "entidade_id");
+CREATE INDEX "idx_hist_usuario" ON "public"."historico_atividades" ("usuario_id", "created_at" DESC);
+
+COMMENT ON TABLE "public"."historico_atividades" IS 'Tabela unificada para logs de auditoria e histórico de atividades do sistema.';
+COMMENT ON COLUMN "public"."historico_atividades"."meta" IS 'Dados contextuais da ação (valores antigos/novos, payloads de API, etc).';
+
+GRANT ALL ON TABLE "public"."historico_atividades" TO "anon";
+GRANT ALL ON TABLE "public"."historico_atividades" TO "authenticated";
+GRANT ALL ON TABLE "public"."historico_atividades" TO "service_role";

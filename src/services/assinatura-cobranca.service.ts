@@ -2,9 +2,10 @@ import crypto from "node:crypto";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
-import { AssinaturaBillingType, AssinaturaCobrancaStatus, ConfigKey } from "../types/enums.js";
+import { AssinaturaBillingType, AssinaturaCobrancaStatus, AtividadeAcao, AtividadeEntidadeTipo, ConfigKey } from "../types/enums.js";
 import { toLocalDateString } from '../utils/date.utils.js';
 import { getConfigNumber } from "./configuracao.service.js";
+import { historicoService } from "./historico.service.js";
 import { paymentService } from "./payment.service.js";
 
 export const assinaturaCobrancaService = {
@@ -277,6 +278,16 @@ export const assinaturaCobrancaService = {
                 logger.error({ updateError, cobrancaId: cobranca.id }, "Erro ao atualizar cobrança com dados do PIX");
             }
 
+            // --- LOG DE AUDITORIA ---
+            historicoService.log({
+                usuario_id: usuarioId,
+                entidade_tipo: AtividadeEntidadeTipo.ASSINATURA,
+                entidade_id: cobranca.id,
+                acao: AtividadeAcao.ASSINATURA_PAGAMENTO,
+                descricao: `Cobrança de ativação de assinatura gerada (Valor: R$ ${valor.toFixed(2)}).`,
+                meta: { valor, status: 'pendente', tipo: 'ativacao' }
+            });
+
 
         } catch (err: any) {
             logger.error({ err, cobrancaId: cobranca.id }, "Falha ao gerar PIX para ativação.");
@@ -315,6 +326,17 @@ export const assinaturaCobrancaService = {
         // 2. Gerar PIX (Reaproveita lógica interna)
         try {
              await this.gerarPixParaCobranca(cobranca.id);
+
+             // --- LOG DE AUDITORIA ---
+             historicoService.log({
+                usuario_id: usuarioId,
+                entidade_tipo: AtividadeEntidadeTipo.ASSINATURA,
+                entidade_id: cobranca.id,
+                acao: AtividadeAcao.ASSINATURA_PAGAMENTO,
+                descricao: `Cobrança de renovação de assinatura gerada automaticamente (Valor: R$ ${valor.toFixed(2)}).`,
+                meta: { valor, status: 'pendente', tipo: 'renovacao' }
+             });
+
              return { cobranca, generatedPix: true };
         } catch (err: any) {
             logger.error({ err, cobrancaId: cobranca.id }, "Falha CRÍTICA ao gerar PIX de renovação. Realizando Rollback.");

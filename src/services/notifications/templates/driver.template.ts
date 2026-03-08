@@ -19,6 +19,7 @@ export interface DriverContext {
     // New fields for flexible Lego composition
     pixPayload?: string; 
     isActivation?: boolean; // Se é o primeiro pagamento (Onboarding)
+    skipPixStep?: boolean; 
     chavePix?: string;
     tipoChavePix?: string;
 }
@@ -196,7 +197,7 @@ export const DriverTemplates = {
         // 2. Lembretes Importantes (APENAS NA ATIVAÇÃO E PLANO PROFISSIONAL)
         const isProfessional = ctx.nomePlano.toLowerCase().includes("profissional");
         
-        if (ctx.isActivation && isProfessional) {
+        if (ctx.isActivation && isProfessional && !ctx.skipPixStep) {
             parts.push({
                 type: "text",
                 content: `⚠️ *Próximos Passos*\n\n` +

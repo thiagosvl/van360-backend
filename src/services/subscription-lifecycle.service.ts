@@ -1,6 +1,7 @@
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
-import { AssinaturaStatus } from "../types/enums.js";
+import { AssinaturaStatus, AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
+import { historicoService } from "./historico.service.js";
 
 export const subscriptionLifecycleService = {
 
@@ -54,6 +55,13 @@ export const subscriptionLifecycleService = {
     },
 
     async suspenderAssinatura(assinaturaId: string, motivo: string): Promise<void> {
+        // Buscar usuario_id antes
+        const { data: sub } = await supabaseAdmin
+            .from("assinaturas_usuarios")
+            .select("usuario_id")
+            .eq("id", assinaturaId)
+            .single();
+
         const { error } = await supabaseAdmin
             .from("assinaturas_usuarios")
             .update({ 
@@ -65,11 +73,28 @@ export const subscriptionLifecycleService = {
             
         if (error) throw new Error(`Erro ao suspender assinatura: ${error.message}`);
         
-        // Log de auditoria ou ação adicional pode ser colocado aqui
         logger.info({ assinaturaId, motivo }, "Assinatura SUSPENSA via Lifecycle Service");
+
+        if (sub) {
+            historicoService.log({
+                usuario_id: sub.usuario_id,
+                entidade_tipo: AtividadeEntidadeTipo.ASSINATURA,
+                entidade_id: assinaturaId,
+                acao: AtividadeAcao.USUARIO_SUSPENSO,
+                descricao: `Assinatura suspensa: ${motivo}`,
+                meta: { motivo }
+            });
+        }
     },
 
     async cancelarAssinaturaImediato(assinaturaId: string, motivo: string): Promise<void> {
+        // Buscar usuario_id antes
+        const { data: sub } = await supabaseAdmin
+            .from("assinaturas_usuarios")
+            .select("usuario_id")
+            .eq("id", assinaturaId)
+            .single();
+
         const { error } = await supabaseAdmin
             .from("assinaturas_usuarios")
             .update({ 
@@ -83,7 +108,16 @@ export const subscriptionLifecycleService = {
         
         logger.info({ assinaturaId, motivo }, "Assinatura CANCELADA (Imediata) via Lifecycle Service");
 
-        // Notificação de encerramento removida (fluxo simplificado)
+        if (sub) {
+            historicoService.log({
+                usuario_id: sub.usuario_id,
+                entidade_tipo: AtividadeEntidadeTipo.ASSINATURA,
+                entidade_id: assinaturaId,
+                acao: AtividadeAcao.ASSINATURA_CANCELADA,
+                descricao: `Assinatura cancelada imediatamente: ${motivo}`,
+                meta: { motivo }
+            });
+        }
     },
     
     async inativarUsuarioPorAbandono(usuarioId: string): Promise<void> {
@@ -95,5 +129,14 @@ export const subscriptionLifecycleService = {
         if (error) throw new Error(`Erro ao inativar usuário: ${error.message}`);
         
         logger.info({ usuarioId }, "Usuário INATIVADO por abandono via Lifecycle Service");
+
+        historicoService.log({
+            usuario_id: usuarioId,
+            entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+            entidade_id: usuarioId,
+            acao: AtividadeAcao.USUARIO_EXCLUIDO,
+            descricao: `Conta inativada automaticamente por abandono (>30 dias suspenso).`,
+            meta: { motivo: "abandono" }
+        });
     }
 };

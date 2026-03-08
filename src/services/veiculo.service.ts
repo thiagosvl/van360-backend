@@ -1,6 +1,8 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { CreateVeiculoDTO, ListVeiculosFiltersDTO, UpdateVeiculoDTO, Veiculo, VeiculoComContagem } from "../types/dtos/veiculo.dto.js";
+import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { cleanString } from "../utils/string.utils.js";
+import { historicoService } from "./historico.service.js";
 
 // Helper Methods
 const _prepareVeiculoData = (data: Partial<CreateVeiculoDTO>, usuarioId?: string, isUpdate: boolean = false): any => {
@@ -35,6 +37,16 @@ export const veiculoService = {
             .single();
         if (error) throw error;
 
+        // --- LOG DE AUDITORIA ---
+        historicoService.log({
+            usuario_id: inserted.usuario_id,
+            entidade_tipo: AtividadeEntidadeTipo.VEICULO,
+            entidade_id: inserted.id,
+            acao: AtividadeAcao.VEICULO_CRIADO,
+            descricao: `Novo veículo ${inserted.placa} (${inserted.modelo || 'Sem modelo'}) cadastrado.`,
+            meta: { placa: inserted.placa, modelo: inserted.modelo }
+        });
+
         return inserted as Veiculo;
     },
 
@@ -51,6 +63,16 @@ export const veiculoService = {
             .single();
         if (error) throw error;
 
+        // --- LOG DE AUDITORIA ---
+        historicoService.log({
+            usuario_id: updated.usuario_id,
+            entidade_tipo: AtividadeEntidadeTipo.VEICULO,
+            entidade_id: id,
+            acao: AtividadeAcao.VEICULO_EDITADO,
+            descricao: `Dados do veículo ${updated.placa} foram atualizados.`,
+            meta: { placa: updated.placa, campos: Object.keys(data) }
+        });
+
         return updated as Veiculo;
     },
 
@@ -62,6 +84,16 @@ export const veiculoService = {
         if (veiculo?.id) {
             const { error } = await supabaseAdmin.from("veiculos").delete().eq("id", id);
             if (error) throw error;
+
+            // --- LOG DE AUDITORIA ---
+            historicoService.log({
+                usuario_id: veiculo.usuario_id,
+                entidade_tipo: AtividadeEntidadeTipo.VEICULO,
+                entidade_id: id,
+                acao: AtividadeAcao.VEICULO_EXCLUIDO,
+                descricao: `Veículo ${veiculo.placa} foi excluído permanentemente do sistema.`,
+                meta: { placa: veiculo.placa, backup: veiculo }
+            });
         }
     },
 
@@ -154,6 +186,19 @@ export const veiculoService = {
 
         if (error) {
             throw new Error(`Falha ao ${novoStatus ? "ativar" : "desativar"} o veículo.`);
+        }
+
+        // --- LOG DE AUDITORIA ---
+        const { data: v } = await supabaseAdmin.from("veiculos").select("usuario_id, placa").eq("id", veiculoId).single();
+        if (v) {
+            historicoService.log({
+                usuario_id: v.usuario_id,
+                entidade_tipo: AtividadeEntidadeTipo.VEICULO,
+                entidade_id: veiculoId,
+                acao: AtividadeAcao.VEICULO_STATUS,
+                descricao: `Veículo ${v.placa} foi ${novoStatus ? 'ATIVADO' : 'DESATIVADO'}.`,
+                meta: { ativo: novoStatus }
+            });
         }
 
         return novoStatus;
