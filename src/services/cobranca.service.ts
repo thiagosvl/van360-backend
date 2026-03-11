@@ -80,14 +80,12 @@ export const cobrancaService = {
     const shouldGeneratePix =
       canGeneratePix &&
       !isPaid &&
+      !isPastDue &&
       passageiro.cpf_responsavel &&
       passageiro.nome_responsavel;
 
     if (shouldGeneratePix) {
       if (options.gerarPixAsync) {
-        // MODO BATCH (ASSÍNCRONO)
-        // Enfileira e deixa o Worker registrar depois.
-        // O registro nasce sem PIX, o worker atualiza.
         logger.info({ cobrancaId }, "Enfileirando geração de PIX (Async)...");
         await addToPixQueue({
           cobrancaId,
@@ -233,8 +231,12 @@ export const cobrancaService = {
 
       const passageiro = cobrancaOriginal.passageiro || cobrancaOriginal.passageiros;
       const isStillPending = (data.status || cobrancaOriginal.status) !== CobrancaStatus.PAGO;
+
+      const novoVencimento = data.data_vencimento !== undefined ? data.data_vencimento : cobrancaOriginal.data_vencimento;
+      const todayStr = toLocalDateString(new Date());
+      const isPastDue = novoVencimento < todayStr;
       
-      if (canGeneratePixNow && passageiro?.cpf_responsavel && passageiro?.nome_responsavel && isStillPending) {
+      if (canGeneratePixNow && passageiro?.cpf_responsavel && passageiro?.nome_responsavel && isStillPending && !isPastDue) {
         shouldGenerateNewPix = true;
       }
     }

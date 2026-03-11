@@ -137,7 +137,7 @@ export const formatAddress = (data: { logradouro?: string; numero?: string; bair
     const parts = [
         `${data.logradouro}${data.numero ? `, ${data.numero}` : ""}`,
         data.bairro,
-        `${data.cidade}${data.estado ? `/${data.estado}` : ""}`
+        `${data.cidade}${data.estado ? `/${data.estado.toUpperCase()}` : ""}`
     ].filter(Boolean);
     return parts.join(" - ");
 };
