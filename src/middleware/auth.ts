@@ -30,7 +30,7 @@ export async function verifySupabaseJWT(
     // This prevents access even if the token is valid (e.g. inactive user)
     const { data: profile, error: profileError } = await supabaseAdmin
         .from("usuarios")
-        .select("ativo")
+        .select("id, ativo")
         .eq("auth_uid", user.user.id)
         .maybeSingle();
 
@@ -48,6 +48,7 @@ export async function verifySupabaseJWT(
     }
 
     (request as any).user = user.user;
+    (request as any).usuario_id = profile.id;
 
   } catch (err: any) {
     console.error("[AuthMiddleware] Unexpected Error:", err);

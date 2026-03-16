@@ -3,7 +3,7 @@ import { DRIVER_EVENT_PAYMENT_CONFIRMED } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
 import { addToReceiptQueue } from "../../queues/receipt.queue.js";
-import { AssinaturaTipoPagamento } from "../../types/enums.js";
+import { AssinaturaTipoPagamento, AtividadeEntidadeTipo, PixKeyStatus } from "../../types/enums.js";
 import { StandardPaymentPayload } from "../../types/webhook.js";
 import { toLocalDateString } from "../../utils/date.utils.js";
 import { processarPagamentoAssinatura } from "../assinatura-pagamento.service.js";
@@ -71,8 +71,14 @@ export const webhookAssinaturaHandler = {
                 pagadorNome: usuario?.nome || "Assinante",
                 descricao: `Mensalidade - ${nomePlano}`,
                 metodoPagamento: AssinaturaTipoPagamento.PIX,
-                tipo: 'ASSINATURA'
+                tipo: AtividadeEntidadeTipo.ASSINATURA
             };
+
+            const { data: userData } = await supabaseAdmin
+                .from("usuarios")
+                .select("status_chave_pix")
+                .eq("id", cobranca.usuario_id)
+                .single();
 
             await addToReceiptQueue({
                 receiptData,
@@ -83,7 +89,8 @@ export const webhookAssinaturaHandler = {
                         nomeMotorista: usuario?.nome,
                         nomePlano: nomePlano,
                         dataVencimento: vigenciaFim,
-                        isActivation: result?.isOnboardingPayment
+                        isActivation: result?.isOnboardingPayment,
+                        skipPixStep: userData?.status_chave_pix === PixKeyStatus.VALIDADA
                     }
                 }
             });

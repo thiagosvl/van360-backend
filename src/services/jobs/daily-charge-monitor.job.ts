@@ -7,9 +7,10 @@ import {
 } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
-import { AssinaturaStatus, CobrancaStatus, ConfigKey } from "../../types/enums.js";
+import { AssinaturaStatus, AtividadeAcao, AtividadeEntidadeTipo, CobrancaStatus, ConfigKey } from "../../types/enums.js";
 import { toLocalDateString } from "../../utils/date.utils.js";
 import { getConfigNumber } from "../configuracao.service.js";
+import { historicoService } from "../historico.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 
 interface JobResult {
@@ -108,16 +109,16 @@ export const dailyChargeMonitorJob = {
 
                 if (!context) continue;
 
-                // 4. Verificar se JÁ ENVIAMOS hoje (Idempotência Diária)
+                // 4. Verificar se JÁ ENVIAMOS hoje (Idempotência Diária) via Histórico de Atividades
                 if (!params.force) {
-                    const { count } = await supabaseAdmin
-                        .from("cobranca_notificacoes")
-                        .select("id", { count: "exact", head: true })
-                        .eq("cobranca_id", cobranca.id)
-                        .eq("tipo_evento", context)
-                        .gte("data_envio", hojeStr + "T00:00:00"); 
+                    const historico = await historicoService.listByEntidade(AtividadeEntidadeTipo.COBRANCA, cobranca.id);
+                    const jaEnviadoHoje = historico.some(h => 
+                        h.acao === AtividadeAcao.NOTIFICACAO_WHATSAPP && 
+                        h.meta?.tipo_evento === context &&
+                        new Date(h.created_at).toDateString() === hoje.toDateString()
+                    );
                     
-                    if (count && count > 0) {
+                    if (jaEnviadoHoje) {
                         continue; // Já processado hoje
                     }
                 }
@@ -153,13 +154,19 @@ export const dailyChargeMonitorJob = {
                            .update({ data_envio_ultima_notificacao: now })
                            .eq("id", cobranca.id);
 
-                        // 2. Gravar log histórico
-                        await supabaseAdmin.from("cobranca_notificacoes").insert({
-                            cobranca_id: cobranca.id,
-                            tipo_evento: context,
-                            tipo_origem: params.force ? JOB_ORIGIN_FORCE : JOB_ORIGIN_DAILY,
-                            canal: "WHATSAPP",
-                            data_envio: now.toISOString()
+                        // 2. Gravar log histórico unificado
+                        historicoService.log({
+                            usuario_id: cobranca.usuario_id,
+                            entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
+                            entidade_id: cobranca.id,
+                            acao: AtividadeAcao.NOTIFICACAO_WHATSAPP,
+                            descricao: `Aviso de cobrança (${context}) enviado automaticamente via WhatsApp.`,
+                            meta: {
+                                tipo_evento: context,
+                                tipo_origem: params.force ? JOB_ORIGIN_FORCE : JOB_ORIGIN_DAILY,
+                                canal: "WHATSAPP",
+                                automatico: true
+                            }
                         });
                         result.sent++;
                     } else {

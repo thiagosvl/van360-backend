@@ -1,12 +1,13 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { appRoutes } from "./app.routes.js";
-import { contractRoutes } from "./contract.routes.js";
 import assinaturaCobrancaRoute from "./assinatura-cobranca.route.js";
 import authRoutes from "./auth.routes.js";
 import cobrancaRoutes from "./cobranca.routes.js";
+import { contractRoutes } from "./contract.routes.js";
 import escolaRoutes from "./escola.routes.js";
 import evolutionRoute from "./evolution.routes.js";
 import gastoRoute from "./gasto.route.js";
+import historicoRoute from "./historico.routes.js";
 import { jobsRoute } from "./jobs.route.js";
 import mockPagamentoRoute from "./mock-pagamento.routes.js";
 import passageiroRoutes from "./passageiro.routes.js";
@@ -57,6 +58,9 @@ const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // Webhook da Evolution
   app.register(evolutionRoute, { prefix: "/api/evolution" });
+
+  // Histórico de Atividades
+  app.register(historicoRoute, { prefix: "/api/historico" });
 };
 
 export default routes;

@@ -19,6 +19,7 @@ export interface DriverContext {
     // New fields for flexible Lego composition
     pixPayload?: string; 
     isActivation?: boolean; // Se é o primeiro pagamento (Onboarding)
+    skipPixStep?: boolean; 
     chavePix?: string;
     tipoChavePix?: string;
 }
@@ -75,8 +76,9 @@ export const DriverTemplates = {
 
         return textPart(`🚀 *Bem-vindo(a) à Van360*\n\n` +
             `O plano *${ctx.nomePlano}* foi ativado com sucesso.\n` +
-            `Seu acesso completo de *${dias} dias* de teste grátis é${validadeMsg}.\n` +
-            `Bora decolar! 🚐💨`);
+            `Seu acesso de *${dias} dias* grátis é${validadeMsg}.\n\n` +
+            `⚠️ *Próximos Passos*\n` +
+            `• Configurar Contrato`);
     },
 
     /**
@@ -84,9 +86,10 @@ export const DriverTemplates = {
      */
     activation: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor);
+
         const text = `⏳ *Ativação Pendente*\n\n` +
-            `Seu plano *${ctx.nomePlano}* no valor de *${valor}* aguarda pagamento para ativação.\n` +
-            `Realize o pagamento pelo PIX abaixo para liberar o acesso imediatamente.`;
+            `Seu plano no valor de *${valor}* aguarda pagamento para ativação.\n` +
+            `Realize o pagamento pelo PIX abaixo para liberar o acesso.`;
 
         return buildPixMessageParts(text, ctx.pixPayload);
     },
@@ -193,14 +196,15 @@ export const DriverTemplates = {
             parts.push({ type: "text", content: text });
         }
 
-        // 2. Lembretes Importantes (APENAS NA ATIVAÇÃO E PLANO PROFISSIONAL)
+        // 2. Lembretes Importantes (APENAS NA ATIVAÇÃO DO PLANO PROFISSIONAL)
         const isProfessional = ctx.nomePlano.toLowerCase().includes("profissional");
         
-        if (ctx.isActivation && isProfessional) {
+        if (ctx.isActivation && !ctx.skipPixStep && isProfessional) {
             parts.push({
                 type: "text",
-                content: `⚠️ *Próximos Passos*\n\n` +
-                    `Acesse o aplicativo e cadastre sua Chave PIX para receber os pagamentos dos responsáveis diretamente em sua conta bancária.`,
+                content: `⚠️ *Próximos Passos*\n` +
+                    `• Configurar Contrato\n` +
+                    `• Cadastrar Chave PIX`,
                 delayMs: 1500
             });
         }

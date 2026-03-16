@@ -1,8 +1,9 @@
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
-import { PixKeyStatus, PixKeyType } from "../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, PixKeyStatus, PixKeyType } from "../types/enums.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
+import { historicoService } from "./historico.service.js";
 import { iniciarValidacaoPix } from "./validacao-pix.service.js";
 
 /**
@@ -96,6 +97,43 @@ export async function atualizarUsuario(usuarioId: string, payload: {
       .catch(err => {
         logger.error({ error: err.message, usuarioId }, "Falha silenciosa ao iniciar validação PIX (background) após update.");
       });
+
+    // --- LOG DE AUDITORIA (CHAVE PIX) ---
+    historicoService.log({
+        usuario_id: usuarioId,
+        entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+        entidade_id: usuarioId,
+        acao: AtividadeAcao.CHAVE_PIX_ALTERADA,
+        descricao: `Chave PIX alterada para ${updates.chave_pix} (${payload.tipo_chave_pix || 'Inalterado'}).`,
+        meta: { chave: updates.chave_pix, tipo: payload.tipo_chave_pix }
+    });
+  } else if (payload.nome || payload.apelido || payload.telefone) {
+      // --- LOG DE AUDITORIA (PERFIL) ---
+      historicoService.log({
+          usuario_id: usuarioId,
+          entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+          entidade_id: usuarioId,
+          acao: AtividadeAcao.PERFIL_EDITADO,
+          descricao: `Dados de perfil (nome/apelido/telefone) atualizados.`,
+          meta: { campos: Object.keys(payload).filter(k => ['nome', 'apelido', 'telefone'].includes(k)) }
+      });
+  } else if (payload.config_contrato !== undefined) {
+      // --- LOG DE AUDITORIA (CONFIG CONTRATO) ---
+      const config = payload.config_contrato;
+      historicoService.log({
+          usuario_id: usuarioId,
+          entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+          entidade_id: usuarioId,
+          acao: AtividadeAcao.CONTRATO_CONFIG_EDITADA,
+          descricao: `Configurações de contrato atualizadas (Usa contratos: ${config.usar_contratos ? 'Sim' : 'Não'}).`,
+          meta: { 
+            usar_contratos: config.usar_contratos,
+            multa_atraso: config.multa_atraso,
+            multa_rescisao: config.multa_rescisao,
+            // Armazena as chaves que foram alteradas para facilitar auditoria rápida
+            campos_alterados: Object.keys(config)
+          }
+      });
   }
 
   return { success: true };
@@ -115,6 +153,16 @@ export async function excluirUsuario(usuarioId: string, authUid: string) {
         logger.error({ error: rpcError.message, usuarioId }, "Falha ao anonimizar usuário no DB.");
         throw new AppError("Erro ao processar exclusão de dados.", 500);
     }
+
+    // --- LOG DE AUDITORIA ---
+    historicoService.log({
+        usuario_id: usuarioId,
+        entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+        entidade_id: usuarioId,
+        acao: AtividadeAcao.USUARIO_EXCLUIDO,
+        descricao: `Conta anonimizada e desativada permanentemente conforme solicitação de exclusão.`,
+        meta: { acao: 'anonymize' }
+    });
 
     // 3. Delete Auth User (Remove Login)
     // Como o auth_uid foi setado para NULL no passo anterior, o CASCADE não deve apagar o registro anonimizado.

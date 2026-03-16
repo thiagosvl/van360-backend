@@ -7,9 +7,10 @@ import {
 } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { supabaseAdmin } from "../../config/supabase.js";
-import { AssinaturaCobrancaStatus, AssinaturaStatus, ConfigKey } from "../../types/enums.js";
+import { AssinaturaCobrancaStatus, AssinaturaStatus, AtividadeAcao, AtividadeEntidadeTipo, ConfigKey } from "../../types/enums.js";
 import { toLocalDateString } from "../../utils/date.utils.js";
 import { getConfigNumber } from "../configuracao.service.js";
+import { historicoService } from "../historico.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 
 interface JobResult {
@@ -110,22 +111,15 @@ export const dailySubscriptionMonitorJob = {
                 // 3. Verificar Histórico (Idempotência)
                 try {
                     if (!params.force) {
-                        const { count, error: histError } = await supabaseAdmin
-                            .from("assinatura_notificacoes")
-                            .select("id", { count: "exact", head: true })
-                            .eq("assinatura_cobranca_id", cobranca.id)
-                            .eq("tipo_evento", context)
-                            // Para Bloqueio e Vencimento, queremos garantir que enviou no dia atual
-                            .gte("data_envio", hojeStr); 
+                        const historico = await historicoService.listByEntidade(AtividadeEntidadeTipo.ASSINATURA, cobranca.id);
+                        const jaNotificado = historico.some(h => 
+                            h.acao === AtividadeAcao.NOTIFICACAO_WHATSAPP && 
+                            h.meta?.tipo_evento === context &&
+                            toLocalDateString(new Date(h.created_at)) === hojeStr
+                        );
 
-                        if (histError) {
-                            if (histError.message.includes("does not exist")) {
-                                logger.error("Tabela assinatura_notificacoes não existe. Rode o SQL.");
-                            }
-                        }
-
-                        if (count && count > 0) {
-                            continue; // Já notificado
+                        if (jaNotificado) {
+                            continue; // Já notificado hoje para este evento
                         }
                     }
                     
@@ -156,18 +150,19 @@ export const dailySubscriptionMonitorJob = {
 
                     if (enviou) {
                         result.notifications++;
-                        // Registrar
-                        try {
-                             await supabaseAdmin.from("assinatura_notificacoes").insert({
-                                assinatura_cobranca_id: cobranca.id,
+                        // Registrar no Histórico
+                        await historicoService.log({
+                            usuario_id: motorista.id,
+                            entidade_tipo: AtividadeEntidadeTipo.ASSINATURA,
+                            entidade_id: cobranca.id,
+                            acao: AtividadeAcao.NOTIFICACAO_WHATSAPP,
+                            descricao: `Lembrete de assinatura enviado via WhatsApp: ${context}.`,
+                            meta: {
                                 tipo_evento: context,
-                                usuario_id: motorista.id,
                                 canal: "WHATSAPP",
-                                data_envio: new Date().toISOString()
-                            });
-                        } catch (e) {
-                            // Ignora erro de insert
-                        }
+                                valor: cobranca.valor
+                            }
+                        });
                     }
 
                 } catch (err: any) {

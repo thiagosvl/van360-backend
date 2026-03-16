@@ -64,8 +64,7 @@ export const chargeGeneratorJob = {
                 .from("assinaturas_usuarios")
                 .select("usuario_id, status, plano_id, usuarios(id, nome), planos:plano_id(slug)") 
                 .in("status", [AssinaturaStatus.ATIVA, AssinaturaStatus.TRIAL]) 
-                .in("plano_id", planIds)
-                .is("cancelamento_manual", null); 
+                .in("plano_id", planIds); 
 
             if (subError) throw subError;
 

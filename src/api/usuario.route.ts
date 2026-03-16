@@ -16,6 +16,7 @@ export default async function usuarioRoute(app: FastifyInstance) {
     app.post("/upgrade-plano", SubscriptionController.upgradePlano);
     app.post("/downgrade-plano", SubscriptionController.downgradePlano);
     app.post("/trocar-subplano", SubscriptionController.trocarSubplano);
+    app.post("/regularizar-assinatura", SubscriptionController.regularizarAssinatura);
     app.post("/criar-assinatura-profissional-personalizado", SubscriptionController.criarAssinaturaPersonalizada);
 
     // --- Rotas de Usuário ---

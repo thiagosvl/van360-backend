@@ -153,7 +153,8 @@ export const AuthController = {
         const authHeader = request.headers.authorization;
         if (authHeader) {
             const token = authHeader.split(" ")[1];
-            await logoutService(token);
+            const usuarioId = (request as any).usuario_id;
+            await logoutService(token, usuarioId);
         }
         return reply.status(200).send({ success: true });
     },

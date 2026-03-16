@@ -1,6 +1,7 @@
 import { PLANO_PROFISSIONAL } from "../config/constants.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
+import { PrecoOrigem } from "../types/enums.js";
 import { getBillingConfig } from "./configuracao.service.js";
 
 /**
@@ -14,7 +15,7 @@ export function calcularPrecosEFranquia(plano: any): {
   const precoAplicado = Number(
     plano.promocao_ativa ? plano.preco_promocional ?? plano.preco : plano.preco
   );
-  const precoOrigem = plano.promocao_ativa ? "promocional" : "normal";
+  const precoOrigem = plano.promocao_ativa ? PrecoOrigem.PROMOCIONAL : PrecoOrigem.NORMAL;
   const franquiaContratada = plano.franquia_cobrancas_mes || 0;
 
   return {

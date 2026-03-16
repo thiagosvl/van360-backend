@@ -128,16 +128,17 @@ export async function validarFranquiaPassageiros(
   usuarioId: string,
   novaFranquia: number
 ): Promise<void> {
-  const { count: passageirosAtivos } = await supabaseAdmin
+  const { count: automacaoAtiva } = await supabaseAdmin
     .from("passageiros")
     .select("id", { count: "exact", head: true })
     .eq("usuario_id", usuarioId)
-    .eq("ativo", true);
+    .eq("ativo", true)
+    .eq("enviar_cobranca_automatica", true);
 
-  if (passageirosAtivos && passageirosAtivos > novaFranquia) {
+  if (automacaoAtiva && automacaoAtiva > novaFranquia) {
     throw new AppError(
-      `Você possui ${passageirosAtivos} passageiros ativos, mas o plano selecionado suporta apenas ${novaFranquia}. ` +
-      `Desative o envio automático de cobrança em ${passageirosAtivos - novaFranquia} passageiro(s) e tente novamente.`,
+      `Você possui ${automacaoAtiva} passageiros com automação ativa, mas o novo limite permite apenas ${novaFranquia}. ` +
+      `Desative a automação de pelo menos ${automacaoAtiva - novaFranquia} passageiro(s) manualmente antes de prosseguir com a redução.`,
       400
     );
   }

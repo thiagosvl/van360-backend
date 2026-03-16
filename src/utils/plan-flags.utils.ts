@@ -52,7 +52,7 @@ export function calculatePlanFlags(assinatura: any): PlanFlags {
 
   // 3. Flags de Acesso (BUSINESS LOGIC)
   const is_plano_valido = is_ativo || is_trial_valido || is_suspensa;
-  const is_read_only = is_suspensa;
+  const is_read_only = is_suspensa || (isTrial && !is_trial_valido);
 
   // 4. Flags de Plano Específico
   const is_profissional = slugPlano === PLANO_PROFISSIONAL;

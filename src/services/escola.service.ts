@@ -1,6 +1,8 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { CreateEscolaDTO, ListEscolasFiltersDTO, UpdateEscolaDTO } from "../types/dtos/escola.dto.js";
+import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { cleanString } from "../utils/string.utils.js";
+import { historicoService } from "./historico.service.js";
 
 // Helper Methods
 const _prepareEscolaData = (data: Partial<CreateEscolaDTO>, usuarioId?: string, isUpdate: boolean = false): any => {
@@ -38,6 +40,16 @@ export const escolaService = {
             .single();
         if (error) throw error;
 
+        // --- LOG DE AUDITORIA ---
+        historicoService.log({
+            usuario_id: inserted.usuario_id,
+            entidade_tipo: AtividadeEntidadeTipo.ESCOLA,
+            entidade_id: inserted.id,
+            acao: AtividadeAcao.ESCOLA_CRIADA,
+            descricao: `Nova escola ${inserted.nome} cadastrada.`,
+            meta: { nome: inserted.nome }
+        });
+
         return inserted;
     },
 
@@ -54,6 +66,16 @@ export const escolaService = {
             .single();
         if (error) throw error;
 
+        // --- LOG DE AUDITORIA ---
+        historicoService.log({
+            usuario_id: updated.usuario_id,
+            entidade_tipo: AtividadeEntidadeTipo.ESCOLA,
+            entidade_id: id,
+            acao: AtividadeAcao.ESCOLA_EDITADA,
+            descricao: `Dados da escola ${updated.nome} foram editados.`,
+            meta: { nome: updated.nome }
+        });
+
         return updated;
     },
 
@@ -65,6 +87,16 @@ export const escolaService = {
         if (escola?.id) {
             const { error } = await supabaseAdmin.from("escolas").delete().eq("id", id);
             if (error) throw error;
+
+            // --- LOG DE AUDITORIA ---
+            historicoService.log({
+                usuario_id: escola.usuario_id,
+                entidade_tipo: AtividadeEntidadeTipo.ESCOLA,
+                entidade_id: id,
+                acao: AtividadeAcao.ESCOLA_EXCLUIDA,
+                descricao: `Escola ${escola.nome} excluída do cadastro.`,
+                meta: { backup: escola }
+            });
         }
     },
 
@@ -159,6 +191,20 @@ export const escolaService = {
             .eq("id", escolaId);
 
         if (error) throw new Error(`Falha ao ${novoStatus ? "ativar" : "desativar"} a escola.`);
+
+        // --- LOG DE AUDITORIA ---
+        const { data: e } = await supabaseAdmin.from("escolas").select("usuario_id, nome").eq("id", escolaId).single();
+        if (e) {
+            historicoService.log({
+                usuario_id: e.usuario_id,
+                entidade_tipo: AtividadeEntidadeTipo.ESCOLA,
+                entidade_id: escolaId,
+                acao: AtividadeAcao.ESCOLA_STATUS,
+                descricao: `Escola ${e.nome} foi ${novoStatus ? 'ATIVADA' : 'DESATIVADO'}.`,
+                meta: { ativo: novoStatus }
+            });
+        }
+
         return novoStatus;
     },
 

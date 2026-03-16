@@ -1,30 +1,30 @@
 import crypto from "node:crypto";
 import {
-  DRIVER_EVENT_ACTIVATION,
-  DRIVER_EVENT_UPGRADE,
-  PLANO_ESSENCIAL,
-  PLANO_PROFISSIONAL
+    DRIVER_EVENT_ACTIVATION,
+    DRIVER_EVENT_UPGRADE,
+    PLANO_ESSENCIAL,
+    PLANO_PROFISSIONAL
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
-import { AssinaturaBillingType, AssinaturaCobrancaStatus, AssinaturaStatus } from "../types/enums.js";
+import { AssinaturaBillingType, AssinaturaCobrancaStatus, AssinaturaStatus, AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { toLocalDateString } from "../utils/date.utils.js";
 import { onlyDigits } from "../utils/string.utils.js";
 import { assinaturaCobrancaService } from "./assinatura-cobranca.service.js";
 import { automationService } from "./automation.service.js";
 import { getBillingConfig } from "./configuracao.service.js";
+import { historicoService } from "./historico.service.js";
 import { notificationService } from "./notifications/notification.service.js";
 import { paymentService } from "./payment.service.js";
 import { pricingService } from "./pricing.service.js";
 import {
-  cancelarCobrancaPendente,
-  contarPassageirosComAutomacao,
-  getAssinaturaAtiva,
-  getUsuarioData,
-  isUpgrade,
-  limparAssinaturasPendentes,
-  validarFranquiaPassageiros
+    cancelarCobrancaPendente,
+    getAssinaturaAtiva,
+    getUsuarioData,
+    isUpgrade,
+    limparAssinaturasPendentes,
+    validarFranquiaPassageiros
 } from "./subscription.common.js";
 
 // Result Interfaces
@@ -163,7 +163,11 @@ export const subscriptionUpgradeService = {
           let vigenciaFimInsert: string | null = null;
           let descricaoCobranca = `Upgrade de Plano: ${planoAtual?.slug === PLANO_ESSENCIAL ? "Essencial" : "Novo"} → ${novoPlano.nome}`;
       
-          if (assinaturaAtual && assinaturaAtual.vigencia_fim) {
+          const isRestricted = assinaturaAtual?.status === AssinaturaStatus.SUSPENSA || 
+                               assinaturaAtual?.status === AssinaturaStatus.CANCELADA ||
+                               (assinaturaAtual?.status === AssinaturaStatus.TRIAL && new Date(assinaturaAtual?.trial_end_at) < new Date());
+
+          if (assinaturaAtual && assinaturaAtual.vigencia_fim && !isRestricted) {
             const billingConfig = await getBillingConfig();
             const precoAtual = Number(assinaturaAtual.preco_aplicado || 0);
             const diferencaMensal = precoAplicado - precoAtual;
@@ -178,13 +182,18 @@ export const subscriptionUpgradeService = {
             billingType = AssinaturaBillingType.UPGRADE_PLAN;
             vigenciaFimInsert = assinaturaAtual.vigencia_fim;
             descricaoCobranca += ` (Pro-Rata: ${diasRestantes} dias)`;
+          } else if (isRestricted) {
+            billingType = AssinaturaBillingType.ACTIVATION;
+            valorCobrar = precoAplicado;
+            vigenciaFimInsert = null;
+            descricaoCobranca = `Reativação de Plano: ${novoPlano.nome}`;
           } else {
             billingType = AssinaturaBillingType.ACTIVATION;
             valorCobrar = precoAplicado;
             vigenciaFimInsert = null;
           }
       
-          if (valorCobrar <= 0) {
+          if (valorCobrar <= 0 && !isRestricted) {
             // Case 1: No financial difference (Side-grade or pricing edge case)
             // We just deactivate the old one and activate the new one immediately
             if (assinaturaAtual) {
@@ -297,6 +306,16 @@ export const subscriptionUpgradeService = {
           } catch (notifErr) {
             logger.error({ notifErr }, "Erro no bloco de notificação imediata");
           }
+
+          // --- LOG DE AUDITORIA ---
+          historicoService.log({
+              usuario_id: usuarioId,
+              entidade_tipo: AtividadeEntidadeTipo.ASSINATURA,
+              entidade_id: novaAssinatura.id,
+              acao: AtividadeAcao.ASSINATURA_UPGRADE,
+              descricao: `Upgrade solicitado: ${planoAtual?.nome || 'Anterior'} → ${novoPlano.nome}.`,
+              meta: { plano: novoPlano.slug, valor: valorCobrar }
+          });
       
           return {
             qrCodePayload: pixData.qrCodePayload,
@@ -340,6 +359,10 @@ export const subscriptionUpgradeService = {
           await cancelarCobrancaPendente(usuarioId);
       
           const { precoAplicado, precoOrigem, franquiaContratada } = pricingService.calcularPrecosEFranquia(novoPlano);
+
+          if (novoPlano.slug !== PLANO_ESSENCIAL) {
+            await validarFranquiaPassageiros(usuarioId, franquiaContratada);
+          }
       
           const anchorDate = assinaturaAtual.anchor_date || toLocalDateString(new Date());
           const vigenciaFim = assinaturaAtual.vigencia_fim || null;
@@ -430,14 +453,24 @@ export const subscriptionUpgradeService = {
             }
           }
       
-          if (slugAtual === PLANO_PROFISSIONAL || (planoAtual.parent as any)?.slug === PLANO_PROFISSIONAL) {
+          if (novoPlano.slug === PLANO_ESSENCIAL && (slugAtual === PLANO_PROFISSIONAL || (planoAtual.parent as any)?.slug === PLANO_PROFISSIONAL)) {
             try {
               const desativados = await automationService.desativarAutomacaoTodosPassageiros(usuarioId);
-              logger.info({ usuarioId, desativados }, "Automação de passageiros desativada devido ao downgrade");
+              logger.info({ usuarioId, desativados }, "Automação de passageiros desativada devido ao downgrade para o plano Essencial");
             } catch (autoError: any) {
               logger.error({ usuarioId, error: autoError.message }, "Erro ao desativar automação de passageiros no downgrade");
             }
           }
+
+          // --- LOG DE AUDITORIA ---
+          historicoService.log({
+              usuario_id: usuarioId,
+              entidade_tipo: AtividadeEntidadeTipo.ASSINATURA,
+              entidade_id: novaAssinatura.id,
+              acao: AtividadeAcao.ASSINATURA_DOWNGRADE,
+              descricao: `Downgrade realizado para o plano ${novoPlano.nome}.`,
+              meta: { plano: novoPlano.slug, franquia: franquiaContratada }
+          });
       
           return { success: true };
       
@@ -482,6 +515,10 @@ export const subscriptionUpgradeService = {
       
           if (novoSubplano.parent_id !== planoProfissionalBase.id) {
             throw new Error("Subplano inválido. Deve pertencer ao plano Profissional.");
+          }
+
+          if (novoSubplanoId === assinaturaAtual.plano_id) {
+            throw new Error("Você já possui este plano. Para renovar sua assinatura, utilize o botão 'Regularizar'.");
           }
       
           const novaFranquiaSub = pricingService.calcularPrecosEFranquia(novoSubplano).franquiaContratada;
@@ -556,15 +593,7 @@ export const subscriptionUpgradeService = {
       
             if (cobrancaError) throw cobrancaError;
       
-            const franquiaAtual = assinaturaAtual.franquia_contratada_cobrancas || 0;
-            if (franquiaContratada < franquiaAtual) {
-              const automacaoAtiva = await contarPassageirosComAutomacao(usuarioId);
-              const excedente = automacaoAtiva - franquiaContratada;
-              throw new AppError(
-                `Para reduzir sua franquia para ${franquiaContratada}, é necessário desativar o envio automático de cobrança em pelo menos ${excedente > 0 ? excedente : franquiaAtual - franquiaContratada} passageiro(s). Após ajustar, tente novamente.`,
-                400
-              );
-            }
+            await validarFranquiaPassageiros(usuarioId, franquiaContratada);
       
             const usuario = await getUsuarioData(usuarioId);
             const cpf = onlyDigits(usuario.cpfcnpj);
@@ -631,20 +660,23 @@ export const subscriptionUpgradeService = {
             diferenca = billingConfig.valorMinimoProRata;
           }
       
-          if (franquiaContratada < franquiaAtual) {
-            const automacaoAtiva = await contarPassageirosComAutomacao(usuarioId);
-            const excedente = automacaoAtiva - franquiaContratada;
-            throw new AppError(
-              `Para reduzir sua franquia para ${franquiaContratada}, é necessário desativar o envio automático de cobrança em pelo menos ${excedente > 0 ? excedente : franquiaAtual - franquiaContratada} passageiro(s). Após ajustar, tente novamente.`,
-              400
-            );
-          }
+          await validarFranquiaPassageiros(usuarioId, franquiaContratada);
       
           const anchorDate = assinaturaAtual.anchor_date || toLocalDateString(new Date());
           const vigenciaFim = assinaturaAtual.vigencia_fim || null;
-      
+
+          const isRestricted = assinaturaAtual.status === AssinaturaStatus.SUSPENSA || 
+                               assinaturaAtual.status === AssinaturaStatus.CANCELADA;
+
+          if (isRestricted) {
+            throw new Error("Sua conta está suspensa ou cancelada. Regularize sua assinatura antes de alterar o limite de passageiros.");
+          }
+
           if (diferenca > 0) {
-            // Reaproveitamente em Expansão Profissional
+            const valorFinalCobrar = diferenca;
+            const bType = AssinaturaBillingType.EXPANSION;
+
+            // Reaproveitamente em Expansão Profissional ou Reativação
             const { data: existingExp } = await supabaseAdmin
                 .from("assinaturas_usuarios")
                 .select("id")
@@ -657,12 +689,13 @@ export const subscriptionUpgradeService = {
             if (existingExp) {
                 const { data: cobExp } = await supabaseAdmin
                     .from("assinaturas_cobrancas")
-                    .select("id")
+                    .select("id, valor")
                     .eq("assinatura_usuario_id", existingExp.id)
                     .eq("status", AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO)
                     .maybeSingle();
                 
-                if (cobExp) {
+                // Só reaproveita se o valor for o mesmo (importante se mudou de pro-rata pra reativação)
+                if (cobExp && Number(cobExp.valor) === valorFinalCobrar) {
                     const res = await assinaturaCobrancaService.gerarPixParaCobranca(cobExp.id);
                     return { ...res, success: true };
                 }
@@ -684,7 +717,7 @@ export const subscriptionUpgradeService = {
                 preco_aplicado: precoAplicado,
                 preco_origem: precoOrigem,
                 anchor_date: anchorDate,
-                vigencia_fim: vigenciaFim,
+                vigencia_fim: vigenciaFim, 
               })
               .select()
               .single();
@@ -697,10 +730,10 @@ export const subscriptionUpgradeService = {
               .insert({
                 usuario_id: usuarioId,
                 assinatura_usuario_id: novaAssinatura.id,
-                valor: diferenca,
+                valor: valorFinalCobrar,
                 status: AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO,
                 data_vencimento: toLocalDateString(new Date()),
-                billing_type: AssinaturaBillingType.EXPANSION,
+                billing_type: bType,
                 descricao: `Expansão de Limite: ${assinaturaAtual.franquia_contratada_cobrancas} → ${franquiaContratada} passageiros`,
               })
               .select()
@@ -713,10 +746,10 @@ export const subscriptionUpgradeService = {
       
             const provider = paymentService.getProvider();
             
-            const txidToUse = crypto.createHash('md5').update(`${cobranca.id}-${diferenca}`).digest('hex');
+            const txidToUse = crypto.createHash('md5').update(`${cobranca.id}-${valorFinalCobrar}`).digest('hex');
             const pixData = await provider.criarCobrancaImediata({
               cobrancaId: txidToUse,
-              valor: diferenca,
+              valor: valorFinalCobrar,
               cpf,
               nome: usuario.nome,
             });
@@ -731,20 +764,30 @@ export const subscriptionUpgradeService = {
               })
               .eq("id", cobranca.id);
       
-            // Notificar Motorista (Expansão via Subplano)
+            // Notificar Motorista
             try {
                if (usuario.telefone) {
                    await notificationService.notifyDriver(usuario.telefone, DRIVER_EVENT_UPGRADE, {
                        nomeMotorista: usuario.nome,
                        nomePlano: (novoSubplano.parent as any)?.nome || novoSubplano.nome,
-                       valor: diferenca,
+                       valor: valorFinalCobrar,
                        dataVencimento: toLocalDateString(new Date()),
                        pixPayload: pixData.qrCodePayload
                    });
                }
             } catch (notifErr) {
-               logger.error({ notifErr }, "Falha ao enviar notificação de expansão subplano");
+               logger.error({ notifErr }, "Falha ao enviar notificação de subplano");
             }
+
+            // --- LOG DE AUDITORIA ---
+            historicoService.log({
+                usuario_id: usuarioId,
+                entidade_tipo: AtividadeEntidadeTipo.ASSINATURA,
+                entidade_id: novaAssinatura.id,
+                acao: AtividadeAcao.ASSINATURA_UPGRADE,
+                descricao: `Alteração de limite Profissional: ${franquiaAtual} → ${franquiaContratada} passageiros.`,
+                meta: { franquia: franquiaContratada, valor: diferenca }
+            });
 
             return {
               qrCodePayload: pixData.qrCodePayload,
@@ -788,6 +831,103 @@ export const subscriptionUpgradeService = {
         }
       },
       
+      async regularizarAssinatura(usuarioId: string): Promise<TrocaSubplanoResult> {
+        try {
+            const assinaturaAtual = await getAssinaturaAtiva(usuarioId);
+            if (!assinaturaAtual) throw new Error("Assinatura não encontrada.");
+
+            const isRestricted = assinaturaAtual.status === AssinaturaStatus.SUSPENSA || 
+                                 assinaturaAtual.status === AssinaturaStatus.CANCELADA;
+
+            if (!isRestricted) {
+                throw new Error("Sua assinatura já está ativa. Não é necessário regularizar agora.");
+            }
+
+            const planoId = assinaturaAtual.plano_id;
+            const franquiaContratada = assinaturaAtual.franquia_contratada_cobrancas || 0;
+            const precoAplicado = Number(assinaturaAtual.preco_aplicado || 0);
+            const anchorDate = assinaturaAtual.anchor_date || toLocalDateString(new Date());
+
+            await limparAssinaturasPendentes(usuarioId);
+            await cancelarCobrancaPendente(usuarioId);
+
+            const { data: novaAssinatura, error: assinaturaError } = await supabaseAdmin
+              .from("assinaturas_usuarios")
+              .insert({
+                usuario_id: usuarioId,
+                plano_id: planoId,
+                franquia_contratada_cobrancas: franquiaContratada,
+                ativo: false,
+                status: AssinaturaStatus.PENDENTE_PAGAMENTO,
+                preco_aplicado: precoAplicado,
+                preco_origem: (assinaturaAtual as any).preco_origem,
+                anchor_date: anchorDate,
+                vigencia_fim: null,
+              })
+              .select()
+              .single();
+
+            if (assinaturaError) throw assinaturaError;
+
+            const { data: cobranca, error: cobrancaError } = await supabaseAdmin
+              .from("assinaturas_cobrancas")
+              .insert({
+                usuario_id: usuarioId,
+                assinatura_usuario_id: novaAssinatura.id,
+                valor: precoAplicado,
+                status: AssinaturaCobrancaStatus.PENDENTE_PAGAMENTO,
+                data_vencimento: toLocalDateString(new Date()),
+                billing_type: AssinaturaBillingType.ACTIVATION,
+                descricao: `Regularização de Assinatura: ${assinaturaAtual.planos?.nome || 'Plano Profissional'}`,
+              })
+              .select()
+              .single();
+
+            if (cobrancaError) throw cobrancaError;
+
+            const usuario = await getUsuarioData(usuarioId);
+            const provider = paymentService.getProvider();
+            const txidToUse = crypto.createHash('md5').update(`${cobranca.id}-${precoAplicado}`).digest('hex');
+            
+            const pixData = await provider.criarCobrancaImediata({
+              cobrancaId: txidToUse,
+              valor: precoAplicado,
+              cpf: onlyDigits(usuario.cpfcnpj || ""),
+              nome: usuario.nome,
+            });
+
+            await supabaseAdmin
+              .from("assinaturas_cobrancas")
+              .update({
+                gateway_txid: pixData.gatewayTransactionId,
+                qr_code_payload: pixData.qrCodePayload,
+                location_url: pixData.location,
+              })
+              .eq("id", cobranca.id);
+
+            // LOG CORRETO (Sem UPGRADE falso)
+            historicoService.log({
+                usuario_id: usuarioId,
+                entidade_tipo: AtividadeEntidadeTipo.ASSINATURA,
+                entidade_id: novaAssinatura.id,
+                acao: AtividadeAcao.ASSINATURA_PAGAMENTO,
+                descricao: `Solicitação de regularização de assinatura profissional (${franquiaContratada} passageiros).`,
+                meta: { valor: precoAplicado, franquia: franquiaContratada }
+            });
+
+            return {
+              qrCodePayload: pixData.qrCodePayload,
+              location: pixData.location,
+              gateway_txid: pixData.gatewayTransactionId,
+              cobrancaId: cobranca.id,
+              success: true,
+            };
+        } catch (err: any) {
+            logger.error({ error: err.message, usuarioId }, "Falha na regularização de assinatura.");
+            throw err;
+        }
+      },
+
       async criarAssinaturaProfissionalPersonalizado(
         usuarioId: string,
         quantidade: number,
@@ -823,15 +963,6 @@ export const subscriptionUpgradeService = {
             throw new Error("Plano Profissional não encontrado.");
           }
       
-          if (isDowngrade && assinaturaAtual) {
-            const automacaoAtiva = await contarPassageirosComAutomacao(usuarioId);
-            const excedente = automacaoAtiva - quantidade;
-            throw new AppError(
-              `Para reduzir sua franquia para ${quantidade}, é necessário desativar o envio automático de cobrança em pelo menos ${excedente > 0 ? excedente : (assinaturaAtual.franquia_contratada_cobrancas || 0) - quantidade} passageiro(s). Após ajustar, tente novamente.`,
-              400
-            );
-          }
-
           await validarFranquiaPassageiros(usuarioId, quantidade);
       
           const { data: subPersonalizadaExistente } = await supabaseAdmin
@@ -885,7 +1016,10 @@ export const subscriptionUpgradeService = {
           const billingType = assinaturaAtual ? AssinaturaBillingType.UPGRADE_PLAN : AssinaturaBillingType.SUBSCRIPTION;
           let valorCobranca = precoCalculado;
       
-          if (assinaturaAtual) {
+          const isRestricted = assinaturaAtual?.status === AssinaturaStatus.SUSPENSA || 
+                               assinaturaAtual?.status === AssinaturaStatus.CANCELADA;
+
+          if (assinaturaAtual && !isRestricted) {
             const precoAtual = Number(assinaturaAtual.preco_aplicado || 0);
       
             if (precoAtual <= 0) {
@@ -904,6 +1038,8 @@ export const subscriptionUpgradeService = {
                 valorCobranca = config.valorMinimoProRata;
               }
             }
+          } else if (isRestricted) {
+            valorCobranca = precoCalculado;
           }
       
           const hoje = new Date();

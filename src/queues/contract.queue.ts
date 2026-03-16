@@ -7,9 +7,11 @@ export const contractQueue = createQueue(QUEUE_NAME_CONTRACT);
 
 export interface ContractJobData {
     contratoId: string;
+    usuarioId: string;
     providerName: string;
     dadosContrato: any;
     passageiro: {
+        id: string;
         nome: string;
         nome_responsavel: string;
         telefone_responsavel: string;
