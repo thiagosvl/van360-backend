@@ -12,20 +12,12 @@ export const env = {
   FRONTEND_URL: process.env.FRONTEND_URL || "http://localhost:8080",
   
   // Observability
-
   SENTRY_DSN: process.env.SENTRY_DSN,
   SENTRY_ENVIRONMENT: process.env.SENTRY_ENVIRONMENT,
   SENTRY_TRACES_SAMPLE_RATE: process.env.SENTRY_TRACES_SAMPLE_RATE || "0.1",
   SENTRY_PROFILES_SAMPLE_RATE: process.env.SENTRY_PROFILES_SAMPLE_RATE || "0.1",
   LOGTAIL_TOKEN: process.env.LOGTAIL_TOKEN,
   LOG_LEVEL: process.env.LOG_LEVEL || "info",
-
-  INTER_API_URL: process.env.INTER_API_URL!,
-  INTER_CLIENT_ID: process.env.INTER_CLIENT_ID!,
-  INTER_CLIENT_SECRET: process.env.INTER_CLIENT_SECRET!,
-  INTER_CERT_PATH: process.env.INTER_CERT_PATH!,
-  INTER_KEY_PATH: process.env.INTER_KEY_PATH!,
-  INTER_PIX_KEY: process.env.INTER_PIX_KEY!, 
 
   // C6 Bank
   C6_CLIENT_ID: process.env.C6_CLIENT_ID!,

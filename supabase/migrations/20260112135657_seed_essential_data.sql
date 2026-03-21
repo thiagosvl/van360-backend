@@ -1,35 +1,9 @@
--- 1. SEED PLANOS (Base Only First)
-INSERT INTO public.planos (id, parent_id, tipo, nome, slug, descricao_curta, ordem_exibicao, ativo, limite_passageiros, franquia_cobrancas_mes, preco, preco_promocional, promocao_ativa, permite_cobrancas, created_at, trial_days, beneficios)
-VALUES 
-('ac17996e-5522-43f9-949a-41353542a53b', NULL, 'base', 'Essencial', 'essencial', 'Profissionalize sua gestão e organize quantos passageiros quiser.', 2, true, 0, 0, 89.90, 0.01, true, true, '2025-10-30 15:08:48.988941+00', 21, '["Passageiros e Cadastros ILIMITADOS", "Link de Cadastro: envie para os pais e eles preenchem por você", "Controle de Gastos: saiba seu lucro real (Combustível/Manutenção)", "Relatórios Financeiros e de Inadimplência", "Suporte prioritário via WhatsApp"]'),
-('e0961539-3186-43e8-adac-4f009720d428', NULL, 'base', 'Profissional', 'profissional', 'Você só dirige. O sistema cobra, recebe, dá baixa e envia recibos.', 3, true, 0, 0, 0.00, 0.00, false, true, '2025-10-30 15:08:48.988941+00', 0, '["Cobrança 100% Automática no WhatsApp (Sem tocar no celular)", "Baixa automática de pagamentos PIX (Fim de conferir extrato)", "Envio automático de Recibos e Lembretes de vencimento", "Redução drástica da inadimplência e atrasos", "Você só dirige: o sistema cuida do financeiro"]')
-ON CONFLICT (id) DO UPDATE SET 
-    nome = EXCLUDED.nome,
-    slug = EXCLUDED.slug,
-    beneficios = EXCLUDED.beneficios;
-
--- 2. SEED PLANOS (Sub Plans - Dependents)
-INSERT INTO public.planos (id, parent_id, tipo, nome, slug, descricao_curta, ordem_exibicao, ativo, limite_passageiros, franquia_cobrancas_mes, preco, preco_promocional, promocao_ativa, permite_cobrancas, created_at, trial_days, beneficios)
-VALUES
-('1c632a37-8f6a-4fa1-a734-c12e1ddaf44d', 'e0961539-3186-43e8-adac-4f009720d428', 'sub', 'Até 25 Cobranças', 'completo_25', NULL, 1, true, 0, 3, 107.00, 0.01, true, true, '2025-10-30 15:13:14.772511+00', 0, '[]'),
-('21a70496-9769-48dd-857e-98726ab81292', 'e0961539-3186-43e8-adac-4f009720d428', 'sub', 'Até 50 Cobranças', 'completo_50', NULL, 2, true, 0, 5, 147.00, 0.02, true, true, '2025-10-30 15:13:14.772511+00', 0, '[]'),
-('484db34f-23c3-4731-a11c-e85074ce1b23', 'e0961539-3186-43e8-adac-4f009720d428', 'sub', 'Até 90 Cobranças', 'completo_90', NULL, 3, true, 0, 8, 227.00, 0.03, true, true, '2025-10-30 15:13:14.772511+00', 0, '[]')
-ON CONFLICT (id) DO UPDATE SET
-    nome = EXCLUDED.nome,
-    preco = EXCLUDED.preco;
-
--- 3. SEED CONFIGURACAO INTERNA
--- Note: ACTIVE_GATEWAY and gateway-specific fees are NOT seeded to avoid hardcoded defaults.
--- These MUST be configured via Environment Variables (ACTIVE_GATEWAY) or manually in this table.
+-- 1. SEED CONFIGURACAO INTERNA
+-- Configurações operacionais para gestão de mensalidades dos alunos.
 INSERT INTO public.configuracao_interna (chave, valor)
 VALUES
-('PRO_RATA_VALOR_MINIMO', '0.1'),
-('PRO_RATA_DIAS_MES', '30'),
-('VALOR_INCREMENTO_PASSAGEIRO_EXCESSO', '2.50'),
 ('DIA_GERACAO_MENSALIDADES', '25'),
 ('DIAS_ANTECEDENCIA_AVISO_VENCIMENTO', '2'),
-('DIAS_ANTECEDENCIA_RENOVACAO', '5'),
-('TRIAL_DIAS_ESSENCIAL', '21'),
 ('PIX_EXPIRACAO_SEGUNDOS', '3600'),
 ('PIX_VALIDADE_APOS_VENCIMENTO', '30'),
 ('DIAS_COBRANCA_POS_VENCIMENTO', '3')

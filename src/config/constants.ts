@@ -1,7 +1,4 @@
 
-export const PLANO_ESSENCIAL = "essencial";
-export const PLANO_PROFISSIONAL = "profissional"; 
-
 // Passenger Events
 export const PASSENGER_EVENT_DUE_SOON = "DUE_SOON";
 export const PASSENGER_EVENT_DUE_TODAY = "DUE_TODAY";
@@ -49,7 +46,7 @@ export const WHATSAPP_STATUS = {
     OPEN: "open",
     CLOSE: "close",
     UNKNOWN: "UNKNOWN",
-    NOT_FOUND: "NOT_FOUND" 
+    NOT_FOUND: "NOT_FOUND"
 } as const;
 
 export const GLOBAL_WHATSAPP_INSTANCE = "Van360";

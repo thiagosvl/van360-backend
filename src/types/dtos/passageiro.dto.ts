@@ -35,7 +35,6 @@ export const createPassageiroSchema = z.object({
 
     // Controle
     ativo: z.boolean().optional(),
-    enviar_cobranca_automatica: z.boolean().optional(),
 
     periodo: z.string().optional().or(z.literal("")).transform(v => v ? v.toLowerCase() : undefined),
     genero: optionalString,
@@ -60,7 +59,6 @@ export const listPassageirosFiltersSchema = z.object({
     status: z.string().optional(),
     periodo: z.string().optional(),
     ativo: z.string().optional(), // Query params vêm como string
-    enviar_cobranca_automatica: z.string().optional(),
 });
 
 export type ListPassageirosFiltersDTO = z.infer<typeof listPassageirosFiltersSchema>;

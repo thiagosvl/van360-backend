@@ -11,12 +11,12 @@ import { cobrancaService } from '../services/cobranca.service.js';
 export const generationWorker = new Worker<GenerationJobData>(
     QUEUE_NAME_GENERATION,
     async (job: Job<GenerationJobData>) => {
-        const { motoristaId, mes, ano, planoSlug } = job.data;
+        const { motoristaId, mes, ano } = job.data;
         logger.info({ jobId: job.id, motoristaId, mes, ano }, "[Worker] Iniciando geração mensal...");
 
         try {
-            const stats = await cobrancaService.gerarCobrancasMensaisParaMotorista(motoristaId, mes, ano, planoSlug);
-            
+            const stats = await cobrancaService.gerarCobrancasMensaisParaMotorista(motoristaId, mes, ano);
+
             logger.info({ jobId: job.id, stats }, "[Worker] Geração mensal concluída para motorista");
             return stats;
 
@@ -29,8 +29,8 @@ export const generationWorker = new Worker<GenerationJobData>(
         connection: redisConfig,
         concurrency: 5, // Pode gerar para 5 motoristas simultaneamente (ajustar conforme DB load)
         limiter: {
-             max: 20, 
-             duration: 10000 
+            max: 20,
+            duration: 10000
         }
     }
 );

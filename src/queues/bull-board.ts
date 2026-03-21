@@ -16,11 +16,11 @@ export const setupBullBoard = (app: FastifyInstance) => {
   createBullBoard({
     queues: [
       new BullMQAdapter(whatsappQueue),
-      new BullMQAdapter(receiptQueue),
-      new BullMQAdapter(webhookQueue),
-      new BullMQAdapter(generationQueue),
-      new BullMQAdapter(pixQueue),
-      new BullMQAdapter(payoutQueue),
+      // new BullMQAdapter(receiptQueue),
+      // new BullMQAdapter(webhookQueue),
+      // new BullMQAdapter(generationQueue),
+      // new BullMQAdapter(pixQueue),
+      // new BullMQAdapter(payoutQueue),
       new BullMQAdapter(contractQueue),
     ],
     serverAdapter,

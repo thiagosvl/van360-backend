@@ -2,15 +2,7 @@ import { Job, Worker } from 'bullmq';
 import { logger } from '../config/logger.js';
 import { redisConfig } from '../config/redis.js';
 import { QUEUE_NAME_CRON } from '../queues/cron.queue.js';
-import { chargeGeneratorJob } from '../services/jobs/charge-generator.job.js';
-import { dailyChargeMonitorJob } from '../services/jobs/daily-charge-monitor.job.js';
-import { dailySubscriptionMonitorJob } from '../services/jobs/daily-subscription-monitor.job.js';
-import { pixValidationMonitorJob } from '../services/jobs/pix-validation-monitor.job.js';
-import { reconciliacaoEntradaJob } from '../services/jobs/reconciliacao-entrada.job.js';
-import { repasseMonitorJob } from '../services/jobs/repasse-monitor.job.js';
-import { repasseReconciliatorJob } from '../services/jobs/repasse-reconciliator.job.js';
-import { repasseRetryJob } from '../services/jobs/repasse-retry.job.js';
-import { subscriptionGeneratorJob } from '../services/jobs/subscription-generator.job.js';
+
 
 /**
  * Worker responsável por executar os Jobs agendados (Cron) na VPS.
@@ -22,6 +14,7 @@ export const cronWorker = new Worker(
 
         try {
             switch (job.name) {
+                /* 
                 case 'repasse-monitor':
                     await repasseMonitorJob.run();
                     break;
@@ -41,25 +34,10 @@ export const cronWorker = new Worker(
                 case 'reconciliacao-entrada':
                     await reconciliacaoEntradaJob.run();
                     break;
-
-                case 'daily-subscription-monitor':
-                    await dailySubscriptionMonitorJob.run();
-                    break;
-
-                case 'charge-generator':
-                    await chargeGeneratorJob.run();
-                    break;
-
-                case 'subscription-generator':
-                    await subscriptionGeneratorJob.run();
-                    break;
-
-                case 'daily-charge-monitor':
-                    await dailyChargeMonitorJob.run();
-                    break;
+                */
 
                 default:
-                    logger.warn({ jobName: job.name }, "[CronWorker] Job desconhecido recebido.");
+                    logger.warn({ jobName: job.name }, "[CronWorker] Job DESATIVADO ou desconhecido recebido.");
             }
         } catch (error: any) {
             logger.error({ 

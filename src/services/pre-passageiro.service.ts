@@ -26,10 +26,10 @@ export const prePassageiroService = {
     // Processa valor_cobranca: converte string para number se necessário (mesma lógica do serviço de passageiros)
     let valorCobranca = null;
     if (payload.valor_cobranca !== undefined && payload.valor_cobranca !== null && payload.valor_cobranca !== "") {
-      valorCobranca = typeof payload.valor_cobranca === "string" 
+      valorCobranca = typeof payload.valor_cobranca === "string"
         ? moneyToNumber(payload.valor_cobranca)
         : Number(payload.valor_cobranca);
-      
+
       // Valida se é um número válido e maior que zero
       if (isNaN(valorCobranca) || valorCobranca <= 0) {
         valorCobranca = null;
@@ -65,7 +65,7 @@ export const prePassageiroService = {
       cep: payload.cep || null,
       referencia: payload.referencia || null,
       observacoes: payload.observacoes || null,
-      
+
       // Novos Campos
       modalidade: payload.modalidade || null,
       genero: payload.genero || null,
@@ -81,29 +81,6 @@ export const prePassageiroService = {
       .single();
 
     if (error) throw error;
-
-    // Notificar Motorista (Background)
-    
-    /* REMOVIDO TEMPORARIAMENTE PARA EVITAR SPAM (REQ. CLIENTE)
-    (async () => {
-      try {
-        const motorista = await getUsuarioData(payload.usuario_id);
-        if (motorista?.telefone) {
-          await notificationService.notifyDriver(motorista.telefone, DRIVER_EVENT_PRE_PASSENGER_CREATED, {
-            nomeMotorista: motorista.nome,
-            nomePassageiro: data.nome,
-            nomeResponsavel: data.nome_responsavel,
-            // Campos obrigatórios do DriverContext (fallbacks)
-            nomePlano: "",
-            valor: 0,
-            dataVencimento: ""
-          });
-        }
-      } catch (err: any) {
-        logger.error({ err: err.message, payload }, "Erro ao notificar motorista sobre pré-cadastro");
-      }
-    })();
-    */
 
     return data;
   },

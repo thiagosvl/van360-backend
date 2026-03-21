@@ -30,26 +30,12 @@ export const passageiroController = {
     
     const authUid = (request as any).user?.id;
     if (authUid) {
-        const usuarioId = await accessControlService.resolveUsuarioId(authUid);
-        await accessControlService.validateWriteAccess(usuarioId);
+        await accessControlService.validateWriteAccess(authUid);
     }
 
     const data = updatePassageiroSchema.parse(request.body);
     
-    // Tratamento especial para enviar_cobranca_automatica
-    if (data.enviar_cobranca_automatica === true) {
-        try {
-            await passageiroService.updatePassageiro(id, data);
-        } catch (err: any) {
-            // Interceptar erro de limite para retornar 403 ou 422 específico se quiser
-            if (err.message.includes("LIMIT_EXCEEDED")) {
-                throw new AppError(err.message, 403);
-            }
-            throw err;
-        }
-    } else {
-        await passageiroService.updatePassageiro(id, data);
-    }
+    await passageiroService.updatePassageiro(id, data);
     
     return reply.status(200).send({ success: true });
   },
@@ -60,8 +46,7 @@ export const passageiroController = {
 
     const authUid = (request as any).user?.id;
     if (authUid) {
-        const usuarioId = await accessControlService.resolveUsuarioId(authUid);
-        await accessControlService.validateWriteAccess(usuarioId);
+        await accessControlService.validateWriteAccess(authUid);
     }
 
     await passageiroService.deletePassageiro(id);
@@ -125,8 +110,7 @@ export const passageiroController = {
         throw new AppError("Não autorizado", 401);
     }
     
-    const usuarioId = await accessControlService.resolveUsuarioId(authUid);
-    const data = await passageiroService.lookupResponsavelByCpf(usuarioId, cpf);
+    const data = await passageiroService.lookupResponsavelByCpf(authUid, cpf);
 
     return reply.status(200).send(data); 
   }

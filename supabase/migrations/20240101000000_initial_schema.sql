@@ -70,17 +70,6 @@ CREATE TYPE "public"."tipo_pagamento_enum" AS ENUM (
 
 ALTER TYPE "public"."tipo_pagamento_enum" OWNER TO "postgres";
 
-CREATE TYPE "public"."billing_type_enum" AS ENUM (
-    'subscription',
-    'upgrade',
-    'activation',
-    'upgrade_plan',
-    'expansion',
-    'downgrade',
-    'renewal'
-);
-
-ALTER TYPE "public"."billing_type_enum" OWNER TO "postgres";
 
 CREATE TYPE "public"."whatsapp_status_enum" AS ENUM (
     'CONNECTED',
@@ -164,59 +153,9 @@ CREATE TABLE IF NOT EXISTS "public"."app_updates" (
 ALTER TABLE "public"."app_updates" OWNER TO "postgres";
 
 
-CREATE TABLE IF NOT EXISTS "public"."assinaturas_cobrancas" (
-    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
-    "usuario_id" "uuid",
-    "assinatura_usuario_id" "uuid",
-    "valor" numeric(10,2) NOT NULL,
-    "status" "text" DEFAULT 'pendente'::"text" NOT NULL,
-    "data_vencimento" "date" NOT NULL,
-    "data_pagamento" timestamp with time zone,
-    "created_at" timestamp with time zone DEFAULT "now"(),
-    "updated_at" timestamp with time zone DEFAULT "now"(),
-    "tipo_pagamento" "text",
-    "valor_pago" numeric(10,2),
-    "gateway_txid" "text",
-    "qr_code_payload" "text",
-    "location_url" "text",
-    "billing_type" "public"."billing_type_enum" DEFAULT 'subscription'::"public"."billing_type_enum" NOT NULL,
-    "descricao" "text",
-    "gateway_fee" numeric(10,2) DEFAULT 0.00,
-    "dados_auditoria_pagamento" "jsonb" DEFAULT '{}'::"jsonb",
-    "recibo_url" "text",
-
-    CONSTRAINT "assinaturas_cobrancas_status_check" CHECK (("status" = ANY (ARRAY['pago'::"text", 'pendente_pagamento'::"text", 'cancelada'::"text"])))
-);
-
-
-ALTER TABLE "public"."assinaturas_cobrancas" OWNER TO "postgres";
-
-
-COMMENT ON COLUMN "public"."assinaturas_cobrancas"."gateway_fee" IS 'Valor da taxa cobrada pelo provedor de pagamento na transação PIX';
 
 
 
-CREATE TABLE IF NOT EXISTS "public"."assinaturas_usuarios" (
-    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "usuario_id" "uuid",
-    "plano_id" "uuid",
-    "ativo" boolean DEFAULT true,
-    "status" "text" DEFAULT 'pendente_pagamento'::"text" NOT NULL,
-    "anchor_date" "date" DEFAULT CURRENT_DATE NOT NULL,
-    "trial_end_at" timestamp with time zone,
-    "preco_aplicado" numeric(10,2),
-    "preco_origem" "text" DEFAULT 'normal'::"text",
-    "created_at" timestamp with time zone DEFAULT "now"(),
-    "updated_at" timestamp with time zone DEFAULT "now"(),
-    "data_ativacao" timestamp with time zone,
-    "franquia_contratada_cobrancas" integer,
-    "vigencia_fim" timestamp without time zone,
-    CONSTRAINT "assinaturas_usuarios_preco_origem_check" CHECK (("preco_origem" = ANY (ARRAY['normal'::"text", 'promocional'::"text", 'personalizado'::"text"]))),
-    CONSTRAINT "assinaturas_usuarios_status_check" CHECK (("status" = ANY (ARRAY['ativa'::"text", 'pendente_pagamento'::"text", 'cancelada'::"text", 'suspensa'::"text", 'trial'::"text"])))
-);
-
-
-ALTER TABLE "public"."assinaturas_usuarios" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."cobrancas" (
@@ -235,13 +174,7 @@ CREATE TABLE IF NOT EXISTS "public"."cobrancas" (
     "usuario_id" "uuid",
     "origem" "text" DEFAULT '''automatica''::text'::"text" NOT NULL,
     "tipo_pagamento" "public"."tipo_pagamento_enum",
-    "gateway_txid" "text",
-    "qr_code_payload" "text",
-    "location_url" "text",
     "valor_pago" numeric(10,2),
-    "gateway_fee" numeric(10,2),
-
-    "dados_auditoria_pagamento" "jsonb" DEFAULT '{}'::"jsonb",
     "data_envio_ultima_notificacao" timestamp without time zone,
     "recibo_url" "text",
     CONSTRAINT "cobrancas_mes_check" CHECK ((("mes" >= 1) AND ("mes" <= 12))),
@@ -253,7 +186,7 @@ CREATE TABLE IF NOT EXISTS "public"."cobrancas" (
 ALTER TABLE "public"."cobrancas" OWNER TO "postgres";
 
 
-COMMENT ON COLUMN "public"."cobrancas"."dados_auditoria_pagamento" IS 'Payload completo do webhook de pagamento para auditoria';
+
 
 
 
@@ -346,8 +279,6 @@ CREATE TABLE IF NOT EXISTS "public"."passageiros" (
     "data_nascimento" "date",
     "parentesco_responsavel" "public"."parentesco_enum",
     "data_inicio_transporte" "date",
-    "enviar_cobranca_automatica" boolean DEFAULT false,
-    "origem_desativacao_cobranca_automatica" character varying(50) DEFAULT NULL::character varying,
     CONSTRAINT "passageiros_dia_vencimento_check" CHECK ((("dia_vencimento" >= 1) AND ("dia_vencimento" <= 31)))
 );
 
@@ -355,52 +286,12 @@ CREATE TABLE IF NOT EXISTS "public"."passageiros" (
 ALTER TABLE "public"."passageiros" OWNER TO "postgres";
 
 
-COMMENT ON COLUMN "public"."passageiros"."origem_desativacao_cobranca_automatica" IS 'Razão da desativação da cobrança: manual (usuário), automatico (sistema por franquia), ou CONTA_EXCLUIDA.';
 
 
 
-CREATE TABLE IF NOT EXISTS "public"."pix_validacao_pendente" (
-    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "usuario_id" "uuid" NOT NULL,
-    "x_id_idempotente" "text" NOT NULL,
-    "chave_pix_enviada" "text" NOT NULL,
-    "created_at" timestamp with time zone DEFAULT "now"(),
-    "status" character varying(50) DEFAULT 'PENDENTE'::character varying,
-    "end_to_end_id" "text",
-    "motivo_falha" "text",
-    "tipo_chave" "text"
-);
 
 
-ALTER TABLE "public"."pix_validacao_pendente" OWNER TO "postgres";
 
-
-CREATE TABLE IF NOT EXISTS "public"."planos" (
-    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "parent_id" "uuid",
-    "tipo" "text" DEFAULT 'base'::"text" NOT NULL,
-    "nome" "text" NOT NULL,
-    "slug" "text" NOT NULL,
-    "descricao_curta" "text",
-    "ordem_exibicao" integer DEFAULT 0,
-    "ativo" boolean DEFAULT true,
-    "limite_passageiros" integer DEFAULT 0,
-    "franquia_cobrancas_mes" integer DEFAULT 0,
-    "preco" numeric(10,2) NOT NULL,
-    "preco_promocional" numeric(10,2),
-    "promocao_ativa" boolean DEFAULT false,
-    "permite_cobrancas" boolean DEFAULT false,
-    "created_at" timestamp with time zone DEFAULT "now"(),
-    "trial_days" integer DEFAULT 0,
-    "beneficios" "jsonb" DEFAULT '[]'::"jsonb",
-    CONSTRAINT "planos_tipo_check" CHECK (("tipo" = ANY (ARRAY['base'::"text", 'sub'::"text"])))
-);
-
-
-ALTER TABLE "public"."planos" OWNER TO "postgres";
-
-
-CREATE TABLE IF NOT EXISTS "public"."pre_passageiros" (
     "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
     "usuario_id" "uuid" NOT NULL,
     "nome" "text" NOT NULL,
@@ -444,20 +335,15 @@ COMMENT ON COLUMN "public"."pre_passageiros"."dia_vencimento" IS 'Dia do mês pa
 
 
 CREATE TABLE IF NOT EXISTS "public"."usuarios" (
-    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "id" "uuid" NOT NULL,
     "cpfcnpj" "text" NOT NULL,
     "email" "text" NOT NULL,
-    "auth_uid" "uuid",
     "created_at" timestamp without time zone DEFAULT "now"() NOT NULL,
     "telefone" "text" NOT NULL,
     "nome" "text" NOT NULL,
     "updated_at" timestamp without time zone DEFAULT "now"() NOT NULL,
     "apelido" "text" NOT NULL,
     "ativo" boolean DEFAULT true,
-    "chave_pix" "text",
-    "tipo_chave_pix" "text",
-    "status_chave_pix" character varying(50) DEFAULT 'NAO_CADASTRADA'::character varying NOT NULL,
-    "chave_pix_validada_em" timestamp with time zone,
     "tipo" "public"."user_type_enum" DEFAULT 'motorista'::"public"."user_type_enum" NOT NULL,
     "assinatura_digital_url" "text",
     "config_contrato" "jsonb" DEFAULT '{
@@ -526,13 +412,6 @@ ALTER TABLE ONLY "public"."app_updates"
 
 
 
-ALTER TABLE ONLY "public"."assinaturas_cobrancas"
-    ADD CONSTRAINT "assinaturas_cobrancas_pkey" PRIMARY KEY ("id");
-
-
-
-ALTER TABLE ONLY "public"."assinaturas_usuarios"
-    ADD CONSTRAINT "assinaturas_usuarios_pkey" PRIMARY KEY ("id");
 
 
 
@@ -576,22 +455,10 @@ ALTER TABLE ONLY "public"."gastos"
 
 
 ALTER TABLE ONLY "public"."pix_validacao_pendente"
-    ADD CONSTRAINT "pix_validacao_pendente_pkey" PRIMARY KEY ("id");
 
 
 
-ALTER TABLE ONLY "public"."pix_validacao_pendente"
-    ADD CONSTRAINT "pix_validacao_pendente_x_id_idempotente_key" UNIQUE ("x_id_idempotente");
 
-
-
-ALTER TABLE ONLY "public"."planos"
-    ADD CONSTRAINT "planos_pkey" PRIMARY KEY ("id");
-
-
-
-ALTER TABLE ONLY "public"."planos"
-    ADD CONSTRAINT "planos_slug_key" UNIQUE ("slug");
 
 
 
@@ -603,8 +470,7 @@ ALTER TABLE ONLY "public"."pre_passageiros"
 
 
 
-ALTER TABLE ONLY "public"."usuarios"
-    ADD CONSTRAINT "usuarios_auth_uid_key" UNIQUE ("auth_uid");
+
 
 
 
@@ -638,19 +504,6 @@ ALTER TABLE ONLY "public"."veiculos"
 
 
 
-CREATE INDEX "assinaturas_usuarios_ativo_idx" ON "public"."assinaturas_usuarios" USING "btree" ("ativo");
-
-
-
-CREATE INDEX "assinaturas_usuarios_plano_id_idx" ON "public"."assinaturas_usuarios" USING "btree" ("plano_id");
-
-
-
-CREATE INDEX "assinaturas_usuarios_usuario_id_idx" ON "public"."assinaturas_usuarios" USING "btree" ("usuario_id");
-
-
-
-CREATE UNIQUE INDEX "assinaturas_usuarios_usuario_id_idx1" ON "public"."assinaturas_usuarios" USING "btree" ("usuario_id") WHERE ("ativo" = true);
 
 
 
@@ -664,20 +517,8 @@ CREATE INDEX "idx_cobrancas_data_envio_ultima_notificacao" ON "public"."cobranca
 
 
 
-CREATE INDEX "idx_passageiros_origem_desativacao_cobranca_automatica" ON "public"."passageiros" USING "btree" ("origem_desativacao_cobranca_automatica") WHERE ("origem_desativacao_cobranca_automatica" IS NOT NULL);
 
 
-
-CREATE INDEX "idx_pix_validacao_pendente_usuario_id" ON "public"."pix_validacao_pendente" USING "btree" ("usuario_id");
-
-
-
-CREATE INDEX "idx_pix_validacao_pendente_x_id_idempotente" ON "public"."pix_validacao_pendente" USING "btree" ("x_id_idempotente");
-
-
-
-
-CREATE INDEX "idx_usuarios_status_chave_pix" ON "public"."usuarios" USING "btree" ("status_chave_pix");
 
 
 
@@ -690,9 +531,6 @@ CREATE INDEX "idx_cobrancas_data_vencimento" ON "public"."cobrancas" USING "btre
 CREATE INDEX "idx_cobrancas_usuario_id" ON "public"."cobrancas" USING "btree" ("usuario_id");
 CREATE INDEX "idx_cobrancas_passageiro_id" ON "public"."cobrancas" USING "btree" ("passageiro_id");
 
-CREATE INDEX "idx_assinaturas_cobrancas_status" ON "public"."assinaturas_cobrancas" USING "btree" ("status");
-CREATE INDEX "idx_assinaturas_cobrancas_usuario_id" ON "public"."assinaturas_cobrancas" USING "btree" ("usuario_id");
-CREATE INDEX "idx_assinaturas_cobrancas_data_vencimento" ON "public"."assinaturas_cobrancas" USING "btree" ("data_vencimento");
 
 
 
@@ -712,23 +550,6 @@ CREATE OR REPLACE TRIGGER "update_escolas_updated_at" BEFORE UPDATE ON "public".
 
 
 
-ALTER TABLE ONLY "public"."assinaturas_cobrancas"
-    ADD CONSTRAINT "assinaturas_cobrancas_assinatura_usuario_id_fkey" FOREIGN KEY ("assinatura_usuario_id") REFERENCES "public"."assinaturas_usuarios"("id") ON UPDATE CASCADE ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."assinaturas_cobrancas"
-    ADD CONSTRAINT "assinaturas_cobrancas_usuario_id_fkey" FOREIGN KEY ("usuario_id") REFERENCES "public"."usuarios"("id") ON UPDATE CASCADE ON DELETE SET NULL;
-
-
-
-ALTER TABLE ONLY "public"."assinaturas_usuarios"
-    ADD CONSTRAINT "assinaturas_usuarios_plano_id_fkey" FOREIGN KEY ("plano_id") REFERENCES "public"."planos"("id") ON UPDATE CASCADE ON DELETE RESTRICT;
-
-
-
-ALTER TABLE ONLY "public"."assinaturas_usuarios"
-    ADD CONSTRAINT "assinaturas_usuarios_usuario_id_fkey" FOREIGN KEY ("usuario_id") REFERENCES "public"."usuarios"("id") ON UPDATE CASCADE ON DELETE SET NULL;
 
 
 
@@ -778,16 +599,6 @@ ALTER TABLE ONLY "public"."passageiros"
 
 
 
-ALTER TABLE ONLY "public"."pix_validacao_pendente"
-    ADD CONSTRAINT "pix_validacao_pendente_usuario_id_fkey" FOREIGN KEY ("usuario_id") REFERENCES "public"."usuarios"("id") ON UPDATE CASCADE ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."planos"
-    ADD CONSTRAINT "planos_parent_id_fkey" FOREIGN KEY ("parent_id") REFERENCES "public"."planos"("id") ON UPDATE CASCADE ON DELETE SET NULL;
-
-
-
 ALTER TABLE ONLY "public"."pre_passageiros"
     ADD CONSTRAINT "pre_passageiros_escola_id_fkey" FOREIGN KEY ("escola_id") REFERENCES "public"."escolas"("id") ON UPDATE CASCADE ON DELETE SET NULL;
 
@@ -801,7 +612,7 @@ ALTER TABLE ONLY "public"."pre_passageiros"
 
 
 ALTER TABLE ONLY "public"."usuarios"
-    ADD CONSTRAINT "usuarios_auth_uid_fkey" FOREIGN KEY ("auth_uid") REFERENCES "auth"."users"("id") ON UPDATE CASCADE ON DELETE CASCADE;
+    ADD CONSTRAINT "usuarios_id_fkey" FOREIGN KEY ("id") REFERENCES "auth"."users"("id") ON UPDATE CASCADE ON DELETE CASCADE;
 
 
 
@@ -819,7 +630,6 @@ ALTER PUBLICATION "supabase_realtime" OWNER TO "postgres";
 
 
 
-ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."assinaturas_cobrancas";
 ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."usuarios";
 
 
@@ -1141,15 +951,6 @@ GRANT ALL ON TABLE "public"."app_updates" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."assinaturas_cobrancas" TO "anon";
-GRANT ALL ON TABLE "public"."assinaturas_cobrancas" TO "authenticated";
-GRANT ALL ON TABLE "public"."assinaturas_cobrancas" TO "service_role";
-
-
-
-GRANT ALL ON TABLE "public"."assinaturas_usuarios" TO "anon";
-GRANT ALL ON TABLE "public"."assinaturas_usuarios" TO "authenticated";
-GRANT ALL ON TABLE "public"."assinaturas_usuarios" TO "service_role";
 
 
 
@@ -1195,9 +996,6 @@ GRANT ALL ON TABLE "public"."pix_validacao_pendente" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."planos" TO "anon";
-GRANT ALL ON TABLE "public"."planos" TO "authenticated";
-GRANT ALL ON TABLE "public"."planos" TO "service_role";
 
 
 
@@ -1300,7 +1098,7 @@ CREATE OR REPLACE FUNCTION "public"."anonymize_user_account"("target_user_id" uu
 BEGIN
   -- 1. DELETE non-critical data (Physical Deletion)
   DELETE FROM "public"."pre_passageiros" WHERE "usuario_id" = target_user_id;
-  DELETE FROM "public"."pix_validacao_pendente" WHERE "usuario_id" = target_user_id;
+
   DELETE FROM "public"."contratos" WHERE "usuario_id" = target_user_id;
   DELETE FROM "public"."historico_atividades" WHERE "usuario_id" = target_user_id;
 
@@ -1312,7 +1110,6 @@ BEGIN
     "email" = 'deleted_' || "id"::text || '@van360.anon',
     "cpfcnpj" = 'DEL' || substring("id"::text, 1, 11),
     "telefone" = '00000000000_' || substring("id"::text, 1, 5),
-    "chave_pix_validada_em" = NULL,
     "assinatura_digital_url" = NULL,
     "config_contrato" = '{
       "usar_contratos": false,
@@ -1320,8 +1117,7 @@ BEGIN
       "multa_atraso": { "valor": 0, "tipo": "percentual" },
       "multa_rescisao": { "valor": 0, "tipo": "percentual" },
       "clausulas": []
-    }'::jsonb,
-    "whatsapp_status" = 'DISCONNECTED'
+    }'::jsonb
   WHERE "id" = target_user_id;
 
   -- 3. ANONYMIZE Passengers (Keep ID for Cobrancas)
@@ -1367,49 +1163,11 @@ BEGIN
   -- 6. SANITIZE Financial Records (Remove PII from audit logs)
   UPDATE "public"."cobrancas"
   SET
-    "dados_auditoria_pagamento" = '{}'::jsonb,
-    "recibo_url" = NULL,
-    "location_url" = NULL,
-    "qr_code_payload" = NULL
-  WHERE "usuario_id" = target_user_id;
-
-  -- 6b. SANITIZE Repasse Records
-  UPDATE "public"."repasses"
-  SET
-    "erro_mensagem" = NULL,
-    "gateway_group_id" = NULL,
-    "gateway_item_id" = NULL,
-    "gateway_raw_status" = NULL
-  WHERE "usuario_id" = target_user_id;
-
-  -- 7. ANONYMIZE/CANCEL SaaS Subscriptions (Stop future billing)
-  UPDATE "public"."assinaturas_usuarios"
-  SET
-    "ativo" = false,
-    "status" = 'cancelada',
-    "billing_mode" = 'manual' -- Prevent auto-renewal
-  WHERE "usuario_id" = target_user_id;
-
-  -- 8. SANITIZE SaaS Billing Records (Keep history, remove PII artifacts)
-  UPDATE "public"."assinaturas_cobrancas"
-  SET
-    "qr_code_payload" = NULL,
-    "location_url" = NULL,
-    "recibo_url" = NULL,
-    "dados_auditoria_pagamento" = '{}'::jsonb
+    "recibo_url" = NULL
   WHERE "usuario_id" = target_user_id;
 
   UPDATE "public"."gastos"
   SET "descricao" = 'Gasto histórico (Conta excluída)'
-  WHERE "usuario_id" = target_user_id;
-
-  -- 9. SANITIZE Repasse Records (FSM Ledger)
-  UPDATE "public"."repasses"
-  SET 
-    "erro_mensagem" = NULL,
-    "gateway_group_id" = NULL,
-    "gateway_item_id" = NULL,
-    "gateway_raw_status" = NULL
   WHERE "usuario_id" = target_user_id;
 
 END;
@@ -1477,95 +1235,7 @@ EXECUTE FUNCTION "public"."update_updated_at_column"();
 
 
 
--- =====================================================
--- MÁQUINA DE ESTADOS DE REPASSE (FSM)
--- =====================================================
 
-CREATE TYPE "public"."repasse_state" AS ENUM (
-  'CRIADO',
-  'DECODIFICANDO',
-  'DECODIFICADO',
-  'SUBMETIDO',
-  'AGUARDANDO_APROVACAO',
-  'EM_LIQUIDACAO',
-  'LIQUIDADO',
-  'ERRO_DECODIFICACAO',
-  'ERRO_TRANSFERENCIA',
-  'EXPIRADO',
-  'CANCELADO'
-);
-
--- Tabela principal de repasses (FSM Ledger)
-CREATE TABLE IF NOT EXISTS "public"."repasses" (
-    "id"                  UUID DEFAULT gen_random_uuid() NOT NULL,
-    "cobranca_id"         UUID NOT NULL,
-    "usuario_id"          UUID NOT NULL,
-    "valor"               NUMERIC(10,2) NOT NULL,
-    "estado"              "public"."repasse_state" NOT NULL DEFAULT 'CRIADO',
-    "versao"              INTEGER NOT NULL DEFAULT 1,
-    "gateway_group_id"    TEXT,
-    "gateway_item_id"     TEXT,
-    "gateway_raw_status"  TEXT,
-    "gateway"             TEXT,
-    "tentativa"           INTEGER NOT NULL DEFAULT 1,
-    "max_tentativas"      INTEGER NOT NULL DEFAULT 3,
-    "erro_mensagem"       TEXT,
-    "erro_codigo"         TEXT,
-    "created_at"          TIMESTAMPTZ DEFAULT now(),
-    "updated_at"          TIMESTAMPTZ DEFAULT now(),
-    "liquidado_at"        TIMESTAMPTZ,
-    CONSTRAINT "repasses_pkey" PRIMARY KEY ("id"),
-    CONSTRAINT "repasses_cobranca_id_fkey" FOREIGN KEY ("cobranca_id")
-      REFERENCES "public"."cobrancas"("id") ON UPDATE CASCADE ON DELETE RESTRICT,
-    CONSTRAINT "repasses_usuario_id_fkey" FOREIGN KEY ("usuario_id")
-      REFERENCES "public"."usuarios"("id") ON UPDATE CASCADE ON DELETE CASCADE
-);
-
-ALTER TABLE "public"."repasses" OWNER TO "postgres";
-
--- Impede 2 repasses ativos para mesma cobrança
-CREATE UNIQUE INDEX "idx_repasse_ativo_cobranca"
-  ON "public"."repasses"("cobranca_id")
-  WHERE "estado" NOT IN ('LIQUIDADO','CANCELADO','ERRO_DECODIFICACAO','ERRO_TRANSFERENCIA');
-
-CREATE INDEX "idx_repasses_estado" ON "public"."repasses"("estado");
-CREATE INDEX "idx_repasses_usuario_id" ON "public"."repasses"("usuario_id");
-CREATE INDEX "idx_repasses_created_at" ON "public"."repasses"("created_at");
-
-CREATE TRIGGER "update_repasses_updated_at"
-  BEFORE UPDATE ON "public"."repasses"
-  FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
-
--- Tabela de audit trail de transições
-CREATE TABLE IF NOT EXISTS "public"."repasse_transicoes" (
-    "id"          UUID DEFAULT gen_random_uuid() NOT NULL,
-    "repasse_id"  UUID NOT NULL,
-    "estado_de"   "public"."repasse_state" NOT NULL,
-    "estado_para" "public"."repasse_state" NOT NULL,
-    "motivo"      TEXT,
-    "ator"        TEXT NOT NULL,
-    "metadata"    JSONB DEFAULT '{}'::jsonb,
-    "created_at"  TIMESTAMPTZ DEFAULT now(),
-    CONSTRAINT "repasse_transicoes_pkey" PRIMARY KEY ("id"),
-    CONSTRAINT "repasse_transicoes_repasse_id_fkey" FOREIGN KEY ("repasse_id")
-      REFERENCES "public"."repasses"("id") ON UPDATE CASCADE ON DELETE CASCADE
-);
-
-ALTER TABLE "public"."repasse_transicoes" OWNER TO "postgres";
-
-CREATE INDEX "idx_repasse_transicoes_repasse_id" ON "public"."repasse_transicoes"("repasse_id");
-
-GRANT ALL ON TABLE "public"."repasses" TO "anon";
-GRANT ALL ON TABLE "public"."repasses" TO "authenticated";
-GRANT ALL ON TABLE "public"."repasses" TO "service_role";
-GRANT ALL ON TABLE "public"."repasse_transicoes" TO "anon";
-GRANT ALL ON TABLE "public"."repasse_transicoes" TO "authenticated";
-GRANT ALL ON TABLE "public"."repasse_transicoes" TO "service_role";
-
-COMMENT ON TABLE "public"."repasses" IS 'Máquina de estados de repasse (transferência ao motorista). Fonte única de verdade.';
-COMMENT ON COLUMN "public"."repasses"."versao" IS 'Lock otimista: incrementado a cada transição para prevenir race conditions.';
-COMMENT ON COLUMN "public"."repasses"."gateway_group_id" IS 'ID do lote/grupo no gateway bancário (genérico).';
-COMMENT ON TABLE "public"."repasse_transicoes" IS 'Audit trail completo de todas as transições de estado dos repasses.';
 
 
 -- =====================================================

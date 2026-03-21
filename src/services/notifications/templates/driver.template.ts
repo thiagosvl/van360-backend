@@ -7,13 +7,11 @@ import { formatCurrency, formatPixKey, getFirstName } from "../../../utils/forma
 
 export interface DriverContext {
     nomeMotorista: string;
-    nomePlano: string;
-    valor: number;
-    dataVencimento: string;
+    valor?: number;
+    dataVencimento?: string;
     mes?: number;
     ano?: number;
     reciboUrl?: string; // URL da imagem do comprovante
-    trialDays?: number;
     nomePassageiro?: string;
     nomeResponsavel?: string;
     // New fields for flexible Lego composition
@@ -67,119 +65,36 @@ const textPart = (text: string): CompositeMessagePart[] => {
 export const DriverTemplates = {
 
     /**
-     * Boas-vindas: Plano com Trial (Essencial)
+     * Boas-vindas: Onboarding concluído
      */
     welcomeTrial: (ctx: DriverContext): CompositeMessagePart[] => {
-        const dias = ctx.trialDays || 7;
-        const validade = ctx.dataVencimento ? formatToBrazilianDate(ctx.dataVencimento) : "";
-        const validadeMsg = validade ? ` válido até *${validade}*` : "";
-
         return textPart(`🚀 *Bem-vindo(a) à Van360*\n\n` +
-            `O plano *${ctx.nomePlano}* foi ativado com sucesso.\n` +
-            `Seu acesso de *${dias} dias* grátis é${validadeMsg}.\n\n` +
+            `Sua conta foi criada com sucesso e já está pronta para uso.\n\n` +
             `⚠️ *Próximos Passos*\n` +
-            `• Configurar Contrato`);
+            `• Configurar seu contrato padrão\n` +
+            `• Cadastrar seus primeiros passageiros`);
     },
 
     /**
-     * Ativação: Faça o pagamento para começar
+     * Ativação: Conta Pronta
      */
     activation: (ctx: DriverContext): CompositeMessagePart[] => {
-        const valor = formatCurrency(ctx.valor);
-
-        const text = `⏳ *Ativação Pendente*\n\n` +
-            `Seu plano no valor de *${valor}* aguarda pagamento para ativação.\n` +
-            `Realize o pagamento pelo PIX abaixo para liberar o acesso.`;
-
-        return buildPixMessageParts(text, ctx.pixPayload);
+        return textPart(`✅ *Conta Ativada*\n\n` +
+            `Seu acesso ao Van360 está liberado.\n` +
+            `Aproveite todas as funcionalidades de gestão e automação sem custos.`);
     },
-
-    /**
-     * Renovação: Genérica (Uso manual ou info)
-     */
-    renewal: (ctx: DriverContext): CompositeMessagePart[] => {
-        const valor = formatCurrency(ctx.valor);
-        const data = formatToBrazilianDate(ctx.dataVencimento);
-        const text = `🗓️ *Renovação Próxima*\n\n` +
-            `Sua assinatura do plano *${ctx.nomePlano}* vence em *${data}*.\n` +
-            `Valor: *${valor}*\n\n` +
-            `Realize o pagamento pelo PIX abaixo para evitar bloqueios no sistema.`;
-
-        return buildPixMessageParts(text, ctx.pixPayload);
-    },
-
-    /**
-     * Renovação: Aviso Prévio (X dias antes)
-     */
-    renewalDueSoon: (ctx: DriverContext): CompositeMessagePart[] => {
-        const valor = formatCurrency(ctx.valor);
-        const data = formatToBrazilianDate(ctx.dataVencimento);
-        const text = `🗓️ *Renovação Próxima*\n\n` +
-            `Sua assinatura do plano *${ctx.nomePlano}* vence em *${data}*.\n` +
-            `Valor: *${valor}*\n\n` +
-            `Realize o pagamento pelo PIX abaixo para evitar bloqueios no sistema.`;
-        
-        return buildPixMessageParts(text, ctx.pixPayload);
-    },
-
-    /**
-     * Renovação: Vence Hoje
-     */
-    renewalDueToday: (ctx: DriverContext): CompositeMessagePart[] => {
-        const valor = formatCurrency(ctx.valor);
-        const data = formatToBrazilianDate(ctx.dataVencimento);
-        const text = `⚠️ *Vencimento Hoje*\n\n` +
-            `Sua assinatura do plano *${ctx.nomePlano}* vence *HOJE* (*${data}*).\n` +
-            `Valor: *${valor}*\n\n` +
-            `Realize o pagamento pelo PIX abaixo para garantir seu acesso.`;
-
-        return buildPixMessageParts(text, ctx.pixPayload);
-    },
-
-    /**
-     * Renovação: Atrasado (Ainda não suspenso)
-     */
-    renewalOverdue: (ctx: DriverContext & { diasAtraso?: number }): CompositeMessagePart[] => {
-        const dias = ctx.diasAtraso ? `há ${ctx.diasAtraso} dias` : "em atraso";
-        const text = `⚠️ *Mensalidade Pendente*\n\n` +
-            `A assinatura do sistema está vencida *${dias}*.\n` +
-            `Regularize o pagamento pelo PIX abaixo para prevenir a suspensão automática das funcionalidades.`;
-        return buildPixMessageParts(text, ctx.pixPayload);
-    },
-
-    /**
-     * Acesso Suspenso (Bloqueado)
-     */
-    accessSuspended: (ctx: DriverContext): CompositeMessagePart[] => {
-        const text = `🚫 *Acesso Limitado*\n\n` +
-            `Devido à falta de pagamento, seu acesso ao sistema foi restrito. Novas ações estão bloqueadas.\n` +
-            `Realize o pagamento pelo PIX abaixo para normalizar o serviço instantaneamente.`;
-        return buildPixMessageParts(text, ctx.pixPayload);
-    },
-
-    /**
-     * Solicitação de Upgrade / Adicional
-     */
-    upgradeRequest: (ctx: DriverContext): CompositeMessagePart[] => {
-         const text = `🚀 *Solicitação de Upgrade*\n\n` +
-            `O pedido para alteração para o plano *${ctx.nomePlano}* foi recebido.\n` +
-            `Para efetivar a mudança imediatamente, realize o pagamento da diferença abaixo.`;
-         return buildPixMessageParts(text, ctx.pixPayload);
-    },
-    
-
 
     /**
      * Confirmação de Pagamento de Assinatura (Recibo do Motorista)
      */
     paymentConfirmed: (ctx: DriverContext): CompositeMessagePart[] => {
-        const valor = formatCurrency(ctx.valor);
+        const valor = formatCurrency(ctx.valor ?? 0);
         const ref = ctx.mes ? `\nReferência: *${getMonthNameBR(ctx.mes)}/${ctx.ano}*` : "";
         const validade = ctx.dataVencimento ? `\nNova validade: *${formatToBrazilianDate(ctx.dataVencimento)}*` : "";
 
-        const text = `✅ *Assinatura Confirmada*\n\n` +
-            `Pagamento de *${valor}* recebido com sucesso.\n` +
-            `Plano: *${ctx.nomePlano}*` +
+        const text = `✅ *Confirmação de Recebimento*\n\n` +
+            `Pagamento de *${valor}* processado com sucesso.\n` +
+            `Referência: *Sistema*` +
             `${ref}` +
             `${validade}`;
 
@@ -196,10 +111,8 @@ export const DriverTemplates = {
             parts.push({ type: "text", content: text });
         }
 
-        // 2. Lembretes Importantes (APENAS NA ATIVAÇÃO DO PLANO PROFISSIONAL)
-        const isProfessional = ctx.nomePlano.toLowerCase().includes("profissional");
-        
-        if (ctx.isActivation && !ctx.skipPixStep && isProfessional) {
+        // 2. Lembretes Importantes (Onboarding)
+        if (ctx.isActivation && !ctx.skipPixStep) {
             parts.push({
                 type: "text",
                 content: `⚠️ *Próximos Passos*\n` +
@@ -213,25 +126,10 @@ export const DriverTemplates = {
     },
 
     /**
-     * Aviso de Fim de Trial
-     */
-    trialEnding: (ctx: DriverContext): CompositeMessagePart[] => {
-        const valor = formatCurrency(ctx.valor);
-        const data = formatToBrazilianDate(ctx.dataVencimento);
-        
-        const text = `⏳ *Fim do Período de Testes*\n\n` +
-            `Seu teste grátis do plano *${ctx.nomePlano}* termina em *${data}*.\n` +
-            `Valor para renovação: *${valor}*\n\n` +
-            `Realize o pagamento pelo PIX abaixo para manter seu acesso completo sem interrupções.`;
-
-        return buildPixMessageParts(text, ctx.pixPayload);
-    },
-
-    /**
      * Falha no Repasse (Invalidar Chave)
      */
     repasseFailed: (ctx: DriverContext): CompositeMessagePart[] => {
-        const valor = formatCurrency(ctx.valor);
+        const valor = formatCurrency(ctx.valor ?? 0);
         return textPart(`❌ *Erro na Transferência PIX*\n\n` +
             `A tentativa de transferir *${valor}* falhou. O banco retornou um erro na sua chave PIX.\n` +
             `Sua chave PIX foi invalidada por segurança. Acesse o aplicativo e cadastre uma nova chave válida para receber os valores retidos.`);
@@ -240,7 +138,7 @@ export const DriverTemplates = {
      * Sucesso no Repasse (Liquidado na Conta)
      */
     repasseSuccess: (ctx: DriverContext): CompositeMessagePart[] => {
-        const valor = formatCurrency(ctx.valor);
+        const valor = formatCurrency(ctx.valor ?? 0);
         const data = ctx.dataVencimento ? formatToBrazilianDate(ctx.dataVencimento) : formatToBrazilianDate(toLocalDateString(new Date()));
         const ref = ctx.mes ? `*${getMonthNameBR(ctx.mes)}/${ctx.ano}*` : "";
         const passageiro = ctx.nomePassageiro ? `\n👤 Passageiro: *${getFirstName(ctx.nomePassageiro)}*` : "";
@@ -253,16 +151,6 @@ export const DriverTemplates = {
             `\n🏦 Data do depósito: *${data}*\n\n` +
             `_O valor já deve estar disponível em sua conta via PIX._`);
     },
-    reactivationWithEmbargo: (ctx: DriverContext): CompositeMessagePart[] => {
-        const mes = getMonthNameBR(ctx.mes);
-        const ref = mes ? ` de *${mes}/${ctx.ano}*` : "";
-
-        return textPart(`✅ *Conta Reativada*\n\n` +
-            `Seu acesso ao sistema foi restaurado.\n` +
-            `As cobranças${ref} referentes ao período suspenso foram geradas automaticamente.\n\n` +
-            `⚠️ *ATENÇÃO:* A automação de cobranças ficará pausada nas próximas 24h. Acesse o painel e dê baixa nos pagamentos recebidos "por fora" para evitar lembretes indevidos aos pais.`);
-    },
-
 
     /**
      * Notificação de Novo Pré-Cadastro

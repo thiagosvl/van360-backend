@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
-import { iniciaRegistroPlanoEssencial, iniciarRegistroplanoProfissional, loginResponsavel, login as loginService, logout as logoutService, refreshToken as refreshTokenService, resetPassword as resetPasswordService, updatePassword as updatePasswordService } from "../services/auth.service.js";
+import { registrarUsuario, loginResponsavel, login as loginService, logout as logoutService, refreshToken as refreshTokenService, resetPassword as resetPasswordService, updatePassword as updatePasswordService } from "../services/auth.service.js";
 
 interface RegisterPayload {
     nome: string;
@@ -9,54 +9,28 @@ interface RegisterPayload {
     email: string;
     telefone: string;
     senha: string;
-    plano_id: string;
-    sub_plano_id?: string;
 }
 
 export const AuthController = {
 
-
-    async registrarPlanoEssencial(request: FastifyRequest, reply: FastifyReply) {
-        logger.info("AuthController.registrarPlanoEssencial - Starting");
+    async registrar(request: FastifyRequest, reply: FastifyReply) {
+        logger.info("AuthController.registrar - Starting");
         const payload = request.body as RegisterPayload;
 
-        if (!payload.email || !payload.senha || !payload.plano_id) {
+        if (!payload.email || !payload.senha || !payload.nome || !payload.cpfcnpj) {
             return reply.status(400).send({ error: "Dados de registro incompletos." });
         }
 
         try {
-            const result = await iniciaRegistroPlanoEssencial(payload);
+            const result = await registrarUsuario(payload);
             return reply.status(200).send({
                 success: true,
                 session: result.session,
             });
         } catch (err: any) {
-            logger.info({ errField: err.field, errMsg: err.message }, "DEBUG: registrarPlanoEssencial Catch");
             logger.error(
-                { error: err.message, payload: { email: payload.email, plano: payload.plano_id } },
-                "Falha no Endpoint de Cadastro no Plano Essencial."
-            );
-            const status = err.statusCode || (err.message.includes("já está em uso") ? 409 : 400);
-            return reply.status(status).send({ error: err.message, field: err.field });
-        }
-    },
-
-    async registrarPlanoProfissional(request: FastifyRequest, reply: FastifyReply) {
-        logger.info("AuthController.registrarPlanoProfissional - Starting");
-        const payload = request.body as RegisterPayload;
-
-        if (!payload.email || !payload.senha || !payload.plano_id) {
-            return reply.status(400).send({ error: "Dados de registro incompletos." });
-        }
-
-        try {
-            const result = await iniciarRegistroplanoProfissional(payload);
-            return reply.status(200).send(result);
-        } catch (err: any) {
-            logger.info({ errField: err.field, errMsg: err.message }, "DEBUG: registrarPlanoProfissional Catch");
-            logger.error(
-                { error: err.message, payload: { email: payload.email, plano: payload.plano_id } },
-                "Falha no Endpoint de Cadastro no Plano Profissional."
+                { error: err.message, payload: { email: payload.email } },
+                "Falha no Endpoint de Cadastro."
             );
             const status = err.statusCode || (err.message.includes("já está em uso") ? 409 : 400);
             return reply.status(status).send({ error: err.message, field: err.field });
@@ -118,18 +92,6 @@ export const AuthController = {
     },
 
     async updatePassword(request: FastifyRequest, reply: FastifyReply) {
-        // Token validation done by middleware, but we need the raw token to pass to service?
-        // Actually the service 'updatePassword' I wrote takes 'token' to verify user AGAIN using supabaseAdmin.auth.getUser(token).
-        // This is double verification (Middleware does it too).
-        // But verifying in Service ensures we use the token's authority.
-        // Middleware attaches `req.user`.
-        // Ideally we just update `req.user.id`.
-        // But `updateUserById` (Admin) is super powerful.
-        // If we trust middleware, we can just use `req.user.id`.
-        // However, standard flow: Use the token to prove identity.
-        // Middleware: `verifySupabaseJWT` checks validity.
-        // I'll extract token from header again.
-
         const authHeader = request.headers.authorization;
         if (!authHeader) return reply.status(401).send({ error: "Token ausente." });
         const token = authHeader.split(" ")[1];

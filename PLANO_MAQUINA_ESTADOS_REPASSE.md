@@ -8,8 +8,6 @@
 ## Decisões de Projeto
 
 - **Estado com nomenclatura C6** — os nomes `DECODIFICANDO`, `DECODIFICADO`, `SUBMETIDO` refletem o fluxo real do C6 (único gateway ativo). Quando o Inter for reativado no futuro, o mapa de transições será expandido.
-- **Mock gateway removido** — Sempre usaremos C6 (produção ou sandbox). A rota `mock-pagamento` (ferramenta de dev que simula webhooks) continua existindo.
-- **Inter gateway intocado** — Não mexeremos no `inter.provider.ts` nem no `inter.service.ts`. Ele ficará desatualizado mas funcional como referência futura.
 - **`submeterGrupo`** — Permanece como chamada direta ao `c6Service` dentro do monitor. Quando Inter for reativado, moveremos para a interface `PaymentProvider`.
 
 ---
@@ -28,7 +26,6 @@
 | `src/services/jobs/repasse-monitor.job.ts` | REESCREVER | Consultar `repasses`. Usar FSM. |
 | `src/services/jobs/repasse-retry.job.ts` | REESCREVER | Buscar em `repasses`. Usar FSM. |
 | `src/services/cobranca-pagamento.service.ts` | MODIFICAR | `iniciarRepasse()` via FSM. Remover refs a `status_repasse`. |
-| `src/api/mock-pagamento.routes.ts` | MODIFICAR | Usar `repasses` em vez de `transacoes_repasse`. |
 | `src/services/payment.service.ts` | MODIFICAR | Remover case `MOCK` e import do MockPaymentProvider. |
 | `src/services/fee.service.ts` | MODIFICAR | Remover entrada `MOCK` da tabela de taxas. |
 
@@ -264,10 +261,6 @@ CANCELADO            → []  (terminal)
 
 **`reprocessarRepassesPendentes(usuarioId)`:**
 - Buscar repasses com estado de erro → `transicionar(CRIADO)` + re-enfileirar
-
-### 4.2 `mock-pagamento.routes.ts`
-- Substituir queries a `transacoes_repasse` por `repasses`
-- Usar FSM para forçar `LIQUIDADO`
 
 ---
 

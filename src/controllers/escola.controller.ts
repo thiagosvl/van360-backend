@@ -37,8 +37,7 @@ export const escolaController = {
     // Permission Check
     const authUid = (request as any).user?.id;
     if (authUid) {
-        const usuarioId = await accessControlService.resolveUsuarioId(authUid);
-        await accessControlService.validateWriteAccess(usuarioId);
+        await accessControlService.validateWriteAccess(authUid);
     }
 
     try {
@@ -60,8 +59,7 @@ export const escolaController = {
     // Permission Check
     const authUid = (request as any).user?.id;
     if (authUid) {
-        const usuarioId = await accessControlService.resolveUsuarioId(authUid);
-        await accessControlService.validateWriteAccess(usuarioId);
+        await accessControlService.validateWriteAccess(authUid);
     }
 
     await escolaService.deleteEscola(id);

@@ -45,7 +45,6 @@ INSERT INTO auth.users (
 -- 3. Create Public Profile (Linked to Auth)
 INSERT INTO public.usuarios (
     id,
-    auth_uid,
     nome,
     email,
     cpfcnpj,
@@ -56,8 +55,7 @@ INSERT INTO public.usuarios (
     updated_at,
     tipo
 ) VALUES (
-    'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', -- Fixed Public ID
-    'd0d8c19c-3b36-402a-9e73-9a3c3c3c3c3c', -- Link to Auth ID
+    'd0d8c19c-3b36-402a-9e73-9a3c3c3c3c3c',
     'Sr. T',
     'admin@van360.com',
     '00000000000',
@@ -68,5 +66,3 @@ INSERT INTO public.usuarios (
     now(),
     'admin'
 ) ON CONFLICT (id) DO NOTHING;
-
--- Subscription removed as per request (Admin system user)

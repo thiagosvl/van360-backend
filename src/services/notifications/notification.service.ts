@@ -1,4 +1,3 @@
-import QRCode from "qrcode";
 import { GLOBAL_WHATSAPP_INSTANCE } from "../../config/constants.js";
 import { logger } from "../../config/logger.js";
 import { CompositeMessagePart } from "../../types/dtos/whatsapp.dto.js";
@@ -61,7 +60,7 @@ export const notificationService = {
     async notifyPassenger(
         to: string, 
         type: PassengerEventType, 
-        ctx: PassengerContext & { pixPayload?: string, reciboUrl?: string }
+        ctx: PassengerContext & { reciboUrl?: string }
     ): Promise<boolean> {
         
         let parts: CompositeMessagePart[] = [];
@@ -76,7 +75,7 @@ export const notificationService = {
 
         // NOTIFICAR SEMPRE PELA INSTÂNCIA GLOBAL (BYPASS)
         // Antes: usava driverInstance se conectado. Agora: Global para todos.
-        return await this._processAndEnqueue(to, parts, type, GLOBAL_WHATSAPP_INSTANCE, ctx.pixPayload);
+        return await this._processAndEnqueue(to, parts, type, GLOBAL_WHATSAPP_INSTANCE);
     },
 
     /**
@@ -85,7 +84,7 @@ export const notificationService = {
     async notifyDriver(
         to: string, 
         type: DriverEventType, 
-        ctx: DriverContext & { pixPayload?: string, nomePagador?: string, nomePassageiro?: string, diasAtraso?: number, reciboUrl?: string, trialDays?: number }
+        ctx: DriverContext & { nomePagador?: string, nomePassageiro?: string, diasAtraso?: number, reciboUrl?: string, trialDays?: number }
     ): Promise<boolean> {
 
         let parts: CompositeMessagePart[] = [];
@@ -93,14 +92,14 @@ export const notificationService = {
         switch (type) {
             case DRIVER_EVENT_ACTIVATION: parts = DriverTemplates.activation(ctx); break;
             case DRIVER_EVENT_WELCOME_TRIAL: parts = DriverTemplates.welcomeTrial(ctx); break;
-            case DRIVER_EVENT_RENEWAL: parts = DriverTemplates.renewal(ctx); break;
-            case DRIVER_EVENT_UPGRADE: parts = DriverTemplates.upgradeRequest(ctx); break;
-            case DRIVER_EVENT_RENEWAL_DUE_SOON: parts = DriverTemplates.renewalDueSoon(ctx); break;
-            case DRIVER_EVENT_RENEWAL_DUE_TODAY: parts = DriverTemplates.renewalDueToday(ctx); break;
-            case DRIVER_EVENT_RENEWAL_OVERDUE: parts = DriverTemplates.renewalOverdue(ctx); break;
-            case DRIVER_EVENT_ACCESS_SUSPENDED: parts = DriverTemplates.accessSuspended(ctx); break;
+            // case DRIVER_EVENT_RENEWAL: parts = DriverTemplates.renewal(ctx); break;
+            // case DRIVER_EVENT_UPGRADE: parts = DriverTemplates.upgradeRequest(ctx); break;
+            // case DRIVER_EVENT_RENEWAL_DUE_SOON: parts = DriverTemplates.renewalDueSoon(ctx); break;
+            // case DRIVER_EVENT_RENEWAL_DUE_TODAY: parts = DriverTemplates.renewalDueToday(ctx); break;
+            // case DRIVER_EVENT_RENEWAL_OVERDUE: parts = DriverTemplates.renewalOverdue(ctx); break;
+            // case DRIVER_EVENT_ACCESS_SUSPENDED: parts = DriverTemplates.accessSuspended(ctx); break;
             case DRIVER_EVENT_PAYMENT_CONFIRMED: parts = DriverTemplates.paymentConfirmed(ctx); break;
-            case DRIVER_EVENT_TRIAL_ENDING: parts = DriverTemplates.trialEnding(ctx); break;
+            // case DRIVER_EVENT_TRIAL_ENDING: parts = DriverTemplates.trialEnding(ctx); break;
             case DRIVER_EVENT_REPASSE_FAILED: parts = DriverTemplates.repasseFailed(ctx); break;
             case DRIVER_EVENT_REPASSE_SUCCESS: parts = DriverTemplates.repasseSuccess(ctx as any); break;
 
@@ -110,7 +109,7 @@ export const notificationService = {
         }
 
         // Motorista recebe da instância global
-        return await this._processAndEnqueue(to, parts, type, GLOBAL_WHATSAPP_INSTANCE, ctx.pixPayload);
+        return await this._processAndEnqueue(to, parts, type, GLOBAL_WHATSAPP_INSTANCE);
     },
 
     /**
@@ -125,7 +124,6 @@ export const notificationService = {
         parts: CompositeMessagePart[], 
         eventType: string, 
         instanceName?: string,
-        pixPayload?: string,
         channels: ("WHATSAPP" | "SMS" | "EMAIL")[] = ["WHATSAPP"] // Default channel
     ): Promise<boolean> {
         try {
@@ -133,7 +131,7 @@ export const notificationService = {
 
             // 1. Channel: WHATSAPP
             if (channels.includes("WHATSAPP")) {
-                const whatsappSuccess = await this._dispatchWhatsapp(to, parts, eventType, instanceName, pixPayload);
+                const whatsappSuccess = await this._dispatchWhatsapp(to, parts, eventType, instanceName);
                 results.push(whatsappSuccess);
             }
 
@@ -168,22 +166,10 @@ export const notificationService = {
         to: string, 
         parts: CompositeMessagePart[], 
         eventType: string, 
-        instanceName?: string,
-        pixPayload?: string
+        instanceName?: string
     ): Promise<boolean> {
         try {
-            // 1. Processar partes dinâmicas (ex: Gerar QR Code)
-            for (const part of parts) {
-                if (part.meta === 'qrcode' && pixPayload) {
-                    try {
-                        part.mediaBase64 = await QRCode.toDataURL(pixPayload);
-                        delete part.meta; 
-                    } catch (e) {
-                         logger.error({ error: e }, "Erro ao gerar QR Code na parte da mensagem");
-                         part.mediaBase64 = undefined; 
-                    }
-                }
-            }
+            // Processamento de QR Code desativado conforme plano base.
             
             // 2. Filtar partes inválidas
             const validParts = parts.filter(p => !((p.type === 'image') && !p.mediaBase64));

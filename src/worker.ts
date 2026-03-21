@@ -3,7 +3,7 @@ import { initSentry } from "./config/sentry.js";
 initSentry();
 
 import { logger } from "./config/logger.js";
-import { paymentService } from "./services/payment.service.js";
+
 import { queueService } from "./services/queue.service.js";
 
 // Entry Point para os Workers (VPS)
@@ -15,7 +15,7 @@ const startWorker = async () => {
 
   try {
     // 1. Inicializar serviços externos e provedores vitais para o Worker
-    await paymentService.initialize();
+
 
     // 2. Inicializar Filas e Workers
     // A queueService já cuida de conectar no Redis e instanciar os Workers do BullMQ

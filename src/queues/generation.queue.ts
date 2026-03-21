@@ -9,7 +9,6 @@ export interface GenerationJobData {
     motoristaId: string;
     mes: number;
     ano: number;
-    planoSlug?: string; // Opicional: otimização para pular PIX se não for Profissional
 }
 
 /**

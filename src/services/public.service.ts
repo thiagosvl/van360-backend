@@ -7,11 +7,7 @@ export async function validateMotoristaPublic(motoristaId: string) {
         .select(`
             id, 
             nome, 
-            apelido, 
-            assinaturas_usuarios (
-                *,
-                planos (*, parent:parent_id (*))
-            )
+            apelido
         `)
         .eq("id", motoristaId)
         .single();

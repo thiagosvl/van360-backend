@@ -1,4 +1,4 @@
-import { PassageiroGenero, PassageiroModalidade, PeriodoEnum, PixKeyType } from "../types/enums.js";
+import { PassageiroGenero, PassageiroModalidade, PeriodoEnum } from "../types/enums.js";
 
 /**
  * Formata um número para o padrão de moeda brasileiro (BRL)
@@ -65,29 +65,7 @@ export function maskPhone(value: string) {
     }
 }
 
-export function maskEvp(value: string) {
-    const cleanValue = value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 32);
-    return cleanValue
-        .replace(/^([a-zA-Z0-9]{8})([a-zA-Z0-9])/, '$1-$2')
-        .replace(/^([a-zA-Z0-9]{8})-([a-zA-Z0-9]{4})([a-zA-Z0-9])/, '$1-$2-$3')
-        .replace(/^([a-zA-Z0-9]{8})-([a-zA-Z0-9]{4})-([a-zA-Z0-9]{4})([a-zA-Z0-9])/, '$1-$2-$3-$4')
-        .replace(/^([a-zA-Z0-9]{8})-([a-zA-Z0-9]{4})-([a-zA-Z0-9]{4})-([a-zA-Z0-9]{4})([a-zA-Z0-9])/, '$1-$2-$3-$4-$5');
-}
 
-export function formatPixKey(key: string, type: string) {
-    if (!key) return "";
-
-    // Normalizar tipo 
-    const t = type ? type.toUpperCase() : "";
-    const clean = key.replace(/\D/g, "");
-
-    if (t === PixKeyType.CPF) return maskCpf(clean);
-    if (t === PixKeyType.CNPJ) return maskCnpj(clean);
-    if (t === PixKeyType.TELEFONE) return maskPhone(key);
-    if (t === PixKeyType.ALEATORIA) return maskEvp(key);
-
-    return key;
-}
 
 export const formatPeriodo = (periodo: string): string => {
   if (periodo === PeriodoEnum.INTEGRAL) return "Integral";

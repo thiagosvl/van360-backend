@@ -57,30 +57,4 @@ export async function getConfigJSON<T>(key: string, defaultValue: T): Promise<T>
   }
 }
 
-/**
- * Helper específico para configurações de Billing
- */
-export async function getBillingConfig() {
-  const [
-    diasProRata,
-    valorMinimoProRata,
-    incrementoBloco,
-    diasAntecedenciaRenovacao
-  ] = await Promise.all([
-    getConfigNumber(ConfigKey.PRO_RATA_DIAS_MES, 30),
-    getConfigNumber(ConfigKey.PRO_RATA_VALOR_MINIMO, 0.01),
-    getConfigNumber(ConfigKey.VALOR_INCREMENTO_PASSAGEIRO_EXCESSO, 2.50),
-    getConfigNumber(ConfigKey.DIAS_ANTECEDENCIA_RENOVACAO, 5)
-  ]);
-
-  /* Recycled variable for the new logic */
-  const valorIncrementoPassageiro = incrementoBloco; 
-
-  return {
-    diasProRata,
-    valorMinimoProRata,
-    planoBaseId: null, 
-    valorIncrementoPassageiro,
-    diasAntecedenciaRenovacao
-  };
-}
+// getBillingConfig removido (Clean Slate)

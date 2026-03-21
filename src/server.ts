@@ -18,7 +18,7 @@ const start = async () => {
     // Inicializa filas e serviços
     await Promise.all([
       queueService.initialize(),
-      paymentService.initialize()
+      // paymentService.initialize()
     ]);
 
     await app.listen({ port, host: "0.0.0.0" });

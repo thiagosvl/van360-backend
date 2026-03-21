@@ -21,10 +21,6 @@ export const createCobrancaSchema = z.object({
     valor_pago: z.union([z.number(), z.string()]).transform(v => typeof v === 'string' ? moneyToNumber(v) : v).optional(),
     recibo_url: z.string().nullable().optional(),
 
-    cpf: z.string().optional(),
-    nome: z.string().optional(),
-    
-    gerarPixAsync: z.boolean().optional(),
     enviar_notificacao_agora: z.boolean().optional()
 });
 

@@ -1,10 +1,9 @@
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
-import { AtividadeAcao, AtividadeEntidadeTipo, PixKeyStatus, PixKeyType } from "../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
-import { iniciarValidacaoPix } from "./validacao-pix.service.js";
 
 /**
  * Helper para obter dados do usuário
@@ -12,7 +11,7 @@ import { iniciarValidacaoPix } from "./validacao-pix.service.js";
 export async function getUsuarioData(usuarioId: string) {
   const { data: usuario, error } = await supabaseAdmin
     .from("usuarios")
-    .select("id, nome, cpfcnpj, telefone, chave_pix, config_contrato")
+    .select("id, nome, cpfcnpj, telefone, config_contrato")
     .eq("id", usuarioId)
     .single();
 
@@ -24,24 +23,13 @@ export async function getUsuarioData(usuarioId: string) {
 }
 
 export async function validarAcessoUsuario(authUid: string, targetUsuarioId: string): Promise<boolean> {
-    const { data: usuario } = await supabaseAdmin
-        .from("usuarios")
-        .select("id")
-        .eq("auth_uid", authUid)
-        .single();
-    
-    if (usuario && usuario.id === targetUsuarioId) {
-        return true;
-    }
-    return false;
+  return authUid === targetUsuarioId;
 }
 
 export async function atualizarUsuario(usuarioId: string, payload: {
   nome?: string;
   apelido?: string;
   telefone?: string;
-  chave_pix?: string;
-  tipo_chave_pix?: string;
   assinatura_digital_url?: string;
   config_contrato?: any;
 }) {
@@ -54,32 +42,7 @@ export async function atualizarUsuario(usuarioId: string, payload: {
   if (payload.assinatura_digital_url !== undefined) updates.assinatura_digital_url = payload.assinatura_digital_url;
   if (payload.config_contrato !== undefined) updates.config_contrato = payload.config_contrato;
 
-  // Atualização de PIX com Sanitização Obrigatória e TRIGGER DE VALIDAÇÃO
-  if (payload.chave_pix !== undefined) {
-    // Validação estrita do ENUM
-    if (payload.tipo_chave_pix && !Object.values(PixKeyType).includes(payload.tipo_chave_pix as any)) {
-      throw new AppError("Tipo de chave PIX inválido.", 400);
-    }
 
-    const tipoConsiderado = payload.tipo_chave_pix || undefined; // Se não enviado, assume que o usuário mantém o tipo
-
-    let chaveSanitizada = "";
-
-    // Se temos o tipo e é um dos numéricos, remover formatação
-    if (tipoConsiderado && [PixKeyType.CPF, PixKeyType.CNPJ, PixKeyType.TELEFONE].includes(tipoConsiderado as any)) {
-      chaveSanitizada = onlyDigits(payload.chave_pix);
-    } else {
-      // Para E-mail, Aleatória ou se não temos o tipo (fallback), apenas limpar espaços
-      chaveSanitizada = cleanString(payload.chave_pix);
-    }
-
-    updates.chave_pix = chaveSanitizada;
-    if (payload.tipo_chave_pix) updates.tipo_chave_pix = payload.tipo_chave_pix;
-
-    // RESETAR STATUS E INICIAR VALIDAÇÃO
-    updates.status_chave_pix = PixKeyStatus.PENDENTE_VALIDACAO;
-    updates.chave_pix_validada_em = null;
-  }
 
   const { error } = await supabaseAdmin
     .from("usuarios")
@@ -90,50 +53,33 @@ export async function atualizarUsuario(usuarioId: string, payload: {
     throw new AppError(`Erro ao atualizar usuário: ${error.message}`, 500);
   }
 
-  // TRIGGER ASYNC VALIDATION (Se houve alteração de PIX)
-  if (payload.chave_pix !== undefined) {
-    // Disparar validação em background
-    iniciarValidacaoPix(usuarioId, updates.chave_pix, payload.tipo_chave_pix)
-      .catch(err => {
-        logger.error({ error: err.message, usuarioId }, "Falha silenciosa ao iniciar validação PIX (background) após update.");
-      });
-
-    // --- LOG DE AUDITORIA (CHAVE PIX) ---
+  if (payload.nome || payload.apelido || payload.telefone) {
+    // --- LOG DE AUDITORIA (PERFIL) ---
     historicoService.log({
-        usuario_id: usuarioId,
-        entidade_tipo: AtividadeEntidadeTipo.USUARIO,
-        entidade_id: usuarioId,
-        acao: AtividadeAcao.CHAVE_PIX_ALTERADA,
-        descricao: `Chave PIX alterada para ${updates.chave_pix} (${payload.tipo_chave_pix || 'Inalterado'}).`,
-        meta: { chave: updates.chave_pix, tipo: payload.tipo_chave_pix }
+      usuario_id: usuarioId,
+      entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+      entidade_id: usuarioId,
+      acao: AtividadeAcao.PERFIL_EDITADO,
+      descricao: `Dados de perfil (nome/apelido/telefone) atualizados.`,
+      meta: { campos: Object.keys(payload).filter(k => ['nome', 'apelido', 'telefone'].includes(k)) }
     });
-  } else if (payload.nome || payload.apelido || payload.telefone) {
-      // --- LOG DE AUDITORIA (PERFIL) ---
-      historicoService.log({
-          usuario_id: usuarioId,
-          entidade_tipo: AtividadeEntidadeTipo.USUARIO,
-          entidade_id: usuarioId,
-          acao: AtividadeAcao.PERFIL_EDITADO,
-          descricao: `Dados de perfil (nome/apelido/telefone) atualizados.`,
-          meta: { campos: Object.keys(payload).filter(k => ['nome', 'apelido', 'telefone'].includes(k)) }
-      });
   } else if (payload.config_contrato !== undefined) {
-      // --- LOG DE AUDITORIA (CONFIG CONTRATO) ---
-      const config = payload.config_contrato;
-      historicoService.log({
-          usuario_id: usuarioId,
-          entidade_tipo: AtividadeEntidadeTipo.USUARIO,
-          entidade_id: usuarioId,
-          acao: AtividadeAcao.CONTRATO_CONFIG_EDITADA,
-          descricao: `Configurações de contrato atualizadas (Usa contratos: ${config.usar_contratos ? 'Sim' : 'Não'}).`,
-          meta: { 
-            usar_contratos: config.usar_contratos,
-            multa_atraso: config.multa_atraso,
-            multa_rescisao: config.multa_rescisao,
-            // Armazena as chaves que foram alteradas para facilitar auditoria rápida
-            campos_alterados: Object.keys(config)
-          }
-      });
+    // --- LOG DE AUDITORIA (CONFIG CONTRATO) ---
+    const config = payload.config_contrato;
+    historicoService.log({
+      usuario_id: usuarioId,
+      entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+      entidade_id: usuarioId,
+      acao: AtividadeAcao.CONTRATO_CONFIG_EDITADA,
+      descricao: `Configurações de contrato atualizadas (Usa contratos: ${config.usar_contratos ? 'Sim' : 'Não'}).`,
+      meta: {
+        usar_contratos: config.usar_contratos,
+        multa_atraso: config.multa_atraso,
+        multa_rescisao: config.multa_rescisao,
+        // Armazena as chaves que foram alteradas para facilitar auditoria rápida
+        campos_alterados: Object.keys(config)
+      }
+    });
   }
 
   return { success: true };
@@ -142,37 +88,40 @@ export async function atualizarUsuario(usuarioId: string, payload: {
 export async function excluirUsuario(usuarioId: string, authUid: string) {
 
 
-    // 2. Anonymize User Data (DB Logic)
-    // Isso garante que o histórico financeiro seja mantido mas os dados pessoais removidos.
-    // Também desvincula o usuario (auth_uid = NULL) para que o deleteUser abaixo não apague o registro público via cascade.
-    const { error: rpcError } = await supabaseAdmin.rpc('anonymize_user_account', {
-        target_user_id: usuarioId
-    });
+  // 2. Anonymize User Data (DB Logic)
+  const { error: rpcError } = await supabaseAdmin.rpc('anonymize_user_account', {
+    target_user_id: usuarioId
+  });
 
-    if (rpcError) {
-        logger.error({ error: rpcError.message, usuarioId }, "Falha ao anonimizar usuário no DB.");
-        throw new AppError("Erro ao processar exclusão de dados.", 500);
-    }
+  if (rpcError) {
+    logger.error({ error: rpcError.message, usuarioId }, "Falha ao anonimizar usuário no DB.");
+    throw new AppError("Erro ao processar exclusão de dados.", 500);
+  }
 
-    // --- LOG DE AUDITORIA ---
-    historicoService.log({
-        usuario_id: usuarioId,
-        entidade_tipo: AtividadeEntidadeTipo.USUARIO,
-        entidade_id: usuarioId,
-        acao: AtividadeAcao.USUARIO_EXCLUIDO,
-        descricao: `Conta anonimizada e desativada permanentemente conforme solicitação de exclusão.`,
-        meta: { acao: 'anonymize' }
-    });
+  // --- LOG DE AUDITORIA ---
+  historicoService.log({
+    usuario_id: usuarioId,
+    entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+    entidade_id: usuarioId,
+    acao: AtividadeAcao.USUARIO_EXCLUIDO,
+    descricao: `Conta anonimizada e desativada permanentemente conforme solicitação de exclusão.`,
+    meta: { acao: 'anonymize' }
+  });
 
-    // 3. Delete Auth User (Remove Login)
-    // Como o auth_uid foi setado para NULL no passo anterior, o CASCADE não deve apagar o registro anonimizado.
-    const { error } = await supabaseAdmin.auth.admin.deleteUser(authUid);
-    
-    if (error) {
-        logger.error({ error: error.message, usuarioId }, "Erro ao excluir usuário no Supabase Auth.");
-        // Não lançar erro aqui pois o usuário já foi anonimizado/inutilizado.
-        // throw new AppError(`Erro ao excluir conta: ${error.message}`, 500);
-    }
+  // 3. Delete Auth User (Remove Login)
+  // ATENÇÃO: Se a constraint for CASCADE, isso apagará a linha da tabela usuarios E TUDO QUE ESTIVER EM CASCADE.
+  // Se a estratégia for apenas anonimizar ("soft-delete" mantendo financeiro), NÃO DEVEMOS deletar o auth user,
+  // mas sim alterar o email para algo inacessível, e banir.
+  const dummyEmail = `deleted_${Date.now()}_${usuarioId}@anonymized.local`;
+  const { error } = await supabaseAdmin.auth.admin.updateUserById(authUid, {
+    email: dummyEmail,
+    password: `!Deleted${Date.now()}#`, // Senha inacessível
+    user_metadata: { deleted: true }
+  });
 
-    return { success: true };
+  if (error) {
+    logger.error({ error: error.message, usuarioId }, "Erro ao desativar usuário no Supabase Auth.");
+  }
+
+  return { success: true };
 }

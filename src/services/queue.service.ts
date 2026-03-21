@@ -1,12 +1,6 @@
 import { logger } from "../config/logger.js";
-import { setupCronJobs } from "../queues/cron.queue.js";
 import { contractWorker } from "../workers/contract.worker.js";
-import { cronWorker } from "../workers/cron.worker.js";
 import { generationWorker } from "../workers/generation.worker.js";
-import { payoutWorker } from "../workers/payout.worker.js";
-import { pixWorker } from "../workers/pix.worker.js";
-import { receiptWorker } from "../workers/receipt.worker.js";
-import { webhookWorker } from "../workers/webhook.worker.js";
 import { whatsappWorker } from "../workers/whatsapp.worker.js";
 
 /**
@@ -18,16 +12,12 @@ export const queueService = {
         logger.info("[QueueService] Initializing workers...");
 
         if (whatsappWorker) logger.info(`[QueueService] Worker started: ${whatsappWorker.name}`);
-        if (receiptWorker) logger.info(`[QueueService] Worker started: ${receiptWorker.name}`);
-        if (webhookWorker) logger.info(`[QueueService] Worker started: ${webhookWorker.name}`);
         if (generationWorker) logger.info(`[QueueService] Worker started: ${generationWorker.name}`);
-        if (pixWorker) logger.info(`[QueueService] Worker started: ${pixWorker.name}`);
-        if (payoutWorker) logger.info(`[QueueService] Worker started: ${payoutWorker.name}`);
         if (contractWorker) logger.info(`[QueueService] Worker started: ${contractWorker.name}`);
-        if (cronWorker) logger.info(`[QueueService] Worker started: ${cronWorker.name}`);
+        // if (cronWorker) logger.info(`[QueueService] Worker started: ${cronWorker.name}`);
 
-        // Configura agendamentos repetitivos (Cron) na VPS
-        await setupCronJobs();
+        // Configura agendamentos repetitivos (Cron) na VPS - DESATIVADOS NO PLANO BASE
+        // await setupCronJobs();
 
         logger.info("[QueueService] All workers initialized and Cron Jobs scheduled.");
     },
@@ -36,13 +26,9 @@ export const queueService = {
         logger.info("[QueueService] Shutting down workers...");
         await Promise.all([
             whatsappWorker.close(),
-            receiptWorker.close(),
-            webhookWorker.close(),
             generationWorker.close(),
-            pixWorker.close(),
-            payoutWorker.close(),
             contractWorker.close(),
-            cronWorker.close()
+            // cronWorker.close()
         ]);
         logger.info("[QueueService] Workers stopped.");
     }

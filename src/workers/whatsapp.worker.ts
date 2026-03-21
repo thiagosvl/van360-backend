@@ -35,7 +35,7 @@ export const whatsappWorker = new Worker<WhatsappJobData>(
             let instanceStatus = await whatsappService.getInstanceStatus(targetInstance);
             
             // Verifica conexão (CONNECTED ou OPEN)
-            const isConnected = instanceStatus.state === WhatsappStatus.CONNECTED || instanceStatus.state === WhatsappStatus.OPEN;
+            const isConnected = instanceStatus.state === WhatsappStatus.CONNECTED || instanceStatus.state === WhatsappStatus.CONNECTED;
 
             if (!isConnected) {
                 logger.warn({ 
@@ -53,7 +53,7 @@ export const whatsappWorker = new Worker<WhatsappJobData>(
                     
                     // Verificar novamente
                     instanceStatus = await whatsappService.getInstanceStatus(targetInstance);
-                    const isNowConnected = instanceStatus.state === WhatsappStatus.CONNECTED || instanceStatus.state === WhatsappStatus.OPEN;
+                    const isNowConnected = instanceStatus.state === WhatsappStatus.CONNECTED || instanceStatus.state === WhatsappStatus.CONNECTED;
 
                     if (!isNowConnected) {
                         logger.warn({ 
@@ -100,7 +100,7 @@ export const whatsappWorker = new Worker<WhatsappJobData>(
                 
                 // Verificar status da Global também
                 const globalStatus = await whatsappService.getInstanceStatus(GLOBAL_WHATSAPP_INSTANCE);
-                const globalConnected = globalStatus.state === WhatsappStatus.CONNECTED || globalStatus.state === WhatsappStatus.OPEN;
+                const globalConnected = globalStatus.state === WhatsappStatus.CONNECTED || globalStatus.state === WhatsappStatus.CONNECTED;
 
                 if (!globalConnected) {
                     logger.error({ jobId: job.id }, "[Worker] Instância GLOBAL também está desconectada. Mantendo job na fila.");
@@ -177,7 +177,7 @@ const startGlobalHealthCheck = () => {
     const check = async () => {
         try {
             const status = await whatsappService.getInstanceStatus(GLOBAL_WHATSAPP_INSTANCE);
-            const isConnected = status.state === WhatsappStatus.CONNECTED || status.state === WhatsappStatus.OPEN;
+            const isConnected = status.state === WhatsappStatus.CONNECTED || status.state === WhatsappStatus.CONNECTED;
 
             if (!isConnected) {
                 logger.warn({ 

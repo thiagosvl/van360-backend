@@ -31,7 +31,7 @@ export async function verifySupabaseJWT(
     const { data: profile, error: profileError } = await supabaseAdmin
         .from("usuarios")
         .select("id, ativo")
-        .eq("auth_uid", user.user.id)
+        .eq("id", user.user.id)
         .maybeSingle();
 
     if (profileError) {
@@ -39,7 +39,7 @@ export async function verifySupabaseJWT(
     }
 
     if (!profile) {
-        console.error("[AuthMiddleware] Profile NOT FOUND for auth_uid:", user.user.id);
+        console.error("[AuthMiddleware] Profile NOT FOUND for id:", user.user.id);
         return reply.status(401).send({ error: "Perfil não encontrado. Faça login novamente." });
     }
 

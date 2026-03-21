@@ -7,8 +7,6 @@ import { redisConfig } from '../config/redis.js';
  * @param queueName Nome da fila
  */
 export const createQueue = (queueName: string) => {
-    logger.info(`[Queue] Initializing queue: ${queueName}`);
-    
     const queue = new Queue(queueName, {
         connection: redisConfig,
         defaultJobOptions: {

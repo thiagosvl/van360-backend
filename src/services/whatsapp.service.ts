@@ -142,10 +142,10 @@ class WhatsappService {
       
       // Normalização para Local API (Casing)
       if (typeof state === 'string' && state.toLowerCase() === "connected") state = WhatsappStatus.CONNECTED;
-      if (typeof state === 'string' && state.toLowerCase() === "open") state = WhatsappStatus.OPEN;
+      if (typeof state === 'string' && state.toLowerCase() === "open") state = WhatsappStatus.CONNECTED;
 
       // Log para auditoria de conexão (debug)
-      if (state !== WhatsappStatus.CONNECTED && state !== WhatsappStatus.OPEN) {
+      if (state !== WhatsappStatus.CONNECTED && state !== WhatsappStatus.CONNECTED) {
           logger.info({ instanceName, state }, "[WhatsappService.getInstanceStatus] Instância não conectada");
       }
 
@@ -293,7 +293,7 @@ class WhatsappService {
               // Só limpa se realmente necessário. Não limpa se já há um código válido em andamento.
               
               const status = await this.getInstanceStatus(instanceName);
-              const isWorking = status.state === WhatsappStatus.OPEN || status.state === WhatsappStatus.CONNECTED;
+              const isWorking = status.state === WhatsappStatus.CONNECTED || status.state === WhatsappStatus.CONNECTED;
 
               // Se já está conectado, não faz sentido pedir pairing code. Retorna sucesso.
               if (isWorking) {
@@ -301,7 +301,7 @@ class WhatsappService {
                    // Garante webhook atualizado mesmo se já conectado
                    await this.setWebhook(instanceName, webhookUrl, true);
                    await this.updateSettings(instanceName);
-                   return { instance: { state: WhatsappStatus.OPEN } };
+                   return { instance: { state: WhatsappStatus.CONNECTED } };
               }
 
               // Se está em estado de erro ou travado, fazer limpeza
@@ -378,7 +378,7 @@ class WhatsappService {
               const { data } = await axios.get<EvolutionConnectResponse>(url, { headers: { "apikey": EVO_KEY } });
               lastData = data;
 
-              if (data?.base64 || data?.qrcode?.base64 || data?.instance?.state === WhatsappStatus.OPEN) {
+              if (data?.base64 || data?.qrcode?.base64 || data?.instance?.state === WhatsappStatus.CONNECTED) {
                   logger.info({ instanceName }, "QR Code obtido ou Instância Conectada.");
                   break; 
               }
@@ -396,8 +396,8 @@ class WhatsappService {
                };
           }
            
-          if (lastData?.instance?.state === WhatsappStatus.OPEN) {
-              return { instance: { state: WhatsappStatus.OPEN } };
+          if (lastData?.instance?.state === WhatsappStatus.CONNECTED) {
+              return { instance: { state: WhatsappStatus.CONNECTED } };
           }
 
           return {}; 

@@ -15,7 +15,6 @@ export interface PassengerContext {
     usuarioId: string; // ID do Motorista (para roteamento WhatsApp)
     apelidoMotorista?: string; // Preferência de nome de exibição
     // New fields for flexible Lego composition
-    pixPayload?: string;
     reciboUrl?: string;
     telefoneMotorista?: string; // Para contato direto
 }
@@ -25,36 +24,6 @@ import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
 // Removidos métodos locais pois agora usamos os utilitários centralizados
 
 // Helper to construct standard PIX message parts for Passengers
-const buildPixMessageParts = (text: string, pixPayload?: string): CompositeMessagePart[] => {
-    // Se não tiver PIX Payload, retorna apenas o texto
-    if (!pixPayload) {
-        return [{ type: "text", content: text }];
-    }
-
-    const parts: CompositeMessagePart[] = [];
-
-    // Adiciona dica de pagamento automático
-    const caption = `${text}\n\n💡 Pague pelo app do seu banco. Não precisa enviar comprovante, o sistema identifica automaticamente.`;
-
-    // 1. Bundle: Image Placeholder (QR Code) with Caption (Instructions)
-    // Service recognizes 'qrcode' meta and generate the image
-    parts.push({ 
-        type: "image", 
-        content: caption, // Caption vai aqui
-        meta: "qrcode" 
-    }); 
-    
-    // 2. Text Payload (Copy-Paste) - SEPARADO para facilitar copiar
-    parts.push({ 
-        type: "text", 
-        content: pixPayload,
-        delayMs: 800 
-    });
-
-    return parts;
-};
-
-// Helper for simple text messages
 const textPart = (text: string): CompositeMessagePart[] => {
     return [{ type: "text", content: text }];
 };
@@ -82,14 +51,13 @@ export const PassengerTemplates = {
         const diasMsg = ctx.diasAntecedencia ? ` (daqui a ${ctx.diasAntecedencia} dias)` : "";
         const nomeResp = getFirstName(ctx.nomeResponsavel);
 
-        const text = `🗓️ *Mensalidade Disponível para Pagamento*\n\n` +
+        const text = `🗓️ *Aviso de Mensalidade*\n\n` +
             `Responsável: *${nomeResp}*\n` +
             `Passageiro(a): *${ctx.nomePassageiro}*\n\n` +
             `🔹 Valor: *${valor}*\n` +
-            `🔹 Vencimento: *${data}*${diasMsg}\n\n` +
-            `Copie o código PIX abaixo para realizar o pagamento.${getSystemFooter(ctx)}`;
+            `🔹 Vencimento: *${data}*${diasMsg}${getSystemFooter(ctx)}`;
 
-        return buildPixMessageParts(text, ctx.pixPayload);
+        return textPart(text);
     },
 
     /**
@@ -100,13 +68,12 @@ export const PassengerTemplates = {
         const data = formatToBrazilianDate(ctx.dataVencimento);
         const nomeResp = getFirstName(ctx.nomeResponsavel);
         
-        const text = `⚠️ *Vencimento Hoje*\n\n` +
+        const text = `⚠️ *Mensalidade Vence Hoje*\n\n` +
             `Responsável: *${nomeResp}*\n` +
             `Passageiro(a): *${ctx.nomePassageiro}*\n\n` +
-            `A mensalidade no valor de *${valor}* vence hoje (*${data}*).\n` +
-            `Copie o código PIX abaixo para realizar o pagamento.${getSystemFooter(ctx)}`;
+            `Informamos que a mensalidade no valor de *${valor}* vence hoje (*${data}*).${getSystemFooter(ctx)}`;
 
-        return buildPixMessageParts(text, ctx.pixPayload);
+        return textPart(text);
     },
 
     /**
@@ -118,13 +85,12 @@ export const PassengerTemplates = {
         const diasAtraso = ctx.diasAtraso || 1;
         const nomeResp = getFirstName(ctx.nomeResponsavel);
         
-        const text = `⚠️ *Mensalidade Pendente*\n\n` +
+        const text = `⚠️ *Aviso de Atraso*\n\n` +
             `Responsável: *${nomeResp}*\n` +
             `Passageiro(a): *${ctx.nomePassageiro}*\n\n` +
-            `A mensalidade no valor de *${valor}* encontra-se em aberto desde *${data}* (${diasAtraso} dias de atraso).\n` +
-            `Copie o código PIX abaixo para regularizar e evitar suspensão do serviço.${getSystemFooter(ctx)}`;
+            `Identificamos que a mensalidade de *${valor}* (vencida em *${data}*) ainda não foi regularizada.${getSystemFooter(ctx)}`;
 
-        return buildPixMessageParts(text, ctx.pixPayload);
+        return textPart(text);
     },
 
     /**
@@ -160,13 +126,12 @@ export const PassengerTemplates = {
         const data = formatToBrazilianDate(ctx.dataVencimento);
         const nomeResp = getFirstName(ctx.nomeResponsavel);
 
-        const text = `🗓️ *Mensalidade para Pagamento*\n\n` +
+        const text = `🗓️ *Aviso de Mensalidade*\n\n` +
             `Responsável: *${nomeResp}*\n` +
             `Passageiro(a): *${ctx.nomePassageiro}*\n\n` +
             `🔹 Valor: *${valor}*\n` +
-            `🔹 Vencimento: *${data}*\n\n` +
-            `Copie o código PIX abaixo para realizar o pagamento.${getSystemFooter(ctx)}`;
+            `🔹 Vencimento: *${data}*${getSystemFooter(ctx)}`;
 
-        return buildPixMessageParts(text, ctx.pixPayload);
+        return textPart(text);
     }
 };
