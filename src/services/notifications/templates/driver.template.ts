@@ -1,5 +1,5 @@
 import { formatToBrazilianDate, getMonthNameBR, toLocalDateString } from "../../../utils/date.utils.js";
-import { formatCurrency, formatPixKey, getFirstName } from "../../../utils/format.js";
+import { formatCurrency, getFirstName } from "../../../utils/format.js";
 
 /**
  * Templates de Mensagem para Motoristas / Assinantes do Sistema
@@ -167,22 +167,22 @@ export const DriverTemplates = {
     /**
      * Sucesso na Validação da Chave PIX
      */
-    pixKeyValidated: (ctx: DriverContext): CompositeMessagePart[] => {
-        const formattedKey = ctx.chavePix && ctx.tipoChavePix ? formatPixKey(ctx.chavePix, ctx.tipoChavePix) : "cadastrada";
+    // pixKeyValidated: (ctx: DriverContext): CompositeMessagePart[] => {
+    //     const formattedKey = ctx.chavePix && ctx.tipoChavePix ? formatPixKey(ctx.chavePix, ctx.tipoChavePix) : "cadastrada";
 
-        return textPart(`✅ *Chave PIX Validada*\n\n` +
-            `A chave PIX (*${formattedKey}*) foi aprovada.\n` +
-            `Sua conta está apta para receber as transferências automáticas das mensalidades.`);
-    },
+    //     return textPart(`✅ *Chave PIX Validada*\n\n` +
+    //         `A chave PIX (*${formattedKey}*) foi aprovada.\n` +
+    //         `Sua conta está apta para receber as transferências automáticas das mensalidades.`);
+    // },
 
     /**
      * Falha na Validação da Chave PIX
      */
-    pixKeyValidationFailed: (ctx: DriverContext): CompositeMessagePart[] => {
-        const formattedKey = ctx.chavePix && ctx.tipoChavePix ? formatPixKey(ctx.chavePix, ctx.tipoChavePix) : (ctx.chavePix || "informada");
+    // pixKeyValidationFailed: (ctx: DriverContext): CompositeMessagePart[] => {
+    //     const formattedKey = ctx.chavePix && ctx.tipoChavePix ? formatPixKey(ctx.chavePix, ctx.tipoChavePix) : (ctx.chavePix || "informada");
 
-        return textPart(`❌ *Falha de Validação PIX*\n\n` +
-            `O banco não pôde aprovar a chave PIX (*${formattedKey}*). O documento atrelado à chave deve ser idêntico ao titular da conta.\n` +
-            `Cadastre uma nova chave PIX ativa no aplicativo.`);
-    }
+    //     return textPart(`❌ *Falha de Validação PIX*\n\n` +
+    //         `O banco não pôde aprovar a chave PIX (*${formattedKey}*). O documento atrelado à chave deve ser idêntico ao titular da conta.\n` +
+    //         `Cadastre uma nova chave PIX ativa no aplicativo.`);
+    // }
 };

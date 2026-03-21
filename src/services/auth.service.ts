@@ -5,7 +5,6 @@ import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
 import { AtividadeAcao, AtividadeEntidadeTipo, UserType } from "../types/enums.js";
-import { toLocalDateString } from "../utils/date.utils.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
 import { notificationService } from "./notifications/notification.service.js";

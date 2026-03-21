@@ -8,7 +8,7 @@ import { toLocalDateString } from "../utils/date.utils.js";
 import { notificationService } from "./notifications/notification.service.js";
 
 import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
-import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaOrigem, CobrancaStatus } from "../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaOrigem } from "../types/enums.js";
 import { historicoService } from "./historico.service.js";
 
 interface CreateCobrancaOptions {
@@ -157,23 +157,13 @@ export const cobrancaService = {
   async getCobranca(id: string): Promise<any> {
     const { data, error } = await supabaseAdmin
       .from("cobrancas")
-      .select("*, passageiro:passageiros(*, escola:escolas(nome), veiculo:veiculos(placa)), repasses(estado, created_at)")
+      .select("*, passageiro:passageiros(*, escola:escolas(nome), veiculo:veiculos(placa))")
       .eq("id", id)
       .single();
 
     if (error) throw new AppError("Cobrança não encontrada.", 404);
 
-    const repasses = data.repasses || [];
-    const ultimoRepasse = repasses.sort((a: any, b: any) => 
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    )[0];
-
-    return {
-      ...data,
-      status_repasse: ultimoRepasse?.estado ?? null,
-      repasse: ultimoRepasse || null,
-      repasses: undefined
-    };
+    return data;
   },
 
   async deleteCobranca(id: string): Promise<void> {
@@ -214,7 +204,7 @@ export const cobrancaService = {
   async listCobrancasWithFilters(filtros: any): Promise<any[]> {
     let query = supabaseAdmin
       .from("cobrancas")
-      .select("*, passageiro:passageiros!inner(nome, nome_responsavel), repasses(estado, created_at)")
+      .select("*, passageiro:passageiros!inner(nome, nome_responsavel)")
       .order("data_vencimento", { ascending: false });
 
     if (filtros.usuarioId) query = query.eq("usuario_id", filtros.usuarioId);
@@ -240,29 +230,13 @@ export const cobrancaService = {
     const { data, error } = await query;
     if (error) throw error;
     
-    // Mapear o status do repasse para manter compatibilidade com o frontend
-    const mappedData = (data || []).map((cobranca: any) => {
-      const repasses = cobranca.repasses || [];
-      // Pegar o último repasse criado
-      const ultimoRepasse = repasses.sort((a: any, b: any) => 
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      )[0];
-      
-      return {
-        ...cobranca,
-        status_repasse: ultimoRepasse?.estado ?? null,
-        repasse: ultimoRepasse || null, // Disponibiliza o objeto completo conforme plano
-        repasses: undefined 
-      };
-    });
-
-    return mappedData;
+    return data;
   },
 
   async listCobrancasByPassageiro(passageiroId: string, ano?: string): Promise<any[]> {
     let query = supabaseAdmin
       .from("cobrancas")
-      .select("*, passageiro:passageiros!inner(nome, nome_responsavel), repasses(estado, created_at)")
+      .select("*, passageiro:passageiros!inner(nome, nome_responsavel)")
       .eq("passageiro_id", passageiroId)
       .order("data_vencimento", { ascending: false });
 
@@ -273,21 +247,7 @@ export const cobrancaService = {
     const { data, error } = await query;
     if (error) throw error;
 
-    const mappedData = (data || []).map((cobranca: any) => {
-      const repasses = cobranca.repasses || [];
-      const ultimoRepasse = repasses.sort((a: any, b: any) => 
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      )[0];
-      
-      return {
-        ...cobranca,
-        status_repasse: ultimoRepasse?.estado ?? null,
-        repasse: ultimoRepasse || null,
-        repasses: undefined
-      };
-    });
-
-    return mappedData;
+    return data;
   },
 
   async listAvailableYearsByPassageiro(passageiroId: string): Promise<number[]> {

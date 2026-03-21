@@ -6,8 +6,6 @@ import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaStatus, CobrancaTipoPagam
 import { cobrancaService } from "./cobranca.service.js";
 import { historicoService } from "./historico.service.js";
 
-import crypto from "node:crypto";
-import { toLocalDateString } from "../utils/date.utils.js";
 
 interface PagamentoInfo {
     horario?: string | Date;
@@ -20,7 +18,6 @@ export const cobrancaPagamentoService = {
 
   /**
    * Registra um pagamento manual feito pelo motorista.
-   * ATENÇÃO: Se a cobrança tiver um PIX ativo, tenta cancelar ANTES de salvar.
    */
   async registrarPagamentoManual(cobrancaId: string, data: RegistrarPagamentoManualDTO): Promise<any> {
       logger.info({ cobrancaId }, "[cobrancaPagamentoService.registrarPagamentoManual] Iniciando registro");
@@ -33,8 +30,6 @@ export const cobrancaPagamentoService = {
 
       if (findError || !cobranca) throw new AppError("Cobrança não encontrada.", 404);
       if (cobranca.status === CobrancaStatus.PAGO) throw new AppError("Esta cobrança já está paga.", 400);
-
-      // Cancelamento de PIX desativado conforme plano base.
 
       // 2. REGISTRAR NO BANCO
       const { data: updated, error } = await supabaseAdmin
@@ -86,8 +81,6 @@ export const cobrancaPagamentoService = {
       throw new AppError("Não é permitido desfazer este pagamento: apenas recebimentos marcados manualmente pelo motorista podem ser revertidos.", 400);
     }
 
-    // Regeneração de PIX desativada conforme plano base.
-    const pixData = {};
 
     const { data, error } = await supabaseAdmin
       .from("cobrancas")
@@ -98,8 +91,6 @@ export const cobrancaPagamentoService = {
         tipo_pagamento: null,
         pagamento_manual: false,
         recibo_url: null,
-        dados_auditoria_pagamento: null,
-        ...pixData // Injeta os novos dados do PIX
       })
       .eq("id", cobrancaId)
       .select()

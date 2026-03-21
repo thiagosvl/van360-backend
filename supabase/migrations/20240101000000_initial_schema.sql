@@ -292,6 +292,7 @@ ALTER TABLE "public"."passageiros" OWNER TO "postgres";
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."pre_passageiros" (
     "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
     "usuario_id" "uuid" NOT NULL,
     "nome" "text" NOT NULL,
@@ -451,11 +452,6 @@ ALTER TABLE ONLY "public"."escolas"
 
 ALTER TABLE ONLY "public"."gastos"
     ADD CONSTRAINT "gastos_pkey" PRIMARY KEY ("id");
-
-
-
-ALTER TABLE ONLY "public"."pix_validacao_pendente"
-
 
 
 
@@ -988,11 +984,6 @@ GRANT ALL ON TABLE "public"."passageiros" TO "anon";
 GRANT ALL ON TABLE "public"."passageiros" TO "authenticated";
 GRANT ALL ON TABLE "public"."passageiros" TO "service_role";
 
-
-
-GRANT ALL ON TABLE "public"."pix_validacao_pendente" TO "anon";
-GRANT ALL ON TABLE "public"."pix_validacao_pendente" TO "authenticated";
-GRANT ALL ON TABLE "public"."pix_validacao_pendente" TO "service_role";
 
 
 
