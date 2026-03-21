@@ -11,17 +11,15 @@ export const createCobrancaSchema = z.object({
 
     mes: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),
     ano: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),
-    
+
     status: z.string().optional(),
     origem: z.nativeEnum(CobrancaOrigem).optional(), // Changed from z.string().optional() to z.nativeEnum(CobrancaOrigem).optional()
-    
+
     pagamento_manual: z.boolean().optional(),
     tipo_pagamento: z.string().nullable().optional(),
     data_pagamento: z.string().nullable().optional(),
     valor_pago: z.union([z.number(), z.string()]).transform(v => typeof v === 'string' ? moneyToNumber(v) : v).optional(),
     recibo_url: z.string().nullable().optional(),
-
-    enviar_notificacao_agora: z.boolean().optional()
 });
 
 export type CreateCobrancaDTO = z.infer<typeof createCobrancaSchema>;

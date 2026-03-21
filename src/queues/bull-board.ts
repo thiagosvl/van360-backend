@@ -3,11 +3,7 @@ import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { FastifyAdapter } from '@bull-board/fastify';
 import { FastifyInstance } from 'fastify';
 import { contractQueue } from './contract.queue.js';
-import { generationQueue } from './generation.queue.js';
-import { payoutQueue } from './payout.queue.js';
-import { pixQueue } from './pix.queue.js';
-import { receiptQueue } from './receipt.queue.js';
-import { webhookQueue } from './webhook.queue.js';
+
 import { whatsappQueue } from './whatsapp.queue.js';
 
 export const setupBullBoard = (app: FastifyInstance) => {

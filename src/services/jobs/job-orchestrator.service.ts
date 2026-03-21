@@ -1,27 +1,23 @@
 import { logger } from "../../config/logger.js";
+import { subscriptionService } from "../subscriptions/subscription.service.js";
 
 export const jobOrchestratorService = {
-  async runWorker() {
-    const now = new Date();
-    // Ajuste para Horário de Brasília (Vercel usa UTC)
-    const brDate = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
-    const hour = brDate.getHours();
-    const minute = brDate.getMinutes();
+  /**
+   * Executa a rotina diária do sistema (Assinaturas, Mensalidades, etc)
+   * A ser disparado por um CronJob (ex: VPS ou Vercel Cron)
+   */
+  async runDailyJobs() {
+    logger.info("[JobOrchestrator] Iniciando rotina diária...");
 
-    logger.info({ hour, minute }, "[JobOrchestrator] Iniciando ciclo de check...");
+    const executions = [
+      subscriptionService.runDailyCheck().catch((err: any) => {
+        logger.error({ err }, "[JobOrchestrator] Erro ao processar assinaturas diárias");
+        throw err;
+      }),
+      // Futuro: cobrancaService.processDailyBilling() (add-on de mensalidades automáticas)
+    ];
 
-    const executions: Promise<any>[] = [];
-
-    // --- AGENDAS DE FREQUÊNCIA E HORÁRIOS MIGRADO PARA BULLMQ NATIVO NA VPS ---
-    // Os jobs agora são disparados internamente pelo cronWorker baseado no redis.
-    
-    if (executions.length === 0) {
-      logger.info("[JobOrchestrator] Nada para rodar neste slot.");
-      return { status: "idle" };
-    }
-
-    logger.info({ jobs: executions.length }, "[JobOrchestrator] Disparando jobs do slot...");
-    
+    logger.info({ totalJobs: executions.length }, "[JobOrchestrator] Disparando jobs...");
     const results = await Promise.allSettled(executions);
     
     return {

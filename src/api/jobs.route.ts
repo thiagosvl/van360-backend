@@ -8,7 +8,6 @@ export async function jobsRoute(app: FastifyInstance) {
   // Middleware de segurança simples para Cron Jobs
   app.addHook("preHandler", async (request, reply) => {
     const authHeader = request.headers["authorization"];
-    // Suporta "Bearer <token>" ou apenas "<token>"
     const token = authHeader?.replace("Bearer ", "");
 
     if (token !== env.CRON_SECRET) {
@@ -17,15 +16,5 @@ export async function jobsRoute(app: FastifyInstance) {
     }
   });
 
-  app.post("/monitor-validacao-pix", jobsController.pixValidationMonitor); // /jobs/monitor-validacao-pix
-
-  app.post("/monitor-repasses", jobsController.repasseMonitor); // /jobs/monitor-repasses
-
-  app.post("/retry-repasses", jobsController.repasseRetry); // /jobs/retry-repasses
-
-  app.post("/reconciliacao-entrada", jobsController.reconciliacaoEntrada);
-
-  app.post("/worker", jobsController.runOrchestrator);
-
-
+  app.post("/daily-routine", jobsController.runDailyRoutine);
 }

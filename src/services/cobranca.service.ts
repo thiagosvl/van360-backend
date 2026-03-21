@@ -1,18 +1,16 @@
 import crypto from "node:crypto";
-import { PASSENGER_EVENT_MANUAL } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { toLocalDateString } from "../utils/date.utils.js";
-import { notificationService } from "./notifications/notification.service.js";
 
 import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
 import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaOrigem } from "../types/enums.js";
 import { historicoService } from "./historico.service.js";
 
 interface CreateCobrancaOptions {
-  skipLog?: boolean;       // Se true, não registra log individual de auditoria
+  skipLog?: boolean;
 }
 
 export const cobrancaService = {
@@ -29,7 +27,6 @@ export const cobrancaService = {
   async createCobranca(data: CreateCobrancaDTO, options: CreateCobrancaOptions = {}): Promise<any> {
     if (!data.passageiro_id || !data.usuario_id) throw new AppError("Campos obrigatórios ausentes (passageiro_id, usuario_id).", 400);
 
-    // Buscar dados do passageiro para gerar PIX (CPF e Nome do Responsável)
     const { data: passageiro, error: passError } = await supabaseAdmin
       .from("passageiros")
       .select("cpf_responsavel, nome_responsavel")
@@ -38,22 +35,16 @@ export const cobrancaService = {
 
     if (passError || !passageiro) throw new AppError("Passageiro não encontrado para gerar cobrança.", 404);
 
-    // Gerar ID preliminar
     const cobrancaId = crypto.randomUUID();
-
-    // Geração de PIX desativada conforme plano base.
-    const pixData = {};
     const valorNumerico = typeof data.valor === "string" ? moneyToNumber(data.valor) : data.valor;
 
-    // Inserir no Banco
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { enviar_notificacao_agora, tipo, ...cobrancaCleanData } = data;
+    const { tipo, ...cobrancaCleanData } = data;
 
     const cobrancaData: any = {
       id: cobrancaId,
       ...cobrancaCleanData,
       valor: valorNumerico,
-      ...pixData
     };
 
     const { data: inserted, error } = await supabaseAdmin
@@ -81,14 +72,6 @@ export const cobrancaService = {
       });
     }
 
-    // Enviar notificação imediata se solicitado
-    if (data.enviar_notificacao_agora) {
-      // Roda em background para não travar response
-      this.enviarNotificacaoManual(inserted.id).catch(err => {
-        logger.error({ err, cobrancaId: inserted.id }, "Falha ao enviar notificação imediata após criação.");
-      });
-    }
-
     return inserted;
   },
 
@@ -107,7 +90,7 @@ export const cobrancaService = {
     // Mapeamento de campos permitidos para edição de metadados
     if (data.valor !== undefined) cobrancaData.valor = data.valor;
     if (data.data_vencimento !== undefined) cobrancaData.data_vencimento = data.data_vencimento;
-    
+
     // Bloqueio de transição de status via PUT (Diretrizes de Arquitetura)
     if (data.status !== undefined && data.status !== cobrancaOriginal.status) {
       logger.warn({ cobrancaId: id, from: cobrancaOriginal.status, to: data.status }, "Tentativa de alteração de status via PUT (updateCobranca) ignorada. Use os endpoints especializados.");
@@ -142,14 +125,6 @@ export const cobrancaService = {
         passageiro: cobrancaOriginal.passageiros?.nome || cobrancaOriginal.passageiro?.nome
       }
     });
-
-    // 4. Reenviar notificação se necessário (Após save do DB para garantir leitura correta)
-    if (shouldResendNotification) {
-      // Executar em background para não travar a resposta HTTP
-      this.enviarNotificacaoManual(id).catch(err => {
-        logger.error({ err, cobrancaId: id }, "Falha ao reenviar notificação automática pós-edição.");
-      });
-    }
 
     return updated;
   },
@@ -229,7 +204,7 @@ export const cobrancaService = {
 
     const { data, error } = await query;
     if (error) throw error;
-    
+
     return data;
   },
 
@@ -346,80 +321,17 @@ export const cobrancaService = {
     if (created > 0) {
       // --- LOG DE AUDITORIA ---
       historicoService.log({
-          usuario_id: motoristaId,
-          entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
-          entidade_id: motoristaId,
-          acao: AtividadeAcao.COBRANCAS_GERADAS,
-          descricao: `Geração automática de ${created} cobranças concluída para ${targetMonth}/${targetYear}.`,
-          meta: { mes: targetMonth, ano: targetYear, criadas: created, puladas: skipped }
+        usuario_id: motoristaId,
+        entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
+        entidade_id: motoristaId,
+        acao: AtividadeAcao.COBRANCAS_GERADAS,
+        descricao: `Geração automática de ${created} cobranças concluída para ${targetMonth}/${targetYear}.`,
+        meta: { mes: targetMonth, ano: targetYear, criadas: created, puladas: skipped }
       });
     }
 
     return { created, skipped };
   },
-
-  async enviarNotificacaoManual(cobrancaId: string): Promise<boolean> {
-    // 1. Buscar Cobrança Completa
-    const { data: cobranca, error } = await supabaseAdmin
-      .from("cobrancas")
-      .select(`
-              id, valor, data_vencimento, usuario_id,
-              passageiros!inner (
-                  id, nome, nome_responsavel, telefone_responsavel
-              ),
-              usuarios!inner ( nome, apelido )
-          `)
-      .eq("id", cobrancaId)
-      .single();
-
-    if (error || !cobranca) throw new Error("Cobrança não encontrada.");
-
-    const passageiro = cobranca.passageiros as any;
-    const motorista = cobranca.usuarios as any;
-    const nomeMotorista = motorista.apelido || motorista.nome;
-
-    if (!passageiro.telefone_responsavel) throw new Error("Telefone do responsável não cadastrado.");
-
-    // 2. Enviar Notificação (Manual)
-    const success = await notificationService.notifyPassenger(
-      passageiro.telefone_responsavel,
-      PASSENGER_EVENT_MANUAL,
-      {
-        nomeResponsavel: passageiro.nome_responsavel || "Responsável",
-        nomePassageiro: passageiro.nome || "Passageiro",
-        nomeMotorista: nomeMotorista || "Motorista",
-        apelidoMotorista: motorista.apelido,
-        valor: cobranca.valor,
-        dataVencimento: cobranca.data_vencimento,
-
-        usuarioId: cobranca.usuario_id
-      }
-    );
-
-    // 3. Log de Histórico de Atividades
-    if (success) {
-      // Atualizar data da última notificação na cobrança
-      await supabaseAdmin
-        .from("cobrancas")
-        .update({ data_envio_ultima_notificacao: new Date() })
-        .eq("id", cobrancaId);
-
-      // --- LOG DE AUDITORIA ---
-      historicoService.log({
-          usuario_id: cobranca.usuario_id,
-          entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
-          entidade_id: cobrancaId,
-          acao: AtividadeAcao.NOTIFICACAO_WHATSAPP,
-          descricao: `Lembrete de cobrança enviado manualmente via WhatsApp para ${passageiro.nome_responsavel}.`,
-          meta: { telefone: passageiro.telefone_responsavel, passageiro: passageiro.nome }
-      });
-    }
-
-    return success;
-  },
-
-  // Métodos auxiliares necessários para updateCobranca...
-
 
   /**
    * Método desativado no plano base.

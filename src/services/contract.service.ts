@@ -12,6 +12,8 @@ import { formatAddress, getFirstName } from '../utils/format.js';
 import { historicoService } from './historico.service.js';
 import { InHouseContractProvider } from './providers/inhouse-contract.provider.js';
 import { whatsappService } from './whatsapp.service.js';
+import { notificationService } from './notifications/notification.service.js';
+import { EVENTO_MOTORISTA_CONTRATO_ASSINADO, EVENTO_PASSAGEIRO_CONTRATO_ASSINADO } from '../config/constants.js';
 
 class ContractService {
   private providers: Map<string, ContractProvider> = new Map();
@@ -238,28 +240,33 @@ class ContractService {
       meta: { contrato_id: contrato.id, documento_final: response.documentoFinalUrl }
     });
 
-    // 4.1 Notificar Responsável
+    // 4.1 Notificar Responsável via NotificationService
     if (passageiro.telefone_responsavel) {
-      const msgResponsavel = `✅ *Contrato Assinado!*\n\n` +
-        `Oi *${getFirstName(passageiro.nome_responsavel)}*! Seu contrato de transporte escolar para *${getFirstName(passageiro.nome)}* foi assinado com sucesso.\n\n` +
-        `Você pode visualizar o documento final no link abaixo:\n\n` +
-        `${response.documentoFinalUrl}\n\n` +
-        `Desejamos uma ótima parceria! 🚀`;
-
-      whatsappService.sendText(passageiro.telefone_responsavel, msgResponsavel)
-        .catch(err => logger.error({ err }, 'Erro ao notificar responsável sobre assinatura'));
+      notificationService.notifyPassenger(
+        passageiro.telefone_responsavel,
+        EVENTO_PASSAGEIRO_CONTRATO_ASSINADO,
+        {
+          nomeResponsavel: passageiro.nome_responsavel,
+          nomePassageiro: passageiro.nome,
+          nomeMotorista: usuario.nome,
+          contratoUrl: response.documentoFinalUrl,
+          usuarioId: usuario.id
+        }
+      ).catch(err => logger.error({ err }, 'Erro ao notificar responsável sobre assinatura via NotificationService'));
     }
 
-    // 4.2 Notificar Motorista
+    // 4.2 Notificar Motorista via NotificationService
     if (usuario.telefone) {
-      const msgMotorista = `✅ *Contrato Assinado!*\n\n` +
-        `*${getFirstName(passageiro.nome_responsavel)}* acabou de assinar o contrato do passageiro *${getFirstName(passageiro.nome)}*.\n\n` +
-        `Acesse o documento assinado aqui:\n\n` +
-        `${response.documentoFinalUrl}\n\n` +
-        `Bora rodar! 🚐💨`;
-
-      whatsappService.sendText(usuario.telefone, msgMotorista)
-        .catch(err => logger.error({ err }, 'Erro ao notify driver about signature'));
+      notificationService.notifyDriver(
+        usuario.telefone,
+        EVENTO_MOTORISTA_CONTRATO_ASSINADO,
+        {
+          nomeMotorista: usuario.nome,
+          nomePassageiro: passageiro.nome,
+          nomeResponsavel: passageiro.nome_responsavel,
+          contratoUrl: response.documentoFinalUrl
+        }
+      ).catch(err => logger.error({ err }, 'Erro ao notificar motorista sobre assinatura via NotificationService'));
     }
 
     return {

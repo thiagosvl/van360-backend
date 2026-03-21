@@ -1,12 +1,13 @@
 import { formatToBrazilianDate, getMonthNameBR } from "../../../utils/date.utils.js";
 import { formatCurrency, getFirstName } from "../../../utils/format.js";
+import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
 
 export interface PassengerContext {
     nomeResponsavel: string;
     nomePassageiro: string;
     nomeMotorista: string;
-    valor: number;
-    dataVencimento: string; // YYYY-MM-DD
+    valor?: number;
+    dataVencimento?: string; // YYYY-MM-DD
     diasAntecedencia?: number;
     diasAtraso?: number;
     linkPagamento?: string; // Futuro
@@ -14,20 +15,15 @@ export interface PassengerContext {
     ano?: number;
     usuarioId: string; // ID do Motorista (para roteamento WhatsApp)
     apelidoMotorista?: string; // Preferência de nome de exibição
-    // New fields for flexible Lego composition
     reciboUrl?: string;
     telefoneMotorista?: string; // Para contato direto
+    linkAssinatura?: string;
+    contratoUrl?: string; // URL do PDF final
 }
 
-import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
-
-// Removidos métodos locais pois agora usamos os utilitários centralizados
-
-// Helper to construct standard PIX message parts for Passengers
 const textPart = (text: string): CompositeMessagePart[] => {
     return [{ type: "text", content: text }];
 };
-
 
 // Helper for System Footer
 const getSystemFooter = (ctx: PassengerContext) => {
@@ -43,11 +39,39 @@ const getSystemFooter = (ctx: PassengerContext) => {
 export const PassengerTemplates = {
     
     /**
-     * Cobrança Disponível / Vencimento Próximo
+     * Contrato Disponível
+     */
+    contractAvailable: (ctx: PassengerContext): CompositeMessagePart[] => {
+        const nomeResp = getFirstName(ctx.nomeResponsavel);
+        const linkStr = ctx.linkAssinatura ? `\n\n👉 Acesse o link abaixo para visualizar e assinar:\n\n${ctx.linkAssinatura}` : "";
+        const text = `🔔 *Contrato Disponível*\n\n` +
+            `Olá *${nomeResp}*,\n` +
+            `O contrato de transporte de *${ctx.nomePassageiro}* foi gerado e já está pronto para assinatura digital.${linkStr}\n\n` +
+            `Acesse o sistema e finalize o processo online e simplificado.${getSystemFooter(ctx)}`;
+
+        return textPart(text);
+    },
+
+    /**
+     * Contrato Assinado (Pelo Passageiro)
+     */
+    contractSignedBySelf: (ctx: PassengerContext): CompositeMessagePart[] => {
+        const nomeResp = getFirstName(ctx.nomeResponsavel);
+        const linkStr = ctx.contratoUrl ? `\n\n📄 Você pode visualizar o documento final no link abaixo:\n\n${ctx.contratoUrl}` : "";
+        const text = `✅ *Contrato Assinado*\n\n` +
+            `Olá *${nomeResp}*,\n` +
+            `Confirmamos que seu contrato de transporte para *${ctx.nomePassageiro}* foi assinado com sucesso!${linkStr}\n\n` +
+            `Desejamos uma ótima parceria! 🚀${getSystemFooter(ctx)}`;
+
+        return textPart(text);
+    },
+
+    /**
+     * Lembrete de Mensalidade Próxima
      */
     dueSoon: (ctx: PassengerContext): CompositeMessagePart[] => {
-        const valor = formatCurrency(ctx.valor);
-        const data = formatToBrazilianDate(ctx.dataVencimento);
+        const valor = formatCurrency(ctx.valor || 0);
+        const data = formatToBrazilianDate(ctx.dataVencimento || "");
         const diasMsg = ctx.diasAntecedencia ? ` (daqui a ${ctx.diasAntecedencia} dias)` : "";
         const nomeResp = getFirstName(ctx.nomeResponsavel);
 
@@ -61,11 +85,11 @@ export const PassengerTemplates = {
     },
 
     /**
-     * Cobrança Vence Hoje
+     * Mensalidade Vence Hoje (Venceu)
      */
     dueToday: (ctx: PassengerContext): CompositeMessagePart[] => {
-        const valor = formatCurrency(ctx.valor);
-        const data = formatToBrazilianDate(ctx.dataVencimento);
+        const valor = formatCurrency(ctx.valor || 0);
+        const data = formatToBrazilianDate(ctx.dataVencimento || "");
         const nomeResp = getFirstName(ctx.nomeResponsavel);
         
         const text = `⚠️ *Mensalidade Vence Hoje*\n\n` +
@@ -77,60 +101,17 @@ export const PassengerTemplates = {
     },
 
     /**
-     * Cobrança em Atraso
+     * Mensalidade Atrasada
      */
     overdue: (ctx: PassengerContext): CompositeMessagePart[] => {
-        const valor = formatCurrency(ctx.valor);
-        const data = formatToBrazilianDate(ctx.dataVencimento);
-        const diasAtraso = ctx.diasAtraso || 1;
+        const valor = formatCurrency(ctx.valor || 0);
+        const data = formatToBrazilianDate(ctx.dataVencimento || "");
         const nomeResp = getFirstName(ctx.nomeResponsavel);
         
         const text = `⚠️ *Aviso de Atraso*\n\n` +
             `Responsável: *${nomeResp}*\n` +
             `Passageiro(a): *${ctx.nomePassageiro}*\n\n` +
             `Identificamos que a mensalidade de *${valor}* (vencida em *${data}*) ainda não foi regularizada.${getSystemFooter(ctx)}`;
-
-        return textPart(text);
-    },
-
-    /**
-     * Confirmação de Pagamento (Recibo)
-     */
-    paymentReceived: (ctx: PassengerContext): CompositeMessagePart[] => {
-        const valor = formatCurrency(ctx.valor);
-        const ref = ctx.mes ? `\nReferência: *${getMonthNameBR(ctx.mes)}/${ctx.ano}*` : "";
-        const nomeResp = getFirstName(ctx.nomeResponsavel);
-        
-        const text = `✅ *Pagamento Confirmado*\n\n` +
-            `Responsável: *${nomeResp}*\n` +
-            `Passageiro(a): *${ctx.nomePassageiro}*\n\n` +
-            `O recebimento da mensalidade de *${valor}* foi confirmado com sucesso.${ref}${getSystemFooter(ctx)}`;
-
-        // Se tiver recibo, envia a imagem com o texto na legenda (Bundle)
-        if (ctx.reciboUrl) {
-            return [{
-                type: "image",
-                mediaBase64: ctx.reciboUrl,
-                content: text // Caption
-            }];
-        }
-
-        return textPart(text);
-    },
-
-    /**
-     * Envio Manual de Cobrança (Lembrete Genérico)
-     */
-    manualCharge: (ctx: PassengerContext): CompositeMessagePart[] => {
-        const valor = formatCurrency(ctx.valor);
-        const data = formatToBrazilianDate(ctx.dataVencimento);
-        const nomeResp = getFirstName(ctx.nomeResponsavel);
-
-        const text = `🗓️ *Aviso de Mensalidade*\n\n` +
-            `Responsável: *${nomeResp}*\n` +
-            `Passageiro(a): *${ctx.nomePassageiro}*\n\n` +
-            `🔹 Valor: *${valor}*\n` +
-            `🔹 Vencimento: *${data}*${getSystemFooter(ctx)}`;
 
         return textPart(text);
     }

@@ -46,25 +46,26 @@ export const contractWorker = new Worker<ContractJobData>(
             logger.info({ jobId: job.id, contratoId }, "[Worker] Contrato atualizado com minuta URL.");
 
             // 4. Enviar para a fila de WhatsApp se houver telefone
+            // 4. Notificar Responsável via NotificationService
             if (passageiro.telefone_responsavel) {
-                const linkAssinatura = providerName === ContratoProvider.INHOUSE 
+                const linkAssinatura = providerName === ContratoProvider.INHOUSE
                     ? `${env.FRONTEND_URL}/assinar/${tokenAcesso}`
                     : response.providerSignatureLink;
 
-                const nomeResponsavel = getFirstName(passageiro.nome_responsavel);
-                const mensagem = `Oi *${nomeResponsavel}*! Tudo bem? 👋\n\n` +
-                  `Estou enviando o contrato de transporte escolar do(a) passageiro(a) *${passageiro.nome}* para assinatura digital.\n\n` +
-                  `👉 Acesse o link abaixo para visualizar e assinar:\n\n` +
-                  `${linkAssinatura}\n\n` +
-                  `O contrato terá validade após a assinatura de ambas as partes.\n\n` +
-                  `🤝 Fico à disposição em caso de dúvidas.`;
+                const { notificationService } = await import('../services/notifications/notification.service.js');
+                const { EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL } = await import('../config/constants.js');
 
-                await addToWhatsappQueue({
-                    phone: passageiro.telefone_responsavel,
-                    message: mensagem,
-                    context: "CONTRACT_GENERATION",
-                    userId: usuarioId
-                });
+                await notificationService.notifyPassenger(
+                    passageiro.telefone_responsavel,
+                    EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL,
+                    {
+                        nomeResponsavel: passageiro.nome_responsavel,
+                        nomePassageiro: passageiro.nome,
+                        nomeMotorista: dadosContrato.nomeCondutor,
+                        linkAssinatura,
+                        usuarioId: usuarioId
+                    }
+                );
 
                 // --- LOG DE AUDITORIA ---
                 historicoService.log({
@@ -72,15 +73,14 @@ export const contractWorker = new Worker<ContractJobData>(
                     entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
                     entidade_id: passageiro.id,
                     acao: AtividadeAcao.NOTIFICACAO_WHATSAPP,
-                    descricao: `Link do contrato enviado via WhatsApp para ${passageiro.nome_responsavel}.`,
-                    meta: { 
-                        contrato_id: contratoId, 
+                    descricao: `Link do contrato enviado via NotificationService para ${passageiro.nome_responsavel}.`,
+                    meta: {
+                        contrato_id: contratoId,
                         contexto: "CONTRATO_GERADO",
-                        canal: "WHATSAPP"
                     }
                 });
 
-                logger.info({ jobId: job.id, phone: passageiro.telefone_responsavel }, "[Worker] Notificação de contrato enfileirada.");
+                logger.info({ jobId: job.id, phone: passageiro.telefone_responsavel }, "[Worker] Notificação de contrato processada via NotificationService.");
             }
 
             return { success: true, documentUrl: response.documentUrl };

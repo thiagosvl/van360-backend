@@ -9,7 +9,7 @@ import gastoRoute from "./gasto.route.js";
 import historicoRoute from "./historico.routes.js";
 import { jobsRoute } from "./jobs.route.js";
 import passageiroRoutes from "./passageiro.routes.js";
-import paymentRoutes from "./payment.routes.js";
+
 import prePassageiroRoutes from "./pre-passageiro.routes.js";
 import profileRoutes from "./profile.routes.js";
 import publicRoutes from "./public.routes.js";
@@ -24,7 +24,7 @@ const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.register(publicRoutes, { prefix: "/api/public" });
   app.register(usuarioRoute, { prefix: "/api/usuarios" });
 
-  // app.register(paymentRoutes, { prefix: "/api/pagamento" });
+
 
   app.register(cobrancaRoutes, { prefix: "/api/cobrancas" });
 
@@ -41,8 +41,7 @@ const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
   // Rotas de Contratos
   app.register(contractRoutes, { prefix: "/api" });
 
-  // Rotas de Jobs (Automação) - DESATIVADAS NO PLANO BASE
-  // app.register(jobsRoute, { prefix: "/api/jobs" });
+  app.register(jobsRoute, { prefix: "/api/jobs" });
 
   // Webhook da Evolution
   app.register(evolutionRoute, { prefix: "/api/evolution" });

@@ -1,5 +1,5 @@
 import {
-    DRIVER_EVENT_ACTIVATION
+  EVENTO_MOTORISTA_TESTE_BOAS_VINDAS
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
@@ -71,7 +71,7 @@ export async function checkUserStatus(
   const telefoneNormalizado = onlyDigits(telefone);
 
   // Uma única query para buscar usuário que corresponda a qualquer um dos campos
-    const { data: usuarios, error: findUserError } = await supabaseAdmin
+  const { data: usuarios, error: findUserError } = await supabaseAdmin
     .from("usuarios")
     .select("id, ativo, cpfcnpj, email, telefone")
     .or(`cpfcnpj.eq.${cpfcnpjNormalizado},email.eq.${emailNormalizado},telefone.eq.${telefoneNormalizado}`)
@@ -87,9 +87,9 @@ export async function checkUserStatus(
   }
 
   const user = usuarios[0];
-  const field: string | undefined = user.cpfcnpj === cpfcnpjNormalizado ? "cpfcnpj" : 
-                    user.email?.toLowerCase().trim() === emailNormalizado ? "email" : 
-                    user.telefone === telefoneNormalizado ? "telefone" : undefined;
+  const field: string | undefined = user.cpfcnpj === cpfcnpjNormalizado ? "cpfcnpj" :
+    user.email?.toLowerCase().trim() === emailNormalizado ? "email" :
+      user.telefone === telefoneNormalizado ? "telefone" : undefined;
 
   const campoEmUso = field === "cpfcnpj" ? "CPF" : field === "email" ? "E-mail" : "Número";
   const mensagem = campoEmUso ? `${campoEmUso} já está em uso.` : "E-mail/CPF/Número já está em uso.";
@@ -208,10 +208,10 @@ export async function registrarUsuario(
 
     // Notificação de Boas Vindas
     if (payload.telefone) {
-      notificationService.notifyDriver(payload.telefone, DRIVER_EVENT_ACTIVATION, {
+      notificationService.notifyDriver(payload.telefone, EVENTO_MOTORISTA_TESTE_BOAS_VINDAS, {
         nomeMotorista: payload.nome,
       })
-      .catch(err => logger.error({ err }, "Falha ao enviar boas vindas"));
+        .catch(err => logger.error({ err }, "Falha ao enviar boas vindas"));
     }
 
     return { success: true, session };

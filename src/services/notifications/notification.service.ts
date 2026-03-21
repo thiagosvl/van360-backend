@@ -1,195 +1,150 @@
-import { GLOBAL_WHATSAPP_INSTANCE } from "../../config/constants.js";
-import { logger } from "../../config/logger.js";
 import { CompositeMessagePart } from "../../types/dtos/whatsapp.dto.js";
 
 import {
-    DRIVER_EVENT_ACCESS_SUSPENDED,
-    DRIVER_EVENT_ACTIVATION,
-    DRIVER_EVENT_PAYMENT_CONFIRMED,
-    DRIVER_EVENT_PIX_KEY_VALIDATED,
-    DRIVER_EVENT_PIX_KEY_VALIDATION_FAILED,
-    DRIVER_EVENT_PRE_PASSENGER_CREATED,
-    DRIVER_EVENT_RENEWAL,
-    DRIVER_EVENT_RENEWAL_DUE_SOON,
-    DRIVER_EVENT_RENEWAL_DUE_TODAY,
-    DRIVER_EVENT_RENEWAL_OVERDUE,
-    DRIVER_EVENT_REPASSE_FAILED,
-    DRIVER_EVENT_REPASSE_SUCCESS,
-    DRIVER_EVENT_TRIAL_ENDING,
-    DRIVER_EVENT_UPGRADE,
-    DRIVER_EVENT_WELCOME_TRIAL,
-    PASSENGER_EVENT_DUE_SOON,
-    PASSENGER_EVENT_DUE_TODAY,
-    PASSENGER_EVENT_MANUAL,
-    PASSENGER_EVENT_OVERDUE,
-    PASSENGER_EVENT_PAYMENT_RECEIVED
+    EVENTO_MOTORISTA_ASSINATURA_PAGO,
+    EVENTO_MOTORISTA_ASSINATURA_VENCENDO,
+    EVENTO_MOTORISTA_ASSINATURA_VENCEU,
+    EVENTO_MOTORISTA_ASSINATURA_ATRASADA,
+    EVENTO_MOTORISTA_TESTE_EXPIRANDO,
+    EVENTO_MOTORISTA_TESTE_BOAS_VINDAS,
+    EVENTO_MOTORISTA_TESTE_ENCERRADO,
+    EVENTO_MOTORISTA_CONTRATO_ASSINADO,
+    EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
+    EVENTO_PASSAGEIRO_ASSINATURA_VENCEU,
+    EVENTO_PASSAGEIRO_ATRASADO,
+    EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL,
+    EVENTO_PASSAGEIRO_CONTRATO_ASSINADO,
+    GLOBAL_WHATSAPP_INSTANCE
 } from "../../config/constants.js";
-import { addToWhatsappQueue } from "../../queues/whatsapp.queue.js";
 import { DriverContext, DriverTemplates } from "./templates/driver.template.js";
 import { PassengerContext, PassengerTemplates } from "./templates/passenger.template.js";
+import { NotificationProviderAdapter } from "./ports/notification-provider.port.js";
+import { EvolutionWhatsappQueueAdapter } from "./adapters/evolution.adapter.js";
+import { MockSmsAdapter } from "./adapters/mock-sms.adapter.js";
+import { MockEmailAdapter } from "./adapters/mock-email.adapter.js";
 
-type PassengerEventType = 
-    | typeof PASSENGER_EVENT_DUE_SOON 
-    | typeof PASSENGER_EVENT_DUE_TODAY 
-    | typeof PASSENGER_EVENT_OVERDUE 
-    | typeof PASSENGER_EVENT_PAYMENT_RECEIVED
-    | typeof PASSENGER_EVENT_MANUAL;
+export type NotificationChannel = "WHATSAPP" | "SMS" | "EMAIL";
 
-type DriverEventType = 
-    | typeof DRIVER_EVENT_ACTIVATION 
-    | typeof DRIVER_EVENT_WELCOME_TRIAL 
-    | typeof DRIVER_EVENT_RENEWAL 
-    | typeof DRIVER_EVENT_UPGRADE 
-    | typeof DRIVER_EVENT_RENEWAL_DUE_SOON
-    | typeof DRIVER_EVENT_RENEWAL_DUE_TODAY
-    | typeof DRIVER_EVENT_RENEWAL_OVERDUE
-    | typeof DRIVER_EVENT_ACCESS_SUSPENDED
-    | typeof DRIVER_EVENT_PAYMENT_CONFIRMED
-    | typeof DRIVER_EVENT_TRIAL_ENDING
-    | typeof DRIVER_EVENT_REPASSE_FAILED
-    | typeof DRIVER_EVENT_REPASSE_SUCCESS
-    | typeof DRIVER_EVENT_PIX_KEY_VALIDATED
-    | typeof DRIVER_EVENT_PIX_KEY_VALIDATION_FAILED
-    | typeof DRIVER_EVENT_PRE_PASSENGER_CREATED;
+export interface NotificationOptions {
+    channels?: NotificationChannel[];
+    whatsapp?: {
+        instanceName?: string;
+    };
+}
 
-export const notificationService = {
+type PassengerEventType =
+    | typeof EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO
+    | typeof EVENTO_PASSAGEIRO_ASSINATURA_VENCEU
+    | typeof EVENTO_PASSAGEIRO_ATRASADO
+    | typeof EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL
+    | typeof EVENTO_PASSAGEIRO_CONTRATO_ASSINADO;
+
+type DriverEventType =
+    | typeof EVENTO_MOTORISTA_TESTE_BOAS_VINDAS
+    | typeof EVENTO_MOTORISTA_TESTE_EXPIRANDO
+    | typeof EVENTO_MOTORISTA_TESTE_ENCERRADO
+    | typeof EVENTO_MOTORISTA_ASSINATURA_VENCENDO
+    | typeof EVENTO_MOTORISTA_ASSINATURA_VENCEU
+    | typeof EVENTO_MOTORISTA_ASSINATURA_ATRASADA
+    | typeof EVENTO_MOTORISTA_ASSINATURA_PAGO
+    | typeof EVENTO_MOTORISTA_CONTRATO_ASSINADO;
+
+class NotificationService {
+    // Registro dos Adapters que farão o disparo real (ou envio para a fila)
+    private adapters: Record<NotificationChannel, NotificationProviderAdapter>;
+
+    constructor() {
+        this.adapters = {
+            "WHATSAPP": new EvolutionWhatsappQueueAdapter(),
+            "SMS": new MockSmsAdapter(),
+            "EMAIL": new MockEmailAdapter()
+        };
+    }
 
     /**
      * Envia notificação para Passageiro/Responsável
+     * @param to Destinatário (Telefone para WA/SMS, Email para Email)
      */
     async notifyPassenger(
-        to: string, 
-        type: PassengerEventType, 
-        ctx: PassengerContext & { reciboUrl?: string }
+        to: string,
+        type: PassengerEventType,
+        ctx: PassengerContext & { reciboUrl?: string },
+        options: NotificationOptions = {}
     ): Promise<boolean> {
-        
+
         let parts: CompositeMessagePart[] = [];
-        
+
         switch (type) {
-            case PASSENGER_EVENT_DUE_SOON: parts = PassengerTemplates.dueSoon(ctx); break;
-            case PASSENGER_EVENT_DUE_TODAY: parts = PassengerTemplates.dueToday(ctx); break;
-            case PASSENGER_EVENT_OVERDUE: parts = PassengerTemplates.overdue(ctx); break;
-            case PASSENGER_EVENT_PAYMENT_RECEIVED: parts = PassengerTemplates.paymentReceived(ctx); break;
-            case PASSENGER_EVENT_MANUAL: parts = PassengerTemplates.manualCharge(ctx); break;
+            case EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO: parts = PassengerTemplates.dueSoon(ctx); break;
+            case EVENTO_PASSAGEIRO_ASSINATURA_VENCEU: parts = PassengerTemplates.dueToday(ctx); break;
+            case EVENTO_PASSAGEIRO_ATRASADO: parts = PassengerTemplates.overdue(ctx); break;
+            case EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL: parts = PassengerTemplates.contractAvailable(ctx); break;
+            case EVENTO_PASSAGEIRO_CONTRATO_ASSINADO: parts = PassengerTemplates.contractSignedBySelf(ctx); break;
         }
 
-        // NOTIFICAR SEMPRE PELA INSTÂNCIA GLOBAL (BYPASS)
-        // Antes: usava driverInstance se conectado. Agora: Global para todos.
-        return await this._processAndEnqueue(to, parts, type, GLOBAL_WHATSAPP_INSTANCE);
-    },
+        return await this._processAndEnqueue(to, parts, type as string, options);
+    }
 
     /**
      * Envia notificação para Motorista/Assinante
+     * @param to Destinatário (Telefone para WA/SMS, Email para Email)
      */
     async notifyDriver(
-        to: string, 
-        type: DriverEventType, 
-        ctx: DriverContext & { nomePagador?: string, nomePassageiro?: string, diasAtraso?: number, reciboUrl?: string, trialDays?: number }
+        to: string,
+        type: DriverEventType,
+        ctx: DriverContext & { nomePagador?: string, nomePassageiro?: string, diasAtraso?: number, reciboUrl?: string, trialDays?: number },
+        options: NotificationOptions = {}
     ): Promise<boolean> {
 
         let parts: CompositeMessagePart[] = [];
 
         switch (type) {
-            case DRIVER_EVENT_ACTIVATION: parts = DriverTemplates.activation(ctx); break;
-            case DRIVER_EVENT_WELCOME_TRIAL: parts = DriverTemplates.welcomeTrial(ctx); break;
-            // case DRIVER_EVENT_RENEWAL: parts = DriverTemplates.renewal(ctx); break;
-            // case DRIVER_EVENT_UPGRADE: parts = DriverTemplates.upgradeRequest(ctx); break;
-            // case DRIVER_EVENT_RENEWAL_DUE_SOON: parts = DriverTemplates.renewalDueSoon(ctx); break;
-            // case DRIVER_EVENT_RENEWAL_DUE_TODAY: parts = DriverTemplates.renewalDueToday(ctx); break;
-            // case DRIVER_EVENT_RENEWAL_OVERDUE: parts = DriverTemplates.renewalOverdue(ctx); break;
-            // case DRIVER_EVENT_ACCESS_SUSPENDED: parts = DriverTemplates.accessSuspended(ctx); break;
-            case DRIVER_EVENT_PAYMENT_CONFIRMED: parts = DriverTemplates.paymentConfirmed(ctx); break;
-            // case DRIVER_EVENT_TRIAL_ENDING: parts = DriverTemplates.trialEnding(ctx); break;
-            case DRIVER_EVENT_REPASSE_FAILED: parts = DriverTemplates.repasseFailed(ctx); break;
-            case DRIVER_EVENT_REPASSE_SUCCESS: parts = DriverTemplates.repasseSuccess(ctx as any); break;
-
-            case DRIVER_EVENT_PIX_KEY_VALIDATED: parts = DriverTemplates.pixKeyValidated(ctx); break;
-            case DRIVER_EVENT_PIX_KEY_VALIDATION_FAILED: parts = DriverTemplates.pixKeyValidationFailed(ctx); break;
-            case DRIVER_EVENT_PRE_PASSENGER_CREATED: parts = DriverTemplates.prePassengerCreated(ctx); break;
+            case EVENTO_MOTORISTA_TESTE_BOAS_VINDAS: parts = DriverTemplates.welcomeTrial(ctx); break;
+            case EVENTO_MOTORISTA_ASSINATURA_PAGO: parts = DriverTemplates.paymentConfirmed(ctx); break;
+            case EVENTO_MOTORISTA_ASSINATURA_VENCEU: parts = DriverTemplates.dueToday(ctx); break;
+            case EVENTO_MOTORISTA_ASSINATURA_VENCENDO: parts = DriverTemplates.dueSoon(ctx); break;
+            case EVENTO_MOTORISTA_ASSINATURA_ATRASADA: parts = DriverTemplates.overdue(ctx); break;
+            case EVENTO_MOTORISTA_TESTE_EXPIRANDO: parts = DriverTemplates.trialExpiring(ctx); break;
+            case EVENTO_MOTORISTA_CONTRATO_ASSINADO: parts = DriverTemplates.contractSigned(ctx); break;
+            case EVENTO_MOTORISTA_TESTE_ENCERRADO: parts = []; break;
         }
 
-        // Motorista recebe da instância global
-        return await this._processAndEnqueue(to, parts, type, GLOBAL_WHATSAPP_INSTANCE);
-    },
+        return await this._processAndEnqueue(to, parts, type as string, options);
+    }
 
     /**
-     * Processa as partes da mensagem (Gera QR Codes se necessário) e Enfileira
+     * Central Dispatcher - Distribui a mensagem entre os canais selecionados delegando aos Adapters
      */
-    /**
-     * Central Dispatcher - Suporta Múltiplos Canais (WhatsApp, SMS, Email)
-     * Atualmente implementado apenas WhatsApp, mas pronto para expansão via switch/strategies.
-     */
-    async _processAndEnqueue(
-        to: string, 
-        parts: CompositeMessagePart[], 
-        eventType: string, 
-        instanceName?: string,
-        channels: ("WHATSAPP" | "SMS" | "EMAIL")[] = ["WHATSAPP"] // Default channel
+    private async _processAndEnqueue(
+        to: string,
+        parts: CompositeMessagePart[],
+        eventType: string,
+        options: NotificationOptions = {}
     ): Promise<boolean> {
+        if (!parts || parts.length === 0) return false;
+
+        const { channels = ["WHATSAPP"], whatsapp: whatsappOptions } = options;
+
         try {
-            const results: boolean[] = [];
+            const results: Promise<boolean>[] = [];
 
-            // 1. Channel: WHATSAPP
-            if (channels.includes("WHATSAPP")) {
-                const whatsappSuccess = await this._dispatchWhatsapp(to, parts, eventType, instanceName);
-                results.push(whatsappSuccess);
+            for (const channel of channels) {
+                const adapter = this.adapters[channel];
+                if (adapter) {
+                    const providerOptions = {
+                        eventType,
+                        instanceName: channel === "WHATSAPP" ? (whatsappOptions?.instanceName || GLOBAL_WHATSAPP_INSTANCE) : undefined
+                    };
+                    results.push(adapter.sendComposite(to, parts, providerOptions));
+                }
             }
 
-            // 2. Channel: SMS (Skeleton)
-            if (channels.includes("SMS")) {
-                // TODO: Implement SMS Service Integration
-                // const smsSuccess = await smsService.send(...)
-                // results.push(smsSuccess);
-                logger.debug({ to, eventType }, "Canal SMS solicitado mas ainda não implementado (Skeleton).");
-            }
-
-            // 3. Channel: EMAIL (Skeleton)
-            if (channels.includes("EMAIL")) {
-                // TODO: Implement Email Service Integration
-                // const emailSuccess = await emailService.send(...)
-                // results.push(emailSuccess);
-                logger.debug({ to, eventType }, "Canal EMAIL solicitado mas ainda não implementado (Skeleton).");
-            }
-
-            return results.some(r => r); // Retorna true se pelo menos um canal funcionou
-
+            const statuses = await Promise.all(results);
+            return statuses.some(s => s); // true se pelo menos um canal teve sucesso
         } catch (error) {
-            logger.error({ error, to }, "Erro no NotificationService (Dispatch)");
-            return false;
-        }
-    },
-
-    /**
-     * Implementação Específica do Canal WhatsApp
-     */
-    async _dispatchWhatsapp(
-        to: string, 
-        parts: CompositeMessagePart[], 
-        eventType: string, 
-        instanceName?: string
-    ): Promise<boolean> {
-        try {
-            // Processamento de QR Code desativado conforme plano base.
-            
-            // 2. Filtar partes inválidas
-            const validParts = parts.filter(p => !((p.type === 'image') && !p.mediaBase64));
-
-            // 3. Enviar para a Fila do WhatsApp
-             const jobId = eventType !== "UNKNOWN" ? `whatsapp-${to}-${eventType}-${Date.now()}` : undefined;
-
-             await addToWhatsappQueue({
-                 phone: to,
-                 compositeMessage: validParts, 
-                 context: eventType,
-                 options: { instanceName } 
-             }, jobId);
-             
-             logger.info({ eventType, phone: to, instanceName, jobId, channel: "WHATSAPP" }, "Notificação enfileirada.");
-             return true; 
-
-        } catch (error) {
-            logger.error({ error, to }, "Erro no Dispatch WhatsApp");
             return false;
         }
     }
-};
+}
+
+export const notificationService = new NotificationService();

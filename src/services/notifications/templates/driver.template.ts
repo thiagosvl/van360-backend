@@ -1,5 +1,6 @@
 import { formatToBrazilianDate, getMonthNameBR, toLocalDateString } from "../../../utils/date.utils.js";
 import { formatCurrency, getFirstName } from "../../../utils/format.js";
+import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
 
 /**
  * Templates de Mensagem para Motoristas / Assinantes do Sistema
@@ -11,53 +12,13 @@ export interface DriverContext {
     dataVencimento?: string;
     mes?: number;
     ano?: number;
-    reciboUrl?: string; // URL da imagem do comprovante
+    reciboUrl?: string;
     nomePassageiro?: string;
     nomeResponsavel?: string;
-    // New fields for flexible Lego composition
-    pixPayload?: string; 
-    isActivation?: boolean; // Se é o primeiro pagamento (Onboarding)
-    skipPixStep?: boolean; 
-    chavePix?: string;
-    tipoChavePix?: string;
+    trialDays?: number;
+    contratoUrl?: string;
 }
 
-// Removidos métodos locais pois agora usamos os utilitários centralizados
-
-import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
-
-// Helper to construct standard PIX message parts
-// Helper to construct standard PIX message parts
-const buildPixMessageParts = (text: string, pixPayload?: string): CompositeMessagePart[] => {
-    // Se não tiver PIX Payload, retorna apenas o texto
-    if (!pixPayload) {
-        return [{ type: "text", content: text }];
-    }
-
-    const parts: CompositeMessagePart[] = [];
-
-    // Adiciona dica de pagamento automático
-    const caption = `${text}\n\n💡 Pague pelo app do seu banco. Não precisa enviar comprovante, o sistema identifica automaticamente.`;
-
-    // 1. Bundle: Image Placeholder (QR Code) with Caption (Instructions)
-    // Service recognize 'qrcode' meta and generate the image
-    parts.push({ 
-        type: "image", 
-        content: caption, // Caption vai aqui
-        meta: "qrcode" 
-    }); 
-    
-    // 2. Text Payload (Copy-Paste) - SEPARADO para facilitar copiar
-    parts.push({ 
-        type: "text", 
-        content: pixPayload,
-        delayMs: 800 
-    });
-
-    return parts;
-};
-
-// Helper for simple text messages
 const textPart = (text: string): CompositeMessagePart[] => {
     return [{ type: "text", content: text }];
 };
@@ -65,124 +26,80 @@ const textPart = (text: string): CompositeMessagePart[] => {
 export const DriverTemplates = {
 
     /**
-     * Boas-vindas: Onboarding concluído
+     * Boas-vindas: Onboarding concluído (Trial Iniciado)
      */
     welcomeTrial: (ctx: DriverContext): CompositeMessagePart[] => {
         return textPart(`🚀 *Bem-vindo(a) à Van360*\n\n` +
-            `Sua conta foi criada com sucesso e já está pronta para uso.\n\n` +
+            `Sua conta foi criada com sucesso e seu período de teste (trial) foi iniciado.\n\n` +
             `⚠️ *Próximos Passos*\n` +
             `• Configurar seu contrato padrão\n` +
             `• Cadastrar seus primeiros passageiros`);
     },
 
     /**
-     * Ativação: Conta Pronta
+     * Trial Expirando (Aviso prévio)
      */
-    activation: (ctx: DriverContext): CompositeMessagePart[] => {
-        return textPart(`✅ *Conta Ativada*\n\n` +
-            `Seu acesso ao Van360 está liberado.\n` +
-            `Aproveite todas as funcionalidades de gestão e automação sem custos.`);
+    trialExpiring: (ctx: DriverContext): CompositeMessagePart[] => {
+        const dias = ctx.trialDays || "poucos";
+        return textPart(`⏳ *Seu Trial está acabando*\n\n` +
+            `Olá *${getFirstName(ctx.nomeMotorista)}*,\n` +
+            `Seu período de experiência na Van360 encerra em *${dias} dias*.\n\n` +
+            `Não perca o acesso às automações! Efetue a contratação da assinatura para continuar gerindo sua van sem interrupções.`);
     },
 
     /**
-     * Confirmação de Pagamento de Assinatura (Recibo do Motorista)
+     * Confirmação de contratação (Pagamento Confirmado)
      */
     paymentConfirmed: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor ?? 0);
-        const ref = ctx.mes ? `\nReferência: *${getMonthNameBR(ctx.mes)}/${ctx.ano}*` : "";
-        const validade = ctx.dataVencimento ? `\nNova validade: *${formatToBrazilianDate(ctx.dataVencimento)}*` : "";
+        const data = ctx.dataVencimento ? formatToBrazilianDate(ctx.dataVencimento) : "";
 
-        const text = `✅ *Confirmação de Recebimento*\n\n` +
-            `Pagamento de *${valor}* processado com sucesso.\n` +
-            `Referência: *Sistema*` +
-            `${ref}` +
-            `${validade}`;
-
-        const parts: CompositeMessagePart[] = [];
-
-        // 1. Recibo / Confirmação
-        if (ctx.reciboUrl) {
-            parts.push({
-                type: "image",
-                mediaBase64: ctx.reciboUrl,
-                content: text // Caption
-            });
-        } else {
-            parts.push({ type: "text", content: text });
-        }
-
-        // 2. Lembretes Importantes (Onboarding)
-        if (ctx.isActivation && !ctx.skipPixStep) {
-            parts.push({
-                type: "text",
-                content: `⚠️ *Próximos Passos*\n` +
-                    `• Configurar Contrato\n` +
-                    `• Cadastrar Chave PIX`,
-                delayMs: 1500
-            });
-        }
-        
-        return parts;
+        return textPart(`✅ *Parabéns pela Assinatura!*\n\n` +
+            `Pagamento de *${valor}* confirmado.\n` +
+            `Seu acesso agora é ilimitado e você saiu do modo trial. Obrigado por confiar na Van360!` +
+            (data ? `\n\n📅 Próximo vencimento: *${data}*` : ""));
     },
 
     /**
-     * Falha no Repasse (Invalidar Chave)
+     * Assinatura Vence Hoje (Venceu)
      */
-    repasseFailed: (ctx: DriverContext): CompositeMessagePart[] => {
+    dueToday: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor ?? 0);
-        return textPart(`❌ *Erro na Transferência PIX*\n\n` +
-            `A tentativa de transferir *${valor}* falhou. O banco retornou um erro na sua chave PIX.\n` +
-            `Sua chave PIX foi invalidada por segurança. Acesse o aplicativo e cadastre uma nova chave válida para receber os valores retidos.`);
+        return textPart(`⚠️ *Assinatura Vence Hoje*\n\n` +
+            `O pagamento da sua assinatura Van360 no valor de *${valor}* vence hoje.\n` +
+            `Regularize para evitar a suspensão das notificações automáticas.`);
     },
+
     /**
-     * Sucesso no Repasse (Liquidado na Conta)
+     * Assinatura Vencendo (Lembrete)
      */
-    repasseSuccess: (ctx: DriverContext): CompositeMessagePart[] => {
+    dueSoon: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor ?? 0);
-        const data = ctx.dataVencimento ? formatToBrazilianDate(ctx.dataVencimento) : formatToBrazilianDate(toLocalDateString(new Date()));
-        const ref = ctx.mes ? `*${getMonthNameBR(ctx.mes)}/${ctx.ano}*` : "";
-        const passageiro = ctx.nomePassageiro ? `\n👤 Passageiro: *${getFirstName(ctx.nomePassageiro)}*` : "";
-
-        return textPart(`💰 *Transferência Finalizada*\n\n` +
-            `O valor de *${valor}* foi depositado em sua conta bancária.\n\n` +
-            `*Detalhes do Pagamento:*` +
-            `${passageiro}` +
-            (ref ? `\n📅 Referência: ${ref}` : "") +
-            `\n🏦 Data do depósito: *${data}*\n\n` +
-            `_O valor já deve estar disponível em sua conta via PIX._`);
+        const data = ctx.dataVencimento ? formatToBrazilianDate(ctx.dataVencimento) : "";
+        return textPart(`🗓️ *Lembrete de Assinatura*\n\n` +
+            `Sua assinatura Van360 (*${valor}*) vence em *${data}*.\n` +
+            `Mantenha sua conta em dia para não parar suas cobranças.`);
     },
 
     /**
-     * Notificação de Novo Pré-Cadastro
+     * Assinatura Expirada (Atrasada)
      */
-    prePassengerCreated: (ctx: DriverContext): CompositeMessagePart[] => {
-        const nomePas = getFirstName(ctx.nomePassageiro) || "um novo passageiro";
-        const nomeResp = ctx.nomeResponsavel ? ` (Responsável: ${getFirstName(ctx.nomeResponsavel)})` : "";
-
-        return textPart(`🔔 *Novo Pré-Cadastro Recebido*\n\n` +
-            `O pré-cadastro de *${nomePas}*${nomeResp} foi efetuado via link da sua Van.\n` +
-            `Acesse o sistema para revisar os dados, definir os valores e aprovar o cadastro.`);
+    overdue: (ctx: DriverContext): CompositeMessagePart[] => {
+        const valor = formatCurrency(ctx.valor ?? 0);
+        return textPart(`🚨 *Assinatura Atrasada*\n\n` +
+            `Identificamos que sua assinatura de *${valor}* ainda não foi paga.\n` +
+            `Em breve suas automações podem ser suspensas. Acesse o sistema e regularize.`);
     },
 
     /**
-     * Sucesso na Validação da Chave PIX
+     * Contrato Assinado (Pelo Passageiro/Responsável)
      */
-    // pixKeyValidated: (ctx: DriverContext): CompositeMessagePart[] => {
-    //     const formattedKey = ctx.chavePix && ctx.tipoChavePix ? formatPixKey(ctx.chavePix, ctx.tipoChavePix) : "cadastrada";
-
-    //     return textPart(`✅ *Chave PIX Validada*\n\n` +
-    //         `A chave PIX (*${formattedKey}*) foi aprovada.\n` +
-    //         `Sua conta está apta para receber as transferências automáticas das mensalidades.`);
-    // },
-
-    /**
-     * Falha na Validação da Chave PIX
-     */
-    // pixKeyValidationFailed: (ctx: DriverContext): CompositeMessagePart[] => {
-    //     const formattedKey = ctx.chavePix && ctx.tipoChavePix ? formatPixKey(ctx.chavePix, ctx.tipoChavePix) : (ctx.chavePix || "informada");
-
-    //     return textPart(`❌ *Falha de Validação PIX*\n\n` +
-    //         `O banco não pôde aprovar a chave PIX (*${formattedKey}*). O documento atrelado à chave deve ser idêntico ao titular da conta.\n` +
-    //         `Cadastre uma nova chave PIX ativa no aplicativo.`);
-    // }
+    contractSigned: (ctx: DriverContext): CompositeMessagePart[] => {
+        const nomePas = getFirstName(ctx.nomePassageiro) || "passageiro";
+        const nomeResp = ctx.nomeResponsavel ? ` (${getFirstName(ctx.nomeResponsavel)})` : "";
+        const linkStr = ctx.contratoUrl ? `\n\n📄 Veja o documento final:\n${ctx.contratoUrl}` : "";
+        return textPart(`✍️ *Contrato Assinado*\n\n` +
+            `Ótimas notícias! O contrato de *${nomePas}*${nomeResp} acaba de ser assinado digitalmente.${linkStr}\n\n` +
+            `O documento também está disponível no seu painel de gestão.`);
+    }
 };

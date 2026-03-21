@@ -89,6 +89,21 @@ export enum ContratoProvider {
   DOCUSIGN = "docusign"
 }
 
+export enum PaymentProvider {
+  DUMMY = "dummy",
+  ASAAS = "asaas",
+  INTER = "inter",
+  EFI = "efi"
+}
+
+export enum SubscriptionStatus {
+  TRIAL = "trial",
+  ACTIVE = "active",
+  PAST_DUE = "past_due",
+  CANCELED = "canceled",
+  EXPIRED = "expired"
+}
+
 export enum ContractMultaTipo {
   PERCENTUAL = "percentual",
   FIXO = "fixo"

@@ -7,7 +7,7 @@ import { initSentry } from "./config/sentry.js";
 initSentry();
 
 import { createApp } from "./app.js";
-import { paymentService } from "./services/payment.service.js";
+import { paymentService } from "./services/payments/payment.service.js";
 import { queueService } from "./services/queue.service.js";
 
 const start = async () => {

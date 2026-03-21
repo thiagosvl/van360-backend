@@ -5,7 +5,7 @@ import cobrancaRoutes from "./cobranca.routes.js";
 import escolaRoutes from "./escola.routes.js";
 import evolutionRoutes from "./evolution.routes.js";
 import passageiroRoutes from "./passageiro.routes.js";
-import paymentRoutes from "./payment.routes.js";
+
 import prePassageiroRoutes from "./pre-passageiro.routes.js";
 import profileRoutes from "./profile.routes.js";
 import publicRoutes from "./public.routes.js";
@@ -27,7 +27,7 @@ export async function appRoutes(app: FastifyInstance) {
     protectedApp.register(veiculoRoutes, { prefix: "/veiculos" });
     protectedApp.register(escolaRoutes, { prefix: "/escolas" });
     protectedApp.register(cobrancaRoutes, { prefix: "/cobrancas" });
-    // protectedApp.register(paymentRoutes, { prefix: "/pagamento" });
+
     protectedApp.register(evolutionRoutes, { prefix: "/evolution" });
     protectedApp.register(profileRoutes, { prefix: "/profile" });
     protectedApp.register(prePassageiroRoutes, { prefix: "/pre-passageiros" });
