@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { moneyToNumber } from "../../utils/currency.utils.js";
-import { CobrancaOrigem, CobrancaTipo } from "../enums.js"; // Added CobrancaOrigem
+import { CobrancaOrigem, CobrancaTipo, CobrancaTipoPagamento } from "../enums.js";
 
 export const createCobrancaSchema = z.object({
     usuario_id: z.string().uuid(),
@@ -16,7 +16,7 @@ export const createCobrancaSchema = z.object({
     origem: z.nativeEnum(CobrancaOrigem).optional(), // Changed from z.string().optional() to z.nativeEnum(CobrancaOrigem).optional()
 
     pagamento_manual: z.boolean().optional(),
-    tipo_pagamento: z.string().nullable().optional(),
+    tipo_pagamento: z.nativeEnum(CobrancaTipoPagamento).nullable().optional(),
     data_pagamento: z.string().nullable().optional(),
     valor_pago: z.union([z.number(), z.string()]).transform(v => typeof v === 'string' ? moneyToNumber(v) : v).optional(),
     recibo_url: z.string().nullable().optional(),
@@ -60,7 +60,7 @@ export type NotificacaoPayloadDTO = z.infer<typeof notificacaoPayloadSchema>;
 export const registrarPagamentoManualSchema = z.object({
     valor_pago: z.union([z.number(), z.string()]).transform(v => typeof v === 'string' ? moneyToNumber(v) : v).optional(),
     data_pagamento: z.string().optional(),
-    tipo_pagamento: z.string().optional(),
+    tipo_pagamento: z.nativeEnum(CobrancaTipoPagamento).optional(),
 });
 
 export type RegistrarPagamentoManualDTO = z.infer<typeof registrarPagamentoManualSchema>;
