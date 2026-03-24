@@ -12,47 +12,50 @@ export async function verifySupabaseJWT(
     }
 
     const token = authHeader.split(" ")[1];
-    // console.log("[AuthMiddleware] Verifying token:", token.substring(0, 10) + "...");
-    const { data: user, error } = await supabaseAdmin.auth.getUser(token);
+    
+    // 1. Validar JWT com Supabase Auth
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
 
-    if (error || !user.user) {
-      console.error("[AuthMiddleware] JWT Validation Failed:", {
-        message: error?.message,
-        name: error?.name,
-        status: (error as any)?.status
+    if (authError || !user) {
+      return reply.status(401).send({ 
+        error: "Sessão inválida ou expirada", 
+        code: "AUTH_JWT_INVALID" 
       });
-      return reply.status(401).send({ error: "Token inválido" });
     }
 
-    console.log("[AuthMiddleware] User verified:", user.user.id);
+    const userId = user.id;
 
-    // SECURITY: Validate if the user is explicitly active in the database
-    // This prevents access even if the token is valid (e.g. inactive user)
+    // 2. Verificar existência e status do perfil no banco de dados
     const { data: profile, error: profileError } = await supabaseAdmin
         .from("usuarios")
         .select("id, ativo")
-        .eq("id", user.user.id)
+        .eq("id", userId)
         .maybeSingle();
 
     if (profileError) {
-        console.error("[AuthMiddleware] Profile Query Error:", profileError.message);
+      console.error("[Auth] Database error during verification:", profileError.message);
+      return reply.status(500).send({ error: "Erro interno ao validar perfil", code: "AUTH_DB_ERROR" });
     }
 
     if (!profile) {
-        console.error("[AuthMiddleware] Profile NOT FOUND for id:", user.user.id);
-        return reply.status(401).send({ error: "Perfil não encontrado. Faça login novamente." });
+      return reply.status(401).send({ 
+        error: "Perfil não registrado no sistema", 
+        code: "AUTH_PROFILE_NOT_FOUND" 
+      });
     }
 
     if (profile.ativo === false) {
-        return reply.status(403).send({ error: "Sua conta está inativa. Entre em contato com o suporte." });
+      return reply.status(403).send({ 
+        error: "Esta conta está desativada", 
+        code: "AUTH_USER_INACTIVE" 
+      });
     }
 
-    (request as any).user = user.user;
+    (request as any).user = user;
     (request as any).usuario_id = profile.id;
 
   } catch (err: any) {
-    console.error("[AuthMiddleware] Unexpected Error:", err);
-    return reply.status(401).send({ error: err.message });
+    return reply.status(401).send({ error: "Falha na autenticação", code: "AUTH_UNEXPECTED_ERROR" });
   }
 }
 
