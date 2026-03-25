@@ -1,3 +1,7 @@
+import { logger } from "../config/logger.js";
+import { contractWorker } from "../workers/contract.worker.js";
+import { generationWorker } from "../workers/generation.worker.js";
+import { whatsappWorker } from "../workers/whatsapp.worker.js";
 
 /**
  * Serviço responsável por inicializar e gerenciar os Workers das filas.
@@ -5,27 +9,22 @@
  */
 export const queueService = {
     async initialize() {
-        // logger.info("[QueueService] Initializing workers...");
+        logger.info("[QueueService] Inicializando workers...");
 
-        // if (whatsappWorker) logger.info(`[QueueService] Worker started: ${whatsappWorker.name}`);
-        // if (generationWorker) logger.info(`[QueueService] Worker started: ${generationWorker.name}`);
-        // if (contractWorker) logger.info(`[QueueService] Worker started: ${contractWorker.name}`);
-        // if (cronWorker) logger.info(`[QueueService] Worker started: ${cronWorker.name}`);
+        if (whatsappWorker) logger.info(`[QueueService] Worker iniciado: ${whatsappWorker.name}`);
+        if (generationWorker) logger.info(`[QueueService] Worker iniciado: ${generationWorker.name}`);
+        if (contractWorker) logger.info(`[QueueService] Worker iniciado: ${contractWorker.name}`);
 
-        // Configura agendamentos repetitivos (Cron) na VPS - DESATIVADOS NO PLANO BASE
-        // await setupCronJobs();
-
-        // logger.info("[QueueService] All workers initialized and Cron Jobs scheduled.");
+        logger.info("[QueueService] Todos os workers ativos e processando filas.");
     },
 
     async shutdown() {
-        // logger.info("[QueueService] Shutting down workers...");
+        logger.info("[QueueService] Desligando workers...");
         await Promise.all([
-            // whatsappWorker.close(),
-            // generationWorker.close(),
-            // contractWorker.close(),
-            // cronWorker.close()
+            whatsappWorker.close(),
+            generationWorker.close(),
+            contractWorker.close(),
         ]);
-        // logger.info("[QueueService] Workers stopped.");
+        logger.info("[QueueService] Workers encerrados.");
     }
 };
