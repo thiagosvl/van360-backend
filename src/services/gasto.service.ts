@@ -130,7 +130,11 @@ export const gastoService = {
         }
 
         if (filtros && filtros.veiculo_id) {
-            query = query.eq('veiculo_id', filtros.veiculo_id);
+            if (filtros.veiculo_id === 'unspecified') {
+                 query = query.is('veiculo_id', null);
+            } else {
+                 query = query.eq('veiculo_id', filtros.veiculo_id);
+            }
         }
 
         if (filtros?.data_inicio) query = query.gte("data", filtros.data_inicio);

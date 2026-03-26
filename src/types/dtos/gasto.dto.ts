@@ -26,7 +26,7 @@ export const createGastoSchema = z.object({
 export const updateGastoSchema = createGastoSchema.partial().omit({ usuario_id: true }); // Usuario não muda
 
 export const listGastosFiltersSchema = z.object({
-  veiculo_id: z.string().uuid().optional(),
+  veiculo_id: z.string().optional(), // Aceita UUID ou 'unspecified'
   categoria: z.string().optional(),
   data_inicio: z.string().optional(),
   data_fim: z.string().optional(),
