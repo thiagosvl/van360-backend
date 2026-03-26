@@ -85,29 +85,6 @@ const createPassageiro = async (data: CreatePassageiroDTO): Promise<any> => {
         }
     });
 
-    // 2. Trigger de Contrato Automático (Se Configurado)
-    // Buscamos configuração do usuário
-    const { data: usuario } = await supabaseAdmin
-        .from("usuarios")
-        .select("config_contrato, id")
-        .eq("id", data.usuario_id)
-        .single();
-
-    if (usuario?.config_contrato?.usar_contratos && usuario?.config_contrato?.configurado && usuario?.id) {
-        try {
-            // Import dinâmico ou garantir que contractService esteja no topo
-            const { contractService } = await import("./contract.service.js");
-            // Dispara criação (async sem await blocking total se quisermos performance, mas melhor garantir aqui)
-            await contractService.criarContrato(usuario.id, {
-                passageiroId: inserted.id,
-                provider: ContratoProvider.INHOUSE
-            });
-        } catch (err) {
-            console.error("[createPassageiro] Falha ao disparar contrato automático", err);
-            // Não falha a criação do passageiro se o contrato der erro, apenas loga
-        }
-    }
-
     return inserted;
 };
 
