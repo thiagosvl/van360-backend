@@ -299,19 +299,6 @@ const toggleAtivo = async (passageiroId: string, novoStatus: boolean): Promise<b
     return true;
 }
 
-const getNumeroCobrancas = async (passageiroId: string): Promise<number> => {
-    if (!passageiroId) throw new Error("ID do passageiro é obrigatório");
-
-    const { count, error } = await supabaseAdmin
-        .from("cobrancas")
-        .select("id", { count: "exact", head: true })
-        .eq("passageiro_id", passageiroId);
-
-    if (error) throw new Error(error.message || "Erro ao contar cobranças");
-
-    return count || 0;
-};
-
 const countListPassageirosByUsuario = async (
     usuarioId: string,
     filtros?: {
@@ -414,7 +401,6 @@ export const passageiroService = {
     getPassageiro,
     listPassageiros,
     toggleAtivo,
-    getNumeroCobrancas,
     countListPassageirosByUsuario,
     finalizePreCadastro,
     lookupResponsavelByCpf
