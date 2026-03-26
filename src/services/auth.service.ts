@@ -109,7 +109,7 @@ export async function criarUsuario(data: UsuarioPayload & { tipo?: UserType, id:
     .insert([{
       id,
       nome: cleanString(nome, true),
-      apelido: cleanString(apelido ?? "", true),
+      apelido: apelido ? cleanString(apelido, true) : null,
       email: cleanString(email).toLowerCase(),
       cpfcnpj: onlyDigits(cpfcnpj),
       telefone: onlyDigits(telefone),

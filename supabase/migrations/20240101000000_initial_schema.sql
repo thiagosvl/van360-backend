@@ -343,7 +343,7 @@ CREATE TABLE IF NOT EXISTS "public"."usuarios" (
     "telefone" "text" NOT NULL,
     "nome" "text" NOT NULL,
     "updated_at" timestamp without time zone DEFAULT "now"() NOT NULL,
-    "apelido" "text" NOT NULL,
+    "apelido" "text",
     "ativo" boolean DEFAULT true,
     "tipo" "public"."user_type_enum" DEFAULT 'motorista'::"public"."user_type_enum" NOT NULL,
     "assinatura_digital_url" "text",
