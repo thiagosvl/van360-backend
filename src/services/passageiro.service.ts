@@ -141,67 +141,6 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO): Promise<
         }
     });
 
-    if (houveMudancaContratual) {
-
-        // Trigger de substituição
-        const { data: usuario } = await supabaseAdmin
-            .from("usuarios")
-            .select("config_contrato, id")
-            .eq("id", updated.usuario_id)
-            .single();
-
-        if (usuario?.config_contrato?.usar_contratos && usuario?.config_contrato?.configurado && usuario?.id) {
-            try {
-                const { contractService } = await import("./contract.service.js");
-
-                console.log(`[updatePassageiro] Substituindo contrato passageiro ${id}. Mudanças detectadas.`);
-
-                // Lógica de Histórico Limpo:
-                // Se o último contrato ativo for PENDENTE (não assinado), excluímos ele (pois é "draft" irrelevante).
-                // Se for ASSINADO, marcamos como substituído (histórico real).
-                const { data: activeContracts } = await supabaseAdmin
-                    .from("contratos")
-                    .select("id, status")
-                    .eq("passageiro_id", id)
-                    .in("status", [ContratoStatus.PENDENTE, ContratoStatus.ASSINADO])
-                    .order("created_at", { ascending: false });
-
-                if (activeContracts && activeContracts.length > 0) {
-                    const latest = activeContracts[0];
-
-                    if (latest.status === ContratoStatus.PENDENTE) {
-                        // Contrato pendente anterior é descartável
-                        console.log(`[updatePassageiro] Removendo contrato pendente anterior (${latest.id}) para limpeza.`);
-                        await supabaseAdmin.from("contratos").delete().eq("id", latest.id);
-
-                        // Se existirem outros "sobrando" (ex: bug de múltiplos ativos), aposentamos eles
-                        if (activeContracts.length > 1) {
-                            const othersIds = activeContracts.slice(1).map(c => c.id);
-                            await supabaseAdmin
-                                .from("contratos")
-                                .update({ status: ContratoStatus.SUBSTITUIDO })
-                                .in("id", othersIds);
-                        }
-                    } else {
-                        // Último era Assinado (Histórico válido). Aposentamos todos os ativos para criar o novo.
-                        const allIds = activeContracts.map(c => c.id);
-                        await supabaseAdmin
-                            .from("contratos")
-                            .update({ status: ContratoStatus.SUBSTITUIDO })
-                            .in("id", allIds);
-                    }
-                }
-
-                await contractService.criarContrato(usuario.id, {
-                    passageiroId: id,
-                    provider: ContratoProvider.INHOUSE
-                });
-            } catch (err) {
-                console.error("[updatePassageiro] Falha ao substituir contrato", err);
-            }
-        }
-    }
-
     return updated;
 };
 
