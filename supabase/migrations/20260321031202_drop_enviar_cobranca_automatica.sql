@@ -1,1 +1,0 @@
--- Removido: Limpeza ajustada diretamente no initial_schema.sql
