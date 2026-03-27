@@ -1256,3 +1256,28 @@ COMMENT ON COLUMN "public"."historico_atividades"."meta" IS 'Dados contextuais d
 GRANT ALL ON TABLE "public"."historico_atividades" TO "anon";
 GRANT ALL ON TABLE "public"."historico_atividades" TO "authenticated";
 GRANT ALL ON TABLE "public"."historico_atividades" TO "service_role";
+
+-- =====================================================
+-- RECUPERAÇÃO DE SENHA (WHATSAPP OTP)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS "public"."recuperacoes_senha" (
+    "id" UUID DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    "usuario_id" UUID NOT NULL REFERENCES "public"."usuarios"("id") ON DELETE CASCADE,
+    "codigo" TEXT NOT NULL,
+    "expira_em" TIMESTAMP WITH TIME ZONE NOT NULL,
+    "usado" BOOLEAN DEFAULT false NOT NULL,
+    "created_at" TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+ALTER TABLE "public"."recuperacoes_senha" OWNER TO "postgres";
+
+CREATE INDEX "idx_rec_senha_usuario" ON "public"."recuperacoes_senha"("usuario_id");
+CREATE INDEX "idx_rec_senha_codigo" ON "public"."recuperacoes_senha"("codigo");
+
+COMMENT ON TABLE "public"."recuperacoes_senha" IS 'Armazena códigos OTP temporários para recuperação de senha via WhatsApp';
+
+GRANT ALL ON TABLE "public"."recuperacoes_senha" TO "anon";
+GRANT ALL ON TABLE "public"."recuperacoes_senha" TO "authenticated";
+GRANT ALL ON TABLE "public"."recuperacoes_senha" TO "service_role";
+

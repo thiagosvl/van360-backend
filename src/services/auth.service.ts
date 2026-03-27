@@ -8,6 +8,7 @@ import { AtividadeAcao, AtividadeEntidadeTipo, UserType } from "../types/enums.j
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
 import { notificationService } from "./notifications/notification.service.js";
+import { EVENTO_AUTH_RECUPERACAO_SENHA } from "../config/constants.js";
 
 // ... (interfaces remain unchanged)
 
@@ -360,6 +361,134 @@ export async function resetPassword(identifier: string, redirectTo?: string): Pr
       descricao: `Solicitação de redefinição de senha enviada para o e-mail.`
     });
   }
+}
+
+export async function solicitarRecuperacaoWhatsapp(cpf: string): Promise<{ telefoneMascarado: string }> {
+  const cpfClean = onlyDigits(cpf);
+  const { data: user, error } = await supabaseAdmin
+    .from("usuarios")
+    .select("id, nome, telefone")
+    .eq("cpfcnpj", cpfClean)
+    .single();
+
+  if (error || !user) throw new AppError("Usuário não encontrado com este CPF.", 404);
+  if (!user.telefone) throw new AppError("O usuário não possui telefone cadastrado para recuperação.", 400);
+
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiraEm = new Date(Date.now() + 15 * 60000).toISOString();
+
+  // Invalida todos os códigos anteriores pendentes do usuário
+  await supabaseAdmin
+    .from("recuperacoes_senha")
+    .update({ usado: true })
+    .eq("usuario_id", user.id)
+    .eq("usado", false);
+
+  const { error: insertError } = await supabaseAdmin
+    .from("recuperacoes_senha")
+    .insert([{
+      usuario_id: user.id,
+      codigo: otp,
+      expira_em: expiraEm
+    }]);
+
+  if (insertError) {
+    logger.error({ error: insertError.message }, "Erro ao salvar OTP no banco.");
+    throw new AppError("Erro ao processar solicitação de recuperação.", 500);
+  }
+
+  await notificationService.notifyDriver(user.telefone, EVENTO_AUTH_RECUPERACAO_SENHA, {
+    nomeMotorista: user.nome,
+    otpCode: otp
+  }).catch(err => logger.error({ err }, "Falha ao enviar OTP via WhatsApp"));
+  
+  historicoService.log({
+    usuario_id: user.id,
+    entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+    entidade_id: user.id,
+    acao: AtividadeAcao.RECUPERACAO_SENHA,
+    descricao: `Solicitação de recuperação de senha via WhatsApp enviada.`
+  });
+
+  const finalTelefone = user.telefone.slice(-4);
+  return { telefoneMascarado: `(XX) XXXXX-${finalTelefone}` };
+}
+
+export async function validarCodigoWhatsApp(cpf: string, codigo: string): Promise<{ recoveryId: string }> {
+  const cpfClean = onlyDigits(cpf);
+  const { data: user, error: userError } = await supabaseAdmin
+    .from("usuarios")
+    .select("id")
+    .eq("cpfcnpj", cpfClean)
+    .single();
+
+  if (userError || !user) throw new AppError("Usuário não encontrado.", 404);
+
+  const { data: rec, error: recError } = await supabaseAdmin
+    .from("recuperacoes_senha")
+    .select("id, expira_em, usado")
+    .eq("usuario_id", user.id)
+    .eq("codigo", codigo)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (recError || !rec) throw new AppError("Código inválido ou expirado.", 401);
+  if (rec.usado) throw new AppError("Código inválido ou expirado.", 401);
+  if (new Date(rec.expira_em) < new Date()) throw new AppError("Código inválido ou expirado.", 401);
+
+  // Marcar como usado logo após validação para permitir o reset uma única vez
+  await supabaseAdmin.from("recuperacoes_senha").update({ usado: true }).eq("id", rec.id);
+
+  return { recoveryId: rec.id };
+}
+
+export async function resetarSenhaComCodigo(recoveryId: string, novaSenha: string): Promise<AuthSession> {
+  const { data: rec, error } = await supabaseAdmin
+    .from("recuperacoes_senha")
+    .select("usuario_id, created_at, usado, usuarios(email)")
+    .eq("id", recoveryId)
+    .single();
+
+  if (error || !rec) throw new AppError("Sessão de recuperação inválida.", 401);
+  
+  const diffMinutes = (Date.now() - new Date(rec.created_at).getTime()) / 60000;
+  if (diffMinutes > 60) throw new AppError("Tempo de recuperação excedido. Solicite novamente.", 401);
+
+  const { error: resetError } = await supabaseAdmin.auth.admin.updateUserById(rec.usuario_id, {
+    password: novaSenha
+  });
+
+  if (resetError) {
+    logger.error({ error: resetError.message }, "Erro ao resetar senha no Auth.");
+    throw new AppError("Erro ao atualizar senha.", 500);
+  }
+
+  // Realizar login automático logo após o reset
+  const email = (rec as any).usuarios.email;
+  const { data: sessionData, error: sessionError } = await supabaseAdmin.auth.signInWithPassword({
+    email,
+    password: novaSenha,
+  });
+
+  if (sessionError || !sessionData?.session) {
+    logger.error({ error: sessionError?.message }, "Falha ao gerar sessão após reset.");
+    throw new AppError("Senha alterada, mas falha ao iniciar sessão automática.", 500);
+  }
+
+  historicoService.log({
+    usuario_id: rec.usuario_id,
+    entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+    entidade_id: rec.usuario_id,
+    acao: AtividadeAcao.SENHA_ALTERADA,
+    descricao: `Senha redefinida com sucesso via WhatsApp com login automático.`
+  });
+
+  return {
+    access_token: sessionData.session.access_token,
+    refresh_token: sessionData.session.refresh_token,
+    user: sessionData.user as any
+  };
 }
 
 export async function logout(token: string, usuarioId?: string): Promise<void> {

@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
-import { registrarUsuario, loginResponsavel, login as loginService, logout as logoutService, refreshToken as refreshTokenService, resetPassword as resetPasswordService, updatePassword as updatePasswordService } from "../services/auth.service.js";
+import { registrarUsuario, loginResponsavel, login as loginService, logout as logoutService, refreshToken as refreshTokenService, resetPassword as resetPasswordService, updatePassword as updatePasswordService, solicitarRecuperacaoWhatsapp, validarCodigoWhatsApp, resetarSenhaComCodigo } from "../services/auth.service.js";
 
 interface RegisterPayload {
     nome: string;
@@ -135,6 +135,53 @@ export const AuthController = {
         } catch (err: any) {
             logger.warn({ error: err.message }, "Falha ao renovar token.");
             const status = err.statusCode || 401;
+            return reply.status(status).send({ error: err.message });
+        }
+    },
+
+    async solicitarRecuperacao(request: FastifyRequest, reply: FastifyReply) {
+        const { cpf } = request.body as any;
+        if (!cpf) return reply.status(400).send({ error: "CPF é obrigatório." });
+
+        try {
+            const result = await solicitarRecuperacaoWhatsapp(cpf);
+            return reply.status(200).send({ 
+                success: true, 
+                message: "Código enviado ao seu WhatsApp.",
+                telefoneMascarado: result.telefoneMascarado
+            });
+        } catch (err: any) {
+            const status = err.statusCode || 500;
+            return reply.status(status).send({ error: err.message });
+        }
+    },
+
+    async validarCodigo(request: FastifyRequest, reply: FastifyReply) {
+        const { cpf, codigo } = request.body as any;
+        if (!cpf || !codigo) return reply.status(400).send({ error: "CPF e Código são obrigatórios." });
+
+        try {
+            const result = await validarCodigoWhatsApp(cpf, codigo);
+            return reply.status(200).send(result);
+        } catch (err: any) {
+            const status = err.statusCode || 401;
+            return reply.status(status).send({ error: err.message });
+        }
+    },
+
+    async confirmarReset(request: FastifyRequest, reply: FastifyReply) {
+        const { recoveryId, password } = request.body as any;
+        if (!recoveryId || !password) return reply.status(400).send({ error: "Dados incompletos." });
+
+        try {
+            const session = await resetarSenhaComCodigo(recoveryId, password);
+            return reply.status(200).send({ 
+                success: true, 
+                message: "Senha alterada com sucesso.",
+                session 
+            });
+        } catch (err: any) {
+            const status = err.statusCode || 400;
             return reply.status(status).send({ error: err.message });
         }
     }

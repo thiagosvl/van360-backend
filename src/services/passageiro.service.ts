@@ -265,7 +265,7 @@ const listPassageiros = async (
                 contrato_url: ultimo.contrato_final_url || ultimo.minuta_url,
                 minuta_url: ultimo.minuta_url,
                 contrato_final_url: ultimo.contrato_final_url,
-                contratos: undefined // remove raw array to clean up
+                contratos: undefined
             };
         }
         return p;

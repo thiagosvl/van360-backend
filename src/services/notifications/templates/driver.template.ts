@@ -17,6 +17,7 @@ export interface DriverContext {
     nomeResponsavel?: string;
     trialDays?: number;
     contratoUrl?: string;
+    otpCode?: string;
 }
 
 const textPart = (text: string): CompositeMessagePart[] => {
@@ -101,5 +102,18 @@ export const DriverTemplates = {
         return textPart(`✍️ *Contrato Assinado*\n\n` +
             `Ótimas notícias! O contrato de *${nomePas}*${nomeResp} acaba de ser assinado digitalmente.${linkStr}\n\n` +
             `O documento também está disponível no seu painel de gestão.`);
+    },
+
+    /**
+     * Recuperação de Senha (OTP)
+     */
+    authRecovery: (ctx: DriverContext): CompositeMessagePart[] => {
+        return textPart(`🔐 *Recuperação de Acesso*\n\n` +
+            `Olá *${getFirstName(ctx.nomeMotorista)}*,\n` +
+            `Você solicitou a recuperação da sua senha na *Van360*.\n\n` +
+            `Seu código de verificação é:\n` +
+            `👉 *${ctx.otpCode}*\n\n` +
+            `O código expira em 15 minutos.\n` +
+            `Se não foi você quem solicitou, ignore esta mensagem por segurança.`);
     }
 };

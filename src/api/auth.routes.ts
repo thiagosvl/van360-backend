@@ -6,6 +6,12 @@ export default async function authRoutes(app: FastifyInstance) {
     app.post("/login", AuthController.login);
     app.post("/login/responsavel", AuthController.loginResponsavel);
     app.post("/reset-password", AuthController.resetPassword);
+    
+    // Recuperação via WhatsApp
+    app.post("/recuperacao/solicitar", AuthController.solicitarRecuperacao);
+    app.post("/recuperacao/validar", AuthController.validarCodigo);
+    app.post("/recuperacao/resetar", AuthController.confirmarReset);
+
     app.post("/update-password", { onRequest: [verifySupabaseJWT] }, AuthController.updatePassword);
     app.post("/logout", { onRequest: [verifySupabaseJWT] }, AuthController.logout);
     app.post("/refresh", AuthController.refresh);
