@@ -17,9 +17,11 @@ export async function verifySupabaseJWT(
     const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
 
     if (authError || !user) {
+      const isUserNotFound = authError?.message?.toLowerCase().includes("user not found");
+      
       return reply.status(401).send({ 
-        error: "Sessão inválida ou expirada", 
-        code: "AUTH_JWT_INVALID" 
+        error: isUserNotFound ? "Usuário não encontrado no sistema de autenticação" : "Sessão inválida ou expirada", 
+        code: isUserNotFound ? "AUTH_USER_NOT_FOUND" : "AUTH_JWT_INVALID" 
       });
     }
 
