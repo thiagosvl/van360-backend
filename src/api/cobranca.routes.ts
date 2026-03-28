@@ -12,7 +12,7 @@ const cobrancaRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     // Contexto de Passageiro
     app.get("/passageiro/:passageiroId", cobrancaController.listByPassageiro);
     app.get("/passageiro/:passageiroId/count", cobrancaController.countByPassageiro);
-    app.get("/passageiro/:passageiroId/anos-disponiveis", cobrancaController.listAvailableYears);
+
 
     // Notificações
     app.get("/:cobrancaId/notificacoes", cobrancaController.listNotificacoes);

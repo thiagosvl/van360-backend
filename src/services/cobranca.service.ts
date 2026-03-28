@@ -225,19 +225,7 @@ export const cobrancaService = {
     return data;
   },
 
-  async listAvailableYearsByPassageiro(passageiroId: string): Promise<number[]> {
-    const { data, error } = await supabaseAdmin
-      .from("cobrancas")
-      .select("ano")
-      .eq("passageiro_id", passageiroId)
-      .order("ano", { ascending: false });
 
-    if (error) throw error;
-
-    // Extrair anos únicos
-    const anos = Array.from(new Set(data?.map((c: any) => c.ano) || [])).sort((a, b) => b - a) as number[];
-    return anos;
-  },
 
   async toggleNotificacoes(cobrancaId: string, novoStatus: boolean): Promise<boolean> {
     const { data, error } = await supabaseAdmin

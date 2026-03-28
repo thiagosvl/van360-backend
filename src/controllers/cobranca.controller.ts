@@ -60,11 +60,7 @@ export const cobrancaController = {
     return reply.status(200).send({ count });
   },
 
-  listAvailableYears: async (request: FastifyRequest, reply: FastifyReply) => {
-    const { passageiroId } = request.params as { passageiroId: string };
-    const anos = await cobrancaService.listAvailableYearsByPassageiro(passageiroId);
-    return reply.status(200).send(anos);
-  },
+
 
   listNotificacoes: async (request: FastifyRequest, reply: FastifyReply) => {
     const { cobrancaId } = request.params as { cobrancaId: string };
