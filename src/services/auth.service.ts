@@ -8,7 +8,7 @@ import { AtividadeAcao, AtividadeEntidadeTipo, UserType } from "../types/enums.j
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
 import { notificationService } from "./notifications/notification.service.js";
-import { EVENTO_AUTH_RECUPERACAO_SENHA } from "../config/constants.js";
+import { EVENTO_AUTH_RECUPERACAO_SENHA, EVENTO_AUTH_SENHA_ALTERADA } from "../config/constants.js";
 
 // ... (interfaces remain unchanged)
 
@@ -307,7 +307,7 @@ export async function updatePassword(token: string, newPassword: string, oldPass
 
   const { data: profile } = await supabaseAdmin
     .from("usuarios")
-    .select("id")
+    .select("id, nome, telefone")
     .eq("id", user.id)
     .single();
 
@@ -319,6 +319,12 @@ export async function updatePassword(token: string, newPassword: string, oldPass
       acao: AtividadeAcao.SENHA_ALTERADA,
       descricao: `Senha alterada pelo usuário.`
     });
+
+    if (profile.telefone) {
+      notificationService.notifyDriver(profile.telefone, EVENTO_AUTH_SENHA_ALTERADA, {
+        nomeMotorista: profile.nome
+      }).catch(err => logger.error({ err }, "Falha ao enviar notificação de senha alterada"));
+    }
   }
 }
 
@@ -446,7 +452,7 @@ export async function validarCodigoWhatsApp(cpf: string, codigo: string): Promis
 export async function resetarSenhaComCodigo(recoveryId: string, novaSenha: string): Promise<AuthSession> {
   const { data: rec, error } = await supabaseAdmin
     .from("recuperacoes_senha")
-    .select("usuario_id, created_at, usado, usuarios(email)")
+    .select("usuario_id, created_at, usado, usuarios(email, nome, telefone)")
     .eq("id", recoveryId)
     .single();
 
@@ -483,6 +489,13 @@ export async function resetarSenhaComCodigo(recoveryId: string, novaSenha: strin
     acao: AtividadeAcao.SENHA_ALTERADA,
     descricao: `Senha redefinida com sucesso via WhatsApp com login automático.`
   });
+
+  const userProfile = (rec as any).usuarios;
+  if (userProfile?.telefone) {
+    notificationService.notifyDriver(userProfile.telefone, EVENTO_AUTH_SENHA_ALTERADA, {
+      nomeMotorista: userProfile.nome
+    }).catch(err => logger.error({ err }, "Falha ao enviar notificação de senha alterada (reset)"));
+  }
 
   return {
     access_token: sessionData.session.access_token,

@@ -15,6 +15,7 @@ import {
     EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL,
     EVENTO_PASSAGEIRO_CONTRATO_ASSINADO,
     EVENTO_AUTH_RECUPERACAO_SENHA,
+    EVENTO_AUTH_SENHA_ALTERADA,
     GLOBAL_WHATSAPP_INSTANCE
 } from "../../config/constants.js";
 import { DriverContext, DriverTemplates } from "./templates/driver.template.js";
@@ -49,7 +50,8 @@ type DriverEventType =
     | typeof EVENTO_MOTORISTA_ASSINATURA_ATRASADA
     | typeof EVENTO_MOTORISTA_ASSINATURA_PAGO
     | typeof EVENTO_MOTORISTA_CONTRATO_ASSINADO
-    | typeof EVENTO_AUTH_RECUPERACAO_SENHA;
+    | typeof EVENTO_AUTH_RECUPERACAO_SENHA
+    | typeof EVENTO_AUTH_SENHA_ALTERADA;
 
 class NotificationService {
     // Registro dos Adapters que farão o disparo real (ou envio para a fila)
@@ -109,6 +111,7 @@ class NotificationService {
             case EVENTO_MOTORISTA_TESTE_EXPIRANDO: parts = DriverTemplates.trialExpiring(ctx); break;
             case EVENTO_MOTORISTA_CONTRATO_ASSINADO: parts = DriverTemplates.contractSigned(ctx); break;
             case EVENTO_AUTH_RECUPERACAO_SENHA: parts = DriverTemplates.authRecovery(ctx); break;
+            case EVENTO_AUTH_SENHA_ALTERADA: parts = DriverTemplates.passwordChanged(ctx); break;
             case EVENTO_MOTORISTA_TESTE_ENCERRADO: parts = []; break;
         }
 

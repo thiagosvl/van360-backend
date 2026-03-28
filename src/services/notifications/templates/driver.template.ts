@@ -115,5 +115,16 @@ export const DriverTemplates = {
             `👉 *${ctx.otpCode}*\n\n` +
             `O código expira em 15 minutos.\n` +
             `Se não foi você quem solicitou, ignore esta mensagem por segurança.`);
+    },
+
+    /**
+     * Confirmação de Senha Alterada
+     */
+    passwordChanged: (ctx: DriverContext): CompositeMessagePart[] => {
+        return textPart(`✅ *Senha Alterada com Sucesso*\n\n` +
+            `Olá *${getFirstName(ctx.nomeMotorista)}*,\n` +
+            `A senha da sua conta na *Van360* foi alterada com sucesso.\n\n` +
+            `🛑 *Não foi você?*\n` +
+            `Caso não tenha sido você quem realizou essa alteração, entre em contato imediatamente com o nosso suporte.`);
     }
 };
