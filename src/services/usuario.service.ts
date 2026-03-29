@@ -1,4 +1,3 @@
-import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
 import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
@@ -85,43 +84,3 @@ export async function atualizarUsuario(usuarioId: string, payload: {
   return { success: true };
 }
 
-export async function excluirUsuario(usuarioId: string, authUid: string) {
-
-
-  // 2. Anonymize User Data (DB Logic)
-  const { error: rpcError } = await supabaseAdmin.rpc('anonymize_user_account', {
-    target_user_id: usuarioId
-  });
-
-  if (rpcError) {
-    logger.error({ error: rpcError.message, usuarioId }, "Falha ao anonimizar usuário no DB.");
-    throw new AppError("Erro ao processar exclusão de dados.", 500);
-  }
-
-  // --- LOG DE AUDITORIA ---
-  historicoService.log({
-    usuario_id: usuarioId,
-    entidade_tipo: AtividadeEntidadeTipo.USUARIO,
-    entidade_id: usuarioId,
-    acao: AtividadeAcao.USUARIO_EXCLUIDO,
-    descricao: `Conta anonimizada e desativada permanentemente conforme solicitação de exclusão.`,
-    meta: { acao: 'anonymize' }
-  });
-
-  // 3. Delete Auth User (Remove Login)
-  // ATENÇÃO: Se a constraint for CASCADE, isso apagará a linha da tabela usuarios E TUDO QUE ESTIVER EM CASCADE.
-  // Se a estratégia for apenas anonimizar ("soft-delete" mantendo financeiro), NÃO DEVEMOS deletar o auth user,
-  // mas sim alterar o email para algo inacessível, e banir.
-  const dummyEmail = `deleted_${Date.now()}_${usuarioId}@anonymized.local`;
-  const { error } = await supabaseAdmin.auth.admin.updateUserById(authUid, {
-    email: dummyEmail,
-    password: `!Deleted${Date.now()}#`, // Senha inacessível
-    user_metadata: { deleted: true }
-  });
-
-  if (error) {
-    logger.error({ error: error.message, usuarioId }, "Erro ao desativar usuário no Supabase Auth.");
-  }
-
-  return { success: true };
-}
