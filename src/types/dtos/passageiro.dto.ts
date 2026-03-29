@@ -1,7 +1,11 @@
 import { z } from "zod";
 import { moneyToNumber } from "../../utils/currency.utils.js";
 
-const optionalString = z.string().optional().or(z.literal("")).transform(v => v === "" ? undefined : v);
+const optionalString = z.union([z.string(), z.null(), z.undefined()]).transform(v => {
+  if (v === undefined) return undefined;
+  if (v === null || v === "") return null;
+  return v;
+});
 const optionalNumber = z.union([z.number(), z.string().length(0).transform(() => undefined), z.string().min(1).transform(val => Number(val))]).optional();
 
 export const createPassageiroSchema = z.object({
