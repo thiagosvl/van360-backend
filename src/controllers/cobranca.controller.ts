@@ -82,19 +82,6 @@ export const cobrancaController = {
     return reply.status(200).send(notificacoesOldFormat);
   },
 
-  createNotificacao: async (request: FastifyRequest, reply: FastifyReply) => {
-    const { cobrancaId } = request.params as { cobrancaId: string };
-    // Opcional validar payload, mas a logica inteira de envio + log esta englobada no service
-    // Notificação manual desativada no clean slate (será controlada pelo novo flow de mensageria diária)
-    // const success = await cobrancaService.enviarNotificacaoManual(cobrancaId);
-    
-    // if (success) {
-    //   return reply.status(201).send({ success: true });
-    // } else {
-      return reply.status(500).send({ success: false, error: "Failed to send notification" });
-    // }
-  },
-
   toggleNotificacoes: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     try {
