@@ -18,7 +18,7 @@ export const cobrancaPagamentoService = {
 
     const { data: cobranca, error: findError } = await supabaseAdmin
       .from("cobrancas")
-      .select("*, passageiro:passageiros(nome_responsavel, cpf_responsavel)")
+      .select("*, passageiro:passageiros(nome, nome_responsavel, cpf_responsavel)")
       .eq("id", cobrancaId)
       .single();
 
@@ -46,12 +46,12 @@ export const cobrancaPagamentoService = {
       entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
       entidade_id: cobrancaId,
       acao: AtividadeAcao.PAGAMENTO_MANUAL,
-      descricao: `Pagamento manual de ${updated.mes}/${updated.ano} (${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(updated.valor_pago)}) do passageiro ${cobranca.passageiro?.nome || cobranca.passageiros?.nome} registrado.`,
+      descricao: `Pagamento manual de ${updated.mes}/${updated.ano} (${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(updated.valor_pago)}) do passageiro ${cobranca.passageiro?.nome} registrado.`,
       meta: {
         valor_pago: updated.valor_pago,
         tipo_pagamento: updated.tipo_pagamento,
         data_pagamento: updated.data_pagamento,
-        passageiro: cobranca.passageiro?.nome || cobranca.passageiros?.nome
+        passageiro: cobranca.passageiro?.nome
       }
     });
 
