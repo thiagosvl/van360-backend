@@ -5,7 +5,7 @@ import satori from "satori";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { getMonthNameBR } from "../utils/date.utils.js";
-import { formatCurrency } from "../utils/format.js";
+import { formatCurrency, capitalize, formatPaymentMethod } from "../utils/format.js";
 
 // Tipo para os dados do recibo
 export interface ReceiptData {
@@ -30,7 +30,7 @@ class ReceiptService {
 
     private async getFont() {
         if (this.fontData) return this.fontData;
-        
+
         try {
             const fontPath = path.resolve(process.cwd(), "assets", "fonts", "Inter-Bold.ttf");
             const exists = fs.existsSync(fontPath);
@@ -61,31 +61,30 @@ class ReceiptService {
         return null;
     }
 
-    // Métodos de formatação agora são centralizados em date.utils.js
-
     /**
      * Gera a imagem do recibo e salva no Storage
      */
     async generateAndSave(data: ReceiptData): Promise<string | null> {
         const logId = `REC-${Date.now()}`;
         try {
-            logger.info({ logId, dataId: data.id, tipo: data.tipo, pagador: data.pagadorNome }, "Iniciando geração de recibo (DEBUG)");
+            logger.info({ logId, dataId: data.id, tipo: data.tipo, pagador: data.pagadorNome }, "Iniciando geração de recibo");
 
             const font = await this.getFont();
             if (!font) {
                 logger.error({ logId, dataId: data.id }, "Fonte não carregada. Impossível gerar recibo.");
                 throw new Error("Fonte não carregada. Impossível gerar recibo.");
             }
-            logger.info({ logId }, "Fonte carregada OK");
 
             const logoBase64 = await this.getLogo();
-            logger.info({ logId, hasLogo: !!logoBase64 }, "Logo carregado");
-            
             const mesNome = getMonthNameBR(data.mes);
             const referencia = data.mes ? `${mesNome}/${data.ano}` : "";
 
+            // Formatação dos dados usando utilitários centralizados
+            const pagadorFormatado = capitalize(data.pagadorNome);
+            const passageiroFormatado = data.passageiroNome ? capitalize(data.passageiroNome) : null;
+            const metodoPagamentoFormatado = formatPaymentMethod(data.metodoPagamento);
+
             // 1. Definir o Layout (JSX-like)
-            logger.info({ logId }, "Iniciando Satori...");
             const svg = await satori(
                 {
                     type: "div",
@@ -106,9 +105,9 @@ class ReceiptService {
                                 props: {
                                     style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "50px" },
                                     children: [
-                                        logoBase64 ? 
-                                        { type: "img", props: { src: logoBase64, style: { width: "120px", height: "60px" } } } :
-                                        { type: "div", props: { style: { fontSize: "24px", fontWeight: "bold", color: "#2563eb" }, children: "VAN360" } },
+                                        logoBase64 ?
+                                            { type: "img", props: { src: logoBase64, style: { width: "120px", height: "60px" } } } :
+                                            { type: "div", props: { style: { fontSize: "24px", fontWeight: "bold", color: "#2563eb" }, children: "VAN360" } },
                                         { type: "div", props: { style: { fontSize: "11px", color: "#94a3b8", marginTop: "10px" }, children: `ID: ${data.id.substring(0, 8)}` } }
                                     ]
                                 }
@@ -116,7 +115,7 @@ class ReceiptService {
                             // Título
                             { type: "div", props: { style: { fontSize: "28px", fontWeight: "bold", marginBottom: "4px" }, children: "Comprovante de Pagamento" } },
                             { type: "div", props: { style: { fontSize: "14px", color: "#64748b", marginBottom: "40px" }, children: data.subtitulo } },
-                            
+
                             // Valor Grande
                             {
                                 type: "div",
@@ -125,7 +124,7 @@ class ReceiptService {
                                     children: [
                                         { type: "div", props: { style: { fontSize: "14px", color: "#64748b", marginBottom: "8px" }, children: "VALOR PAGO" } },
                                         { type: "div", props: { style: { fontSize: "48px", fontWeight: "bold", color: "#1e293b" }, children: formatCurrency(data.valor) } },
-                                        { type: "div", props: { style: { fontSize: "12px", color: "#94a3b8", marginTop: "8px" }, children: data.metodoPagamento } }
+                                        { type: "div", props: { style: { fontSize: "12px", color: "#94a3b8", marginTop: "8px" }, children: metodoPagamentoFormatado } }
                                     ]
                                 }
                             },
@@ -135,12 +134,12 @@ class ReceiptService {
                                 props: {
                                     style: { display: "flex", flexDirection: "column", gap: "20px" },
                                     children: [
-                                        this.renderRow("Pagador", data.pagadorNome),
-                                        data.passageiroNome ? this.renderRow("Passageiro", data.passageiroNome) : null,
+                                        this.renderRow("Pagador", pagadorFormatado),
+                                        passageiroFormatado ? this.renderRow("Passageiro", passageiroFormatado) : null,
                                         data.pagadorDocumento ? this.renderRow("CPF/CNPJ", data.pagadorDocumento) : null,
                                         this.renderRow("Data do Pagamento", data.data),
-                                        data.mes ? this.renderRow("Referente a", `${data.descricao || 'Mensalidade'} - ${referencia}`) : 
-                                                 (data.descricao ? this.renderRow("Referente a", data.descricao) : null),
+                                        data.mes ? this.renderRow("Referente a", `${data.descricao || 'Mensalidade'} - ${referencia}`) :
+                                            (data.descricao ? this.renderRow("Referente a", data.descricao) : null),
                                     ].filter(Boolean)
                                 }
                             },
@@ -171,86 +170,59 @@ class ReceiptService {
                     ],
                 }
             );
-            logger.info({ logId }, "SVG Gerado OK");
 
             // 2. Converter para PNG
             const resvg = new Resvg(svg);
             const pngData = resvg.render();
             const pngBuffer = pngData.asPng();
-            logger.info({ logId, size: pngBuffer.length }, "PNG Renderizado OK");
 
             // 3. Salvar no Supabase Storage
-            const fileName = `${data.tipo.toLowerCase()}_${data.id}_${Date.now()}.png`;
-            logger.info({ logId, fileName }, "Enviando pro Supabase...");
-            
-            const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
+            const fileName = `${data.id}_${Date.now()}.png`;
+            const { error: uploadError } = await supabaseAdmin.storage
                 .from("recibos")
                 .upload(fileName, pngBuffer, {
                     contentType: "image/png",
                     upsert: true
                 });
 
-            if (uploadError) {
-                logger.error({ logId, uploadError }, "Erro no Upload Supabase");
-                throw uploadError;
-            }
+            if (uploadError) throw uploadError;
 
             // 4. Obter URL Pública
             const { data: { publicUrl } } = supabaseAdmin.storage
                 .from("recibos")
                 .getPublicUrl(fileName);
 
-            logger.info({ logId, publicUrl }, "Recibo gerado e salvo com sucesso!");
             return publicUrl;
         } catch (error: any) {
-            logger.error({ 
-                logId,
-                error: error.message || error, 
-                stack: error.stack,
-                dataId: data.id,
-                dataType: data.tipo
-            }, "Erro CRÍTICO ao gerar/salvar recibo");
+            logger.error({ logId, error: error.message, dataId: data.id }, "Erro ao gerar/salvar recibo");
             return null;
         }
     }
 
     /**
-     * Remove o arquivo de recibo do Storage do Supabase baseado na URL pública
+     * Remove o arquivo de recibo do Storage do Supabase
      */
     async deleteReceipt(url: string | null): Promise<void> {
         if (!url) return;
-        
         try {
-            // Extrair o nome do arquivo da URL pública
-            // URL format: https://.../storage/v1/object/public/recibos/filename.png
             const parts = url.split("/");
             const fileName = parts[parts.length - 1];
-            
             if (!fileName) return;
 
-            const { error } = await supabaseAdmin.storage
-                .from("recibos")
-                .remove([fileName]);
-
-            if (error) {
-                logger.error({ error, url, fileName }, "Erro ao deletar recibo do Storage");
-            } else {
-                logger.info({ fileName }, "Recibo deletado do Storage com sucesso");
-            }
+            await supabaseAdmin.storage.from("recibos").remove([fileName]);
+            logger.info({ fileName }, "Recibo deletado do Storage");
         } catch (e: any) {
-            logger.error({ error: e.message, url }, "Erro inesperado ao deletar recibo do Storage");
+            logger.error({ error: e.message, url }, "Erro ao deletar recibo do Storage");
         }
     }
 
     /**
      * Busca dados da cobrança e gera o recibo síncrono
-     * Centraliza a lógica para ser usada em qualquer fluxo (manual, criação, etc)
      */
     async generateForCobranca(cobrancaId: string): Promise<string | null> {
         try {
             logger.info({ cobrancaId }, "[ReceiptService.generateForCobranca] Buscando dados para recibo");
-            
-            // 1. Busca a cobrança com passageiro e o motorista (tabela usuarios)
+
             const { data: cobranca, error } = await supabaseAdmin
                 .from("cobrancas")
                 .select(`
@@ -261,7 +233,8 @@ class ReceiptService {
                         cpf_responsavel
                     ),
                     motorista:usuarios (
-                        nome
+                        nome,
+                        nome_exibicao
                     )
                 `)
                 .eq("id", cobrancaId)
@@ -272,34 +245,30 @@ class ReceiptService {
                 return null;
             }
 
-            const motoristaNome = (cobranca as any).motorista?.nome || "Transporte Escolar";
-
             const receiptData: ReceiptData = {
                 id: cobranca.id,
                 titulo: "Comprovante de Pagamento",
-                subtitulo: cobranca.motorista?.nome_exibicao || "Transporte Escolar",
+                subtitulo: (cobranca as any).motorista?.nome_exibicao || (cobranca as any).motorista?.nome || "Transporte Escolar",
                 valor: cobranca.valor_pago || cobranca.valor,
-                data: cobranca.data_pagamento ? new Date(cobranca.data_pagamento).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
-                pagadorNome: cobranca.passageiro?.nome_responsavel || cobranca.passageiro?.nome,
+                data: cobranca.pago_em ? new Date(cobranca.pago_em).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
+                pagadorNome: cobranca.passageiro?.nome_responsavel || cobranca.passageiro?.nome || 'Cliente',
                 passageiroNome: cobranca.passageiro?.nome,
                 mes: cobranca.mes,
                 ano: cobranca.ano,
                 pagadorDocumento: cobranca.passageiro?.cpf_responsavel,
-                descricao: "Mensalidade",
-                metodoPagamento: cobranca.tipo_pagamento || "DINHEIRO",
+                descricao: cobranca.mes ? "Mensalidade" : "Cobrança Avulsa",
+                metodoPagamento: cobranca.tipo_pagamento || "dinheiro",
                 tipo: 'PASSAGEIRO'
             };
 
             const url = await this.generateAndSave(receiptData);
 
             if (url) {
-                // Atualiza a cobrança com a URL do recibo
                 await supabaseAdmin
                     .from("cobrancas")
                     .update({ recibo_url: url })
                     .eq("id", cobrancaId);
-                
-                logger.info({ cobrancaId, url }, "Recibo gerado e vinculado à cobrança");
+                logger.info({ cobrancaId, url }, "Recibo gerado e vinculado");
             }
 
             return url;

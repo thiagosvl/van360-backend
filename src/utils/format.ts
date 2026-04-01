@@ -119,3 +119,25 @@ export const formatAddress = (data: { logradouro?: string; numero?: string; bair
     ].filter(Boolean);
     return parts.join(" - ");
 };
+
+export const formatPaymentMethod = (method: string): string => {
+  const labels: Record<string, string> = {
+    dinheiro: "Dinheiro",
+    pix: "PIX",
+    transferencia: "Transferência",
+    boleto: "Boleto",
+    cartao_credito: "Crédito",
+    cartao_debito: "Débito",
+  };
+  return labels[method] || (method ? method.charAt(0).toUpperCase() + method.slice(1) : "");
+};
+
+export const capitalize = (str?: string): string => {
+  if (!str) return "";
+  return str
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+};
