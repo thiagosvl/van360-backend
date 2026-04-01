@@ -10,7 +10,6 @@ export async function contractRoutes(app: FastifyInstance) {
   app.post('/contratos/preview', { preHandler: authenticate }, contractController.preview);
   app.delete('/contratos/:id', { preHandler: authenticate }, contractController.excluir);
   app.post('/contratos/:id/substituir', { preHandler: authenticate }, contractController.substituir);
-  app.post('/contratos/:id/reenviar', { preHandler: authenticate }, contractController.reenviar);
   app.get('/contratos/:id/download', { preHandler: authenticate }, contractController.download);
   
   // Rotas públicas (para assinatura)

@@ -65,14 +65,6 @@ export const contractController = {
     return reply.status(200).send(result);
   },
 
-  reenviar: async (req: FastifyRequest, reply: FastifyReply) => {
-    const { id } = req.params as { id: string };
-    const usuarioId = (req as any).user.id;
-
-    const result = await contractService.reenviarNotificacao(usuarioId, id);
-    return reply.status(200).send(result);
-  },
-
   download: async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const usuarioId = (req as any).user.id;
