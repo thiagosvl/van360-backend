@@ -231,7 +231,7 @@ class ReceiptService {
                 .select(`
                     *,
                     passageiro:passageiros (nome, nome_responsavel, cpf_responsavel),
-                    motorista:usuarios (nome, nome_exibicao)
+                    motorista:usuarios (nome, apelido)
                 `)
                 .eq("id", cobrancaId)
                 .single();
@@ -244,7 +244,7 @@ class ReceiptService {
             const receiptData: ReceiptData = {
                 id: cobranca.id,
                 titulo: "Comprovante de Pagamento",
-                subtitulo: (cobranca as any).motorista?.nome_exibicao || (cobranca as any).motorista?.nome || "Transporte Escolar",
+                subtitulo: (cobranca as any).motorista?.apelido || (cobranca as any).motorista?.nome || "Transporte Escolar",
                 valor: cobranca.valor_pago || cobranca.valor,
                 data: cobranca.pago_em ? new Date(cobranca.pago_em).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
                 pagadorNome: cobranca.passageiro?.nome_responsavel || cobranca.passageiro?.nome || 'Cliente',
