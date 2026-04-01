@@ -33,12 +33,23 @@ export interface ReceiptData {
 class ReceiptService {
     private fontData: Buffer | null = null;
 
+    private getRootPath(): string {
+        // __dirname é dist/src/services ou src/services
+        const pathSrc = path.resolve(__dirname, "..", ".."); // Raiz se for src/services
+        const pathDist = path.resolve(__dirname, "..", "..", ".."); // Raiz se for dist/src/services
+
+        if (fs.existsSync(path.join(pathSrc, "assets"))) return pathSrc;
+        if (fs.existsSync(path.join(pathDist, "assets"))) return pathDist;
+
+        // Fallback process.cwd() se PM2 iniciar na raiz
+        return process.cwd();
+    }
+
     private async getFont() {
         if (this.fontData) return this.fontData;
 
         try {
-            // Busca na raiz do projeto (subindo de src/services para a raiz)
-            const rootPath = path.resolve(__dirname, "..", "..");
+            const rootPath = this.getRootPath();
             const fontPath = path.join(rootPath, "assets", "fonts", "Inter-Bold.ttf");
             
             logger.debug({ fontPath }, "[ReceiptService] Tentando carregar fonte");
@@ -56,7 +67,7 @@ class ReceiptService {
 
     private async getLogo() {
         try {
-            const rootPath = path.resolve(__dirname, "..", "..");
+            const rootPath = this.getRootPath();
             const logoPath = path.join(rootPath, "assets", "images", "logo-van360.png");
             
             if (fs.existsSync(logoPath)) {
