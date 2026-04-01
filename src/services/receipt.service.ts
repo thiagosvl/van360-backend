@@ -51,9 +51,9 @@ class ReceiptService {
         try {
             const rootPath = this.getRootPath();
             const fontPath = path.join(rootPath, "assets", "fonts", "Inter-Bold.ttf");
-            
+
             logger.debug({ fontPath }, "[ReceiptService] Tentando carregar fonte");
-            
+
             if (fs.existsSync(fontPath)) {
                 this.fontData = fs.readFileSync(fontPath);
             } else {
@@ -69,7 +69,7 @@ class ReceiptService {
         try {
             const rootPath = this.getRootPath();
             const logoPath = path.join(rootPath, "assets", "images", "logo-van360.png");
-            
+
             if (fs.existsSync(logoPath)) {
                 const buffer = fs.readFileSync(logoPath);
                 return `data:image/png;base64,${buffer.toString("base64")}`;
@@ -264,7 +264,7 @@ class ReceiptService {
                 ano: cobranca.ano,
                 pagadorDocumento: cobranca.passageiro?.cpf_responsavel,
                 descricao: cobranca.mes ? "Mensalidade" : "Cobrança Avulsa",
-                metodoPagamento: cobranca.tipo_pagamento || "dinheiro",
+                metodoPagamento: cobranca.tipo_pagamento,
                 tipo: 'PASSAGEIRO'
             };
 
