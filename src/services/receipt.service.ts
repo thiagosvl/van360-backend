@@ -1,11 +1,16 @@
 import { Resvg } from "@resvg/resvg-js";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import satori from "satori";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { getMonthNameBR } from "../utils/date.utils.js";
 import { formatCurrency, capitalize, formatPaymentMethod } from "../utils/format.js";
+
+// Utilitário para caminhos absolutos em ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Tipo para os dados do recibo
 export interface ReceiptData {
@@ -32,10 +37,16 @@ class ReceiptService {
         if (this.fontData) return this.fontData;
 
         try {
-            const fontPath = path.resolve(process.cwd(), "assets", "fonts", "Inter-Bold.ttf");
-            const exists = fs.existsSync(fontPath);
-            if (exists) {
+            // Busca na raiz do projeto (subindo de src/services para a raiz)
+            const rootPath = path.resolve(__dirname, "..", "..");
+            const fontPath = path.join(rootPath, "assets", "fonts", "Inter-Bold.ttf");
+            
+            logger.debug({ fontPath }, "[ReceiptService] Tentando carregar fonte");
+            
+            if (fs.existsSync(fontPath)) {
                 this.fontData = fs.readFileSync(fontPath);
+            } else {
+                logger.error({ fontPath }, "[ReceiptService] Arquivo de fonte não encontrado");
             }
         } catch (e: any) {
             logger.error({ error: e.message }, "[ReceiptService] Erro ao carregar fonte");
@@ -45,10 +56,14 @@ class ReceiptService {
 
     private async getLogo() {
         try {
-            const logoPath = path.resolve(process.cwd(), "assets", "images", "logo-van360.png");
+            const rootPath = path.resolve(__dirname, "..", "..");
+            const logoPath = path.join(rootPath, "assets", "images", "logo-van360.png");
+            
             if (fs.existsSync(logoPath)) {
                 const buffer = fs.readFileSync(logoPath);
                 return `data:image/png;base64,${buffer.toString("base64")}`;
+            } else {
+                logger.warn({ logoPath }, "[ReceiptService] Logo não encontrado, usando fallback texto");
             }
         } catch (e: any) {
             logger.error({ error: e.message }, "[ReceiptService] Erro ao carregar logo");
