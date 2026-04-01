@@ -202,16 +202,109 @@ class ReceiptService {
 
             logger.info({ logId, publicUrl }, "Recibo gerado e salvo com sucesso!");
             return publicUrl;
-
         } catch (error: any) {
             logger.error({ 
                 logId,
                 error: error.message || error, 
                 stack: error.stack,
-                step: error.step || "unknown", // Tentar identificar o passo
                 dataId: data.id,
                 dataType: data.tipo
             }, "Erro CRÍTICO ao gerar/salvar recibo");
+            return null;
+        }
+    }
+
+    /**
+     * Remove o arquivo de recibo do Storage do Supabase baseado na URL pública
+     */
+    async deleteReceipt(url: string | null): Promise<void> {
+        if (!url) return;
+        
+        try {
+            // Extrair o nome do arquivo da URL pública
+            // URL format: https://.../storage/v1/object/public/recibos/filename.png
+            const parts = url.split("/");
+            const fileName = parts[parts.length - 1];
+            
+            if (!fileName) return;
+
+            const { error } = await supabaseAdmin.storage
+                .from("recibos")
+                .remove([fileName]);
+
+            if (error) {
+                logger.error({ error, url, fileName }, "Erro ao deletar recibo do Storage");
+            } else {
+                logger.info({ fileName }, "Recibo deletado do Storage com sucesso");
+            }
+        } catch (e: any) {
+            logger.error({ error: e.message, url }, "Erro inesperado ao deletar recibo do Storage");
+        }
+    }
+
+    /**
+     * Busca dados da cobrança e gera o recibo síncrono
+     * Centraliza a lógica para ser usada em qualquer fluxo (manual, criação, etc)
+     */
+    async generateForCobranca(cobrancaId: string): Promise<string | null> {
+        try {
+            logger.info({ cobrancaId }, "[ReceiptService.generateForCobranca] Buscando dados para recibo");
+            
+            // 1. Busca a cobrança com passageiro e o motorista (tabela usuarios)
+            const { data: cobranca, error } = await supabaseAdmin
+                .from("cobrancas")
+                .select(`
+                    *,
+                    passageiro:passageiros (
+                        nome,
+                        nome_responsavel,
+                        cpf_responsavel
+                    ),
+                    motorista:usuarios (
+                        nome
+                    )
+                `)
+                .eq("id", cobrancaId)
+                .single();
+
+            if (error || !cobranca) {
+                logger.error({ error, cobrancaId }, "Erro ao buscar dados da cobrança para gerar recibo");
+                return null;
+            }
+
+            const motoristaNome = (cobranca as any).motorista?.nome || "Transporte Escolar";
+
+            const receiptData: ReceiptData = {
+                id: cobranca.id,
+                titulo: "Comprovante de Pagamento",
+                subtitulo: cobranca.motorista?.nome_exibicao || "Transporte Escolar",
+                valor: cobranca.valor_pago || cobranca.valor,
+                data: cobranca.data_pagamento ? new Date(cobranca.data_pagamento).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
+                pagadorNome: cobranca.passageiro?.nome_responsavel || cobranca.passageiro?.nome,
+                passageiroNome: cobranca.passageiro?.nome,
+                mes: cobranca.mes,
+                ano: cobranca.ano,
+                pagadorDocumento: cobranca.passageiro?.cpf_responsavel,
+                descricao: "Mensalidade",
+                metodoPagamento: cobranca.tipo_pagamento || "DINHEIRO",
+                tipo: 'PASSAGEIRO'
+            };
+
+            const url = await this.generateAndSave(receiptData);
+
+            if (url) {
+                // Atualiza a cobrança com a URL do recibo
+                await supabaseAdmin
+                    .from("cobrancas")
+                    .update({ recibo_url: url })
+                    .eq("id", cobrancaId);
+                
+                logger.info({ cobrancaId, url }, "Recibo gerado e vinculado à cobrança");
+            }
+
+            return url;
+        } catch (e: any) {
+            logger.error({ error: e.message, cobrancaId }, "Erro ao gerar recibo para cobrança");
             return null;
         }
     }

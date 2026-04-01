@@ -5,6 +5,7 @@ import { RegistrarPagamentoManualDTO } from "../types/dtos/cobranca.dto.js";
 import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaStatus, CobrancaTipoPagamento } from "../types/enums.js";
 import { cobrancaService } from "./cobranca.service.js";
 import { historicoService } from "./historico.service.js";
+import { receiptService } from "./receipt.service.js";
 
 export const cobrancaPagamentoService = {
 
@@ -54,7 +55,29 @@ export const cobrancaPagamentoService = {
         passageiro: cobranca.passageiro?.nome
       }
     });
-
+  
+    // 3. GERAR RECIBO (Sincrono e Obrigatorio para consistencia)
+    try {
+      const reciboUrl = await receiptService.generateForCobranca(cobrancaId);
+      if (!reciboUrl) {
+        throw new Error("Não foi possível gerar o recibo. O pagamento não foi registrado.");
+      }
+      updated.recibo_url = reciboUrl;
+    } catch (receiptError: any) {
+       // Rollback manual (setando status de volta ou apenas lancando erro se a transacao nao for SQL)
+       // Como ja demos o update, vamos reverter o status caso a geracao do recibo falhe CRITICAMENTE
+       await supabaseAdmin.from("cobrancas").update({
+          status: cobranca.status,
+          pagamento_manual: false,
+          data_pagamento: null,
+          valor_pago: null,
+          tipo_pagamento: null
+       }).eq("id", cobrancaId);
+       
+       logger.error({ error: receiptError.message, cobrancaId }, "Erro ao gerar recibo - Pagamento revertido para manter consistencia");
+       throw new AppError(receiptError.message || "Erro ao gerar recibo.", 500);
+    }
+  
     return updated;
   },
 
@@ -116,6 +139,11 @@ export const cobrancaPagamentoService = {
       }
     });
 
+    // 2. DELETAR RECIBO DO STORAGE
+    if (cobranca.recibo_url) {
+      await receiptService.deleteReceipt(cobranca.recibo_url);
+    }
+  
     return data;
   },
 };

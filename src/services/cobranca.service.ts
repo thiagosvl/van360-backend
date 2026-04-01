@@ -6,8 +6,9 @@ import { moneyToNumber } from "../utils/currency.utils.js";
 import { toLocalDateString } from "../utils/date.utils.js";
 
 import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
-import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaOrigem } from "../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaOrigem, CobrancaStatus } from "../types/enums.js";
 import { historicoService } from "./historico.service.js";
+import { receiptService } from "./receipt.service.js";
 
 interface CreateCobrancaOptions {
   skipLog?: boolean;
@@ -70,6 +71,24 @@ export const cobrancaService = {
           passageiro: (inserted as any).passageiros?.nome
         }
       });
+    }
+
+    // 3. GERAR RECIBO SE JÁ NASCER PAGO
+    if (inserted.status === CobrancaStatus.PAGO) {
+        try {
+            const url = await receiptService.generateForCobranca(inserted.id);
+            if (!url) {
+                // Rollback: Deletar a cobrança criada pois o recibo falhou
+                await supabaseAdmin.from("cobrancas").delete().eq("id", inserted.id);
+                throw new Error("Não foi possível gerar o recibo para a cobrança paga.");
+            }
+            inserted.recibo_url = url;
+        } catch (e: any) {
+            // Rollback manual
+            await supabaseAdmin.from("cobrancas").delete().eq("id", inserted.id);
+            logger.error({ error: e.message, cobrancaId: inserted.id }, "Erro ao gerar recibo na criação - Cobrança excluída p/ manter consistência");
+            throw new AppError(e.message || "Erro ao gerar recibo.", 500);
+        }
     }
 
     return inserted;
