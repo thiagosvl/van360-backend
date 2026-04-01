@@ -34,16 +34,11 @@ class ReceiptService {
         try {
             const fontPath = path.resolve(process.cwd(), "assets", "fonts", "Inter-Bold.ttf");
             const exists = fs.existsSync(fontPath);
-            logger.info({ fontPath, exists }, "Tentando carregar fonte");
-
             if (exists) {
                 this.fontData = fs.readFileSync(fontPath);
-                logger.info({ size: this.fontData?.length }, "Fonte carregada com sucesso");
-            } else {
-                logger.error({ fontPath }, "Fonte Inter-Bold.ttf não encontrada");
             }
         } catch (e: any) {
-            logger.error({ error: e.message, stack: e.stack }, "Erro ao carregar fonte para recibos");
+            logger.error({ error: e.message }, "[ReceiptService] Erro ao carregar fonte");
         }
         return this.fontData;
     }
@@ -56,7 +51,7 @@ class ReceiptService {
                 return `data:image/png;base64,${buffer.toString("base64")}`;
             }
         } catch (e: any) {
-            logger.error({ error: e.message }, "Erro ao carregar logo para recibos");
+            logger.error({ error: e.message }, "[ReceiptService] Erro ao carregar logo");
         }
         return null;
     }
@@ -67,24 +62,20 @@ class ReceiptService {
     async generateAndSave(data: ReceiptData): Promise<string | null> {
         const logId = `REC-${Date.now()}`;
         try {
-            logger.info({ logId, dataId: data.id, tipo: data.tipo, pagador: data.pagadorNome }, "Iniciando geração de recibo");
+            logger.info({ logId, cobrancaId: data.id, pagador: data.pagadorNome }, "[ReceiptService] Iniciando geração de recibo");
 
             const font = await this.getFont();
-            if (!font) {
-                logger.error({ logId, dataId: data.id }, "Fonte não carregada. Impossível gerar recibo.");
-                throw new Error("Fonte não carregada. Impossível gerar recibo.");
-            }
+            if (!font) throw new Error("Fonte não carregada");
 
             const logoBase64 = await this.getLogo();
             const mesNome = getMonthNameBR(data.mes);
             const referencia = data.mes ? `${mesNome}/${data.ano}` : "";
 
-            // Formatação dos dados usando utilitários centralizados
             const pagadorFormatado = capitalize(data.pagadorNome);
             const passageiroFormatado = data.passageiroNome ? capitalize(data.passageiroNome) : null;
             const metodoPagamentoFormatado = formatPaymentMethod(data.metodoPagamento);
 
-            // 1. Definir o Layout (JSX-like)
+            logger.debug({ logId, cobrancaId: data.id }, "[ReceiptService] Renderizando SVG via Satori");
             const svg = await satori(
                 {
                     type: "div",
@@ -171,13 +162,14 @@ class ReceiptService {
                 }
             );
 
-            // 2. Converter para PNG
+            logger.debug({ logId, cobrancaId: data.id }, "[ReceiptService] Convertendo SVG para PNG");
             const resvg = new Resvg(svg);
             const pngData = resvg.render();
             const pngBuffer = pngData.asPng();
 
-            // 3. Salvar no Supabase Storage
             const fileName = `${data.id}_${Date.now()}.png`;
+            logger.info({ logId, cobrancaId: data.id, fileName }, "[ReceiptService] Fazendo upload para Storage");
+
             const { error: uploadError } = await supabaseAdmin.storage
                 .from("recibos")
                 .upload(fileName, pngBuffer, {
@@ -187,20 +179,20 @@ class ReceiptService {
 
             if (uploadError) throw uploadError;
 
-            // 4. Obter URL Pública
             const { data: { publicUrl } } = supabaseAdmin.storage
                 .from("recibos")
                 .getPublicUrl(fileName);
 
+            logger.info({ logId, cobrancaId: data.id, publicUrl }, "[ReceiptService] Recibo gerado com sucesso");
             return publicUrl;
         } catch (error: any) {
-            logger.error({ logId, error: error.message, dataId: data.id }, "Erro ao gerar/salvar recibo");
+            logger.error({ logId, cobrancaId: data.id, error: error.message }, "[ReceiptService] Falha ao gerar recibo");
             return null;
         }
     }
 
     /**
-     * Remove o arquivo de recibo do Storage do Supabase
+     * Remove o arquivo de recibo do Storage
      */
     async deleteReceipt(url: string | null): Promise<void> {
         if (!url) return;
@@ -210,38 +202,27 @@ class ReceiptService {
             if (!fileName) return;
 
             await supabaseAdmin.storage.from("recibos").remove([fileName]);
-            logger.info({ fileName }, "Recibo deletado do Storage");
+            logger.info({ fileName }, "[ReceiptService] Recibo deletado do Storage");
         } catch (e: any) {
-            logger.error({ error: e.message, url }, "Erro ao deletar recibo do Storage");
+            logger.error({ error: e.message, url }, "[ReceiptService] Falha ao deletar do Storage");
         }
     }
 
-    /**
-     * Busca dados da cobrança e gera o recibo síncrono
-     */
     async generateForCobranca(cobrancaId: string): Promise<string | null> {
+        const logId = `GEN-${Date.now()}`;
         try {
-            logger.info({ cobrancaId }, "[ReceiptService.generateForCobranca] Buscando dados para recibo");
-
             const { data: cobranca, error } = await supabaseAdmin
                 .from("cobrancas")
                 .select(`
                     *,
-                    passageiro:passageiros (
-                        nome,
-                        nome_responsavel,
-                        cpf_responsavel
-                    ),
-                    motorista:usuarios (
-                        nome,
-                        nome_exibicao
-                    )
+                    passageiro:passageiros (nome, nome_responsavel, cpf_responsavel),
+                    motorista:usuarios (nome, nome_exibicao)
                 `)
                 .eq("id", cobrancaId)
                 .single();
 
             if (error || !cobranca) {
-                logger.error({ error, cobrancaId }, "Erro ao buscar dados da cobrança para gerar recibo");
+                logger.error({ error, cobrancaId }, "[ReceiptService] Cobrança não encontrada");
                 return null;
             }
 
@@ -264,16 +245,21 @@ class ReceiptService {
             const url = await this.generateAndSave(receiptData);
 
             if (url) {
-                await supabaseAdmin
+                const { error: updateError } = await supabaseAdmin
                     .from("cobrancas")
                     .update({ recibo_url: url })
                     .eq("id", cobrancaId);
-                logger.info({ cobrancaId, url }, "Recibo gerado e vinculado");
+
+                if (updateError) {
+                    logger.error({ logId, cobrancaId, error: updateError.message }, "[ReceiptService] Erro ao salvar recibo_url na cobranca");
+                } else {
+                    logger.info({ logId, cobrancaId, url }, "[ReceiptService] URL do recibo persistida no banco");
+                }
             }
 
             return url;
         } catch (e: any) {
-            logger.error({ error: e.message, cobrancaId }, "Erro ao gerar recibo para cobrança");
+            logger.error({ error: e.message, cobrancaId }, "[ReceiptService] Erro generateForCobranca");
             return null;
         }
     }
