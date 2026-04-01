@@ -186,7 +186,7 @@ const getPassageiro = async (id: string): Promise<any> => {
             *,
             escola:escolas(id, nome),
             veiculo:veiculos(id, placa, modelo),
-            contratos(id, status, created_at, minuta_url, contrato_final_url)
+            contratos(id, status, created_at, minuta_url, contrato_final_url, token_acesso)
         `)
         .eq("id", id)
         .order('created_at', { foreignTable: 'contratos', ascending: false })
@@ -210,7 +210,8 @@ const getPassageiro = async (id: string): Promise<any> => {
         contrato_id: contratoId,
         contrato_url: contratoUrl,
         minuta_url: ultimoContrato?.minuta_url,
-        contrato_final_url: ultimoContrato?.contrato_final_url
+        contrato_final_url: ultimoContrato?.contrato_final_url,
+        token_acesso: ultimoContrato?.token_acesso
     };
 };
 
@@ -226,7 +227,7 @@ const listPassageiros = async (
             *,
             escola:escolas(id, nome),
             veiculo:veiculos(id, placa),
-            contratos(id, status, created_at, minuta_url, contrato_final_url)
+            contratos(id, status, created_at, minuta_url, contrato_final_url, token_acesso)
         `)
         .eq("usuario_id", usuarioId)
         .order("nome", { ascending: true });
@@ -265,6 +266,7 @@ const listPassageiros = async (
                 contrato_url: ultimo.contrato_final_url || ultimo.minuta_url,
                 minuta_url: ultimo.minuta_url,
                 contrato_final_url: ultimo.contrato_final_url,
+                token_acesso: ultimo.token_acesso,
                 contratos: undefined
             };
         }
