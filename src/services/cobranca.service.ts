@@ -179,7 +179,7 @@ export const cobrancaService = {
   async listCobrancasWithFilters(filtros: any): Promise<any[]> {
     let query = supabaseAdmin
       .from("cobrancas")
-      .select("*, passageiro:passageiros!inner(nome, nome_responsavel)")
+      .select("*, passageiro:passageiros!inner(nome, nome_responsavel, telefone_responsavel)")
       .order("data_vencimento", { ascending: false });
 
     if (filtros.usuarioId) query = query.eq("usuario_id", filtros.usuarioId);
@@ -211,7 +211,7 @@ export const cobrancaService = {
   async listCobrancasByPassageiro(passageiroId: string, ano?: string): Promise<any[]> {
     let query = supabaseAdmin
       .from("cobrancas")
-      .select("*, passageiro:passageiros!inner(nome, nome_responsavel)")
+      .select("*, passageiro:passageiros!inner(nome, nome_responsavel, telefone_responsavel)")
       .eq("passageiro_id", passageiroId)
       .order("data_vencimento", { ascending: false });
 
