@@ -341,6 +341,7 @@ class ContractService {
           passageiro: {
             nome: p.nome,
             nome_responsavel: p.nome_responsavel,
+            telefone_responsavel: p.telefone_responsavel,
             ativo: p.ativo
           },
           dados_contrato: {
@@ -360,7 +361,7 @@ class ContractService {
     // Listagem de Contratos Reais (Pendentes ou Assinados)
     let query = supabaseAdmin
       .from('contratos')
-      .select('*, passageiro:passageiros!inner(nome, nome_responsavel, ativo)', { count: 'exact' })
+      .select('*, passageiro:passageiros!inner(nome, nome_responsavel, telefone_responsavel, ativo)', { count: 'exact' })
       .eq('usuario_id', usuarioId)
       .order('created_at', { ascending: false });
 
