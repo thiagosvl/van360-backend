@@ -347,6 +347,8 @@ CREATE TABLE IF NOT EXISTS "public"."usuarios" (
     "ativo" boolean DEFAULT true,
     "tipo" "public"."user_type_enum" DEFAULT 'motorista'::"public"."user_type_enum" NOT NULL,
     "assinatura_digital_url" "text",
+    "termos_aceitos_em" timestamp with time zone,
+    "termos_versao" "text",
     "config_contrato" "jsonb" DEFAULT '{
       "usar_contratos": true,
       "configurado": false,

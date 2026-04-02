@@ -9,6 +9,7 @@ interface RegisterPayload {
     email: string;
     telefone: string;
     senha: string;
+    termos_aceitos: boolean;
 }
 
 export const AuthController = {
@@ -19,6 +20,10 @@ export const AuthController = {
 
         if (!payload.email || !payload.senha || !payload.nome || !payload.cpfcnpj) {
             return reply.status(400).send({ error: "Dados de registro incompletos." });
+        }
+
+        if (!payload.termos_aceitos) {
+            return reply.status(400).send({ error: "É necessário aceitar os Termos de Uso e a Política de Privacidade." });
         }
 
         try {

@@ -12,6 +12,8 @@ import { EVENTO_AUTH_RECUPERACAO_SENHA, EVENTO_AUTH_SENHA_ALTERADA } from "../co
 
 // ... (interfaces remain unchanged)
 
+const TERMOS_VERSAO_ATUAL = "2026-04";
+
 export interface UsuarioPayload {
   nome: string;
   apelido?: string;
@@ -20,6 +22,7 @@ export interface UsuarioPayload {
   cpfcnpj: string;
   telefone: string;
   ativo?: boolean;
+  termos_aceitos?: boolean;
 }
 
 export interface CheckUserStatusResult {
@@ -49,6 +52,7 @@ export interface RegistroPayload {
   cpfcnpj: string;
   telefone: string;
   ativo?: boolean;
+  termos_aceitos: boolean;
 }
 
 export interface RegistroManualResult {
@@ -103,7 +107,7 @@ export async function checkUserStatus(
 }
 
 export async function criarUsuario(data: UsuarioPayload & { tipo?: UserType, id: string }) {
-  const { id, nome, apelido, email, cpfcnpj, telefone, ativo = false, tipo } = data;
+  const { id, nome, apelido, email, cpfcnpj, telefone, ativo = false, tipo, termos_aceitos } = data;
 
   const { data: usuario, error } = await supabaseAdmin
     .from("usuarios")
@@ -115,7 +119,9 @@ export async function criarUsuario(data: UsuarioPayload & { tipo?: UserType, id:
       cpfcnpj: onlyDigits(cpfcnpj),
       telefone: onlyDigits(telefone),
       ativo,
-      tipo: tipo || UserType.MOTORISTA
+      tipo: tipo || UserType.MOTORISTA,
+      termos_aceitos_em: termos_aceitos ? new Date().toISOString() : null,
+      termos_versao: termos_aceitos ? TERMOS_VERSAO_ATUAL : null,
     }])
     .select("id")
     .single();
