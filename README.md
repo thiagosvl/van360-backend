@@ -1,6 +1,6 @@
 # 🚀 Van360 Backend
 
-Backend API para o sistema Van360 - Gestão de Transporte Escolar.
+Backend API para o sistema Van360
 
 ## 🏗️ Arquitetura
 
