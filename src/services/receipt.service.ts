@@ -123,7 +123,7 @@ class ReceiptService {
                                     style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "50px" },
                                     children: [
                                         logoBase64 ?
-                                            { type: "img", props: { src: logoBase64, style: { width: "120px", height: "60px" } } } :
+                                            { type: "img", props: { src: logoBase64, style: { width: "100px", height: "60px" } } } :
                                             { type: "div", props: { style: { fontSize: "24px", fontWeight: "bold", color: "#2563eb" }, children: "VAN360" } },
                                         { type: "div", props: { style: { fontSize: "11px", color: "#94a3b8", marginTop: "10px" }, children: `ID: ${data.id.substring(0, 8)}` } }
                                     ]
