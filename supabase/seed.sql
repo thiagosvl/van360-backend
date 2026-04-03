@@ -58,7 +58,7 @@ INSERT INTO public.usuarios (
     'd0d8c19c-3b36-402a-9e73-9a3c3c3c3c3c',
     'Sr. T',
     'admin@van360.com',
-    '00000000000',
+    '26419848814',
     '11999999999',
     'Admin',
     true,
