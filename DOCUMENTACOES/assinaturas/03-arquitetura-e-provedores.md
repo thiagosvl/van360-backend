@@ -5,7 +5,7 @@ O coração técnico do sistema SaaS deve ser **Provider-Agnostic** (Independent
 ---
 
 ## 1. Estratégia de Abstração
-Utilizamos o padrão **Provider Pattern** para garantir que a lógica de negócio do Van360 não conheça os detalhes do gateway (Efipay, Asaas, C6, etc.).
+Utilizamos o padrão **Provider Pattern** para garantir que a lógica de negócio do Van360 não conheça os detalhes do gateway (Efí Bank, Asaas, C6, etc.).
 
 ### 📂 Estrutura de Pastas
 - `src/services/payments/payment.provider.ts`: Interface base (Contrato).
@@ -14,12 +14,12 @@ Utilizamos o padrão **Provider Pattern** para garantir que a lógica de negóci
 
 ---
 
-## 2. Fluxo Efipay (Gateway Inicial)
-O Efipay será o provedor padrão para PIX e Cartão de Crédito, utilizando APIs distintas para cada método.
+## 2. Fluxo Efí Bank (Gateway Inicial)
+O Efí Bank será o provedor padrão para PIX e Cartão de Crédito, utilizando APIs distintas para cada método.
 
 ### 💳 Cartão de Crédito (API Cobranças)
 - **Tipo**: Assinatura recorrente via **API de Assinaturas**.
-- **Webhook**: O sistema aguarda o callback simples enviado pela Efipay para confirmar a renovação.
+- **Webhook**: O sistema aguarda o callback simples enviado pela Efí Bank para confirmar a renovação.
 - **Segurança**: Validação via IP de origem e chave secreta no payload.
 
 ### 💨 Pix (Motor Interno)
@@ -34,8 +34,8 @@ Os webhooks são a fonte da verdade para o status da transação.
 
 | Provedor | Endpoint | Segurança / Protocolo |
 | :--- | :--- | :--- |
-| **Efipay (Cartão)** | `/api/v1/webhooks/efi/card` | Secret Key + IP |
-| **Efipay (Pix)** | `/api/v1/webhooks/efi/pix` | **mTLS (Mutual TLS)** + Certificado |
+| **Efí Bank (Cartão)** | `/api/v1/webhooks/efi/card` | Secret Key + IP |
+| **Efí Bank (Pix)** | `/api/v1/webhooks/efi/pix` | **mTLS (Mutual TLS)** + Certificado |
 
 ### 🛠️ Processamento
 1. O Webhook recebe o evento.
@@ -49,7 +49,7 @@ Os webhooks são a fonte da verdade para o status da transação.
 Um Job agendado (Cron) roda diariamente para:
 - Mudar motoristas de `TRIAL` para `EXPIRED` (Exatamente 15 dias cravados).
 - Mudar motoristas de `ACTIVE` para `PAST_DUE` (Assinatura vencida hoje).
-- Mudar motoristas de `PAST_DUE` para `EXPIRED` (Atrasado há mais de 72h/3 dias).
+- Mudar motoristas de `PAST_DUE` para `EXPIRED` (Atrasado há mais de 3 dias corridos).
 
 ---
 
@@ -66,4 +66,4 @@ Para garantir que o motorista tenha o QR Code disponível antes do vencimento, o
 ---
 
 > [!IMPORTANT]
-> **Última Atualização**: 2026-04-03
+> **Última Atualização**: 2026-04-06

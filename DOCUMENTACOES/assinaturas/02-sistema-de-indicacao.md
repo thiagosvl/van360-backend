@@ -56,4 +56,4 @@ Para transparência e engajamento, o motorista indicador terá acesso a um hist�
 ---
 
 > [!IMPORTANT]
-> **Última Atualização**: 2026-04-03
+> **Última Atualização**: 2026-04-06

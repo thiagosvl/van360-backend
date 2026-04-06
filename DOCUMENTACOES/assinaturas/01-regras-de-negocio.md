@@ -7,22 +7,24 @@ Este documento define a estratégia comercial e técnica para fidelização e re
 ## 1. Estratégia de Gateway (MVP)
 Para o lançamento, simplificaremos a operação utilizando um único provedor para todos os métodos.
 
-*   **Provedor Único**: **Efipay (FBANK)** para Cartão de Crédito e Pix.
+*   **Provedor Único**: **Efí Bank** para Cartão de Crédito e Pix.
 *   **Cartão de Crédito**: Utiliza tokenização para renovação automática.
-*   **Pix**: O Van360 é o motor de recorrência. No dia do vencimento, o sistema gera o QR Code via Efipay e notifica o motorista. O Pix automático (recorrência nativa) está descartado.
+*   **Pix**: O Van360 é o motor de recorrência. No dia do vencimento, o sistema gera o QR Code via Efí Bank e notifica o motorista. O Pix automático (recorrência nativa) está descartado.
 
 ---
 
 ## 2. Ciclo de Vida e Renovação
 A saúde financeira e a operação do motorista são protegidas por regras de vencimento imutáveis.
 
-*   **Vencimento Fixo**: A data de renovação é mantida independentemente da data de pagamento.
+*   **Ciclo de Cobrança (Modelo Netflix)**: A data de aniversário da assinatura é fixa pelo **primeiro pagamento realizado**. Pagamentos em atraso não alteram a data do próximo ciclo.
 *   **Geração Antecipada**: A fatura/Pix de renovação é gerada com **N dias de antecedência**, conforme definido na tabela de configurações administrativas do sistema.
-*   **Falha na Cobrança (Cartão)**: O sistema **não faz fallback automático** para Pix. Em caso de falha, o motorista é notificado e deve agir manualmente (trocar o cartão ou solicitar um Pix).
-*   **Período de Tolerância [EM DISCUSSÃO]**: 
-    - **Assinantes**: Prazo de acesso em atraso (`PAST_DUE`) antes do bloqueio total (`EXPIRED`) ainda não definido.
-    - **Trial**: Lógica de bloqueio pós-experiência em aberto.
-*   **Conversão de Trial**: Ao assinar durante o período de experiência, os dias restantes de trial são somados ao período do plano contratado (ex: 15 dias de trial + 30 dias de plano mensal = 45 dias de acesso total). Caso o trial já esteja expirado, o período contratado inicia da data do pagamento.
+*   **Falha na Cobrança (Cartão)**: O sistema **não faz fallback automático** para Pix. Em caso de falha, o motorista é notificado e deve agir manualmente.
+*   **Período de Tolerância e Bloqueios**: 
+    - **ACTIVE -> PAST_DUE**: O motorista atrasou a mensalidade, mas mantém acesso total por **3 dias de carência**.
+    - **PAST_DUE -> EXPIRED**: Após os 3 dias de carência, a assinatura transita para `EXPIRED` e o acesso ao painel administrativo é **BLOQUEADO**.
+    - **TRIAL -> EXPIRED**: Ao término dos 15 dias de Trial sem assinatura ativa, o status transita diretamente para `EXPIRED` e o acesso é **BLOQUEADO**.
+    - **Independência do Add-on**: O motor de cobrança automática (Woovi) **CONTINUA ATIVO** mesmo em `EXPIRED`, processando mensalidades dos passageiros e garantindo as taxas da Van360 e o fluxo do motorista.
+*   **Conversão de Trial**: Ao assinar durante o trial, os dias restantes são somados ao primeiro mês pago. Caso o trial esteja expirado, o período inicia na data do pagamento.
 
 ---
 
@@ -66,4 +68,4 @@ Para garantir flexibilidade comercial, os seguintes parâmetros são definidos v
 ---
 
 > [!IMPORTANT]
-> **Última Atualização**: 2026-04-03
+> **Última Atualização**: 2026-04-06

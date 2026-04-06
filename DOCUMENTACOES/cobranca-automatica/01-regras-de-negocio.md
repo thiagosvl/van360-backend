@@ -7,18 +7,32 @@ Este documento detalha o funcionamento do módulo de cobrança automática entre
 ## 1. Visão Geral
 O sistema automatiza o recebimento das mensalidades via PIX dinâmico com regras de vencimento (`COBV`), permitindo o cálculo automático de encargos pelo Banco Central e a divisão (Split) imediata entre motorista e plataforma.
 
-## 2. Dependência SaaS (Fila de Inadimplência)
-O módulo de cobrança automática é dependente do status da assinatura do motorista com a Van360 (**Módulo SaaS**):
+## 2. Independência Operacional SaaS
 
-*   **Motorista ATIVO**: As cobranças dos passageiros são geradas normalmente nas datas programadas.
-*   **Motorista INADIMPLENTE/SUSPENSO**: O sistema continua identificando a necessidade de cobrança, mas as retém em uma **Fila de Processamento** por um período limitado.
-    *   **Prazo de Retenção [EM DISCUSSÃO]**: O tempo máximo que uma cobrança permanece na fila (ex: 7 dias) ainda não está definido e será discutido posteriormente.
-    *   **Regra de Vencimento [EM DISCUSSÃO]**: A lógica de atualização da data de vencimento (Vencimento Amigável) ao liberar cobranças retidas segue em aberto.
-    *   **Auto-Reativação**: Assim que o motorista regulariza sua assinatura (status `ACTIVE`), o sistema dispara as cobranças retidas conforme a regra de vencimento que for estabelecida.
+O motor de cobrança automática é **independente** do status da assinatura SaaS do motorista. Isso garante que a Van360 continue processando taxas e o motorista continue recebendo de seus passageiros, mesmo em caso de inadimplência do plano principal.
+
+### Tabela de Comportamento por Status SaaS
+
+| Status SaaS | Painel do Motorista | Cobrança Automática (Add-on) | Motivação |
+| :--- | :--- | :--- | :--- |
+| **ACTIVE** | Liberado (Full) | Operação Normal | Fluxo padrão. |
+| **TRIAL** | Liberado (Full) | Operação Normal | Degustação do sistema. |
+| **PAST_DUE** (1–3 dias) | **Readonly** | **Operação Normal** | Grace period (3 dias) — o motor não para. |
+| **EXPIRED** | **Bloqueado** | **Operação Normal** | Garante receita da Van360 e fluxo do motorista, mas força regularização para gerir o negócio. |
+| **CANCELED** | Bloqueado | Desativado (Stop) | Encerramento da relação comercial. |
 
 ---
 
-## 3. Taxas e Parametrização (Split Agnóstico)
+## 3. Fluxo de Cobrança em Dois Níveis
+
+Para garantir eficiência e evitar custos desnecessários com QR Codes não utilizados, o sistema opera em dois estágios:
+
+1.  **Nível 1 (Registro Interno)**: No dia da geração (ex: todo dia 25), o sistema cria o registro na tabela `cobrancas_passageiros` com `status = pendente` e `gateway_id = null`.
+2.  **Nível 2 (Cobrança Ativa)**: No momento do envio da notificação (Job 2), se o registro não possuir um `gateway_id`, o sistema solicita o QR Code ao provedor (Woovi) e atualiza o registro.
+
+---
+
+## 4. Taxas e Parametrização (Split Agnóstico)
 No momento do **Onboarding**, as taxas são configuradas para garantir a sustentabilidade da plataforma:
 
 | Componente | Armazenamento | Descrição |
@@ -37,7 +51,20 @@ No momento do **Onboarding**, as taxas são configuradas para garantir a sustent
 
 ---
 
-## 4. Penalidades Financeiras (Multa e Juros)
+## 5. Repasse de Taxas de Serviço (Pass-Through)
+O Van360 permite que o motorista decida quem arcará com os custos da plataforma. Essa configuração é feita individualmente para cada passageiro através da flag `repassar_taxa_servico`.
+
+*   **Cenário A: Taxa Repassada ao Pai (`repassar_taxa_servico: true`)**:
+    *   **Valor da Cobrança**: `Mensalidade (Original) + Taxa de Serviço (Motorista)`.
+    *   **Impacto**: O motorista recebe o valor integral da sua mensalidade após o split.
+*   **Cenário B: Taxa Assumida pelo Motorista (`repassar_taxa_servico: false`)**:
+    *   **Valor da Cobrança**: `Mensalidade (Original)`.
+    *   **Impacto**: O custo da plataforma é descontado do valor recebido pelo motorista no momento do split.
+*   **Independência de Encargos**: Multas e juros por atraso são **sempre** revertidos 100% para o motorista, independentemente da escolha de repasse da taxa de serviço.
+
+---
+
+## 6. Penalidades Financeiras (Multa e Juros)
 Utilizamos a lógica do **Gateway** para gerenciar encargos sem necessidade de recalcular valores diariamente no banco de dados.
 
 *   **Configuração**: O sistema envia os parâmetros `fines` (multa) e `interests` (juros) na criação da cobrança.
@@ -46,7 +73,7 @@ Utilizamos a lógica do **Gateway** para gerenciar encargos sem necessidade de r
 
 ---
 
-## 5. Ciclo de Vida e Resiliência (Pix Out)
+## 7. Ciclo de Vida e Resiliência (Pix Out)
 *   **Validação de Chave Pix**: Validada via interface do Gateway contra o DICT (Bacen) no onboarding.
 *   **Falha no Repasse (Pix Out)**: Se a chave do motorista estiver inválida no momento do pagamento do passageiro:
     1.  O status da transação vai para `REPASSE_FALHA`.
@@ -59,7 +86,7 @@ Utilizamos a lógica do **Gateway** para gerenciar encargos sem necessidade de r
 
 ---
 
-## 6. Estratégia de Gateways e Adapters (Agnóstico)
+## 8. Estratégia de Gateways e Adapters (Agnóstico)
 O sistema utiliza o padrão **Strategy** para garantir que a inteligência de cobrança resida no Van360, e não no provedor.
 
 *   **Diferenciação de Recursos (Feature Leveling)**:
@@ -72,7 +99,7 @@ O sistema utiliza o padrão **Strategy** para garantir que a inteligência de co
 
 ---
 
-## 7. Arquitetura de Webhooks e Notificações (Conciliação)
+## 9. Arquitetura de Webhooks e Notificações (Conciliação)
 Para garantir a integridade, o processamento de eventos segue um padrão descentralizado e resiliente:
 
 1.  **Endpoints Especializados**:
@@ -90,7 +117,7 @@ Para garantir a integridade, o processamento de eventos segue um padrão descent
 
 ---
 
-## 8. Abstração e Extensibilidade (Plug-and-Play)
+## 10. Abstração e Extensibilidade (Plug-and-Play)
 O sistema é projetado para ser **Gateway-Agnostic**, o que significa que o Van360 não é "refém" de nenhum provedor específico.
 
 *   **Interface Única (`IBillingProvider`)**: Todas as ações financeiras (gerar Pix, registrar cartão, processar webhook) passam por uma casca técnica comum.
@@ -101,13 +128,11 @@ O sistema é projetado para ser **Gateway-Agnostic**, o que significa que o Van3
 
 ---
 
-## 9. Configurações Administrativas
-Para garantir flexibilidade operacional, as seguintes variáveis não são fixas no código e residem em tabelas de configuração do sistema (acessíveis via Interface Admin no futuro):
+---
 
-*   **Prazo de Retenção (EM DISCUSSÃO)**: Tempo limite na fila aguardando regularização.
-*   **Margem de Tolerância (EM DISCUSSÃO)**: Lógica de aceitação de atrasos parciais.
+
 
 ---
 
 > [!IMPORTANT]
-> **Última Atualização**: 2026-04-03
+> **Última Atualização**: 2026-04-06 (Revisão Repasse)

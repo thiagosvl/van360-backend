@@ -56,4 +56,4 @@ A migração seguirá os passos abaixo para garantir a segurança dos dados dos 
 ---
 
 > [!IMPORTANT]
-> **Última Atualização**: 2026-04-03
+> **Última Atualização**: 2026-04-06

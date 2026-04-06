@@ -22,6 +22,7 @@ Configurações de faturamento e identidade no gateway.
 | `faturamento_habilitado` | `boolean` | Ativação individual do módulo. |
 | `dia_vencimento` | `int` | Dia fixo para geração da cobrança. |
 | `valor_mensalidade` | `numeric` | Valor base (snapshot p/ cobrança). |
+| `repassar_taxa_servico` | `boolean` | Se `true`, soma a `taxa_servico_motorista` ao valor final. |
 | `gateway_customer_id` | `text` | ID do pagador no gateway atual. |
 
 ### 💰 Tabela `public.cobrancas` (Faturamento Individual)
@@ -74,10 +75,10 @@ Armazena parâmetros globais do gateway que afetam o cálculo de split.
 
 | Chave | Valor Exemplo | Descrição |
 | :--- | :--- | :--- |
-| `gateway_fee_pix_in` | `0.85` | Custo por recebimento PIX. |
-| `gateway_fee_split` | `0.00` | Custo por operação de split. |
-| `gateway_fee_pix_out` | `1.00` | Custo por transação de saque. |
-| `gateway_fee_type` | `FIXED` | Tipo da taxa (`FIXED` ou `PERCENTAGE`). |
+| `billing_gateway_pix_in_fee` | `0.85` | Custo por recebimento PIX. |
+| `billing_gateway_split_fee` | `0.00` | Custo por operação de split. |
+| `billing_gateway_pix_out_fee` | `1.00` | Custo por transação de saque. |
+| `billing_gateway_fee_type` | `FIXED` | Tipo da taxa (`FIXED` ou `PERCENTAGE`). |
 
 ---
 
@@ -92,4 +93,4 @@ Armazena parâmetros globais do gateway que afetam o cálculo de split.
 ---
 
 > [!NOTE]
-> **Última Atualização**: 2026-04-03
+> **Última Atualização**: 2026-04-06

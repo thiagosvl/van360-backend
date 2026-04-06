@@ -10,8 +10,8 @@ A transição de estados é crucial para auditoria e tratamento de falhas em rep
 
 | Estado | Significado | Próximo Passo |
 | :--- | :--- | :--- |
-| **WAIT_DRIVER_SaaS** | Motorista inadimplente com Van360. Cobrança aguardando na fila. | Regularização do SaaS -> `AGUARDANDO_PAGAMENTO`. |
-| **AGUARDANDO_PAGAMENTO** | Cobrança gerada no Gateway. | Pagamento pelo Passageiro -> `PAGO`. |
+| **AGUARDANDO_ENVIO** | Mensalidade registrada internamente (nível 1). | Chegou o dia de envio -> Solicitar QR Code (Woovi). |
+| **AGUARDANDO_PAGAMENTO** | Cobrança gerada no Gateway (QR Code ativo). | Pagamento pelo Passageiro -> `PAGO`. |
 | **PAGO** | Webhook de confirmação do Provedor recebido. | Iniciar processo de Split/Repasse. |
 | **REPASSE_PROCESSANDO** | Dinheiro em trânsito para o banco do motorista (Pix Out em andamento). | Sucesso -> `CONCLUIDO` / Erro -> `REPASSE_FALHA`. |
 | **REPASSE_FALHA** | Pix Out rejeitado (ex: Chave PIX deletada/inexistente). | Atualização de Chave -> `REPASSE_PROCESSANDO`. |
@@ -19,23 +19,23 @@ A transição de estados é crucial para auditoria e tratamento de falhas em rep
 > [!TIP]
 > **Job de Reconciliação**: Se uma transação permanecer em `REPASSE_PROCESSANDO` por mais de 30 min, o sistema deve consultar o status no gateway via API. Se o gateway confirmar o sucesso, movemos para `CONCLUIDO`. Se o gateway não tiver registro ou informar erro, retrocedemos para `REPASSE_FALHA` para nova tentativa.
 | **CONCLUIDO** | Dinheiro no banco do motorista e taxa na Van360. | Estado terminal de sucesso. |
-| **CANCELADO** | Cobrança invalidada manualmente, por nova geração ou por expiração de retenção ([EM DISCUSSÃO] dias de inadimplência SaaS). | Estado terminal. |
+| **CANCELADO** | Cobrança invalidada manualmente ou por nova geração. | Estado terminal. |
 | **VENCIDO** | Data limite ultrapassada. | No caso de `COBV`, o PIX já inclui encargos (multa/juros). |
 
 ---
 
-## 2. Fluxo de Retenção SaaS
+## 2. Fluxo de Independência Operacional
 
 Para garantir a saúde financeira da plataforma, a geração de cobranças para passageiros segue este fluxo:
 
 ```mermaid
 graph TD
-    A[Data de Geração Chegou] --> B{Motorista Ativo no SaaS?}
-    B -- Sim --> C[Gerar Cobrança no Gateway]
-    B -- Não --> D[Status: WAIT_DRIVER_SaaS]
-    D --> E{Pagou Assinatura Van360?}
-    E -- Sim --> C
-    C --> F[Enviar para Passageiro]
+    A[Job 1: Geração Batch - Dia 25] --> B[Criar Registro: Status PENDENTE]
+    B --> C[Job 2: Envio/Notificação - Dia Vencimento]
+    C --> D{Tem Gateway ID?}
+    D -- Não --> E[Solicitar QR Code na Woovi]
+    E --> F[Atualizar Registro + Enviar WhatsApp]
+    D -- Sim --> G[Enviar WhatsApp]
 ```
 
 ---
@@ -61,4 +61,4 @@ Quando o motorista clica em "Recebi por fora":
 ---
 
 > [!IMPORTANT]
-> **Última Atualização**: 2026-04-03
+> **Última Atualização**: 2026-04-06

@@ -47,4 +47,4 @@ A visualização de texto plano será substituída por um componente de renderiz
 ---
 
 > [!IMPORTANT]
-> **Última Atualização**: 2026-04-03
+> **Última Atualização**: 2026-04-06

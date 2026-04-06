@@ -50,14 +50,31 @@ Opção na listagem de cobranças para quando o passageiro paga em mãos (espéc
 
 ---
 
-## 4. Análise de Resiliência (Corners Cases)
+## 4. Arquitetura de Dois Níveis e Resiliência
 
-### Fila de Retenção SaaS
-Se o motorista estiver bloqueado por inadimplência com o Van360, as cobranças ficam no estado `WAIT_DRIVER_SaaS`.
-*   **Ação**: O sistema retém por um período limitado (**[EM DISCUSSÃO]**). Se não regularizado, ignora o motorista para novos ciclos.
-*   **Auto-reativação**: Ao pagar o SaaS, o sistema processa automaticamente a fila de cobranças pendentes conforme a política de vencimento definida (**[EM DISCUSSÃO]**).
+Para otimizar custos e garantir a operação, o sistema separa o registro da intenção de cobrança da ativação do QR Code:
+
+### Nível 1: Geração Batch (Job 1)
+- **Gatilho**: Executado mensalmente (ex: dia 25).
+- **Ação**: Cria registros em `cobrancas_passageiros` com `status = pendente`.
+- **SaaS**: Se o motorista estiver `CANCELED`, o registro não é criado. Para outros status, a geração é normal.
+
+### Nível 2: Ativação e Envio (Job 2)
+- **Gatilho**: Executado no dia do envio/vencimento.
+- **Ação**: Se `gateway_id` é nulo, solicita o QR Code à Woovi, atualiza o registro e envia a notificação via WhatsApp.
+
+### Job de Recuperação SaaS
+Ao transicionar para `ACTIVE`, o sistema dispara um **Job de Recuperação** que verifica o ciclo atual para passageiros com `faturamento_habilitado = true`. 
+
+*   **Vencimento futuro**: Cria o registro (Nível 1) com a data original.
+*   **Vencimento hoje**: Cria e ativa (Nível 2) com data de hoje.
+*   **Vencimento passou (1–7 dias)**: Cria e ativa com data de hoje (o gateway aplicará multa/juros retroativos no QR Code).
+*   **Vencimento passou (> 7 dias)**: Não gera nada automaticamente, aguardando o próximo ciclo (Job 1).
+
+**Importante**: O sistema nunca gera faturamento retroativo de meses anteriores automaticamente.
 
 ---
+
 
 > [!IMPORTANT]
 > **Última Atualização**: 2026-04-03

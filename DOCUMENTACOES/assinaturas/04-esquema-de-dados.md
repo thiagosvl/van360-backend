@@ -89,4 +89,4 @@ CREATE TYPE public.subscription_status_enum AS ENUM (
 ---
 
 > [!IMPORTANT]
-> **Última Atualização**: 2026-04-03
+> **Última Atualização**: 2026-04-06

@@ -99,5 +99,5 @@ A formalização do contrato é feita via link único enviado ao responsável.
 ---
 
 > [!IMPORTANT]
-> **Última Atualização**: 2026-04-03
+> **Última Atualização**: 2026-04-06
 > **Schema de Referência**: Ver `supabase/migrations/` para detalhes de tipos e constraints.

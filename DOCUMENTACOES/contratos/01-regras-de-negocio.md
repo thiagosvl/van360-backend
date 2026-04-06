@@ -46,4 +46,4 @@ Para reduzir a barreira de entrada e facilitar o trabalho do motorista escolar, 
 ---
 
 > [!IMPORTANT]
-> **Última Atualização**: 2026-04-03
+> **Última Atualização**: 2026-04-06
