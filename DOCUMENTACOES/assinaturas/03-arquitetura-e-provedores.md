@@ -18,9 +18,10 @@ Utilizamos o padrão **Provider Pattern** para garantir que a lógica de negóci
 O Efí Bank será o provedor padrão para PIX e Cartão de Crédito, utilizando APIs distintas para cada método.
 
 ### 💳 Cartão de Crédito (API Cobranças)
-- **Tipo**: Assinatura recorrente via **API de Assinaturas**.
-- **Webhook**: O sistema aguarda o callback simples enviado pela Efí Bank para confirmar a renovação.
-- **Segurança**: Validação via IP de origem e chave secreta no payload.
+- **Tipo**: Pagamento avulso (One-Step Charge) com **Token Reutilizável**.
+- **Recorrência**: O Van360 gerencia o calendário (Regra de Aniversário). No vencimento, o Job dispara uma nova cobrança usando o `payment_token` salvo (`reuse: true`).
+- **Segurança**: Dados sensíveis nunca tocam o backend; tokenização 100% via SDK da Efí no Frontend.
+- **Webhook**: O sistema usa o **Notification Token** enviado pela Efí para conciliação.
 
 ### 💨 Pix (Motor Interno)
 - **Tipo**: Cobrança imediata via QR Code Dinâmico geretado sob demanda pelo Van360.
@@ -30,18 +31,16 @@ O Efí Bank será o provedor padrão para PIX e Cartão de Crédito, utilizando 
 ---
 
 ## 3. Gestão de Webhooks
-Os webhooks são a fonte da verdade para o status da transação.
+Os webhooks são a fonte da verdade para o status da transação. Centralizamos o recebimento em um único endpoint que redireciona conforme o tipo de payload (Pix vs Cartão).
 
 | Provedor | Endpoint | Segurança / Protocolo |
 | :--- | :--- | :--- |
-| **Efí Bank (Cartão)** | `/api/v1/webhooks/efi/card` | Secret Key + IP |
-| **Efí Bank (Pix)** | `/api/v1/webhooks/efi/pix` | **mTLS (Mutual TLS)** + Certificado |
+| **Efí Bank (Pix)** | `/api/webhooks/efi` | **mTLS (Mutual TLS)** + Certificado |
+| **Efí Bank (Cartão)** | `/api/webhooks/efi` | **Notification Token** (OneStepCharge) |
 
 ### 🛠️ Processamento
-1. O Webhook recebe o evento.
-2. Identifica o `usuario_id` no banco via `provider_txid`.
-3. Chama `subscriptionService.processPayment()`.
-4. Atualiza a assinatura e dispara bônus de indicação se houver.
+1. **Pix**: O corpo contém o `txid` e o `valor`. O sistema valida o certificado e chama `subscriptionService.activateByFatura()`.
+2. **Cartão**: O corpo contém apenas um `notification` (token). O sistema faz uma requisição `GET` para a Efí usando esse token para obter os detalhes da transação (`charge_id`, `status`, `custom_id`) e processa a ativação se o status for `paid`.
 
 ---
 
@@ -50,18 +49,13 @@ Um Job agendado (Cron) roda diariamente para:
 - Mudar motoristas de `TRIAL` para `EXPIRED` (Exatamente 15 dias cravados).
 - Mudar motoristas de `ACTIVE` para `PAST_DUE` (Assinatura vencida hoje).
 - Mudar motoristas de `PAST_DUE` para `EXPIRED` (Atrasado há mais de 3 dias corridos).
+- **Renovação Automática**: Gera cobrança antecipada (5 dias) no cartão salvo ou emite um novo Pix.
 
 ---
 
-## 5. Job de Renovação de Pix (SaaS)
-Para garantir que o motorista tenha o QR Code disponível antes do vencimento, o sistema utiliza um job focado em emissão e manutenção:
-
-*   **Geração Antecipada**: O job consulta a `data_vencimento` e gera um novo QR Code Pix com **N dias de antecedência** (configurável em `configuracoes_sistema`).
-*   **Validade do QR**: Todo Pix de assinatura gerado deve ter **vencimento mínimo de 1 mês** no gateway. O sistema armazena essa data em `qr_expires_at`.
-*   **Regra de Unicidade (Single Active Pix)**: 
-    - O sistema mantém apenas **um Pix de assinatura pendente** por usuário. 
-    - Ao gerar um novo Pix (por upgrade de plano ou regeneração de expiração), o sistema deve **cancelar explicitamente** o Pix anterior no gateway para evitar pagamentos duplicados ou de valores incorretos.
-*   **Auto-Regeneração**: Se o motorista tentar acessar um Pix cuja `qr_expires_at` já passou, o sistema regenera um novo QR Code automaticamente, invalidando o anterior.
+## 5. Fluxo de Recorrência (Cartão vs Pix)
+- **Cartão**: Ao renovar, o sistema tenta cobrar no `payment_token` salvo. Se for `declined`, o sistema notifica o motorista sugerindo o pagamento via Pix.
+- **Pix**: O sistema gera um QR Code e envia via WhatsApp/SMS. Caso não seja pago até o fim da carência (3 dias), bloqueia o acesso.
 
 ---
 

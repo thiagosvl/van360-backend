@@ -8,8 +8,8 @@ Este documento define a estratégia comercial e técnica para fidelização e re
 Para o lançamento, simplificaremos a operação utilizando um único provedor para todos os métodos.
 
 *   **Provedor Único**: **Efí Bank** para Cartão de Crédito e Pix.
-*   **Cartão de Crédito**: Utiliza tokenização para renovação automática.
-*   **Pix**: O Van360 é o motor de recorrência. No dia do vencimento, o sistema gera o QR Code via Efí Bank e notifica o motorista. O Pix automático (recorrência nativa) está descartado.
+*   **Cartão de Crédito**: Utiliza tokenização para renovação automática. Em Sandbox, o resultado da transação é definido pelo **último dígito** do cartão (Ex: final 4 a 0 aprovam; final 2 nega por segurança).
+*   **Pix**: O Van360 é o motor de recorrência. Em Sandbox, a simulação de pagamento é automática para cobranças de **R$ 0,01 a R$ 10,00** (o status muda para CONCLUÍDA em segundos). Valores acima de R$ 10,00 permanecem como ATIVA. O Pix automático (recorrência nativa) está descartado.
 
 ---
 
@@ -17,8 +17,12 @@ Para o lançamento, simplificaremos a operação utilizando um único provedor p
 A saúde financeira e a operação do motorista são protegidas por regras de vencimento imutáveis.
 
 *   **Ciclo de Cobrança (Modelo Netflix)**: A data de aniversário da assinatura é fixa pelo **primeiro pagamento realizado**. Pagamentos em atraso não alteram a data do próximo ciclo.
-*   **Geração Antecipada**: A fatura/Pix de renovação é gerada com **N dias de antecedência**, conforme definido na tabela de configurações administrativas do sistema.
-*   **Falha na Cobrança (Cartão)**: O sistema **não faz fallback automático** para Pix. Em caso de falha, o motorista é notificado e deve agir manualmente.
+*   **Geração Antecipada**: A fatura/Pix de renovação é gerada com **N dias de antecedência** (ex: 5 dias), conforme definido na tabela de configurações (`SAAS_DIAS_VENCIMENTO`).
+*   **Renovação Automática (Cartão)**: Para motoristas com cartão de crédito salvo, o Job de monitoramento tenta realizar a cobrança automática (`OneStepCharge`) na data de aniversário da assinatura. 
+    - **Sucesso**: A assinatura é renovada imediatamente.
+    - **Falha**: Se a cobrança falhar (cartão recusado, expirado, etc.), o sistema **NÃO bloqueia o acesso imediatamente**. Em vez disso, envia uma notificação inteligente ao motorista sugerindo a troca do cartão ou o pagamento via Pix para evitar o bloqueio após o período de carência.
+*   **Renovação Manual (Pix)**: Caso o motorista não utilize cartão ou a cobrança automática falhe, o sistema gera um QR Code Pix e o envia via notificação.
+*   **Gestão de Cartões**: O motorista pode gerenciar seus cartões na interface de "Assinatura". O sistema utiliza a bandeira e os últimos 4 dígitos para identificação, mantendo o `payment_token` para futuras cobranças.
 *   **Período de Tolerância e Bloqueios**: 
     - **ACTIVE -> PAST_DUE**: O motorista atrasou a mensalidade, mas mantém acesso total por **3 dias de carência**.
     - **PAST_DUE -> EXPIRED**: Após os 3 dias de carência, a assinatura transita para `EXPIRED` e o acesso ao painel administrativo é **BLOQUEADO**.
