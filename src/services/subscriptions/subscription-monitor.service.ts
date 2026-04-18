@@ -2,7 +2,7 @@ import { supabaseAdmin } from "../../config/supabase.js";
 import { logger } from "../../config/logger.js";
 import { SubscriptionStatus, ConfigKey } from "../../types/enums.js";
 import { subscriptionService } from "./subscription.service.js";
-import { notificationService } from "../notifications/notification.service.js";
+import { notificationService, DriverEventType } from "../notifications/notification.service.js";
 import { getConfigNumber, getConfig } from "../configuracao.service.js";
 import { getNowBR, getEndOfDayBR, addDays, parseLocalDate, diffInDays } from "../../utils/date.utils.js";
 import {
@@ -130,7 +130,7 @@ export const subscriptionMonitorService = {
       // 0 dias = Hoje
       // 1 dia = Amanhã (Urgente)
       // N dias = Aviso normal
-      let tipo = EVENTO_MOTORISTA_TESTE_EXPIRANDO;
+      let tipo: DriverEventType = EVENTO_MOTORISTA_TESTE_EXPIRANDO;
       if (daysLeft === 1) tipo = EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO;
       if (daysLeft === 0) tipo = EVENTO_MOTORISTA_TESTE_HOJE;
       
@@ -370,7 +370,7 @@ export const subscriptionMonitorService = {
     }
     if (!pastDue?.length) return;
 
-    const reminderSteps = [
+    const reminderSteps: { daysAgo: number, tipo: DriverEventType }[] = [
       { daysAgo: 1, tipo: EVENTO_MOTORISTA_RENOVACAO_LEMBRETE  },
       { daysAgo: 2, tipo: EVENTO_MOTORISTA_RENOVACAO_URGENCIA  },
     ];

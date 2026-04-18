@@ -54,7 +54,7 @@ type PassengerEventType =
     | typeof EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL
     | typeof EVENTO_PASSAGEIRO_CONTRATO_ASSINADO;
 
-type DriverEventType =
+export type DriverEventType =
     | typeof EVENTO_MOTORISTA_TESTE_BOAS_VINDAS
     | typeof EVENTO_MOTORISTA_TESTE_EXPIRANDO
     | typeof EVENTO_MOTORISTA_TESTE_ENCERRADO

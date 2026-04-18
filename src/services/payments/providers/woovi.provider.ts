@@ -1,3 +1,4 @@
+import { PaymentProvider } from "../../../types/enums.js";
 import { AppError } from "../../../errors/AppError.js";
 import {
     ChargeResponse,
@@ -12,7 +13,7 @@ import {
  * TODO: Implementar integração com a API da Woovi.
  */
 export class WooviProvider implements PaymentProviderAdapter {
-    readonly providerName = "woovi";
+    readonly providerName = PaymentProvider.WOOVI;
 
     async createCharge(_request: CreateChargeRequest): Promise<ChargeResponse> {
         throw new AppError("WooviProvider não implementado.", 501);
