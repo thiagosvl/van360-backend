@@ -34,34 +34,35 @@ const baseConfig: pino.LoggerOptions = {
 
 // Função para obter a configuração correta de transporte
 function getLoggerConfig(): pino.LoggerOptions {
-  if (isProduction && env.LOGTAIL_TOKEN) {
-    // PRODUÇÃO: Dual output (PM2 + Better Stack)
-    return {
-      ...baseConfig,
-      transport: {
-        targets: [
-          // Console (para PM2 logs)
-          {
-            target: 'pino-pretty',
-            level: env.LOG_LEVEL || 'info',
-            options: {
-              colorize: false,
-              translateTime: 'SYS:standard',
-              ignore: 'pid,hostname',
+  if (isProduction) {
+    // Se tiver Token do Logtail, usa multi-target. Se não, JSON padrão no stdout.
+    if (env.LOGTAIL_TOKEN) {
+      return {
+        ...baseConfig,
+        transport: {
+          targets: [
+            // Standard Output (PM2 captura isso)
+            {
+              target: 'pino/file', // Pino/file sem caminho = stdout
+              level: env.LOG_LEVEL || 'info',
+              options: { destination: 1 } // 1 = stdout
             },
-          },
-          // Better Stack/Logtail
-          {
-            target: '@logtail/pino',
-            level: env.LOG_LEVEL || 'info',
-            options: {
-              token: env.LOGTAIL_TOKEN, // Algumas versões usam 'token'
-              sourceToken: env.LOGTAIL_TOKEN, // Outras usam 'sourceToken'
+            // Better Stack/Logtail
+            {
+              target: '@logtail/pino',
+              level: env.LOG_LEVEL || 'info',
+              options: {
+                token: env.LOGTAIL_TOKEN,
+                sourceToken: env.LOGTAIL_TOKEN,
+              },
             },
-          },
-        ],
-      },
-    };
+          ],
+        },
+      };
+    }
+    
+    // Fallback Produção sem Logtail: Apenas stdout (JSON)
+    return baseConfig;
   } 
   
   if (isDevelopment) {
