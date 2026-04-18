@@ -11,6 +11,10 @@ SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
+-- Configuração de fuso horário para Brasil
+ALTER DATABASE postgres SET timezone TO 'America/Sao_Paulo';
+SET timezone = 'America/Sao_Paulo';
+
 
 COMMENT ON SCHEMA "public" IS 'standard public schema';
 
@@ -145,7 +149,7 @@ CREATE TABLE IF NOT EXISTS "public"."app_updates" (
     "force_update" boolean DEFAULT false,
     "url_zip" "text" NOT NULL,
     "changelog" "text",
-    "created_at" timestamp without time zone DEFAULT "now"(),
+    "created_at" timestamptz DEFAULT now(),
     CONSTRAINT "app_updates_platform_check" CHECK (("platform" = ANY (ARRAY['android'::"text", 'ios'::"text"])))
 );
 
@@ -175,7 +179,7 @@ CREATE TABLE IF NOT EXISTS "public"."cobrancas" (
     "origem" "text" DEFAULT '''automatica''::text'::"text" NOT NULL,
     "tipo_pagamento" "public"."tipo_pagamento_enum",
     "valor_pago" numeric(10,2),
-    "data_envio_ultima_notificacao" timestamp without time zone,
+    "data_envio_ultima_notificacao" timestamptz,
     "recibo_url" "text",
     CONSTRAINT "cobrancas_mes_check" CHECK ((("mes" >= 1) AND ("mes" <= 12))),
     CONSTRAINT "cobrancas_origem_check" CHECK (("origem" = ANY (ARRAY['automatica'::"text", 'manual'::"text"]))),
@@ -339,10 +343,10 @@ CREATE TABLE IF NOT EXISTS "public"."usuarios" (
     "id" "uuid" NOT NULL,
     "cpfcnpj" "text" NOT NULL,
     "email" "text" NOT NULL,
-    "created_at" timestamp without time zone DEFAULT "now"() NOT NULL,
+    "created_at" timestamptz DEFAULT now() NOT NULL,
     "telefone" "text" NOT NULL,
     "nome" "text" NOT NULL,
-    "updated_at" timestamp without time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamptz DEFAULT now() NOT NULL,
     "apelido" "text",
     "ativo" boolean DEFAULT true,
     "tipo" "public"."user_type_enum" DEFAULT 'motorista'::"public"."user_type_enum" NOT NULL,
@@ -907,24 +911,18 @@ GRANT ALL ON FUNCTION "public"."update_updated_at_column"() TO "service_role";
 
 
 
-GRANT ALL ON FUNCTION "public"."urlencode"("string" "bytea") TO "postgres";
-GRANT ALL ON FUNCTION "public"."urlencode"("string" "bytea") TO "anon";
-GRANT ALL ON FUNCTION "public"."urlencode"("string" "bytea") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."urlencode"("string" "bytea") TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."urlencode"("data" "jsonb") TO "postgres";
-GRANT ALL ON FUNCTION "public"."urlencode"("data" "jsonb") TO "anon";
-GRANT ALL ON FUNCTION "public"."urlencode"("data" "jsonb") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."urlencode"("data" "jsonb") TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."urlencode"("string" character varying) TO "postgres";
-GRANT ALL ON FUNCTION "public"."urlencode"("string" character varying) TO "anon";
-GRANT ALL ON FUNCTION "public"."urlencode"("string" character varying) TO "authenticated";
-GRANT ALL ON FUNCTION "public"."urlencode"("string" character varying) TO "service_role";
+-- GRANT ALL ON FUNCTION "public"."urlencode"("string" "bytea") TO "postgres";
+-- GRANT ALL ON FUNCTION "public"."urlencode"("string" "bytea") TO "anon";
+-- GRANT ALL ON FUNCTION "public"."urlencode"("string" "bytea") TO "authenticated";
+-- GRANT ALL ON FUNCTION "public"."urlencode"("string" "bytea") TO "service_role";
+-- GRANT ALL ON FUNCTION "public"."urlencode"("data" "jsonb") TO "postgres";
+-- GRANT ALL ON FUNCTION "public"."urlencode"("data" "jsonb") TO "anon";
+-- GRANT ALL ON FUNCTION "public"."urlencode"("data" "jsonb") TO "authenticated";
+-- GRANT ALL ON FUNCTION "public"."urlencode"("data" "jsonb") TO "service_role";
+-- GRANT ALL ON FUNCTION "public"."urlencode"("string" character varying) TO "postgres";
+-- GRANT ALL ON FUNCTION "public"."urlencode"("string" character varying) TO "anon";
+-- GRANT ALL ON FUNCTION "public"."urlencode"("string" character varying) TO "authenticated";
+-- GRANT ALL ON FUNCTION "public"."urlencode"("string" character varying) TO "service_role";
 
 
 
@@ -1199,3 +1197,192 @@ GRANT ALL ON TABLE "public"."recuperacoes_senha" TO "anon";
 GRANT ALL ON TABLE "public"."recuperacoes_senha" TO "authenticated";
 GRANT ALL ON TABLE "public"."recuperacoes_senha" TO "service_role";
 
+
+-- =====================================================
+-- SISTEMA DE ASSINATURAS SaaS (PLANOS, ASSINATURAS, FATURAS E INDICAÇÕES)
+-- =====================================================
+
+-- 1. TABELAS SaaS
+CREATE TABLE IF NOT EXISTS "public"."planos" (
+    "id" uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    "nome" text NOT NULL,
+    "identificador" text NOT NULL UNIQUE CHECK (identificador IN ('MONTHLY', 'YEARLY')),
+    "valor" numeric NOT NULL,
+    "valor_promocional" numeric,
+    "ativo" boolean DEFAULT true,
+    "created_at" timestamptz DEFAULT now(),
+    "updated_at" timestamptz DEFAULT now()
+);
+
+ALTER TABLE "public"."planos" OWNER TO "postgres";
+
+CREATE TABLE IF NOT EXISTS "public"."metodos_pagamento" (
+    "id" uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    "usuario_id" uuid NOT NULL REFERENCES "public"."usuarios"("id") ON DELETE CASCADE,
+    "brand" varchar(50),
+    "last_4_digits" varchar(4) NOT NULL,
+    "expire_month" varchar(2) NOT NULL,
+    "expire_year" varchar(4) NOT NULL,
+    "payment_token" varchar(255) NOT NULL,
+    "is_default" boolean DEFAULT false,
+    "created_at" timestamptz DEFAULT now() NOT NULL,
+    "updated_at" timestamptz DEFAULT now()
+);
+
+ALTER TABLE "public"."metodos_pagamento" OWNER TO "postgres";
+
+CREATE TABLE IF NOT EXISTS "public"."assinaturas" (
+    "id" uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    "usuario_id" uuid NOT NULL REFERENCES "public"."usuarios"("id") ON DELETE CASCADE,
+    "plano_id" uuid NOT NULL REFERENCES "public"."planos"("id"),
+    "status" text NOT NULL DEFAULT 'TRIAL' CHECK (status IN ('TRIAL', 'ACTIVE', 'PAST_DUE', 'EXPIRED', 'CANCELED')),
+    "data_inicio" timestamptz DEFAULT now(),
+    "data_vencimento" timestamptz,
+    "trial_ends_at" timestamptz DEFAULT (now() + interval '15 days'),
+    "gateway_subscription_id" text,
+    "metodo_pagamento_preferencial_id" uuid REFERENCES "public"."metodos_pagamento"("id") ON DELETE SET NULL,
+    "metodo_pagamento" varchar(50),
+    "created_at" timestamptz DEFAULT now(),
+    "updated_at" timestamptz DEFAULT now()
+);
+
+ALTER TABLE "public"."assinaturas" OWNER TO "postgres";
+
+CREATE TABLE IF NOT EXISTS "public"."assinatura_faturas" (
+    "id" uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    "assinatura_id" uuid NOT NULL REFERENCES "public"."assinaturas"("id") ON DELETE CASCADE,
+    "usuario_id" uuid NOT NULL REFERENCES "public"."usuarios"("id") ON DELETE CASCADE,
+    "plano_id" uuid REFERENCES "public"."planos"("id"),
+    "metodo_pagamento" text NOT NULL,
+    "status" text NOT NULL DEFAULT 'PENDING',
+    "valor" numeric NOT NULL,
+    "data_vencimento" timestamptz NOT NULL,
+    "data_pagamento" timestamptz,
+    "gateway_txid" text,
+    "pix_copy_paste" text,
+    "created_at" timestamptz DEFAULT now(),
+    "updated_at" timestamptz DEFAULT now(),
+
+    CONSTRAINT "assinatura_faturas_status_check" CHECK (status IN ('PENDING', 'PAID', 'CANCELED', 'FAILED'))
+);
+
+ALTER TABLE "public"."assinatura_faturas" OWNER TO "postgres";
+
+CREATE TABLE IF NOT EXISTS "public"."indicacoes" (
+    "id" uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    "indicador_id" uuid NOT NULL REFERENCES "public"."usuarios"("id") ON DELETE CASCADE,
+    "indicado_id" uuid NOT NULL REFERENCES "public"."usuarios"("id") ON DELETE CASCADE,
+    "status" text NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'COMPLETED', 'CANCELED')),
+    "meses_bonus" integer DEFAULT 1,
+    "fatura_origem_id" uuid,
+    "created_at" timestamptz DEFAULT now(),
+    "updated_at" timestamptz DEFAULT now(),
+    UNIQUE(indicado_id)
+);
+
+ALTER TABLE "public"."indicacoes" OWNER TO "postgres";
+
+CREATE TABLE IF NOT EXISTS "public"."assinatura_notificacoes" (
+    "id"               uuid         DEFAULT gen_random_uuid() PRIMARY KEY,
+    "usuario_id"       uuid         NOT NULL REFERENCES "public"."usuarios"("id") ON DELETE CASCADE,
+    "tipo"             text         NOT NULL,
+    "ciclo_referencia" date         NOT NULL,
+    "enviado_em"       timestamptz  DEFAULT now(),
+
+    CONSTRAINT "assinatura_notificacoes_unique"
+        UNIQUE ("usuario_id", "tipo", "ciclo_referencia")
+);
+
+ALTER TABLE "public"."assinatura_notificacoes" OWNER TO "postgres";
+
+-- 2. ALTERAÇÕES EM TABELAS EXISTENTES
+ALTER TABLE "public"."usuarios" ADD COLUMN IF NOT EXISTS "taxa_servico" numeric(10,2);
+ALTER TABLE "public"."usuarios" ADD COLUMN IF NOT EXISTS "chave_pix" text;
+
+ALTER TABLE "public"."passageiros" ADD COLUMN IF NOT EXISTS "repasse_taxa_servico" boolean DEFAULT false;
+ALTER TABLE "public"."passageiros" ADD COLUMN IF NOT EXISTS "cobranca_automatica" boolean DEFAULT false;
+
+ALTER TABLE "public"."cobrancas" ADD COLUMN IF NOT EXISTS "gateway_txid" text;
+ALTER TABLE "public"."cobrancas" ADD COLUMN IF NOT EXISTS "pix_copy_paste" text;
+ALTER TABLE "public"."cobrancas" ADD COLUMN IF NOT EXISTS "pix_expiration" timestamptz;
+
+-- 3. ÍNDICES DE PERFORMANCE
+CREATE INDEX IF NOT EXISTS "idx_planos_identificador" ON "public"."planos"("identificador");
+CREATE INDEX IF NOT EXISTS "idx_assinaturas_usuario_id" ON "public"."assinaturas"("usuario_id");
+CREATE INDEX IF NOT EXISTS "idx_assinaturas_status" ON "public"."assinaturas"("status");
+CREATE INDEX IF NOT EXISTS "idx_assinatura_faturas_assinatura_id" ON "public"."assinatura_faturas"("assinatura_id");
+CREATE INDEX IF NOT EXISTS "idx_assinatura_faturas_status" ON "public"."assinatura_faturas"("status");
+CREATE INDEX IF NOT EXISTS "idx_indicacoes_indicador_id" ON "public"."indicacoes"("indicador_id");
+CREATE INDEX IF NOT EXISTS "idx_indicacoes_indicado_id" ON "public"."indicacoes"("indicado_id");
+CREATE INDEX IF NOT EXISTS "idx_metodos_pagamento_usuario_id" ON "public"."metodos_pagamento"("usuario_id");
+CREATE INDEX IF NOT EXISTS "idx_assinatura_notificacoes_usuario_id" ON "public"."assinatura_notificacoes"("usuario_id");
+CREATE INDEX IF NOT EXISTS "idx_assinatura_notificacoes_tipo_ciclo" ON "public"."assinatura_notificacoes"("tipo", "ciclo_referencia");
+
+-- 4. PERMISSÕES
+GRANT ALL ON TABLE "public"."planos" TO "anon", "authenticated", "service_role";
+GRANT ALL ON TABLE "public"."assinaturas" TO "anon", "authenticated", "service_role";
+GRANT ALL ON TABLE "public"."assinatura_faturas" TO "anon", "authenticated", "service_role";
+GRANT ALL ON TABLE "public"."indicacoes" TO "anon", "authenticated", "service_role";
+GRANT ALL ON TABLE "public"."metodos_pagamento" TO "anon", "authenticated", "service_role";
+GRANT ALL ON TABLE "public"."assinatura_notificacoes" TO "anon", "authenticated", "service_role";
+
+-- 5. TRIGGERS (Automated updated_at)
+CREATE TRIGGER "update_planos_updated_at" BEFORE UPDATE ON "public"."planos" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
+CREATE TRIGGER "update_assinaturas_updated_at" BEFORE UPDATE ON "public"."assinaturas" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
+CREATE TRIGGER "update_assinatura_faturas_updated_at" BEFORE UPDATE ON "public"."assinatura_faturas" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
+CREATE TRIGGER "update_indicacoes_updated_at" BEFORE UPDATE ON "public"."indicacoes" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
+CREATE TRIGGER "update_metodos_pagamento_updated_at" BEFORE UPDATE ON "public"."metodos_pagamento" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
+
+
+-- HABILITAR REALTIME PARA TABELAS SAAS
+ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."assinaturas";
+ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."assinatura_faturas";
+
+-- =====================================================
+-- CONFIGURAÇÃO DE STORAGE (RECIBOS E CONTRATOS)
+-- =====================================================
+
+-- 1. Buckets
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('recibos', 'recibos', true)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('contratos', 'contratos', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- 2. Políticas para 'recibos' (Idempotentes)
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Permitir Upload Publico Recibos' AND tablename = 'objects' AND schemaname = 'storage') THEN
+        CREATE POLICY "Permitir Upload Publico Recibos" ON storage.objects FOR INSERT TO public WITH CHECK (bucket_id = 'recibos');
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Permitir Leitura Publica Recibos' AND tablename = 'objects' AND schemaname = 'storage') THEN
+        CREATE POLICY "Permitir Leitura Publica Recibos" ON storage.objects FOR SELECT TO public USING (bucket_id = 'recibos');
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Permitir Back-End Service Role Total' AND tablename = 'objects' AND schemaname = 'storage') THEN
+        CREATE POLICY "Permitir Back-End Service Role Total" ON storage.objects FOR ALL TO service_role USING (bucket_id = 'recibos') WITH CHECK (bucket_id = 'recibos');
+    END IF;
+END $$;
+
+-- 3. Políticas para 'contratos' (Idempotentes)
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Usuarios podem fazer upload de contratos' AND tablename = 'objects' AND schemaname = 'storage') THEN
+        CREATE POLICY "Usuarios podem fazer upload de contratos" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'contratos');
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Contratos são publicamente acessíveis' AND tablename = 'objects' AND schemaname = 'storage') THEN
+        CREATE POLICY "Contratos são publicamente acessíveis" ON storage.objects FOR SELECT TO public USING (bucket_id = 'contratos');
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Usuarios podem atualizar seus contratos' AND tablename = 'objects' AND schemaname = 'storage') THEN
+        CREATE POLICY "Usuarios podem atualizar seus contratos" ON storage.objects FOR UPDATE TO authenticated USING (bucket_id = 'contratos');
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Usuarios podem deletar seus contratos' AND tablename = 'objects' AND schemaname = 'storage') THEN
+        CREATE POLICY "Usuarios podem deletar seus contratos" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'contratos');
+    END IF;
+END $$;

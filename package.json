@@ -10,7 +10,9 @@
     "build:worker": "tsc",
     "build": "echo \"[INIT] Compilando Backend...\" && tsc && echo \"[SUCCESS] Backend Compilado!\"",
     "convert-certs": "node scripts/converter-certificados-base64.js",
-    "cron:dev": "tsx --env-file=.env scripts/dev-cron.ts"
+    "cron:dev": "tsx --env-file=.env scripts/dev-cron.ts",
+    "trigger-job": "tsx scripts/trigger-job.ts",
+    "account": "tsx --env-file=.env scripts/account.ts"
   },
   "keywords": [],
   "author": "",
@@ -33,6 +35,7 @@
     "dotenv": "^17.2.3",
     "fastify": "^5.6.1",
     "fastify-cors": "^6.0.3",
+    "gn-api-sdk-typescript": "^2.0.1",
     "ioredis": "^5.9.1",
     "pdf-lib": "^1.17.1",
     "pino": "^10.1.0",

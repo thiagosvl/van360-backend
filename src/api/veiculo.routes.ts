@@ -1,7 +1,11 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { veiculoController } from "../controllers/veiculo.controller.js";
+import { authenticate } from "../middleware/auth.js";
+
 
 const veiculoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
+    app.addHook("onRequest", authenticate);
+
     // CRUD Básico
     app.post("/", veiculoController.create);
     app.put("/:id", veiculoController.update);

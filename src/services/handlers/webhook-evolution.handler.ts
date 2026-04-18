@@ -1,35 +1,38 @@
 import { logger } from "../../config/logger.js";
-import { AtividadeAcao, AtividadeEntidadeTipo } from "../../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, EvolutionEvent } from "../../types/enums.js";
 import { historicoService } from "../historico.service.js";
 
-// Constantes para controle de spam
-const DISCONNECTION_NOTIFICATION_COOLDOWN_MS = 60 * 60 * 1000; // 1 hora
-const MAX_NOTIFICATIONS_PER_DAY = 5;
+interface EvolutionWebhookPayload {
+    event: EvolutionEvent;
+    instance: string;
+    data: {
+        state?: string;
+        statusReason?: number;
+    } & Record<string, unknown>;
+}
 
 export const webhookEvolutionHandler = {
-    async handle(payload: any): Promise<boolean> {
+    async handle(payload: EvolutionWebhookPayload): Promise<boolean> {
         const { event, instance, data } = payload;
         
         try {
             switch (event) {
-                case "send.message":
+                case EvolutionEvent.SEND_MESSAGE:
                     return await this.handleSendMessage(instance, data);
-                case "messages.update":
+                case EvolutionEvent.MESSAGES_UPSERT: // Novo evento na v2 para novas mensagens
+                case EvolutionEvent.MESSAGES_UPDATE:
                     return await this.handleMessagesUpdate(instance, data);
-                
-                case "connection.update":
+                case EvolutionEvent.CONNECTION_UPDATE:
                     return await this.handleConnectionUpdate(instance, data);
-
-                // IGNORAR
-                case "qrcode.updated":
-                case "logout.instance":
+                case EvolutionEvent.QRCODE_UPDATED:
+                case EvolutionEvent.LOGOUT_INSTANCE:
                     return true;
-
                 default:
                     return true;
             }
-        } catch (error) {
-            logger.error({ error, event, instance }, "Erro ao processar webhook Evolution");
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "Unkown error in webhook handler";
+            logger.error({ err: message, event, instance }, "Erro processador Evolution");
             return false;
         }
     },
@@ -37,8 +40,8 @@ export const webhookEvolutionHandler = {
     /**
      * Processa atualização de conexão (WhatsApp)
      */
-    async handleConnectionUpdate(instanceName: string, data: any): Promise<boolean> {
-        const { state } = data;
+    async handleConnectionUpdate(instanceName: string, data: Record<string, unknown>): Promise<boolean> {
+        const state = data.state as string;
         
         // Extrair usuarioId do nome da instância: motorista-{uuid}
         const usuarioId = instanceName.split("motorista-")[1];
@@ -63,14 +66,14 @@ export const webhookEvolutionHandler = {
     /**
      * Processa confirmação de envio de mensagem
      */
-    async handleSendMessage(instanceName: string, data: any): Promise<boolean> {
+    async handleSendMessage(instanceName: string, data: Record<string, unknown>): Promise<boolean> {
         return true; // Apenas acknowledge
     },
 
     /**
      * Processa atualização de status de mensagem
      */
-    async handleMessagesUpdate(instanceName: string, data: any): Promise<boolean> {
+    async handleMessagesUpdate(instanceName: string, data: Record<string, unknown>): Promise<boolean> {
         return true; // Apenas acknowledge
     }
 };

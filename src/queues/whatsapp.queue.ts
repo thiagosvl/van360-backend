@@ -22,8 +22,13 @@ export interface WhatsappJobData {
 export const addToWhatsappQueue = async (data: WhatsappJobData, jobId?: string) => {
     try {
         await whatsappQueue.add('send-message', data, {
-            jobId: jobId, // Se informado, o Redis ignora se já existir um job com este ID
-            removeOnComplete: true
+            jobId: jobId, 
+            removeOnComplete: true,
+            attempts: 10, // Tenta até 10 vezes em caso de falha (ex: offline)
+            backoff: {
+                type: 'exponential',
+                delay: 60000 // Começa com 1 minuto de intervalo e aumenta
+            }
         });
         logger.debug({ phone: data.phone, context: data.context, jobId }, "[Queue] Job added to whatsapp-queue");
     } catch (error: any) {

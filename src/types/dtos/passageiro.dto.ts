@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { moneyToNumber } from "../../utils/currency.utils.js";
+import { parseLocalDate } from "../../utils/date.utils.js";
 
 const optionalString = z.union([z.string(), z.null(), z.undefined()]).transform(v => {
   if (v === undefined) return undefined;
@@ -39,15 +40,17 @@ export const createPassageiroSchema = z.object({
 
     // Controle
     ativo: z.boolean().optional(),
+    repasse_taxa_servico: z.boolean().optional(),
+    cobranca_automatica: z.boolean().optional(),
 
     periodo: z.string().optional().or(z.literal("")).transform(v => v ? v.toLowerCase() : undefined),
     genero: optionalString,
     
     // Novos Campos
     modalidade: z.string().min(1, "Modalidade é obrigatória").optional().or(z.literal("")).transform(v => v === "" ? undefined : v),
-    data_nascimento: z.string().optional().or(z.literal("")).transform(v => v ? new Date(v) : undefined), // Aceita string ISO e converte
+    data_nascimento: z.string().optional().or(z.literal("")).transform(v => v ? parseLocalDate(v) : undefined), // Aceita string ISO e converte
     parentesco_responsavel: optionalString,
-    data_inicio_transporte: z.string().optional().or(z.literal("")).transform(v => v ? new Date(v) : undefined),
+    data_inicio_transporte: z.string().optional().or(z.literal("")).transform(v => v ? parseLocalDate(v) : undefined),
 
 }).passthrough(); // Permite outros campos não estritos por enquanto (migração suave)
 

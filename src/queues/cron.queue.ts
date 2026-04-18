@@ -34,26 +34,29 @@ export const setupCronJobs = async () => {
 
     // --- JOBS DIÁRIOS (Executados em horários específicos) ---
 
-    // 5. Reconciliação Geral - 06:10 AM
+    // 5. Reconciliação Geral - 06:00 AM (processamento puro, sem notificação)
     await cronQueue.add('reconciliacao-entrada', {}, {
+        repeat: { pattern: '0 6 * * *' }
+    });
+
+    // 6. Geração de Cobranças Mensais de Passageiros + PIX - 06:10 AM (processamento puro)
+    await cronQueue.add('charge-generator', {}, {
         repeat: { pattern: '10 6 * * *' }
     });
 
-    // 6. Monitor de Assinaturas (Motoristas) - 09:10 AM
-    await cronQueue.add('daily-subscription-monitor', {}, {
-        repeat: { pattern: '10 9 * * *' }
-    });
-
-    // 7. Geração de Cobranças Mensais/Renovações - 11:10 AM
-    await cronQueue.add('charge-generator', {}, {
-        repeat: { pattern: '10 11 * * *' }
-    });
+    // 7. Geração de Faturas de Renovação SaaS - 06:20 AM (processamento puro, idempotente)
     await cronQueue.add('subscription-generator', {}, {
-        repeat: { pattern: '15 11 * * *' }
+        repeat: { pattern: '20 6 * * *' }
     });
 
-    // 8. Monitor de Cobranças (Passageiros) - 12:10 PM
+    // 8. Monitor de Assinaturas SaaS - 13:10 PM (inclui notificações WhatsApp)
+    // Horário ocioso do motorista: entre rotas do meio-dia e da tarde
+    await cronQueue.add('daily-subscription-monitor', {}, {
+        repeat: { pattern: '10 13 * * *' }
+    });
+
+    // 9. Monitor de Cobranças (Passageiros) - 13:30 PM (stub — horário reservado para quando implementado)
     await cronQueue.add('daily-charge-monitor', {}, {
-        repeat: { pattern: '10 12 * * *' }
+        repeat: { pattern: '30 13 * * *' }
     });
 };

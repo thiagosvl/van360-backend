@@ -1,441 +1,326 @@
 import axios, { AxiosError } from "axios";
-import { GLOBAL_WHATSAPP_INSTANCE } from "../config/constants.js";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
-import { CompositeMessagePart, ConnectInstanceResponse, EvolutionConnectResponse, EvolutionInstance } from "../types/dtos/whatsapp.dto.js";
-import { WhatsappStatus } from "../types/enums.js";
-export type { ConnectInstanceResponse };
+import {
+    EvolutionConnectResponse,
+    ConnectInstanceResponse,
+    EvolutionInstance
+} from "../types/dtos/whatsapp.dto.js";
+import { EvolutionEvent, EvolutionIntegration, WhatsappMediaType, WhatsappStatus } from "../types/enums.js";
 
 const EVO_URL = env.EVOLUTION_API_URL;
 const EVO_KEY = env.EVOLUTION_API_KEY;
+const EVO_HEADERS = { "apikey": EVO_KEY };
+const WEBHOOK_URL = `${env.BACKEND_URL}/api/evolution/webhook`;
 
-/**
- * Configurações de privacidade e performance para instâncias de motoristas
- * Essas configurações garantem que o sistema não invada a privacidade do usuário
- */
-const DRIVER_INSTANCE_SETTINGS = {
-  rejectCalls: true,           // Rejeita chamadas de voz/vídeo
-  ignoreGroups: true,          // Ignora mensagens de grupos
-  alwaysOnline: false,         // Não força status "online"
-  readMessages: false,         // Não marca mensagens como lidas
-  syncFullHistory: false,      // Não sincroniza histórico completo
-  readStatus: false            // Não marca stories como visto
-};
+export class WhatsappService {
+    async getInstanceStatus(instanceName: string): Promise<EvolutionInstance> {
+        try {
+            const url = `${EVO_URL}/instance/connectionState/${instanceName}`;
+            const { data } = await axios.get(url, { headers: EVO_HEADERS });
 
-class WhatsappService {
-  
-  /**
-   * Envia mensagem de texto simples
-   */
-  async sendText(number: string, text: string, instanceName: string = GLOBAL_WHATSAPP_INSTANCE): Promise<boolean> {
-    const cleanNumber = number.replace(/\D/g, "");
-    const finalNumber = cleanNumber.length <= 11 ? `55${cleanNumber}` : cleanNumber;
-    logger.info({ number: finalNumber, instance: instanceName }, "[WhatsappService.sendText] Solicitando envio de mensagem");
+            const rawState = data?.instance?.state || data?.state;
+            
+            return {
+                state: (rawState as WhatsappStatus) || WhatsappStatus.UNKNOWN,
+                status: data?.instance?.status || data?.status,
+                statusReason: data?.instance?.statusReason || data?.statusReason
+            };
+        } catch (error) {
+            const err = error as AxiosError;
+            
+            try {
+                const fallbackUrl = `${EVO_URL}/instance/fetchInstances?instanceName=${instanceName}`;
+                const { data } = await axios.get(fallbackUrl, { headers: EVO_HEADERS });
+                const instances = Array.isArray(data) ? data : (data?.instances || [data?.instance]);
+                const instance = instances.find((i: any) => (i?.instanceName || i?.name) === instanceName);
 
-    const url = `${EVO_URL}/message/sendText/${instanceName}`;
-    
-    try {
-      const response = await axios.post(url, {
-        number: finalNumber,
-        text: text
-      }, {
-        headers: {
-          "apikey": EVO_KEY,
-          "Content-Type": "application/json"
+                if (instance) {
+                    return {
+                        state: (instance.state || instance.status) as WhatsappStatus,
+                        status: instance.status
+                    };
+                }
+            } catch (fallbackErr) {}
+
+            if (err.response?.status === 404) {
+                return { state: WhatsappStatus.NOT_FOUND };
+            }
+            
+            logger.error({ err: err.message, instanceName }, "[WhatsappService] Erro ao consultar status");
+            return { state: WhatsappStatus.UNKNOWN };
         }
-      });
-
-      logger.info({ number: finalNumber, instance: instanceName, messageId: response.data?.key?.id }, "✅ [WhatsappService.sendText] Mensagem enviada com sucesso");
-      return true;
-
-    } catch (error) {
-      const err = error as AxiosError;
-      logger.error({ 
-        err: err.response?.data || err.message, 
-        number: finalNumber, 
-        instance: instanceName 
-      }, "❌ [WhatsappService.sendText] Falha no envio de texto");
-      return false; 
     }
-  }
 
-  /**
-   * Envia Imagem (Base64)
-   */
-  async sendImage(number: string, media: string, caption?: string, instanceName: string = GLOBAL_WHATSAPP_INSTANCE): Promise<boolean> {
-    const cleanNumber = number.replace(/\D/g, "");
-    const finalNumber = cleanNumber.length <= 11 ? `55${cleanNumber}` : cleanNumber;
-    logger.info({ number: finalNumber, instance: instanceName, caption: caption?.substring(0, 30) }, "[WhatsappService.sendImage] Solicitando envio de imagem");
-    const url = `${EVO_URL}/message/sendMedia/${instanceName}`;
+    async sendText(number: string, text: string, instanceName: string): Promise<boolean> {
+        try {
+            const cleanNumber = number.replace(/\D/g, "");
+            const finalNumber = cleanNumber.length <= 11 ? `55${cleanNumber}` : cleanNumber;
 
-    try {
-      const body: { number: string; media: string; mediatype: string; caption: string; fileName?: string } = {
-        number: finalNumber,
-        media: media,
-        mediatype: "image",
-        caption: caption || ""
-      };
+            const url = `${EVO_URL}/message/sendText/${instanceName}`;
+            await axios.post(url, {
+                number: finalNumber,
+                text: text,
+                delay: 1200,
+                linkPreview: true
+            }, { headers: EVO_HEADERS });
 
-      if (!media.startsWith('http')) {
-        body.media = media.replace(/^data:image\/[a-z]+;base64,/, "");
-        body.fileName = "image.png"; 
-      }
-
-      const response = await axios.post(url, body, {
-        headers: {
-          "apikey": EVO_KEY,
-          "Content-Type": "application/json"
+            return true;
+        } catch (error) {
+            const err = error as AxiosError;
+            logger.error({ err: err.response?.data || err.message, instanceName }, "[WhatsappService] Erro ao enviar texto");
+            return false;
         }
-      });
-
-      logger.info({ number: finalNumber, instance: instanceName, messageId: response.data?.key?.id }, "✅ [WhatsappService.sendImage] Imagem enviada com sucesso");
-      return true;
-    } catch (error) {
-      const err = error as AxiosError;
-      logger.error({ 
-         error: err.response?.data || err.message,
-         status: err.response?.status,
-         number: finalNumber,
-         instance: instanceName
-      }, "❌ [WhatsappService.sendImage] Falha ao enviar Imagem WhatsApp");
-      return false;
     }
-  }
 
-  /**
-   * Envia Mensagem Composta (Lego)
-   */
-  async sendCompositeMessage(number: string, parts: CompositeMessagePart[], instanceName: string = GLOBAL_WHATSAPP_INSTANCE): Promise<boolean> {
-    const cleanNumber = number.replace(/\D/g, "");
-    const finalNumber = cleanNumber.length <= 11 ? `55${cleanNumber}` : cleanNumber;
+    async sendImage(number: string, media: string, caption: string, instanceName: string): Promise<boolean> {
+        try {
+            const cleanNumber = number.replace(/\D/g, "");
+            const finalNumber = cleanNumber.length <= 11 ? `55${cleanNumber}` : cleanNumber;
 
-    let success = true;
+            const url = `${EVO_URL}/message/sendMedia/${instanceName}`;
+            const cleanBase64 = media.includes('base64,') ? media.split('base64,')[1] : media;
 
-    for (const part of parts) {
-      if (part.delayMs) {
-        await new Promise(resolve => setTimeout(resolve, part.delayMs));
-      }
+            const body = {
+                number: finalNumber,
+                media: cleanBase64,
+                mediatype: WhatsappMediaType.IMAGE,
+                caption: caption || ""
+            };
 
-      if (part.type === "text" && part.content) {
-         const sent = await this.sendText(finalNumber, part.content, instanceName);
-         if (!sent) success = false;
-      } 
-      else if (part.type === "image" && part.mediaBase64) {
-         const sent = await this.sendImage(finalNumber, part.mediaBase64, part.content, instanceName);
-         if (!sent) success = false;
-      }
+            await axios.post(url, body, { headers: EVO_HEADERS });
+            return true;
+        } catch (error) {
+            const err = error as AxiosError;
+            logger.error({ err: err.response?.data || err.message, instanceName }, "[WhatsappService] Erro ao enviar imagem");
+            return false;
+        }
     }
-    return success;
-  }
 
-  // --- GESTÃO DE INSTÂNCIAS ---
+    async sendCompositeMessage(number: string, parts: any[], instanceName: string): Promise<boolean> {
+        const cleanNumber = number.replace(/\D/g, "");
+        const finalNumber = cleanNumber.length <= 11 ? `55${cleanNumber}` : cleanNumber;
+        let success = true;
 
-  /**
-   * Verifica status da instância
-   */
-  async getInstanceStatus(instanceName: string): Promise<{ state: string; statusReason?: number }> {
-    try {
-      const url = `${EVO_URL}/instance/connectionState/${instanceName}`;
-      const { data } = await axios.get<{ instance: EvolutionInstance }>(url, { headers: { "apikey": EVO_KEY } });
-      
-      let state = data?.instance?.state || (data as any)?.state || WhatsappStatus.UNKNOWN;
-      
-      // Normalização para Local API (Casing)
-      if (typeof state === 'string' && state.toLowerCase() === "connected") state = WhatsappStatus.CONNECTED;
-      if (typeof state === 'string' && state.toLowerCase() === "open") state = WhatsappStatus.CONNECTED;
+        for (const part of parts) {
+            if (part.delayMs) {
+                await new Promise(resolve => setTimeout(resolve, part.delayMs));
+            }
 
-      // Log para auditoria de conexão (debug)
-      if (state !== WhatsappStatus.CONNECTED && state !== WhatsappStatus.CONNECTED) {
-          logger.info({ instanceName, state }, "[WhatsappService.getInstanceStatus] Instância não conectada");
-      }
+            if (part.type === WhatsappMediaType.TEXT && part.content) {
+                const sent = await this.sendText(finalNumber, part.content, instanceName);
+                if (!sent) success = false;
+            } 
+            else if (part.type === WhatsappMediaType.IMAGE && part.mediaBase64) {
+                const sent = await this.sendImage(finalNumber, part.mediaBase64, part.content || "", instanceName);
+                if (!sent) success = false;
+            }
+        }
 
-      return { 
-          state,
-          statusReason: data?.instance?.statusReason 
-      };
-    } catch (error) {
-      const err = error as AxiosError;
-      if (err.response?.status === 404) {
-          logger.debug({ instanceName }, "[WhatsappService.getInstanceStatus] Instância não encontrada (404)");
-          return { state: WhatsappStatus.NOT_FOUND };
-      }
-      logger.warn({ instanceName, error: err.message }, "[WhatsappService.getInstanceStatus] Erro ao verificar status");
-      return { state: "ERROR" };
+        return success;
     }
-  }
 
-  /**
-   * Configura/Atualiza o Webhook da instância
-   */
-  async setWebhook(instanceName: string, webhookUrl: string, enabled: boolean = true): Promise<boolean> {
-      try {
-          logger.info({ instanceName, webhookUrl }, "Configurando Webhook...");
-          const url = `${EVO_URL}/webhook/set/${instanceName}`;
-          await axios.post(url, {
-              webhook: {
-                enabled,
-                url: webhookUrl,
-                webhookByEvents: false,
-                  events: ["CONNECTION_UPDATE", "QRCODE_UPDATED", "SEND_MESSAGE", "MESSAGES_UPDATE", "LOGOUT_INSTANCE"]
-              }
-          }, { 
-              headers: { "apikey": EVO_KEY } 
-          });
-          return true;
-      } catch (error) {
-          const err = error as AxiosError;
-           logger.error({ 
-              err: err.response?.data || err.message, 
-              instanceName 
-          }, "Falha ao configurar Webhook");
-          return false;
-      }
-  }
+    async setWebhook(instanceName: string, url: string): Promise<boolean> {
+        try {
+            const settingsUrl = `${EVO_URL}/webhook/set/${instanceName}`;
+            
+            const payload = {
+                webhook: {
+                    url: url,
+                    enabled: true,
+                    byEvents: false,    // Padrão CamelCase
+                    by_events: false,   // Padrão SnakeCase (fallback v2)
+                    base64: true,
+                    events: [
+                        EvolutionEvent._CONNECTION_UPDATE,
+                        EvolutionEvent._MESSAGES_UPSERT,
+                        EvolutionEvent._MESSAGES_UPDATE,
+                        EvolutionEvent._QRCODE_UPDATED
+                    ]
+                }
+            };
 
-  /**
-   * Atualiza as configurações de privacidade e performance da instância
-   * Garante que a instância não invada a privacidade do motorista
-   */
-  async updateSettings(instanceName: string, settings: Partial<typeof DRIVER_INSTANCE_SETTINGS> = DRIVER_INSTANCE_SETTINGS): Promise<boolean> {
-      try {
-          const url = `${EVO_URL}/instance/settings/set/${instanceName}`;
-          
-          const mergedSettings = { ...DRIVER_INSTANCE_SETTINGS, ...settings };
-          
-          await axios.post(url, mergedSettings, {
-              headers: { "apikey": EVO_KEY }
-          });
+            await axios.post(settingsUrl, payload, { headers: EVO_HEADERS });
+            return true;
+        } catch (error) {
+            const err = error as AxiosError;
+            logger.error({ 
+                err: err.response?.data, 
+                instanceName,
+                statusCode: err.response?.status 
+            }, "[WhatsappService] Falha ao configurar webhook");
+            return false;
+        }
+    }
 
-          logger.info({ instanceName }, "Configurações de privacidade aplicadas com sucesso");
-          return true;
-      } catch (error) {
-          const err = error as AxiosError;
-          logger.warn({ 
-              err: err.response?.data || err.message, 
-              instanceName 
-          }, "Falha ao atualizar configurações (pode ser esperado em versões antigas da API)");
-          // Não falha a operação pois essa feature pode não estar disponível em todas as versões
-          return true;
-      }
-  }
+    async updateSettings(instanceName: string): Promise<boolean> {
+        try {
+            const settingsUrl = `${EVO_URL}/settings/set/${instanceName}`;
+            
+            // Endpoint de settings na v2 costuma ser PLANO (flat)
+            await axios.post(settingsUrl, {
+                rejectCall: true,
+                msgCall: "Desculpe, este número não aceita chamadas de voz.",
+                groupsIgnore: true,
+                alwaysOnline: true,
+                readMessages: true,
+                readStatus: false,
+                syncFullHistory: false
+            }, { headers: EVO_HEADERS });
 
-  /**
-   * Cria uma instância (se não existir)
-   * Retorna 'true' se a instância está pronta (já existia ou foi criada agora)
-   */
-  async createInstance(instanceName: string, enableQrcode: boolean = true): Promise<boolean> {
-      try {
-          const webhookUrl = `${env.BACKEND_URL}/api/evolution/webhook`;
+            return true;
+        } catch (error) {
+            const err = error as AxiosError;
+            logger.error({ err: err.response?.data, instanceName }, "[WhatsappService] Falha ao atualizar settings");
+            return false;
+        }
+    }
 
-          // 1. Verificar se já existe
-          const status = await this.getInstanceStatus(instanceName);
-          
-          if (status.state !== WhatsappStatus.NOT_FOUND && status.state !== "ERROR") {
-              // Já existe, mas vamos garantir que o Webhook e as configurações estejam corretos
-              logger.info({ instanceName, state: status.state }, "Instância já existe. Atualizando configurações...");
-              await this.setWebhook(instanceName, webhookUrl, true);
-              await this.updateSettings(instanceName);
-              return true; 
-          }
+    async createInstance(instanceName: string, enableQrcode: boolean = false): Promise<boolean> {
+        try {
+            logger.info({ instanceName, enableQrcode }, "[WhatsappService] Iniciando criação de instância...");
+            const url = `${EVO_URL}/instance/create`;
+            
+            try {
+                const payload = {
+                    instanceName: instanceName,
+                    token: env.EVOLUTION_API_KEY, 
+                    qrcode: enableQrcode, 
+                    integration: EvolutionIntegration.BAILEYS,
+                    webhook: {
+                        url: WEBHOOK_URL,
+                        enabled: true,
+                        byEvents: false,
+                        by_events: false,
+                        events: [
+                            EvolutionEvent._CONNECTION_UPDATE,
+                            EvolutionEvent._MESSAGES_UPSERT,
+                            EvolutionEvent._MESSAGES_UPDATE,
+                            EvolutionEvent._QRCODE_UPDATED
+                        ]
+                    }
+                };
 
-          // 2. Se não existe (404), criar
-          logger.info({ instanceName, enableQrcode }, "Instância não encontrada. Criando nova instância na Evolution...");
-          const url = `${EVO_URL}/instance/create`;
-          await axios.post(url, {
-              instanceName: instanceName,
-              token: "random_secure_token", 
-              qrcode: enableQrcode, 
-              integration: "WHATSAPP-BAILEYS",
-              webhook: {
-                  enabled: true,
-                  url: webhookUrl,
-                  webhookByEvents: false,
-                    events: ["CONNECTION_UPDATE", "QRCODE_UPDATED", "SEND_MESSAGE", "MESSAGES_UPDATE", "LOGOUT_INSTANCE"]
-              }
-          }, { 
-              headers: { "apikey": EVO_KEY } 
-          });
+                await axios.post(url, payload, { headers: EVO_HEADERS });
+                await this.updateSettings(instanceName);
+                return true;
+            } catch (createError) {
+                const err = createError as AxiosError;
+                
+                if (err.response?.status === 403) {
+                    logger.warn({ instanceName }, "[WhatsappService] Instância já existe. Reconfigurando...");
+                    
+                    await this.setWebhook(instanceName, WEBHOOK_URL);
+                    await this.updateSettings(instanceName);
+                    return true;
+                }
+                throw createError;
+            }
+        } catch (error) {
+            const err = error as AxiosError;
+            logger.error({ 
+                err: err.response?.data || err.message, 
+                instanceName 
+            }, "[WhatsappService] Falha crítica ao criar/verificar instância");
+            return false;
+        }
+    }
 
-          // 3. Delay adequado para garantir que a Evolution registrou a nova instância internamente
-          // Evolution API precisa de tempo para inicializar o Chromium/Baileys
-          await new Promise(r => setTimeout(r, 3000));
+    async connectInstance(instanceName: string, phoneNumber?: string): Promise<ConnectInstanceResponse> {
+        try {
+            logger.info({ instanceName, mode: phoneNumber ? "PairingCode" : "QRCode" }, "[WhatsappService] Iniciando fluxo de conexão");
 
-          // 4. Aplicar configurações de privacidade
-          await this.updateSettings(instanceName);
+            const status = await this.getInstanceStatus(instanceName);
+            const exists = status.state !== WhatsappStatus.UNKNOWN;
+            const isWorking = status.state === WhatsappStatus.CONNECTED || status.state === WhatsappStatus.OPEN;
 
-          logger.info({ instanceName }, "Instância criada com sucesso.");
-          return true;
-      } catch (error) {
-          const err = error as AxiosError;
-          logger.error({ 
-              err: err.response?.data || err.message, 
-              instanceName 
-          }, "Falha crítica ao criar/verificar instância na Evolution");
-          return false;
-      }
-  }
+            // 1. Se já está funcionando, apenas garante que as configurações estão corretas (silenciosamente)
+            if (isWorking) {
+                logger.info({ instanceName }, "[WhatsappService] Instância já conectada. Sincronizando presets...");
+                await this.setWebhook(instanceName, WEBHOOK_URL);
+                await this.updateSettings(instanceName);
+                return { instance: { state: WhatsappStatus.OPEN } };
+            }
 
-  /**
-   * Solicita conexão (Retorna QR Code ou Pairing Code)
-   * Se a instância não existir, cria.
-   */
-  async connectInstance(instanceName: string, phoneNumber?: string, alreadyRetried: boolean = false): Promise<ConnectInstanceResponse> {
-      try {
-          logger.info({ instanceName, mode: phoneNumber ? "PairingCode" : "QRCode" }, "Iniciando processo de conexão...");
-          const webhookUrl = `${env.BACKEND_URL}/api/evolution/webhook`;
+            // 2. Se a instância NÃO existe, cria do zero
+            if (!exists) {
+                logger.info({ instanceName }, "[WhatsappService] Instância inexistente. Criando...");
+                await this.createInstance(instanceName, !phoneNumber);
+                await new Promise(r => setTimeout(r, 2000));
+            } else {
+                // 3. Se EXISTE mas não está funcional, APENAS reconfigura (sem POST /create que derruba a sessão)
+                logger.info({ instanceName, state: status.state }, "[WhatsappService] Instância existe mas requer atenção. Sincronizando...");
+                await this.setWebhook(instanceName, WEBHOOK_URL);
+                await this.updateSettings(instanceName);
+            }
 
-          // --- FLUXO PAIRING CODE (Mobile) ---
-          if (phoneNumber) {
-              const cleanPhone = phoneNumber.replace(/\D/g, "");
-              const finalPhone = cleanPhone.length <= 11 ? `55${cleanPhone}` : cleanPhone;
+            // Fluxo de Pairing Code
+            if (phoneNumber) {
+                const cleanPhone = phoneNumber.replace(/\D/g, "");
+                const finalPhone = cleanPhone.length <= 11 ? `55${cleanPhone}` : cleanPhone;
 
-              // 1. Limpeza Inteligente de Sessão (Smart Cleanup)
-              // Só limpa se realmente necessário. Não limpa se já há um código válido em andamento.
-              
-              const status = await this.getInstanceStatus(instanceName);
-              const isWorking = status.state === WhatsappStatus.CONNECTED || status.state === WhatsappStatus.CONNECTED;
+                const maxAttempts = 5;
+                for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                    const url = `${EVO_URL}/instance/connect/${instanceName}?number=${finalPhone}`;
+                    try {
+                        const { data } = await axios.get<EvolutionConnectResponse>(url, { headers: EVO_HEADERS });
+                        let pCode = data.pairingCode || (data.code && !data.code.startsWith("2@") ? data.code : undefined);
 
-              // Se já está conectado, não faz sentido pedir pairing code. Retorna sucesso.
-              if (isWorking) {
-                   logger.info({ instanceName }, "Instância já conectada. Retornando sucesso.");
-                   // Garante webhook atualizado mesmo se já conectado
-                   await this.setWebhook(instanceName, webhookUrl, true);
-                   await this.updateSettings(instanceName);
-                   return { instance: { state: WhatsappStatus.CONNECTED } };
-              }
+                        if (pCode && pCode.length >= 8) {
+                            return { pairingCode: { code: pCode } };
+                        }
+                    } catch (e) {}
+                    await new Promise(r => setTimeout(r, 2000));
+                }
+                throw new Error("Falha ao gerar código de pareamento.");
+            }
 
-              // Se está em estado de erro ou travado, fazer limpeza
-              const needsCleanup = status.state !== WhatsappStatus.NOT_FOUND && 
-                                  (status.state === "ERROR" || status.state === WhatsappStatus.CONNECTING);
-              
-              if (needsCleanup) {
-                   logger.info({ instanceName, reason: status.state }, "Limpando instância travada para novo Pairing Code...");
-                   await this.disconnectInstance(instanceName);
-                   await this.deleteInstance(instanceName);
-                   await new Promise(r => setTimeout(r, 2500));
-              }
+            // Fluxo de QR Code (Tenta recuperar se já existir)
+            const qrcUrl = `${EVO_URL}/instance/connect/${instanceName}`;
+            const { data } = await axios.get<EvolutionConnectResponse>(qrcUrl, { headers: EVO_HEADERS });
 
-              // 2. Criar Instância com enableQrcode = false para evitar conflitos
-              // O false garante que a Evolution foque apenas no Pairing Code
-              await this.createInstance(instanceName, false);
+            const base64 = data.qrcode?.base64 || data.base64;
+            const code = data.qrcode?.code || data.code;
 
-              // Esperar a Evolution inicializar o Chromium
-              logger.info({ instanceName }, "Aguardando inicialização (6s)...");
-              await new Promise(r => setTimeout(r, 6000));
+            if (base64) {
+                return {
+                    qrcode: {
+                        base64: base64,
+                        code: code
+                    }
+                };
+            }
 
-              // 3. Solicitar Código (Retry com Backoff Exponencial)
-              const maxAttempts = 6;
-              for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-                  const url = `${EVO_URL}/instance/connect/${instanceName}?number=${finalPhone}`;
-                  try {
-                      const { data } = await axios.get<{ pairingCode: string, code: string }>(url, { headers: { "apikey": EVO_KEY } });
-                      
-                      // PRIORIDADE: Pairing Code explícito
-                      let pCode: string | undefined = data?.pairingCode;
+            // Se for bem sucedido em conectar sem QR (sessão recuperada)
+            return { instance: { state: (data.instance?.state || status.state) as WhatsappStatus } };
 
-                      // FALLBACK: Campo 'code', mas SOMENTE se NÃO for um QR Code (começa com 2@)
-                      if (!pCode) {
-                          pCode = data.code;
-                      }
-                      
-                      // Filtro Anti-QR: Ignorar se começar com "2@" ou for muito longo
-                      if (pCode?.startsWith("2@")) pCode = undefined;
+        } catch (error) {
+            const err = error as AxiosError;
+            logger.error({ err: err.response?.data || err.message, instanceName }, "[WhatsappService] Falha ao conectar");
+            throw new Error("Falha ao configurar conexão do WhatsApp.");
+        }
+    }
 
-                      // Validação Rígida: Pairing Code é curto (ex: "K2A5-Z9B1"). 
-                      if (pCode && pCode.length >= 8 && pCode.length < 25) {
-                          logger.info({ instanceName, attempt, pCode: pCode.substring(0, 4) + "***" }, "Pairing Code gerado com sucesso");
-                          return { pairingCode: { code: pCode } };
-                      }
-                  } catch (e) {
-                      const err = e as AxiosError;
-                      logger.warn({ instanceName, attempt, status: err.response?.status }, `Tentativa de Pairing Code ${attempt}/${maxAttempts} falhou`);
-                  }
+    async disconnectInstance(instanceName: string): Promise<boolean> {
+        try {
+            const url = `${EVO_URL}/instance/logout/${instanceName}`;
+            await axios.delete(url, { headers: EVO_HEADERS });
+            return true;
+        } catch (err) {
+            return false;
+        }
+    }
 
-                  if (attempt < maxAttempts) {
-                      // Backoff exponencial: 1s, 2s, 4s, 8s, 16s
-                      const delayMs = Math.pow(2, attempt - 1) * 1000;
-                      logger.info({ instanceName, attempt, delayMs }, `Aguardando ${delayMs}ms antes da próxima tentativa...`);
-                      await new Promise(r => setTimeout(r, delayMs));
-                  }
-              }
-              throw new Error("Não foi possível gerar o código após 6 tentativas. Tente novamente.");
-          }
-
-          // --- FLUXO QR CODE / RECONNECT (Sem Phone) ---
-          
-          // 1. Garantir que instância existe e webhook está setado
-          await this.createInstance(instanceName, true);
-          
-          // WARM-UP QR CODE: Esperar o Chrome iniciar para gerar o QR Code
-          logger.info({ instanceName }, "Aguardando QR Code (3s)...");
-          await new Promise(r => setTimeout(r, 3000)); 
-
-          // 2. Soft Reconnect (Apenas pede connect para ver se gera QR ou conecta session existente)
-          let lastData: EvolutionConnectResponse | null = null;
-          
-          for (let attempt = 1; attempt <= 5; attempt++) {
-              const url = `${EVO_URL}/instance/connect/${instanceName}`;
-              const { data } = await axios.get<EvolutionConnectResponse>(url, { headers: { "apikey": EVO_KEY } });
-              lastData = data;
-
-              if (data?.base64 || data?.qrcode?.base64 || data?.instance?.state === WhatsappStatus.CONNECTED) {
-                  logger.info({ instanceName }, "QR Code obtido ou Instância Conectada.");
-                  break; 
-              }
-              
-              if (attempt < 5) await new Promise(r => setTimeout(r, 2000));
-          }
-
-          // Retorno padrão
-          if (lastData?.base64 || lastData?.qrcode?.base64) {
-               return { 
-                   qrcode: { 
-                       base64: (lastData.base64 || lastData.qrcode?.base64) as string,
-                       code: lastData.code || lastData.qrcode?.code
-                   } 
-               };
-          }
-           
-          if (lastData?.instance?.state === WhatsappStatus.CONNECTED) {
-              return { instance: { state: WhatsappStatus.CONNECTED } };
-          }
-
-          return {}; 
-
-      } catch (error) {
-          const err = error as AxiosError;
-          logger.error({ err: err.response?.data || err.message, instanceName }, "Falha ao conectar instância");
-          throw new Error("Falha ao gerar conexão, tente novamente.");
-      }
-  }
-
-  /**
-   * Desconecta (Logout)
-   */
-  async disconnectInstance(instanceName: string): Promise<boolean> {
-      try {
-          logger.info({ instanceName }, "Solicitando Logout...");
-          const url = `${EVO_URL}/instance/logout/${instanceName}`;
-          await axios.delete(url, { headers: { "apikey": EVO_KEY } });
-          return true;
-      } catch (err) {
-          logger.error({ instanceName, err }, "Erro no Logout");
-          return false;
-      }
-  }
-  
-  /**
-   * Deleta a instância
-   */
-  async deleteInstance(instanceName: string): Promise<boolean> {
-      try {
-          const url = `${EVO_URL}/instance/delete/${instanceName}`;
-          await axios.delete(url, { headers: { "apikey": EVO_KEY } });
-          return true;
-      } catch (err) {
-          return false; // Pode já não existir
-      }
-  }
+    async deleteInstance(instanceName: string): Promise<boolean> {
+        try {
+            const url = `${EVO_URL}/instance/delete/${instanceName}`;
+            await axios.delete(url, { headers: EVO_HEADERS });
+            return true;
+        } catch (err) {
+            return false;
+        }
+    }
 }
 
 export const whatsappService = new WhatsappService();
+

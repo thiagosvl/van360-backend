@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-import { formatToBrazilianDate } from '../../utils/date.utils.js';
+import { formatToBrazilianDate, getNowBR, parseLocalDate } from '../../utils/date.utils.js';
 import { formatModalidade, formatParentesco, formatPeriodo, maskCnpj, maskCpf, maskPhone } from '../../utils/format.js';
 
 import { supabaseAdmin } from '../../config/supabase.js';
@@ -118,7 +118,7 @@ export class InHouseContractProvider implements ContractProvider {
 
     return {
       documentoFinalUrl: publicUrl,
-      assinadoEm: new Date().toISOString(),
+      assinadoEm: getNowBR().toISOString(),
     };
   }
 
@@ -311,7 +311,8 @@ export class InHouseContractProvider implements ContractProvider {
     currentY -= 30;
 
     currentY = drawHeader('DO PERÍODO DO CONTRATO', currentY);
-    const currentYear = new Date().getFullYear();
+    const currentYear = getNowBR().getFullYear();
+
     page.drawText(`Ano Letivo: ${dados.ano || currentYear}`, { x: margin, y: currentY, size: smallTextSize, font });
     page.drawText(`Início: ${formatToBrazilianDate(dados.dataInicio)}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
     page.drawText(`Término: ${formatToBrazilianDate(dados.dataFim)}`, { x: 300, y: currentY - 14, size: smallTextSize, font });
@@ -410,7 +411,8 @@ export class InHouseContractProvider implements ContractProvider {
     }
 
     currentY -= 40;
-    const today = new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
+    const today = getNowBR().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
+
 
     page.drawText(`${today}`, { x: margin, y: currentY, size: smallTextSize, font });
     currentY -= 80; // Mais espaço para assinar
@@ -464,14 +466,16 @@ export class InHouseContractProvider implements ContractProvider {
     const lastPage = pages[pages.length - 1];
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-    const dataOriginal = new Date(params.metadados.timestamp);
+    const dataOriginal = params.metadados.timestamp ? parseLocalDate(params.metadados.timestamp) : getNowBR();
     const dataFormatada = dataOriginal.toLocaleString('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
     });
+
 
     const text = `Assinado pelo CONTRATANTE (${params.nomeAssinante}) em ${dataFormatada} | IP: ${params.metadados.ip}`;
     lastPage.drawText(text, { x: 50, y: 30, size: 7, font, color: rgb(0.5, 0.5, 0.5) });

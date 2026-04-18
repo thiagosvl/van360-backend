@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import satori from "satori";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
-import { getMonthNameBR } from "../utils/date.utils.js";
+import { getMonthNameBR, getNowBR, formatToBrazilianDate } from "../utils/date.utils.js";
 import { formatCurrency, capitalize, formatPaymentMethod } from "../utils/format.js";
 
 // Utilitário para caminhos absolutos em ESM
@@ -257,7 +257,7 @@ class ReceiptService {
                 titulo: "Comprovante de Pagamento",
                 subtitulo: (cobranca as any).motorista?.apelido || (cobranca as any).motorista?.nome || "Transporte Escolar",
                 valor: cobranca.valor_pago || cobranca.valor,
-                data: cobranca.pago_em ? new Date(cobranca.pago_em).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
+                data: cobranca.pago_em ? formatToBrazilianDate(cobranca.pago_em) : formatToBrazilianDate(getNowBR()),
                 pagadorNome: cobranca.passageiro?.nome_responsavel || cobranca.passageiro?.nome || 'Cliente',
                 passageiroNome: cobranca.passageiro?.nome,
                 mes: cobranca.mes,

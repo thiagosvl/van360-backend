@@ -33,11 +33,48 @@ export enum UserType {
 }
 
 export enum WhatsappStatus {
+  // Estados Legados/Gerais
   CONNECTED = "CONNECTED",
   DISCONNECTED = "DISCONNECTED",
   CONNECTING = "CONNECTING",
+
+  // Estados Oficiais Evolution v2
+  OPEN = "open",
+  CLOSE = "close",
+
+  // Estados Internos do Sistema
   UNKNOWN = "UNKNOWN",
   NOT_FOUND = "NOT_FOUND"
+}
+
+export enum EvolutionEvent {
+  // Eventos recebidos no Webhook (Lowercase/Dot notation)
+  CONNECTION_UPDATE = "connection.update",
+  MESSAGES_UPSERT = "messages.upsert",      // Novo na v2 para novas mensagens
+  MESSAGES_UPDATE = "messages.update",      // Status da mensagem
+  SEND_MESSAGE = "send.message",
+  QRCODE_UPDATED = "qrcode.updated",
+  LOGOUT_INSTANCE = "logout.instance",
+
+  // Eventos para Configuração (Uppercase/Underscore - para setWebhook)
+  _CONNECTION_UPDATE = "CONNECTION_UPDATE",
+  _MESSAGES_UPSERT = "MESSAGES_UPSERT",
+  _MESSAGES_UPDATE = "MESSAGES_UPDATE",
+  _SEND_MESSAGE = "SEND_MESSAGE",
+  _QRCODE_UPDATED = "QRCODE_UPDATED",
+  _LOGOUT_INSTANCE = "LOGOUT_INSTANCE",
+}
+
+export enum WhatsappMediaType {
+  TEXT = "text",
+  IMAGE = "image",
+  VIDEO = "video",
+  AUDIO = "audio",
+  DOCUMENT = "document"
+}
+
+export enum EvolutionIntegration {
+  BAILEYS = "WHATSAPP-BAILEYS"
 }
 
 
@@ -47,7 +84,19 @@ export enum WhatsappStatus {
 export enum ConfigKey {
   DIA_GERACAO_MENSALIDADES = "DIA_GERACAO_MENSALIDADES",
   DIAS_ANTECEDENCIA_AVISO_VENCIMENTO = "DIAS_ANTECEDENCIA_AVISO_VENCIMENTO",
-  DIAS_COBRANCA_POS_VENCIMENTO = "DIAS_COBRANCA_POS_VENCIMENTO"
+  DIAS_COBRANCA_POS_VENCIMENTO = "DIAS_COBRANCA_POS_VENCIMENTO",
+  TAXA_SERVICO_PADRAO = "TAXA_SERVICO_PADRAO",
+  TAXA_BANCARIA_PIX_ENTRADA = "TAXA_BANCARIA_PIX_ENTRADA",
+  TAXA_BANCARIA_PIX_SAIDA = "TAXA_BANCARIA_PIX_SAIDA",
+  TAXA_BANCARIA_SPLIT = "TAXA_BANCARIA_SPLIT",
+  DIAS_VENCIMENTO_COBRANCA = "DIAS_VENCIMENTO_COBRANCA",
+  SAAS_DIAS_VENCIMENTO = "SAAS_DIAS_VENCIMENTO",
+  SAAS_DIAS_CARENCIA = "SAAS_DIAS_CARENCIA",
+  SAAS_DIAS_AVISO_TRIAL = "SAAS_DIAS_AVISO_TRIAL",
+  SAAS_PROMOCAO_ATIVA = "SAAS_PROMOCAO_ATIVA",
+  SAAS_MAX_TENTATIVAS_CARTAO = "SAAS_MAX_TENTATIVAS_CARTAO",
+  PIX_EXPIRACAO_SEGUNDOS = "PIX_EXPIRACAO_SEGUNDOS",
+  PIX_VALIDADE_APOS_VENCIMENTO = "PIX_VALIDADE_APOS_VENCIMENTO",
 }
 
 
@@ -89,19 +138,40 @@ export enum ContratoProvider {
   DOCUSIGN = "docusign"
 }
 
-export enum PaymentProvider {
-  DUMMY = "dummy",
-  ASAAS = "asaas",
-  INTER = "inter",
-  EFI = "efi"
+export enum SubscriptionStatus {
+  TRIAL = "TRIAL",
+  ACTIVE = "ACTIVE",
+  PAST_DUE = "PAST_DUE",
+  CANCELED = "CANCELED",
+  EXPIRED = "EXPIRED"
 }
 
-export enum SubscriptionStatus {
-  TRIAL = "trial",
-  ACTIVE = "active",
-  PAST_DUE = "past_due",
-  CANCELED = "canceled",
-  EXPIRED = "expired"
+export enum SubscriptionInvoiceStatus {
+  PENDING = "PENDING",
+  PAID = "PAID",
+  CANCELED = "CANCELED",
+  FAILED = "FAILED"
+}
+
+export enum SubscriptionIdentifer {
+  MONTHLY = "MONTHLY",
+  YEARLY = "YEARLY"
+}
+
+export enum IndicacaoStatus {
+  PENDING = "PENDING",
+  COMPLETED = "COMPLETED",
+  CANCELED = "CANCELED"
+}
+
+export enum CheckoutPaymentMethod {
+  PIX = "pix",
+  CREDIT_CARD = "credit_card"
+}
+
+export enum PaymentProvider {
+  EFIPAY = "efipay",
+  WOOVI = "woovi"
 }
 
 export enum ContractMultaTipo {
@@ -116,10 +186,6 @@ export enum PeriodoEnum {
   INTEGRAL = "integral"
 }
 
-
-
-// InterTransferStatus removido
-
 export enum AtividadeEntidadeTipo {
   COBRANCA = "COBRANCA",
   PASSAGEIRO = "PASSAGEIRO",
@@ -128,6 +194,8 @@ export enum AtividadeEntidadeTipo {
   VEICULO = "VEICULO",
   ESCOLA = "ESCOLA",
   CONTRATO = "CONTRATO",
+  SAAS_ASSINATURA = "SAAS_ASSINATURA",
+  SAAS_FATURA = "SAAS_FATURA",
 }
 
 export enum AtividadeAcao {
@@ -153,7 +221,7 @@ export enum AtividadeAcao {
   CONTRATO_GERADO = "CONTRATO_GERADO",
   CONTRATO_ASSINADO = "CONTRATO_ASSINADO",
   CONTRATO_EXCLUIDO = "CONTRATO_EXCLUIDO",
-USUARIO_SUSPENSO = "USUARIO_SUSPENSO",
+  USUARIO_SUSPENSO = "USUARIO_SUSPENSO",
   WHATSAPP_STATUS_ALTERADO = "WHATSAPP_STATUS_ALTERADO",
   LOGIN = "LOGIN",
   LOGOUT = "LOGOUT",
@@ -172,8 +240,14 @@ USUARIO_SUSPENSO = "USUARIO_SUSPENSO",
   ESCOLA_EDITADA = "ESCOLA_EDITADA",
   ESCOLA_STATUS = "ESCOLA_STATUS",
   ESCOLA_EXCLUIDA = "ESCOLA_EXCLUIDA",
-  
+
   // Jobs
   COBRANCAS_GERADAS = "COBRANCAS_GERADAS",
-  LOG_LIMPEZA = "LOG_LIMPEZA"
+  LOG_LIMPEZA = "LOG_LIMPEZA",
+
+  // SaaS / Assinaturas
+  SAAS_ASSINATURA_ATIVA = "SAAS_ASSINATURA_ATIVA",
+  SAAS_ASSINATURA_CANCELADA = "SAAS_ASSINATURA_CANCELADA",
+  SAAS_FATURA_GERADA = "SAAS_FATURA_GERADA",
+  SAAS_PAGAMENTO_RECEBIDO = "SAAS_PAGAMENTO_RECEBIDO"
 }

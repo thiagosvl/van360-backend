@@ -9,14 +9,20 @@ import gastoRoute from "./gasto.route.js";
 import historicoRoute from "./historico.routes.js";
 import { jobsRoute } from "./jobs.route.js";
 import passageiroRoutes from "./passageiro.routes.js";
-
 import prePassageiroRoutes from "./pre-passageiro.routes.js";
 import profileRoutes from "./profile.routes.js";
 import publicRoutes from "./public.routes.js";
+import subscriptionRoutes from "./subscription.routes.js";
 import usuarioRoute from "./usuario.route.js";
 import veiculoRoutes from "./veiculo.routes.js";
 
+import { checkSubscriptionAccess } from "../middleware/subscription.js";
+import { WebhookController } from "./webhook.controller.js";
+
 const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
+  // Middleware Global para Bloqueio de Escrita por Assinatura Expirada
+  // (Depende do `onRequest: authenticate` estar em cada arquivo de rota)
+  app.addHook("preHandler", checkSubscriptionAccess);
 
   app.register(authRoutes, { prefix: "/api/auth" });
   app.register(profileRoutes, { prefix: "/api" });
@@ -24,18 +30,14 @@ const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.register(publicRoutes, { prefix: "/api/public" });
   app.register(usuarioRoute, { prefix: "/api/usuarios" });
 
-
+  // Assinaturas SaaS (Gestão do Motorista)
+  app.register(subscriptionRoutes, { prefix: "/api/subscriptions" });
 
   app.register(cobrancaRoutes, { prefix: "/api/cobrancas" });
-
   app.register(passageiroRoutes, { prefix: "/api/passageiros" });
-
   app.register(prePassageiroRoutes, { prefix: "/api/pre-passageiros" });
-
   app.register(veiculoRoutes, { prefix: "/api/veiculos" });
-
   app.register(escolaRoutes, { prefix: "/api/escolas" });
-
   app.register(gastoRoute, { prefix: "/api/gastos" });
 
   // Rotas de Contratos
@@ -48,6 +50,12 @@ const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // Histórico de Atividades
   app.register(historicoRoute, { prefix: "/api/historico" });
+
+  // Webhook unificado da Efí Pay (PIX e Cartão)
+  app.post("/api/webhooks/efi", WebhookController.handleEfipay);
+  app.post("/api/webhooks/efi/*", WebhookController.handleEfipay);
+
 };
 
 export default routes;
+

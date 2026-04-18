@@ -7,11 +7,10 @@ import { addToContractQueue } from '../queues/contract.queue.js';
 import { ContractProvider, DadosContrato, SignatureMetadata } from '../types/contract.js';
 import { CreateContractDTO, ListContractsDTO } from '../types/dtos/contract.dto.js';
 import { AtividadeAcao, AtividadeEntidadeTipo, ContractMultaTipo, ContratoProvider, ContratoStatus, PassageiroModalidade, PeriodoEnum } from '../types/enums.js';
-import { toLocalDateString } from '../utils/date.utils.js';
-import { formatAddress, getFirstName } from '../utils/format.js';
+import { getNowBR, toLocalDateString, parseLocalDate, addMonths } from '../utils/date.utils.js';
+import { formatAddress } from '../utils/format.js';
 import { historicoService } from './historico.service.js';
 import { InHouseContractProvider } from './providers/inhouse-contract.provider.js';
-import { whatsappService } from './whatsapp.service.js';
 import { notificationService } from './notifications/notification.service.js';
 import { EVENTO_MOTORISTA_CONTRATO_ASSINADO, EVENTO_PASSAGEIRO_CONTRATO_ASSINADO } from '../config/constants.js';
 
@@ -69,7 +68,7 @@ class ContractService {
     }
 
     // 3. Cálculos dinâmicos (Default: 12 meses seguindo o ano escolar)
-    const hoje = new Date();
+    const hoje = getNowBR();
     const dataInicio = customTerms.dataInicio || passageiro.data_inicio_transporte || toLocalDateString(hoje);
 
     // Período padrão de 12 meses (ou o que o usuário definir)
@@ -78,11 +77,10 @@ class ContractService {
     const valorTotal = valorMensal * qtdParcelas;
 
     // Calcular data fim baseada em data início + (qtdParcelas - 1) meses para terminar no final do ciclo
-    const dInicio = new Date(dataInicio + 'T12:00:00');
-    const dFim = new Date(dInicio);
-    dFim.setMonth(dInicio.getMonth() + qtdParcelas);
-    dFim.setDate(0); // Último dia do mês anterior ao mês do vencimento final
-    const dataFim = customTerms.dataFim || toLocalDateString(dFim);
+    const dInicio = parseLocalDate(dataInicio);
+    const dFimCalculado = addMonths(dInicio, qtdParcelas);
+    dFimCalculado.setDate(0); // Último dia do mês anterior ao mês do vencimento final
+    const dataFim = customTerms.dataFim || toLocalDateString(dFimCalculado);
 
     // 4. Preparar dados do contrato
     const dadosContrato: DadosContrato = {
@@ -567,7 +565,7 @@ class ContractService {
       throw new AppError('Usuário não encontrado', 404);
     }
 
-    const hoje = new Date();
+    const hoje = getNowBR();
     const anoVigente = hoje.getFullYear();
 
     // 2. Dados Fictícios para o Preview MERGED com o Draft Config

@@ -1,8 +1,10 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { gastoController } from "../controllers/gasto.controller.js";
+import { authenticate } from "../middleware/auth.js";
+
 
 const gastoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
-    // app.addHook("preHandler", verifySupabaseJWT);
+    app.addHook("onRequest", authenticate);
 
     app.post("/", gastoController.create);
     app.put("/:id", gastoController.update);

@@ -1,7 +1,11 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { escolaController } from "../controllers/escola.controller.js";
+import { authenticate } from "../middleware/auth.js";
+
 
 const escolaRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
+    app.addHook("onRequest", authenticate);
+
     // CRUD Básico
     app.post("/", escolaController.create);
     app.put("/:id", escolaController.update);

@@ -77,6 +77,19 @@ export async function createApp(): Promise<FastifyInstance> {
       allowedHeaders: ["Content-Type", "Authorization"],
     });
 
+    // Parser para application/x-www-form-urlencoded (usado pela EfiPay no webhook de cartão)
+    app.addContentTypeParser("application/x-www-form-urlencoded", { parseAs: "string" }, (_req, body, done) => {
+      try {
+        const result: Record<string, string> = {};
+        new URLSearchParams(body as string).forEach((value, key) => {
+          result[key] = value;
+        });
+        done(null, result);
+      } catch (err) {
+        done(err as Error, undefined);
+      }
+    });
+
     // Configurar Bull Board (Dashboard de Filas)
     // Opcional: Adicionar proteção de Basic Auth aqui futuramente
     // Nota: O Bull Board não funciona em ambiente Serverless (Vercel)

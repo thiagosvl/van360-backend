@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
+import { toPersistenceString } from "../utils/date.utils.js";
 
 export const prePassageiroService = {
   async listPrePassageiros(usuarioId: string, search?: string) {
@@ -70,8 +71,8 @@ export const prePassageiroService = {
       modalidade: payload.modalidade || null,
       genero: payload.genero || null,
       parentesco_responsavel: payload.parentesco_responsavel || null,
-      data_inicio_transporte: payload.data_inicio_transporte || null,
-      data_nascimento: payload.data_nascimento || null
+      data_inicio_transporte: payload.data_inicio_transporte ? toPersistenceString(payload.data_inicio_transporte) : null,
+      data_nascimento: payload.data_nascimento ? toPersistenceString(payload.data_nascimento) : null
     };
 
     const { data, error } = await supabaseAdmin

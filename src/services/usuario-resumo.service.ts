@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { CobrancaStatus } from "../types/enums.js";
-import { toLocalDateString } from "../utils/date.utils.js";
+import { getNowBR, toLocalDateString, getLastDayOfMonth } from "../utils/date.utils.js";
 import { getUsuarioData } from "./usuario.service.js";
 
 interface SystemSummary {
@@ -82,12 +82,13 @@ export const usuarioResumoService = {
     const escInativos = escTotal - escAtivos;
 
     // 3. Financial Summary
-    const now = new Date();
+    const now = getNowBR();
     const targetMes = mes ?? (now.getMonth() + 1);
     const targetAno = ano ?? now.getFullYear();
 
-    const start = toLocalDateString(new Date(targetAno, targetMes - 1, 1));
-    const end = toLocalDateString(new Date(targetAno, targetMes, 0));
+    const start = `${targetAno}-${String(targetMes).padStart(2, '0')}-01`;
+    const lastDay = getLastDayOfMonth(Number(targetAno), Number(targetMes));
+    const end = `${targetAno}-${String(targetMes).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
     const [cobrancasRes, gastosRes] = await Promise.all([
       supabaseAdmin.from("cobrancas").select("*").eq("usuario_id", usuarioId).gte("data_vencimento", start).lte("data_vencimento", end),
@@ -105,7 +106,7 @@ export const usuarioResumoService = {
     const totalDespesas = gastos.reduce((acc: number, g: any) => acc + Number(g.valor || 0), 0);
     const margemOperacional = receitaRealizada > 0 ? ((receitaRealizada - totalDespesas) / receitaRealizada) * 100 : 0;
 
-    const hoje = toLocalDateString(new Date());
+    const hoje = toLocalDateString(getNowBR());
     const atrasos = cobrancas.filter((c: any) => c.status === CobrancaStatus.PENDENTE && c.data_vencimento < hoje);
     const valorAtrasos = atrasos.reduce((acc: number, c: any) => acc + Number(c.valor || 0), 0);
 

@@ -1,10 +1,11 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
 import { CreatePassageiroDTO, ListPassageirosFiltersDTO, UpdatePassageiroDTO } from "../types/dtos/passageiro.dto.js";
-import { AtividadeAcao, AtividadeEntidadeTipo, ContratoProvider, ContratoStatus } from "../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
+import { parseLocalDate, toPersistenceString } from "../utils/date.utils.js";
 
 // Métodos privados auxiliares
 const _preparePassageiroData = (data: Partial<CreatePassageiroDTO> & Record<string, any>, usuarioId?: string, isUpdate: boolean = false): any => {
@@ -45,9 +46,11 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO> & Record<stri
 
     // Novos Campos
     if (data.modalidade !== undefined) prepared.modalidade = data.modalidade;
-    if (data.data_nascimento !== undefined) prepared.data_nascimento = data.data_nascimento;
+    if (data.data_nascimento !== undefined) prepared.data_nascimento = data.data_nascimento ? toPersistenceString(data.data_nascimento) : null;
     if (data.parentesco_responsavel !== undefined) prepared.parentesco_responsavel = data.parentesco_responsavel;
-    if (data.data_inicio_transporte !== undefined) prepared.data_inicio_transporte = data.data_inicio_transporte;
+    if (data.data_inicio_transporte !== undefined) prepared.data_inicio_transporte = data.data_inicio_transporte ? toPersistenceString(data.data_inicio_transporte) : null;
+    if (data.repasse_taxa_servico !== undefined) prepared.repasse_taxa_servico = data.repasse_taxa_servico;
+    if (data.cobranca_automatica !== undefined) prepared.cobranca_automatica = data.cobranca_automatica;
 
 
     // Controle
@@ -255,7 +258,7 @@ const listPassageiros = async (
             // Sort just in case supabase didn't (though we can't easily sort in foreign table select without specific query)
             // Ideally we should use a view or a separate query, but for now let's sort in JS
             const contratosOnPassageiro = p.contratos.sort((a: any, b: any) =>
-                new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                parseLocalDate(b.created_at).getTime() - parseLocalDate(a.created_at).getTime()
             );
             const ultimo = contratosOnPassageiro[0];
             return {

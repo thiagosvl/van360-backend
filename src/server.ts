@@ -2,12 +2,15 @@
 // Para produção na Vercel, use api/index.ts
 import "dotenv/config";
 
+// Garantir que o Node.js rode no fuso horário de Brasília
+process.env.TZ = "America/Sao_Paulo";
+
 // IMPORTANTE: Sentry deve ser inicializado ANTES de qualquer outro import
+
 import { initSentry } from "./config/sentry.js";
 initSentry();
 
 import { createApp } from "./app.js";
-import { paymentService } from "./services/payments/payment.service.js";
 import { queueService } from "./services/queue.service.js";
 
 const start = async () => {

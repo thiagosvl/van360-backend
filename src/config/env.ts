@@ -28,4 +28,15 @@ export const env = {
   C6_KEY_PATH: process.env.C6_KEY_PATH!,
   C6_CERT_BASE64: process.env.C6_CERT_BASE64,
   C6_KEY_BASE64: process.env.C6_KEY_BASE64,
+
+  // Efí Pay
+  EFI_CLIENT_ID: process.env.EFI_CLIENT_ID || "",
+  EFI_CLIENT_SECRET: process.env.EFI_CLIENT_SECRET || "",
+  EFI_SANDBOX: process.env.EFI_SANDBOX === "true",
+  EFI_CERT_BASE64: process.env.EFI_CERT_BASE64,
+  EFI_PIX_KEY: process.env.EFI_PIX_KEY || "",
+  EFI_WEBHOOK_URL: process.env.EFI_WEBHOOK_URL || "",
+  EFI_WEBHOOK_TOKEN: process.env.EFI_WEBHOOK_TOKEN || "",
+
+  PAYMENT_PROVIDER: process.env.PAYMENT_PROVIDER || "efipay",
 };

@@ -3,12 +3,13 @@ import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
-import { toLocalDateString } from "../utils/date.utils.js";
+import { getNowBR, getLastDayOfMonth, toPersistenceString } from "../utils/date.utils.js";
 
 import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
-import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaOrigem, CobrancaStatus } from "../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaOrigem, CobrancaStatus, ConfigKey } from "../types/enums.js";
 import { historicoService } from "./historico.service.js";
 import { receiptService } from "./receipt.service.js";
+import { getConfigNumber } from "./configuracao.service.js";
 
 interface CreateCobrancaOptions {
   skipLog?: boolean;
@@ -46,6 +47,7 @@ export const cobrancaService = {
       id: cobrancaId,
       ...cobrancaCleanData,
       valor: valorNumerico,
+      data_vencimento: data.data_vencimento ? toPersistenceString(data.data_vencimento) : undefined,
     };
 
     const { data: inserted, error } = await supabaseAdmin
@@ -75,20 +77,20 @@ export const cobrancaService = {
 
     // 3. GERAR RECIBO SE JÁ NASCER PAGO
     if (inserted.status === CobrancaStatus.PAGO) {
-        try {
-            const url = await receiptService.generateForCobranca(inserted.id);
-            if (!url) {
-                // Rollback: Deletar a cobrança criada pois o recibo falhou
-                await supabaseAdmin.from("cobrancas").delete().eq("id", inserted.id);
-                throw new Error("Não foi possível gerar o recibo para a cobrança paga.");
-            }
-            inserted.recibo_url = url;
-        } catch (e: any) {
-            // Rollback manual
-            await supabaseAdmin.from("cobrancas").delete().eq("id", inserted.id);
-            logger.error({ error: e.message, cobrancaId: inserted.id }, "Erro ao gerar recibo na criação - Cobrança excluída p/ manter consistência");
-            throw new AppError(e.message || "Erro ao gerar recibo.", 500);
+      try {
+        const url = await receiptService.generateForCobranca(inserted.id);
+        if (!url) {
+          // Rollback: Deletar a cobrança criada pois o recibo falhou
+          await supabaseAdmin.from("cobrancas").delete().eq("id", inserted.id);
+          throw new Error("Não foi possível gerar o recibo para a cobrança paga.");
         }
+        inserted.recibo_url = url;
+      } catch (e: any) {
+        // Rollback manual
+        await supabaseAdmin.from("cobrancas").delete().eq("id", inserted.id);
+        logger.error({ error: e.message, cobrancaId: inserted.id }, "Erro ao gerar recibo na criação - Cobrança excluída p/ manter consistência");
+        throw new AppError(e.message || "Erro ao gerar recibo.", 500);
+      }
     }
 
     return inserted;
@@ -108,7 +110,7 @@ export const cobrancaService = {
 
     // Mapeamento de campos permitidos para edição de metadados
     if (data.valor !== undefined) cobrancaData.valor = data.valor;
-    if (data.data_vencimento !== undefined) cobrancaData.data_vencimento = data.data_vencimento;
+    if (data.data_vencimento !== undefined) cobrancaData.data_vencimento = data.data_vencimento ? toPersistenceString(data.data_vencimento) : undefined;
 
     // Bloqueio de transição de status via PUT (Diretrizes de Arquitetura)
     if (data.status !== undefined && data.status !== cobrancaOriginal.status) {
@@ -208,10 +210,9 @@ export const cobrancaService = {
     if (filtros.dataFim) query = query.lte("data_vencimento", filtros.dataFim);
 
     if (filtros.mes && filtros.ano) {
-      const start = new Date(filtros.ano, filtros.mes - 1, 1);
-      const endObj = new Date(filtros.ano, filtros.mes, 0);
-      const startStr = toLocalDateString(start);
-      const endStr = toLocalDateString(endObj);
+      const startStr = `${filtros.ano}-${String(filtros.mes).padStart(2, '0')}-01`;
+      const lastDay = getLastDayOfMonth(Number(filtros.ano), Number(filtros.mes));
+      const endStr = `${filtros.ano}-${String(filtros.mes).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
       query = query.gte("data_vencimento", startStr);
       query = query.lte("data_vencimento", endStr);
@@ -276,17 +277,30 @@ export const cobrancaService = {
     let created = 0;
     let skipped = 0;
 
-    // 1. Buscar Passageiros Ativos do Motorista
+    // 1. Buscar Passageiros Ativos e Detalhes do Motorista (Taxa)
+    const { data: motorista, error: motError } = await supabaseAdmin
+      .from("usuarios")
+      .select("taxa_servico")
+      .eq("id", motoristaId)
+      .single();
+
+    if (motError) throw motError;
+
     const { data: passageiros, error: passError } = await supabaseAdmin
       .from("passageiros")
-      .select("id, nome, valor_mensalidade, dia_vencimento, cpf_responsavel, nome_responsavel")
+      .select("id, nome, valor_cobranca, dia_vencimento, cpf_responsavel, nome_responsavel, repasse_taxa_servico")
       .eq("usuario_id", motoristaId)
-      .eq("ativo", true);
+      .eq("ativo", true)
+      .eq("cobranca_automatica", true);
 
     if (passError) throw passError;
     if (!passageiros) return { created, skipped };
 
-    // 2. Iterar por Passageiro e Gerar Cobrança
+    // 2. Buscar Taxa de Serviço Global (Fallback se o motorista não tiver personalizada)
+    const taxaServicoPadrao = await getConfigNumber(ConfigKey.TAXA_SERVICO_PADRAO, 3.90);
+    const taxaMotorista = motorista.taxa_servico ? Number(motorista.taxa_servico) : taxaServicoPadrao;
+
+    // 3. Iterar por Passageiro e Gerar Cobrança
     for (const passageiro of passageiros) {
       // Verificar se já existe cobrança para este mês/ano/passageiro
       const { count } = await supabaseAdmin
@@ -303,25 +317,32 @@ export const cobrancaService = {
 
       // Calcular Vencimento
       const diaVencimento = passageiro.dia_vencimento;
-      const lastDayOfMonth = new Date(targetYear, targetMonth, 0).getDate();
+      const lastDayOfMonth = getLastDayOfMonth(targetYear, targetMonth);
       const diaFinal = Math.min(diaVencimento, lastDayOfMonth);
       const dataVencimentoStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(diaFinal).padStart(2, '0')}`;
 
-      const valorCobranca = passageiro.valor_mensalidade;
-      if (!valorCobranca || valorCobranca <= 0) continue;
+      // Lógica de Repasse de Taxa:
+      // Se repassa, somamos a taxa ao valor original.
+      // Se não repassa, o valor da cobrança é apenas o valor original (a taxa será descontada no split).
+      let valorFinal = Number(passageiro.valor_cobranca);
+      if (passageiro.repasse_taxa_servico) {
+        valorFinal += taxaMotorista;
+      }
+
+      if (!valorFinal || valorFinal <= 0) continue;
 
       try {
         await this.createCobranca({
           usuario_id: motoristaId,
           passageiro_id: passageiro.id,
-          valor: valorCobranca,
+          valor: valorFinal,
           data_vencimento: dataVencimentoStr,
           origem: CobrancaOrigem.AUTOMATICA
         }, { skipLog: true });
 
         created++;
       } catch (e) {
-        logger.error({ error: e, passageiroId: passageiro.id }, "Erro ao gerar cobrança automática no loop");
+        logger.error({ error: e, passageiroId: passageiro.id }, "[CobrancaService] Erro ao gerar cobrança automática no loop");
       }
     }
 
@@ -345,5 +366,37 @@ export const cobrancaService = {
    */
   async gerarPixRetroativo(usuarioId: string): Promise<any> {
     return { totalEnfileirados: 0 };
+  },
+
+  /**
+   * Dispara a geração de cobranças para todos os motoristas ativos.
+   * Foca no mês atual ou no próximo, dependendo da configuração.
+   */
+  async gerarCobrancasMensaisParaTodos() {
+    logger.info("[CobrancaService] Iniciando geração global de cobranças...");
+
+    // 1. Buscar todos os motoristas ativos (que não sejam admin)
+    const { data: motoristas, error } = await supabaseAdmin
+      .from("usuarios")
+      .select("id")
+      .eq("ativo", true)
+      .eq("tipo", "motorista");
+
+    if (error) throw error;
+    if (!motoristas) return { totalMotoristas: 0 };
+
+    const now = getNowBR();
+    // Se hoje for dia >= 20, gera para o mês que vem. Se não, para o mês atual (caso falte alguma).
+    const targetMonth = now.getDate() >= 20 ? (now.getMonth() === 11 ? 1 : now.getMonth() + 2) : (now.getMonth() + 1);
+    const targetYear = (now.getDate() >= 20 && now.getMonth() === 11) ? now.getFullYear() + 1 : now.getFullYear();
+
+    let totalCreated = 0;
+
+    for (const m of motoristas) {
+      const res = await this.gerarCobrancasMensaisParaMotorista(m.id, targetMonth, targetYear);
+      totalCreated += res.created;
+    }
+
+    return { totalMotoristas: motoristas.length, totalCreated };
   }
 };

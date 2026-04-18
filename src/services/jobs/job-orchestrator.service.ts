@@ -1,5 +1,6 @@
 import { logger } from "../../config/logger.js";
-import { subscriptionService } from "../subscriptions/subscription.service.js";
+import { subscriptionMonitorService } from "../subscriptions/subscription-monitor.service.js";
+import { cobrancaService } from "../cobranca.service.js";
 
 export const jobOrchestratorService = {
   /**
@@ -10,11 +11,14 @@ export const jobOrchestratorService = {
     logger.info("[JobOrchestrator] Iniciando rotina diária...");
 
     const executions = [
-      subscriptionService.runDailyCheck().catch((err: any) => {
+      subscriptionMonitorService.runDailyCheck().catch((err: any) => {
         logger.error({ err }, "[JobOrchestrator] Erro ao processar assinaturas diárias");
         throw err;
       }),
-      // Futuro: cobrancaService.processDailyBilling() (add-on de mensalidades automáticas)
+      cobrancaService.gerarCobrancasMensaisParaTodos().catch((err: any) => {
+        logger.error({ err }, "[JobOrchestrator] Erro ao processar mensalidades de passageiros");
+        throw err;
+      })
     ];
 
     logger.info({ totalJobs: executions.length }, "[JobOrchestrator] Disparando jobs...");

@@ -1,9 +1,7 @@
--- USERS SEED (FOR LOCAL DEVELOPMENT ONLY)
+-- USUÁRIO ADMINISTRADOR INICIAL (AUTH & PUBLIC)
+-- Este arquivo é executado automaticamente pelo 'supabase db reset'
 
--- 1. Create Identity (Optional but recommended for robust setups, though simple insert often works)
--- We skip complex identity logic and insert directly into auth.users
-
--- 2. Create Auth User (Admin)
+-- 1. USUÁRIO NO SCHEMA AUTH
 INSERT INTO auth.users (
     instance_id,
     id,
@@ -24,7 +22,7 @@ INSERT INTO auth.users (
     recovery_token
 ) VALUES (
     '00000000-0000-0000-0000-000000000000',
-    'd0d8c19c-3b36-402a-9e73-9a3c3c3c3c3c', -- Fixed UUID for Dev Admin
+    'd0d8c19c-3b36-402a-9e73-9a3c3c3c3c3c',
     'authenticated',
     'authenticated',
     'admin@van360.com',
@@ -42,7 +40,7 @@ INSERT INTO auth.users (
     ''
 ) ON CONFLICT (id) DO NOTHING;
 
--- 3. Create Public Profile (Linked to Auth)
+-- 2. PERFIL NO SCHEMA PUBLIC (VAN360)
 INSERT INTO public.usuarios (
     id,
     nome,
@@ -66,3 +64,32 @@ INSERT INTO public.usuarios (
     now(),
     'admin'
 ) ON CONFLICT (id) DO NOTHING;
+
+-- 3. CONFIGURAÇÃO INTERNA (GESTÃO OPERACIONAL E FINANCEIRA)
+INSERT INTO public.configuracao_interna (chave, valor)
+VALUES
+    ('DIA_GERACAO_MENSALIDADES', '25'),
+    ('DIAS_ANTECEDENCIA_AVISO_VENCIMENTO', '2'),
+    ('PIX_EXPIRACAO_SEGUNDOS', '3600'),
+    ('PIX_VALIDADE_APOS_VENCIMENTO', '30'),
+    ('DIAS_COBRANCA_POS_VENCIMENTO', '3'),
+    ('TAXA_BANCARIA_PIX_ENTRADA', '0.85'),
+    ('TAXA_BANCARIA_PIX_SAIDA', '1.00'),
+    ('TAXA_BANCARIA_SPLIT', '0.00'),
+    ('TAXA_SERVICO_PADRAO', '3.90'),
+    ('DIAS_VENCIMENTO_COBRANCA', '5'),
+    ('SAAS_PROMOCAO_ATIVA', 'true'),
+    ('SAAS_DIAS_VENCIMENTO', '5'),
+    ('SAAS_DIAS_CARENCIA', '3'),
+    ('SAAS_DIAS_AVISO_TRIAL', '3'),
+    ('SAAS_MAX_TENTATIVAS_CARTAO', '3')
+ON CONFLICT (chave) DO UPDATE SET valor = EXCLUDED.valor;
+
+-- 4. PLANOS SAAS
+INSERT INTO public.planos (nome, identificador, valor, valor_promocional)
+VALUES 
+    ('Mensal', 'MONTHLY', 14.90, 9.90),
+    ('Anual', 'YEARLY', 149.00, 99.00)
+ON CONFLICT (identificador) DO UPDATE SET
+    valor = EXCLUDED.valor,
+    valor_promocional = EXCLUDED.valor_promocional;

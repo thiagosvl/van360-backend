@@ -4,6 +4,7 @@ import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { cleanString } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
+import { toPersistenceString } from "../utils/date.utils.js";
 
 // Helper Methods
 const _prepareGastoData = (data: Partial<CreateGastoDTO>, usuarioId?: string, isUpdate: boolean = false): any => {
@@ -14,7 +15,7 @@ const _prepareGastoData = (data: Partial<CreateGastoDTO>, usuarioId?: string, is
     }
 
     if (data.valor !== undefined) prepared.valor = typeof data.valor === "string" ? moneyToNumber(data.valor) : data.valor;
-    if (data.data !== undefined) prepared.data = data.data;
+    if (data.data !== undefined) prepared.data = data.data ? toPersistenceString(data.data) : null;
     if (data.descricao !== undefined) prepared.descricao = data.descricao ? cleanString(data.descricao) : null;
     if (data.categoria !== undefined) prepared.categoria = data.categoria;
     

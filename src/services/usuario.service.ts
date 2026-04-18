@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
+import { getNowBR } from "../utils/date.utils.js";
 import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
@@ -34,7 +35,7 @@ export async function atualizarUsuario(usuarioId: string, payload: {
 }) {
   if (!usuarioId) throw new AppError("ID do usuário é obrigatório.", 400);
 
-  const updates: any = { updated_at: new Date().toISOString() };
+  const updates: any = { updated_at: getNowBR().toISOString() };
   if (payload.nome) updates.nome = cleanString(payload.nome, true);
   if (payload.apelido) updates.apelido = cleanString(payload.apelido, true);
   if (payload.telefone) updates.telefone = onlyDigits(payload.telefone);

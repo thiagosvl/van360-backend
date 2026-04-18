@@ -7,6 +7,7 @@ import { AppError } from "../errors/AppError.js";
 import { AtividadeAcao, AtividadeEntidadeTipo, UserType } from "../types/enums.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
+import { getNowBR, addMinutes, isBeforeNowBR, parseLocalDate } from "../utils/date.utils.js";
 import { notificationService } from "./notifications/notification.service.js";
 import { EVENTO_AUTH_RECUPERACAO_SENHA, EVENTO_AUTH_SENHA_ALTERADA } from "../config/constants.js";
 
@@ -53,6 +54,7 @@ export interface RegistroPayload {
   telefone: string;
   ativo?: boolean;
   termos_aceitos: boolean;
+  indicador_id?: string;
 }
 
 export interface RegistroManualResult {
@@ -120,7 +122,7 @@ export async function criarUsuario(data: UsuarioPayload & { tipo?: UserType, id:
       telefone: onlyDigits(telefone),
       ativo,
       tipo: tipo || UserType.MOTORISTA,
-      termos_aceitos_em: termos_aceitos ? new Date().toISOString() : null,
+      termos_aceitos_em: termos_aceitos ? getNowBR().toISOString() : null,
       termos_versao: termos_aceitos ? TERMOS_VERSAO_ATUAL : null,
     }])
     .select("id")
@@ -213,10 +215,22 @@ export async function registrarUsuario(
 
     const usuario = await criarUsuario({ ...payload, id: authUid });
 
+    // --- SETUP SAAS SUBSCRIPTION ---
+    const { subscriptionService } = await import("./subscriptions/subscription.service.js");
+    
+    // 1. Iniciar Trial de 15 dias
+    const subscription = await subscriptionService.getOrCreateSubscription(usuarioId);
+
+    // 2. Registrar indicação (se houver)
+    if (payload.indicador_id) {
+      await subscriptionService.registerReferral(payload.indicador_id, usuarioId);
+    }
+
     // Notificação de Boas Vindas
     if (payload.telefone) {
       notificationService.notifyDriver(payload.telefone, EVENTO_MOTORISTA_TESTE_BOAS_VINDAS, {
         nomeMotorista: payload.nome,
+        dataVencimento: subscription?.trial_ends_at ?? undefined,
       })
         .catch(err => logger.error({ err }, "Falha ao enviar boas vindas"));
     }
@@ -387,7 +401,7 @@ export async function solicitarRecuperacaoWhatsapp(cpf: string): Promise<{ telef
   if (!user.telefone) throw new AppError("O usuário não possui telefone cadastrado para recuperação.", 400);
 
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  const expiraEm = new Date(Date.now() + 15 * 60000).toISOString();
+  const expiraEm = addMinutes(getNowBR(), 15).toISOString();
 
   // Invalida todos os códigos anteriores pendentes do usuário
   await supabaseAdmin
@@ -447,7 +461,7 @@ export async function validarCodigoWhatsApp(cpf: string, codigo: string): Promis
 
   if (recError || !rec) throw new AppError("Código inválido ou expirado.", 401);
   if (rec.usado) throw new AppError("Código inválido ou expirado.", 401);
-  if (new Date(rec.expira_em) < new Date()) throw new AppError("Código inválido ou expirado.", 401);
+  if (isBeforeNowBR(rec.expira_em)) throw new AppError("Código inválido ou expirado.", 401);
 
   // Marcar como usado logo após validação para permitir o reset uma única vez
   await supabaseAdmin.from("recuperacoes_senha").update({ usado: true }).eq("id", rec.id);
@@ -464,7 +478,7 @@ export async function resetarSenhaComCodigo(recoveryId: string, novaSenha: strin
 
   if (error || !rec) throw new AppError("Sessão de recuperação inválida.", 401);
   
-  const diffMinutes = (Date.now() - new Date(rec.created_at).getTime()) / 60000;
+  const diffMinutes = (getNowBR().getTime() - parseLocalDate(rec.created_at).getTime()) / 60000;
   if (diffMinutes > 60) throw new AppError("Tempo de recuperação excedido. Solicite novamente.", 401);
 
   const { error: resetError } = await supabaseAdmin.auth.admin.updateUserById(rec.usuario_id, {
