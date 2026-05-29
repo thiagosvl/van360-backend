@@ -8,9 +8,8 @@ import {
 } from "../../../types/payment.js";
 
 /**
- * Provedor Woovi
- * Responsável por cobranças de mensalidades dos passageiros com split automático para o motorista.
- * TODO: Implementar integração com a API da Woovi.
+ * Provedor Woovi (Placeholder)
+ * Estrutura inativa mantida para futura integração.
  */
 export class WooviProvider implements PaymentProviderAdapter {
     readonly providerName = PaymentProvider.WOOVI;

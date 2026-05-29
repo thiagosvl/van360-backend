@@ -3,6 +3,7 @@ import { contractWorker } from "../workers/contract.worker.js";
 import { generationWorker } from "../workers/generation.worker.js";
 import { whatsappWorker } from "../workers/whatsapp.worker.js";
 import { cronWorker } from "../workers/cron.worker.js";
+import { setupCronJobs } from "../queues/cron.queue.js";
 
 /**
  * Serviço responsável por inicializar e gerenciar os Workers das filas.
@@ -11,6 +12,8 @@ import { cronWorker } from "../workers/cron.worker.js";
 export const queueService = {
     async initialize() {
         logger.info("[QueueService] Inicializando workers...");
+
+        await setupCronJobs();
 
         if (whatsappWorker) logger.info(`[QueueService] Worker iniciado: ${whatsappWorker.name}`);
         if (generationWorker) logger.info(`[QueueService] Worker iniciado: ${generationWorker.name}`);

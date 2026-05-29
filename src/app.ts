@@ -21,9 +21,15 @@ export async function createApp(): Promise<FastifyInstance> {
     const app = Fastify({
       // No Fastify 5, para passar uma instância do Pino usamos 'loggerInstance'
       loggerInstance: logger as any, 
-      disableRequestLogging: false,
+      disableRequestLogging: true,
       trustProxy: true,
     }) as FastifyInstance;
+
+    app.addHook("onResponse", (request, reply, done) => {
+      if (request.method === "OPTIONS") return done();
+      request.log.info(`${request.method} ${request.url} - ${reply.statusCode}`);
+      done();
+    });
 
     // --- CONTEXT PROVIDER (IP Tracking via Plugin) ---
     // Envolve cada request em um store do AsyncLocalStorage de forma robusta

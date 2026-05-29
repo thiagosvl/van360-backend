@@ -2,8 +2,13 @@ import crypto from "node:crypto";
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
+import {
+  EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_HOJE,
+  EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_AVISO,
+  EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_ATRASO
+} from "../config/constants.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
-import { getNowBR, getLastDayOfMonth, toPersistenceString } from "../utils/date.utils.js";
+import { getNowBR, addDays, getLastDayOfMonth, toPersistenceString, diffInDays } from "../utils/date.utils.js";
 
 import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
 import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaOrigem, CobrancaStatus, ConfigKey } from "../types/enums.js";
@@ -277,10 +282,10 @@ export const cobrancaService = {
     let created = 0;
     let skipped = 0;
 
-    // 1. Buscar Passageiros Ativos e Detalhes do Motorista (Taxa)
+    // 1. Buscar Passageiros Ativos e Detalhes do Motorista
     const { data: motorista, error: motError } = await supabaseAdmin
       .from("usuarios")
-      .select("taxa_servico")
+      .select("id")
       .eq("id", motoristaId)
       .single();
 
@@ -288,27 +293,23 @@ export const cobrancaService = {
 
     const { data: passageiros, error: passError } = await supabaseAdmin
       .from("passageiros")
-      .select("id, nome, valor_cobranca, dia_vencimento, cpf_responsavel, nome_responsavel, repasse_taxa_servico")
+      .select("id, nome, valor_cobranca, dia_vencimento, cpf_responsavel, nome_responsavel")
       .eq("usuario_id", motoristaId)
       .eq("ativo", true)
-      .eq("cobranca_automatica", true);
+      .eq("enviar_notificacoes", true);
 
     if (passError) throw passError;
     if (!passageiros) return { created, skipped };
 
-    // 2. Buscar Taxa de Serviço Global (Fallback se o motorista não tiver personalizada)
-    const taxaServicoPadrao = await getConfigNumber(ConfigKey.TAXA_SERVICO_PADRAO, 3.90);
-    const taxaMotorista = motorista.taxa_servico ? Number(motorista.taxa_servico) : taxaServicoPadrao;
-
-    // 3. Iterar por Passageiro e Gerar Cobrança
+    // 2. Iterar por Passageiro e Gerar Cobrança
     for (const passageiro of passageiros) {
       // Verificar se já existe cobrança para este mês/ano/passageiro
       const { count } = await supabaseAdmin
-        .from("cobrancas")
-        .select("id", { count: "exact", head: true })
-        .eq("passageiro_id", passageiro.id)
-        .eq("mes", targetMonth)
-        .eq("ano", targetYear);
+         .from("cobrancas")
+         .select("id", { count: "exact", head: true })
+         .eq("passageiro_id", passageiro.id)
+         .eq("mes", targetMonth)
+         .eq("ano", targetYear);
 
       if (count && count > 0) {
         skipped++;
@@ -321,13 +322,7 @@ export const cobrancaService = {
       const diaFinal = Math.min(diaVencimento, lastDayOfMonth);
       const dataVencimentoStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(diaFinal).padStart(2, '0')}`;
 
-      // Lógica de Repasse de Taxa:
-      // Se repassa, somamos a taxa ao valor original.
-      // Se não repassa, o valor da cobrança é apenas o valor original (a taxa será descontada no split).
-      let valorFinal = Number(passageiro.valor_cobranca);
-      if (passageiro.repasse_taxa_servico) {
-        valorFinal += taxaMotorista;
-      }
+      const valorFinal = Number(passageiro.valor_cobranca);
 
       if (!valorFinal || valorFinal <= 0) continue;
 
@@ -361,11 +356,131 @@ export const cobrancaService = {
     return { created, skipped };
   },
 
-  /**
-   * Método desativado no plano base.
-   */
-  async gerarPixRetroativo(usuarioId: string): Promise<any> {
-    return { totalEnfileirados: 0 };
+  async enviarNotificacoesDiarias() {
+    logger.info("[CobrancaService] Iniciando processo diário de notificações de cobrança...");
+
+    try {
+      const now = getNowBR();
+      const todayStr = toPersistenceString(now);
+      
+      const thresholdDays = await getConfigNumber(ConfigKey.PASSAGEIRO_DIAS_AVISO_VENCIMENTO, 2);
+      const thresholdDate = getNowBR();
+      thresholdDate.setDate(now.getDate() + thresholdDays);
+      const thresholdDateStr = toPersistenceString(thresholdDate);
+
+      const { data: cobrancas, error } = await supabaseAdmin
+        .from("cobrancas")
+        .select(`
+          *,
+          passageiro:passageiros(nome, nome_responsavel, telefone_responsavel),
+          motorista:usuarios!cobrancas_usuario_id_fkey(nome, apelido, telefone, chave_pix, tipo_chave_pix)
+        `)
+        .eq("status", CobrancaStatus.PENDENTE)
+        .eq("desativar_lembretes", false);
+
+      if (error) {
+        logger.error({ error: error.message }, "[CobrancaService] Erro ao buscar cobranças pendentes para notificações");
+        return;
+      }
+
+      if (!cobrancas || cobrancas.length === 0) {
+        logger.info("[CobrancaService] Nenhuma cobrança pendente para notificar hoje.");
+        return;
+      }
+
+      logger.info({ count: cobrancas.length }, "[CobrancaService] Processando notificações para cobranças pendentes...");
+
+      let sentCount = 0;
+
+      for (const c of cobrancas) {
+        const passageiro = c.passageiro;
+        const motorista = c.motorista;
+
+        if (!passageiro?.telefone_responsavel) continue;
+
+        if (!motorista?.chave_pix || !motorista?.tipo_chave_pix) {
+          logger.warn({ cobrancaId: c.id, motoristaId: c.usuario_id }, "[CobrancaService] Motorista sem chave Pix configurada. Notificação ignorada.");
+          continue;
+        }
+
+        const dataVencimentoStr = c.data_vencimento;
+        const ultimaNotifStr = c.data_envio_ultima_notificacao;
+
+        let eventType:
+          | typeof EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_HOJE
+          | typeof EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_AVISO
+          | typeof EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_ATRASO
+          | null = null;
+        let shouldSend = false;
+
+        if (dataVencimentoStr === todayStr) {
+          eventType = EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_HOJE;
+          if (!ultimaNotifStr || !ultimaNotifStr.startsWith(todayStr)) {
+            shouldSend = true;
+          }
+        } else if (dataVencimentoStr > todayStr && dataVencimentoStr <= thresholdDateStr) {
+          eventType = EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_AVISO;
+          if (!ultimaNotifStr) {
+            shouldSend = true;
+          }
+        } else if (dataVencimentoStr < todayStr) {
+          eventType = EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_ATRASO;
+          const daysSinceDue = diffInDays(dataVencimentoStr, now);
+          if (daysSinceDue === 3 || daysSinceDue === 5 || daysSinceDue === 7) {
+            shouldSend = true;
+          }
+        }
+
+        if (shouldSend && eventType) {
+          try {
+            const context = {
+              nomeResponsavel: passageiro.nome_responsavel,
+              nomePassageiro: passageiro.nome,
+              nomeMotorista: motorista.nome,
+              apelidoMotorista: motorista.apelido,
+              telefoneMotorista: motorista.telefone,
+              valor: Number(c.valor),
+              dataVencimento: dataVencimentoStr,
+              diasAntecedencia: thresholdDays,
+              usuarioId: c.usuario_id,
+              chavePix: motorista.chave_pix,
+              tipoChavePix: motorista.tipo_chave_pix
+            };
+
+            const { notificationService } = await import("./notifications/notification.service.js");
+            const success = await notificationService.notifyPassenger(
+              passageiro.telefone_responsavel,
+              eventType,
+              context
+            );
+
+            if (success) {
+              await supabaseAdmin
+                .from("cobrancas")
+                .update({ data_envio_ultima_notificacao: new Date().toISOString() })
+                .eq("id", c.id);
+
+              historicoService.log({
+                usuario_id: c.usuario_id,
+                entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
+                entidade_id: c.id,
+                acao: AtividadeAcao.NOTIFICACAO_WHATSAPP,
+                descricao: `Notificação de cobrança (${eventType}) enviada para o responsável de ${passageiro.nome}.`,
+                meta: { passageiro: passageiro.nome, tipo: eventType }
+              });
+
+              sentCount++;
+            }
+          } catch (err: any) {
+            logger.error({ err: err.message, cobrancaId: c.id }, "[CobrancaService] Falha ao enviar notificação de cobrança individual");
+          }
+        }
+      }
+
+      logger.info({ sentCount }, "[CobrancaService] Envio diário de notificações de cobrança concluído.");
+    } catch (err: any) {
+      logger.error({ err: err.message }, "[CobrancaService] Erro crítico no processo de notificações de cobrança");
+    }
   },
 
   /**

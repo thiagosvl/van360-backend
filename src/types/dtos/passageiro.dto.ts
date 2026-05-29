@@ -40,8 +40,7 @@ export const createPassageiroSchema = z.object({
 
     // Controle
     ativo: z.boolean().optional(),
-    repasse_taxa_servico: z.boolean().optional(),
-    cobranca_automatica: z.boolean().optional(),
+    enviar_notificacoes: z.boolean().optional(),
 
     periodo: z.string().optional().or(z.literal("")).transform(v => v ? v.toLowerCase() : undefined),
     genero: optionalString,

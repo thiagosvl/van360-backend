@@ -49,8 +49,7 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO> & Record<stri
     if (data.data_nascimento !== undefined) prepared.data_nascimento = data.data_nascimento ? toPersistenceString(data.data_nascimento) : null;
     if (data.parentesco_responsavel !== undefined) prepared.parentesco_responsavel = data.parentesco_responsavel;
     if (data.data_inicio_transporte !== undefined) prepared.data_inicio_transporte = data.data_inicio_transporte ? toPersistenceString(data.data_inicio_transporte) : null;
-    if (data.repasse_taxa_servico !== undefined) prepared.repasse_taxa_servico = data.repasse_taxa_servico;
-    if (data.cobranca_automatica !== undefined) prepared.cobranca_automatica = data.cobranca_automatica;
+    if (data.enviar_notificacoes !== undefined) prepared.enviar_notificacoes = data.enviar_notificacoes;
 
 
     // Controle

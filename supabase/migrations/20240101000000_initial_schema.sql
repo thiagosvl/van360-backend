@@ -283,6 +283,7 @@ CREATE TABLE IF NOT EXISTS "public"."passageiros" (
     "data_nascimento" "date",
     "parentesco_responsavel" "public"."parentesco_enum",
     "data_inicio_transporte" "date",
+    "enviar_notificacoes" boolean DEFAULT true NOT NULL,
     CONSTRAINT "passageiros_dia_vencimento_check" CHECK ((("dia_vencimento" >= 1) AND ("dia_vencimento" <= 31)))
 );
 
@@ -353,6 +354,8 @@ CREATE TABLE IF NOT EXISTS "public"."usuarios" (
     "assinatura_digital_url" "text",
     "termos_aceitos_em" timestamp with time zone,
     "termos_versao" "text",
+    "chave_pix" "text",
+    "tipo_chave_pix" "text",
     "config_contrato" "jsonb" DEFAULT '{
       "usar_contratos": true,
       "configurado": false,
@@ -1295,16 +1298,6 @@ CREATE TABLE IF NOT EXISTS "public"."assinatura_notificacoes" (
 
 ALTER TABLE "public"."assinatura_notificacoes" OWNER TO "postgres";
 
--- 2. ALTERAÇÕES EM TABELAS EXISTENTES
-ALTER TABLE "public"."usuarios" ADD COLUMN IF NOT EXISTS "taxa_servico" numeric(10,2);
-ALTER TABLE "public"."usuarios" ADD COLUMN IF NOT EXISTS "chave_pix" text;
-
-ALTER TABLE "public"."passageiros" ADD COLUMN IF NOT EXISTS "repasse_taxa_servico" boolean DEFAULT false;
-ALTER TABLE "public"."passageiros" ADD COLUMN IF NOT EXISTS "cobranca_automatica" boolean DEFAULT false;
-
-ALTER TABLE "public"."cobrancas" ADD COLUMN IF NOT EXISTS "gateway_txid" text;
-ALTER TABLE "public"."cobrancas" ADD COLUMN IF NOT EXISTS "pix_copy_paste" text;
-ALTER TABLE "public"."cobrancas" ADD COLUMN IF NOT EXISTS "pix_expiration" timestamptz;
 
 -- 3. ÍNDICES DE PERFORMANCE
 CREATE INDEX IF NOT EXISTS "idx_planos_identificador" ON "public"."planos"("identificador");

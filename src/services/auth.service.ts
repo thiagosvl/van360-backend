@@ -124,6 +124,7 @@ export async function criarUsuario(data: UsuarioPayload & { tipo?: UserType, id:
       tipo: tipo || UserType.MOTORISTA,
       termos_aceitos_em: termos_aceitos ? getNowBR().toISOString() : null,
       termos_versao: termos_aceitos ? TERMOS_VERSAO_ATUAL : null,
+      created_at: getNowBR().toISOString(),
     }])
     .select("id")
     .single();

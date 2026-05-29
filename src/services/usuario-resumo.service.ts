@@ -130,7 +130,7 @@ export const usuarioResumoService = {
       },
       ticket_medio: ticketMedio
     };
-    
+
     return {
       usuario: {
         ativo: (usuario as any).ativo,

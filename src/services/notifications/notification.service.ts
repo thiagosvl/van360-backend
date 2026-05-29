@@ -23,10 +23,13 @@ import {
     EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_1,
     EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_FINAL,
     EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
-    EVENTO_PASSAGEIRO_ASSINATURA_VENCEU,
+    EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
     EVENTO_PASSAGEIRO_ATRASADO,
     EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL,
     EVENTO_PASSAGEIRO_CONTRATO_ASSINADO,
+    EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_AVISO,
+    EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_HOJE,
+    EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_ATRASO,
     EVENTO_AUTH_RECUPERACAO_SENHA,
     EVENTO_AUTH_SENHA_ALTERADA,
     GLOBAL_WHATSAPP_INSTANCE
@@ -49,10 +52,13 @@ export interface NotificationOptions {
 
 type PassengerEventType =
     | typeof EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO
-    | typeof EVENTO_PASSAGEIRO_ASSINATURA_VENCEU
+    | typeof EVENTO_PASSAGEIRO_VENCIMENTO_HOJE
     | typeof EVENTO_PASSAGEIRO_ATRASADO
     | typeof EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL
-    | typeof EVENTO_PASSAGEIRO_CONTRATO_ASSINADO;
+    | typeof EVENTO_PASSAGEIRO_CONTRATO_ASSINADO
+    | typeof EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_AVISO
+    | typeof EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_HOJE
+    | typeof EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_ATRASO;
 
 export type DriverEventType =
     | typeof EVENTO_MOTORISTA_TESTE_BOAS_VINDAS
@@ -106,10 +112,13 @@ class NotificationService {
 
         switch (type) {
             case EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO: parts = PassengerTemplates.dueSoon(ctx); break;
-            case EVENTO_PASSAGEIRO_ASSINATURA_VENCEU: parts = PassengerTemplates.dueToday(ctx); break;
+            case EVENTO_PASSAGEIRO_VENCIMENTO_HOJE: parts = PassengerTemplates.dueToday(ctx); break;
             case EVENTO_PASSAGEIRO_ATRASADO: parts = PassengerTemplates.overdue(ctx); break;
             case EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL: parts = PassengerTemplates.contractAvailable(ctx); break;
             case EVENTO_PASSAGEIRO_CONTRATO_ASSINADO: parts = PassengerTemplates.contractSignedBySelf(ctx); break;
+            case EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_AVISO: parts = PassengerTemplates.dueSoonManual(ctx); break;
+            case EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_HOJE: parts = PassengerTemplates.dueTodayManual(ctx); break;
+            case EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_ATRASO: parts = PassengerTemplates.overdueManual(ctx); break;
         }
 
         return await this._processAndEnqueue(to, parts, type as string, options);

@@ -1,7 +1,7 @@
 import { CreateChargeRequest, ChargeResponse, NormalizedPaymentEvent, PaymentProviderAdapter } from "../../types/payment.js";
 import { PaymentProvider } from "../../types/enums.js";
 import { EfipayProvider } from "./providers/efipay.provider.js";
-import { WooviProvider } from "./providers/woovi.provider.js";
+// import { WooviProvider } from "./providers/woovi.provider.js";
 import { AppError } from "../../errors/AppError.js";
 import { logger } from "../../config/logger.js";
 
@@ -10,7 +10,7 @@ class PaymentService {
 
     constructor() {
         this.register(new EfipayProvider());
-        this.register(new WooviProvider());
+        // this.register(new WooviProvider());
     }
 
     private register(provider: PaymentProviderAdapter): void {

@@ -3,12 +3,10 @@ import { logger } from '../config/logger.js';
 import { redisConfig } from '../config/redis.js';
 import { QUEUE_NAME_CRON } from '../queues/cron.queue.js';
 
-
 import { subscriptionMonitorService } from '../services/subscriptions/subscription-monitor.service.js';
 import { cobrancaService } from '../services/cobranca.service.js';
-import { cobrancaPixService } from '../services/payments/cobranca-pix.service.js';
 import { getConfigNumber } from '../services/configuracao.service.js';
-import { ConfigKey } from '../types/enums.js';
+import { ConfigKey, CronJob } from '../types/enums.js';
 
 /**
  * Worker responsável por executar os Jobs agendados (Cron) na VPS.
@@ -20,29 +18,23 @@ export const cronWorker = new Worker(
 
         try {
             switch (job.name) {
-                case 'daily-subscription-monitor':
-                case 'subscription-check':
+                case CronJob.DAILY_SUBSCRIPTION_MONITOR:
+                case CronJob.SUBSCRIPTION_CHECK:
                     await subscriptionMonitorService.runDailyCheck();
                     break;
 
-                case 'subscription-generator': {
+                case CronJob.SUBSCRIPTION_GENERATOR: {
                     const daysBefore = await getConfigNumber(ConfigKey.SAAS_DIAS_VENCIMENTO, 5);
                     await subscriptionMonitorService.generateRenewalInvoices(daysBefore);
                     break;
                 }
 
-                case 'charge-generator':
-                    // 1. Garante que as cobranças do mês (casca) existam no DB
+                case CronJob.CHARGE_GENERATOR:
                     await cobrancaService.gerarCobrancasMensaisParaTodos();
-                    // 2. Para as cobranças existentes que vencem em breve, gera o Pix com Split
-                    await cobrancaPixService.gerarPixParaCobrancasVencendo();
                     break;
 
-                case 'repasse-monitor':
-                case 'pix-validation-monitor':
-                case 'repasse-retry':
-                case 'reconciliacao-entrada':
-                    logger.info({ jobName: job.name }, "[CronWorker] Job trigger recebido.");
+                case CronJob.DAILY_CHARGE_MONITOR:
+                    await cobrancaService.enviarNotificacoesDiarias();
                     break;
 
                 default:

@@ -19,10 +19,25 @@ export interface PassengerContext {
     telefoneMotorista?: string; // Para contato direto
     linkAssinatura?: string;
     contratoUrl?: string; // URL do PDF final
+    chavePix?: string;
+    tipoChavePix?: string;
 }
 
 const textPart = (text: string): CompositeMessagePart[] => {
     return [{ type: "text", content: text }];
+};
+
+// Helper for Pix Key Label
+const getTipoChavePixLabel = (tipo?: string): string => {
+    if (!tipo) return "Não informado";
+    const mapping: Record<string, string> = {
+        CPF: "CPF",
+        CNPJ: "CNPJ",
+        EMAIL: "E-mail",
+        TELEFONE: "Telefone",
+        ALEATORIA: "Chave Aleatória"
+    };
+    return mapping[tipo.toUpperCase()] || tipo;
 };
 
 // Helper for System Footer
@@ -85,6 +100,36 @@ export const PassengerTemplates = {
     },
 
     /**
+     * Lembrete de Mensalidade Próxima - Pix Estático (Manual)
+     */
+    dueSoonManual: (ctx: PassengerContext): CompositeMessagePart[] => {
+        const valor = formatCurrency(ctx.valor || 0);
+        const data = formatToBrazilianDate(ctx.dataVencimento || "");
+        const diasMsg = ctx.diasAntecedencia ? ` (daqui a ${ctx.diasAntecedencia} dias)` : "";
+        const nomeResp = getFirstName(ctx.nomeResponsavel);
+
+        const labelTipo = getTipoChavePixLabel(ctx.tipoChavePix);
+        const nomeExibicao = ctx.apelidoMotorista || getFirstName(ctx.nomeMotorista);
+
+        const text = `🗓️ *Aviso de Mensalidade*\n\n` +
+            `Responsável: *${nomeResp}*\n` +
+            `Passageiro(a): *${ctx.nomePassageiro}*\n\n` +
+            `🔹 Valor: *${valor}*\n` +
+            `🔹 Vencimento: *${data}*${diasMsg}\n\n` +
+            `_________________\n` +
+            `🔑 *Dados para Pagamento via Pix:*\n` +
+            `• *Tipo:* ${labelTipo}\n` +
+            `• *Favorecido:* ${nomeExibicao}\n\n` +
+            `*(A chave Pix limpa será enviada na próxima mensagem para facilitar a cópia)*` +
+            `${getSystemFooter(ctx)}`;
+
+        return [
+            { type: "text", content: text },
+            { type: "text", content: ctx.chavePix || "", delayMs: 1500 }
+        ];
+    },
+
+    /**
      * Mensalidade Vence Hoje (Venceu)
      */
     dueToday: (ctx: PassengerContext): CompositeMessagePart[] => {
@@ -101,6 +146,34 @@ export const PassengerTemplates = {
     },
 
     /**
+     * Mensalidade Vence Hoje - Pix Estático (Manual)
+     */
+    dueTodayManual: (ctx: PassengerContext): CompositeMessagePart[] => {
+        const valor = formatCurrency(ctx.valor || 0);
+        const data = formatToBrazilianDate(ctx.dataVencimento || "");
+        const nomeResp = getFirstName(ctx.nomeResponsavel);
+
+        const labelTipo = getTipoChavePixLabel(ctx.tipoChavePix);
+        const nomeExibicao = ctx.apelidoMotorista || getFirstName(ctx.nomeMotorista);
+        
+        const text = `⚠️ *Mensalidade Vence Hoje*\n\n` +
+            `Responsável: *${nomeResp}*\n` +
+            `Passageiro(a): *${ctx.nomePassageiro}*\n\n` +
+            `Informamos que a mensalidade no valor de *${valor}* vence hoje (*${data}*).\n\n` +
+            `_________________\n` +
+            `🔑 *Dados para Pagamento via Pix:*\n` +
+            `• *Tipo:* ${labelTipo}\n` +
+            `• *Favorecido:* ${nomeExibicao}\n\n` +
+            `*(A chave Pix limpa será enviada na próxima mensagem para facilitar a cópia)*` +
+            `${getSystemFooter(ctx)}`;
+
+        return [
+            { type: "text", content: text },
+            { type: "text", content: ctx.chavePix || "", delayMs: 1500 }
+        ];
+    },
+
+    /**
      * Mensalidade Atrasada
      */
     overdue: (ctx: PassengerContext): CompositeMessagePart[] => {
@@ -114,5 +187,33 @@ export const PassengerTemplates = {
             `Identificamos que a mensalidade de *${valor}* (vencida em *${data}*) ainda não foi regularizada.${getSystemFooter(ctx)}`;
 
         return textPart(text);
+    },
+
+    /**
+     * Mensalidade Atrasada - Pix Estático (Manual)
+     */
+    overdueManual: (ctx: PassengerContext): CompositeMessagePart[] => {
+        const valor = formatCurrency(ctx.valor || 0);
+        const data = formatToBrazilianDate(ctx.dataVencimento || "");
+        const nomeResp = getFirstName(ctx.nomeResponsavel);
+
+        const labelTipo = getTipoChavePixLabel(ctx.tipoChavePix);
+        const nomeExibicao = ctx.apelidoMotorista || getFirstName(ctx.nomeMotorista);
+        
+        const text = `⚠️ *Aviso de Atraso*\n\n` +
+            `Responsável: *${nomeResp}*\n` +
+            `Passageiro(a): *${ctx.nomePassageiro}*\n\n` +
+            `Identificamos que a mensalidade de *${valor}* (vencida em *${data}*) ainda não foi regularizada.\n\n` +
+            `_________________\n` +
+            `🔑 *Dados para Pagamento via Pix:*\n` +
+            `• *Tipo:* ${labelTipo}\n` +
+            `• *Favorecido:* ${nomeExibicao}\n\n` +
+            `*(A chave Pix limpa será enviada na próxima mensagem para facilitar a cópia)*` +
+            `${getSystemFooter(ctx)}`;
+
+        return [
+            { type: "text", content: text },
+            { type: "text", content: ctx.chavePix || "", delayMs: 1500 }
+        ];
     }
 };

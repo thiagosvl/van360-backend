@@ -1,22 +1,30 @@
 import { logger } from "../../config/logger.js";
 import { subscriptionMonitorService } from "../subscriptions/subscription-monitor.service.js";
 import { cobrancaService } from "../cobranca.service.js";
+import { getConfigNumber } from "../configuracao.service.js";
+import { ConfigKey } from "../../types/enums.js";
 
 export const jobOrchestratorService = {
-  /**
-   * Executa a rotina diária do sistema (Assinaturas, Mensalidades, etc)
-   * A ser disparado por um CronJob (ex: VPS ou Vercel Cron)
-   */
   async runDailyJobs() {
     logger.info("[JobOrchestrator] Iniciando rotina diária...");
 
+    const daysBefore = await getConfigNumber(ConfigKey.SAAS_DIAS_VENCIMENTO, 5);
+
     const executions = [
-      subscriptionMonitorService.runDailyCheck().catch((err: any) => {
+      subscriptionMonitorService.runDailyCheck().catch((err: Error) => {
         logger.error({ err }, "[JobOrchestrator] Erro ao processar assinaturas diárias");
         throw err;
       }),
-      cobrancaService.gerarCobrancasMensaisParaTodos().catch((err: any) => {
+      subscriptionMonitorService.generateRenewalInvoices(daysBefore).catch((err: Error) => {
+        logger.error({ err }, "[JobOrchestrator] Erro ao gerar faturas de renovação SaaS");
+        throw err;
+      }),
+      cobrancaService.gerarCobrancasMensaisParaTodos().catch((err: Error) => {
         logger.error({ err }, "[JobOrchestrator] Erro ao processar mensalidades de passageiros");
+        throw err;
+      }),
+      cobrancaService.enviarNotificacoesDiarias().catch((err: Error) => {
+        logger.error({ err }, "[JobOrchestrator] Erro ao enviar lembretes diários de cobrança");
         throw err;
       })
     ];
