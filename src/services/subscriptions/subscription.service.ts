@@ -228,12 +228,12 @@ export const subscriptionService = {
 
         const { data: indicacaoComoConvidado } = await supabaseAdmin
             .from("indicacoes")
-            .select("id")
+            .select("id, status")
             .eq("indicado_id", userId)
-            .eq("status", IndicacaoStatus.PENDING)
             .maybeSingle();
 
-        const hasActiveDiscount = !!indicacaoComoConvidado;
+        const hasActiveDiscount = indicacaoComoConvidado?.status === IndicacaoStatus.PENDING;
+        const hasIndicator = !!indicacaoComoConvidado;
 
         return {
             total,
@@ -243,7 +243,8 @@ export const subscriptionService = {
             referralLink: `${env.FRONTEND_URL}/cadastro?ref=${userId}`,
             bonusDays,
             discountPct,
-            hasActiveDiscount
+            hasActiveDiscount,
+            hasIndicator
         };
     },
 
