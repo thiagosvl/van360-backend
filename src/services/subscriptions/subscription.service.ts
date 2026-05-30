@@ -223,12 +223,27 @@ export const subscriptionService = {
         const completed = data?.filter(i => i.status === IndicacaoStatus.COMPLETED).length || 0;
         const pending = data?.filter(i => i.status === IndicacaoStatus.PENDING).length || 0;
 
+        const bonusDays = await getConfigNumber(ConfigKey.SAAS_REFERRAL_BONUS_DAYS, 30);
+        const discountPct = await getConfigNumber(ConfigKey.SAAS_REFERRAL_DISCOUNT_PCT, 10);
+
+        const { data: indicacaoComoConvidado } = await supabaseAdmin
+            .from("indicacoes")
+            .select("id")
+            .eq("indicado_id", userId)
+            .eq("status", IndicacaoStatus.PENDING)
+            .maybeSingle();
+
+        const hasActiveDiscount = !!indicacaoComoConvidado;
+
         return {
             total,
             completed,
             pending,
             referralCode: userId,
-            referralLink: `${env.FRONTEND_URL}/cadastro?ref=${userId}`
+            referralLink: `${env.FRONTEND_URL}/cadastro?ref=${userId}`,
+            bonusDays,
+            discountPct,
+            hasActiveDiscount
         };
     },
 
@@ -351,7 +366,19 @@ export const subscriptionService = {
         // 2. Aplicar bônus ao indicador (Adicionar N dias à validade da assinatura atual)
         const sub = await this.getOrCreateSubscription(indicacao.indicador_id);
         if (sub) {
-            const newExpiry = sub.data_vencimento ? parseLocalDate(sub.data_vencimento) : getNowBR();
+            let baseDate = getNowBR();
+            if (sub.status === SubscriptionStatus.TRIAL && sub.trial_ends_at) {
+                baseDate = parseLocalDate(sub.trial_ends_at);
+            } else if (sub.data_vencimento) {
+                baseDate = parseLocalDate(sub.data_vencimento);
+            }
+
+            // Se a data base (vencimento antigo ou fim do trial) já passou, o bônus começa a contar a partir de hoje
+            if (baseDate < getNowBR()) {
+                baseDate = getNowBR();
+            }
+
+            const newExpiry = getEndOfDayBR(baseDate);
             const bonusDays = await getConfigNumber(ConfigKey.SAAS_REFERRAL_BONUS_DAYS, 30);
             newExpiry.setDate(newExpiry.getDate() + bonusDays);
 
@@ -359,7 +386,8 @@ export const subscriptionService = {
                 .from("assinaturas")
                 .update({
                     data_vencimento: getEndOfDayBR(newExpiry).toISOString(),
-                    status: SubscriptionStatus.ACTIVE
+                    status: SubscriptionStatus.ACTIVE,
+                    trial_ends_at: null // Remove o trial_ends_at pois agora ele tem uma assinatura com vencimento ativo
                 })
                 .eq("id", sub.id);
 
