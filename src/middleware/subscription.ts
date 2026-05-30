@@ -27,9 +27,9 @@ export async function checkSubscriptionAccess(
 
     if (isBlocked) {
       logger.warn({ userId, url, method }, "[SubscriptionMiddleware] Ação bloqueada — Assinatura SaaS EXPIRADA.");
-      
+
       return reply.status(403).send({
-        error: "Acesso bloqueado. Sua assinatura SaaS expirou.",
+        error: "Acesso bloqueado. Sua assinatura expirou.",
         code: "SAAS_EXPIRED",
         message: "Sua conta está em modo leitura. Regularize seu pagamento para continuar criando cobranças e gerenciando passageiros."
       });
