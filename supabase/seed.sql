@@ -51,7 +51,8 @@ INSERT INTO public.usuarios (
     ativo,
     created_at,
     updated_at,
-    tipo
+    tipo,
+    data_nascimento
 ) VALUES (
     'd0d8c19c-3b36-402a-9e73-9a3c3c3c3c3c',
     'Sr. T',
@@ -62,7 +63,8 @@ INSERT INTO public.usuarios (
     true,
     now(),
     now(),
-    'admin'
+    'admin',
+    '1990-01-01'
 ) ON CONFLICT (id) DO NOTHING;
 
 -- 3. CONFIGURAÇÃO INTERNA (GESTÃO OPERACIONAL E FINANCEIRA)
