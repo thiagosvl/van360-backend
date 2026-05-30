@@ -356,6 +356,7 @@ CREATE TABLE IF NOT EXISTS "public"."usuarios" (
     "termos_versao" "text",
     "chave_pix" "text",
     "tipo_chave_pix" "text",
+    "data_nascimento" "date" NOT NULL,
     "config_contrato" "jsonb" DEFAULT '{
       "usar_contratos": true,
       "configurado": false,

@@ -24,6 +24,7 @@ export interface UsuarioPayload {
   telefone: string;
   ativo?: boolean;
   termos_aceitos?: boolean;
+  data_nascimento?: string;
 }
 
 export interface CheckUserStatusResult {
@@ -55,6 +56,7 @@ export interface RegistroPayload {
   ativo?: boolean;
   termos_aceitos: boolean;
   indicador_id?: string;
+  data_nascimento?: string;
 }
 
 export interface RegistroManualResult {
@@ -109,7 +111,20 @@ export async function checkUserStatus(
 }
 
 export async function criarUsuario(data: UsuarioPayload & { tipo?: UserType, id: string }) {
-  const { id, nome, apelido, email, cpfcnpj, telefone, ativo = false, tipo, termos_aceitos } = data;
+  const { id, nome, apelido, email, cpfcnpj, telefone, ativo = false, tipo, termos_aceitos, data_nascimento } = data;
+
+  let dataNascimentoISO: string | null = null;
+  if (data_nascimento) {
+    const cleanDate = data_nascimento.replace(/\D/g, "");
+    if (cleanDate.length === 8) {
+      const dia = cleanDate.substring(0, 2);
+      const mes = cleanDate.substring(2, 4);
+      const ano = cleanDate.substring(4, 8);
+      dataNascimentoISO = `${ano}-${mes}-${dia}`;
+    } else if (data_nascimento.includes("-")) {
+      dataNascimentoISO = data_nascimento;
+    }
+  }
 
   const { data: usuario, error } = await supabaseAdmin
     .from("usuarios")
@@ -125,6 +140,7 @@ export async function criarUsuario(data: UsuarioPayload & { tipo?: UserType, id:
       termos_aceitos_em: termos_aceitos ? getNowBR().toISOString() : null,
       termos_versao: termos_aceitos ? TERMOS_VERSAO_ATUAL : null,
       created_at: getNowBR().toISOString(),
+      data_nascimento: dataNascimentoISO,
     }])
     .select("id")
     .single();

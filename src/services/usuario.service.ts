@@ -6,13 +6,10 @@ import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
 import { isValidPixKey } from "../utils/validators.js";
 
-/**
- * Helper para obter dados do usuário
- */
 export async function getUsuarioData(usuarioId: string) {
   const { data: usuario, error } = await supabaseAdmin
     .from("usuarios")
-    .select("id, nome, cpfcnpj, telefone, config_contrato, chave_pix, tipo_chave_pix")
+    .select("id, nome, cpfcnpj, telefone, config_contrato, chave_pix, tipo_chave_pix, data_nascimento")
     .eq("id", usuarioId)
     .single();
 
@@ -33,6 +30,7 @@ export async function atualizarUsuario(usuarioId: string, payload: {
   telefone?: string;
   assinatura_digital_url?: string;
   config_contrato?: any;
+  data_nascimento?: string;
 }) {
   if (!usuarioId) throw new AppError("ID do usuário é obrigatório.", 400);
 
@@ -43,6 +41,24 @@ export async function atualizarUsuario(usuarioId: string, payload: {
   if (payload.assinatura_digital_url !== undefined) updates.assinatura_digital_url = payload.assinatura_digital_url;
   if (payload.config_contrato !== undefined) updates.config_contrato = payload.config_contrato;
 
+  if (payload.data_nascimento !== undefined) {
+    if (payload.data_nascimento) {
+      const cleanDate = payload.data_nascimento.replace(/\D/g, "");
+      if (cleanDate.length === 8) {
+        const dia = cleanDate.substring(0, 2);
+        const mes = cleanDate.substring(2, 4);
+        const ano = cleanDate.substring(4, 8);
+        updates.data_nascimento = `${ano}-${mes}-${dia}`;
+      } else if (payload.data_nascimento.includes("-")) {
+        updates.data_nascimento = payload.data_nascimento;
+      } else {
+        updates.data_nascimento = null;
+      }
+    } else {
+      updates.data_nascimento = null;
+    }
+  }
+
   const { error } = await supabaseAdmin
     .from("usuarios")
     .update(updates)
@@ -52,7 +68,7 @@ export async function atualizarUsuario(usuarioId: string, payload: {
     throw new AppError(`Erro ao atualizar usuário: ${error.message}`, 500);
   }
 
-  const perfilAlterado = payload.nome || payload.apelido || payload.telefone;
+  const perfilAlterado = payload.nome || payload.apelido || payload.telefone || payload.data_nascimento;
 
   if (perfilAlterado) {
     historicoService.log({
@@ -60,11 +76,10 @@ export async function atualizarUsuario(usuarioId: string, payload: {
       entidade_tipo: AtividadeEntidadeTipo.USUARIO,
       entidade_id: usuarioId,
       acao: AtividadeAcao.PERFIL_EDITADO,
-      descricao: "Dados de identificação do perfil (nome/apelido/telefone) atualizados.",
-      meta: { campos: Object.keys(payload).filter(k => ['nome', 'apelido', 'telefone'].includes(k)) }
+      descricao: "Dados de identificação do perfil (nome/apelido/telefone/data_nascimento) atualizados.",
+      meta: { campos: Object.keys(payload).filter(k => ['nome', 'apelido', 'telefone', 'data_nascimento'].includes(k)) }
     });
   } else if (payload.config_contrato !== undefined) {
-    // --- LOG DE AUDITORIA (CONFIG CONTRATO) ---
     const config = payload.config_contrato;
     historicoService.log({
       usuario_id: usuarioId,
@@ -76,7 +91,6 @@ export async function atualizarUsuario(usuarioId: string, payload: {
         usar_contratos: config.usar_contratos,
         multa_atraso: config.multa_atraso,
         multa_rescisao: config.multa_rescisao,
-        // Armazena as chaves que foram alteradas para facilitar auditoria rápida
         campos_alterados: Object.keys(config)
       }
     });
