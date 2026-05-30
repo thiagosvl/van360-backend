@@ -13,7 +13,6 @@ export async function verifySupabaseJWT(
 
     const token = authHeader.split(" ")[1];
     
-    // 1. Validar JWT com Supabase Auth
     const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
 
     if (authError || !user) {
@@ -27,10 +26,9 @@ export async function verifySupabaseJWT(
 
     const userId = user.id;
 
-    // 2. Verificar existência e status do perfil no banco de dados
     const { data: profile, error: profileError } = await supabaseAdmin
         .from("usuarios")
-        .select("id, ativo")
+        .select("id, ativo, tipo")
         .eq("id", userId)
         .maybeSingle();
 
@@ -53,7 +51,13 @@ export async function verifySupabaseJWT(
       });
     }
 
-    (request as any).user = user;
+    (request as any).user = {
+      ...user,
+      app_metadata: {
+        ...user.app_metadata,
+        role: profile.tipo,
+      },
+    };
     (request as any).usuario_id = profile.id;
 
   } catch (err: any) {

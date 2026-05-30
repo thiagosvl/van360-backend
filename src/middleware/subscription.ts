@@ -13,12 +13,14 @@ export async function checkSubscriptionAccess(
   const userId = (request as any).usuario_id;
   const method = request.method;
 
-  // 1. Permitir leituras (GET) sempre
   if (method === "GET") return;
 
-  // 2. Ignorar rotas de pagamento e assinatura
   const url = request.url;
-  if (url.includes("/subscriptions") || url.includes("/payments")) return;
+
+  if (url.includes("/admin") || url.includes("/subscriptions") || url.includes("/payments")) return;
+
+  const user = (request as any).user;
+  if (user?.app_metadata?.role === "admin") return;
 
   if (!userId) return;
 
@@ -36,8 +38,6 @@ export async function checkSubscriptionAccess(
     }
   } catch (err) {
     logger.error({ err, userId }, "[SubscriptionMiddleware] Erro ao validar assinatura.");
-    // Em caso de erro na validação, permitimos para evitar quebra do sistema?
-    // Ou bloqueamos por segurança? Vou permitir por enquanto p/ não travar o driver por erro interno.
     return;
   }
 }

@@ -403,9 +403,14 @@ export const subscriptionService = {
         const sub = await this.getOrCreateSubscription(userId);
         if (!sub) return true;
 
-        if (sub.status === SubscriptionStatus.EXPIRED) return true;
+        if (
+            sub.status === SubscriptionStatus.EXPIRED ||
+            sub.status === SubscriptionStatus.CANCELED ||
+            sub.status === SubscriptionStatus.PAST_DUE
+        ) {
+            return true;
+        }
 
-        // Se for trial, verificar se já expirou
         if (sub.status === SubscriptionStatus.TRIAL) {
             const trialLimit = parseLocalDate(sub.trial_ends_at);
             return trialLimit < getNowBR();
@@ -619,6 +624,10 @@ export const subscriptionService = {
             .eq("usuario_id", userId)
             .eq("status", SubscriptionInvoiceStatus.PENDING);
 
+        const { getConfigNumber } = await import("../configuracao.service.js");
+        const invoiceDays = await getConfigNumber(ConfigKey.SAAS_DIAS_VENCIMENTO, 30);
+        const dataVencimentoFatura = toPersistenceString(addDays(getNowBR(), invoiceDays));
+
         const { paymentService } = await import("../payments/payment.service.js");
 
         let chargeRes;
@@ -626,7 +635,7 @@ export const subscriptionService = {
             chargeRes = await paymentService.createCharge({
                 amount: valor,
                 description: `Assinatura Van360 - Plano ${plano.nome}`,
-                dueDate: toPersistenceString(addDays(getNowBR(), 1)),
+                dueDate: dataVencimentoFatura,
                 externalId: `sub_${sub.id}_${Date.now()}`,
                 paymentMethod: paymentMethod,
                 paymentToken: currentPaymentToken,
@@ -659,7 +668,7 @@ export const subscriptionService = {
                         metodo_pagamento: paymentMethod,
                         valor,
                         status: SubscriptionInvoiceStatus.FAILED,
-                        data_vencimento: toPersistenceString(addDays(getNowBR(), 1)),
+                        data_vencimento: dataVencimentoFatura,
                         gateway_txid: null,
                         pix_copy_paste: null
                     })
@@ -695,7 +704,7 @@ export const subscriptionService = {
                         metodo_pagamento: paymentMethod,
                         valor,
                         status: SubscriptionInvoiceStatus.FAILED,
-                        data_vencimento: toPersistenceString(addDays(getNowBR(), 1)),
+                        data_vencimento: dataVencimentoFatura,
                         gateway_txid: chargeRes.providerId || null,
                         pix_copy_paste: null
                     })
@@ -772,7 +781,7 @@ export const subscriptionService = {
                 metodo_pagamento: paymentMethod, // SALVA O MÉTODO UTILIZADO NA FATURA
                 valor,
                 status: SubscriptionInvoiceStatus.PENDING,
-                data_vencimento: toPersistenceString(addDays(getNowBR(), 1)),
+                data_vencimento: dataVencimentoFatura,
                 gateway_txid: chargeRes.providerId,
                 pix_copy_paste: chargeRes.pixCopyPaste
             })

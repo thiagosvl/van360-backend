@@ -24,7 +24,7 @@ export const cronWorker = new Worker(
                     break;
 
                 case CronJob.SUBSCRIPTION_GENERATOR: {
-                    const daysBefore = await getConfigNumber(ConfigKey.SAAS_DIAS_VENCIMENTO, 5);
+                    const daysBefore = await getConfigNumber(ConfigKey.SAAS_DIAS_ANTECEDENCIA_RENOVACAO, 5);
                     await subscriptionMonitorService.generateRenewalInvoices(daysBefore);
                     break;
                 }

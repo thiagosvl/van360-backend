@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
+import adminRoutes from "./admin.routes.js";
 import { appRoutes } from "./app.routes.js";
 import authRoutes from "./auth.routes.js";
 import cobrancaRoutes from "./cobranca.routes.js";
@@ -25,6 +26,7 @@ const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.addHook("preHandler", checkSubscriptionAccess);
 
   app.register(authRoutes, { prefix: "/api/auth" });
+  app.register(adminRoutes, { prefix: "/api/admin" });
   app.register(profileRoutes, { prefix: "/api" });
   app.register(appRoutes, { prefix: "/api/app" });
   app.register(publicRoutes, { prefix: "/api/public" });

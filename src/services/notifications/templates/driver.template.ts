@@ -24,6 +24,8 @@ export interface DriverContext {
     erro?: string;
     valorPromocional?: number;
     isEngaged?: boolean;
+    cpfLogin?: string;
+    senhaTemporaria?: string;
 }
 
 const textPart = (text: string): CompositeMessagePart[] => {
@@ -304,5 +306,29 @@ export const DriverTemplates = {
             `Olá *${getFirstName(ctx.nomeMotorista)}*,\n\n` +
             `Tivemos um problema ao processar o pagamento da sua assinatura${valorStr} via cartão de crédito.\n\n` +
             `Entre no app para atualizar seu cartão ou realizar o pagamento via Pix e manter sua conta ativa.`);
+    },
+
+    welcomeAdminCreated: (ctx: DriverContext): CompositeMessagePart[] => {
+        return textPart(`*Seu acesso ao Van360!* 🚀\n\n` +
+            `Olá *${getFirstName(ctx.nomeMotorista)}*,\n` +
+            `Sua conta de motorista foi cadastrada no sistema.\n\n` +
+            `*Seus dados de acesso:*\n` +
+            `👤 CPF: ${ctx.cpfLogin || ""}\n` +
+            `🔑 Senha temporária: ${ctx.senhaTemporaria || ""} (Recomendamos alterá-la no app)\n\n` +
+            `*Como acessar?*\n` +
+            `Você pode entrar baixando nosso aplicativo *Van360* na Google Play Store / Apple App Store ou acessar diretamente pelo navegador no link abaixo:\n` +
+            `🔗 https://app.van360.com.br/login`);
+    },
+
+    adminResetPassword: (ctx: DriverContext): CompositeMessagePart[] => {
+        return textPart(`*Nova Senha Provisória - Van360!* 🔐\n\n` +
+            `Olá *${getFirstName(ctx.nomeMotorista)}*,\n` +
+            `Sua senha foi redefinida pelo administrador do sistema.\n\n` +
+            `*Novos dados de acesso:*\n` +
+            `👤 CPF: ${ctx.cpfLogin || ""}\n` +
+            `🔑 Senha temporária: ${ctx.senhaTemporaria || ""}\n\n` +
+            `*Como acessar?*\n` +
+            `Você pode entrar baixando nosso aplicativo *Van360* na Google Play Store / Apple App Store ou acessar diretamente pelo navegador no link abaixo:\n` +
+            `🔗 https://app.van360.com.br/login`);
     }
 };

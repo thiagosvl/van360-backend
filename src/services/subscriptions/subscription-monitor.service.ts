@@ -54,7 +54,7 @@ export const subscriptionMonitorService = {
       await this.notifyRenewalRecoveries();               // D+5/+10: recuperação pós-EXPIRED
 
       // --- GERAÇÃO DE FATURAS ---
-      const daysBefore = await getConfigNumber(ConfigKey.SAAS_DIAS_VENCIMENTO, 5);
+      const daysBefore = await getConfigNumber(ConfigKey.SAAS_DIAS_ANTECEDENCIA_RENOVACAO, 5);
       await this.generateRenewalInvoices(daysBefore);     // D-N: gera PIX/cartão
 
     } catch (error: any) {

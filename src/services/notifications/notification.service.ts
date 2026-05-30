@@ -32,6 +32,8 @@ import {
     EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_ATRASO,
     EVENTO_AUTH_RECUPERACAO_SENHA,
     EVENTO_AUTH_SENHA_ALTERADA,
+    EVENTO_MOTORISTA_CADASTRO_ADMIN,
+    EVENTO_MOTORISTA_RESET_SENHA_ADMIN,
     GLOBAL_WHATSAPP_INSTANCE
 } from "../../config/constants.js";
 import { DriverContext, DriverTemplates } from "./templates/driver.template.js";
@@ -83,7 +85,9 @@ export type DriverEventType =
     | typeof EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO
     | typeof EVENTO_MOTORISTA_CARTAO_COBRANCA_AVISO
     | typeof EVENTO_AUTH_RECUPERACAO_SENHA
-    | typeof EVENTO_AUTH_SENHA_ALTERADA;
+    | typeof EVENTO_AUTH_SENHA_ALTERADA
+    | typeof EVENTO_MOTORISTA_CADASTRO_ADMIN
+    | typeof EVENTO_MOTORISTA_RESET_SENHA_ADMIN;
 
 class NotificationService {
     // Registro dos Adapters que farão o disparo real (ou envio para a fila)
@@ -161,6 +165,8 @@ class NotificationService {
             case EVENTO_MOTORISTA_CARTAO_COBRANCA_AVISO:        parts = DriverTemplates.cardChargeNotice(ctx); break;
             case EVENTO_AUTH_RECUPERACAO_SENHA:                 parts = DriverTemplates.authRecovery(ctx); break;
             case EVENTO_AUTH_SENHA_ALTERADA:                    parts = DriverTemplates.passwordChanged(ctx); break;
+            case EVENTO_MOTORISTA_CADASTRO_ADMIN:               parts = DriverTemplates.welcomeAdminCreated(ctx); break;
+            case EVENTO_MOTORISTA_RESET_SENHA_ADMIN:            parts = DriverTemplates.adminResetPassword(ctx); break;
         }
 
         return await this._processAndEnqueue(to, parts, type as string, options);

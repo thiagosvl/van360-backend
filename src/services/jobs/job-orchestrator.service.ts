@@ -8,7 +8,7 @@ export const jobOrchestratorService = {
   async runDailyJobs() {
     logger.info("[JobOrchestrator] Iniciando rotina diária...");
 
-    const daysBefore = await getConfigNumber(ConfigKey.SAAS_DIAS_VENCIMENTO, 5);
+    const daysBefore = await getConfigNumber(ConfigKey.SAAS_DIAS_ANTECEDENCIA_RENOVACAO, 5);
 
     const executions = [
       subscriptionMonitorService.runDailyCheck().catch((err: Error) => {
