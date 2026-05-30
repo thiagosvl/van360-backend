@@ -11,12 +11,13 @@ import {
     AtividadeEntidadeTipo,
     PaymentProvider
 } from "../../types/enums.js";
-import { getConfig } from "../configuracao.service.js";
+import { getConfig, getConfigNumber } from "../configuracao.service.js";
 import { historicoService } from "../historico.service.js";
 import { getNowBR, getEndOfDayBR, parseLocalDate, addDays, toPersistenceString } from "../../utils/date.utils.js";
 import type { CreateInvoiceDTO } from "../../types/dtos/subscription.dto.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { EVENTO_MOTORISTA_ASSINATURA_PAGO } from "../../config/constants.js";
+import { env } from "../../config/env.js";
 
 type FaturaComJoins = {
     id: string;
@@ -111,7 +112,7 @@ export const subscriptionService = {
     },
 
     /**
-     * Calcula o preço do plano considerando promoção de Fundador.
+     * Calcula o preço do plano considerando promoção de Fundador e descontos de indicação.
      */
     async calculatePrice(userId: string, planIdentificador: string): Promise<number> {
         const { data: plano } = await supabaseAdmin
@@ -124,11 +125,26 @@ export const subscriptionService = {
 
         const isPromotionActive = await getConfig(ConfigKey.SAAS_PROMOCAO_ATIVA, "false") === "true";
 
+        let valorFinal = Number(plano.valor);
         if (isPromotionActive && plano.valor_promocional) {
-            return Number(plano.valor_promocional);
+            valorFinal = Number(plano.valor_promocional);
         }
 
-        return Number(plano.valor);
+        const { data: indicacao } = await supabaseAdmin
+            .from("indicacoes")
+            .select("id")
+            .eq("indicado_id", userId)
+            .eq("status", IndicacaoStatus.PENDING)
+            .maybeSingle();
+
+        if (indicacao) {
+            const descontoPct = await getConfigNumber(ConfigKey.SAAS_REFERRAL_DISCOUNT_PCT, 10);
+            if (descontoPct > 0) {
+                valorFinal = valorFinal * (1 - descontoPct / 100);
+            }
+        }
+
+        return Number(valorFinal.toFixed(2));
     },
 
     /**
@@ -212,7 +228,7 @@ export const subscriptionService = {
             completed,
             pending,
             referralCode: userId,
-            referralLink: `https://van360.com.br/registro?ref=${userId}`
+            referralLink: `${env.FRONTEND_URL}/cadastro?ref=${userId}`
         };
     },
 
@@ -332,11 +348,12 @@ export const subscriptionService = {
             .update({ status: IndicacaoStatus.COMPLETED, fatura_origem_id: faturaId })
             .eq("id", indicacao.id);
 
-        // 2. Aplicar bônus ao indicador (Adicionar 30 dias à validade da assinatura atual)
+        // 2. Aplicar bônus ao indicador (Adicionar N dias à validade da assinatura atual)
         const sub = await this.getOrCreateSubscription(indicacao.indicador_id);
         if (sub) {
             const newExpiry = sub.data_vencimento ? parseLocalDate(sub.data_vencimento) : getNowBR();
-            newExpiry.setDate(newExpiry.getDate() + 30);
+            const bonusDays = await getConfigNumber(ConfigKey.SAAS_REFERRAL_BONUS_DAYS, 30);
+            newExpiry.setDate(newExpiry.getDate() + bonusDays);
 
             await supabaseAdmin
                 .from("assinaturas")
@@ -346,7 +363,7 @@ export const subscriptionService = {
                 })
                 .eq("id", sub.id);
 
-            logger.info({ indicadorId: indicacao.indicador_id, meses: 1 }, "[SubscriptionService] Bônus de indicação aplicado.");
+            logger.info({ indicadorId: indicacao.indicador_id, dias: bonusDays }, "[SubscriptionService] Bônus de indicação aplicado.");
         }
     },
 
