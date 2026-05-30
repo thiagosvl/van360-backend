@@ -620,32 +620,100 @@ export const subscriptionService = {
 
         const { paymentService } = await import("../payments/payment.service.js");
 
-        const chargeRes = await paymentService.createCharge({
-            amount: valor,
-            description: `Assinatura Van360 - Plano ${plano.nome}`,
-            dueDate: toPersistenceString(addDays(getNowBR(), 1)),
-            externalId: `sub_${sub.id}_${Date.now()}`,
-            paymentMethod: paymentMethod,
-            paymentToken: currentPaymentToken,
-            customer: {
-                name: user.nome,
-                document: user.cpfcnpj,
-                email: user.email || "financeiro@van360.com.br",
-                phone: user.telefone || "11999999999",
-                birth: birth || "1980-01-01"
-            },
-            billingAddress: (paymentMethod === CheckoutPaymentMethod.CREDIT_CARD && street) ? {
-                street: street,
-                number: number || "SN",
-                neighborhood: neighborhood || "Centro",
-                zipcode: zipcode?.replace(/\D/g, "") || "01001000",
-                city: city || "São Paulo",
-                state: state || "SP"
-            } : undefined
-        }, PaymentProvider.EFIPAY);
+        let chargeRes;
+        try {
+            chargeRes = await paymentService.createCharge({
+                amount: valor,
+                description: `Assinatura Van360 - Plano ${plano.nome}`,
+                dueDate: toPersistenceString(addDays(getNowBR(), 1)),
+                externalId: `sub_${sub.id}_${Date.now()}`,
+                paymentMethod: paymentMethod,
+                paymentToken: currentPaymentToken,
+                customer: {
+                    name: user.nome,
+                    document: user.cpfcnpj,
+                    email: user.email || "financeiro@van360.com.br",
+                    phone: user.telefone || "11999999999",
+                    birth: birth || "1980-01-01"
+                },
+                billingAddress: (paymentMethod === CheckoutPaymentMethod.CREDIT_CARD && street) ? {
+                    street: street,
+                    number: number || "SN",
+                    neighborhood: neighborhood || "Centro",
+                    zipcode: zipcode?.replace(/\D/g, "") || "01001000",
+                    city: city || "São Paulo",
+                    state: state || "SP"
+                } : undefined
+            }, PaymentProvider.EFIPAY);
+        } catch (gatewayErr: any) {
+            logger.error({ userId, error: gatewayErr.message }, "[SubscriptionService] Erro de conexão/exceção no Gateway");
+
+            try {
+                const { data: failedInvoice } = await supabaseAdmin
+                    .from("assinatura_faturas")
+                    .insert({
+                        usuario_id: userId,
+                        assinatura_id: sub.id,
+                        plano_id: planId,
+                        metodo_pagamento: paymentMethod,
+                        valor,
+                        status: SubscriptionInvoiceStatus.FAILED,
+                        data_vencimento: toPersistenceString(addDays(getNowBR(), 1)),
+                        gateway_txid: null,
+                        pix_copy_paste: null
+                    })
+                    .select("id")
+                    .single();
+
+                if (failedInvoice) {
+                    await historicoService.log({
+                        usuario_id: userId,
+                        entidade_tipo: AtividadeEntidadeTipo.SAAS_FATURA,
+                        entidade_id: failedInvoice.id,
+                        acao: AtividadeAcao.SAAS_FATURA_GERADA,
+                        descricao: `Exceção na cobrança automática de fatura via ${paymentMethod.toUpperCase()} (Valor R$ ${valor}): ${gatewayErr.message}`
+                    });
+                }
+            } catch (dbError) {
+                logger.error({ userId, dbError }, "[SubscriptionService] Erro ao gravar fatura falha no banco (exceção).");
+            }
+
+            throw gatewayErr;
+        }
 
         if (!chargeRes.success) {
             logger.error({ userId, error: chargeRes.error }, "[SubscriptionService] Erro ao gerar Cobrança no Gateway");
+
+            try {
+                const { data: failedInvoice } = await supabaseAdmin
+                    .from("assinatura_faturas")
+                    .insert({
+                        usuario_id: userId,
+                        assinatura_id: sub.id,
+                        plano_id: planId,
+                        metodo_pagamento: paymentMethod,
+                        valor,
+                        status: SubscriptionInvoiceStatus.FAILED,
+                        data_vencimento: toPersistenceString(addDays(getNowBR(), 1)),
+                        gateway_txid: chargeRes.providerId || null,
+                        pix_copy_paste: null
+                    })
+                    .select("id")
+                    .single();
+
+                if (failedInvoice) {
+                    await historicoService.log({
+                        usuario_id: userId,
+                        entidade_tipo: AtividadeEntidadeTipo.SAAS_FATURA,
+                        entidade_id: failedInvoice.id,
+                        acao: AtividadeAcao.SAAS_FATURA_GERADA,
+                        descricao: `Tentativa de fatura falhou via ${paymentMethod.toUpperCase()} (Valor R$ ${valor}): ${chargeRes.error}`
+                    });
+                }
+            } catch (dbError) {
+                logger.error({ userId, dbError }, "[SubscriptionService] Erro ao gravar fatura falha no banco.");
+            }
+
             throw new Error(`Erro no Gateway de Pagamento: ${chargeRes.error}`);
         }
 
