@@ -4,6 +4,7 @@ import { subscriptionController } from "../controllers/subscription.controller.j
 
 export default async function publicRoutes(app: FastifyInstance) {
     app.get("/motoristas/:id/validate", PublicController.validateMotorista);
+    app.get("/motoristas/:id/escolas", PublicController.listEscolas);
     
     /**
      * Planos SaaS públicos (usado na Landing Page)

@@ -18,3 +18,18 @@ export async function validateMotoristaPublic(motoristaId: string) {
 
     return data;
 }
+
+export async function listEscolasPublic(motoristaId: string): Promise<any[]> {
+    const { data, error } = await supabaseAdmin
+        .from("escolas")
+        .select("*")
+        .eq("usuario_id", motoristaId)
+        .eq("ativo", true)
+        .order("nome", { ascending: true });
+
+    if (error) {
+        throw new AppError("Erro ao buscar escolas do motorista.", 400);
+    }
+
+    return data || [];
+}
