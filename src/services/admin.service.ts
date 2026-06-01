@@ -1,7 +1,7 @@
 import { logger } from "../config/logger.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { SubscriptionStatus, UserType } from "../types/enums.js";
-import { getNowBR } from "../utils/date.utils.js";
+import { getNowBR, parseBrazilianDateToISO } from "../utils/date.utils.js";
 import { onlyDigits, cleanString } from "../utils/string.utils.js";
 import type { UpdateUserAdminDTO, UpdateSubscriptionAdminDTO, ListUsersQuery, UpdatePlanDTO, CreateUserAdminDTO } from "../schemas/admin.schema.js";
 import { subscriptionService } from "./subscriptions/subscription.service.js";
@@ -181,21 +181,7 @@ export const adminService = {
     if (data.cpfcnpj !== undefined) updatePayload.cpfcnpj = onlyDigits(data.cpfcnpj);
     if (data.ativo !== undefined) updatePayload.ativo = data.ativo;
     if (data.data_nascimento !== undefined) {
-      if (data.data_nascimento) {
-        const cleanDate = data.data_nascimento.replace(/\D/g, "");
-        if (cleanDate.length === 8) {
-          const dia = cleanDate.substring(0, 2);
-          const mes = cleanDate.substring(2, 4);
-          const ano = cleanDate.substring(4, 8);
-          updatePayload.data_nascimento = `${ano}-${mes}-${dia}`;
-        } else if (data.data_nascimento.includes("-")) {
-          updatePayload.data_nascimento = data.data_nascimento;
-        } else {
-          updatePayload.data_nascimento = null;
-        }
-      } else {
-        updatePayload.data_nascimento = null;
-      }
+      updatePayload.data_nascimento = parseBrazilianDateToISO(data.data_nascimento);
     }
 
     updatePayload.updated_at = getNowBR().toISOString();
@@ -357,19 +343,6 @@ export const adminService = {
 
     const userId = authUser.user.id;
 
-    let dataNascimentoISO: string | null = null;
-    if (data.data_nascimento) {
-      const cleanDate = data.data_nascimento.replace(/\D/g, "");
-      if (cleanDate.length === 8) {
-        const dia = cleanDate.substring(0, 2);
-        const mes = cleanDate.substring(2, 4);
-        const ano = cleanDate.substring(4, 8);
-        dataNascimentoISO = `${ano}-${mes}-${dia}`;
-      } else if (data.data_nascimento.includes("-")) {
-        dataNascimentoISO = data.data_nascimento;
-      }
-    }
-
     const { error: insertError } = await supabaseAdmin
       .from("usuarios")
       .insert({
@@ -378,7 +351,7 @@ export const adminService = {
         email: emailClean,
         telefone: onlyDigits(data.telefone),
         cpfcnpj: cpfcnpjClean,
-        data_nascimento: dataNascimentoISO,
+        data_nascimento: parseBrazilianDateToISO(data.data_nascimento),
         tipo: UserType.MOTORISTA,
         ativo: true,
         created_at: getNowBR().toISOString(),

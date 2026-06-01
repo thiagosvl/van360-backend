@@ -7,7 +7,7 @@ import { AppError } from "../errors/AppError.js";
 import { AtividadeAcao, AtividadeEntidadeTipo, UserType } from "../types/enums.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
-import { getNowBR, addMinutes, isBeforeNowBR, parseLocalDate } from "../utils/date.utils.js";
+import { getNowBR, addMinutes, isBeforeNowBR, parseLocalDate, parseBrazilianDateToISO } from "../utils/date.utils.js";
 import { notificationService } from "./notifications/notification.service.js";
 import { EVENTO_AUTH_RECUPERACAO_SENHA, EVENTO_AUTH_SENHA_ALTERADA } from "../config/constants.js";
 
@@ -113,19 +113,6 @@ export async function checkUserStatus(
 export async function criarUsuario(data: UsuarioPayload & { tipo?: UserType, id: string }) {
   const { id, nome, apelido, email, cpfcnpj, telefone, ativo = false, tipo, termos_aceitos, data_nascimento } = data;
 
-  let dataNascimentoISO: string | null = null;
-  if (data_nascimento) {
-    const cleanDate = data_nascimento.replace(/\D/g, "");
-    if (cleanDate.length === 8) {
-      const dia = cleanDate.substring(0, 2);
-      const mes = cleanDate.substring(2, 4);
-      const ano = cleanDate.substring(4, 8);
-      dataNascimentoISO = `${ano}-${mes}-${dia}`;
-    } else if (data_nascimento.includes("-")) {
-      dataNascimentoISO = data_nascimento;
-    }
-  }
-
   const { data: usuario, error } = await supabaseAdmin
     .from("usuarios")
     .insert([{
@@ -140,7 +127,7 @@ export async function criarUsuario(data: UsuarioPayload & { tipo?: UserType, id:
       termos_aceitos_em: termos_aceitos ? getNowBR().toISOString() : null,
       termos_versao: termos_aceitos ? TERMOS_VERSAO_ATUAL : null,
       created_at: getNowBR().toISOString(),
-      data_nascimento: dataNascimentoISO,
+      data_nascimento: parseBrazilianDateToISO(data_nascimento),
     }])
     .select("id")
     .single();

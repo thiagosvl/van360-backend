@@ -156,3 +156,21 @@ export const diffInDays = (d1: Date | string, d2: Date | string): number => {
   const end = getStartOfDayBR(d2);
   return Math.round((end.getTime() - start.getTime()) / 86_400_000);
 };
+
+export const parseBrazilianDateToISO = (dateStr: string | null | undefined): string | null => {
+  if (!dateStr) return null;
+
+  const cleanDate = dateStr.replace(/\D/g, "");
+  if (cleanDate.length === 8) {
+    const dia = cleanDate.substring(0, 2);
+    const mes = cleanDate.substring(2, 4);
+    const ano = cleanDate.substring(4, 8);
+    return `${ano}-${mes}-${dia}`;
+  }
+
+  if (dateStr.includes("-")) {
+    return dateStr;
+  }
+
+  return null;
+};

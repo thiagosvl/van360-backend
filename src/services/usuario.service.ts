@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
-import { getNowBR } from "../utils/date.utils.js";
+import { getNowBR, parseBrazilianDateToISO } from "../utils/date.utils.js";
 import { AtividadeAcao, AtividadeEntidadeTipo, TipoChavePix } from "../types/enums.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
@@ -42,21 +42,7 @@ export async function atualizarUsuario(usuarioId: string, payload: {
   if (payload.config_contrato !== undefined) updates.config_contrato = payload.config_contrato;
 
   if (payload.data_nascimento !== undefined) {
-    if (payload.data_nascimento) {
-      const cleanDate = payload.data_nascimento.replace(/\D/g, "");
-      if (cleanDate.length === 8) {
-        const dia = cleanDate.substring(0, 2);
-        const mes = cleanDate.substring(2, 4);
-        const ano = cleanDate.substring(4, 8);
-        updates.data_nascimento = `${ano}-${mes}-${dia}`;
-      } else if (payload.data_nascimento.includes("-")) {
-        updates.data_nascimento = payload.data_nascimento;
-      } else {
-        updates.data_nascimento = null;
-      }
-    } else {
-      updates.data_nascimento = null;
-    }
+    updates.data_nascimento = parseBrazilianDateToISO(payload.data_nascimento);
   }
 
   const { error } = await supabaseAdmin
