@@ -46,7 +46,7 @@ export const createUserAdminSchema = z.object({
   email: z.string().email(),
   telefone: z.string().min(10).max(15),
   cpfcnpj: z.string().min(11).max(14),
-  data_nascimento: z.string().optional().nullable(),
+  data_nascimento: z.string().min(10, "Data de nascimento inválida"),
   senha: z.string().min(6),
 });
 export type CreateUserAdminDTO = z.infer<typeof createUserAdminSchema>;

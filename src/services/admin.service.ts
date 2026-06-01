@@ -180,7 +180,23 @@ export const adminService = {
     if (data.telefone !== undefined) updatePayload.telefone = onlyDigits(data.telefone);
     if (data.cpfcnpj !== undefined) updatePayload.cpfcnpj = onlyDigits(data.cpfcnpj);
     if (data.ativo !== undefined) updatePayload.ativo = data.ativo;
-    if (data.data_nascimento !== undefined) updatePayload.data_nascimento = data.data_nascimento;
+    if (data.data_nascimento !== undefined) {
+      if (data.data_nascimento) {
+        const cleanDate = data.data_nascimento.replace(/\D/g, "");
+        if (cleanDate.length === 8) {
+          const dia = cleanDate.substring(0, 2);
+          const mes = cleanDate.substring(2, 4);
+          const ano = cleanDate.substring(4, 8);
+          updatePayload.data_nascimento = `${ano}-${mes}-${dia}`;
+        } else if (data.data_nascimento.includes("-")) {
+          updatePayload.data_nascimento = data.data_nascimento;
+        } else {
+          updatePayload.data_nascimento = null;
+        }
+      } else {
+        updatePayload.data_nascimento = null;
+      }
+    }
 
     updatePayload.updated_at = getNowBR().toISOString();
 
@@ -341,6 +357,19 @@ export const adminService = {
 
     const userId = authUser.user.id;
 
+    let dataNascimentoISO: string | null = null;
+    if (data.data_nascimento) {
+      const cleanDate = data.data_nascimento.replace(/\D/g, "");
+      if (cleanDate.length === 8) {
+        const dia = cleanDate.substring(0, 2);
+        const mes = cleanDate.substring(2, 4);
+        const ano = cleanDate.substring(4, 8);
+        dataNascimentoISO = `${ano}-${mes}-${dia}`;
+      } else if (data.data_nascimento.includes("-")) {
+        dataNascimentoISO = data.data_nascimento;
+      }
+    }
+
     const { error: insertError } = await supabaseAdmin
       .from("usuarios")
       .insert({
@@ -349,7 +378,7 @@ export const adminService = {
         email: emailClean,
         telefone: onlyDigits(data.telefone),
         cpfcnpj: cpfcnpjClean,
-        data_nascimento: data.data_nascimento || null,
+        data_nascimento: dataNascimentoISO,
         tipo: UserType.MOTORISTA,
         ativo: true,
         created_at: getNowBR().toISOString(),
