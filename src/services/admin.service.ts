@@ -104,9 +104,9 @@ export const adminService = {
       const searchClean = search.trim();
       const digits = onlyDigits(searchClean);
       if (digits && digits.length >= 3) {
-        q = q.or(`nome.ilike.%${searchClean}%,cpfcnpj.ilike.%${digits}%,email.ilike.%${searchClean}%,telefone.ilike.%${digits}%`);
+        q = q.or(`nome.ilike.%${searchClean}%,telefone.ilike.%${digits}%`);
       } else {
-        q = q.or(`nome.ilike.%${searchClean}%,email.ilike.%${searchClean}%`);
+        q = q.or(`nome.ilike.%${searchClean}%`);
       }
     }
 
