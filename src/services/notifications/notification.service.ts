@@ -30,6 +30,10 @@ import {
     EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_AVISO,
     EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_HOJE,
     EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_ATRASO,
+    EVENTO_ROTA_A_CAMINHO_IDA,
+    EVENTO_ROTA_A_CAMINHO_VOLTA,
+    EVENTO_ROTA_EMBARCOU,
+    EVENTO_ROTA_DESEMBARCOU,
     EVENTO_AUTH_RECUPERACAO_SENHA,
     EVENTO_AUTH_SENHA_ALTERADA,
     EVENTO_MOTORISTA_CADASTRO_ADMIN,
@@ -38,6 +42,7 @@ import {
 } from "../../config/constants.js";
 import { DriverContext, DriverTemplates } from "./templates/driver.template.js";
 import { PassengerContext, PassengerTemplates } from "./templates/passenger.template.js";
+import { RouteContext, RouteTemplates } from "./templates/route.template.js";
 import { NotificationProviderAdapter } from "./ports/notification-provider.port.js";
 import { EvolutionWhatsappQueueAdapter } from "./adapters/evolution.adapter.js";
 import { MockSmsAdapter } from "./adapters/mock-sms.adapter.js";
@@ -61,6 +66,12 @@ type PassengerEventType =
     | typeof EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_AVISO
     | typeof EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_HOJE
     | typeof EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_ATRASO;
+
+export type RouteEventType =
+    | typeof EVENTO_ROTA_A_CAMINHO_IDA
+    | typeof EVENTO_ROTA_A_CAMINHO_VOLTA
+    | typeof EVENTO_ROTA_EMBARCOU
+    | typeof EVENTO_ROTA_DESEMBARCOU;
 
 export type DriverEventType =
     | typeof EVENTO_MOTORISTA_TESTE_BOAS_VINDAS
@@ -123,6 +134,28 @@ class NotificationService {
             case EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_AVISO: parts = PassengerTemplates.dueSoonManual(ctx); break;
             case EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_HOJE: parts = PassengerTemplates.dueTodayManual(ctx); break;
             case EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_ATRASO: parts = PassengerTemplates.overdueManual(ctx); break;
+        }
+
+        return await this._processAndEnqueue(to, parts, type as string, options);
+    }
+
+    /**
+     * Envia notificação relacionada a rotas (Ida, Volta, Embarcou, Desembarcou)
+     * @param to Destinatário (Telefone do Responsável)
+     */
+    async notifyRoute(
+        to: string,
+        type: RouteEventType,
+        ctx: RouteContext,
+        options: NotificationOptions = {}
+    ): Promise<boolean> {
+        let parts: CompositeMessagePart[] = [];
+
+        switch (type) {
+            case EVENTO_ROTA_A_CAMINHO_IDA: parts = RouteTemplates.enRouteIda(ctx); break;
+            case EVENTO_ROTA_A_CAMINHO_VOLTA: parts = RouteTemplates.enRouteVolta(ctx); break;
+            case EVENTO_ROTA_EMBARCOU: parts = RouteTemplates.boarded(ctx); break;
+            case EVENTO_ROTA_DESEMBARCOU: parts = RouteTemplates.delivered(ctx); break;
         }
 
         return await this._processAndEnqueue(to, parts, type as string, options);

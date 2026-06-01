@@ -32,6 +32,8 @@ export const createPassageiroSchema = z.object({
     endereco_cidade: optionalString,
     referencia: optionalString,
     observacoes: optionalString,
+    latitude: z.union([z.number(), z.string().transform(v => v === "" ? undefined : Number(v))]).optional().nullable(),
+    longitude: z.union([z.number(), z.string().transform(v => v === "" ? undefined : Number(v))]).optional().nullable(),
 
     // Financeiro
     dia_vencimento: optionalNumber,

@@ -1,3 +1,4 @@
+import axios from "axios";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
 import { CreatePassageiroDTO, ListPassageirosFiltersDTO, UpdatePassageiroDTO } from "../types/dtos/passageiro.dto.js";
@@ -8,6 +9,39 @@ import { historicoService } from "./historico.service.js";
 import { parseLocalDate, toPersistenceString } from "../utils/date.utils.js";
 
 // Métodos privados auxiliares
+const geocodeAddress = async (enderecoParts: { logradouro?: string, numero?: string, cidade?: string, estado?: string }): Promise<{lat: number, lon: number} | null> => {
+    const partes = [];
+    if (enderecoParts.logradouro) partes.push(enderecoParts.logradouro);
+    if (enderecoParts.numero) partes.push(enderecoParts.numero);
+    if (enderecoParts.cidade) partes.push(enderecoParts.cidade);
+    if (enderecoParts.estado) partes.push(enderecoParts.estado);
+    
+    if (partes.length === 0) return null;
+    
+    const endereco = partes.join(', ');
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+
+    if (!apiKey) {
+      return null;
+    }
+
+    try {
+      const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(endereco)}&key=${apiKey}`;
+      const response = await axios.get(url);
+      
+      if (response.data && response.data.status === "OK" && response.data.results.length > 0) {
+        const location = response.data.results[0].geometry.location;
+        return {
+          lat: location.lat,
+          lon: location.lng
+        };
+      }
+      return null;
+    } catch (error) {
+      return null;
+    }
+};
+
 const _preparePassageiroData = (data: Partial<CreatePassageiroDTO> & Record<string, any>, usuarioId?: string, isUpdate: boolean = false): any => {
     const prepared: any = {};
 
@@ -37,6 +71,8 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO> & Record<stri
     if (data.cep !== undefined) prepared.cep = data.cep ? onlyDigits(data.cep) : null;
     if (data.referencia !== undefined) prepared.referencia = data.referencia ? cleanString(data.referencia, true) : null;
     if (data.observacoes !== undefined) prepared.observacoes = data.observacoes ? cleanString(data.observacoes, true) : null;
+    if (data.latitude !== undefined) prepared.latitude = data.latitude !== null ? Number(data.latitude) : null;
+    if (data.longitude !== undefined) prepared.longitude = data.longitude !== null ? Number(data.longitude) : null;
 
     // Detalhes
     if (data.periodo !== undefined) prepared.periodo = data.periodo ? cleanString(data.periodo.toLocaleLowerCase()) : null;
@@ -64,6 +100,18 @@ const createPassageiro = async (data: CreatePassageiroDTO): Promise<any> => {
 
 
     const passageiroData = _preparePassageiroData(data, data.usuario_id, false);
+
+    const coords = await geocodeAddress({
+        logradouro: data.logradouro ? String(data.logradouro) : undefined,
+        numero: data.numero ? String(data.numero) : undefined,
+        cidade: data.cidade ? String(data.cidade) : undefined,
+        estado: data.estado ? String(data.estado) : undefined
+    });
+
+    if (coords) {
+        passageiroData.latitude = coords.lat;
+        passageiroData.longitude = coords.lon;
+    }
 
     const { data: inserted, error } = await supabaseAdmin
         .from("passageiros")
@@ -98,6 +146,26 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO): Promise<
     if (!estadoAnterior) throw new AppError("Passageiro não encontrado", 404);
 
     const passageiroData = _preparePassageiroData(data, undefined, true);
+
+    const addressChanged = 
+        (data.logradouro !== undefined && data.logradouro !== estadoAnterior.logradouro) ||
+        (data.numero !== undefined && data.numero !== estadoAnterior.numero) ||
+        (data.cidade !== undefined && data.cidade !== estadoAnterior.cidade) ||
+        (data.estado !== undefined && data.estado !== estadoAnterior.estado);
+
+    if (addressChanged) {
+        const coords = await geocodeAddress({
+            logradouro: data.logradouro !== undefined ? (data.logradouro ? String(data.logradouro) : undefined) : (estadoAnterior.logradouro ? String(estadoAnterior.logradouro) : undefined),
+            numero: data.numero !== undefined ? (data.numero ? String(data.numero) : undefined) : (estadoAnterior.numero ? String(estadoAnterior.numero) : undefined),
+            cidade: data.cidade !== undefined ? (data.cidade ? String(data.cidade) : undefined) : (estadoAnterior.cidade ? String(estadoAnterior.cidade) : undefined),
+            estado: data.estado !== undefined ? (data.estado ? String(data.estado) : undefined) : (estadoAnterior.estado ? String(estadoAnterior.estado) : undefined)
+        });
+
+        if (coords) {
+            passageiroData.latitude = coords.lat;
+            passageiroData.longitude = coords.lon;
+        }
+    }
 
     const { data: updated, error } = await supabaseAdmin
         .from("passageiros")
