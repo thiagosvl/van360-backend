@@ -8,6 +8,7 @@ import {
   listUsersQuerySchema,
   updatePlanSchema,
   createUserAdminSchema,
+  listUserLogsQuerySchema,
 } from "../schemas/admin.schema.js";
 
 export const AdminController = {
@@ -134,6 +135,18 @@ export const AdminController = {
     } catch (err: any) {
       logger.error({ error: err.message }, "[AdminController] Erro ao resetar senha.");
       return reply.status(400).send({ error: err.message });
+    }
+  },
+
+  async getUserLogs(request: FastifyRequest, reply: FastifyReply) {
+    const { id } = request.params as { id: string };
+    try {
+      const query = listUserLogsQuerySchema.parse(request.query);
+      const result = await adminService.getUserLogs(id, query);
+      return reply.status(200).send(result);
+    } catch (err: any) {
+      logger.error({ error: err.message, id }, "[AdminController] Erro ao buscar logs de atividades.");
+      return reply.status(500).send({ error: "Erro ao buscar logs de atividades." });
     }
   },
 };
