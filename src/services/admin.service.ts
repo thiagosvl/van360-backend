@@ -50,7 +50,7 @@ export const adminService = {
         .eq("status", "PAID"),
       supabaseAdmin
         .from("usuarios")
-        .select("id, nome, email, created_at, tipo")
+        .select("id, nome, email, telefone, created_at, tipo, assinaturas(status)")
         .eq("tipo", UserType.MOTORISTA)
         .order("created_at", { ascending: false })
         .limit(10),
