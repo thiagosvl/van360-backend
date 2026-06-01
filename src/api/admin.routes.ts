@@ -12,6 +12,7 @@ const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get("/users", AdminController.getUsers);
   app.post("/users", AdminController.createUser);
   app.get("/users/:id", AdminController.getUserDetails);
+  app.get("/users/:id/logs", AdminController.getUserLogs);
   app.patch("/users/:id", AdminController.updateUser);
   app.patch("/users/:id/subscription", AdminController.updateSubscription);
   app.post("/users/:id/reset-password", AdminController.resetUserPassword);

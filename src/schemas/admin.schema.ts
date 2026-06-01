@@ -30,10 +30,16 @@ export const listUsersQuerySchema = z.object({
   status: z.string().optional(),
 });
 
+export const listUserLogsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
 export type UpdateUserAdminDTO = z.infer<typeof updateUserAdminSchema>;
 export type UpdateSubscriptionAdminDTO = z.infer<typeof updateSubscriptionAdminSchema>;
 export type UpdateConfigDTO = z.infer<typeof updateConfigSchema>;
 export type ListUsersQuery = z.infer<typeof listUsersQuerySchema>;
+export type ListUserLogsQuery = z.infer<typeof listUserLogsQuerySchema>;
 
 export const updatePlanSchema = z.object({
   valor: z.coerce.number().min(0).optional(),

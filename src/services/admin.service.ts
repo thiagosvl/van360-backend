@@ -3,7 +3,7 @@ import { supabaseAdmin } from "../config/supabase.js";
 import { SubscriptionStatus, UserType } from "../types/enums.js";
 import { getNowBR, parseBrazilianDateToISO } from "../utils/date.utils.js";
 import { onlyDigits, cleanString } from "../utils/string.utils.js";
-import type { UpdateUserAdminDTO, UpdateSubscriptionAdminDTO, ListUsersQuery, UpdatePlanDTO, CreateUserAdminDTO } from "../schemas/admin.schema.js";
+import type { UpdateUserAdminDTO, UpdateSubscriptionAdminDTO, ListUsersQuery, ListUserLogsQuery, UpdatePlanDTO, CreateUserAdminDTO } from "../schemas/admin.schema.js";
 import { subscriptionService } from "./subscriptions/subscription.service.js";
 import { notificationService } from "./notifications/notification.service.js";
 import { EVENTO_MOTORISTA_CADASTRO_ADMIN, EVENTO_MOTORISTA_RESET_SENHA_ADMIN } from "../config/constants.js";
@@ -127,6 +127,31 @@ export const adminService = {
 
     return {
       data: filtered,
+      total: count ?? 0,
+      page,
+      limit,
+    };
+  },
+
+  async getUserLogs(userId: string, query: ListUserLogsQuery) {
+    const { page, limit } = query;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    const { data, error, count } = await supabaseAdmin
+      .from("historico_atividades")
+      .select("*", { count: "exact" })
+      .eq("usuario_id", userId)
+      .order("created_at", { ascending: false })
+      .range(from, to);
+
+    if (error) {
+      logger.error({ error, userId }, "[AdminService] Erro ao buscar logs de atividades do usuário.");
+      throw error;
+    }
+
+    return {
+      data: data || [],
       total: count ?? 0,
       page,
       limit,
