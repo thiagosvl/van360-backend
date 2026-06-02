@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { RouteStopStatus } from "../enums.js";
 
 const optionalString = z.union([z.string(), z.null(), z.undefined()]).transform(v => {
   if (v === undefined) return undefined;
@@ -10,7 +11,7 @@ export const createRouteSchema = z.object({
   usuario_id: z.string().uuid("ID do usuário inválido"),
   nome: z.string().min(1, "Nome é obrigatório"),
   periodo: z.string().min(1, "Período é obrigatório"), // 'manha', 'tarde', 'noite'
-  tipo: z.enum(["ida", "volta"], { message: "Tipo de modalidade (ida/volta) é obrigatório" }),
+  tipo: z.enum(["ida", "volta"], { message: "Tipo de trajeto é obrigatório" }),
   passageiros: z.array(z.object({
     passageiro_id: z.string().uuid(),
     ordem: z.number().int()
@@ -42,7 +43,7 @@ export type SetRoutePassengersDTO = z.infer<typeof setRoutePassengersSchema>;
 
 export const stepRouteExecutionSchema = z.object({
   passageiro_id: z.string().uuid("ID do passageiro inválido"),
-  status: z.enum(["embarcado", "ausente"], { message: "Novo status ('embarcado' ou 'ausente') é obrigatório" })
+  status: z.enum([RouteStopStatus.EMBARCADO, RouteStopStatus.AUSENTE], { message: "Novo status ('embarcado' ou 'ausente') é obrigatório" })
 });
 
 export type StepRouteExecutionDTO = z.infer<typeof stepRouteExecutionSchema>;

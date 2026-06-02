@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS "public"."execucoes_rota" (
     "finalizada_em" timestamp with time zone,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     CONSTRAINT "execucoes_rota_pkey" PRIMARY KEY ("id"),
-    CONSTRAINT "execucoes_rota_rota_id_fkey" FOREIGN KEY ("rota_id") REFERENCES "public"."rotas"("id") ON UPDATE CASCADE ON DELETE RESTRICT,
+    CONSTRAINT "execucoes_rota_rota_id_fkey" FOREIGN KEY ("rota_id") REFERENCES "public"."rotas"("id") ON UPDATE CASCADE ON DELETE CASCADE,
     CONSTRAINT "execucoes_rota_usuario_id_fkey" FOREIGN KEY ("usuario_id") REFERENCES "public"."usuarios"("id") ON UPDATE CASCADE ON DELETE CASCADE
 );
 

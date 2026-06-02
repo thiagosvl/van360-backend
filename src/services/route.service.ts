@@ -2,6 +2,7 @@ import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
 import { CreateRouteDTO, UpdateRouteDTO } from "../types/dtos/route.dto.js";
 import { notificationService } from "./notifications/notification.service.js";
+import { RouteExecutionStatus, RouteStopStatus } from "../types/enums.js";
 import {
   EVENTO_ROTA_A_CAMINHO_IDA,
   EVENTO_ROTA_A_CAMINHO_VOLTA,
@@ -206,6 +207,7 @@ const getExecucaoDetail = async (id: string): Promise<any> => {
         ordem,
         notificado_em,
         visitado_em,
+        passageiro_id,
         passageiro:passageiros (
           id,
           nome,
@@ -215,6 +217,8 @@ const getExecucaoDetail = async (id: string): Promise<any> => {
           numero,
           bairro,
           cidade,
+          latitude,
+          longitude,
           escola:escolas (
             id,
             nome
@@ -231,6 +235,7 @@ const getExecucaoDetail = async (id: string): Promise<any> => {
     exec.paradas = exec.execucoes_rota_passageiros
       .map((erp: any) => ({
         ...erp.passageiro,
+        passageiro_id: erp.passageiro_id,
         status: erp.status,
         ordem: erp.ordem,
         notificado_em: erp.notificado_em,
@@ -255,7 +260,7 @@ const iniciarRota = async (rotaId: string, usuarioId: string): Promise<any> => {
     .from("execucoes_rota")
     .select("id")
     .eq("usuario_id", usuarioId)
-    .eq("status", "iniciada")
+    .eq("status", RouteExecutionStatus.INICIADA)
     .maybeSingle();
 
   if (checkError) throw checkError;
@@ -274,7 +279,7 @@ const iniciarRota = async (rotaId: string, usuarioId: string): Promise<any> => {
     .insert([{
       rota_id: rotaId,
       usuario_id: usuarioId,
-      status: "iniciada",
+      status: RouteExecutionStatus.INICIADA,
       tipo: route.tipo
     }])
     .select()
@@ -286,7 +291,7 @@ const iniciarRota = async (rotaId: string, usuarioId: string): Promise<any> => {
     execucao_rota_id: exec.id,
     passageiro_id: p.id,
     ordem: p.ordem,
-    status: "pendente"
+    status: RouteStopStatus.PENDENTE
   }));
 
   const { error: paradasError } = await supabaseAdmin
@@ -308,7 +313,7 @@ const avancarProximoPassageiro = async (execucaoId: string): Promise<any> => {
     .single();
 
   if (execError) throw execError;
-  if (exec.status !== "iniciada") return await getExecucaoDetail(execucaoId);
+  if (exec.status !== RouteExecutionStatus.INICIADA) return await getExecucaoDetail(execucaoId);
 
   const { data: paradas, error: paradasError } = await supabaseAdmin
     .from("execucoes_rota_passageiros")
@@ -318,13 +323,13 @@ const avancarProximoPassageiro = async (execucaoId: string): Promise<any> => {
 
   if (paradasError) throw paradasError;
 
-  const proximo = (paradas || []).find((p: any) => p.status === "pendente");
+  const proximo = (paradas || []).find((p: any) => p.status === RouteStopStatus.PENDENTE);
 
   if (!proximo) {
     const { error: updateExecError } = await supabaseAdmin
       .from("execucoes_rota")
       .update({
-        status: "concluida",
+        status: RouteExecutionStatus.CONCLUIDA,
         finalizada_em: new Date().toISOString()
       })
       .eq("id", execucaoId);
@@ -335,7 +340,7 @@ const avancarProximoPassageiro = async (execucaoId: string): Promise<any> => {
 
   const { error: updateParadaError } = await supabaseAdmin
     .from("execucoes_rota_passageiros")
-    .update({ status: "a_caminho" })
+    .update({ status: RouteStopStatus.A_CAMINHO })
     .eq("id", proximo.id);
 
   if (updateParadaError) throw updateParadaError;
@@ -382,7 +387,7 @@ const avancarProximoPassageiro = async (execucaoId: string): Promise<any> => {
 const atualizarParadaStatus = async (
   execucaoId: string,
   passageiroId: string,
-  novoStatus: "embarcado" | "ausente"
+  novoStatus: RouteStopStatus.EMBARCADO | RouteStopStatus.AUSENTE
 ): Promise<any> => {
   if (!execucaoId) throw new AppError("ID da execução é obrigatório", 400);
   if (!passageiroId) throw new AppError("ID do passageiro é obrigatório", 400);
@@ -394,7 +399,7 @@ const atualizarParadaStatus = async (
     .single();
 
   if (execError) throw execError;
-  if (exec.status !== "iniciada") {
+  if (exec.status !== RouteExecutionStatus.INICIADA) {
     throw new AppError("A rota selecionada não está ativa.", 400);
   }
 
@@ -417,7 +422,7 @@ const atualizarParadaStatus = async (
 
   if (updateError) throw updateError;
 
-  if (novoStatus === "embarcado") {
+  if (novoStatus === RouteStopStatus.EMBARCADO) {
     const { data: passData, error: passError } = await supabaseAdmin
       .from("passageiros")
       .select("nome, nome_responsavel, telefone_responsavel")
@@ -459,7 +464,7 @@ const cancelarExecucao = async (execucaoId: string): Promise<any> => {
   const { error } = await supabaseAdmin
     .from("execucoes_rota")
     .update({
-      status: "cancelada",
+      status: RouteExecutionStatus.CANCELADA,
       finalizada_em: new Date().toISOString()
     })
     .eq("id", execucaoId);

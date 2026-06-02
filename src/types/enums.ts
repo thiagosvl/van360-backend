@@ -250,3 +250,16 @@ export enum CronJob {
   CHARGE_GENERATOR = "charge-generator",
   DAILY_CHARGE_MONITOR = "daily-charge-monitor",
 }
+
+export enum RouteExecutionStatus {
+  INICIADA = "iniciada",
+  CONCLUIDA = "concluida",
+  CANCELADA = "cancelada"
+}
+
+export enum RouteStopStatus {
+  PENDENTE = "pendente",
+  A_CAMINHO = "a_caminho",
+  EMBARCADO = "embarcado",
+  AUSENTE = "ausente"
+}
