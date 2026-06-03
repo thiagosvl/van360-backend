@@ -57,10 +57,6 @@ export const subscriptionMonitorService = {
       await this.notifyOverdueReminders();                // D+1/+2: lembretes PAST_DUE
       await this.notifyRenewalRecoveries();               // D+5/+10: recuperação pós-EXPIRED
 
-      // --- GERAÇÃO DE FATURAS ---
-      const daysBefore = await getConfigNumber(ConfigKey.SAAS_DIAS_ANTECEDENCIA_RENOVACAO, 5);
-      await this.generateRenewalInvoices(daysBefore);     // D-N: gera PIX/cartão
-
       // --- LIMPEZA ---
       await this.cancelExpiredPendingInvoices();          // Cancela faturas PENDING vencidas
 
