@@ -160,6 +160,10 @@ export const diffInDays = (d1: Date | string, d2: Date | string): number => {
 export const parseBrazilianDateToISO = (dateStr: string | null | undefined): string | null => {
   if (!dateStr) return null;
 
+  if (dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
+    return dateStr;
+  }
+
   const cleanDate = dateStr.replace(/\D/g, "");
   if (cleanDate.length === 8) {
     const dia = cleanDate.substring(0, 2);
