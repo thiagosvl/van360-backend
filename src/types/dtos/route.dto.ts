@@ -1,12 +1,6 @@
 import { z } from "zod";
 import { RouteStopStatus } from "../enums.js";
 
-const optionalString = z.union([z.string(), z.null(), z.undefined()]).transform(v => {
-  if (v === undefined) return undefined;
-  if (v === null || v === "") return null;
-  return v;
-});
-
 export const createRouteSchema = z.object({
   usuario_id: z.string().uuid("ID do usuário inválido"),
   nome: z.string().min(1, "Nome é obrigatório"),

@@ -34,11 +34,17 @@ const createRoute = async (data: CreateRouteDTO): Promise<any> => {
       ordem: p.ordem
     }));
 
-    const { error: assocError } = await supabaseAdmin
-      .from("rota_passageiros")
-      .insert(records);
+    try {
+      const { error: assocError } = await supabaseAdmin
+        .from("rota_passageiros")
+        .insert(records);
 
-    if (assocError) throw assocError;
+      if (assocError) throw assocError;
+    } catch (assocError) {
+      // Rollback: exclui a rota mestre recém-criada
+      await supabaseAdmin.from("rotas").delete().eq("id", inserted.id);
+      throw assocError;
+    }
   }
 
   return await getRoute(inserted.id);
@@ -62,6 +68,15 @@ const updateRoute = async (id: string, data: UpdateRouteDTO): Promise<any> => {
   }
 
   if (data.passageiros !== undefined) {
+    // 1. Fazer backup dos passageiros originais
+    const { data: oldPassengers, error: fetchError } = await supabaseAdmin
+      .from("rota_passageiros")
+      .select("passageiro_id, ordem")
+      .eq("rota_id", id);
+
+    if (fetchError) throw fetchError;
+
+    // 2. Deletar os atuais
     const { error: deleteError } = await supabaseAdmin
       .from("rota_passageiros")
       .delete()
@@ -69,6 +84,7 @@ const updateRoute = async (id: string, data: UpdateRouteDTO): Promise<any> => {
 
     if (deleteError) throw deleteError;
 
+    // 3. Tentar inserir novos
     if (data.passageiros && data.passageiros.length > 0) {
       const records = data.passageiros.map(p => ({
         rota_id: id,
@@ -76,11 +92,24 @@ const updateRoute = async (id: string, data: UpdateRouteDTO): Promise<any> => {
         ordem: p.ordem
       }));
 
-      const { error: insertError } = await supabaseAdmin
-        .from("rota_passageiros")
-        .insert(records);
+      try {
+        const { error: insertError } = await supabaseAdmin
+          .from("rota_passageiros")
+          .insert(records);
 
-      if (insertError) throw insertError;
+        if (insertError) throw insertError;
+      } catch (insertError) {
+        // Rollback: restaurar os anteriores
+        if (oldPassengers && oldPassengers.length > 0) {
+          const restoreRecords = oldPassengers.map((op: any) => ({
+            rota_id: id,
+            passageiro_id: op.passageiro_id,
+            ordem: op.ordem
+          }));
+          await supabaseAdmin.from("rota_passageiros").insert(restoreRecords);
+        }
+        throw insertError;
+      }
     }
   }
 
@@ -323,6 +352,11 @@ const avancarProximoPassageiro = async (execucaoId: string): Promise<any> => {
 
   if (paradasError) throw paradasError;
 
+  const jaTemAlguemACaminho = (paradas || []).some((p: any) => p.status === RouteStopStatus.A_CAMINHO);
+  if (jaTemAlguemACaminho) {
+    return await getExecucaoDetail(execucaoId);
+  }
+
   const proximo = (paradas || []).find((p: any) => p.status === RouteStopStatus.PENDENTE);
 
   if (!proximo) {
@@ -411,6 +445,10 @@ const atualizarParadaStatus = async (
     .single();
 
   if (paradaError) throw paradaError;
+
+  if (parada.status === RouteStopStatus.EMBARCADO || parada.status === RouteStopStatus.AUSENTE) {
+    throw new AppError("Esta parada já foi concluída.", 400);
+  }
 
   const { error: updateError } = await supabaseAdmin
     .from("execucoes_rota_passageiros")
