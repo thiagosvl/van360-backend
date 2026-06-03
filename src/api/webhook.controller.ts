@@ -1,10 +1,11 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
 import { env } from "../config/env.js";
-import { PaymentProvider, SubscriptionInvoiceStatus } from "../types/enums.js";
+import { PaymentProvider, SubscriptionInvoiceStatus, SubscriptionStatus } from "../types/enums.js";
 import { paymentService } from "../services/payments/payment.service.js";
-import { supabaseAdmin } from "../config/supabase.js";
 import { subscriptionService } from "../services/subscriptions/subscription.service.js";
+import { invoiceRepository } from "../repositories/invoice.repository.js";
+import { subscriptionRepository } from "../repositories/subscription.repository.js";
 
 export const WebhookController = {
 
@@ -27,11 +28,7 @@ export const WebhookController = {
     const txid = event.internalId;
 
     try {
-      const { data: fatura, error } = await supabaseAdmin
-        .from("assinatura_faturas")
-        .select("id, status, usuario_id")
-        .eq("gateway_txid", txid)
-        .maybeSingle();
+      const { data: fatura, error } = await invoiceRepository.getInvoiceByGatewayTxId(txid);
 
       if (error) throw error;
 
@@ -44,10 +41,15 @@ export const WebhookController = {
           await subscriptionService.activateByFatura(fatura.id);
         } else if (event.type === "PAYMENT_FAILED") {
           logger.warn({ faturaId: fatura.id, txid }, "[WebhookController] Falha no pagamento (Cartão). Marcando como FAILED.");
-          await supabaseAdmin
-            .from("assinatura_faturas")
-            .update({ status: SubscriptionInvoiceStatus.FAILED })
-            .eq("id", fatura.id);
+          await invoiceRepository.updateInvoiceStatus(fatura.id, SubscriptionInvoiceStatus.FAILED);
+        } else if (event.type === "PAYMENT_REFUNDED") {
+          logger.error({ faturaId: fatura.id, txid }, "[WebhookController] Pagamento estornado/contestado. Cancelando assinatura.");
+          
+          await invoiceRepository.updateInvoiceStatus(fatura.id, SubscriptionInvoiceStatus.CANCELED);
+
+          if (fatura.assinatura_id) {
+            await subscriptionRepository.updateStatus(fatura.assinatura_id, SubscriptionStatus.PAST_DUE);
+          }
         }
         return reply.code(200).send({ success: true });
       }

@@ -221,13 +221,18 @@ export async function registrarUsuario(
 
     // --- SETUP SAAS SUBSCRIPTION ---
     const { subscriptionService } = await import("./subscriptions/subscription.service.js");
+    const { subscriptionReferralService } = await import("./subscriptions/subscription-referral.service.js");
     
     // 1. Iniciar Trial de 15 dias
     const subscription = await subscriptionService.getOrCreateSubscription(usuarioId);
 
-    // 2. Registrar indicação (se houver)
-    if (payload.indicador_id) {
-      await subscriptionService.registerReferral(payload.indicador_id, usuarioId);
+    // 2. Vincular Indicador (se houver indicador_id no payload)
+    if (subscription && payload.indicador_id) {
+      try {
+        await subscriptionReferralService.registerReferral(payload.indicador_id, usuarioId);
+      } catch (e) {
+        logger.error({ error: e }, "Falha ao registrar referral");
+      }
     }
 
     // Notificação de Boas Vindas

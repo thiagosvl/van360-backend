@@ -332,12 +332,14 @@ export const cobrancaService = {
           passageiro_id: passageiro.id,
           valor: valorFinal,
           data_vencimento: dataVencimentoStr,
-          origem: CobrancaOrigem.AUTOMATICA
+          origem: CobrancaOrigem.AUTOMATICA,
+          mes: targetMonth,
+          ano: targetYear
         }, { skipLog: true });
 
         created++;
       } catch (e) {
-        logger.error({ error: e, passageiroId: passageiro.id }, "[CobrancaService] Erro ao gerar cobrança automática no loop");
+        logger.error({ error: e, passageiroId: passageiro.id, motoristaId, mes: targetMonth, ano: targetYear }, "[CobrancaService] Erro ao gerar cobrança automática no loop");
       }
     }
 
