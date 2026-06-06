@@ -48,6 +48,10 @@ class ContractService {
     const usuario = await this.getUsuarioByAuthId(authId);
     const usuarioId = usuario.id;
 
+    if (!usuario.config_contrato?.usar_contratos || !usuario.config_contrato?.configurado) {
+      throw new AppError("A funcionalidade de contratos não está ativa ou configurada para este usuário.", 400);
+    }
+
     logger.info({ usuarioId: usuario.id, passageiroId, providerName }, 'Criando contrato');
 
     // 2. Buscar dados do passageiro

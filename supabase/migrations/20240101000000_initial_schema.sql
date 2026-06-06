@@ -358,7 +358,7 @@ CREATE TABLE IF NOT EXISTS "public"."usuarios" (
     "tipo_chave_pix" "text",
     "data_nascimento" "date" NOT NULL,
     "config_contrato" "jsonb" DEFAULT '{
-      "usar_contratos": true,
+      "usar_contratos": false,
       "configurado": false,
       "multa_atraso": { "valor": 10.00, "tipo": "percentual" },
       "multa_rescisao": { "valor": 15.00, "tipo": "percentual" },
