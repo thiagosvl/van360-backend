@@ -124,7 +124,7 @@ export const cobrancaRepository = {
             .from("cobrancas")
             .select(`
                 *,
-                passageiro:passageiros(nome, nome_responsavel, telefone_responsavel),
+                passageiro:passageiros(nome, nome_responsavel, telefone_responsavel, enviar_notificacoes),
                 motorista:usuarios!cobrancas_usuario_id_fkey(nome, apelido, telefone, chave_pix, tipo_chave_pix)
             `)
             .eq("status", CobrancaStatus.PENDENTE)

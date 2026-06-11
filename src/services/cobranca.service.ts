@@ -327,6 +327,9 @@ export const cobrancaService = {
         const motorista = c.motorista;
 
         if (!passageiro?.telefone_responsavel) continue;
+        
+        // Verifica a flag global de notificações do passageiro
+        if (passageiro?.enviar_notificacoes === false) continue;
 
         if (!motorista?.chave_pix || !motorista?.tipo_chave_pix) {
           logger.warn({ cobrancaId: c.id, motoristaId: c.usuario_id }, "[CobrancaService] Motorista sem chave Pix configurada. Notificação ignorada.");
