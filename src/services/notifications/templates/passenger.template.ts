@@ -42,8 +42,8 @@ const getTipoChavePixLabel = (tipo?: string): string => {
 
 // Helper for System Footer
 const getSystemFooter = (ctx: PassengerContext) => {
-    const phoneLink = ctx.telefoneMotorista 
-        ? `\n📞 Dúvidas? Fale com o motorista: https://wa.me/55${ctx.telefoneMotorista.replace(/\D/g, "")}` 
+    const phoneLink = ctx.telefoneMotorista
+        ? `\n📞 Dúvidas? Fale com o motorista: https://wa.me/55${ctx.telefoneMotorista.replace(/\D/g, "")}`
         : "";
 
     const nomeExibicao = ctx.apelidoMotorista || getFirstName(ctx.nomeMotorista);
@@ -52,7 +52,7 @@ const getSystemFooter = (ctx: PassengerContext) => {
 };
 
 export const PassengerTemplates = {
-    
+
     /**
      * Contrato Disponível
      */
@@ -109,7 +109,6 @@ export const PassengerTemplates = {
         const nomeResp = getFirstName(ctx.nomeResponsavel);
 
         const labelTipo = getTipoChavePixLabel(ctx.tipoChavePix);
-        const nomeExibicao = ctx.apelidoMotorista || getFirstName(ctx.nomeMotorista);
 
         const text = `🗓️ *Aviso de Mensalidade*\n\n` +
             `Responsável: *${nomeResp}*\n` +
@@ -119,13 +118,11 @@ export const PassengerTemplates = {
             `_________________\n` +
             `🔑 *Dados para Pagamento via Pix:*\n` +
             `• *Tipo:* ${labelTipo}\n` +
-            `• *Favorecido:* ${nomeExibicao}\n\n` +
-            `*(A chave Pix limpa será enviada na próxima mensagem para facilitar a cópia)*` +
+            `• *Chave PIX:* ${ctx.chavePix}\n\n` +
             `${getSystemFooter(ctx)}`;
 
         return [
-            { type: "text", content: text },
-            { type: "text", content: ctx.chavePix || "", delayMs: 1500 }
+            { type: "text", content: text }
         ];
     },
 
@@ -136,7 +133,7 @@ export const PassengerTemplates = {
         const valor = formatCurrency(ctx.valor || 0);
         const data = formatToBrazilianDate(ctx.dataVencimento || "");
         const nomeResp = getFirstName(ctx.nomeResponsavel);
-        
+
         const text = `⚠️ *Mensalidade Vence Hoje*\n\n` +
             `Responsável: *${nomeResp}*\n` +
             `Passageiro(a): *${ctx.nomePassageiro}*\n\n` +
@@ -154,8 +151,7 @@ export const PassengerTemplates = {
         const nomeResp = getFirstName(ctx.nomeResponsavel);
 
         const labelTipo = getTipoChavePixLabel(ctx.tipoChavePix);
-        const nomeExibicao = ctx.apelidoMotorista || getFirstName(ctx.nomeMotorista);
-        
+
         const text = `⚠️ *Mensalidade Vence Hoje*\n\n` +
             `Responsável: *${nomeResp}*\n` +
             `Passageiro(a): *${ctx.nomePassageiro}*\n\n` +
@@ -163,13 +159,11 @@ export const PassengerTemplates = {
             `_________________\n` +
             `🔑 *Dados para Pagamento via Pix:*\n` +
             `• *Tipo:* ${labelTipo}\n` +
-            `• *Favorecido:* ${nomeExibicao}\n\n` +
-            `*(A chave Pix limpa será enviada na próxima mensagem para facilitar a cópia)*` +
+            `• *Chave PIX:* ${ctx.chavePix}\n\n` +
             `${getSystemFooter(ctx)}`;
 
         return [
-            { type: "text", content: text },
-            { type: "text", content: ctx.chavePix || "", delayMs: 1500 }
+            { type: "text", content: text }
         ];
     },
 
@@ -180,7 +174,7 @@ export const PassengerTemplates = {
         const valor = formatCurrency(ctx.valor || 0);
         const data = formatToBrazilianDate(ctx.dataVencimento || "");
         const nomeResp = getFirstName(ctx.nomeResponsavel);
-        
+
         const text = `⚠️ *Aviso de Atraso*\n\n` +
             `Responsável: *${nomeResp}*\n` +
             `Passageiro(a): *${ctx.nomePassageiro}*\n\n` +
@@ -198,8 +192,8 @@ export const PassengerTemplates = {
         const nomeResp = getFirstName(ctx.nomeResponsavel);
 
         const labelTipo = getTipoChavePixLabel(ctx.tipoChavePix);
-        const nomeExibicao = ctx.apelidoMotorista || getFirstName(ctx.nomeMotorista);
-        
+        const nomeExibicao = getFirstName(ctx.nomeMotorista);
+
         const text = `⚠️ *Aviso de Atraso*\n\n` +
             `Responsável: *${nomeResp}*\n` +
             `Passageiro(a): *${ctx.nomePassageiro}*\n\n` +
@@ -207,13 +201,11 @@ export const PassengerTemplates = {
             `_________________\n` +
             `🔑 *Dados para Pagamento via Pix:*\n` +
             `• *Tipo:* ${labelTipo}\n` +
-            `• *Favorecido:* ${nomeExibicao}\n\n` +
-            `*(A chave Pix limpa será enviada na próxima mensagem para facilitar a cópia)*` +
+            `• *Chave PIX:* ${ctx.chavePix}\n\n` +
             `${getSystemFooter(ctx)}`;
 
         return [
-            { type: "text", content: text },
-            { type: "text", content: ctx.chavePix || "", delayMs: 1500 }
+            { type: "text", content: text }
         ];
     }
 };

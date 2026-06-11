@@ -7,7 +7,6 @@ interface SystemSummary {
   usuario: {
     ativo: boolean;
     flags: {
-      contrato_configurado: boolean;
       usar_contratos: boolean;
     };
   };
@@ -135,7 +134,6 @@ export const usuarioResumoService = {
       usuario: {
         ativo: (usuario as any).ativo,
         flags: {
-          contrato_configurado: !!usuario.config_contrato?.configurado,
           usar_contratos: !!usuario.config_contrato?.usar_contratos,
         }
       },
