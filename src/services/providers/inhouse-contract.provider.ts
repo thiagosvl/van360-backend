@@ -4,7 +4,8 @@ import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { formatToBrazilianDate, getNowBR, parseLocalDate } from '../../utils/date.utils.js';
 import { formatModalidade, formatParentesco, formatPeriodo, maskCnpj, maskCpf, maskPhone } from '../../utils/format.js';
 
-import { supabaseAdmin } from '../../config/supabase.js';
+import { storageProvider } from './storage.provider.js';
+import { contractRepository } from '../../repositories/contract.repository.js';
 import {
   ContractGenerationParams,
   ContractGenerationResponse,
@@ -23,18 +24,14 @@ export class InHouseContractProvider implements ContractProvider {
     const pdfBytes = await pdfDoc.save();
     const fileName = `minutas/${params.contratoId}.pdf`;
 
-    const { error } = await supabaseAdmin.storage
-      .from('contratos')
-      .upload(fileName, pdfBytes, {
+    const { error } = await storageProvider.upload('contratos', fileName, Buffer.from(pdfBytes), {
         contentType: 'application/pdf',
         upsert: true,
       });
 
     if (error) throw error;
 
-    const { data: { publicUrl } } = supabaseAdmin.storage
-      .from('contratos')
-      .getPublicUrl(fileName);
+    const publicUrl = storageProvider.getPublicUrl('contratos', fileName);
 
     return {
       documentUrl: publicUrl,
@@ -42,18 +39,12 @@ export class InHouseContractProvider implements ContractProvider {
   }
 
   async processarAssinatura(params: ContractSignatureParams): Promise<ContractSignatureResponse> {
-    const { data: contrato, error } = await supabaseAdmin
-      .from('contratos')
-      .select('minuta_url, dados_contrato')
-      .eq('id', params.contratoId)
-      .single();
+    const { data: contrato, error } = await contractRepository.getMinutaAndData(params.contratoId);
 
     if (error || !contrato) throw new Error('Contrato não encontrado');
 
     const minutaPath = contrato.minuta_url.split('/contratos/')[1];
-    const { data: pdfBuffer, error: downloadError } = await supabaseAdmin.storage
-      .from('contratos')
-      .download(minutaPath);
+    const { data: pdfBuffer, error: downloadError } = await storageProvider.download('contratos', minutaPath);
 
     if (downloadError) throw downloadError;
 
@@ -103,18 +94,14 @@ export class InHouseContractProvider implements ContractProvider {
     const finalPdfBytes = await pdfDoc.save();
     const finalFileName = `assinados/${params.contratoId}.pdf`;
 
-    const { error: uploadError } = await supabaseAdmin.storage
-      .from('contratos')
-      .upload(finalFileName, finalPdfBytes, {
+    const { error: uploadError } = await storageProvider.upload('contratos', finalFileName, Buffer.from(finalPdfBytes), {
         contentType: 'application/pdf',
         upsert: true,
       });
 
     if (uploadError) throw uploadError;
 
-    const { data: { publicUrl } } = supabaseAdmin.storage
-      .from('contratos')
-      .getPublicUrl(finalFileName);
+    const publicUrl = storageProvider.getPublicUrl('contratos', finalFileName);
 
     return {
       documentoFinalUrl: publicUrl,
@@ -123,26 +110,16 @@ export class InHouseContractProvider implements ContractProvider {
   }
 
   async consultarStatus(contratoId: string): Promise<any> {
-    const { data, error } = await supabaseAdmin
-      .from('contratos')
-      .select('*')
-      .eq('id', contratoId)
-      .single();
+    const { data, error } = await contractRepository.getBasicStatus(contratoId);
     if (error) throw error;
     return data;
   }
 
   async baixarDocumento(contratoId: string): Promise<Buffer> {
-    const { data: contrato } = await supabaseAdmin
-      .from('contratos')
-      .select('contrato_final_url')
-      .eq('id', contratoId)
-      .single();
+    const { data: contrato } = await contractRepository.getFinalUrl(contratoId);
     if (!contrato?.contrato_final_url) throw new Error('Documento não encontrado');
     const pathDownload = contrato.contrato_final_url.split('/contratos/')[1];
-    const { data: pdfBuffer } = await supabaseAdmin.storage
-      .from('contratos')
-      .download(pathDownload);
+    const { data: pdfBuffer } = await storageProvider.download('contratos', pathDownload);
     if (!pdfBuffer) throw new Error('Erro ao baixar documento');
     return Buffer.from(await pdfBuffer.arrayBuffer());
   }

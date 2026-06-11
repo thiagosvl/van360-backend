@@ -1,5 +1,5 @@
 import { logger } from "../config/logger.js";
-import { supabaseAdmin } from "../config/supabase.js";
+import { historicoRepository } from "../repositories/historico.repository.js";
 import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { getContextIp } from "../utils/context.js";
 
@@ -20,17 +20,15 @@ export const historicoService = {
     async log(params: LogAtividadeParams): Promise<void> {
         try {
             const contextIp = getContextIp();
-            const { error } = await supabaseAdmin
-                .from('historico_atividades')
-                .insert([{
-                    usuario_id: params.usuario_id,
-                    entidade_tipo: params.entidade_tipo,
-                    entidade_id: params.entidade_id,
-                    acao: params.acao,
-                    descricao: params.descricao,
-                    meta: params.meta || {},
-                    ip_address: params.ip_address || contextIp || null
-                }]);
+            const { error } = await historicoRepository.insert({
+                usuario_id: params.usuario_id,
+                entidade_tipo: params.entidade_tipo,
+                entidade_id: params.entidade_id,
+                acao: params.acao,
+                descricao: params.descricao,
+                meta: params.meta || {},
+                ip_address: params.ip_address || contextIp || null
+            });
 
             if (error) {
                 logger.error({ error, params }, "[historicoService.log] Erro ao inserir log de atividade");
@@ -44,12 +42,7 @@ export const historicoService = {
      * Lista atividades de uma entidade específica.
      */
     async listByEntidade(tipo: AtividadeEntidadeTipo, id: string) {
-        const { data, error } = await supabaseAdmin
-            .from('historico_atividades')
-            .select('*')
-            .eq('entidade_tipo', tipo)
-            .eq('entidade_id', id)
-            .order('created_at', { ascending: false });
+        const { data, error } = await historicoRepository.listByEntidade(tipo, id);
 
         if (error) throw error;
         return data || [];
@@ -59,12 +52,7 @@ export const historicoService = {
      * Lista atividades globais de um usuário (motorista).
      */
     async listByUsuario(usuarioId: string, limit = 50) {
-        const { data, error } = await supabaseAdmin
-            .from('historico_atividades')
-            .select('*')
-            .eq('usuario_id', usuarioId)
-            .order('created_at', { ascending: false })
-            .limit(limit);
+        const { data, error } = await historicoRepository.listByUsuario(usuarioId, limit);
 
         if (error) throw error;
         return data || [];

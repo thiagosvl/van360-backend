@@ -1,4 +1,3 @@
-import { supabaseAdmin } from "../../config/supabase.js";
 import { logger } from "../../config/logger.js";
 import { SubscriptionStatus, ConfigKey, CheckoutPaymentMethod, AtividadeAcao, AtividadeEntidadeTipo } from "../../types/enums.js";
 import { historicoService } from "../historico.service.js";

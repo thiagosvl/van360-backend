@@ -120,7 +120,7 @@ export const subscriptionBillingService = {
         }
 
         const invoiceDays = await getConfigNumber(ConfigKey.SAAS_DIAS_VENCIMENTO, 30);
-        const dataVencimentoFatura = toPersistenceString(addDays(getNowBR(), invoiceDays));
+        const dataVencimentoFatura = toPersistenceString(addDays(new Date(getNowBR().getTime()), invoiceDays));
 
         const { paymentService } = await import("../payments/payment.service.js");
 
@@ -149,8 +149,11 @@ export const subscriptionBillingService = {
                     state: state || "SP"
                 } : undefined
             }, PaymentProvider.EFIPAY);
-        } catch (gatewayErr: any) {
-            logger.error({ userId, error: gatewayErr.message }, "[SubscriptionBillingService] Erro de conexão/exceção no Gateway");
+        } catch (gatewayErr) {
+            const isError = gatewayErr instanceof Error;
+            const errMsg = isError ? gatewayErr.message : String(gatewayErr);
+            
+            logger.error({ userId, error: errMsg }, "[SubscriptionBillingService] Erro de conexão/exceção no Gateway");
 
             try {
                 const { data: failedInvoice } = await invoiceRepository.createInvoice({
@@ -171,14 +174,14 @@ export const subscriptionBillingService = {
                         entidade_tipo: AtividadeEntidadeTipo.SAAS_FATURA,
                         entidade_id: failedInvoice.id,
                         acao: AtividadeAcao.SAAS_FATURA_GERADA,
-                        descricao: `Exceção na cobrança automática via ${paymentMethod.toUpperCase()} (Valor R$ ${valor}): ${gatewayErr.message}`
+                        descricao: `Exceção na cobrança automática via ${paymentMethod.toUpperCase()} (Valor R$ ${valor}): ${errMsg}`
                     });
                 }
             } catch (dbError) {
                 logger.error({ userId, dbError }, "[SubscriptionBillingService] Erro ao gravar fatura falha no banco.");
             }
 
-            throw gatewayErr;
+            throw isError ? gatewayErr : new Error(errMsg);
         }
 
         if (!chargeRes.success) {

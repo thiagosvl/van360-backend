@@ -1,12 +1,12 @@
-import { supabaseAdmin } from "../config/supabase.js";
+import { veiculoRepository } from "../repositories/veiculo.repository.js";
 import { CreateVeiculoDTO, ListVeiculosFiltersDTO, UpdateVeiculoDTO, Veiculo, VeiculoComContagem } from "../types/dtos/veiculo.dto.js";
 import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { cleanString } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
 
 // Helper Methods
-const _prepareVeiculoData = (data: Partial<CreateVeiculoDTO>, usuarioId?: string, isUpdate: boolean = false): any => {
-    const prepared: any = {};
+const _prepareVeiculoData = (data: Partial<CreateVeiculoDTO>, usuarioId?: string, isUpdate: boolean = false): Record<string, unknown> => {
+    const prepared: Record<string, unknown> = {};
 
     if (!isUpdate && usuarioId) {
         prepared.usuario_id = usuarioId;
@@ -30,11 +30,7 @@ export const veiculoService = {
 
         const veiculoData = _prepareVeiculoData(data, data.usuario_id, false);
 
-        const { data: inserted, error } = await supabaseAdmin
-            .from("veiculos")
-            .insert([veiculoData])
-            .select()
-            .single();
+        const { data: inserted, error } = await veiculoRepository.insert(veiculoData);
         if (error) throw error;
 
         // --- LOG DE AUDITORIA ---
@@ -55,12 +51,7 @@ export const veiculoService = {
 
         const veiculoData = _prepareVeiculoData(data, undefined, true);
 
-        const { data: updated, error } = await supabaseAdmin
-            .from("veiculos")
-            .update(veiculoData)
-            .eq("id", id)
-            .select()
-            .single();
+        const { data: updated, error } = await veiculoRepository.update(id, veiculoData);
         if (error) throw error;
 
         // --- LOG DE AUDITORIA ---
@@ -82,7 +73,7 @@ export const veiculoService = {
         const veiculo = await this.getVeiculo(id);
 
         if (veiculo?.id) {
-            const { error } = await supabaseAdmin.from("veiculos").delete().eq("id", id);
+            const { error } = await veiculoRepository.delete(id);
             if (error) throw error;
 
             // --- LOG DE AUDITORIA ---
@@ -98,11 +89,7 @@ export const veiculoService = {
     },
 
     async getVeiculo(id: string): Promise<Veiculo | null> {
-        const { data, error } = await supabaseAdmin
-            .from("veiculos")
-            .select("*")
-            .eq("id", id)
-            .single();
+        const { data, error } = await veiculoRepository.getById(id);
         if (error) throw error;
         return data as Veiculo;
     },
@@ -111,31 +98,7 @@ export const veiculoService = {
         usuarioId: string,
         filtros?: ListVeiculosFiltersDTO
     ): Promise<Veiculo[]> {
-        let query = supabaseAdmin
-            .from("veiculos")
-            .select("*")
-            .eq("usuario_id", usuarioId)
-            .order("placa", { ascending: true });
-
-        if (filtros?.search) {
-            query = query.or(
-                `placa.ilike.%${filtros.search}%,marca.ilike.%${filtros.search}%,modelo.ilike.%${filtros.search}%`
-            );
-        }
-
-        if (filtros?.placa) query = query.eq("placa", filtros.placa);
-        if (filtros?.marca) query = query.eq("marca", filtros.marca);
-        if (filtros?.modelo) query = query.eq("modelo", filtros.modelo);
-
-        if (filtros?.ativo !== undefined && filtros?.includeId) {
-            query = query.or(`ativo.eq.${filtros.ativo === "true"},id.eq.${filtros.includeId}`);
-        } else if (filtros?.ativo !== undefined) {
-            query = query.eq("ativo", filtros.ativo === "true");
-        } else if (filtros?.includeId) {
-            query = query.eq("id", filtros.includeId);
-        }
-
-        const { data, error } = await query;
+        const { data, error } = await veiculoRepository.list(usuarioId, filtros);
         if (error) throw error;
 
         return (data || []) as Veiculo[];
@@ -144,52 +107,24 @@ export const veiculoService = {
     async listVeiculosComContagemAtivos(usuarioId: string, filtros?: ListVeiculosFiltersDTO): Promise<VeiculoComContagem[]> {
         if (!usuarioId) throw new Error("Usuário obrigatório");
 
-        let query = supabaseAdmin
-            .from("veiculos")
-            .select(`*, passageiros(count)`)
-            .eq("usuario_id", usuarioId)
-            .eq("passageiros.ativo", true)
-            .order("placa", { ascending: true });
-
-        if (filtros?.search) {
-            query = query.or(
-                `placa.ilike.%${filtros.search}%,marca.ilike.%${filtros.search}%,modelo.ilike.%${filtros.search}%`
-            );
-        }
-
-        if (filtros?.placa) query = query.eq("placa", filtros.placa);
-        if (filtros?.marca) query = query.eq("marca", filtros.marca);
-        if (filtros?.modelo) query = query.eq("modelo", filtros.modelo);
-
-        if (filtros?.ativo !== undefined && filtros?.includeId) {
-            query = query.or(`ativo.eq.${filtros.ativo === "true"},id.eq.${filtros.includeId}`);
-        } else if (filtros?.ativo !== undefined) {
-            query = query.eq("ativo", filtros.ativo === "true");
-        } else if (filtros?.includeId) {
-            query = query.eq("id", filtros.includeId);
-        }
-
-        const { data, error } = await query;
+        const { data, error } = await veiculoRepository.listComContagemAtivos(usuarioId, filtros);
         if (error) throw error;
 
-        return (data || []).map((veiculo: any) => ({
+        return (data || []).map((veiculo: Record<string, any>) => ({
             ...veiculo,
-            passageiros_ativos_count: veiculo.passageiros[0]?.count || 0,
+            passageiros_ativos_count: veiculo.passageiros?.[0]?.count || 0,
         })) as VeiculoComContagem[];
     },
 
     async toggleAtivo(veiculoId: string, novoStatus: boolean): Promise<boolean> {
-        const { error } = await supabaseAdmin
-            .from("veiculos")
-            .update({ ativo: novoStatus })
-            .eq("id", veiculoId);
+        const { error } = await veiculoRepository.updateAtivo(veiculoId, novoStatus);
 
         if (error) {
             throw new Error(`Falha ao ${novoStatus ? "ativar" : "desativar"} o veículo.`);
         }
 
         // --- LOG DE AUDITORIA ---
-        const { data: v } = await supabaseAdmin.from("veiculos").select("usuario_id, placa").eq("id", veiculoId).single();
+        const { data: v } = await veiculoRepository.getUsuarioIdAndPlaca(veiculoId);
         if (v) {
             historicoService.log({
                 usuario_id: v.usuario_id,
@@ -205,10 +140,7 @@ export const veiculoService = {
     },
 
     async countListVeiculosByUsuario(usuarioId: string): Promise<number> {
-        const { count, error } = await supabaseAdmin
-            .from("veiculos")
-            .select("id", { count: "exact", head: true })
-            .eq("usuario_id", usuarioId);
+        const { count, error } = await veiculoRepository.countByUsuario(usuarioId);
 
         if (error) throw new Error(error.message || "Erro ao contar veículos");
         return count || 0;

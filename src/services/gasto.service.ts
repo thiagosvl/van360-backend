@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "../config/supabase.js";
+import { gastoRepository } from "../repositories/gasto.repository.js";
 import { CreateGastoDTO, ListGastosFiltersDTO, UpdateGastoDTO } from "../types/dtos/gasto.dto.js";
 import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
@@ -7,8 +7,8 @@ import { historicoService } from "./historico.service.js";
 import { toPersistenceString } from "../utils/date.utils.js";
 
 // Helper Methods
-const _prepareGastoData = (data: Partial<CreateGastoDTO>, usuarioId?: string, isUpdate: boolean = false): any => {
-    const prepared: any = {};
+const _prepareGastoData = (data: Partial<CreateGastoDTO>, usuarioId?: string, isUpdate: boolean = false): Record<string, unknown> => {
+    const prepared: Record<string, unknown> = {};
 
     if (!isUpdate && usuarioId) {
         prepared.usuario_id = usuarioId;
@@ -36,11 +36,7 @@ export const gastoService = {
 
         const gastoData = _prepareGastoData(data, data.usuario_id, false);
 
-        const { data: inserted, error } = await supabaseAdmin
-            .from("gastos")
-            .insert([gastoData])
-            .select()
-            .single();
+        const { data: inserted, error } = await gastoRepository.insert(gastoData);
         if (error) throw error;
 
         // --- LOG DE AUDITORIA ---
@@ -61,12 +57,7 @@ export const gastoService = {
 
         const gastoData = _prepareGastoData(data, undefined, true);
 
-        const { data: updated, error } = await supabaseAdmin
-            .from("gastos")
-            .update(gastoData)
-            .eq("id", id)
-            .select()
-            .single();
+        const { data: updated, error } = await gastoRepository.update(id, gastoData);
         if (error) throw error;
 
         // --- LOG DE AUDITORIA ---
@@ -88,7 +79,7 @@ export const gastoService = {
         const gasto = await this.getGasto(id);
 
         if (gasto?.id) {
-            const { error } = await supabaseAdmin.from("gastos").delete().eq("id", id);
+            const { error } = await gastoRepository.delete(id);
             if (error) throw error;
 
             // --- LOG DE AUDITORIA ---
@@ -104,11 +95,7 @@ export const gastoService = {
     },
 
     async getGasto(id: string): Promise<any> {
-        const { data, error } = await supabaseAdmin
-            .from("gastos")
-            .select("*")
-            .eq("id", id)
-            .single();
+        const { data, error } = await gastoRepository.getById(id);
         if (error) throw error;
         return data;
     },
@@ -119,37 +106,7 @@ export const gastoService = {
     ): Promise<any[]> {
         if (!usuarioId) throw new Error("Usuário obrigatório");
 
-        let query = supabaseAdmin
-            .from("gastos")
-            .select("*, veiculo:veiculos(id, placa)")
-            .eq("usuario_id", usuarioId)
-            .order("data", { ascending: false })
-            .order("categoria", { ascending: false });
-
-        if (filtros && filtros.categoria) {
-            query = query.eq('categoria', filtros.categoria);
-        }
-
-        if (filtros && filtros.veiculo_id) {
-            if (filtros.veiculo_id === 'unspecified') {
-                 query = query.is('veiculo_id', null);
-            } else {
-                 query = query.eq('veiculo_id', filtros.veiculo_id);
-            }
-        }
-
-        if (filtros?.data_inicio) query = query.gte("data", filtros.data_inicio);
-        if (filtros?.data_fim) query = query.lte("data", filtros.data_fim);
-
-        if (filtros?.search) {
-             query = query.ilike('descricao', `%${filtros.search}%`);
-        }
-
-        // Pagination
-        if (filtros?.limit) query = query.limit(filtros.limit);
-        if (filtros?.offset) query = query.range(filtros.offset, filtros.offset + (filtros.limit || 10) - 1);
-
-        const { data, error } = await query;
+        const { data, error } = await gastoRepository.list(usuarioId, filtros);
         if (error) throw error;
 
         return data || [];

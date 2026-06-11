@@ -1,5 +1,4 @@
 import { logger } from "../../config/logger.js";
-import { supabaseAdmin } from "../../config/supabase.js";
 import {
     SubscriptionStatus,
     SubscriptionIdentifer,
@@ -11,6 +10,7 @@ import { getNowBR, getEndOfDayBR, addDays, parseLocalDate } from "../../utils/da
 import { notificationService } from "../notifications/notification.service.js";
 import { EVENTO_MOTORISTA_ASSINATURA_PAGO } from "../../config/constants.js";
 import { subscriptionRepository } from "../../repositories/subscription.repository.js";
+import { planRepository } from "../../repositories/plan.repository.js";
 import { subscriptionReferralService } from "./subscription-referral.service.js";
 
 export const subscriptionService = {
@@ -38,15 +38,11 @@ export const subscriptionService = {
      * Cria um Trial de 15 dias para novos usuários.
      */
     async createTrial(userId: string) {
-        const { data: plano } = await supabaseAdmin
-            .from("planos")
-            .select("id")
-            .eq("identificador", SubscriptionIdentifer.MONTHLY)
-            .single();
+        const { data: plano } = await planRepository.getByIdentifier(SubscriptionIdentifer.MONTHLY);
 
         if (!plano) {
             logger.error({ identificador: SubscriptionIdentifer.MONTHLY }, "[SubscriptionService] Plano inicial não encontrado para criar Trial.");
-            return null;
+            throw new Error(`Plano '${SubscriptionIdentifer.MONTHLY}' não encontrado.`);
         }
 
         const trialEndsAtIso = getEndOfDayBR(addDays(getNowBR(), 15)).toISOString();
@@ -75,11 +71,7 @@ export const subscriptionService = {
      * Lista todos os planos ativos.
      */
     async listPlans() {
-        const { data: plans, error } = await supabaseAdmin
-            .from("planos")
-            .select("*")
-            .eq("ativo", true)
-            .order("valor", { ascending: true });
+        const { data: plans, error } = await planRepository.listActivePlans();
 
         if (error) throw error;
         return plans;
@@ -100,7 +92,9 @@ export const subscriptionService = {
         }
 
         if (sub.status === SubscriptionStatus.TRIAL) {
+            if (!sub.trial_ends_at) return true;
             const trialLimit = parseLocalDate(sub.trial_ends_at);
+            if (isNaN(trialLimit.getTime())) return true;
             return trialLimit < getNowBR();
         }
 
@@ -127,12 +121,11 @@ export const subscriptionService = {
      * Ativa a assinatura com base no pagamento de uma fatura.
      */
     async activateByFatura(faturaId: string) {
-        const { data: rpcRes, error: rpcError } = await supabaseAdmin
-            .rpc("confirm_invoice_payment", { p_fatura_id: faturaId });
+        const { data: rpcRes, error: rpcError } = await subscriptionRepository.confirmInvoicePaymentRpc(faturaId);
 
         if (rpcError) {
             logger.error({ error: rpcError, faturaId }, "[SubscriptionService] Erro ao executar RPC confirm_invoice_payment.");
-            return;
+            throw rpcError;
         }
 
         const res = rpcRes as {
@@ -152,13 +145,15 @@ export const subscriptionService = {
             logger.info({ faturaId, message: res?.message }, "[SubscriptionService] Webhook ignorado/cancelado.");
             return;
         }
+        
+        const safeFaturaIdStr = res.fatura_id ? res.fatura_id.split("-")[0] : faturaId.split("-")[0];
 
         await historicoService.log({
             usuario_id: res.usuario_id!,
             entidade_tipo: AtividadeEntidadeTipo.SAAS_FATURA,
-            entidade_id: res.fatura_id!,
+            entidade_id: res.fatura_id || faturaId,
             acao: AtividadeAcao.SAAS_PAGAMENTO_RECEBIDO,
-            descricao: `Pagamento confirmado para fatura ${res.fatura_id!.split("-")[0]} (Valor R$ ${res.valor})`
+            descricao: `Pagamento confirmado para fatura ${safeFaturaIdStr} (Valor R$ ${res.valor})`
         });
 
         await historicoService.log({

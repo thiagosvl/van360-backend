@@ -4,9 +4,12 @@ import { logger } from "../config/logger.js";
 import {
     EvolutionConnectResponse,
     ConnectInstanceResponse,
-    EvolutionInstance
+    EvolutionInstance,
+    CompositeMessagePart,
+    EvolutionInstanceFallback
 } from "../types/dtos/whatsapp.dto.js";
 import { EvolutionEvent, EvolutionIntegration, WhatsappMediaType, WhatsappStatus } from "../types/enums.js";
+import { formatWhatsAppNumber } from "../utils/string.utils.js";
 
 const EVO_URL = env.EVOLUTION_API_URL;
 const EVO_KEY = env.EVOLUTION_API_KEY;
@@ -33,7 +36,7 @@ export class WhatsappService {
                 const fallbackUrl = `${EVO_URL}/instance/fetchInstances?instanceName=${instanceName}`;
                 const { data } = await axios.get(fallbackUrl, { headers: EVO_HEADERS });
                 const instances = Array.isArray(data) ? data : (data?.instances || [data?.instance]);
-                const instance = instances.find((i: any) => (i?.instanceName || i?.name) === instanceName);
+                const instance = instances.find((i: EvolutionInstanceFallback) => (i?.instanceName || i?.name) === instanceName);
 
                 if (instance) {
                     return {
@@ -41,7 +44,10 @@ export class WhatsappService {
                         status: instance.status
                     };
                 }
-            } catch (fallbackErr) {}
+            } catch (fallbackErr) {
+                const errFallback = fallbackErr as AxiosError;
+                logger.warn({ err: errFallback.message, instanceName }, "[WhatsappService] Fallback status falhou");
+            }
 
             if (err.response?.status === 404) {
                 return { state: WhatsappStatus.NOT_FOUND };
@@ -54,8 +60,7 @@ export class WhatsappService {
 
     async sendText(number: string, text: string, instanceName: string): Promise<boolean> {
         try {
-            const cleanNumber = number.replace(/\D/g, "");
-            const finalNumber = cleanNumber.length <= 11 ? `55${cleanNumber}` : cleanNumber;
+            const finalNumber = formatWhatsAppNumber(number);
 
             const url = `${EVO_URL}/message/sendText/${instanceName}`;
             await axios.post(url, {
@@ -75,8 +80,7 @@ export class WhatsappService {
 
     async sendImage(number: string, media: string, caption: string, instanceName: string): Promise<boolean> {
         try {
-            const cleanNumber = number.replace(/\D/g, "");
-            const finalNumber = cleanNumber.length <= 11 ? `55${cleanNumber}` : cleanNumber;
+            const finalNumber = formatWhatsAppNumber(number);
 
             const url = `${EVO_URL}/message/sendMedia/${instanceName}`;
             const cleanBase64 = media.includes('base64,') ? media.split('base64,')[1] : media;
@@ -97,9 +101,8 @@ export class WhatsappService {
         }
     }
 
-    async sendCompositeMessage(number: string, parts: any[], instanceName: string): Promise<boolean> {
-        const cleanNumber = number.replace(/\D/g, "");
-        const finalNumber = cleanNumber.length <= 11 ? `55${cleanNumber}` : cleanNumber;
+    async sendCompositeMessage(number: string, parts: CompositeMessagePart[], instanceName: string): Promise<boolean> {
+        const finalNumber = formatWhatsAppNumber(number);
         let success = true;
 
         for (const part of parts) {
@@ -128,8 +131,7 @@ export class WhatsappService {
                 webhook: {
                     url: url,
                     enabled: true,
-                    byEvents: false,    // Padrão CamelCase
-                    by_events: false,   // Padrão SnakeCase (fallback v2)
+                    byEvents: false,
                     base64: true,
                     events: [
                         EvolutionEvent._CONNECTION_UPDATE,
@@ -191,7 +193,6 @@ export class WhatsappService {
                         url: WEBHOOK_URL,
                         enabled: true,
                         byEvents: false,
-                        by_events: false,
                         events: [
                             EvolutionEvent._CONNECTION_UPDATE,
                             EvolutionEvent._MESSAGES_UPSERT,
@@ -256,8 +257,7 @@ export class WhatsappService {
 
             // Fluxo de Pairing Code
             if (phoneNumber) {
-                const cleanPhone = phoneNumber.replace(/\D/g, "");
-                const finalPhone = cleanPhone.length <= 11 ? `55${cleanPhone}` : cleanPhone;
+                const finalPhone = formatWhatsAppNumber(phoneNumber);
 
                 const maxAttempts = 5;
                 for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -269,7 +269,10 @@ export class WhatsappService {
                         if (pCode && pCode.length >= 8) {
                             return { pairingCode: { code: pCode } };
                         }
-                    } catch (e) {}
+                    } catch (e) {
+                        const errCode = e as AxiosError;
+                        logger.warn({ err: errCode.message, attempt }, "[WhatsappService] Falha ao tentar parear, tentando novamente...");
+                    }
                     await new Promise(r => setTimeout(r, 2000));
                 }
                 throw new Error("Falha ao gerar código de pareamento.");

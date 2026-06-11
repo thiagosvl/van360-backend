@@ -169,6 +169,17 @@ export enum PeriodoEnum {
   INTEGRAL = "integral"
 }
 
+export enum GastoCategoria {
+  COMBUSTIVEL = "combustivel",
+  MANUTENCAO = "manutencao",
+  IMPOSTOS = "impostos",
+  MULTAS = "multas",
+  LAVAGEM = "lavagem",
+  ALIMENTACAO = "alimentacao",
+  SEGURO = "seguro",
+  OUTROS = "outros"
+}
+
 export enum AtividadeEntidadeTipo {
   COBRANCA = "COBRANCA",
   PASSAGEIRO = "PASSAGEIRO",

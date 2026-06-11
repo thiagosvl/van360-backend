@@ -2,7 +2,9 @@ import {
   EVENTO_MOTORISTA_TESTE_BOAS_VINDAS
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
-import { supabaseAdmin } from "../config/supabase.js";
+import { userRepository } from "../repositories/user.repository.js";
+import { authRepository } from "../repositories/auth.repository.js";
+import { authProvider } from "./providers/auth.provider.js";
 import { AppError } from "../errors/AppError.js";
 import { AtividadeAcao, AtividadeEntidadeTipo, UserType } from "../types/enums.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
@@ -35,15 +37,21 @@ export interface CheckUserStatusResult {
   field?: string;
 }
 
+export interface RecoverySessionQueryResult {
+  usuario_id: string;
+  created_at: string;
+  usado: boolean;
+  usuarios: {
+    email: string;
+    nome: string;
+    telefone: string | null;
+  } | null;
+}
+
 export interface AuthSession {
   access_token: string;
   refresh_token: string;
-  user: {
-    id: string;
-    email: string;
-    role: string;
-    [key: string]: any;
-  };
+  user: any;
 }
 
 export interface RegistroPayload {
@@ -80,11 +88,7 @@ export async function checkUserStatus(
   const telefoneNormalizado = onlyDigits(telefone);
 
   // Uma única query para buscar usuário que corresponda a qualquer um dos campos
-  const { data: usuarios, error: findUserError } = await supabaseAdmin
-    .from("usuarios")
-    .select("id, ativo, cpfcnpj, email, telefone")
-    .or(`cpfcnpj.eq.${cpfcnpjNormalizado},email.eq.${emailNormalizado},telefone.eq.${telefoneNormalizado}`)
-    .limit(1);
+  const { data: usuarios, error: findUserError } = await authRepository.checkUserStatus(cpfcnpjNormalizado, emailNormalizado, telefoneNormalizado);
 
   if (findUserError) {
     logger.error({ error: findUserError.message }, "Erro DB ao verificar status.");
@@ -113,9 +117,7 @@ export async function checkUserStatus(
 export async function criarUsuario(data: UsuarioPayload & { tipo?: UserType, id: string }) {
   const { id, nome, apelido, email, cpfcnpj, telefone, ativo = false, tipo, termos_aceitos, data_nascimento } = data;
 
-  const { data: usuario, error } = await supabaseAdmin
-    .from("usuarios")
-    .insert([{
+  const { data: usuario, error } = await userRepository.insert({
       id,
       nome: cleanString(nome, true),
       apelido: apelido ? cleanString(apelido, true) : null,
@@ -128,9 +130,7 @@ export async function criarUsuario(data: UsuarioPayload & { tipo?: UserType, id:
       termos_versao: termos_aceitos ? TERMOS_VERSAO_ATUAL : null,
       created_at: getNowBR().toISOString(),
       data_nascimento: parseBrazilianDateToISO(data_nascimento),
-    }])
-    .select("id")
-    .single();
+    });
 
   if (error) {
     logger.error({ error: error.message }, "Falha ao criar usuário no DB.");
@@ -145,7 +145,7 @@ export async function criarUsuarioAuth(
   tipo: UserType = UserType.MOTORISTA
 ): Promise<AuthSession> {
 
-  const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+  const { data: authData, error: authError } = await authProvider.createUser({
     email,
     password: senha,
     email_confirm: true,
@@ -158,7 +158,7 @@ export async function criarUsuarioAuth(
     throw new AppError(authError?.message || "Erro ao criar usuário de autenticação", 400);
   }
 
-  const { data: sessionData, error: sessionError } = await supabaseAdmin.auth.signInWithPassword({
+  const { data: sessionData, error: sessionError } = await authProvider.signInWithPassword({
     email,
     password: senha,
   });
@@ -184,10 +184,10 @@ export async function rollbackCadastro({
 }) {
   try {
     if (usuarioId) {
-      await supabaseAdmin.from("usuarios").delete().eq("id", usuarioId);
+      await userRepository.delete(usuarioId);
     }
     if (authUid) {
-      await supabaseAdmin.auth.admin.deleteUser(authUid);
+      await authProvider.deleteUser(authUid);
     }
   } catch (err: any) {
     logger.warn({ error: err.message }, "Erro durante rollback (pode ser parcial).");
@@ -217,6 +217,8 @@ export async function registrarUsuario(
     authUid = session.user.id;
     usuarioId = authUid;
 
+    if (!usuarioId || !authUid) throw new AppError("Falha ao gerar identificador único.", 500);
+
     const usuario = await criarUsuario({ ...payload, id: authUid });
 
     // --- SETUP SAAS SUBSCRIPTION ---
@@ -241,14 +243,15 @@ export async function registrarUsuario(
         nomeMotorista: payload.nome,
         dataVencimento: subscription?.trial_ends_at ?? undefined,
       })
-        .catch(err => logger.error({ err }, "Falha ao enviar boas vindas"));
+        .catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar boas vindas"));
     }
 
     return { success: true, session };
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (usuarioId) await rollbackCadastro({ usuarioId, authUid });
-    if (err instanceof AppError || err.field) throw err;
-    throw new AppError(err.message || "Erro desconhecido ao processar registro.", 400);
+    if (err instanceof AppError || (err && typeof err === 'object' && 'field' in err)) throw err as AppError;
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    throw new AppError(errorMessage || "Erro desconhecido ao processar registro.", 400);
   }
 }
 
@@ -256,16 +259,12 @@ export async function login(identifier: string, password: string): Promise<AuthS
   const cpf = onlyDigits(identifier);
   if (!cpf) throw new AppError("CPF inválido.", 400);
 
-  const { data: user, error } = await supabaseAdmin
-    .from("usuarios")
-    .select("id, email, ativo")
-    .eq("cpfcnpj", cpf)
-    .single();
+  const { data: user, error } = await authRepository.getUserLogin(cpf);
 
   if (error || !user) throw new AppError("Usuário não encontrado com este CPF.", 404);
   if (!user.ativo) throw new AppError("Sua conta está inativa. Entre em contato com o suporte.", 403);
 
-  const { data, error: authError } = await supabaseAdmin.auth.signInWithPassword({
+  const { data, error: authError } = await authProvider.signInWithPassword({
     email: user.email,
     password
   });
@@ -291,41 +290,29 @@ export async function loginResponsavel(cpf: string, email: string) {
   const cpfClean = onlyDigits(cpf);
   const emailClean = email.trim();
 
-  const { data: firstMatch, error } = await supabaseAdmin
-    .from("passageiros")
-    .select("usuario_id")
-    .eq("cpf_responsavel", cpfClean)
-    .eq("email_responsavel", emailClean)
-    .limit(1)
-    .single();
+  const { data: firstMatch, error } = await authRepository.getPassageiroResponsavel(cpfClean, emailClean);
 
   if (error || !firstMatch) throw new AppError("CPF ou Email não encontrados.", 401);
 
-  const { data: passageiros, error: listError } = await supabaseAdmin
-    .from("passageiros")
-    .select("*, escolas(nome), veiculos(placa)")
-    .eq("cpf_responsavel", cpfClean)
-    .eq("email_responsavel", emailClean)
-    .eq("usuario_id", firstMatch.usuario_id)
-    .order("nome", { ascending: true });
+  const { data: passageiros, error: listError } = await authRepository.listPassageirosResponsavel(cpfClean, emailClean, firstMatch.usuario_id);
 
   if (listError) throw new AppError("Erro ao buscar passageiros.", 500);
   return passageiros;
 }
 
 export async function updatePassword(token: string, newPassword: string, oldPassword?: string): Promise<void> {
-  const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
+  const { data: { user }, error: userError } = await authProvider.getUser(token);
   if (userError || !user || !user.email) throw new AppError("Token inválido ou expirado.", 401);
 
   if (oldPassword) {
-    const { error: signInError } = await supabaseAdmin.auth.signInWithPassword({
+    const { error: signInError } = await authProvider.signInWithPassword({
       email: user.email,
       password: oldPassword
     });
     if (signInError) throw new AppError("A senha atual está incorreta.", 401);
   }
 
-  const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
+  const { error } = await authProvider.updateUserById(user.id, {
     password: newPassword
   });
 
@@ -334,11 +321,7 @@ export async function updatePassword(token: string, newPassword: string, oldPass
     throw new AppError("Não foi possível atualizar a senha.", 500);
   }
 
-  const { data: profile } = await supabaseAdmin
-    .from("usuarios")
-    .select("id, nome, telefone")
-    .eq("id", user.id)
-    .single();
+  const { data: profile } = await userRepository.getById(user.id);
 
   if (profile) {
     historicoService.log({
@@ -352,7 +335,7 @@ export async function updatePassword(token: string, newPassword: string, oldPass
     if (profile.telefone) {
       notificationService.notifyDriver(profile.telefone, EVENTO_AUTH_SENHA_ALTERADA, {
         nomeMotorista: profile.nome
-      }).catch(err => logger.error({ err }, "Falha ao enviar notificação de senha alterada"));
+      }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar notificação de senha alterada"));
     }
   }
 }
@@ -362,17 +345,13 @@ export async function resetPassword(identifier: string, redirectTo?: string): Pr
   const isCpf = /^\d+$/.test(identifier);
   if (isCpf) {
     const cpf = onlyDigits(identifier);
-    const { data: user, error } = await supabaseAdmin
-      .from("usuarios")
-      .select("email")
-      .eq("cpfcnpj", cpf)
-      .single();
+    const { data: user, error } = await authRepository.getUserIdAndEmailByCpf(cpf);
 
     if (error || !user) throw new AppError("Usuário não encontrado.", 404);
     email = user.email;
   }
 
-  const { error } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
+  const { error } = await authProvider.resetPasswordForEmail(email, {
     redirectTo: redirectTo
   });
 
@@ -381,11 +360,7 @@ export async function resetPassword(identifier: string, redirectTo?: string): Pr
     throw new AppError("Não foi possível enviar o e-mail de recuperação.", 500);
   }
 
-  const { data: user } = await supabaseAdmin
-    .from("usuarios")
-    .select("id")
-    .eq("email", email)
-    .single();
+  const { data: user } = await authRepository.getUserByEmail(email);
 
   if (user) {
     historicoService.log({
@@ -400,11 +375,7 @@ export async function resetPassword(identifier: string, redirectTo?: string): Pr
 
 export async function solicitarRecuperacaoWhatsapp(cpf: string): Promise<{ telefoneMascarado: string }> {
   const cpfClean = onlyDigits(cpf);
-  const { data: user, error } = await supabaseAdmin
-    .from("usuarios")
-    .select("id, nome, telefone")
-    .eq("cpfcnpj", cpfClean)
-    .single();
+  const { data: user, error } = await authRepository.getUserIdAndEmailByCpf(cpfClean);
 
   if (error || !user) throw new AppError("Usuário não encontrado com este CPF.", 404);
   if (!user.telefone) throw new AppError("O usuário não possui telefone cadastrado para recuperação.", 400);
@@ -413,19 +384,9 @@ export async function solicitarRecuperacaoWhatsapp(cpf: string): Promise<{ telef
   const expiraEm = addMinutes(getNowBR(), 15).toISOString();
 
   // Invalida todos os códigos anteriores pendentes do usuário
-  await supabaseAdmin
-    .from("recuperacoes_senha")
-    .update({ usado: true })
-    .eq("usuario_id", user.id)
-    .eq("usado", false);
+  await authRepository.invalidateRecoveryCodes(user.id);
 
-  const { error: insertError } = await supabaseAdmin
-    .from("recuperacoes_senha")
-    .insert([{
-      usuario_id: user.id,
-      codigo: otp,
-      expira_em: expiraEm
-    }]);
+  const { error: insertError } = await authRepository.insertRecoveryCode(user.id, otp, expiraEm);
 
   if (insertError) {
     logger.error({ error: insertError.message }, "Erro ao salvar OTP no banco.");
@@ -451,46 +412,32 @@ export async function solicitarRecuperacaoWhatsapp(cpf: string): Promise<{ telef
 
 export async function validarCodigoWhatsApp(cpf: string, codigo: string): Promise<{ recoveryId: string }> {
   const cpfClean = onlyDigits(cpf);
-  const { data: user, error: userError } = await supabaseAdmin
-    .from("usuarios")
-    .select("id")
-    .eq("cpfcnpj", cpfClean)
-    .single();
+  const { data: user, error: userError } = await authRepository.getUserIdAndEmailByCpf(cpfClean);
 
   if (userError || !user) throw new AppError("Usuário não encontrado.", 404);
 
-  const { data: rec, error: recError } = await supabaseAdmin
-    .from("recuperacoes_senha")
-    .select("id, expira_em, usado")
-    .eq("usuario_id", user.id)
-    .eq("codigo", codigo)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const { data: rec, error: recError } = await authRepository.getRecoveryCode(user.id, codigo);
 
   if (recError || !rec) throw new AppError("Código inválido ou expirado.", 401);
   if (rec.usado) throw new AppError("Código inválido ou expirado.", 401);
   if (isBeforeNowBR(rec.expira_em)) throw new AppError("Código inválido ou expirado.", 401);
 
   // Marcar como usado logo após validação para permitir o reset uma única vez
-  await supabaseAdmin.from("recuperacoes_senha").update({ usado: true }).eq("id", rec.id);
+  await authRepository.markRecoveryCodeUsed(rec.id);
 
   return { recoveryId: rec.id };
 }
 
 export async function resetarSenhaComCodigo(recoveryId: string, novaSenha: string): Promise<AuthSession> {
-  const { data: rec, error } = await supabaseAdmin
-    .from("recuperacoes_senha")
-    .select("usuario_id, created_at, usado, usuarios(email, nome, telefone)")
-    .eq("id", recoveryId)
-    .single();
+  const { data: recData, error } = await authRepository.getRecoverySession(recoveryId);
 
-  if (error || !rec) throw new AppError("Sessão de recuperação inválida.", 401);
+  if (error || !recData) throw new AppError("Sessão de recuperação inválida.", 401);
+  const rec = recData as unknown as RecoverySessionQueryResult;
   
   const diffMinutes = (getNowBR().getTime() - parseLocalDate(rec.created_at).getTime()) / 60000;
-  if (diffMinutes > 60) throw new AppError("Tempo de recuperação excedido. Solicite novamente.", 401);
+  if (isNaN(diffMinutes) || diffMinutes > 60) throw new AppError("Tempo de recuperação excedido. Solicite novamente.", 401);
 
-  const { error: resetError } = await supabaseAdmin.auth.admin.updateUserById(rec.usuario_id, {
+  const { error: resetError } = await authProvider.updateUserById(rec.usuario_id, {
     password: novaSenha
   });
 
@@ -500,8 +447,10 @@ export async function resetarSenhaComCodigo(recoveryId: string, novaSenha: strin
   }
 
   // Realizar login automático logo após o reset
-  const email = (rec as any).usuarios.email;
-  const { data: sessionData, error: sessionError } = await supabaseAdmin.auth.signInWithPassword({
+  if (!rec.usuarios) throw new AppError("Perfil de usuário não encontrado para auto-login.", 500);
+  
+  const email = rec.usuarios.email;
+  const { data: sessionData, error: sessionError } = await authProvider.signInWithPassword({
     email,
     password: novaSenha,
   });
@@ -519,11 +468,11 @@ export async function resetarSenhaComCodigo(recoveryId: string, novaSenha: strin
     descricao: `Senha redefinida com sucesso via WhatsApp com login automático.`
   });
 
-  const userProfile = (rec as any).usuarios;
+  const userProfile = rec.usuarios;
   if (userProfile?.telefone) {
     notificationService.notifyDriver(userProfile.telefone, EVENTO_AUTH_SENHA_ALTERADA, {
       nomeMotorista: userProfile.nome
-    }).catch(err => logger.error({ err }, "Falha ao enviar notificação de senha alterada (reset)"));
+    }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar notificação de senha alterada (reset)"));
   }
 
   return {
@@ -534,7 +483,7 @@ export async function resetarSenhaComCodigo(recoveryId: string, novaSenha: strin
 }
 
 export async function logout(token: string, usuarioId?: string): Promise<void> {
-  const { error } = await supabaseAdmin.auth.admin.signOut(token);
+  const { error } = await authProvider.signOut(token);
   if (error) logger.warn({ error: error.message }, "Erro ao realizar logout no Supabase.");
 
   if (usuarioId) {
@@ -549,7 +498,7 @@ export async function logout(token: string, usuarioId?: string): Promise<void> {
 }
 
 export async function refreshToken(refreshToken: string): Promise<AuthSession> {
-  const { data, error } = await supabaseAdmin.auth.refreshSession({ refresh_token: refreshToken });
+  const { data, error } = await authProvider.refreshSession({ refresh_token: refreshToken });
   if (error || !data.session) throw new AppError("Sessão expirada.", 401);
 
   return {

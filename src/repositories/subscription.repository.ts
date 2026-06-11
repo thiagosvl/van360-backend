@@ -88,5 +88,9 @@ export const subscriptionRepository = {
             .from("assinaturas")
             .update({ data_vencimento: newExpiry, updated_at: new Date().toISOString() })
             .eq("id", id);
+    },
+
+    async confirmInvoicePaymentRpc(faturaId: string) {
+        return supabaseAdmin.rpc("confirm_invoice_payment", { p_fatura_id: faturaId });
     }
 };

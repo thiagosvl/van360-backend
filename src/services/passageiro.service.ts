@@ -1,4 +1,5 @@
-import { supabaseAdmin } from "../config/supabase.js";
+import { passageiroRepository } from "../repositories/passageiro.repository.js";
+import { prePassageiroRepository } from "../repositories/pre-passageiro.repository.js";
 import { AppError } from "../errors/AppError.js";
 import { CreatePassageiroDTO, ListPassageirosFiltersDTO, UpdatePassageiroDTO } from "../types/dtos/passageiro.dto.js";
 import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
@@ -8,8 +9,8 @@ import { historicoService } from "./historico.service.js";
 import { parseLocalDate, toPersistenceString } from "../utils/date.utils.js";
 
 // Métodos privados auxiliares
-const _preparePassageiroData = (data: Partial<CreatePassageiroDTO> & Record<string, any>, usuarioId?: string, isUpdate: boolean = false): any => {
-    const prepared: any = {};
+const _preparePassageiroData = (data: Partial<CreatePassageiroDTO>, usuarioId?: string, isUpdate: boolean = false): Record<string, unknown> => {
+    const prepared: Record<string, unknown> = {};
 
     if (!isUpdate && usuarioId) {
         prepared.usuario_id = usuarioId;
@@ -28,13 +29,14 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO> & Record<stri
     if (data.telefone_responsavel !== undefined) prepared.telefone_responsavel = data.telefone_responsavel ? onlyDigits(data.telefone_responsavel) : null;
     if (data.email_responsavel !== undefined) prepared.email_responsavel = data.email_responsavel ? cleanString(data.email_responsavel) : null;
 
-    // Endereço
+    // Endereço (Algumas chaves podem vir no passthrough)
+    const flexData = data as Record<string, any>;
     if (data.logradouro !== undefined) prepared.logradouro = data.logradouro ? cleanString(data.logradouro, true) : null;
-    if (data.numero !== undefined) prepared.numero = data.numero ? cleanString(data.numero, true) : null;
+    if (flexData.numero !== undefined) prepared.numero = flexData.numero ? cleanString(flexData.numero, true) : null;
     if (data.bairro !== undefined) prepared.bairro = data.bairro ? cleanString(data.bairro, true) : null;
     if (data.cidade !== undefined) prepared.cidade = data.cidade ? cleanString(data.cidade, true) : null;
-    if (data.estado !== undefined) prepared.estado = data.estado ? cleanString(data.estado, true) : null;
-    if (data.cep !== undefined) prepared.cep = data.cep ? onlyDigits(data.cep) : null;
+    if (flexData.estado !== undefined) prepared.estado = flexData.estado ? cleanString(flexData.estado, true) : null;
+    if (flexData.cep !== undefined) prepared.cep = flexData.cep ? onlyDigits(flexData.cep) : null;
     if (data.referencia !== undefined) prepared.referencia = data.referencia ? cleanString(data.referencia, true) : null;
     if (data.observacoes !== undefined) prepared.observacoes = data.observacoes ? cleanString(data.observacoes, true) : null;
 
@@ -65,11 +67,7 @@ const createPassageiro = async (data: CreatePassageiroDTO): Promise<any> => {
 
     const passageiroData = _preparePassageiroData(data, data.usuario_id, false);
 
-    const { data: inserted, error } = await supabaseAdmin
-        .from("passageiros")
-        .insert([passageiroData])
-        .select()
-        .single();
+    const { data: inserted, error } = await passageiroRepository.insert(passageiroData);
 
     if (error) throw error;
 
@@ -99,18 +97,14 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO): Promise<
 
     const passageiroData = _preparePassageiroData(data, undefined, true);
 
-    const { data: updated, error } = await supabaseAdmin
-        .from("passageiros")
-        .update(passageiroData)
-        .eq("id", id)
-        .select()
-        .single();
+    const { data: updated, error } = await passageiroRepository.update(id, passageiroData);
 
     if (error) throw error;
 
     // 2. Lógica de Substituição de Contrato
     // Helper simples para valor do DTO
     const getValorNumerico = (v: any) => typeof v === 'string' ? moneyToNumber(v) : v;
+    const flexData = data as Record<string, any>;
 
     const houveMudancaContratual =
         (data.valor_cobranca !== undefined && Math.abs(getValorNumerico(data.valor_cobranca) - Number(estadoAnterior.valor_cobranca)) > 0.01) ||
@@ -124,11 +118,11 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO): Promise<
         (data.modalidade !== undefined && data.modalidade !== estadoAnterior.modalidade) ||
         (data.data_inicio_transporte !== undefined && data.data_inicio_transporte !== estadoAnterior.data_inicio_transporte) ||
         (data.logradouro !== undefined && data.logradouro !== estadoAnterior.logradouro) ||
-        (data.numero !== undefined && data.numero !== estadoAnterior.numero) ||
+        (flexData.numero !== undefined && flexData.numero !== estadoAnterior.numero) ||
         (data.bairro !== undefined && data.bairro !== estadoAnterior.bairro) ||
         (data.cidade !== undefined && data.cidade !== estadoAnterior.cidade) ||
-        (data.estado !== undefined && data.estado !== estadoAnterior.estado) ||
-        (data.cep !== undefined && data.cep !== estadoAnterior.cep);
+        (flexData.estado !== undefined && flexData.estado !== estadoAnterior.estado) ||
+        (flexData.cep !== undefined && flexData.cep !== estadoAnterior.cep);
 
     // 2. LOG DE AUDITORIA (Qualquer edição)
     historicoService.log({
@@ -153,10 +147,7 @@ const deletePassageiro = async (id: string): Promise<void> => {
 
     if (passageiro?.id) {
         // Verificar se tem cobranças (pendentes ou pagas)
-        const { count, error: countError } = await supabaseAdmin
-            .from("cobrancas")
-            .select("id", { count: "exact", head: true })
-            .eq("passageiro_id", id);
+        const { count, error: countError } = await passageiroRepository.countCobrancas(id);
 
         if (countError) throw countError;
 
@@ -164,7 +155,7 @@ const deletePassageiro = async (id: string): Promise<void> => {
             throw new AppError("Passageiro possui cobranças. Desative o cadastro ou remova as cobranças.", 400);
         }
 
-        const { error } = await supabaseAdmin.from("passageiros").delete().eq("id", id);
+        const { error } = await passageiroRepository.delete(id);
         if (error) throw error;
 
         // --- LOG DE AUDITORIA ---
@@ -182,18 +173,7 @@ const deletePassageiro = async (id: string): Promise<void> => {
 }
 
 const getPassageiro = async (id: string): Promise<any> => {
-    const { data, error } = await supabaseAdmin
-        .from("passageiros")
-        .select(`
-            *,
-            escola:escolas(id, nome),
-            veiculo:veiculos(id, placa, modelo),
-            contratos(id, status, created_at, minuta_url, contrato_final_url, token_acesso)
-        `)
-        .eq("id", id)
-        .order('created_at', { foreignTable: 'contratos', ascending: false })
-        .limit(1, { foreignTable: 'contratos' })
-        .single();
+    const { data, error } = await passageiroRepository.getById(id);
 
     if (error) throw error;
 
@@ -223,40 +203,16 @@ const listPassageiros = async (
 ): Promise<any[]> => {
     if (!usuarioId) throw new Error("Usuário obrigatório");
 
-    let query = supabaseAdmin
-        .from("passageiros")
-        .select(`
-            *,
-            escola:escolas(id, nome),
-            veiculo:veiculos(id, placa),
-            contratos(id, status, created_at, minuta_url, contrato_final_url, token_acesso)
-        `)
-        .eq("usuario_id", usuarioId)
-        .order("nome", { ascending: true });
-
-    if (filtros?.search) {
-        query = query.or(
-            `nome.ilike.%${filtros.search}%,nome_responsavel.ilike.%${filtros.search}%`
-        );
-    }
-
-    if (filtros?.escola) query = query.eq("escola_id", filtros.escola);
-    if (filtros?.veiculo) query = query.eq("veiculo_id", filtros.veiculo);
-
-    if (filtros?.ativo !== undefined) {
-        query = query.eq("ativo", filtros.ativo === "true");
-    }
-
-    const { data, error } = await query;
+    const { data, error } = await passageiroRepository.list(usuarioId, filtros);
     if (error) throw error;
 
     // Map contract status to flat properties
-    const passageiros = (data || []).map((p: any) => {
+    const passageiros = (data || []).map((p: Record<string, any>) => {
         // Find latest contract if multiple returned (though simpler to just take array logic if supabase returns array)
         if (p.contratos && p.contratos.length > 0) {
             // Sort just in case supabase didn't (though we can't easily sort in foreign table select without specific query)
             // Ideally we should use a view or a separate query, but for now let's sort in JS
-            const contratosOnPassageiro = p.contratos.sort((a: any, b: any) =>
+            const contratosOnPassageiro = p.contratos.sort((a: Record<string, any>, b: Record<string, any>) =>
                 parseLocalDate(b.created_at).getTime() - parseLocalDate(a.created_at).getTime()
             );
             const ultimo = contratosOnPassageiro[0];
@@ -280,15 +236,12 @@ const listPassageiros = async (
 
 const toggleAtivo = async (passageiroId: string, novoStatus: boolean): Promise<boolean> => {
 
-    const { error } = await supabaseAdmin
-        .from("passageiros")
-        .update({ ativo: novoStatus })
-        .eq("id", passageiroId);
+    const { error } = await passageiroRepository.updateAtivo(passageiroId, novoStatus);
 
     if (error) throw new Error(`Falha ao alterar status do passageiro: ${error.message}`);
 
     // --- LOG DE AUDITORIA ---
-    const { data: pass } = await supabaseAdmin.from("passageiros").select("usuario_id, nome").eq("id", passageiroId).single();
+    const { data: pass } = await passageiroRepository.getUsuarioIdAndNome(passageiroId);
     if (pass) {
         historicoService.log({
             usuario_id: pass.usuario_id,
@@ -309,16 +262,7 @@ const countListPassageirosByUsuario = async (
         ativo?: string;
     }
 ): Promise<number> => {
-    let query = supabaseAdmin
-        .from("passageiros")
-        .select("id", { count: "exact", head: true })
-        .eq("usuario_id", usuarioId);
-
-    if (filtros?.ativo !== undefined) {
-        query = query.eq("ativo", filtros.ativo === "true");
-    }
-
-    const { count, error } = await query;
+    const { count, error } = await passageiroRepository.countByUsuario(usuarioId, filtros);
 
     if (error) throw new Error(error.message || "Erro ao contar passageiros");
     return count || 0;
@@ -326,16 +270,11 @@ const countListPassageirosByUsuario = async (
 
 const finalizePreCadastro = async (
     prePassageiroId: string,
-    data: any,
+    data: Partial<CreatePassageiroDTO>,
     usuarioId: string
 ): Promise<any> => {
     // 1. Buscar Pré-Cadastro
-    const { data: pre, error } = await supabaseAdmin
-        .from("pre_passageiros")
-        .select("*")
-        .eq("id", prePassageiroId)
-        .eq("usuario_id", usuarioId)
-        .single();
+    const { data: pre, error } = await prePassageiroRepository.getById(prePassageiroId, usuarioId);
 
     if (error || !pre) throw new AppError("Pré-cadastro não encontrado.", 404);
 
@@ -350,9 +289,9 @@ const finalizePreCadastro = async (
     };
 
     // Remover campos de sistema do pre
-    delete (payload as any).id;
-    delete (payload as any).created_at;
-    delete (payload as any).updated_at;
+    delete (payload as Record<string, unknown>).id;
+    delete (payload as Record<string, unknown>).created_at;
+    delete (payload as Record<string, unknown>).updated_at;
 
     // 3. Criar Passageiro
     const novoPassageiro = await createPassageiro(payload);
@@ -361,7 +300,7 @@ const finalizePreCadastro = async (
     // Removido pois createPassageiro já realiza essa verificação e criação
 
     // 5. Deletar Pré-Cadastro
-    await supabaseAdmin.from("pre_passageiros").delete().eq("id", prePassageiroId);
+    await prePassageiroRepository.delete(prePassageiroId);
 
     // --- LOG DE AUDITORIA ---
     historicoService.log({
@@ -382,13 +321,7 @@ const lookupResponsavelByCpf = async (usuarioId: string, cpf: string): Promise<a
 
     const cpfClean = onlyDigits(cpf);
 
-    const { data, error } = await supabaseAdmin
-        .from("passageiros")
-        .select("nome_responsavel, email_responsavel, telefone_responsavel")
-        .eq("usuario_id", usuarioId)
-        .eq("cpf_responsavel", cpfClean)
-        .limit(1)
-        .maybeSingle();
+    const { data, error } = await passageiroRepository.lookupResponsavel(usuarioId, cpfClean);
 
     if (error) {
         throw new AppError("Erro ao buscar responsável.", 500);
