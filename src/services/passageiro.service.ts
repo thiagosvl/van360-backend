@@ -152,7 +152,7 @@ const deletePassageiro = async (id: string): Promise<void> => {
         if (countError) throw countError;
 
         if (count && count > 0) {
-            throw new AppError("Passageiro possui cobranças. Desative o cadastro ou remova as cobranças.", 400);
+            throw new AppError("Passageiro possui mensalidades. Para excluir, é necessário antes excluir as mensalidades. Se preferir, você também pode apenas desativar o cadastro.", 400);
         }
 
         const { error } = await passageiroRepository.delete(id);
