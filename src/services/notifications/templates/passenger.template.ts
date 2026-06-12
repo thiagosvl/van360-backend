@@ -29,7 +29,7 @@ const textPart = (text: string): CompositeMessagePart[] => {
 
 // Helper for Pix Key Label
 const getTipoChavePixLabel = (tipo?: string): string => {
-    if (!tipo) return "Não informado";
+    if (!tipo) return "";
     const mapping: Record<string, string> = {
         CPF: "CPF",
         CNPJ: "CNPJ",
@@ -61,7 +61,7 @@ export const PassengerTemplates = {
         const linkStr = ctx.linkAssinatura ? `\n\n👉 Acesse o link abaixo para visualizar e assinar:\n\n${ctx.linkAssinatura}` : "";
         const text = `🔔 *Contrato Disponível*\n\n` +
             `Olá *${nomeResp}*,\n` +
-            `O contrato de transporte de *${ctx.nomePassageiro}* foi gerado e já está pronto para assinatura digital.${linkStr}\n\n` +
+            `O contrato de transporte de *${getFirstName(ctx.nomePassageiro)}* foi gerado e já está pronto para assinatura digital.${linkStr}\n\n` +
             `Acesse o sistema e finalize o processo online e simplificado.${getSystemFooter(ctx)}`;
 
         return textPart(text);

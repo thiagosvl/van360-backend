@@ -25,9 +25,9 @@ export class InHouseContractProvider implements ContractProvider {
     const fileName = `minutas/${params.contratoId}.pdf`;
 
     const { error } = await storageProvider.upload('contratos', fileName, Buffer.from(pdfBytes), {
-        contentType: 'application/pdf',
-        upsert: true,
-      });
+      contentType: 'application/pdf',
+      upsert: true,
+    });
 
     if (error) throw error;
 
@@ -68,22 +68,27 @@ export class InHouseContractProvider implements ContractProvider {
     }
 
     if (params.assinaturaBase64) {
-      const assinaturaBytes = Buffer.from(params.assinaturaBase64.split(',')[1], 'base64');
-      const assinaturaImage = await pdfDoc.embedPng(assinaturaBytes);
-      const pages = pdfDoc.getPages();
-      const ultimaPagina = pages[pages.length - 1];
+      try {
+        const resp = await fetch(params.assinaturaBase64);
+        const signatureBytes = await resp.arrayBuffer();
+        const signatureImage = await pdfDoc.embedPng(signatureBytes);
+        const pages = pdfDoc.getPages();
+        const ultimaPagina = pages[pages.length - 1];
 
-      // Ajuste fino: A imagem deve ficar um pouco acima da linha (y)
-      // Se signatureY é a linha, a imagem começa um pouco acima.
-      // drawImage usa y como canto inferior esquerdo.
-      const imageY = signatureY + 2;
+        // Ajuste fino: A imagem deve ficar um pouco acima da linha (y)
+        // Se signatureY é a linha, a imagem começa um pouco acima.
+        // drawImage usa y como canto inferior esquerdo.
+        const imageY = signatureY + 2;
 
-      ultimaPagina.drawImage(assinaturaImage, {
-        x: 350,
-        y: imageY,
-        width: 150,
-        height: 50,
-      });
+        ultimaPagina.drawImage(signatureImage, {
+          x: 350,
+          y: imageY,
+          width: 150,
+          height: 50,
+        });
+      } catch (e) {
+        console.error('Error embedding parent signature', e);
+      }
     }
 
     await this.adicionarRodapeAuditoria(pdfDoc, {
@@ -95,9 +100,9 @@ export class InHouseContractProvider implements ContractProvider {
     const finalFileName = `assinados/${params.contratoId}.pdf`;
 
     const { error: uploadError } = await storageProvider.upload('contratos', finalFileName, Buffer.from(finalPdfBytes), {
-        contentType: 'application/pdf',
-        upsert: true,
-      });
+      contentType: 'application/pdf',
+      upsert: true,
+    });
 
     if (uploadError) throw uploadError;
 
@@ -261,15 +266,15 @@ export class InHouseContractProvider implements ContractProvider {
     page.drawText(`Telefone: ${maskPhone(dados.telefoneResponsavel)}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
     page.drawText(`Parentesco do Passageiro: ${formatParentesco(dados.parentescoResponsavel || '')}`, { x: margin, y: currentY - 42, size: smallTextSize, font });
 
-    currentY -= 65;
+    currentY -= 80;
 
     // CONTRATADA
-    page.drawText('CONTRATADA (Transportador)', { x: margin, y: currentY, size: smallTextSize, font: fontBold });
+    page.drawText('PRESTADOR(A) DE SERVIÇOS DE TRANSPORTE', { x: margin, y: currentY, size: smallTextSize, font: fontBold });
     page.drawText(`Nome: ${dados.nomeCondutor}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
     page.drawText(`Documento (CPF): ${maskDoc(dados.cpfCnpjCondutor)}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
     page.drawText(`Telefone: ${maskPhone(dados.telefoneCondutor)}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
 
-    currentY -= 50;
+    currentY -= 70;
 
     currentY = drawHeader('PASSAGEIRO(A)', currentY);
     page.drawText(`Nome: ${dados.nomePassageiro}`, { x: margin, y: currentY, size: smallTextSize, font });
@@ -280,12 +285,12 @@ export class InHouseContractProvider implements ContractProvider {
 
     page.drawText(`Endereço: ${dados.enderecoCompleto}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
 
-    currentY -= 50; // Adjusted spacing
+    currentY -= 70;
 
     currentY = drawHeader('VEÍCULO', currentY);
     page.drawText(`Modelo: ${dados.modeloVeiculo}`, { x: margin, y: currentY, size: smallTextSize, font });
     page.drawText(`Placa: ${dados.placaVeiculo}`, { x: 300, y: currentY, size: smallTextSize, font });
-    currentY -= 30;
+    currentY -= 45;
 
     currentY = drawHeader('DO PERÍODO DO CONTRATO', currentY);
     const currentYear = getNowBR().getFullYear();
@@ -293,7 +298,7 @@ export class InHouseContractProvider implements ContractProvider {
     page.drawText(`Ano Letivo: ${dados.ano || currentYear}`, { x: margin, y: currentY, size: smallTextSize, font });
     page.drawText(`Início: ${formatToBrazilianDate(dados.dataInicio)}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
     page.drawText(`Término: ${formatToBrazilianDate(dados.dataFim)}`, { x: 300, y: currentY - 14, size: smallTextSize, font });
-    currentY -= 45;
+    currentY -= 55;
 
     currentY = drawHeader('DAS CONDIÇÕES DE VALOR', currentY);
     page.drawText(`Valor total do contrato (R$): ${dados.valorTotal.toLocaleString("pt-BR", {
