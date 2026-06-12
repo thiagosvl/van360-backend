@@ -31,7 +31,8 @@ export function getFirstName(name?: string): string {
   return name.trim().split(/\s+/)[0];
 }
 
-export function maskCpf(value: string) {
+export function maskCpf(value?: string | null) {
+  if (!value) return "";
   return value
     .replace(/\D/g, "")
     .replace(/(\d{3})(\d)/, "$1.$2")
@@ -40,7 +41,8 @@ export function maskCpf(value: string) {
     .replace(/(-\d{2})\d+?$/, "$1");
 }
 
-export function maskCnpj(value: string) {
+export function maskCnpj(value?: string | null) {
+  if (!value) return "";
   return value
     .replace(/\D/g, "")
     .replace(/(\d{2})(\d)/, "$1.$2")
@@ -50,7 +52,8 @@ export function maskCnpj(value: string) {
     .replace(/(-\d{2})\d+?$/, "$1");
 }
 
-export function maskPhone(value: string) {
+export function maskPhone(value?: string | null) {
+  if (!value) return "";
   let r = value.replace(/\D/g, "");
   if (r.length > 11) {
     r = r.slice(0, 11);

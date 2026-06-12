@@ -244,7 +244,7 @@ export class InHouseContractProvider implements ContractProvider {
     // ...
 
     // Helper para mascarar doc genérico
-    const maskDoc = (doc: string) => {
+    const maskDoc = (doc?: string | null) => {
       if (!doc) return '';
       const clean = doc.replace(/\D/g, '');
       return clean.length > 11 ? maskCnpj(clean) : maskCpf(clean);
