@@ -86,6 +86,7 @@ export const passageiroRepository = {
 
     if (filtros?.escola) query = query.eq("escola_id", filtros.escola);
     if (filtros?.veiculo) query = query.eq("veiculo_id", filtros.veiculo);
+    if (filtros?.periodo) query = query.eq("periodo", filtros.periodo.toLowerCase());
     if (filtros?.ativo !== undefined) query = query.eq("ativo", filtros.ativo === "true");
 
     return query;
