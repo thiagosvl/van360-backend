@@ -259,7 +259,7 @@ export const subscriptionBillingService = {
         if (fError || !fatura) throw fError || new Error("Erro ao criar fatura");
 
         try {
-            await invoiceRepository.cancelPendingInvoicesByUserId(userId, getNowBR().toISOString());
+            await invoiceRepository.cancelPendingInvoicesByUserId(userId, getNowBR().toISOString(), fatura.id);
         } catch (err: unknown) {
             logger.error({ err, userId }, "[SubscriptionBillingService] Falha ao cancelar faturas pendentes.");
         }
