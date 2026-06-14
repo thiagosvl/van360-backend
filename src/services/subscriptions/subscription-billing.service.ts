@@ -152,7 +152,7 @@ export const subscriptionBillingService = {
         } catch (gatewayErr) {
             const isError = gatewayErr instanceof Error;
             const errMsg = isError ? gatewayErr.message : String(gatewayErr);
-            
+
             logger.error({ userId, error: errMsg }, "[SubscriptionBillingService] Erro de conexão/exceção no Gateway");
 
             try {
@@ -225,7 +225,7 @@ export const subscriptionBillingService = {
                 logger.error({ userId, dbError }, "[SubscriptionBillingService] Erro ao gravar fatura falha no banco.");
             }
 
-            throw new Error(`Erro no Gateway de Pagamento: ${chargeRes.error}`);
+            throw new Error(`${chargeRes.error}`);
         }
 
         if (paymentMethod === CheckoutPaymentMethod.CREDIT_CARD && currentPaymentToken && saveCard && cardLast4 && cardBrand) {
