@@ -84,7 +84,7 @@ class ContractService {
       nomeEscola: passageiro.escola?.nome || '',
       enderecoEscola: passageiro.escola ? formatAddress(passageiro.escola) : '',
       periodo: passageiro.periodo,
-      modalidade: customTerms.modalidade || passageiro.modalidade || 'ida_volta',
+      modalidade: customTerms.modalidade || passageiro.modalidade || '',
       valorMensal: valorMensal,
       diaVencimento: customTerms.diaVencimento || passageiro.dia_vencimento,
 
