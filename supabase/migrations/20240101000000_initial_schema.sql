@@ -359,6 +359,12 @@ CREATE TABLE IF NOT EXISTS "public"."usuarios" (
     "chave_pix" "text",
     "tipo_chave_pix" "text",
     "data_nascimento" "date" NOT NULL,
+    "logradouro" "text",
+    "numero" "text",
+    "bairro" "text",
+    "cidade" "text",
+    "estado" "text",
+    "cep" "text",
     "config_contrato" "jsonb" DEFAULT '{
       "usar_contratos": false,
       "multa_atraso": { "valor": 10.00, "tipo": "fixo" },

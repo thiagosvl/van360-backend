@@ -142,11 +142,11 @@ export const subscriptionBillingService = {
                 },
                 billingAddress: (paymentMethod === CheckoutPaymentMethod.CREDIT_CARD && street) ? {
                     street: street,
-                    number: number || "SN",
-                    neighborhood: neighborhood || "Centro",
-                    zipcode: zipcode?.replace(/\D/g, "") || "01001000",
-                    city: city || "São Paulo",
-                    state: state || "SP"
+                    number: number!,
+                    neighborhood: neighborhood!,
+                    zipcode: zipcode?.replace(/\D/g, "")!,
+                    city: city!,
+                    state: state!
                 } : undefined
             }, PaymentProvider.EFIPAY);
         } catch (gatewayErr) {
@@ -253,6 +253,21 @@ export const subscriptionBillingService = {
 
             if (preferredMethodId) {
                 await subscriptionRepository.updatePreferredMethod(sub.id, preferredMethodId);
+            }
+
+            if (street) {
+                try {
+                    await userRepository.update(userId, {
+                        logradouro: street,
+                        numero: number,
+                        bairro: neighborhood,
+                        cidade: city,
+                        estado: state,
+                        cep: zipcode?.replace(/\D/g, "")
+                    });
+                } catch (updateErr) {
+                    logger.error({ userId, updateErr }, "[SubscriptionBillingService] Erro ao salvar endereco do usuario.");
+                }
             }
         }
 
