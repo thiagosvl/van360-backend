@@ -61,6 +61,20 @@ export const subscriptionController = {
     }
   },
 
+  async cancelSubscription(request: FastifyRequest, reply: FastifyReply) {
+    const authRequest = request as AuthenticatedRequest;
+    const userId = authRequest.usuario_id;
+
+    try {
+      await subscriptionService.cancelSubscription(userId);
+      return reply.send({ success: true, message: "Assinatura cancelada com sucesso." });
+    } catch (err) {
+      const error = err as Error;
+      logger.error({ err: error, userId }, "[SubscriptionController] Erro ao cancelar assinatura.");
+      return reply.status(500).send({ error: error.message || "Erro interno ao cancelar assinatura." });
+    }
+  },
+
   async createCheckout(request: FastifyRequest, reply: FastifyReply) {
     const authRequest = request as AuthenticatedRequest;
     const userId = authRequest.usuario_id;

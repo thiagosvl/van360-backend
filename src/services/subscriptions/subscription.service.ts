@@ -11,6 +11,7 @@ import { notificationService } from "../notifications/notification.service.js";
 import { EVENTO_MOTORISTA_ASSINATURA_PAGO } from "../../config/constants.js";
 import { subscriptionRepository } from "../../repositories/subscription.repository.js";
 import { planRepository } from "../../repositories/plan.repository.js";
+import { invoiceRepository } from "../../repositories/invoice.repository.js";
 import { subscriptionReferralService } from "./subscription-referral.service.js";
 
 export const subscriptionService = {
@@ -114,6 +115,39 @@ export const subscriptionService = {
             throw error;
         }
 
+        return true;
+    },
+
+    /**
+     * Cancela a assinatura voluntariamente (Pelo App ou Admin)
+     */
+    async cancelSubscription(userId: string) {
+        logger.info({ userId }, "[SubscriptionService] Cancelando assinatura do usuário...");
+
+        const sub = await this.getOrCreateSubscription(userId);
+        if (!sub) throw new Error("Assinatura não encontrada.");
+
+        if (sub.status === SubscriptionStatus.CANCELED) {
+            logger.info({ subId: sub.id }, "Assinatura já estava cancelada.");
+            return true;
+        }
+
+        // 1. Atualizar status da assinatura
+        await this.updateStatus(sub.id, SubscriptionStatus.CANCELED, "Assinatura cancelada manualmente.");
+
+        // 2. Cancelar faturas pendentes/com erro
+        await invoiceRepository.cancelIncompleteInvoicesByUserId(userId, getNowBR().toISOString());
+
+        // 3. Registrar no histórico
+        await historicoService.log({
+            usuario_id: userId,
+            entidade_tipo: AtividadeEntidadeTipo.SAAS_ASSINATURA,
+            entidade_id: sub.id,
+            acao: AtividadeAcao.SAAS_ASSINATURA_ATRASO, // ou podemos não especificar uma ação rígida
+            descricao: "A assinatura foi cancelada. As cobranças recorrentes foram suspensas."
+        });
+
+        logger.info({ subId: sub.id, userId }, "[SubscriptionService] Assinatura cancelada com sucesso.");
         return true;
     },
 

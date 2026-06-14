@@ -1,6 +1,7 @@
 import { logger } from "../config/logger.js";
 import { adminRepository } from "../repositories/admin.repository.js";
 import { userRepository } from "../repositories/user.repository.js";
+import { invoiceRepository } from "../repositories/invoice.repository.js";
 import { authProvider } from "./providers/auth.provider.js";
 import { SubscriptionStatus, UserType } from "../types/enums.js";
 import { getNowBR, parseBrazilianDateToISO } from "../utils/date.utils.js";
@@ -193,6 +194,11 @@ export const adminService = {
     if (error) {
       logger.error({ error, userId, subId: sub.id }, "[AdminService] Erro ao atualizar assinatura.");
       throw error;
+    }
+
+    if (data.status === SubscriptionStatus.CANCELED) {
+      logger.info({ userId }, "[AdminService] Assinatura cancelada, cancelando faturas pendentes...");
+      await invoiceRepository.cancelIncompleteInvoicesByUserId(userId, getNowBR().toISOString());
     }
 
     return { success: true };
