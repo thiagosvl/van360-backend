@@ -176,6 +176,12 @@ export const subscriptionBillingService = {
                         acao: AtividadeAcao.SAAS_FATURA_GERADA,
                         descricao: `Exceção na cobrança automática via ${paymentMethod.toUpperCase()} (Valor R$ ${valor}): ${errMsg}`
                     });
+
+                    try {
+                        await invoiceRepository.cancelIncompleteInvoicesByUserId(userId, getNowBR().toISOString(), failedInvoice.id);
+                    } catch (cleanupErr) {
+                        logger.error({ cleanupErr, userId }, "[SubscriptionBillingService] Falha ao limpar faturas pendentes/recusadas anteriores.");
+                    }
                 }
             } catch (dbError) {
                 logger.error({ userId, dbError }, "[SubscriptionBillingService] Erro ao gravar fatura falha no banco.");
@@ -208,6 +214,12 @@ export const subscriptionBillingService = {
                         acao: AtividadeAcao.SAAS_FATURA_GERADA,
                         descricao: `Tentativa falhou via ${paymentMethod.toUpperCase()} (Valor R$ ${valor}): ${chargeRes.error}`
                     });
+
+                    try {
+                        await invoiceRepository.cancelIncompleteInvoicesByUserId(userId, getNowBR().toISOString(), failedInvoice.id);
+                    } catch (cleanupErr) {
+                        logger.error({ cleanupErr, userId }, "[SubscriptionBillingService] Falha ao limpar faturas pendentes/recusadas anteriores.");
+                    }
                 }
             } catch (dbError) {
                 logger.error({ userId, dbError }, "[SubscriptionBillingService] Erro ao gravar fatura falha no banco.");
@@ -259,9 +271,9 @@ export const subscriptionBillingService = {
         if (fError || !fatura) throw fError || new Error("Erro ao criar fatura");
 
         try {
-            await invoiceRepository.cancelPendingInvoicesByUserId(userId, getNowBR().toISOString(), fatura.id);
+            await invoiceRepository.cancelIncompleteInvoicesByUserId(userId, getNowBR().toISOString(), fatura.id);
         } catch (err: unknown) {
-            logger.error({ err, userId }, "[SubscriptionBillingService] Falha ao cancelar faturas pendentes.");
+            logger.error({ err, userId }, "[SubscriptionBillingService] Falha ao cancelar faturas pendentes/recusadas anteriores.");
         }
 
         await historicoService.log({

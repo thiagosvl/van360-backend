@@ -75,7 +75,10 @@ export const subscriptionController = {
       }
       const error = err as Error;
       logger.error({ err: error, userId }, "[SubscriptionController] Erro ao gerar checkout.");
-      return reply.status(500).send({ error: "Erro interno ao gerar checkout." });
+      
+      // Se for um erro do gateway ou de negócio, retornamos a mensagem real para o usuário
+      const errorMessage = error.message || "Erro interno ao gerar checkout.";
+      return reply.status(400).send({ error: errorMessage });
     }
   },
 

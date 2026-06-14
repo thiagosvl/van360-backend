@@ -43,7 +43,7 @@ export const invoiceRepository = {
             .order("created_at", { ascending: false });
     },
 
-    async cancelPendingInvoicesByUserId(userId: string, updated_at: string, excludeInvoiceId?: string) {
+    async cancelIncompleteInvoicesByUserId(userId: string, updated_at: string, excludeInvoiceId?: string) {
         let query = supabaseAdmin
             .from("assinatura_faturas")
             .update({
@@ -51,7 +51,7 @@ export const invoiceRepository = {
                 updated_at
             })
             .eq("usuario_id", userId)
-            .eq("status", SubscriptionInvoiceStatus.PENDING);
+            .in("status", [SubscriptionInvoiceStatus.PENDING, SubscriptionInvoiceStatus.FAILED]);
 
         if (excludeInvoiceId) {
             query = query.neq("id", excludeInvoiceId);
