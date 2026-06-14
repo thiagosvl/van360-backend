@@ -1,5 +1,5 @@
 import { formatToBrazilianDate } from "../../../utils/date.utils.js";
-import { formatCurrency, getFirstName } from "../../../utils/format.js";
+import { formatCurrency, getFirstName, maskPhone } from "../../../utils/format.js";
 import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
 
 export interface PassengerContext {
@@ -41,7 +41,7 @@ const getTipoChavePixLabel = (tipo?: string): string => {
 
 const getSystemFooter = (ctx: PassengerContext) => {
     const phoneLink = ctx.telefoneMotorista
-        ? `\n📞 https://wa.me/55${ctx.telefoneMotorista.replace(/\D/g, "")}`
+        ? `\n📞 Fale com o Motorista: ${maskPhone(ctx.telefoneMotorista)}`
         : "";
     const nomeExibicao = ctx.apelidoMotorista || getFirstName(ctx.nomeMotorista);
     return `\n\n———\n🚐 *${nomeExibicao}* · Van360${phoneLink}`;

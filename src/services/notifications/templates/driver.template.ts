@@ -5,6 +5,7 @@ import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
 export interface DriverContext {
     nomeMotorista: string;
     valor?: number;
+    planoNome?: string;
     dataVencimento?: string;
     pixCopiaECola?: string;
     metodoCobranca?: string;
@@ -100,6 +101,7 @@ export const DriverTemplates = {
     renewalLembrete: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = ctx.valor ? formatCurrency(ctx.valor) : "";
         const valorStr = valor ? ` de *${valor}*` : "";
+        const planoStr = ctx.planoNome ? ` (Plano *${ctx.planoNome}*)` : "";
         const isCard = ctx.metodoCobranca === "credit_card";
         const extra = isCard
             ? ` A cobrança no cartão não foi processada.\n\nAtualize o cartão ou pague via Pix no app.`
@@ -107,12 +109,13 @@ export const DriverTemplates = {
                 ? `\n\n💳 *Pix Copia e Cola:*\n${ctx.pixCopiaECola}\n\n_Copie e pague pelo app do seu banco._`
                 : `\n\nRegularize pelo app para manter o acesso.`;
         return textPart(`🔔 *Pagamento pendente — Van360*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, sua assinatura${valorStr} venceu ontem.${extra}`);
+            `${getFirstName(ctx.nomeMotorista)}, sua assinatura${planoStr}${valorStr} venceu ontem.${extra}`);
     },
 
     renewalUrgencia: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = ctx.valor ? formatCurrency(ctx.valor) : "";
         const valorStr = valor ? ` de *${valor}*` : "";
+        const planoStr = ctx.planoNome ? ` (Plano *${ctx.planoNome}*)` : "";
         const isCard = ctx.metodoCobranca === "credit_card";
         const extra = isCard
             ? ` Atualize o cartão ou pague via Pix no app para evitar a suspensão.`
@@ -120,7 +123,7 @@ export const DriverTemplates = {
                 ? `\n\n💳 *Pix Copia e Cola:*\n${ctx.pixCopiaECola}\n\n_Copie e pague pelo app do seu banco._`
                 : `\n\nRegularize hoje para evitar a suspensão.`;
         return textPart(`🚨 *Acesso será suspenso amanhã*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, o pagamento${valorStr} da sua assinatura Van360 não foi confirmado.${extra}`);
+            `${getFirstName(ctx.nomeMotorista)}, o pagamento${valorStr} da sua assinatura${planoStr} Van360 não foi confirmado.${extra}`);
     },
 
     renewalRecovery1: (ctx: DriverContext): CompositeMessagePart[] => {
@@ -137,19 +140,22 @@ export const DriverTemplates = {
     paymentConfirmed: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = ctx.valor ? formatCurrency(ctx.valor) : "";
         const data = ctx.dataVencimento ? formatToBrazilianDate(ctx.dataVencimento) : "";
+        const planoStr = ctx.planoNome ? `\n🏷️ Plano: *${ctx.planoNome}*` : "";
 
         return textPart(`✅ *Pagamento confirmado — Van360*\n\n` +
             `${getFirstName(ctx.nomeMotorista)}, ` +
             (valor ? `pagamento de *${valor}* recebido. ` : `pagamento recebido. `) +
             `Seu acesso está ativo.` +
-            (data ? `\n\n📅 Próximo vencimento: *${data}*` : ""));
+            (data ? `\n\n📅 Próximo vencimento: *${data}*` : "") +
+            planoStr);
     },
 
     dueToday: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = ctx.valor ? formatCurrency(ctx.valor) : "";
         const valorStr = valor ? ` de *${valor}*` : "";
+        const planoStr = ctx.planoNome ? ` (Plano *${ctx.planoNome}*)` : "";
         return textPart(`⚠️ *Assinatura venceu hoje — Van360*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, o pagamento${valorStr} da sua assinatura Van360 venceu hoje. Regularize para manter o acesso ativo.`);
+            `${getFirstName(ctx.nomeMotorista)}, o pagamento${valorStr} da sua assinatura${planoStr} Van360 venceu hoje. Regularize para manter o acesso ativo.`);
     },
 
     dueSoon: (ctx: DriverContext): CompositeMessagePart[] => {
@@ -157,19 +163,21 @@ export const DriverTemplates = {
         const data = ctx.dataVencimento ? formatToBrazilianDate(ctx.dataVencimento) : "";
         const valorStr = valor ? ` de *${valor}*` : "";
         const dataTitle = data ? `em ${data}` : "em breve";
+        const planoStr = ctx.planoNome ? `\n🏷️ Plano: *${ctx.planoNome}*` : "";
         const pixExtra = ctx.pixCopiaECola
             ? `\n\n💳 *Pix Copia e Cola:*\n${ctx.pixCopiaECola}\n\n_Copie e pague pelo app do seu banco._`
             : "";
 
         return textPart(`🗓️ *Assinatura vence ${dataTitle}*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, sua mensalidade Van360${valorStr} vence em breve. Mantenha em dia para não interromper suas cobranças.${pixExtra}`);
+            `${getFirstName(ctx.nomeMotorista)}, sua mensalidade Van360${valorStr} vence em breve.${planoStr}\n\nMantenha em dia para não interromper suas cobranças.${pixExtra}`);
     },
 
     overdue: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = ctx.valor ? formatCurrency(ctx.valor) : "";
         const valorStr = valor ? ` de *${valor}*` : "";
+        const planoStr = ctx.planoNome ? ` (Plano *${ctx.planoNome}*)` : "";
         return textPart(`🚨 *Acesso suspenso — Van360*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, sua assinatura${valorStr} foi suspensa por falta de pagamento. Renove pelo app para reativar.`);
+            `${getFirstName(ctx.nomeMotorista)}, sua assinatura${planoStr}${valorStr} foi suspensa por falta de pagamento. Renove pelo app para reativar.`);
     },
 
     contractSigned: (ctx: DriverContext): CompositeMessagePart[] => {
@@ -197,9 +205,11 @@ export const DriverTemplates = {
         const valor = ctx.valor ? formatCurrency(ctx.valor) : "";
         const cardStr = ctx.cardLast4 ? ` final *${ctx.cardLast4}*` : "";
         const dataStr = ctx.dataVencimento ? `em ${formatToBrazilianDate(ctx.dataVencimento)}` : "em breve";
+        const planoStr = ctx.planoNome ? `🏷️ Plano: *${ctx.planoNome}*\n\n` : "";
         return textPart(`🔄 *Renovação automática ${dataStr}*\n\n` +
             `${getFirstName(ctx.nomeMotorista)}, ` +
             (valor ? `*${valor}* será debitado no cartão${cardStr}.\n\n` : `sua assinatura será renovada.\n\n`) +
+            planoStr +
             `Para alterar o cartão ou pagar via Pix, acesse o app antes dessa data.`);
     },
 

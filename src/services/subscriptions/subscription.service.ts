@@ -171,6 +171,7 @@ export const subscriptionService = {
                 nomeMotorista: res.usuario_nome!,
                 valor: typeof res.valor === "string" ? parseFloat(res.valor) : res.valor!,
                 dataVencimento: res.new_expiry!,
+                planoNome: res.plano_nome,
             }).catch(err => logger.error({ err }, "[SubscriptionService] Falha ao notificar pagamento confirmado"));
         }
     }

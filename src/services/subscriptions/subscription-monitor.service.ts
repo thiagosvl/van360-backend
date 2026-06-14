@@ -329,6 +329,7 @@ export const subscriptionMonitorService = {
         if (user?.telefone) {
           await notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_ASSINATURA_VENCEU, {
             nomeMotorista: user.nome,
+            planoNome: (sub as any).planos?.nome,
           });
           await this.logNotification(sub.usuario_id, EVENTO_MOTORISTA_ASSINATURA_VENCEU, this.toCicloRef(sub.data_vencimento || new Date()), sub.id, "Aviso de mensalidade vencida enviado.");
         }
@@ -356,6 +357,7 @@ export const subscriptionMonitorService = {
           await notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_ASSINATURA_ATRASADA, {
             nomeMotorista: user.nome,
             diasAtraso: gracePeriod,
+            planoNome: (sub as any).planos?.nome,
           });
           await this.logNotification(sub.usuario_id, EVENTO_MOTORISTA_ASSINATURA_ATRASADA, this.toCicloRef(sub.data_vencimento || new Date()), sub.id, "Aviso de assinatura suspensa enviado.");
         }
@@ -402,6 +404,7 @@ export const subscriptionMonitorService = {
           valor: fatura?.valor ? Number(fatura.valor) : undefined,
           pixCopiaECola: fatura?.pix_copy_paste ?? undefined,
           metodoCobranca: sub.metodo_pagamento ?? undefined,
+          planoNome: (sub as any).planos?.nome,
         });
         await this.logNotification(sub.usuario_id, step.tipo, cicloRef, sub.id, `Lembrete de pagamento pendente enviado (${step.daysAgo} dias de atraso).`);
         break;
@@ -504,9 +507,10 @@ export const subscriptionMonitorService = {
           if (user?.telefone) {
             await notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_CARTAO_COBRANCA_AVISO, {
               nomeMotorista: user.nome,
-              valor: sub.planos?.valor ? Number(sub.planos.valor) : undefined,
+              valor: (sub as any).planos?.valor ? Number((sub as any).planos.valor) : undefined,
               dataVencimento: sub.data_vencimento,
               cardLast4,
+              planoNome: (sub as any).planos?.nome,
             });
             await this.logNotification(sub.usuario_id, EVENTO_MOTORISTA_CARTAO_COBRANCA_AVISO, cicloRef, sub.id, "Aviso antecipado de cobrança automática no cartão enviado.");
           }
@@ -528,6 +532,7 @@ export const subscriptionMonitorService = {
             dataVencimento: sub.data_vencimento,
             pixCopiaECola: fatura.pix_copy_paste,
             valor: fatura.valor,
+            planoNome: (sub as any).planos?.nome,
           });
           const cicloRef = this.toCicloRef(sub.data_vencimento || new Date());
           await this.logNotification(sub.usuario_id, EVENTO_MOTORISTA_ASSINATURA_VENCENDO, cicloRef, sub.id, "Aviso de vencimento de PIX enviado.");
