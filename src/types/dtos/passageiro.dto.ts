@@ -66,6 +66,11 @@ export const createPassageiroSchema = z.object({
       if (v === null || v === "") return null;
       return parseLocalDate(v);
     }),
+    data_fim_transporte: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
+      if (v === undefined) return undefined;
+      if (v === null || v === "") return null;
+      return parseLocalDate(v);
+    }),
 
 }).passthrough(); // Permite outros campos não estritos por enquanto (migração suave)
 

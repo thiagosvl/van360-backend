@@ -62,15 +62,22 @@ class ContractService {
     // 3. Cálculos dinâmicos
     const hoje = getNowBR();
     const dataInicio = customTerms.dataInicio || passageiro.data_inicio_transporte || toLocalDateString(hoje);
-
-    const qtdParcelas = customTerms.qtdParcelas || 12;
-    const valorMensal = customTerms.valorMensal || Number(passageiro.valor_cobranca);
-    const valorTotal = valorMensal * qtdParcelas;
-
     const dInicio = parseLocalDate(dataInicio);
-    const dFimCalculado = addMonths(dInicio, qtdParcelas);
-    dFimCalculado.setDate(0); 
-    const dataFim = customTerms.dataFim || toLocalDateString(dFimCalculado);
+
+    let dataFim = customTerms.dataFim || passageiro.data_fim_transporte;
+    if (!dataFim) {
+      dataFim = `${dInicio.getFullYear()}-12-31`;
+    }
+    const dFim = parseLocalDate(dataFim);
+
+    let qtdParcelas = customTerms.qtdParcelas;
+    if (!qtdParcelas) {
+      const diffMonths = (dFim.getFullYear() - dInicio.getFullYear()) * 12 + (dFim.getMonth() - dInicio.getMonth());
+      qtdParcelas = Math.max(1, diffMonths + 1);
+    }
+
+    const valorMensal = customTerms.valorMensal || Number(passageiro.valor_cobranca) || 0;
+    const valorTotal = valorMensal * qtdParcelas;
 
     // 4. Preparar dados do contrato
     const dadosContrato: DadosContrato = {

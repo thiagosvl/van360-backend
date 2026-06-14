@@ -24,6 +24,7 @@ export const createPrePassageiroSchema = z.object({
   genero: z.nativeEnum(PassageiroGenero).optional().nullable().or(z.literal('')),
   parentesco_responsavel: z.string().optional().nullable().or(z.literal('')),
   data_inicio_transporte: z.string().optional().nullable().or(z.literal('')),
+  data_fim_transporte: z.string().optional().nullable().or(z.literal('')),
   data_nascimento: z.string().optional().nullable().or(z.literal('')),
 });
 

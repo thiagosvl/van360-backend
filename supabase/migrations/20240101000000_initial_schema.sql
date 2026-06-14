@@ -283,6 +283,7 @@ CREATE TABLE IF NOT EXISTS "public"."passageiros" (
     "data_nascimento" "date",
     "parentesco_responsavel" "public"."parentesco_enum",
     "data_inicio_transporte" "date",
+    "data_fim_transporte" "date",
     "enviar_notificacoes" boolean DEFAULT true NOT NULL,
     CONSTRAINT "passageiros_dia_vencimento_check" CHECK ((("dia_vencimento" >= 1) AND ("dia_vencimento" <= 31)))
 );
@@ -323,7 +324,8 @@ CREATE TABLE IF NOT EXISTS "public"."pre_passageiros" (
     "modalidade" "public"."modalidade_enum",
     "data_nascimento" "date",
     "parentesco_responsavel" "public"."parentesco_enum",
-    "data_inicio_transporte" "date"
+    "data_inicio_transporte" "date",
+    "data_fim_transporte" "date"
 );
 
 
