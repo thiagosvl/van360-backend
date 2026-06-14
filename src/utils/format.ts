@@ -80,9 +80,9 @@ export const formatPeriodo = (periodo: string): string => {
 
 export const formatModalidade = (modalidade: string): string => {
   switch (modalidade) {
-    case PassageiroModalidade.IDA: return 'Ida';
-    case PassageiroModalidade.VOLTA: return 'Volta';
     case PassageiroModalidade.IDA_VOLTA: return 'Ida e Volta';
+    case PassageiroModalidade.IDA: return 'Somente Ida';
+    case PassageiroModalidade.VOLTA: return 'Somente Volta';
     default: return modalidade || '';
   }
 };
