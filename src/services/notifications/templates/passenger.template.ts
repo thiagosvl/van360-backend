@@ -63,9 +63,9 @@ export const PassengerTemplates = {
     },
 
     contractSignedBySelf: (ctx: PassengerContext): CompositeMessagePart[] => {
-        const linkStr = ctx.contratoUrl ? `\n\n📄 Documento: ${ctx.contratoUrl}` : "";
-        const text = `✅ *Contrato assinado — ${ctx.nomePassageiro}*\n\n` +
-            `${getFirstName(ctx.nomeResponsavel)}, o contrato de transporte de *${ctx.nomePassageiro}* foi assinado com sucesso.${linkStr}${getSystemFooter(ctx)}`;
+        const linkStr = ctx.contratoUrl ? `\n\n📄 Veja o contrato: ${ctx.contratoUrl}` : "";
+        const text = `✅ *Contrato assinado — ${getFirstName(ctx.nomePassageiro)}*\n\n` +
+            `${getFirstName(ctx.nomeResponsavel)}, o contrato de transporte foi assinado com sucesso.${linkStr}${getSystemFooter(ctx)}`;
         return textPart(text);
     },
 

@@ -359,8 +359,8 @@ CREATE TABLE IF NOT EXISTS "public"."usuarios" (
     "data_nascimento" "date" NOT NULL,
     "config_contrato" "jsonb" DEFAULT '{
       "usar_contratos": false,
-      "multa_atraso": { "valor": 10.00, "tipo": "percentual" },
-      "multa_rescisao": { "valor": 15.00, "tipo": "percentual" },
+      "multa_atraso": { "valor": 10.00, "tipo": "fixo" },
+      "multa_rescisao": { "valor": 15.00, "tipo": "fixo" },
       "clausulas": [
         "O serviço contratado consiste no transporte do passageiro acima citado, no trajeto com origem e destino acordado entre as partes.",
         "Somente o passageiro CONTRATANTE está autorizado a utilizar-se do objeto deste contrato, sendo vedado o passageiro se fazer acompanhar de colegas, parentes, amigos e etc.",

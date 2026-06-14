@@ -35,7 +35,7 @@ export const DriverTemplates = {
         const validade = ctx.dataVencimento ? formatToBrazilianDate(ctx.dataVencimento) : "15 dias";
         return textPart(`🚀 *Bem-vindo ao Van360!*\n\n` +
             `${getFirstName(ctx.nomeMotorista)}, sua conta está ativa com acesso completo até *${validade}*.\n\n` +
-            `Comece cadastrando seus passageiros e veja o controle financeiro funcionando na prática.\n\n` +
+            `Comece cadastrando seus passageiros e veja a organização digital da sua van funcionando na prática.\n\n` +
             `Precisa de ajuda? Responda esta mensagem.`);
     },
 
@@ -182,10 +182,10 @@ export const DriverTemplates = {
 
     contractSigned: (ctx: DriverContext): CompositeMessagePart[] => {
         const nomePas = getFirstName(ctx.nomePassageiro) || "passageiro";
-        const nomeResp = ctx.nomeResponsavel ? ` (resp. ${getFirstName(ctx.nomeResponsavel)})` : "";
-        const linkStr = ctx.contratoUrl ? `\n\n📄 Documento final:\n${ctx.contratoUrl}` : "";
-        return textPart(`✍️ *Contrato assinado — ${nomePas}*\n\n` +
-            `O contrato de *${nomePas}*${nomeResp} foi assinado digitalmente.${linkStr}`);
+        const nomeResp = ctx.nomeResponsavel ? ` (responsável ${getFirstName(ctx.nomeResponsavel)})` : "";
+        const linkStr = ctx.contratoUrl ? `\n\n📄 Veja o contrato:\n${ctx.contratoUrl}` : "";
+        return textPart(`✍️ *Contrato assinado — ${ctx.nomePassageiro}*\n\n` +
+            `O contrato de *${nomePas}*${nomeResp} foi assinado com sucesso.${linkStr}`);
     },
 
     authRecovery: (ctx: DriverContext): CompositeMessagePart[] => {
