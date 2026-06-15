@@ -36,7 +36,21 @@ export async function createApp(): Promise<FastifyInstance> {
     await app.register(fastifyRequestContext);
 
     app.addHook('onRequest', async (request) => {
-      (request as any).requestContext.set('ip', request.ip);
+      const xForwardedFor = request.headers['x-forwarded-for'];
+      const xRealIp = request.headers['x-real-ip'];
+      
+      let clientIp: string | undefined;
+      
+      if (typeof xForwardedFor === 'string') {
+        clientIp = xForwardedFor.split(',')[0].trim();
+      } else if (Array.isArray(xForwardedFor) && xForwardedFor.length > 0) {
+        clientIp = xForwardedFor[0].trim();
+      } else if (typeof xRealIp === 'string') {
+        clientIp = xRealIp.trim();
+      }
+      
+      const finalIp = clientIp || request.ip;
+      (request as any).requestContext.set('ip', finalIp);
     });
     
     // Iniciar integração com Sentry para Fastify
