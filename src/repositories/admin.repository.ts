@@ -46,11 +46,31 @@ export const adminRepository = {
         return q;
     },
 
-    async getUserLogs(userId: string, from: number, to: number) {
-        return supabaseAdmin
+    async getUserLogs(
+        userId: string,
+        from: number,
+        to: number,
+        filters?: { dataInicio?: string; dataFim?: string; acao?: string; entidade?: string }
+    ) {
+        let query = supabaseAdmin
             .from("historico_atividades")
             .select("*", { count: "exact" })
-            .eq("usuario_id", userId)
+            .eq("usuario_id", userId);
+
+        if (filters?.dataInicio) {
+            query = query.gte("created_at", `${filters.dataInicio}T00:00:00`);
+        }
+        if (filters?.dataFim) {
+            query = query.lte("created_at", `${filters.dataFim}T23:59:59`);
+        }
+        if (filters?.acao) {
+            query = query.eq("acao", filters.acao);
+        }
+        if (filters?.entidade) {
+            query = query.eq("entidade_tipo", filters.entidade);
+        }
+
+        return query
             .order("created_at", { ascending: false })
             .range(from, to);
     },

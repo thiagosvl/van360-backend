@@ -3,7 +3,8 @@ import { adminRepository } from "../repositories/admin.repository.js";
 import { userRepository } from "../repositories/user.repository.js";
 import { invoiceRepository } from "../repositories/invoice.repository.js";
 import { authProvider } from "./providers/auth.provider.js";
-import { SubscriptionStatus, UserType } from "../types/enums.js";
+import { SubscriptionStatus, UserType, AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
+import { historicoService } from "./historico.service.js";
 import { getNowBR, parseBrazilianDateToISO } from "../utils/date.utils.js";
 import { onlyDigits, cleanString } from "../utils/string.utils.js";
 import type { UpdateUserAdminDTO, UpdateSubscriptionAdminDTO, ListUsersQuery, ListUserLogsQuery, UpdatePlanDTO, CreateUserAdminDTO } from "../schemas/admin.schema.js";
@@ -106,11 +107,16 @@ export const adminService = {
   },
 
   async getUserLogs(userId: string, query: ListUserLogsQuery) {
-    const { page, limit } = query;
+    const { page, limit, dataInicio, dataFim, acao, entidade } = query;
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
-    const { data, error, count } = await adminRepository.getUserLogs(userId, from, to);
+    const { data, error, count } = await adminRepository.getUserLogs(
+      userId,
+      from,
+      to,
+      { dataInicio, dataFim, acao, entidade }
+    );
 
     if (error) {
       logger.error({ error, userId }, "[AdminService] Erro ao buscar logs de atividades do usuário.");
@@ -164,11 +170,28 @@ export const adminService = {
       await authProvider.updateUserById(userId, {
         ban_duration: data.ativo ? "none" : "876600h",
       });
+      await historicoService.log({
+        usuario_id: userId,
+        entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+        entidade_id: userId,
+        acao: AtividadeAcao.USUARIO_SUSPENSO,
+        descricao: data.ativo ? "Acesso do usuário desbloqueado pelo administrador." : "Acesso do usuário suspenso pelo administrador.",
+      });
     }
 
     if (data.email !== undefined) {
       await authProvider.updateUserById(userId, {
         email: data.email.toLowerCase().trim(),
+      });
+    }
+
+    if (Object.keys(updatePayload).length > 1 || (Object.keys(updatePayload).length === 1 && data.ativo === undefined)) {
+      await historicoService.log({
+        usuario_id: userId,
+        entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+        entidade_id: userId,
+        acao: AtividadeAcao.PERFIL_EDITADO,
+        descricao: "Dados cadastrais atualizados pelo administrador.",
       });
     }
 
@@ -194,6 +217,30 @@ export const adminService = {
     if (error) {
       logger.error({ error, userId, subId: sub.id }, "[AdminService] Erro ao atualizar assinatura.");
       throw error;
+    }
+
+    if (data.status !== undefined && data.status !== sub.status) {
+      let acao = AtividadeAcao.SAAS_ASSINATURA_ATIVA;
+      let desc = "Assinatura ativada pelo administrador.";
+
+      if (data.status === SubscriptionStatus.CANCELED) {
+        acao = AtividadeAcao.SAAS_ASSINATURA_CANCELADA;
+        desc = "Assinatura cancelada pelo administrador.";
+      } else if (data.status === SubscriptionStatus.EXPIRED) {
+        acao = AtividadeAcao.SAAS_ASSINATURA_EXPIRADA;
+        desc = "Assinatura marcada como expirada pelo administrador.";
+      } else if (data.status === SubscriptionStatus.PAST_DUE) {
+        acao = AtividadeAcao.SAAS_ASSINATURA_ATRASO;
+        desc = "Assinatura marcada em atraso pelo administrador.";
+      }
+
+      await historicoService.log({
+        usuario_id: userId,
+        entidade_tipo: AtividadeEntidadeTipo.SAAS_ASSINATURA,
+        entidade_id: sub.id,
+        acao,
+        descricao: desc,
+      });
     }
 
     if (data.status === SubscriptionStatus.CANCELED) {

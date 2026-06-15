@@ -123,7 +123,7 @@ export async function atualizarPixUsuario(usuarioId: string, payload: {
     usuario_id: usuarioId,
     entidade_tipo: AtividadeEntidadeTipo.USUARIO,
     entidade_id: usuarioId,
-    acao: AtividadeAcao.PERFIL_EDITADO,
+    acao: AtividadeAcao.CHAVE_PIX_ALTERADA,
     descricao: descricaoPix,
     meta: { 
       tipo_chave_pix,

@@ -237,7 +237,6 @@ export enum AtividadeAcao {
 
   // Jobs
   COBRANCAS_GERADAS = "COBRANCAS_GERADAS",
-  LOG_LIMPEZA = "LOG_LIMPEZA",
 
   // SaaS / Assinaturas
   SAAS_ASSINATURA_ATIVA = "SAAS_ASSINATURA_ATIVA",
