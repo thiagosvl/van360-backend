@@ -350,4 +350,21 @@ export const adminService = {
 
     return { success: true, senha: newPassword };
   },
+
+  async deleteUser(userId: string) {
+    const { data: user, error: fetchError } = await userRepository.getById(userId);
+
+    if (fetchError || !user) {
+      throw new Error("Usuário não encontrado.");
+    }
+
+    const { error: authError } = await authProvider.deleteUser(userId);
+
+    if (authError) {
+      logger.error({ authError, userId }, "[AdminService] Erro ao deletar usuário no Supabase Auth.");
+      throw authError;
+    }
+
+    return { success: true };
+  },
 };

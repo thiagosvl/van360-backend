@@ -16,6 +16,7 @@ const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.patch("/users/:id", AdminController.updateUser);
   app.patch("/users/:id/subscription", AdminController.updateSubscription);
   app.post("/users/:id/reset-password", AdminController.resetUserPassword);
+  app.delete("/users/:id", AdminController.deleteUser);
 
   app.get("/configs", AdminController.getConfigs);
   app.put("/configs", AdminController.updateConfig);
