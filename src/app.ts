@@ -36,20 +36,39 @@ export async function createApp(): Promise<FastifyInstance> {
     await app.register(fastifyRequestContext);
 
     app.addHook('onRequest', async (request) => {
-      const xForwardedFor = request.headers['x-forwarded-for'];
-      const xRealIp = request.headers['x-real-ip'];
+      const headers = request.headers;
+      const rawHeaders = request.raw?.headers || {};
+      
+      const xForwardedFor = headers['x-forwarded-for'] || rawHeaders['x-forwarded-for'];
+      const xRealIp = headers['x-real-ip'] || rawHeaders['x-real-ip'];
+      const xVercelIp = headers['x-vercel-ip'] || rawHeaders['x-vercel-ip'];
+      const cfConnectingIp = headers['cf-connecting-ip'] || rawHeaders['cf-connecting-ip'];
       
       let clientIp: string | undefined;
       
-      if (typeof xForwardedFor === 'string') {
-        clientIp = xForwardedFor.split(',')[0].trim();
-      } else if (Array.isArray(xForwardedFor) && xForwardedFor.length > 0) {
-        clientIp = xForwardedFor[0].trim();
+      if (typeof xVercelIp === 'string') {
+        clientIp = xVercelIp.trim();
+      } else if (typeof cfConnectingIp === 'string') {
+        clientIp = cfConnectingIp.trim();
       } else if (typeof xRealIp === 'string') {
         clientIp = xRealIp.trim();
+      } else if (typeof xForwardedFor === 'string') {
+        clientIp = xForwardedFor.split(',')[0].trim();
+      } else if (Array.isArray(xForwardedFor) && xForwardedFor.length > 0) {
+        clientIp = (xForwardedFor[0] as string).trim();
       }
       
       const finalIp = clientIp || request.ip;
+      
+      request.log.info({
+        ipResolvido: finalIp,
+        requestIp: request.ip,
+        xVercelIp,
+        xRealIp,
+        xForwardedFor,
+        cfConnectingIp
+      }, "[IP_RESOLVER] Resultado do cálculo de IP");
+      
       (request as any).requestContext.set('ip', finalIp);
     });
     
