@@ -133,7 +133,7 @@ export const adminRepository = {
     async getSubscriptionForUser(userId: string) {
         return supabaseAdmin
             .from("assinaturas")
-            .select("id")
+            .select("id, status")
             .eq("usuario_id", userId)
             .order("created_at", { ascending: false })
             .limit(1)
