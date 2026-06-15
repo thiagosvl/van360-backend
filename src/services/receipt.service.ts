@@ -105,6 +105,7 @@ class ReceiptService {
             const metodoPagamentoFormatado = formatPaymentMethod(data.metodoPagamento);
 
             logger.debug({ logId, cobrancaId: data.id }, "[ReceiptService] Renderizando SVG via Satori");
+            // @ts-ignore - Satori default export may lack call signature in Vercel build environment
             const svg = await satori(
                 {
                     type: "div",
