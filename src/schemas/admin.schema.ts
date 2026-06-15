@@ -33,6 +33,10 @@ export const listUsersQuerySchema = z.object({
 export const listUserLogsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
+  dataInicio: z.string().optional(),
+  dataFim: z.string().optional(),
+  acao: z.string().optional(),
+  entidade: z.string().optional(),
 });
 
 export type UpdateUserAdminDTO = z.infer<typeof updateUserAdminSchema>;

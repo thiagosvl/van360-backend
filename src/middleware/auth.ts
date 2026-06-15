@@ -1,5 +1,6 @@
 import { FastifyReply, FastifyRequest } from "fastify";
-import { supabaseAdmin } from "../config/supabase.js";
+import { authProvider } from "../services/providers/auth.provider.js";
+import { authRepository } from "../repositories/auth.repository.js";
 
 export async function verifySupabaseJWT(
   request: FastifyRequest,
@@ -13,7 +14,7 @@ export async function verifySupabaseJWT(
 
     const token = authHeader.split(" ")[1];
     
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    const { data: { user }, error: authError } = await authProvider.getUser(token);
 
     if (authError || !user) {
       const isUserNotFound = authError?.message?.toLowerCase().includes("user not found");
@@ -26,11 +27,7 @@ export async function verifySupabaseJWT(
 
     const userId = user.id;
 
-    const { data: profile, error: profileError } = await supabaseAdmin
-        .from("usuarios")
-        .select("id, ativo, tipo")
-        .eq("id", userId)
-        .maybeSingle();
+    const { data: profile, error: profileError } = await authRepository.getAuthProfile(userId);
 
     if (profileError) {
       console.error("[Auth] Database error during verification:", profileError.message);

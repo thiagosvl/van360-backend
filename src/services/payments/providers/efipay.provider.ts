@@ -95,9 +95,19 @@ export class EfipayProvider implements PaymentProviderAdapter {
                 };
 
             } else {
+                let expiracaoSegundos = 3600 * 24; // Padrão: 24 horas
+                if (request.dueDate) {
+                    const dueDate = new Date(request.dueDate);
+                    const now = new Date();
+                    const diffSeconds = Math.floor((dueDate.getTime() - now.getTime()) / 1000);
+                    if (diffSeconds > 0) {
+                        expiracaoSegundos = diffSeconds;
+                    }
+                }
+
                 const body = {
                     calendario: {
-                        expiracao: 3600 * 24
+                        expiracao: expiracaoSegundos
                     },
                     devedor: {
                         [request.customer.document.replace(/\D/g, "").length > 11 ? "cnpj" : "cpf"]: request.customer.document.replace(/\D/g, ""),
@@ -227,6 +237,13 @@ export class EfipayProvider implements PaymentProviderAdapter {
                     } else if (status === "declined" || status === "unpaid" || status === "canceled") {
                         return {
                             type: "PAYMENT_FAILED",
+                            internalId: chargeId ?? "",
+                            providerRef: lastLog.id?.toString() ?? "",
+                            raw: response.data as unknown as Record<string, unknown>
+                        };
+                    } else if (status === "refunded" || status === "contested" || status === "chargeback") {
+                        return {
+                            type: "PAYMENT_REFUNDED",
                             internalId: chargeId ?? "",
                             providerRef: lastLog.id?.toString() ?? "",
                             raw: response.data as unknown as Record<string, unknown>

@@ -11,14 +11,14 @@ import {
     updatePassageiroSchema
 } from "../types/dtos/passageiro.dto.js";
 
-import { accessControlService } from "../services/access-control.service.js";
+
 
 export const passageiroController = {
   create: async (request: FastifyRequest, reply: FastifyReply) => {
     logger.info("PassageiroController.create - Starting");
     const data = createPassageiroSchema.parse(request.body);
     
-    await accessControlService.validateWriteAccess(data.usuario_id);
+
 
     const result = await passageiroService.createPassageiro(data);
     return reply.status(201).send(result);
@@ -28,10 +28,7 @@ export const passageiroController = {
     const { id } = request.params as { id: string };
     logger.info({ passageiroId: id }, "PassageiroController.update - Starting");
     
-    const authUid = (request as any).user?.id;
-    if (authUid) {
-        await accessControlService.validateWriteAccess(authUid);
-    }
+
 
     const data = updatePassageiroSchema.parse(request.body);
     
@@ -44,10 +41,7 @@ export const passageiroController = {
     const { id } = request.params as { id: string };
     logger.info({ passageiroId: id }, "PassageiroController.delete - Starting");
 
-    const authUid = (request as any).user?.id;
-    if (authUid) {
-        await accessControlService.validateWriteAccess(authUid);
-    }
+
 
     await passageiroService.deletePassageiro(id);
     return reply.status(200).send({ success: true });

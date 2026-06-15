@@ -1,5 +1,5 @@
 import { logger } from "../config/logger.js";
-import { supabaseAdmin } from "../config/supabase.js";
+import { configuracaoRepository } from "../repositories/configuracao.repository.js";
 
 import { ConfigKey } from "../types/enums.js";
 
@@ -12,11 +12,7 @@ import { ConfigKey } from "../types/enums.js";
 export async function getConfig(key: ConfigKey, defaultValue: string): Promise<string>;
 export async function getConfig(key: string, defaultValue: string): Promise<string>;
 export async function getConfig(key: string, defaultValue: string): Promise<string> {
-  const { data, error } = await supabaseAdmin
-    .from("configuracao_interna")
-    .select("valor")
-    .eq("chave", key)
-    .single();
+  const { data, error } = await configuracaoRepository.getByKey(key);
 
   if (error || !data) {
     logger.warn({ key, defaultValue, error: error?.message }, "Configuração não encontrada, usando valor padrão.");
@@ -56,5 +52,3 @@ export async function getConfigJSON<T>(key: string, defaultValue: T): Promise<T>
     return defaultValue;
   }
 }
-
-// getBillingConfig removido (Clean Slate)

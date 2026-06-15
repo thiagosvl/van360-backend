@@ -44,14 +44,35 @@ export const createPassageiroSchema = z.object({
     ativo: z.boolean().optional(),
     enviar_notificacoes: z.boolean().optional(),
 
-    periodo: z.string().optional().or(z.literal("")).transform(v => v ? v.toLowerCase() : undefined),
+    periodo: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
+      if (v === undefined) return undefined;
+      if (v === null || v === "") return null;
+      return v.toLowerCase();
+    }),
     genero: optionalString,
     
     // Novos Campos
-    modalidade: z.string().min(1, "Modalidade é obrigatória").optional().or(z.literal("")).transform(v => v === "" ? undefined : v),
-    data_nascimento: z.string().optional().or(z.literal("")).transform(v => v ? parseLocalDate(v) : undefined), // Aceita string ISO e converte
+    modalidade: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
+      if (v === undefined) return undefined;
+      if (v === null || v === "") return null;
+      return v;
+    }),
+    data_nascimento: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
+      if (v === undefined) return undefined;
+      if (v === null || v === "") return null;
+      return parseLocalDate(v);
+    }), // Aceita string ISO e converte
     parentesco_responsavel: optionalString,
-    data_inicio_transporte: z.string().optional().or(z.literal("")).transform(v => v ? parseLocalDate(v) : undefined),
+    data_inicio_transporte: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
+      if (v === undefined) return undefined;
+      if (v === null || v === "") return null;
+      return parseLocalDate(v);
+    }),
+    data_fim_transporte: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
+      if (v === undefined) return undefined;
+      if (v === null || v === "") return null;
+      return parseLocalDate(v);
+    }),
 
 }).passthrough(); // Permite outros campos não estritos por enquanto (migração suave)
 

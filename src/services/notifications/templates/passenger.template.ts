@@ -1,5 +1,5 @@
-import { formatToBrazilianDate, getMonthNameBR } from "../../../utils/date.utils.js";
-import { formatCurrency, getFirstName } from "../../../utils/format.js";
+import { formatToBrazilianDate } from "../../../utils/date.utils.js";
+import { formatCurrency, getFirstName, maskPhone } from "../../../utils/format.js";
 import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
 
 export interface PassengerContext {
@@ -7,18 +7,18 @@ export interface PassengerContext {
     nomePassageiro: string;
     nomeMotorista: string;
     valor?: number;
-    dataVencimento?: string; // YYYY-MM-DD
+    dataVencimento?: string;
     diasAntecedencia?: number;
     diasAtraso?: number;
-    linkPagamento?: string; // Futuro
+    linkPagamento?: string;
     mes?: number;
     ano?: number;
-    usuarioId: string; // ID do Motorista (para roteamento WhatsApp)
-    apelidoMotorista?: string; // Preferência de nome de exibição
+    usuarioId: string;
+    apelidoMotorista?: string;
     reciboUrl?: string;
-    telefoneMotorista?: string; // Para contato direto
+    telefoneMotorista?: string;
     linkAssinatura?: string;
-    contratoUrl?: string; // URL do PDF final
+    contratoUrl?: string;
     chavePix?: string;
     tipoChavePix?: string;
 }
@@ -27,9 +27,8 @@ const textPart = (text: string): CompositeMessagePart[] => {
     return [{ type: "text", content: text }];
 };
 
-// Helper for Pix Key Label
 const getTipoChavePixLabel = (tipo?: string): string => {
-    if (!tipo) return "Não informado";
+    if (!tipo) return "";
     const mapping: Record<string, string> = {
         CPF: "CPF",
         CNPJ: "CNPJ",
@@ -40,180 +39,94 @@ const getTipoChavePixLabel = (tipo?: string): string => {
     return mapping[tipo.toUpperCase()] || tipo;
 };
 
-// Helper for System Footer
 const getSystemFooter = (ctx: PassengerContext) => {
-    const phoneLink = ctx.telefoneMotorista 
-        ? `\n📞 Dúvidas? Fale com o motorista: https://wa.me/55${ctx.telefoneMotorista.replace(/\D/g, "")}` 
+    const phoneLink = ctx.telefoneMotorista
+        ? `\n📞 Fale com o Motorista: ${maskPhone(ctx.telefoneMotorista)}`
         : "";
-
     const nomeExibicao = ctx.apelidoMotorista || getFirstName(ctx.nomeMotorista);
+    return `\n\n———\n🚐 *${nomeExibicao}* · Van360${phoneLink}`;
+};
 
-    return `\n\n_________________\n🤖 *Sistema Van360*\nEnviada em nome de: *${nomeExibicao}*${phoneLink}`;
+const getPixBlock = (ctx: PassengerContext): string => {
+    if (!ctx.chavePix) return "";
+    const labelTipo = getTipoChavePixLabel(ctx.tipoChavePix);
+    return `\n\n💳 *Pix para pagamento:*\nChave (${labelTipo}): ${ctx.chavePix}`;
 };
 
 export const PassengerTemplates = {
-    
-    /**
-     * Contrato Disponível
-     */
+
     contractAvailable: (ctx: PassengerContext): CompositeMessagePart[] => {
-        const nomeResp = getFirstName(ctx.nomeResponsavel);
-        const linkStr = ctx.linkAssinatura ? `\n\n👉 Acesse o link abaixo para visualizar e assinar:\n\n${ctx.linkAssinatura}` : "";
-        const text = `🔔 *Contrato Disponível*\n\n` +
-            `Olá *${nomeResp}*,\n` +
-            `O contrato de transporte de *${ctx.nomePassageiro}* foi gerado e já está pronto para assinatura digital.${linkStr}\n\n` +
-            `Acesse o sistema e finalize o processo online e simplificado.${getSystemFooter(ctx)}`;
-
+        const linkStr = ctx.linkAssinatura ? `\n\n👉 Assine aqui: ${ctx.linkAssinatura}` : "";
+        const text = `📄 *Contrato de transporte disponível*\n\n` +
+            `${getFirstName(ctx.nomeResponsavel)}, o contrato de *${getFirstName(ctx.nomePassageiro)}* está pronto para assinatura digital.${linkStr}${getSystemFooter(ctx)}`;
         return textPart(text);
     },
 
-    /**
-     * Contrato Assinado (Pelo Passageiro)
-     */
     contractSignedBySelf: (ctx: PassengerContext): CompositeMessagePart[] => {
-        const nomeResp = getFirstName(ctx.nomeResponsavel);
-        const linkStr = ctx.contratoUrl ? `\n\n📄 Você pode visualizar o documento final no link abaixo:\n\n${ctx.contratoUrl}` : "";
-        const text = `✅ *Contrato Assinado*\n\n` +
-            `Olá *${nomeResp}*,\n` +
-            `Confirmamos que seu contrato de transporte para *${ctx.nomePassageiro}* foi assinado com sucesso!${linkStr}\n\n` +
-            `Desejamos uma ótima parceria! 🚀${getSystemFooter(ctx)}`;
-
+        const linkStr = ctx.contratoUrl ? `\n\n📄 Veja o contrato: ${ctx.contratoUrl}` : "";
+        const text = `✅ *Contrato assinado — ${getFirstName(ctx.nomePassageiro)}*\n\n` +
+            `${getFirstName(ctx.nomeResponsavel)}, o contrato de transporte foi assinado com sucesso.${linkStr}${getSystemFooter(ctx)}`;
         return textPart(text);
     },
 
-    /**
-     * Lembrete de Mensalidade Próxima
-     */
     dueSoon: (ctx: PassengerContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor || 0);
         const data = formatToBrazilianDate(ctx.dataVencimento || "");
         const diasMsg = ctx.diasAntecedencia ? ` (daqui a ${ctx.diasAntecedencia} dias)` : "";
-        const nomeResp = getFirstName(ctx.nomeResponsavel);
 
-        const text = `🗓️ *Aviso de Mensalidade*\n\n` +
-            `Responsável: *${nomeResp}*\n` +
-            `Passageiro(a): *${ctx.nomePassageiro}*\n\n` +
+        const text = `🗓️ *Mensalidade — ${ctx.nomePassageiro}*\n\n` +
+            `${getFirstName(ctx.nomeResponsavel)}, lembrete da mensalidade do transporte.\n\n` +
             `🔹 Valor: *${valor}*\n` +
             `🔹 Vencimento: *${data}*${diasMsg}${getSystemFooter(ctx)}`;
-
         return textPart(text);
     },
 
-    /**
-     * Lembrete de Mensalidade Próxima - Pix Estático (Manual)
-     */
     dueSoonManual: (ctx: PassengerContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor || 0);
         const data = formatToBrazilianDate(ctx.dataVencimento || "");
         const diasMsg = ctx.diasAntecedencia ? ` (daqui a ${ctx.diasAntecedencia} dias)` : "";
-        const nomeResp = getFirstName(ctx.nomeResponsavel);
 
-        const labelTipo = getTipoChavePixLabel(ctx.tipoChavePix);
-        const nomeExibicao = ctx.apelidoMotorista || getFirstName(ctx.nomeMotorista);
-
-        const text = `🗓️ *Aviso de Mensalidade*\n\n` +
-            `Responsável: *${nomeResp}*\n` +
-            `Passageiro(a): *${ctx.nomePassageiro}*\n\n` +
+        const text = `🗓️ *Mensalidade — ${ctx.nomePassageiro}*\n\n` +
+            `${getFirstName(ctx.nomeResponsavel)}, lembrete da mensalidade do transporte.\n\n` +
             `🔹 Valor: *${valor}*\n` +
-            `🔹 Vencimento: *${data}*${diasMsg}\n\n` +
-            `_________________\n` +
-            `🔑 *Dados para Pagamento via Pix:*\n` +
-            `• *Tipo:* ${labelTipo}\n` +
-            `• *Favorecido:* ${nomeExibicao}\n\n` +
-            `*(A chave Pix limpa será enviada na próxima mensagem para facilitar a cópia)*` +
-            `${getSystemFooter(ctx)}`;
-
-        return [
-            { type: "text", content: text },
-            { type: "text", content: ctx.chavePix || "", delayMs: 1500 }
-        ];
+            `🔹 Vencimento: *${data}*${diasMsg}${getPixBlock(ctx)}${getSystemFooter(ctx)}`;
+        return textPart(text);
     },
 
-    /**
-     * Mensalidade Vence Hoje (Venceu)
-     */
     dueToday: (ctx: PassengerContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor || 0);
         const data = formatToBrazilianDate(ctx.dataVencimento || "");
-        const nomeResp = getFirstName(ctx.nomeResponsavel);
-        
-        const text = `⚠️ *Mensalidade Vence Hoje*\n\n` +
-            `Responsável: *${nomeResp}*\n` +
-            `Passageiro(a): *${ctx.nomePassageiro}*\n\n` +
-            `Informamos que a mensalidade no valor de *${valor}* vence hoje (*${data}*).${getSystemFooter(ctx)}`;
 
+        const text = `⚠️ *Mensalidade vence hoje — ${ctx.nomePassageiro}*\n\n` +
+            `${getFirstName(ctx.nomeResponsavel)}, a mensalidade de *${valor}* do transporte vence hoje (*${data}*).${getSystemFooter(ctx)}`;
         return textPart(text);
     },
 
-    /**
-     * Mensalidade Vence Hoje - Pix Estático (Manual)
-     */
     dueTodayManual: (ctx: PassengerContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor || 0);
         const data = formatToBrazilianDate(ctx.dataVencimento || "");
-        const nomeResp = getFirstName(ctx.nomeResponsavel);
 
-        const labelTipo = getTipoChavePixLabel(ctx.tipoChavePix);
-        const nomeExibicao = ctx.apelidoMotorista || getFirstName(ctx.nomeMotorista);
-        
-        const text = `⚠️ *Mensalidade Vence Hoje*\n\n` +
-            `Responsável: *${nomeResp}*\n` +
-            `Passageiro(a): *${ctx.nomePassageiro}*\n\n` +
-            `Informamos que a mensalidade no valor de *${valor}* vence hoje (*${data}*).\n\n` +
-            `_________________\n` +
-            `🔑 *Dados para Pagamento via Pix:*\n` +
-            `• *Tipo:* ${labelTipo}\n` +
-            `• *Favorecido:* ${nomeExibicao}\n\n` +
-            `*(A chave Pix limpa será enviada na próxima mensagem para facilitar a cópia)*` +
-            `${getSystemFooter(ctx)}`;
-
-        return [
-            { type: "text", content: text },
-            { type: "text", content: ctx.chavePix || "", delayMs: 1500 }
-        ];
-    },
-
-    /**
-     * Mensalidade Atrasada
-     */
-    overdue: (ctx: PassengerContext): CompositeMessagePart[] => {
-        const valor = formatCurrency(ctx.valor || 0);
-        const data = formatToBrazilianDate(ctx.dataVencimento || "");
-        const nomeResp = getFirstName(ctx.nomeResponsavel);
-        
-        const text = `⚠️ *Aviso de Atraso*\n\n` +
-            `Responsável: *${nomeResp}*\n` +
-            `Passageiro(a): *${ctx.nomePassageiro}*\n\n` +
-            `Identificamos que a mensalidade de *${valor}* (vencida em *${data}*) ainda não foi regularizada.${getSystemFooter(ctx)}`;
-
+        const text = `⚠️ *Mensalidade vence hoje — ${ctx.nomePassageiro}*\n\n` +
+            `${getFirstName(ctx.nomeResponsavel)}, a mensalidade de *${valor}* do transporte vence hoje (*${data}*).${getPixBlock(ctx)}${getSystemFooter(ctx)}`;
         return textPart(text);
     },
 
-    /**
-     * Mensalidade Atrasada - Pix Estático (Manual)
-     */
+    overdue: (ctx: PassengerContext): CompositeMessagePart[] => {
+        const valor = formatCurrency(ctx.valor || 0);
+        const data = formatToBrazilianDate(ctx.dataVencimento || "");
+
+        const text = `🚨 *Mensalidade em atraso — ${ctx.nomePassageiro}*\n\n` +
+            `${getFirstName(ctx.nomeResponsavel)}, a mensalidade de *${valor}* (vencida em *${data}*) ainda não foi paga.\n\n` +
+            `Entre em contato com o motorista para regularizar.${getSystemFooter(ctx)}`;
+        return textPart(text);
+    },
+
     overdueManual: (ctx: PassengerContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor || 0);
         const data = formatToBrazilianDate(ctx.dataVencimento || "");
-        const nomeResp = getFirstName(ctx.nomeResponsavel);
 
-        const labelTipo = getTipoChavePixLabel(ctx.tipoChavePix);
-        const nomeExibicao = ctx.apelidoMotorista || getFirstName(ctx.nomeMotorista);
-        
-        const text = `⚠️ *Aviso de Atraso*\n\n` +
-            `Responsável: *${nomeResp}*\n` +
-            `Passageiro(a): *${ctx.nomePassageiro}*\n\n` +
-            `Identificamos que a mensalidade de *${valor}* (vencida em *${data}*) ainda não foi regularizada.\n\n` +
-            `_________________\n` +
-            `🔑 *Dados para Pagamento via Pix:*\n` +
-            `• *Tipo:* ${labelTipo}\n` +
-            `• *Favorecido:* ${nomeExibicao}\n\n` +
-            `*(A chave Pix limpa será enviada na próxima mensagem para facilitar a cópia)*` +
-            `${getSystemFooter(ctx)}`;
-
-        return [
-            { type: "text", content: text },
-            { type: "text", content: ctx.chavePix || "", delayMs: 1500 }
-        ];
+        const text = `🚨 *Mensalidade em atraso — ${ctx.nomePassageiro}*\n\n` +
+            `${getFirstName(ctx.nomeResponsavel)}, a mensalidade de *${valor}* (vencida em *${data}*) ainda não foi paga.${getPixBlock(ctx)}${getSystemFooter(ctx)}`;
+        return textPart(text);
     }
 };

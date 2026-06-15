@@ -1,4 +1,9 @@
-import { supabaseAdmin } from "../config/supabase.js";
+import { veiculoRepository } from "../repositories/veiculo.repository.js";
+import { escolaRepository } from "../repositories/escola.repository.js";
+import { passageiroRepository } from "../repositories/passageiro.repository.js";
+import { prePassageiroRepository } from "../repositories/pre-passageiro.repository.js";
+import { cobrancaRepository } from "../repositories/cobranca.repository.js";
+import { gastoRepository } from "../repositories/gasto.repository.js";
 import { CobrancaStatus } from "../types/enums.js";
 import { getNowBR, toLocalDateString, getLastDayOfMonth } from "../utils/date.utils.js";
 import { getUsuarioData } from "./usuario.service.js";
@@ -7,7 +12,6 @@ interface SystemSummary {
   usuario: {
     ativo: boolean;
     flags: {
-      contrato_configurado: boolean;
       usar_contratos: boolean;
     };
   };
@@ -39,6 +43,7 @@ interface SystemSummary {
     saidas: {
       total: number;
       margem_operacional: number;
+      detalhamento: Record<string, number>;
     };
     atrasos: {
       valor: number;
@@ -61,24 +66,24 @@ export const usuarioResumoService = {
       passData,
       prePassageirosCount,
     ] = await Promise.all([
-      supabaseAdmin.from("veiculos").select("id, ativo").eq("usuario_id", usuarioId),
-      supabaseAdmin.from("escolas").select("id, ativo").eq("usuario_id", usuarioId),
-      supabaseAdmin.from("passageiros").select("id, ativo").eq("usuario_id", usuarioId),
-      supabaseAdmin.from("pre_passageiros").select("id", { count: "exact", head: true }).eq("usuario_id", usuarioId),
+      veiculoRepository.getSummaryForDashboard(usuarioId),
+      escolaRepository.getSummaryForDashboard(usuarioId),
+      passageiroRepository.getSummaryForDashboard(usuarioId),
+      prePassageiroRepository.getCountForDashboard(usuarioId),
     ]);
 
     // Process Counters
     const passageirosList = passData.data || [];
     const passTotal = passageirosList.length;
-    const passAtivos = passageirosList.filter((p: any) => p.ativo).length;
+    const passAtivos = passageirosList.filter((p: Record<string, any>) => p.ativo).length;
     const passInativos = passTotal - passAtivos;
 
     const veicTotal = veiculosCount.data?.length || 0;
-    const veicAtivos = veiculosCount.data?.filter((v: any) => v.ativo).length || 0;
+    const veicAtivos = veiculosCount.data?.filter((v: Record<string, any>) => v.ativo).length || 0;
     const veicInativos = veicTotal - veicAtivos;
 
     const escTotal = escolasCount.data?.length || 0;
-    const escAtivos = escolasCount.data?.filter((e: any) => e.ativo).length || 0;
+    const escAtivos = escolasCount.data?.filter((e: Record<string, any>) => e.ativo).length || 0;
     const escInativos = escTotal - escAtivos;
 
     // 3. Financial Summary
@@ -91,26 +96,33 @@ export const usuarioResumoService = {
     const end = `${targetAno}-${String(targetMes).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
     const [cobrancasRes, gastosRes] = await Promise.all([
-      supabaseAdmin.from("cobrancas").select("*").eq("usuario_id", usuarioId).gte("data_vencimento", start).lte("data_vencimento", end),
-      supabaseAdmin.from("gastos").select("*").eq("usuario_id", usuarioId).gte("data", start).lte("data", end)
+      cobrancaRepository.getForPeriodForDashboard(usuarioId, start, end),
+      gastoRepository.getGastosForPeriodForDashboard(usuarioId, start, end)
     ]);
 
     const cobrancas = cobrancasRes.data || [];
     const gastos = gastosRes.data || [];
 
-    const cobrancasPagas = cobrancas.filter((c: any) => c.status === CobrancaStatus.PAGO);
-    const receitaRealizada = cobrancasPagas.reduce((acc: number, c: any) => acc + Number(c.valor || 0), 0);
-    const receitaPrevista = cobrancas.reduce((acc: number, c: any) => acc + Number(c.valor || 0), 0);
+    const cobrancasPagas = cobrancas.filter((c: Record<string, any>) => c.status === CobrancaStatus.PAGO);
+    const receitaRealizada = cobrancasPagas.reduce((acc: number, c: Record<string, any>) => acc + Number(c.valor || 0), 0);
+    const receitaPrevista = cobrancas.reduce((acc: number, c: Record<string, any>) => acc + Number(c.valor || 0), 0);
     const taxaRecebimento = receitaPrevista > 0 ? (receitaRealizada / receitaPrevista) * 100 : 0;
 
-    const totalDespesas = gastos.reduce((acc: number, g: any) => acc + Number(g.valor || 0), 0);
+    const totalDespesas = gastos.reduce((acc: number, g: Record<string, any>) => acc + Number(g.valor || 0), 0);
+    const detalhamentoGastos: Record<string, number> = {};
+    
+    gastos.forEach((g: Record<string, any>) => {
+      const cat = g.categoria || "outros";
+      detalhamentoGastos[cat] = (detalhamentoGastos[cat] || 0) + Number(g.valor || 0);
+    });
+
     const margemOperacional = receitaRealizada > 0 ? ((receitaRealizada - totalDespesas) / receitaRealizada) * 100 : 0;
 
     const hoje = toLocalDateString(getNowBR());
-    const atrasos = cobrancas.filter((c: any) => c.status === CobrancaStatus.PENDENTE && c.data_vencimento < hoje);
-    const valorAtrasos = atrasos.reduce((acc: number, c: any) => acc + Number(c.valor || 0), 0);
+    const atrasos = cobrancas.filter((c: Record<string, any>) => c.status === CobrancaStatus.PENDENTE && c.data_vencimento < hoje);
+    const valorAtrasos = atrasos.reduce((acc: number, c: Record<string, any>) => acc + Number(c.valor || 0), 0);
 
-    const passageirosPagos = new Set(cobrancasPagas.map((c: any) => c.passageiro_id)).size;
+    const passageirosPagos = new Set(cobrancasPagas.map((c: Record<string, any>) => c.passageiro_id)).size;
     const ticketMedio = passageirosPagos > 0 ? receitaRealizada / passageirosPagos : 0;
 
     const financeiro = {
@@ -122,7 +134,8 @@ export const usuarioResumoService = {
       },
       saidas: {
         total: totalDespesas,
-        margem_operacional: Math.round(margemOperacional)
+        margem_operacional: Math.round(margemOperacional),
+        detalhamento: detalhamentoGastos
       },
       atrasos: {
         valor: valorAtrasos,
@@ -133,9 +146,8 @@ export const usuarioResumoService = {
 
     return {
       usuario: {
-        ativo: (usuario as any).ativo,
+        ativo: (usuario as Record<string, any>).ativo,
         flags: {
-          contrato_configurado: !!usuario.config_contrato?.configurado,
           usar_contratos: !!usuario.config_contrato?.usar_contratos,
         }
       },

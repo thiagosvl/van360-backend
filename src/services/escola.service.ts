@@ -1,12 +1,12 @@
-import { supabaseAdmin } from "../config/supabase.js";
+import { escolaRepository } from "../repositories/escola.repository.js";
 import { CreateEscolaDTO, ListEscolasFiltersDTO, UpdateEscolaDTO } from "../types/dtos/escola.dto.js";
 import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { cleanString } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
 
 // Helper Methods
-const _prepareEscolaData = (data: Partial<CreateEscolaDTO>, usuarioId?: string, isUpdate: boolean = false): any => {
-    const prepared: any = {};
+const _prepareEscolaData = (data: Partial<CreateEscolaDTO>, usuarioId?: string, isUpdate: boolean = false): Record<string, unknown> => {
+    const prepared: Record<string, unknown> = {};
 
     if (!isUpdate && usuarioId) {
         prepared.usuario_id = usuarioId;
@@ -33,11 +33,7 @@ export const escolaService = {
 
         const escolaData = _prepareEscolaData(data, data.usuario_id, false);
 
-        const { data: inserted, error } = await supabaseAdmin
-            .from("escolas")
-            .insert([escolaData])
-            .select()
-            .single();
+        const { data: inserted, error } = await escolaRepository.insert(escolaData);
         if (error) throw error;
 
         // --- LOG DE AUDITORIA ---
@@ -58,12 +54,7 @@ export const escolaService = {
 
         const escolaData = _prepareEscolaData(data, undefined, true);
 
-        const { data: updated, error } = await supabaseAdmin
-            .from("escolas")
-            .update(escolaData)
-            .eq("id", id)
-            .select()
-            .single();
+        const { data: updated, error } = await escolaRepository.update(id, escolaData);
         if (error) throw error;
 
         // --- LOG DE AUDITORIA ---
@@ -85,7 +76,7 @@ export const escolaService = {
         const escola = await this.getEscola(id);
 
         if (escola?.id) {
-            const { error } = await supabaseAdmin.from("escolas").delete().eq("id", id);
+            const { error } = await escolaRepository.delete(id);
             if (error) throw error;
 
             // --- LOG DE AUDITORIA ---
@@ -101,11 +92,7 @@ export const escolaService = {
     },
 
     async getEscola(id: string): Promise<any> {
-        const { data, error } = await supabaseAdmin
-            .from("escolas")
-            .select("*")
-            .eq("id", id)
-            .single();
+        const { data, error } = await escolaRepository.getById(id);
         if (error) throw error;
         return data;
     },
@@ -116,32 +103,7 @@ export const escolaService = {
     ): Promise<any[]> {
         if (!usuarioId) throw new Error("Usuário obrigatório");
 
-        let query = supabaseAdmin
-            .from("escolas")
-            .select("*")
-            .eq("usuario_id", usuarioId)
-            .order("nome", { ascending: true });
-
-        if (filtros?.search) {
-            query = query.or(
-                `nome.ilike.%${filtros.search}%,cidade.ilike.%${filtros.search}%,estado.ilike.%${filtros.search}%`
-            );
-        }
-
-        if (filtros?.nome) query = query.eq("nome", filtros.nome);
-        if (filtros?.cidade) query = query.eq("cidade", filtros.cidade);
-        if (filtros?.estado) query = query.eq("estado", filtros.estado);
-
-
-        if (filtros?.ativo !== undefined && filtros?.includeId) {
-            query = query.or(`ativo.eq.${filtros.ativo === "true"},id.eq.${filtros.includeId}`);
-        } else if (filtros?.ativo !== undefined) {
-            query = query.eq("ativo", filtros.ativo === "true");
-        } else if (filtros?.includeId) {
-            query = query.eq("id", filtros.includeId);
-        }
-
-        const { data, error } = await query;
+        const { data, error } = await escolaRepository.list(usuarioId, filtros);
         if (error) throw error;
 
         return data || [];
@@ -150,50 +112,22 @@ export const escolaService = {
     async listEscolasComContagemAtivos(usuarioId: string, filtros?: ListEscolasFiltersDTO): Promise<any[]> {
         if (!usuarioId) throw new Error("Usuário obrigatório");
 
-        let query = supabaseAdmin
-            .from("escolas")
-            .select(`*, passageiros(count)`)
-            .eq("usuario_id", usuarioId)
-            .eq("passageiros.ativo", true)
-            .order("nome", { ascending: true });
-
-        if (filtros?.search) {
-            query = query.or(
-                `nome.ilike.%${filtros.search}%,cidade.ilike.%${filtros.search}%,estado.ilike.%${filtros.search}%`
-            );
-        }
-
-        if (filtros?.nome) query = query.eq("nome", filtros.nome);
-        if (filtros?.cidade) query = query.eq("cidade", filtros.cidade);
-        if (filtros?.estado) query = query.eq("estado", filtros.estado);
-
-        if (filtros?.ativo !== undefined && filtros?.includeId) {
-            query = query.or(`ativo.eq.${filtros.ativo === "true"},id.eq.${filtros.includeId}`);
-        } else if (filtros?.ativo !== undefined) {
-            query = query.eq("ativo", filtros.ativo === "true");
-        } else if (filtros?.includeId) {
-            query = query.eq("id", filtros.includeId);
-        }
-
-        const { data, error } = await query;
+        const { data, error } = await escolaRepository.listComContagemAtivos(usuarioId, filtros);
         if (error) throw error;
 
-        return (data || []).map(escola => ({
+        return (data || []).map((escola: Record<string, any>) => ({
             ...escola,
-            passageiros_ativos_count: escola.passageiros[0]?.count || 0,
+            passageiros_ativos_count: escola.passageiros?.[0]?.count || 0,
         }));
     },
 
     async toggleAtivo(escolaId: string, novoStatus: boolean): Promise<boolean> {
-        const { error } = await supabaseAdmin
-            .from("escolas")
-            .update({ ativo: novoStatus })
-            .eq("id", escolaId);
+        const { error } = await escolaRepository.updateAtivo(escolaId, novoStatus);
 
         if (error) throw new Error(`Falha ao ${novoStatus ? "ativar" : "desativar"} a escola.`);
 
         // --- LOG DE AUDITORIA ---
-        const { data: e } = await supabaseAdmin.from("escolas").select("usuario_id, nome").eq("id", escolaId).single();
+        const { data: e } = await escolaRepository.getUsuarioIdAndNome(escolaId);
         if (e) {
             historicoService.log({
                 usuario_id: e.usuario_id,
@@ -209,10 +143,7 @@ export const escolaService = {
     },
 
     async countListEscolasByUsuario(usuarioId: string): Promise<number> {
-        const { count, error } = await supabaseAdmin
-            .from("escolas")
-            .select("id", { count: "exact", head: true })
-            .eq("usuario_id", usuarioId);
+        const { count, error } = await escolaRepository.countByUsuario(usuarioId);
 
         if (error) throw new Error(error.message || "Erro ao contar escolas");
         return count || 0;

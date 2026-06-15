@@ -1,6 +1,9 @@
 import crypto from "node:crypto";
+import { cobrancaRepository } from "../repositories/cobranca.repository.js";
+import { passageiroRepository } from "../repositories/passageiro.repository.js";
+import { userRepository } from "../repositories/user.repository.js";
 import { logger } from "../config/logger.js";
-import { supabaseAdmin } from "../config/supabase.js";
+
 import { AppError } from "../errors/AppError.js";
 import {
   EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_HOJE,
@@ -22,10 +25,7 @@ interface CreateCobrancaOptions {
 
 export const cobrancaService = {
   async countByPassageiro(passageiroId: string): Promise<number> {
-    const { count, error } = await supabaseAdmin
-      .from("cobrancas")
-      .select("id", { count: "exact", head: true })
-      .eq("passageiro_id", passageiroId);
+    const { count, error } = await cobrancaRepository.countByPassageiro(passageiroId);
 
     if (error) throw error;
     return count || 0;
@@ -34,11 +34,7 @@ export const cobrancaService = {
   async createCobranca(data: CreateCobrancaDTO, options: CreateCobrancaOptions = {}): Promise<any> {
     if (!data.passageiro_id || !data.usuario_id) throw new AppError("Campos obrigatórios ausentes (passageiro_id, usuario_id).", 400);
 
-    const { data: passageiro, error: passError } = await supabaseAdmin
-      .from("passageiros")
-      .select("cpf_responsavel, nome_responsavel")
-      .eq("id", data.passageiro_id)
-      .single();
+    const { data: passageiro, error: passError } = await passageiroRepository.getResponsavelInfo(data.passageiro_id);
 
     if (passError || !passageiro) throw new AppError("Passageiro não encontrado para gerar cobrança.", 404);
 
@@ -48,34 +44,31 @@ export const cobrancaService = {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { tipo, ...cobrancaCleanData } = data;
 
-    const cobrancaData: any = {
+    const cobrancaData: Record<string, unknown> = {
       id: cobrancaId,
       ...cobrancaCleanData,
       valor: valorNumerico,
       data_vencimento: data.data_vencimento ? toPersistenceString(data.data_vencimento) : undefined,
     };
 
-    const { data: inserted, error } = await supabaseAdmin
-      .from("cobrancas")
-      .insert([cobrancaData])
-      .select("*, passageiros(nome)")
-      .single();
+    const { data: inserted, error } = await cobrancaRepository.insert(cobrancaData);
 
     if (error) throw new AppError(`Erro ao criar cobrança no banco: ${error.message}`, 500);
 
     // --- LOG DE AUDITORIA ---
     if (!options.skipLog) {
+      const passageiroNome = (inserted as Record<string, any>).passageiros?.nome || (inserted as Record<string, any>).passageiro?.nome;
       historicoService.log({
         usuario_id: inserted.usuario_id,
         entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
         entidade_id: inserted.id,
         acao: AtividadeAcao.COBRANCA_CRIADA,
-        descricao: `Cobrança de ${inserted.mes}/${inserted.ano} do passageiro ${(inserted as any).passageiros?.nome} criada (${inserted.origem === 'automatica' ? 'Automática' : 'Manual'}).`,
+        descricao: `Cobrança de ${inserted.mes}/${inserted.ano} do passageiro ${passageiroNome} criada (${inserted.origem === 'automatica' ? 'Automática' : 'Manual'}).`,
         meta: {
           valor: inserted.valor,
           vencimento: inserted.data_vencimento,
           origem: inserted.origem,
-          passageiro: (inserted as any).passageiros?.nome
+          passageiro: passageiroNome
         }
       });
     }
@@ -86,15 +79,16 @@ export const cobrancaService = {
         const url = await receiptService.generateForCobranca(inserted.id);
         if (!url) {
           // Rollback: Deletar a cobrança criada pois o recibo falhou
-          await supabaseAdmin.from("cobrancas").delete().eq("id", inserted.id);
+          await cobrancaRepository.delete(inserted.id);
           throw new Error("Não foi possível gerar o recibo para a cobrança paga.");
         }
         inserted.recibo_url = url;
-      } catch (e: any) {
+      } catch (e: unknown) {
         // Rollback manual
-        await supabaseAdmin.from("cobrancas").delete().eq("id", inserted.id);
-        logger.error({ error: e.message, cobrancaId: inserted.id }, "Erro ao gerar recibo na criação - Cobrança excluída p/ manter consistência");
-        throw new AppError(e.message || "Erro ao gerar recibo.", 500);
+        await cobrancaRepository.delete(inserted.id);
+        const msg = e instanceof Error ? e.message : String(e);
+        logger.error({ error: msg, cobrancaId: inserted.id }, "Erro ao gerar recibo na criação - Cobrança excluída p/ manter consistência");
+        throw new AppError(msg || "Erro ao gerar recibo.", 500);
       }
     }
 
@@ -103,7 +97,7 @@ export const cobrancaService = {
 
 
 
-  async updateCobranca(id: string, data: Partial<any>, cobrancaOriginal?: any): Promise<any> {
+  async updateCobranca(id: string, data: Partial<CreateCobrancaDTO>, cobrancaOriginal?: Record<string, any>): Promise<any> {
     if (!id) throw new AppError("ID da cobrança é obrigatório", 400);
 
     // Buscar cobrança original se não foi fornecida
@@ -111,15 +105,15 @@ export const cobrancaService = {
       cobrancaOriginal = await this.getCobranca(id);
     }
 
-    const cobrancaData: any = {};
+    const cobrancaData: Record<string, unknown> = {};
 
     // Mapeamento de campos permitidos para edição de metadados
     if (data.valor !== undefined) cobrancaData.valor = data.valor;
     if (data.data_vencimento !== undefined) cobrancaData.data_vencimento = data.data_vencimento ? toPersistenceString(data.data_vencimento) : undefined;
 
     // Bloqueio de transição de status via PUT (Diretrizes de Arquitetura)
-    if (data.status !== undefined && data.status !== cobrancaOriginal.status) {
-      logger.warn({ cobrancaId: id, from: cobrancaOriginal.status, to: data.status }, "Tentativa de alteração de status via PUT (updateCobranca) ignorada. Use os endpoints especializados.");
+    if (data.status !== undefined && data.status !== cobrancaOriginal?.status) {
+      logger.warn({ cobrancaId: id, from: cobrancaOriginal?.status, to: data.status }, "Tentativa de alteração de status via PUT (updateCobranca) ignorada. Use os endpoints especializados.");
     }
 
     if (data.tipo_pagamento !== undefined) cobrancaData.tipo_pagamento = data.tipo_pagamento;
@@ -129,38 +123,32 @@ export const cobrancaService = {
     // Lógica de regeneração de PIX removida conforme diretrizes do plano base.
     let shouldResendNotification = false;
 
-    const { data: updated, error } = await supabaseAdmin
-      .from("cobrancas")
-      .update(cobrancaData)
-      .eq("id", id)
-      .select()
-      .single();
+    const { data: updated, error } = await cobrancaRepository.update(id, cobrancaData);
 
     if (error) throw new AppError(`Erro ao atualizar cobrança: ${error.message}`, 500);
 
     // --- LOG DE AUDITORIA ---
+    const passageiroNomeUpdate = cobrancaOriginal?.passageiros?.nome || cobrancaOriginal?.passageiro?.nome;
     historicoService.log({
-      usuario_id: cobrancaOriginal.usuario_id,
+      usuario_id: cobrancaOriginal?.usuario_id,
       entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
       entidade_id: id,
       acao: AtividadeAcao.COBRANCA_EDITADA,
-      descricao: `Cobrança de ${cobrancaOriginal.mes}/${cobrancaOriginal.ano} do passageiro ${cobrancaOriginal.passageiros?.nome || cobrancaOriginal.passageiro?.nome} editada pelo motorista.`,
+      descricao: `Cobrança de ${cobrancaOriginal?.mes}/${cobrancaOriginal?.ano} do passageiro ${passageiroNomeUpdate} editada pelo motorista.`,
       meta: {
-        antes: { valor: cobrancaOriginal.valor, vencimento: cobrancaOriginal.data_vencimento },
+        antes: { valor: cobrancaOriginal?.valor, vencimento: cobrancaOriginal?.data_vencimento },
         depois: { valor: updated.valor, vencimento: updated.data_vencimento },
-        passageiro: cobrancaOriginal.passageiros?.nome || cobrancaOriginal.passageiro?.nome
+        passageiro: passageiroNomeUpdate
       }
     });
 
     return updated;
   },
 
+
+
   async getCobranca(id: string): Promise<any> {
-    const { data, error } = await supabaseAdmin
-      .from("cobrancas")
-      .select("*, passageiro:passageiros(*, escola:escolas(nome), veiculo:veiculos(placa))")
-      .eq("id", id)
-      .single();
+    const { data, error } = await cobrancaRepository.getById(id);
 
     if (error) throw new AppError("Cobrança não encontrada.", 404);
 
@@ -169,11 +157,7 @@ export const cobrancaService = {
 
   async deleteCobranca(id: string): Promise<void> {
     // 1. Buscar dados antes de deletar (p/ log e cancelamento)
-    const { data: cobranca, error: fetchError } = await supabaseAdmin
-      .from("cobrancas")
-      .select("*, passageiros(nome)")
-      .eq("id", id)
-      .single();
+    const { data: cobranca, error: fetchError } = await cobrancaRepository.getByIdBasic(id);
 
     if (fetchError || !cobranca) {
       logger.error({ error: fetchError?.message, cobrancaId: id }, "Erro ao buscar cobrança para exclusão.");
@@ -182,17 +166,22 @@ export const cobrancaService = {
 
     // Cancelamento de PIX removido conforme diretrizes do plano base.
 
-    // 3. Deletar do Banco
-    const { error } = await supabaseAdmin.from("cobrancas").delete().eq("id", id);
+    // 3. Deletar do Banco e do Storage
+    if (cobranca.recibo_url) {
+      await receiptService.deleteReceipt(cobranca.recibo_url);
+    }
+
+    const { error } = await cobrancaRepository.delete(id);
     if (error) throw new AppError("Erro ao excluir cobrança no banco de dados.", 500);
 
     // --- LOG DE AUDITORIA ---
+    const passageiroNomeDelete = (cobranca as Record<string, any>).passageiros?.nome || (cobranca as Record<string, any>).passageiro?.nome;
     historicoService.log({
       usuario_id: cobranca.usuario_id,
       entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
       entidade_id: id,
       acao: AtividadeAcao.COBRANCA_EXCLUIDA,
-      descricao: `Mensalidade de ${cobranca.mes}/${cobranca.ano} do passageiro ${(cobranca as any).passageiros?.nome} foi removida.`,
+      descricao: `Mensalidade de ${cobranca.mes}/${cobranca.ano} do passageiro ${passageiroNomeDelete} foi removida.`,
       meta: {
         valor: cobranca.valor,
         mes: cobranca.mes,
@@ -202,49 +191,15 @@ export const cobrancaService = {
     });
   },
 
-  async listCobrancasWithFilters(filtros: any): Promise<any[]> {
-    let query = supabaseAdmin
-      .from("cobrancas")
-      .select("*, passageiro:passageiros!inner(nome, nome_responsavel, telefone_responsavel)")
-      .order("data_vencimento", { ascending: false });
-
-    if (filtros.usuarioId) query = query.eq("usuario_id", filtros.usuarioId);
-    if (filtros.passageiroId) query = query.eq("passageiro_id", filtros.passageiroId);
-    if (filtros.status) query = query.eq("status", filtros.status);
-    if (filtros.dataInicio) query = query.gte("data_vencimento", filtros.dataInicio);
-    if (filtros.dataFim) query = query.lte("data_vencimento", filtros.dataFim);
-
-    if (filtros.mes && filtros.ano) {
-      const startStr = `${filtros.ano}-${String(filtros.mes).padStart(2, '0')}-01`;
-      const lastDay = getLastDayOfMonth(Number(filtros.ano), Number(filtros.mes));
-      const endStr = `${filtros.ano}-${String(filtros.mes).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-
-      query = query.gte("data_vencimento", startStr);
-      query = query.lte("data_vencimento", endStr);
-    }
-
-    if (filtros.search) {
-      query = query.or(`nome.ilike.%${filtros.search}%,nome_responsavel.ilike.%${filtros.search}%`, { foreignTable: 'passageiro' });
-    }
-
-    const { data, error } = await query;
+  async listCobrancasWithFilters(filtros: Record<string, unknown>): Promise<any[]> {
+    const { data, error } = await cobrancaRepository.listWithFilters(filtros);
     if (error) throw error;
 
     return data;
   },
 
   async listCobrancasByPassageiro(passageiroId: string, ano?: string): Promise<any[]> {
-    let query = supabaseAdmin
-      .from("cobrancas")
-      .select("*, passageiro:passageiros!inner(nome, nome_responsavel, telefone_responsavel)")
-      .eq("passageiro_id", passageiroId)
-      .order("data_vencimento", { ascending: false });
-
-    if (ano) {
-      query = query.eq("ano", parseInt(ano));
-    }
-
-    const { data, error } = await query;
+    const { data, error } = await cobrancaRepository.listByPassageiro(passageiroId, ano);
     if (error) throw error;
 
     return data;
@@ -253,12 +208,7 @@ export const cobrancaService = {
 
 
   async toggleNotificacoes(cobrancaId: string, novoStatus: boolean): Promise<boolean> {
-    const { data, error } = await supabaseAdmin
-      .from("cobrancas")
-      .update({ desativar_lembretes: novoStatus })
-      .eq("id", cobrancaId)
-      .select("desativar_lembretes, usuario_id")
-      .single();
+    const { data, error } = await cobrancaRepository.toggleNotificacoes(cobrancaId, novoStatus);
 
     if (error) {
       logger.error({ error, cobrancaId }, "Erro ao alterar status de notificação da cobrança");
@@ -283,20 +233,11 @@ export const cobrancaService = {
     let skipped = 0;
 
     // 1. Buscar Passageiros Ativos e Detalhes do Motorista
-    const { data: motorista, error: motError } = await supabaseAdmin
-      .from("usuarios")
-      .select("id")
-      .eq("id", motoristaId)
-      .single();
+    const { data: motorista, error: motError } = await userRepository.getMotoristaId(motoristaId);
 
     if (motError) throw motError;
 
-    const { data: passageiros, error: passError } = await supabaseAdmin
-      .from("passageiros")
-      .select("id, nome, valor_cobranca, dia_vencimento, cpf_responsavel, nome_responsavel")
-      .eq("usuario_id", motoristaId)
-      .eq("ativo", true)
-      .eq("enviar_notificacoes", true);
+    const { data: passageiros, error: passError } = await passageiroRepository.listParaCobrancaAutomatica(motoristaId);
 
     if (passError) throw passError;
     if (!passageiros) return { created, skipped };
@@ -304,12 +245,7 @@ export const cobrancaService = {
     // 2. Iterar por Passageiro e Gerar Cobrança
     for (const passageiro of passageiros) {
       // Verificar se já existe cobrança para este mês/ano/passageiro
-      const { count } = await supabaseAdmin
-         .from("cobrancas")
-         .select("id", { count: "exact", head: true })
-         .eq("passageiro_id", passageiro.id)
-         .eq("mes", targetMonth)
-         .eq("ano", targetYear);
+      const { count } = await cobrancaRepository.countForMesAnoPassageiro(passageiro.id, targetMonth, targetYear);
 
       if (count && count > 0) {
         skipped++;
@@ -332,12 +268,14 @@ export const cobrancaService = {
           passageiro_id: passageiro.id,
           valor: valorFinal,
           data_vencimento: dataVencimentoStr,
-          origem: CobrancaOrigem.AUTOMATICA
+          origem: CobrancaOrigem.AUTOMATICA,
+          mes: targetMonth,
+          ano: targetYear
         }, { skipLog: true });
 
         created++;
-      } catch (e) {
-        logger.error({ error: e, passageiroId: passageiro.id }, "[CobrancaService] Erro ao gerar cobrança automática no loop");
+      } catch (e: unknown) {
+        logger.error({ error: e instanceof Error ? e.message : String(e), passageiroId: passageiro.id, motoristaId, mes: targetMonth, ano: targetYear }, "[CobrancaService] Erro ao gerar cobrança automática no loop");
       }
     }
 
@@ -368,15 +306,7 @@ export const cobrancaService = {
       thresholdDate.setDate(now.getDate() + thresholdDays);
       const thresholdDateStr = toPersistenceString(thresholdDate);
 
-      const { data: cobrancas, error } = await supabaseAdmin
-        .from("cobrancas")
-        .select(`
-          *,
-          passageiro:passageiros(nome, nome_responsavel, telefone_responsavel),
-          motorista:usuarios!cobrancas_usuario_id_fkey(nome, apelido, telefone, chave_pix, tipo_chave_pix)
-        `)
-        .eq("status", CobrancaStatus.PENDENTE)
-        .eq("desativar_lembretes", false);
+      const { data: cobrancas, error } = await cobrancaRepository.getPendentesParaNotificacao();
 
       if (error) {
         logger.error({ error: error.message }, "[CobrancaService] Erro ao buscar cobranças pendentes para notificações");
@@ -397,6 +327,9 @@ export const cobrancaService = {
         const motorista = c.motorista;
 
         if (!passageiro?.telefone_responsavel) continue;
+        
+        // Verifica a flag global de notificações do passageiro
+        if (passageiro?.enviar_notificacoes === false) continue;
 
         if (!motorista?.chave_pix || !motorista?.tipo_chave_pix) {
           logger.warn({ cobrancaId: c.id, motoristaId: c.usuario_id }, "[CobrancaService] Motorista sem chave Pix configurada. Notificação ignorada.");
@@ -455,10 +388,7 @@ export const cobrancaService = {
             );
 
             if (success) {
-              await supabaseAdmin
-                .from("cobrancas")
-                .update({ data_envio_ultima_notificacao: new Date().toISOString() })
-                .eq("id", c.id);
+              await cobrancaRepository.updateUltimaNotificacao(c.id, new Date().toISOString());
 
               historicoService.log({
                 usuario_id: c.usuario_id,
@@ -471,15 +401,17 @@ export const cobrancaService = {
 
               sentCount++;
             }
-          } catch (err: any) {
-            logger.error({ err: err.message, cobrancaId: c.id }, "[CobrancaService] Falha ao enviar notificação de cobrança individual");
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            logger.error({ err: msg, cobrancaId: c.id }, "[CobrancaService] Falha ao enviar notificação de cobrança individual");
           }
         }
       }
 
       logger.info({ sentCount }, "[CobrancaService] Envio diário de notificações de cobrança concluído.");
-    } catch (err: any) {
-      logger.error({ err: err.message }, "[CobrancaService] Erro crítico no processo de notificações de cobrança");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error({ err: msg }, "[CobrancaService] Erro crítico no processo de notificações de cobrança");
     }
   },
 
@@ -491,11 +423,7 @@ export const cobrancaService = {
     logger.info("[CobrancaService] Iniciando geração global de cobranças...");
 
     // 1. Buscar todos os motoristas ativos (que não sejam admin)
-    const { data: motoristas, error } = await supabaseAdmin
-      .from("usuarios")
-      .select("id")
-      .eq("ativo", true)
-      .eq("tipo", "motorista");
+    const { data: motoristas, error } = await userRepository.listMotoristasAtivos();
 
     if (error) throw error;
     if (!motoristas) return { totalMotoristas: 0 };

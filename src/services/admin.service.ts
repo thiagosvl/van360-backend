@@ -1,6 +1,10 @@
 import { logger } from "../config/logger.js";
-import { supabaseAdmin } from "../config/supabase.js";
-import { SubscriptionStatus, UserType } from "../types/enums.js";
+import { adminRepository } from "../repositories/admin.repository.js";
+import { userRepository } from "../repositories/user.repository.js";
+import { invoiceRepository } from "../repositories/invoice.repository.js";
+import { authProvider } from "./providers/auth.provider.js";
+import { SubscriptionStatus, UserType, AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
+import { historicoService } from "./historico.service.js";
 import { getNowBR, parseBrazilianDateToISO } from "../utils/date.utils.js";
 import { onlyDigits, cleanString } from "../utils/string.utils.js";
 import type { UpdateUserAdminDTO, UpdateSubscriptionAdminDTO, ListUsersQuery, ListUserLogsQuery, UpdatePlanDTO, CreateUserAdminDTO } from "../schemas/admin.schema.js";
@@ -32,29 +36,7 @@ export const adminService = {
       assinaturasRes,
       receitaRes,
       recentUsersRes,
-    ] = await Promise.all([
-      supabaseAdmin
-        .from("usuarios")
-        .select("id, ativo", { count: "exact", head: true })
-        .eq("tipo", UserType.MOTORISTA),
-      supabaseAdmin
-        .from("passageiros")
-        .select("id", { count: "exact", head: true })
-        .eq("ativo", true),
-      supabaseAdmin
-        .from("assinaturas")
-        .select("status"),
-      supabaseAdmin
-        .from("assinatura_faturas")
-        .select("valor, status")
-        .eq("status", "PAID"),
-      supabaseAdmin
-        .from("usuarios")
-        .select("id, nome, email, telefone, created_at, tipo, assinaturas(status)")
-        .eq("tipo", UserType.MOTORISTA)
-        .order("created_at", { ascending: false })
-        .limit(10),
-    ]);
+    ] = await adminRepository.getDashboardStats();
 
     const totalMotoristas = motoristasRes.count ?? 0;
     const totalPassageiros = passageirosRes.count ?? 0;
@@ -93,24 +75,15 @@ export const adminService = {
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
-    let q = supabaseAdmin
-      .from("usuarios")
-      .select("id, nome, apelido, email, cpfcnpj, telefone, ativo, tipo, created_at, data_nascimento, assinaturas(id, status, plano_id, data_vencimento, trial_ends_at, planos(id, nome, identificador))", { count: "exact" })
-      .eq("tipo", UserType.MOTORISTA)
-      .order("created_at", { ascending: false })
-      .range(from, to);
+    let digits = null;
+    let searchClean = null;
 
     if (search) {
-      const searchClean = search.trim();
-      const digits = onlyDigits(searchClean);
-      if (digits && digits.length >= 3) {
-        q = q.or(`nome.ilike.%${searchClean}%,telefone.ilike.%${digits}%`);
-      } else {
-        q = q.or(`nome.ilike.%${searchClean}%`);
-      }
+      searchClean = search.trim();
+      digits = onlyDigits(searchClean);
     }
 
-    const { data, error, count } = await q;
+    const { data, error, count } = await adminRepository.listUsers({ from, to, searchClean, digits });
     if (error) {
       logger.error({ error }, "[AdminService] Erro ao listar usuários.");
       throw error;
@@ -134,16 +107,16 @@ export const adminService = {
   },
 
   async getUserLogs(userId: string, query: ListUserLogsQuery) {
-    const { page, limit } = query;
+    const { page, limit, dataInicio, dataFim, acao, entidade } = query;
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
-    const { data, error, count } = await supabaseAdmin
-      .from("historico_atividades")
-      .select("*", { count: "exact" })
-      .eq("usuario_id", userId)
-      .order("created_at", { ascending: false })
-      .range(from, to);
+    const { data, error, count } = await adminRepository.getUserLogs(
+      userId,
+      from,
+      to,
+      { dataInicio, dataFim, acao, entidade }
+    );
 
     if (error) {
       logger.error({ error, userId }, "[AdminService] Erro ao buscar logs de atividades do usuário.");
@@ -159,40 +132,15 @@ export const adminService = {
   },
 
   async getUserDetails(userId: string) {
-    const { data: user, error } = await supabaseAdmin
-      .from("usuarios")
-      .select("*")
-      .eq("id", userId)
-      .single();
+    const [userReq, assinaturaReq, faturasReq, planosReq] = await adminRepository.getUserDetails(userId);
 
-    if (error || !user) throw new Error("Usuário não encontrado.");
-
-    const { data: assinatura } = await supabaseAdmin
-      .from("assinaturas")
-      .select("*, planos(*)")
-      .eq("usuario_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    const { data: faturas } = await supabaseAdmin
-      .from("assinatura_faturas")
-      .select("*, planos(nome, identificador)")
-      .eq("usuario_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(20);
-
-    const { data: planos } = await supabaseAdmin
-      .from("planos")
-      .select("id, nome, identificador, valor, valor_promocional, ativo")
-      .eq("ativo", true)
-      .order("valor", { ascending: true });
+    if (userReq.error || !userReq.data) throw new Error("Usuário não encontrado.");
 
     return {
-      user,
-      assinatura,
-      faturas: faturas || [],
-      planos: planos || [],
+      user: userReq.data,
+      assinatura: assinaturaReq.data,
+      faturas: faturasReq.data || [],
+      planos: planosReq.data || [],
     };
   },
 
@@ -211,10 +159,7 @@ export const adminService = {
 
     updatePayload.updated_at = getNowBR().toISOString();
 
-    const { error } = await supabaseAdmin
-      .from("usuarios")
-      .update(updatePayload)
-      .eq("id", userId);
+    const { error } = await userRepository.update(userId, updatePayload);
 
     if (error) {
       logger.error({ error, userId }, "[AdminService] Erro ao atualizar usuário.");
@@ -222,14 +167,31 @@ export const adminService = {
     }
 
     if (data.ativo !== undefined) {
-      await supabaseAdmin.auth.admin.updateUserById(userId, {
+      await authProvider.updateUserById(userId, {
         ban_duration: data.ativo ? "none" : "876600h",
+      });
+      await historicoService.log({
+        usuario_id: userId,
+        entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+        entidade_id: userId,
+        acao: AtividadeAcao.USUARIO_SUSPENSO,
+        descricao: data.ativo ? "Acesso do usuário desbloqueado pelo administrador." : "Acesso do usuário suspenso pelo administrador.",
       });
     }
 
     if (data.email !== undefined) {
-      await supabaseAdmin.auth.admin.updateUserById(userId, {
+      await authProvider.updateUserById(userId, {
         email: data.email.toLowerCase().trim(),
+      });
+    }
+
+    if (Object.keys(updatePayload).length > 1 || (Object.keys(updatePayload).length === 1 && data.ativo === undefined)) {
+      await historicoService.log({
+        usuario_id: userId,
+        entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+        entidade_id: userId,
+        acao: AtividadeAcao.PERFIL_EDITADO,
+        descricao: "Dados cadastrais atualizados pelo administrador.",
       });
     }
 
@@ -237,13 +199,7 @@ export const adminService = {
   },
 
   async updateSubscription(userId: string, data: UpdateSubscriptionAdminDTO) {
-    const { data: sub, error: fetchError } = await supabaseAdmin
-      .from("assinaturas")
-      .select("id")
-      .eq("usuario_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const { data: sub, error: fetchError } = await adminRepository.getSubscriptionForUser(userId);
 
     if (fetchError || !sub) throw new Error("Assinatura não encontrada para este usuário.");
 
@@ -256,33 +212,54 @@ export const adminService = {
 
     updatePayload.updated_at = getNowBR().toISOString();
 
-    const { error } = await supabaseAdmin
-      .from("assinaturas")
-      .update(updatePayload)
-      .eq("id", sub.id);
+    const { error } = await adminRepository.updateSubscription(sub.id, updatePayload);
 
     if (error) {
       logger.error({ error, userId, subId: sub.id }, "[AdminService] Erro ao atualizar assinatura.");
       throw error;
     }
 
+    if (data.status !== undefined && data.status !== sub.status) {
+      let acao = AtividadeAcao.SAAS_ASSINATURA_ATIVA;
+      let desc = "Assinatura ativada pelo administrador.";
+
+      if (data.status === SubscriptionStatus.CANCELED) {
+        acao = AtividadeAcao.SAAS_ASSINATURA_CANCELADA;
+        desc = "Assinatura cancelada pelo administrador.";
+      } else if (data.status === SubscriptionStatus.EXPIRED) {
+        acao = AtividadeAcao.SAAS_ASSINATURA_EXPIRADA;
+        desc = "Assinatura marcada como expirada pelo administrador.";
+      } else if (data.status === SubscriptionStatus.PAST_DUE) {
+        acao = AtividadeAcao.SAAS_ASSINATURA_ATRASO;
+        desc = "Assinatura marcada em atraso pelo administrador.";
+      }
+
+      await historicoService.log({
+        usuario_id: userId,
+        entidade_tipo: AtividadeEntidadeTipo.SAAS_ASSINATURA,
+        entidade_id: sub.id,
+        acao,
+        descricao: desc,
+      });
+    }
+
+    if (data.status === SubscriptionStatus.CANCELED) {
+      logger.info({ userId }, "[AdminService] Assinatura cancelada, cancelando faturas pendentes...");
+      await invoiceRepository.cancelIncompleteInvoicesByUserId(userId, getNowBR().toISOString());
+    }
+
     return { success: true };
   },
 
   async listConfigs() {
-    const { data, error } = await supabaseAdmin
-      .from("configuracao_interna")
-      .select("*")
-      .order("chave", { ascending: true });
+    const { data, error } = await adminRepository.listConfigs();
 
     if (error) throw error;
     return data || [];
   },
 
   async updateConfig(chave: string, valor: string) {
-    const { error } = await supabaseAdmin
-      .from("configuracao_interna")
-      .upsert({ chave, valor }, { onConflict: "chave" });
+    const { error } = await adminRepository.updateConfig(chave, valor);
 
     if (error) {
       logger.error({ error, chave }, "[AdminService] Erro ao atualizar configuração.");
@@ -293,10 +270,7 @@ export const adminService = {
   },
 
   async listPlans() {
-    const { data, error } = await supabaseAdmin
-      .from("planos")
-      .select("*")
-      .order("valor", { ascending: true });
+    const { data, error } = await adminRepository.listPlanos();
 
     if (error) throw error;
     return data || [];
@@ -308,10 +282,7 @@ export const adminService = {
     if (data.valor_promocional !== undefined) updatePayload.valor_promocional = data.valor_promocional;
     updatePayload.updated_at = getNowBR().toISOString();
 
-    const { error } = await supabaseAdmin
-      .from("planos")
-      .update(updatePayload)
-      .eq("id", id);
+    const { error } = await adminRepository.updatePlano(id, updatePayload);
 
     if (error) {
       logger.error({ error, id }, "[AdminService] Erro ao atualizar plano.");
@@ -325,11 +296,7 @@ export const adminService = {
     const emailClean = data.email.toLowerCase().trim();
     const cpfcnpjClean = onlyDigits(data.cpfcnpj);
 
-    const { data: existingEmail } = await supabaseAdmin
-      .from("usuarios")
-      .select("id")
-      .eq("email", emailClean)
-      .maybeSingle();
+    const { data: existingEmail } = await userRepository.getByEmail(emailClean);
 
     if (existingEmail) {
       const error: any = new Error("Este e-mail já está cadastrado.");
@@ -338,11 +305,7 @@ export const adminService = {
       throw error;
     }
 
-    const { data: existingCpf } = await supabaseAdmin
-      .from("usuarios")
-      .select("id")
-      .eq("cpfcnpj", cpfcnpjClean)
-      .maybeSingle();
+    const { data: existingCpf } = await userRepository.getByCpfcnpj(cpfcnpjClean);
 
     if (existingCpf) {
       const error: any = new Error("Este CPF/CNPJ já está cadastrado.");
@@ -351,7 +314,7 @@ export const adminService = {
       throw error;
     }
 
-    const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    const { data: authUser, error: authError } = await authProvider.createUser({
       email: emailClean,
       password: data.senha,
       email_confirm: true,
@@ -368,9 +331,7 @@ export const adminService = {
 
     const userId = authUser.user.id;
 
-    const { error: insertError } = await supabaseAdmin
-      .from("usuarios")
-      .insert({
+    const { error: insertError } = await userRepository.insert({
         id: userId,
         nome: cleanString(data.nome, true),
         email: emailClean,
@@ -385,7 +346,7 @@ export const adminService = {
 
     if (insertError) {
       logger.error({ insertError, userId }, "[AdminService] Erro ao salvar dados cadastrais do usuário.");
-      await supabaseAdmin.auth.admin.deleteUser(userId);
+      await authProvider.deleteUser(userId);
       throw insertError;
     }
 
@@ -408,11 +369,7 @@ export const adminService = {
   },
 
   async resetUserPassword(userId: string) {
-    const { data: user, error: fetchError } = await supabaseAdmin
-      .from("usuarios")
-      .select("nome, email, telefone, cpfcnpj")
-      .eq("id", userId)
-      .single();
+    const { data: user, error: fetchError } = await userRepository.getById(userId);
 
     if (fetchError || !user) {
       throw new Error("Usuário não encontrado.");
@@ -420,7 +377,7 @@ export const adminService = {
 
     const newPassword = generateTempPassword();
 
-    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+    const { error: authError } = await authProvider.updateUserById(userId, {
       password: newPassword,
     });
 
@@ -439,5 +396,22 @@ export const adminService = {
     }
 
     return { success: true, senha: newPassword };
+  },
+
+  async deleteUser(userId: string) {
+    const { data: user, error: fetchError } = await userRepository.getById(userId);
+
+    if (fetchError || !user) {
+      throw new Error("Usuário não encontrado.");
+    }
+
+    const { error: authError } = await authProvider.deleteUser(userId);
+
+    if (authError) {
+      logger.error({ authError, userId }, "[AdminService] Erro ao deletar usuário no Supabase Auth.");
+      throw authError;
+    }
+
+    return { success: true };
   },
 };

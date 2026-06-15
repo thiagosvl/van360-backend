@@ -4,7 +4,8 @@ import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { formatToBrazilianDate, getNowBR, parseLocalDate } from '../../utils/date.utils.js';
 import { formatModalidade, formatParentesco, formatPeriodo, maskCnpj, maskCpf, maskPhone } from '../../utils/format.js';
 
-import { supabaseAdmin } from '../../config/supabase.js';
+import { storageProvider } from './storage.provider.js';
+import { contractRepository } from '../../repositories/contract.repository.js';
 import {
   ContractGenerationParams,
   ContractGenerationResponse,
@@ -23,18 +24,14 @@ export class InHouseContractProvider implements ContractProvider {
     const pdfBytes = await pdfDoc.save();
     const fileName = `minutas/${params.contratoId}.pdf`;
 
-    const { error } = await supabaseAdmin.storage
-      .from('contratos')
-      .upload(fileName, pdfBytes, {
-        contentType: 'application/pdf',
-        upsert: true,
-      });
+    const { error } = await storageProvider.upload('contratos', fileName, Buffer.from(pdfBytes), {
+      contentType: 'application/pdf',
+      upsert: true,
+    });
 
     if (error) throw error;
 
-    const { data: { publicUrl } } = supabaseAdmin.storage
-      .from('contratos')
-      .getPublicUrl(fileName);
+    const publicUrl = storageProvider.getPublicUrl('contratos', fileName);
 
     return {
       documentUrl: publicUrl,
@@ -42,18 +39,12 @@ export class InHouseContractProvider implements ContractProvider {
   }
 
   async processarAssinatura(params: ContractSignatureParams): Promise<ContractSignatureResponse> {
-    const { data: contrato, error } = await supabaseAdmin
-      .from('contratos')
-      .select('minuta_url, dados_contrato')
-      .eq('id', params.contratoId)
-      .single();
+    const { data: contrato, error } = await contractRepository.getMinutaAndData(params.contratoId);
 
     if (error || !contrato) throw new Error('Contrato não encontrado');
 
     const minutaPath = contrato.minuta_url.split('/contratos/')[1];
-    const { data: pdfBuffer, error: downloadError } = await supabaseAdmin.storage
-      .from('contratos')
-      .download(minutaPath);
+    const { data: pdfBuffer, error: downloadError } = await storageProvider.download('contratos', minutaPath);
 
     if (downloadError) throw downloadError;
 
@@ -77,22 +68,27 @@ export class InHouseContractProvider implements ContractProvider {
     }
 
     if (params.assinaturaBase64) {
-      const assinaturaBytes = Buffer.from(params.assinaturaBase64.split(',')[1], 'base64');
-      const assinaturaImage = await pdfDoc.embedPng(assinaturaBytes);
-      const pages = pdfDoc.getPages();
-      const ultimaPagina = pages[pages.length - 1];
+      try {
+        const resp = await fetch(params.assinaturaBase64);
+        const signatureBytes = await resp.arrayBuffer();
+        const signatureImage = await pdfDoc.embedPng(signatureBytes);
+        const pages = pdfDoc.getPages();
+        const ultimaPagina = pages[pages.length - 1];
 
-      // Ajuste fino: A imagem deve ficar um pouco acima da linha (y)
-      // Se signatureY é a linha, a imagem começa um pouco acima.
-      // drawImage usa y como canto inferior esquerdo.
-      const imageY = signatureY + 2;
+        // Ajuste fino: A imagem deve ficar um pouco acima da linha (y)
+        // Se signatureY é a linha, a imagem começa um pouco acima.
+        // drawImage usa y como canto inferior esquerdo.
+        const imageY = signatureY + 2;
 
-      ultimaPagina.drawImage(assinaturaImage, {
-        x: 350,
-        y: imageY,
-        width: 150,
-        height: 50,
-      });
+        ultimaPagina.drawImage(signatureImage, {
+          x: 350,
+          y: imageY,
+          width: 150,
+          height: 50,
+        });
+      } catch (e) {
+        console.error('Error embedding parent signature', e);
+      }
     }
 
     await this.adicionarRodapeAuditoria(pdfDoc, {
@@ -103,18 +99,14 @@ export class InHouseContractProvider implements ContractProvider {
     const finalPdfBytes = await pdfDoc.save();
     const finalFileName = `assinados/${params.contratoId}.pdf`;
 
-    const { error: uploadError } = await supabaseAdmin.storage
-      .from('contratos')
-      .upload(finalFileName, finalPdfBytes, {
-        contentType: 'application/pdf',
-        upsert: true,
-      });
+    const { error: uploadError } = await storageProvider.upload('contratos', finalFileName, Buffer.from(finalPdfBytes), {
+      contentType: 'application/pdf',
+      upsert: true,
+    });
 
     if (uploadError) throw uploadError;
 
-    const { data: { publicUrl } } = supabaseAdmin.storage
-      .from('contratos')
-      .getPublicUrl(finalFileName);
+    const publicUrl = storageProvider.getPublicUrl('contratos', finalFileName);
 
     return {
       documentoFinalUrl: publicUrl,
@@ -123,26 +115,16 @@ export class InHouseContractProvider implements ContractProvider {
   }
 
   async consultarStatus(contratoId: string): Promise<any> {
-    const { data, error } = await supabaseAdmin
-      .from('contratos')
-      .select('*')
-      .eq('id', contratoId)
-      .single();
+    const { data, error } = await contractRepository.getBasicStatus(contratoId);
     if (error) throw error;
     return data;
   }
 
   async baixarDocumento(contratoId: string): Promise<Buffer> {
-    const { data: contrato } = await supabaseAdmin
-      .from('contratos')
-      .select('contrato_final_url')
-      .eq('id', contratoId)
-      .single();
+    const { data: contrato } = await contractRepository.getFinalUrl(contratoId);
     if (!contrato?.contrato_final_url) throw new Error('Documento não encontrado');
     const pathDownload = contrato.contrato_final_url.split('/contratos/')[1];
-    const { data: pdfBuffer } = await supabaseAdmin.storage
-      .from('contratos')
-      .download(pathDownload);
+    const { data: pdfBuffer } = await storageProvider.download('contratos', pathDownload);
     if (!pdfBuffer) throw new Error('Erro ao baixar documento');
     return Buffer.from(await pdfBuffer.arrayBuffer());
   }
@@ -267,7 +249,7 @@ export class InHouseContractProvider implements ContractProvider {
     // ...
 
     // Helper para mascarar doc genérico
-    const maskDoc = (doc: string) => {
+    const maskDoc = (doc?: string | null) => {
       if (!doc) return '';
       const clean = doc.replace(/\D/g, '');
       return clean.length > 11 ? maskCnpj(clean) : maskCpf(clean);
@@ -284,15 +266,15 @@ export class InHouseContractProvider implements ContractProvider {
     page.drawText(`Telefone: ${maskPhone(dados.telefoneResponsavel)}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
     page.drawText(`Parentesco do Passageiro: ${formatParentesco(dados.parentescoResponsavel || '')}`, { x: margin, y: currentY - 42, size: smallTextSize, font });
 
-    currentY -= 65;
+    currentY -= 80;
 
     // CONTRATADA
-    page.drawText('CONTRATADA (Transportador)', { x: margin, y: currentY, size: smallTextSize, font: fontBold });
+    page.drawText('PRESTADOR(A) DE SERVIÇOS DE TRANSPORTE', { x: margin, y: currentY, size: smallTextSize, font: fontBold });
     page.drawText(`Nome: ${dados.nomeCondutor}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
     page.drawText(`Documento (CPF): ${maskDoc(dados.cpfCnpjCondutor)}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
     page.drawText(`Telefone: ${maskPhone(dados.telefoneCondutor)}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
 
-    currentY -= 50;
+    currentY -= 70;
 
     currentY = drawHeader('PASSAGEIRO(A)', currentY);
     page.drawText(`Nome: ${dados.nomePassageiro}`, { x: margin, y: currentY, size: smallTextSize, font });
@@ -303,12 +285,12 @@ export class InHouseContractProvider implements ContractProvider {
 
     page.drawText(`Endereço: ${dados.enderecoCompleto}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
 
-    currentY -= 50; // Adjusted spacing
+    currentY -= 70;
 
     currentY = drawHeader('VEÍCULO', currentY);
     page.drawText(`Modelo: ${dados.modeloVeiculo}`, { x: margin, y: currentY, size: smallTextSize, font });
     page.drawText(`Placa: ${dados.placaVeiculo}`, { x: 300, y: currentY, size: smallTextSize, font });
-    currentY -= 30;
+    currentY -= 45;
 
     currentY = drawHeader('DO PERÍODO DO CONTRATO', currentY);
     const currentYear = getNowBR().getFullYear();
@@ -316,7 +298,7 @@ export class InHouseContractProvider implements ContractProvider {
     page.drawText(`Ano Letivo: ${dados.ano || currentYear}`, { x: margin, y: currentY, size: smallTextSize, font });
     page.drawText(`Início: ${formatToBrazilianDate(dados.dataInicio)}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
     page.drawText(`Término: ${formatToBrazilianDate(dados.dataFim)}`, { x: 300, y: currentY - 14, size: smallTextSize, font });
-    currentY -= 45;
+    currentY -= 55;
 
     currentY = drawHeader('DAS CONDIÇÕES DE VALOR', currentY);
     page.drawText(`Valor total do contrato (R$): ${dados.valorTotal.toLocaleString("pt-BR", {

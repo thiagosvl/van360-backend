@@ -25,6 +25,12 @@ export default async function subscriptionRoutes(app: FastifyInstance) {
   app.get("/invoices", subscriptionController.myInvoices);
 
   /**
+   * Cancelar Assinatura Voluntariamente
+   * POST /api/subscriptions/cancel
+   */
+  app.post("/cancel", subscriptionController.cancelSubscription);
+
+  /**
    * Criação de Checkout (Geração de Pix) para um Plano
    * POST /api/subscriptions/checkout
    */

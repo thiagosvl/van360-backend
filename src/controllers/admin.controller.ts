@@ -149,5 +149,17 @@ export const AdminController = {
       return reply.status(500).send({ error: "Erro ao buscar logs de atividades." });
     }
   },
+
+  async deleteUser(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { id } = request.params as { id: string };
+      const result = await adminService.deleteUser(id);
+      return reply.status(200).send(result);
+    } catch (err) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminController] Erro ao deletar usuário.");
+      return reply.status(400).send({ error: error.message });
+    }
+  },
 };
 

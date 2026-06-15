@@ -9,7 +9,7 @@ import {
 } from "../types/dtos/escola.dto.js";
 
 import { AppError } from "../errors/AppError.js";
-import { accessControlService } from "../services/access-control.service.js";
+
 
 export const escolaController = {
   create: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -17,8 +17,6 @@ export const escolaController = {
     try {
         const data = createEscolaSchema.parse(request.body);
         
-        // Validate Write Access (Subscription/Trial)
-        await accessControlService.validateWriteAccess(data.usuario_id);
 
         const result = await escolaService.createEscola(data);
         return reply.status(201).send(result);
@@ -34,11 +32,6 @@ export const escolaController = {
     const { id } = request.params as { id: string };
     logger.info({ escolaId: id }, "EscolaController.update - Starting");
     
-    // Permission Check
-    const authUid = (request as any).user?.id;
-    if (authUid) {
-        await accessControlService.validateWriteAccess(authUid);
-    }
 
     try {
         const data = updateEscolaSchema.parse(request.body);
@@ -56,11 +49,6 @@ export const escolaController = {
     const { id } = request.params as { id: string };
     logger.info({ escolaId: id }, "EscolaController.delete - Starting");
 
-    // Permission Check
-    const authUid = (request as any).user?.id;
-    if (authUid) {
-        await accessControlService.validateWriteAccess(authUid);
-    }
 
     await escolaService.deleteEscola(id);
     return reply.status(200).send({ success: true });

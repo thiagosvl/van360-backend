@@ -4,6 +4,13 @@ export interface EvolutionInstance {
   statusReason?: number;
 }
 
+export interface EvolutionInstanceFallback {
+  instanceName?: string;
+  name?: string;
+  state?: string;
+  status?: string;
+}
+
 export interface EvolutionResponse {
     key?: {
       remoteJid: string;

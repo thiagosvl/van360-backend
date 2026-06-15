@@ -31,7 +31,8 @@ export function getFirstName(name?: string): string {
   return name.trim().split(/\s+/)[0];
 }
 
-export function maskCpf(value: string) {
+export function maskCpf(value?: string | null) {
+  if (!value) return "";
   return value
     .replace(/\D/g, "")
     .replace(/(\d{3})(\d)/, "$1.$2")
@@ -40,7 +41,8 @@ export function maskCpf(value: string) {
     .replace(/(-\d{2})\d+?$/, "$1");
 }
 
-export function maskCnpj(value: string) {
+export function maskCnpj(value?: string | null) {
+  if (!value) return "";
   return value
     .replace(/\D/g, "")
     .replace(/(\d{2})(\d)/, "$1.$2")
@@ -50,7 +52,8 @@ export function maskCnpj(value: string) {
     .replace(/(-\d{2})\d+?$/, "$1");
 }
 
-export function maskPhone(value: string) {
+export function maskPhone(value?: string | null) {
+  if (!value) return "";
   let r = value.replace(/\D/g, "");
   if (r.length > 11) {
     r = r.slice(0, 11);
@@ -66,23 +69,21 @@ export function maskPhone(value: string) {
   }
 }
 
-
-
 export const formatPeriodo = (periodo: string): string => {
   if (periodo === PeriodoEnum.INTEGRAL) return "Integral";
   if (periodo === PeriodoEnum.MANHA) return "Manhã";
   if (periodo === PeriodoEnum.TARDE) return "Tarde";
   if (periodo === PeriodoEnum.NOITE) return "Noite";
 
-  return "Não Identificado";
+  return "";
 };
 
 export const formatModalidade = (modalidade: string): string => {
   switch (modalidade) {
-    case PassageiroModalidade.IDA: return 'Ida';
-    case PassageiroModalidade.VOLTA: return 'Volta';
     case PassageiroModalidade.IDA_VOLTA: return 'Ida e Volta';
-    default: return modalidade || 'Não informada';
+    case PassageiroModalidade.IDA: return 'Somente Ida';
+    case PassageiroModalidade.VOLTA: return 'Somente Volta';
+    default: return modalidade || '';
   }
 };
 
@@ -91,7 +92,7 @@ export const formatGenero = (genero: string): string => {
     case PassageiroGenero.MASCULINO: return 'Masculino';
     case PassageiroGenero.FEMININO: return 'Feminino';
     case PassageiroGenero.PREFIRO_NAO_INFORMAR: return 'Prefiro não informar';
-    default: return genero || 'Não informado';
+    default: return genero || '';
   }
 };
 
@@ -107,7 +108,7 @@ export const formatParentesco = (parentesco: string): string => {
     case 'madrasta': return 'Madrasta';
     case 'responsavel_legal': return 'Responsável Legal';
     case 'outro': return 'Outro';
-    default: return parentesco || 'Não informado';
+    default: return parentesco || '';
   }
 };
 

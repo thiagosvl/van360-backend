@@ -2,7 +2,7 @@ import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
 import { AppError } from "../errors/AppError.js";
 import { routeService } from "../services/route.service.js";
-import { accessControlService } from "../services/access-control.service.js";
+
 import {
   createRouteSchema,
   updateRouteSchema,
@@ -14,7 +14,7 @@ export const routeController = {
     logger.info("RouteController.create - Starting");
     const data = createRouteSchema.parse(request.body);
 
-    await accessControlService.validateWriteAccess(data.usuario_id);
+
 
     const result = await routeService.createRoute(data);
     return reply.status(201).send(result);
@@ -26,7 +26,7 @@ export const routeController = {
 
     const authUid = (request as any).user?.id;
     if (authUid) {
-      await accessControlService.validateWriteAccess(authUid);
+      // access control handled by middleware
     }
 
     const data = updateRouteSchema.parse(request.body);
@@ -40,7 +40,7 @@ export const routeController = {
 
     const authUid = (request as any).user?.id;
     if (authUid) {
-      await accessControlService.validateWriteAccess(authUid);
+      // access control handled by middleware
     }
 
     await routeService.deleteRoute(id);
@@ -84,7 +84,7 @@ export const routeController = {
       throw new AppError("Não autorizado", 401);
     }
 
-    await accessControlService.validateWriteAccess(authUid);
+
 
     const result = await routeService.iniciarRota(id, authUid);
     return reply.status(201).send(result);
@@ -96,7 +96,7 @@ export const routeController = {
 
     const authUid = (request as any).user?.id;
     if (authUid) {
-      await accessControlService.validateWriteAccess(authUid);
+      // access control handled by middleware
     }
 
     const { passageiro_id, status } = stepRouteExecutionSchema.parse(request.body);
@@ -110,7 +110,7 @@ export const routeController = {
 
     const authUid = (request as any).user?.id;
     if (authUid) {
-      await accessControlService.validateWriteAccess(authUid);
+      // access control handled by middleware
     }
 
     const result = await routeService.cancelarExecucao(id);

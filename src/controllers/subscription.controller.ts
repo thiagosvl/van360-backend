@@ -1,5 +1,7 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { subscriptionService } from "../services/subscriptions/subscription.service.js";
+import { subscriptionBillingService } from "../services/subscriptions/subscription-billing.service.js";
+import { subscriptionReferralService } from "../services/subscriptions/subscription-referral.service.js";
 import { logger } from "../config/logger.js";
 import { z } from "zod";
 import { ConfigKey } from "../types/enums.js";
@@ -50,12 +52,26 @@ export const subscriptionController = {
     const userId = authRequest.usuario_id;
 
     try {
-      const invoices = await subscriptionService.getInvoices(userId);
+      const invoices = await subscriptionBillingService.getInvoices(userId);
       return reply.send(invoices);
     } catch (err) {
       const error = err as Error;
       logger.error({ err: error, userId }, "[SubscriptionController] Erro ao buscar faturas.");
       return reply.status(500).send({ error: "Erro interno ao buscar faturas." });
+    }
+  },
+
+  async cancelSubscription(request: FastifyRequest, reply: FastifyReply) {
+    const authRequest = request as AuthenticatedRequest;
+    const userId = authRequest.usuario_id;
+
+    try {
+      await subscriptionService.cancelSubscription(userId);
+      return reply.send({ success: true, message: "Assinatura cancelada com sucesso." });
+    } catch (err) {
+      const error = err as Error;
+      logger.error({ err: error, userId }, "[SubscriptionController] Erro ao cancelar assinatura.");
+      return reply.status(500).send({ error: error.message || "Erro interno ao cancelar assinatura." });
     }
   },
 
@@ -65,7 +81,7 @@ export const subscriptionController = {
 
     try {
       const parsedBody = createInvoiceSchema.parse(request.body);
-      const invoice = await subscriptionService.createInvoice(userId, parsedBody);
+      const invoice = await subscriptionBillingService.createInvoice(userId, parsedBody);
       return reply.status(201).send(invoice);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -73,7 +89,10 @@ export const subscriptionController = {
       }
       const error = err as Error;
       logger.error({ err: error, userId }, "[SubscriptionController] Erro ao gerar checkout.");
-      return reply.status(500).send({ error: error.message || "Erro interno ao gerar checkout." });
+      
+      // Se for um erro do gateway ou de negócio, retornamos a mensagem real para o usuário
+      const errorMessage = error.message || "Erro interno ao gerar checkout.";
+      return reply.status(400).send({ error: errorMessage });
     }
   },
 
@@ -82,7 +101,7 @@ export const subscriptionController = {
     const userId = authRequest.usuario_id;
 
     try {
-      const summary = await subscriptionService.getReferralSummary(userId);
+      const summary = await subscriptionReferralService.getReferralSummary(userId);
       return reply.send(summary);
     } catch (err) {
       const error = err as Error;
@@ -95,7 +114,7 @@ export const subscriptionController = {
     const authRequest = request as AuthenticatedRequest;
     const userId = authRequest.usuario_id;
     try {
-      const methods = await subscriptionService.listPaymentMethods(userId);
+      const methods = await subscriptionBillingService.listPaymentMethods(userId);
       return reply.send(methods);
     } catch (err) {
       const error = err as Error;
@@ -110,7 +129,7 @@ export const subscriptionController = {
     const { id } = request.params;
 
     try {
-      await subscriptionService.updateDefaultPaymentMethod(userId, id);
+      await subscriptionBillingService.updateDefaultPaymentMethod(userId, id);
       return reply.send({ success: true, message: "Método de pagamento padrão atualizado." });
     } catch (err) {
       const error = err as Error;
@@ -125,7 +144,7 @@ export const subscriptionController = {
     const { id } = request.params;
 
     try {
-      await subscriptionService.deletePaymentMethod(userId, id);
+      await subscriptionBillingService.deletePaymentMethod(userId, id);
       return reply.send({ success: true, message: "Método de pagamento removido." });
     } catch (err) {
       const error = err as Error;
@@ -143,7 +162,7 @@ export const subscriptionController = {
 
     try {
       const { phone } = bodySchema.parse(request.body);
-      await subscriptionService.claimReferral(userId, phone);
+      await subscriptionReferralService.claimReferral(userId, phone);
       return reply.send({ success: true, message: "Indicação vinculada com sucesso!" });
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -151,7 +170,7 @@ export const subscriptionController = {
       }
       const error = err as Error;
       logger.error({ err: error, userId }, "[SubscriptionController] Erro ao resgatar convite.");
-      return reply.status(400).send({ error: error.message || "Erro interno ao resgatar convite." });
+      return reply.status(400).send({ error: "Erro ao resgatar convite. Tente novamente ou contate o suporte." });
     }
   },
 };

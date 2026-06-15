@@ -272,17 +272,18 @@ CREATE TABLE IF NOT EXISTS "public"."passageiros" (
     "referencia" "text",
     "escola_id" "uuid" NOT NULL,
     "ativo" boolean DEFAULT true NOT NULL,
-    "cpf_responsavel" "text" NOT NULL,
+    "cpf_responsavel" "text",
     "usuario_id" "uuid" NOT NULL,
-    "email_responsavel" "text" NOT NULL,
+    "email_responsavel" "text",
     "genero" "public"."genero_enum",
     "observacoes" "text",
     "veiculo_id" "uuid" NOT NULL,
-    "periodo" "text" NOT NULL,
+    "periodo" "text",
     "modalidade" "public"."modalidade_enum",
     "data_nascimento" "date",
     "parentesco_responsavel" "public"."parentesco_enum",
     "data_inicio_transporte" "date",
+    "data_fim_transporte" "date",
     "enviar_notificacoes" boolean DEFAULT true NOT NULL,
     CONSTRAINT "passageiros_dia_vencimento_check" CHECK ((("dia_vencimento" >= 1) AND ("dia_vencimento" <= 31)))
 );
@@ -302,8 +303,8 @@ CREATE TABLE IF NOT EXISTS "public"."pre_passageiros" (
     "usuario_id" "uuid" NOT NULL,
     "nome" "text" NOT NULL,
     "nome_responsavel" "text" NOT NULL,
-    "email_responsavel" "text" NOT NULL,
-    "cpf_responsavel" "text" NOT NULL,
+    "email_responsavel" "text",
+    "cpf_responsavel" "text",
     "telefone_responsavel" "text" NOT NULL,
     "genero" "public"."genero_enum",
     "logradouro" "text",
@@ -323,7 +324,8 @@ CREATE TABLE IF NOT EXISTS "public"."pre_passageiros" (
     "modalidade" "public"."modalidade_enum",
     "data_nascimento" "date",
     "parentesco_responsavel" "public"."parentesco_enum",
-    "data_inicio_transporte" "date"
+    "data_inicio_transporte" "date",
+    "data_fim_transporte" "date"
 );
 
 
@@ -357,11 +359,16 @@ CREATE TABLE IF NOT EXISTS "public"."usuarios" (
     "chave_pix" "text",
     "tipo_chave_pix" "text",
     "data_nascimento" "date" NOT NULL,
+    "logradouro" "text",
+    "numero" "text",
+    "bairro" "text",
+    "cidade" "text",
+    "estado" "text",
+    "cep" "text",
     "config_contrato" "jsonb" DEFAULT '{
-      "usar_contratos": true,
-      "configurado": false,
-      "multa_atraso": { "valor": 10.00, "tipo": "percentual" },
-      "multa_rescisao": { "valor": 15.00, "tipo": "percentual" },
+      "usar_contratos": false,
+      "multa_atraso": { "valor": 10.00, "tipo": "fixo" },
+      "multa_rescisao": { "valor": 15.00, "tipo": "fixo" },
       "clausulas": [
         "O serviço contratado consiste no transporte do passageiro acima citado, no trajeto com origem e destino acordado entre as partes.",
         "Somente o passageiro CONTRATANTE está autorizado a utilizar-se do objeto deste contrato, sendo vedado o passageiro se fazer acompanhar de colegas, parentes, amigos e etc.",

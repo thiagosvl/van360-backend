@@ -2,7 +2,7 @@ import { Job, Worker } from 'bullmq';
 import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
 import { redisConfig } from '../config/redis.js';
-import { supabaseAdmin } from '../config/supabase.js';
+import { contractRepository } from '../repositories/contract.repository.js';
 import { ContractJobData, QUEUE_NAME_CONTRACT } from '../queues/contract.queue.js';
 import { addToWhatsappQueue } from '../queues/whatsapp.queue.js';
 import { historicoService } from '../services/historico.service.js';
@@ -32,16 +32,11 @@ export const contractWorker = new Worker<ContractJobData>(
             });
 
             // 3. Atualizar contrato no Supabase com a URL da minuta
-            const { error: updateError } = await supabaseAdmin
-                .from('contratos')
-                .update({
-                    minuta_url: response.documentUrl,
-                    provider_document_id: response.providerDocumentId,
-                    provider_link_assinatura: response.providerSignatureLink,
-                })
-                .eq('id', contratoId);
-
-            if (updateError) throw updateError;
+            await contractRepository.updateStatus(contratoId, {
+                minuta_url: response.documentUrl,
+                provider_document_id: response.providerDocumentId,
+                provider_link_assinatura: response.providerSignatureLink,
+            });
 
             logger.info({ jobId: job.id, contratoId }, "[Worker] Contrato atualizado com minuta URL.");
 

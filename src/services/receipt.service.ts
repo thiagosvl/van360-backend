@@ -4,7 +4,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import satori from "satori";
 import { logger } from "../config/logger.js";
-import { supabaseAdmin } from "../config/supabase.js";
+import { storageProvider } from "./providers/storage.provider.js";
+import { cobrancaRepository } from "../repositories/cobranca.repository.js";
 import { getMonthNameBR, getNowBR, formatToBrazilianDate } from "../utils/date.utils.js";
 import { formatCurrency, capitalize, formatPaymentMethod } from "../utils/format.js";
 
@@ -59,8 +60,9 @@ class ReceiptService {
             } else {
                 logger.error({ fontPath }, "[ReceiptService] Arquivo de fonte não encontrado");
             }
-        } catch (e: any) {
-            logger.error({ error: e.message }, "[ReceiptService] Erro ao carregar fonte");
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            logger.error({ error: msg }, "[ReceiptService] Erro ao carregar fonte");
         }
         return this.fontData;
     }
@@ -76,8 +78,9 @@ class ReceiptService {
             } else {
                 logger.warn({ logoPath }, "[ReceiptService] Logo não encontrado, usando fallback texto");
             }
-        } catch (e: any) {
-            logger.error({ error: e.message }, "[ReceiptService] Erro ao carregar logo");
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            logger.error({ error: msg }, "[ReceiptService] Erro ao carregar logo");
         }
         return null;
     }
@@ -102,6 +105,7 @@ class ReceiptService {
             const metodoPagamentoFormatado = formatPaymentMethod(data.metodoPagamento);
 
             logger.debug({ logId, cobrancaId: data.id }, "[ReceiptService] Renderizando SVG via Satori");
+            // @ts-ignore - Satori default export may lack call signature in Vercel build environment
             const svg = await satori(
                 {
                     type: "div",
@@ -196,23 +200,20 @@ class ReceiptService {
             const fileName = `${data.id}_${Date.now()}.png`;
             logger.info({ logId, cobrancaId: data.id, fileName }, "[ReceiptService] Fazendo upload para Storage");
 
-            const { error: uploadError } = await supabaseAdmin.storage
-                .from("recibos")
-                .upload(fileName, pngBuffer, {
-                    contentType: "image/png",
-                    upsert: true
-                });
+            const { error: uploadError } = await storageProvider.upload("recibos", fileName, pngBuffer, {
+                contentType: "image/png",
+                upsert: true
+            });
 
             if (uploadError) throw uploadError;
 
-            const { data: { publicUrl } } = supabaseAdmin.storage
-                .from("recibos")
-                .getPublicUrl(fileName);
+            const publicUrl = storageProvider.getPublicUrl("recibos", fileName);
 
             logger.info({ logId, cobrancaId: data.id, publicUrl }, "[ReceiptService] Recibo gerado com sucesso");
             return publicUrl;
-        } catch (error: any) {
-            logger.error({ logId, cobrancaId: data.id, error: error.message }, "[ReceiptService] Falha ao gerar recibo");
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : String(error);
+            logger.error({ logId, cobrancaId: data.id, error: msg }, "[ReceiptService] Falha ao gerar recibo");
             return null;
         }
     }
@@ -227,42 +228,38 @@ class ReceiptService {
             const fileName = parts[parts.length - 1];
             if (!fileName) return;
 
-            await supabaseAdmin.storage.from("recibos").remove([fileName]);
+            await storageProvider.remove("recibos", [fileName]);
             logger.info({ fileName }, "[ReceiptService] Recibo deletado do Storage");
-        } catch (e: any) {
-            logger.error({ error: e.message, url }, "[ReceiptService] Falha ao deletar do Storage");
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            logger.error({ error: msg, url }, "[ReceiptService] Falha ao deletar do Storage");
         }
     }
 
     async generateForCobranca(cobrancaId: string): Promise<string | null> {
         const logId = `GEN-${Date.now()}`;
         try {
-            const { data: cobranca, error } = await supabaseAdmin
-                .from("cobrancas")
-                .select(`
-                    *,
-                    passageiro:passageiros (nome, nome_responsavel, cpf_responsavel),
-                    motorista:usuarios (nome, apelido)
-                `)
-                .eq("id", cobrancaId)
-                .single();
+            const { data: cobranca, error } = await cobrancaRepository.getByIdWithPassageiroAndMotorista(cobrancaId);
 
             if (error || !cobranca) {
                 logger.error({ error, cobrancaId }, "[ReceiptService] Cobrança não encontrada");
                 return null;
             }
 
+            const motoristaInfo = (cobranca as Record<string, any>).motorista;
+            const passageiroInfo = cobranca.passageiro as Record<string, any> | undefined;
+
             const receiptData: ReceiptData = {
                 id: cobranca.id,
                 titulo: "Comprovante de Pagamento",
-                subtitulo: (cobranca as any).motorista?.apelido || (cobranca as any).motorista?.nome || "Transporte Escolar",
+                subtitulo: motoristaInfo?.apelido || motoristaInfo?.nome || "Transporte Escolar",
                 valor: cobranca.valor_pago || cobranca.valor,
                 data: cobranca.pago_em ? formatToBrazilianDate(cobranca.pago_em) : formatToBrazilianDate(getNowBR()),
-                pagadorNome: cobranca.passageiro?.nome_responsavel || cobranca.passageiro?.nome || 'Cliente',
-                passageiroNome: cobranca.passageiro?.nome,
+                pagadorNome: passageiroInfo?.nome_responsavel || passageiroInfo?.nome || 'Cliente',
+                passageiroNome: passageiroInfo?.nome,
                 mes: cobranca.mes,
                 ano: cobranca.ano,
-                pagadorDocumento: cobranca.passageiro?.cpf_responsavel,
+                pagadorDocumento: passageiroInfo?.cpf_responsavel,
                 descricao: cobranca.mes ? "Mensalidade" : "Cobrança Avulsa",
                 metodoPagamento: cobranca.tipo_pagamento,
                 tipo: 'PASSAGEIRO'
@@ -271,10 +268,7 @@ class ReceiptService {
             const url = await this.generateAndSave(receiptData);
 
             if (url) {
-                const { error: updateError } = await supabaseAdmin
-                    .from("cobrancas")
-                    .update({ recibo_url: url })
-                    .eq("id", cobrancaId);
+                const { error: updateError } = await cobrancaRepository.update(cobrancaId, { recibo_url: url });
 
                 if (updateError) {
                     logger.error({ logId, cobrancaId, error: updateError.message }, "[ReceiptService] Erro ao salvar recibo_url na cobranca");
@@ -284,8 +278,9 @@ class ReceiptService {
             }
 
             return url;
-        } catch (e: any) {
-            logger.error({ error: e.message, cobrancaId }, "[ReceiptService] Erro generateForCobranca");
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            logger.error({ error: msg, cobrancaId }, "[ReceiptService] Erro generateForCobranca");
             return null;
         }
     }

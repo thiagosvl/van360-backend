@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "../config/supabase.js";
+import { userRepository } from "../repositories/user.repository.js";
 import { AppError } from "../errors/AppError.js";
 import { getNowBR, parseBrazilianDateToISO } from "../utils/date.utils.js";
 import { AtividadeAcao, AtividadeEntidadeTipo, TipoChavePix } from "../types/enums.js";
@@ -7,11 +7,7 @@ import { historicoService } from "./historico.service.js";
 import { isValidPixKey } from "../utils/validators.js";
 
 export async function getUsuarioData(usuarioId: string) {
-  const { data: usuario, error } = await supabaseAdmin
-    .from("usuarios")
-    .select("id, nome, cpfcnpj, telefone, config_contrato, chave_pix, tipo_chave_pix, data_nascimento")
-    .eq("id", usuarioId)
-    .single();
+  const { data: usuario, error } = await userRepository.getProfileData(usuarioId);
 
   if (error || !usuario) {
     throw new AppError("Usuário não encontrado.", 404);
@@ -45,10 +41,7 @@ export async function atualizarUsuario(usuarioId: string, payload: {
     updates.data_nascimento = parseBrazilianDateToISO(payload.data_nascimento);
   }
 
-  const { error } = await supabaseAdmin
-    .from("usuarios")
-    .update(updates)
-    .eq("id", usuarioId);
+  const { error } = await userRepository.update(usuarioId, updates);
 
   if (error) {
     throw new AppError(`Erro ao atualizar usuário: ${error.message}`, 500);
@@ -97,11 +90,7 @@ export async function atualizarPixUsuario(usuarioId: string, payload: {
     throw new AppError("A chave Pix e o tipo de chave Pix devem ser fornecidos juntos ou ambos nulos.", 400);
   }
 
-  const { data: currentPixData } = await supabaseAdmin
-    .from("usuarios")
-    .select("chave_pix")
-    .eq("id", usuarioId)
-    .single();
+  const { data: currentPixData } = await userRepository.getPixKey(usuarioId);
 
   const updates: any = {
     updated_at: getNowBR().toISOString()
@@ -119,10 +108,7 @@ export async function atualizarPixUsuario(usuarioId: string, payload: {
     updates.tipo_chave_pix = null;
   }
 
-  const { error } = await supabaseAdmin
-    .from("usuarios")
-    .update(updates)
-    .eq("id", usuarioId);
+  const { error } = await userRepository.update(usuarioId, updates);
 
   if (error) {
     throw new AppError(`Erro ao atualizar dados Pix do usuário: ${error.message}`, 500);
@@ -137,7 +123,7 @@ export async function atualizarPixUsuario(usuarioId: string, payload: {
     usuario_id: usuarioId,
     entidade_tipo: AtividadeEntidadeTipo.USUARIO,
     entidade_id: usuarioId,
-    acao: AtividadeAcao.PERFIL_EDITADO,
+    acao: AtividadeAcao.CHAVE_PIX_ALTERADA,
     descricao: descricaoPix,
     meta: { 
       tipo_chave_pix,
