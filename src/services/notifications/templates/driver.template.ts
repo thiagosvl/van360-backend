@@ -227,7 +227,7 @@ export const DriverTemplates = {
             `*Dados de acesso:*\n` +
             `👤 CPF: ${ctx.cpfLogin || ""}\n` +
             `🔑 Senha: ${ctx.senhaTemporaria || ""} _(altere no primeiro acesso)_\n\n` +
-            `🔗 Acesse: https://van360.com.br/login`);
+            `🔗 Faça login através do app ou acesse o site: https://van360.com.br/login`);
     },
 
     adminResetPassword: (ctx: DriverContext): CompositeMessagePart[] => {
@@ -236,6 +236,6 @@ export const DriverTemplates = {
             `*Novos dados de acesso:*\n` +
             `👤 CPF: ${ctx.cpfLogin || ""}\n` +
             `🔑 Nova senha: ${ctx.senhaTemporaria || ""}\n\n` +
-            `🔗 Acesse: https://van360.com.br/login`);
+            `🔗 Faça login através do app ou acesse o site: https://van360.com.br/login`);
     }
 };
