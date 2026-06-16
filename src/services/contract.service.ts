@@ -59,14 +59,21 @@ class ContractService {
       throw new AppError('Passageiro não encontrado', 404);
     });
 
-    // 3. Cálculos dinâmicos
+    // 3. Validações e Cálculos dinâmicos
+    if (!passageiro.cpf_responsavel) {
+      throw new AppError("CPF do responsável é obrigatório para gerar o contrato", 400);
+    }
+
     const hoje = getNowBR();
-    const dataInicio = customTerms.dataInicio || passageiro.data_inicio_transporte || toLocalDateString(hoje);
+    const dataInicio = customTerms.dataInicio || passageiro.data_inicio_transporte;
+    if (!dataInicio) {
+      throw new AppError("Data de início de transporte é obrigatória para gerar o contrato", 400);
+    }
     const dInicio = parseLocalDate(dataInicio);
 
-    let dataFim = customTerms.dataFim || passageiro.data_fim_transporte;
+    const dataFim = customTerms.dataFim || passageiro.data_fim_transporte;
     if (!dataFim) {
-      dataFim = `${dInicio.getFullYear()}-12-31`;
+      throw new AppError("Data de término de transporte é obrigatória para gerar o contrato", 400);
     }
     const dFim = parseLocalDate(dataFim);
 
