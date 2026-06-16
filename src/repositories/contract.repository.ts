@@ -52,8 +52,9 @@ export const contractRepository = {
   async getPassageirosIdsComContratoValido(usuarioId: string) {
     const { data } = await supabaseAdmin
       .from("contratos")
-      .select("passageiro_id")
+      .select("passageiro_id, passageiros!inner(ativo)")
       .eq("usuario_id", usuarioId)
+      .eq("passageiros.ativo", true)
       .in("status", [ContratoStatus.PENDENTE, ContratoStatus.ASSINADO]);
 
     return data?.map((c) => c.passageiro_id) || [];
@@ -62,15 +63,17 @@ export const contractRepository = {
   async getKPIs(usuarioId: string) {
     const { count: pendentes } = await supabaseAdmin
       .from("contratos")
-      .select("*", { count: "exact", head: true })
+      .select("id, passageiros!inner(ativo)", { count: "exact", head: true })
       .eq("usuario_id", usuarioId)
-      .eq("status", ContratoStatus.PENDENTE);
+      .eq("status", ContratoStatus.PENDENTE)
+      .eq("passageiros.ativo", true);
 
     const { count: assinados } = await supabaseAdmin
       .from("contratos")
-      .select("*", { count: "exact", head: true })
+      .select("id, passageiros!inner(ativo)", { count: "exact", head: true })
       .eq("usuario_id", usuarioId)
-      .eq("status", ContratoStatus.ASSINADO);
+      .eq("status", ContratoStatus.ASSINADO)
+      .eq("passageiros.ativo", true);
 
     return { pendentes: pendentes || 0, assinados: assinados || 0 };
   },
@@ -80,8 +83,9 @@ export const contractRepository = {
 
     let query = supabaseAdmin
       .from("passageiros")
-      .select("*", { count: "exact", head: true })
-      .eq("usuario_id", usuarioId);
+      .select("id", { count: "exact", head: true })
+      .eq("usuario_id", usuarioId)
+      .eq("ativo", true);
 
     if (idsIgnorar.length > 0) {
       query = query.not("id", "in", `(${idsIgnorar.join(",")})`);
@@ -142,6 +146,7 @@ export const contractRepository = {
         { count: "exact" }
       )
       .eq("usuario_id", usuarioId)
+      .eq("passageiros.ativo", true)
       .order("created_at", { ascending: false });
 
     if (status) {
@@ -165,7 +170,8 @@ export const contractRepository = {
       `,
         { count: "exact" }
       )
-      .eq("usuario_id", usuarioId);
+      .eq("usuario_id", usuarioId)
+      .eq("ativo", true);
 
     if (idsIgnorar.length > 0) {
       query = query.not("id", "in", `(${idsIgnorar.join(",")})`);
