@@ -241,7 +241,7 @@ export const DriverTemplates = {
 
     referralBonusReceived: (ctx: DriverContext): CompositeMessagePart[] => {
         return textPart(`🎉 *Você ganhou 1 mês grátis! — Van360*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, um motorista que você indicou assinou o sistema.\n\n` +
+            `${getFirstName(ctx.nomeMotorista)}, um motorista que você indicou realizou a assinatura do app.\n\n` +
             `Como recompensa, adicionamos uma mensalidade gratuita na sua assinatura! Continue indicando o Van360 para ganhar mais.`);
     }
 };
