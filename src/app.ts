@@ -1,6 +1,8 @@
 // Aplicação Fastify compartilhada
 // Usado tanto para desenvolvimento local quanto para Vercel serverless
 import fastifyCors from "@fastify/cors";
+import fastifyHelmet from "@fastify/helmet";
+import fastifyRateLimit from "@fastify/rate-limit";
 import { fastifyRequestContext } from "@fastify/request-context";
 import * as Sentry from "@sentry/node";
 import Fastify, { FastifyInstance } from "fastify";
@@ -49,6 +51,16 @@ export async function createApp(): Promise<FastifyInstance> {
     
     // Global Error Handler
     app.setErrorHandler(globalErrorHandler);
+
+    // Segurança Defensiva: Proteção de Cabeçalhos HTTP (Helmet)
+    await app.register(fastifyHelmet, { global: true });
+
+    // Segurança Defensiva: Limite de Requisições (Rate Limiting)
+    await app.register(fastifyRateLimit, {
+      max: 100, // Limite de 100 requisições...
+      timeWindow: "1 minute", // ...por 1 minuto
+      // request.ip é usado por padrão, alinhado com o trustProxy
+    });
 
     // Configuração de CORS
     const envOrigins = process.env.ALLOWED_ORIGINS
