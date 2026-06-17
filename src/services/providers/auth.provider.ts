@@ -1,4 +1,6 @@
 import { supabaseAdmin } from "../../config/supabase.js";
+import { createClient } from "@supabase/supabase-js";
+import { env } from "../../config/env.js";
 
 export const authProvider = {
     async createUser(data: any) {
@@ -14,7 +16,11 @@ export const authProvider = {
     },
 
     async signInWithPassword(data: any) {
-        return supabaseAdmin.auth.signInWithPassword(data);
+        // CRÍTICO: Criar um client temporário para não poluir a sessão do supabaseAdmin global
+        const tempClient = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+            auth: { persistSession: false, autoRefreshToken: false }
+        });
+        return tempClient.auth.signInWithPassword(data);
     },
 
     async getUser(token: string) {
@@ -30,6 +36,10 @@ export const authProvider = {
     },
 
     async refreshSession(data: any) {
-        return supabaseAdmin.auth.refreshSession(data);
+        // CRÍTICO: Criar um client temporário para não poluir a sessão do supabaseAdmin global
+        const tempClient = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+            auth: { persistSession: false, autoRefreshToken: false }
+        });
+        return tempClient.auth.refreshSession(data);
     }
 };
