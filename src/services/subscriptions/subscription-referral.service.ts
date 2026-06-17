@@ -120,7 +120,8 @@ export const subscriptionReferralService = {
                     EVENTO_MOTORISTA_INDICACAO_BONUS,
                     {
                         nomeMotorista: indicador.nome,
-                        trialDays: bonusDays
+                        trialDays: bonusDays,
+                        dataVencimento: getEndOfDayBR(newExpiry).toISOString()
                     }
                 ).catch(err => {
                     logger.error({ err, indicadorId: indicador.id }, "[SubscriptionReferralService] Erro ao notificar bônus de indicação");

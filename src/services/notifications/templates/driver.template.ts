@@ -240,8 +240,14 @@ export const DriverTemplates = {
     },
 
     referralBonusReceived: (ctx: DriverContext): CompositeMessagePart[] => {
-        return textPart(`🎉 *Você ganhou 1 mês grátis! — Van360*\n\n` +
+        const dias = ctx.trialDays || 30;
+        const diasLabel = dias === 1 ? "dia" : "dias";
+        const novaValidade = ctx.dataVencimento ? formatToBrazilianDate(ctx.dataVencimento) : "";
+        const validadeTexto = novaValidade ? ` A nova validade do seu plano é *${novaValidade}*.` : "";
+
+        return textPart(`🎉 *Recompensa: ${dias} ${diasLabel} grátis! — Van360*\n\n` +
             `${getFirstName(ctx.nomeMotorista)}, um motorista que você indicou realizou a assinatura do app.\n\n` +
-            `Como recompensa, adicionamos uma mensalidade gratuita na sua assinatura! Continue indicando o Van360 para ganhar mais.`);
+            `Como agradecimento, acabamos de adicionar mais *${dias} ${diasLabel}* de acesso gratuito na sua assinatura!${validadeTexto}\n\n` +
+            `Continue indicando o Van360 para ganhar mais.`);
     }
 };

@@ -1284,7 +1284,6 @@ CREATE TABLE IF NOT EXISTS "public"."indicacoes" (
     "indicador_id" uuid NOT NULL REFERENCES "public"."usuarios"("id") ON DELETE CASCADE,
     "indicado_id" uuid NOT NULL REFERENCES "public"."usuarios"("id") ON DELETE CASCADE,
     "status" text NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'COMPLETED', 'CANCELED')),
-    "meses_bonus" integer DEFAULT 1,
     "fatura_origem_id" uuid,
     "created_at" timestamptz DEFAULT now(),
     "updated_at" timestamptz DEFAULT now(),
