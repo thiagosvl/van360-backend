@@ -11,6 +11,8 @@ import { subscriptionService } from "./subscription.service.js";
 import { referralRepository } from "../../repositories/referral.repository.js";
 import { userRepository } from "../../repositories/user.repository.js";
 import { subscriptionRepository } from "../../repositories/subscription.repository.js";
+import { notificationService } from "../notifications/notification.service.js";
+import { EVENTO_MOTORISTA_INDICACAO_BONUS } from "../../config/constants.js";
 
 export const subscriptionReferralService = {
     async getReferralSummary(userId: string) {
@@ -109,6 +111,21 @@ export const subscriptionReferralService = {
             await subscriptionRepository.updateExpiry(sub.id, getEndOfDayBR(newExpiry).toISOString());
 
             logger.info({ indicadorId: indicacao.indicador_id, dias: bonusDays }, "[SubscriptionReferralService] Bônus de indicação aplicado.");
+
+            // Enviar notificação via WhatsApp
+            const { data: indicador } = await userRepository.getById(indicacao.indicador_id);
+            if (indicador?.telefone) {
+                await notificationService.notifyDriver(
+                    indicador.telefone,
+                    EVENTO_MOTORISTA_INDICACAO_BONUS,
+                    {
+                        nomeMotorista: indicador.nome,
+                        trialDays: bonusDays
+                    }
+                ).catch(err => {
+                    logger.error({ err, indicadorId: indicador.id }, "[SubscriptionReferralService] Erro ao notificar bônus de indicação");
+                });
+            }
         }
     }
 };

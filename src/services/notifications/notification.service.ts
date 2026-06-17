@@ -34,6 +34,7 @@ import {
     EVENTO_AUTH_SENHA_ALTERADA,
     EVENTO_MOTORISTA_CADASTRO_ADMIN,
     EVENTO_MOTORISTA_RESET_SENHA_ADMIN,
+    EVENTO_MOTORISTA_INDICACAO_BONUS,
     GLOBAL_WHATSAPP_INSTANCE
 } from "../../config/constants.js";
 import { DriverContext, DriverTemplates } from "./templates/driver.template.js";
@@ -87,7 +88,8 @@ export type DriverEventType =
     | typeof EVENTO_AUTH_RECUPERACAO_SENHA
     | typeof EVENTO_AUTH_SENHA_ALTERADA
     | typeof EVENTO_MOTORISTA_CADASTRO_ADMIN
-    | typeof EVENTO_MOTORISTA_RESET_SENHA_ADMIN;
+    | typeof EVENTO_MOTORISTA_RESET_SENHA_ADMIN
+    | typeof EVENTO_MOTORISTA_INDICACAO_BONUS;
 
 class NotificationService {
     // Registro dos Adapters que farão o disparo real (ou envio para a fila)
@@ -167,6 +169,7 @@ class NotificationService {
             case EVENTO_AUTH_SENHA_ALTERADA:                    parts = DriverTemplates.passwordChanged(ctx); break;
             case EVENTO_MOTORISTA_CADASTRO_ADMIN:               parts = DriverTemplates.welcomeAdminCreated(ctx); break;
             case EVENTO_MOTORISTA_RESET_SENHA_ADMIN:            parts = DriverTemplates.adminResetPassword(ctx); break;
+            case EVENTO_MOTORISTA_INDICACAO_BONUS:              parts = DriverTemplates.referralBonusReceived(ctx); break;
         }
 
         return await this._processAndEnqueue(to, parts, type as string, options);

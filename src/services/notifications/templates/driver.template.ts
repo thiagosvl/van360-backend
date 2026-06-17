@@ -237,5 +237,11 @@ export const DriverTemplates = {
             `👤 CPF: ${ctx.cpfLogin || ""}\n` +
             `🔑 Nova senha: ${ctx.senhaTemporaria || ""}\n\n` +
             `🔗 Faça login através do app ou acesse o site: https://van360.com.br/login`);
+    },
+
+    referralBonusReceived: (ctx: DriverContext): CompositeMessagePart[] => {
+        return textPart(`🎉 *Você ganhou 1 mês grátis! — Van360*\n\n` +
+            `${getFirstName(ctx.nomeMotorista)}, um motorista que você indicou assinou o sistema.\n\n` +
+            `Como recompensa, adicionamos uma mensalidade gratuita na sua assinatura! Continue indicando o Van360 para ganhar mais.`);
     }
 };
