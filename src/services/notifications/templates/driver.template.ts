@@ -138,16 +138,15 @@ export const DriverTemplates = {
     },
 
     paymentConfirmed: (ctx: DriverContext): CompositeMessagePart[] => {
-        const valor = ctx.valor ? formatCurrency(ctx.valor) : "";
         const data = ctx.dataVencimento ? formatToBrazilianDate(ctx.dataVencimento) : "";
-        const planoStr = ctx.planoNome ? `\n🏷️ Plano: *${ctx.planoNome}*` : "";
+        const planoStr = ctx.planoNome ? `🏷️ Plano: *${ctx.planoNome}*` : "";
+        const dataStr = data ? `📅 Próximo vencimento: *${data}*` : "";
+
+        const details = [planoStr, dataStr].filter(Boolean).join('\n');
 
         return textPart(`✅ *Pagamento confirmado — Van360*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, ` +
-            (valor ? `pagamento de *${valor}* recebido. ` : `pagamento recebido. `) +
-            `Seu acesso está ativo.` +
-            (data ? `\n\n📅 Próximo vencimento: *${data}*` : "") +
-            planoStr);
+            `${getFirstName(ctx.nomeMotorista)}, pagamento recebido com sucesso. Seu acesso está ativo.` +
+            (details ? `\n\n${details}` : ""));
     },
 
     dueToday: (ctx: DriverContext): CompositeMessagePart[] => {
