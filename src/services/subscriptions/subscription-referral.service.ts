@@ -108,7 +108,13 @@ export const subscriptionReferralService = {
             const bonusDays = await getConfigNumber(ConfigKey.SAAS_REFERRAL_BONUS_DAYS, 30);
             newExpiry.setDate(newExpiry.getDate() + bonusDays);
 
-            await subscriptionRepository.updateExpiry(sub.id, getEndOfDayBR(newExpiry).toISOString());
+            const newExpiryIso = getEndOfDayBR(newExpiry).toISOString();
+
+            if (sub.status === SubscriptionStatus.TRIAL) {
+                await subscriptionRepository.extendTrial(sub.id, newExpiryIso);
+            } else {
+                await subscriptionRepository.updateExpiry(sub.id, newExpiryIso);
+            }
 
             logger.info({ indicadorId: indicacao.indicador_id, dias: bonusDays }, "[SubscriptionReferralService] Bônus de indicação aplicado.");
 

@@ -90,6 +90,13 @@ export const subscriptionRepository = {
             .eq("id", id);
     },
 
+    async extendTrial(id: string, newTrialEnd: string) {
+        return supabaseAdmin
+            .from("assinaturas")
+            .update({ trial_ends_at: newTrialEnd, updated_at: new Date().toISOString() })
+            .eq("id", id);
+    },
+
     async confirmInvoicePaymentRpc(faturaId: string) {
         return supabaseAdmin.rpc("confirm_invoice_payment", { p_fatura_id: faturaId });
     }
