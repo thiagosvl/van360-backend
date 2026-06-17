@@ -128,7 +128,7 @@ export const passageiroRepository = {
   async lookupResponsavel(usuarioId: string, cpfLimpo: string) {
     return supabaseAdmin
         .from("passageiros")
-        .select("nome_responsavel, email_responsavel, telefone_responsavel")
+        .select("nome_responsavel, telefone_responsavel")
         .eq("usuario_id", usuarioId)
         .eq("cpf_responsavel", cpfLimpo)
         .limit(1)

@@ -286,19 +286,7 @@ export async function login(identifier: string, password: string): Promise<AuthS
   };
 }
 
-export async function loginResponsavel(cpf: string, email: string) {
-  const cpfClean = onlyDigits(cpf);
-  const emailClean = email.trim();
 
-  const { data: firstMatch, error } = await authRepository.getPassageiroResponsavel(cpfClean, emailClean);
-
-  if (error || !firstMatch) throw new AppError("CPF ou Email não encontrados.", 401);
-
-  const { data: passageiros, error: listError } = await authRepository.listPassageirosResponsavel(cpfClean, emailClean, firstMatch.usuario_id);
-
-  if (listError) throw new AppError("Erro ao buscar passageiros.", 500);
-  return passageiros;
-}
 
 export async function updatePassword(token: string, newPassword: string, oldPassword?: string): Promise<void> {
   const { data: { user }, error: userError } = await authProvider.getUser(token);

@@ -17,25 +17,7 @@ export const authRepository = {
             .single();
     },
 
-    async getPassageiroResponsavel(cpf: string, email: string) {
-        return supabaseAdmin
-            .from("passageiros")
-            .select("usuario_id")
-            .eq("cpf_responsavel", cpf)
-            .eq("email_responsavel", email)
-            .limit(1)
-            .single();
-    },
 
-    async listPassageirosResponsavel(cpf: string, email: string, usuarioId: string) {
-        return supabaseAdmin
-            .from("passageiros")
-            .select("*, escolas(nome), veiculos(placa)")
-            .eq("cpf_responsavel", cpf)
-            .eq("email_responsavel", email)
-            .eq("usuario_id", usuarioId)
-            .order("nome", { ascending: true });
-    },
 
     async getUserIdAndEmailByCpf(cpf: string) {
         return supabaseAdmin

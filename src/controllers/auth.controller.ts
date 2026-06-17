@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
-import { registrarUsuario, loginResponsavel, login as loginService, logout as logoutService, refreshToken as refreshTokenService, resetPassword as resetPasswordService, updatePassword as updatePasswordService, solicitarRecuperacaoWhatsapp, validarCodigoWhatsApp, resetarSenhaComCodigo } from "../services/auth.service.js";
+import { registrarUsuario, login as loginService, logout as logoutService, refreshToken as refreshTokenService, resetPassword as resetPasswordService, updatePassword as updatePasswordService, solicitarRecuperacaoWhatsapp, validarCodigoWhatsApp, resetarSenhaComCodigo } from "../services/auth.service.js";
 
 interface RegisterPayload {
     nome: string;
@@ -75,24 +75,6 @@ export const AuthController = {
             logger.error({ error: err.message, identifier }, "Falha na solicitação de recuperação de senha.");
             const status = err.statusCode || 500;
             return reply.status(status).send({ error: err.message || "Erro ao processar solicitação." });
-        }
-    },
-
-    async loginResponsavel(request: FastifyRequest, reply: FastifyReply) {
-        logger.info("AuthController.loginResponsavel - Starting");
-        const { cpf, email } = request.body as any;
-
-        if (!cpf || !email) {
-            return reply.status(400).send({ error: "CPF e Email são obrigatórios." });
-        }
-
-        try {
-            const result = await loginResponsavel(cpf, email);
-            return reply.status(200).send(result);
-        } catch (err: any) {
-            logger.warn({ error: err.message, cpf }, "Falha no Login Responsavel.");
-            const status = err.statusCode || 401;
-            return reply.status(status).send({ error: err.message });
         }
     },
 

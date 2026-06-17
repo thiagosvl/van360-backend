@@ -5,7 +5,7 @@ export const createPrePassageiroSchema = z.object({
   usuario_id: z.string().uuid('ID do motorista inválido'),
   nome: z.string().min(2, 'Nome do passageiro é obrigatório'),
   nome_responsavel: z.string().min(2, 'Nome do responsável é obrigatório'),
-  email_responsavel: z.string().email('E-mail inválido').optional().or(z.literal('')),
+
   cpf_responsavel: z.string().optional().or(z.literal('')),
   telefone_responsavel: z.string().optional().or(z.literal('')),
   escola_id: z.string().uuid().optional().nullable().or(z.literal('')),

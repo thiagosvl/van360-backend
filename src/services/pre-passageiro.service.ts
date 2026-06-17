@@ -33,7 +33,7 @@ export const prePassageiroService = {
       usuario_id: payload.usuario_id,
       nome: cleanString(payload.nome, true),
       nome_responsavel: cleanString(payload.nome_responsavel, true),
-      email_responsavel: payload.email_responsavel ? cleanString(payload.email_responsavel) : null,
+
       cpf_responsavel: payload.cpf_responsavel ? onlyDigits(payload.cpf_responsavel) : null,
       telefone_responsavel: payload.telefone_responsavel ? onlyDigits(payload.telefone_responsavel) : null,
       escola_id: payload.escola_id || null,

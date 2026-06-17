@@ -21,7 +21,7 @@ export const createPassageiroSchema = z.object({
     responsavel_cpf: optionalString, // Alias comum
     telefone_responsavel: optionalString,
     responsavel_telefone: optionalString, // Alias comum
-    email_responsavel: z.string().email().optional().or(z.literal("")).transform(v => v === "" ? undefined : v),
+
     
     // Endereço
     logradouro: optionalString,

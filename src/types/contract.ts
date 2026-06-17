@@ -12,7 +12,7 @@ export interface DadosContrato {
   nomeResponsavel: string;
   cpfResponsavel: string;
   telefoneResponsavel: string;
-  emailResponsavel: string;
+
   parentescoResponsavel?: string;
   enderecoCompleto: string;
   

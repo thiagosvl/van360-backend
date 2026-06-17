@@ -27,7 +27,7 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO>, usuarioId?: 
     if (data.nome_responsavel !== undefined) prepared.nome_responsavel = data.nome_responsavel ? cleanString(data.nome_responsavel, true) : null;
     if (data.cpf_responsavel !== undefined) prepared.cpf_responsavel = data.cpf_responsavel ? onlyDigits(data.cpf_responsavel) : null;
     if (data.telefone_responsavel !== undefined) prepared.telefone_responsavel = data.telefone_responsavel ? onlyDigits(data.telefone_responsavel) : null;
-    if (data.email_responsavel !== undefined) prepared.email_responsavel = data.email_responsavel ? cleanString(data.email_responsavel) : null;
+
 
     // Endereço (Algumas chaves podem vir no passthrough)
     const flexData = data as Record<string, any>;

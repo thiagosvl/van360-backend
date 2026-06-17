@@ -92,7 +92,7 @@ class ContractService {
       nomeResponsavel: passageiro.nome_responsavel,
       cpfResponsavel: passageiro.cpf_responsavel,
       telefoneResponsavel: passageiro.telefone_responsavel,
-      emailResponsavel: passageiro.email_responsavel,
+
       parentescoResponsavel: passageiro.parentesco_responsavel,
       enderecoCompleto: formatAddress(passageiro),
       nomeEscola: passageiro.escola?.nome || '',
@@ -481,7 +481,7 @@ class ContractService {
       nomeResponsavel: "Responsável Fictício de Souza",
       cpfResponsavel: "000.000.000-00",
       telefoneResponsavel: "(11) 99999-9999",
-      emailResponsavel: "exemplo@email.com",
+
       parentescoResponsavel: "pai",
       enderecoCompleto: "Rua das Flores, 123 - Centro, Cidade/EST",
       nomeEscola: "Escola Municipal de Exemplo",
