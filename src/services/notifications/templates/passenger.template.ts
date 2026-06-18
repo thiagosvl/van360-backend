@@ -40,11 +40,8 @@ const getTipoChavePixLabel = (tipo?: string): string => {
 };
 
 const getSystemFooter = (ctx: PassengerContext) => {
-    const phoneLink = ctx.telefoneMotorista
-        ? `\n📞 Fale com o Motorista: ${maskPhone(ctx.telefoneMotorista)}`
-        : "";
     const nomeExibicao = ctx.apelidoMotorista || getFirstName(ctx.nomeMotorista);
-    return `\n\n———\n🚐 *${nomeExibicao}* · Van360${phoneLink}`;
+    return `\n\n———\n🚐 *${nomeExibicao}* · Van360`;
 };
 
 const getPixBlock = (ctx: PassengerContext): string => {
