@@ -12,7 +12,7 @@ export const subscriptionRepository = {
             .maybeSingle();
     },
 
-    async createTrial(userId: string, planoId: string, trialEndsAtIso: string, valorBase?: number) {
+    async createTrial(userId: string, planoId: string, trialEndsAtIso: string, valorBase?: number, valorPromocional?: number) {
         return supabaseAdmin
             .from("assinaturas")
             .insert({
@@ -20,7 +20,8 @@ export const subscriptionRepository = {
                 plano_id: planoId,
                 status: SubscriptionStatus.TRIAL,
                 trial_ends_at: trialEndsAtIso,
-                valor_base: valorBase
+                valor_base: valorBase,
+                valor_promocional: valorPromocional
             })
             .select("*, planos(*)")
             .single();

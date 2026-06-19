@@ -1,9 +1,11 @@
 import { logger } from "../../config/logger.js";
+import { getConfig } from "../configuracao.service.js";
 import {
     SubscriptionStatus,
     SubscriptionIdentifer,
     AtividadeAcao,
     AtividadeEntidadeTipo,
+    ConfigKey,
 } from "../../types/enums.js";
 import { historicoService } from "../historico.service.js";
 import { getNowBR, getEndOfDayBR, addDays, parseLocalDate } from "../../utils/date.utils.js";
@@ -48,7 +50,19 @@ export const subscriptionService = {
 
         const trialEndsAtIso = getEndOfDayBR(addDays(getNowBR(), 15)).toISOString();
 
-        const { data, error } = await subscriptionRepository.createTrial(userId, plano.id, trialEndsAtIso, Number(plano.valor));
+        const isPromotionActive = await getConfig(ConfigKey.SAAS_PROMOCAO_ATIVA, "false").then(v => v === "true");
+        let valorPromocional = undefined;
+        if (isPromotionActive && plano.valor_promocional !== null && plano.valor_promocional !== undefined) {
+            valorPromocional = Number(plano.valor_promocional);
+        }
+
+        const { data, error } = await subscriptionRepository.createTrial(
+            userId, 
+            plano.id, 
+            trialEndsAtIso, 
+            Number(plano.valor),
+            valorPromocional
+        );
 
         if (error) {
             logger.error({ error, userId }, "[SubscriptionService] Erro ao criar Trial.");
