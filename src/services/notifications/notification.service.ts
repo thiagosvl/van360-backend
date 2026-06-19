@@ -1,4 +1,6 @@
 import { CompositeMessagePart } from "../../types/dtos/whatsapp.dto.js";
+import { env } from "../../config/env.js";
+import { logger } from "../../config/logger.js";
 
 import {
     EVENTO_MOTORISTA_ASSINATURA_PAGO,
@@ -192,6 +194,11 @@ class NotificationService {
         ctx: AdminRegistrationContext | AdminSubscriptionContext,
         options: NotificationOptions = { channels: ["TELEGRAM"] }
     ): Promise<boolean> {
+
+        if (env.NODE_ENV !== "production") {
+            logger.debug({ type }, "[NotificationService] Admin notification skipped in non-production environment.");
+            return true;
+        }
 
         let parts: CompositeMessagePart[] = [];
 
