@@ -2,6 +2,7 @@ import { logger } from "../config/logger.js";
 import { adminRepository } from "../repositories/admin.repository.js";
 import { userRepository } from "../repositories/user.repository.js";
 import { invoiceRepository } from "../repositories/invoice.repository.js";
+import { planRepository } from "../repositories/plan.repository.js";
 import { authProvider } from "./providers/auth.provider.js";
 import { SubscriptionStatus, UserType, AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { historicoService } from "./historico.service.js";
@@ -205,10 +206,20 @@ export const adminService = {
 
     const updatePayload: Record<string, unknown> = {};
 
-    if (data.plano_id !== undefined) updatePayload.plano_id = data.plano_id;
+    if (data.plano_id !== undefined && data.plano_id !== sub.plano_id) {
+        updatePayload.plano_id = data.plano_id;
+        const { data: novoPlano } = await planRepository.getById(data.plano_id);
+        if (novoPlano) updatePayload.valor_base = novoPlano.valor;
+    } else if (data.plano_id !== undefined) {
+        updatePayload.plano_id = data.plano_id;
+    }
     if (data.status !== undefined) updatePayload.status = data.status;
     if (data.data_vencimento !== undefined) updatePayload.data_vencimento = data.data_vencimento;
     if (data.trial_ends_at !== undefined) updatePayload.trial_ends_at = data.trial_ends_at;
+    
+    // Novas colunas promocionais
+    if (data.valor_promocional !== undefined) updatePayload.valor_promocional = data.valor_promocional;
+    if (data.data_fim_promocao !== undefined) updatePayload.data_fim_promocao = data.data_fim_promocao;
 
     updatePayload.updated_at = getNowBR().toISOString();
 

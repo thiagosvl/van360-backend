@@ -25,11 +25,31 @@ export const subscriptionBillingService = {
 
         if (!plano) throw new Error(`Plano '${planIdentificador}' não encontrado.`);
 
-        const isPromotionActive = await getConfig(ConfigKey.SAAS_PROMOCAO_ATIVA, "false") === "true";
+        const sub = await subscriptionService.getOrCreateSubscription(userId);
+        if (!sub) throw new Error("Erro ao obter assinatura do usuário.");
 
         let valorFinal = Number(plano.valor);
+        if (sub.valor_base !== null && sub.valor_base !== undefined) {
+            valorFinal = Number(sub.valor_base);
+        }
+
+        const isPromotionActive = await getConfig(ConfigKey.SAAS_PROMOCAO_ATIVA, "false") === "true";
+
         if (isPromotionActive && plano.valor_promocional) {
             valorFinal = Number(plano.valor_promocional);
+        }
+
+        if (sub.valor_promocional !== null && sub.valor_promocional !== undefined) {
+            if (!sub.data_fim_promocao) {
+                // Definitivo
+                valorFinal = Number(sub.valor_promocional);
+            } else {
+                const fim = new Date(sub.data_fim_promocao).getTime();
+                const agora = getNowBR().getTime();
+                if (fim >= agora) {
+                    valorFinal = Number(sub.valor_promocional);
+                }
+            }
         }
 
         const { data: indicacao } = await referralRepository.getPendingReferralByIndicadoId(userId);
@@ -93,6 +113,12 @@ export const subscriptionBillingService = {
 
         const sub = await subscriptionService.getOrCreateSubscription(userId);
         if (!sub) throw new Error("Erro ao obter assinatura.");
+
+        if (sub.plano_id !== planId) {
+             await subscriptionRepository.updatePlanAndBaseValue(sub.id, planId, Number(plano.valor));
+             sub.plano_id = planId;
+             sub.valor_base = plano.valor;
+        }
 
         let currentPaymentToken = paymentToken;
         let preferredMethodId: string | null = sub.metodo_pagamento_preferencial_id;

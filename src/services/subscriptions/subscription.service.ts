@@ -48,7 +48,7 @@ export const subscriptionService = {
 
         const trialEndsAtIso = getEndOfDayBR(addDays(getNowBR(), 15)).toISOString();
 
-        const { data, error } = await subscriptionRepository.createTrial(userId, plano.id, trialEndsAtIso);
+        const { data, error } = await subscriptionRepository.createTrial(userId, plano.id, trialEndsAtIso, Number(plano.valor));
 
         if (error) {
             logger.error({ error, userId }, "[SubscriptionService] Erro ao criar Trial.");

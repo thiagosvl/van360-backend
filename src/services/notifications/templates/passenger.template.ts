@@ -95,7 +95,9 @@ export const PassengerTemplates = {
         const data = formatToBrazilianDate(ctx.dataVencimento || "");
 
         const text = `⚠️ *Mensalidade vence hoje — ${ctx.nomePassageiro}*\n\n` +
-            `${getFirstName(ctx.nomeResponsavel)}, a mensalidade de *${valor}* do transporte vence hoje (*${data}*).${getSystemFooter(ctx)}`;
+            `${getFirstName(ctx.nomeResponsavel)}, a mensalidade (*${valor}*) está aguardando pagamento.\n\n` +
+            `🔹 Valor: *${valor}*\n` +
+            `🔹 Vencimento: *${data} (Hoje)*${getSystemFooter(ctx)}`;
         return textPart(text);
     },
 
@@ -104,7 +106,9 @@ export const PassengerTemplates = {
         const data = formatToBrazilianDate(ctx.dataVencimento || "");
 
         const text = `⚠️ *Mensalidade vence hoje — ${ctx.nomePassageiro}*\n\n` +
-            `${getFirstName(ctx.nomeResponsavel)}, a mensalidade de *${valor}* do transporte vence hoje (*${data}*).${getPixBlock(ctx)}${getSystemFooter(ctx)}`;
+            `${getFirstName(ctx.nomeResponsavel)}, a mensalidade (*${valor}*) está aguardando pagamento.\n\n` +
+            `🔹 Valor: *${valor}*\n` +
+            `🔹 Vencimento: *${data} (Hoje)*${getPixBlock(ctx)}${getSystemFooter(ctx)}`;
         return textPart(text);
     },
 
@@ -113,7 +117,9 @@ export const PassengerTemplates = {
         const data = formatToBrazilianDate(ctx.dataVencimento || "");
 
         const text = `🚨 *Mensalidade em atraso — ${ctx.nomePassageiro}*\n\n` +
-            `${getFirstName(ctx.nomeResponsavel)}, a mensalidade de *${valor}* (vencida em *${data}*) ainda não foi paga.\n\n` +
+            `${getFirstName(ctx.nomeResponsavel)}, a mensalidade (*${valor}*) ainda não foi paga.\n\n` +
+            `🔹 Valor pendente: *${valor}*\n` +
+            `🔹 Vencida em: *${data}*\n\n` +
             `Entre em contato com o motorista para regularizar.${getSystemFooter(ctx)}`;
         return textPart(text);
     },
@@ -123,7 +129,9 @@ export const PassengerTemplates = {
         const data = formatToBrazilianDate(ctx.dataVencimento || "");
 
         const text = `🚨 *Mensalidade em atraso — ${ctx.nomePassageiro}*\n\n` +
-            `${getFirstName(ctx.nomeResponsavel)}, a mensalidade de *${valor}* (vencida em *${data}*) ainda não foi paga.${getPixBlock(ctx)}${getSystemFooter(ctx)}`;
+            `${getFirstName(ctx.nomeResponsavel)}, a mensalidade (*${valor}*) ainda não foi paga.\n\n` +
+            `🔹 Valor pendente: *${valor}*\n` +
+            `🔹 Vencida em: *${data}*${getPixBlock(ctx)}${getSystemFooter(ctx)}`;
         return textPart(text);
     }
 };
