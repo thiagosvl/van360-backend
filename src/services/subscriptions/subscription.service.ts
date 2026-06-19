@@ -93,9 +93,9 @@ export const subscriptionService = {
         }
 
         if (sub.status === SubscriptionStatus.TRIAL) {
-            if (!sub.trial_ends_at) return true;
+            if (!sub.trial_ends_at) return false;
             const trialLimit = parseLocalDate(sub.trial_ends_at);
-            if (isNaN(trialLimit.getTime())) return true;
+            if (isNaN(trialLimit.getTime())) return false;
             return trialLimit < getNowBR();
         }
 
