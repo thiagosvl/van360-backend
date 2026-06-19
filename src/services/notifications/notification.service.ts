@@ -35,6 +35,8 @@ import {
     EVENTO_MOTORISTA_CADASTRO_ADMIN,
     EVENTO_MOTORISTA_RESET_SENHA_ADMIN,
     EVENTO_MOTORISTA_INDICACAO_BONUS,
+    EVENTO_ADMIN_NOVO_CADASTRO,
+    EVENTO_ADMIN_NOVA_ASSINATURA,
     GLOBAL_WHATSAPP_INSTANCE
 } from "../../config/constants.js";
 import { DriverContext, DriverTemplates } from "./templates/driver.template.js";
@@ -43,8 +45,10 @@ import { NotificationProviderAdapter } from "./ports/notification-provider.port.
 import { EvolutionWhatsappQueueAdapter } from "./adapters/evolution.adapter.js";
 import { MockSmsAdapter } from "./adapters/mock-sms.adapter.js";
 import { MockEmailAdapter } from "./adapters/mock-email.adapter.js";
+import { TelegramAdapter } from "./adapters/telegram.adapter.js";
+import { AdminRegistrationContext, AdminSubscriptionContext, AdminTemplates } from "./templates/admin.template.js";
 
-export type NotificationChannel = "WHATSAPP" | "SMS" | "EMAIL";
+export type NotificationChannel = "WHATSAPP" | "SMS" | "EMAIL" | "TELEGRAM";
 
 export interface NotificationOptions {
     channels?: NotificationChannel[];
@@ -91,6 +95,10 @@ export type DriverEventType =
     | typeof EVENTO_MOTORISTA_RESET_SENHA_ADMIN
     | typeof EVENTO_MOTORISTA_INDICACAO_BONUS;
 
+export type AdminEventType =
+    | typeof EVENTO_ADMIN_NOVO_CADASTRO
+    | typeof EVENTO_ADMIN_NOVA_ASSINATURA;
+
 class NotificationService {
     // Registro dos Adapters que farão o disparo real (ou envio para a fila)
     private adapters: Record<NotificationChannel, NotificationProviderAdapter>;
@@ -99,7 +107,8 @@ class NotificationService {
         this.adapters = {
             "WHATSAPP": new EvolutionWhatsappQueueAdapter(),
             "SMS": new MockSmsAdapter(),
-            "EMAIL": new MockEmailAdapter()
+            "EMAIL": new MockEmailAdapter(),
+            "TELEGRAM": new TelegramAdapter()
         };
     }
 
@@ -173,6 +182,30 @@ class NotificationService {
         }
 
         return await this._processAndEnqueue(to, parts, type as string, options);
+    }
+
+    /**
+     * Envia notificação para Administrador
+     */
+    async notifyAdmin(
+        type: AdminEventType,
+        ctx: AdminRegistrationContext | AdminSubscriptionContext,
+        options: NotificationOptions = { channels: ["TELEGRAM"] }
+    ): Promise<boolean> {
+
+        let parts: CompositeMessagePart[] = [];
+
+        switch (type) {
+            case EVENTO_ADMIN_NOVO_CADASTRO: 
+                parts = AdminTemplates.newRegistration(ctx as AdminRegistrationContext); 
+                break;
+            case EVENTO_ADMIN_NOVA_ASSINATURA: 
+                parts = AdminTemplates.newSubscription(ctx as AdminSubscriptionContext); 
+                break;
+        }
+
+        // Para Admin, o 'to' não importa porque o chatId está no .env, passamos vazio
+        return await this._processAndEnqueue("", parts, type as string, options);
     }
 
     /**

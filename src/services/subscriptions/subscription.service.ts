@@ -8,7 +8,7 @@ import {
 import { historicoService } from "../historico.service.js";
 import { getNowBR, getEndOfDayBR, addDays, parseLocalDate } from "../../utils/date.utils.js";
 import { notificationService } from "../notifications/notification.service.js";
-import { EVENTO_MOTORISTA_ASSINATURA_PAGO } from "../../config/constants.js";
+import { EVENTO_MOTORISTA_ASSINATURA_PAGO, EVENTO_ADMIN_NOVA_ASSINATURA } from "../../config/constants.js";
 import { subscriptionRepository } from "../../repositories/subscription.repository.js";
 import { planRepository } from "../../repositories/plan.repository.js";
 import { invoiceRepository } from "../../repositories/invoice.repository.js";
@@ -208,5 +208,16 @@ export const subscriptionService = {
                 planoNome: res.plano_nome,
             }).catch(err => logger.error({ err }, "[SubscriptionService] Falha ao notificar pagamento confirmado"));
         }
+
+        // Notificação para o Admin (Telegram)
+        const valorNumerico = typeof res.valor === "string" ? parseFloat(res.valor) : (res.valor || 0);
+        notificationService.notifyAdmin(EVENTO_ADMIN_NOVA_ASSINATURA, {
+            nomeMotorista: res.usuario_nome || "Desconhecido",
+            telefone: res.usuario_telefone || "Não informado",
+            nomePlano: res.plano_nome || "Desconhecido",
+            valor: `R$ ${valorNumerico.toFixed(2).replace('.', ',')}`,
+            dataVencimento: new Date(res.new_expiry!).toLocaleDateString('pt-BR'),
+            usuarioId: res.usuario_id!
+        }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "[SubscriptionService] Falha ao notificar admin sobre assinatura paga"));
     }
 };

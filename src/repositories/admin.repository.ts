@@ -36,7 +36,9 @@ export const adminRepository = {
             .order("created_at", { ascending: false })
             .range(query.from, query.to);
 
-        if (query.searchClean) {
+        if (query.isId) {
+            q = q.eq("id", query.searchClean);
+        } else if (query.searchClean) {
             if (query.digits && query.digits.length >= 3) {
                 q = q.or(`nome.ilike.%${query.searchClean}%,telefone.ilike.%${query.digits}%`);
             } else {

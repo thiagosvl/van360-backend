@@ -1,5 +1,6 @@
 import {
-  EVENTO_MOTORISTA_TESTE_BOAS_VINDAS
+  EVENTO_MOTORISTA_TESTE_BOAS_VINDAS,
+  EVENTO_ADMIN_NOVO_CADASTRO
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
 import { userRepository } from "../repositories/user.repository.js";
@@ -245,6 +246,16 @@ export async function registrarUsuario(
       })
         .catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar boas vindas"));
     }
+
+    // Notificação para o Admin (Telegram)
+    notificationService.notifyAdmin(EVENTO_ADMIN_NOVO_CADASTRO, {
+      nome: payload.nome,
+      email: payload.email,
+      telefone: payload.telefone,
+      cpfcnpj: payload.cpfcnpj,
+      dataRegistro: getNowBR().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }),
+      usuarioId: usuarioId as string
+    }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao notificar admin sobre cadastro"));
 
     return { success: true, session };
   } catch (err: unknown) {

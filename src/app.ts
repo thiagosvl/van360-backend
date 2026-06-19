@@ -69,8 +69,9 @@ export async function createApp(): Promise<FastifyInstance> {
 
     const defaultOrigins = [
       "http://localhost:8080",
-      "https://localhost", // Android Capacitor
-      "capacitor://localhost", // iOS Capacitor
+      "https://localhost", // Android Capacitor fallback
+      "capacitor://localhost", // iOS Capacitor fallback
+      "https://app.van360.com.br", // Capacitor Custom Hostname
       "http://localhost" // Web/General
     ];
     

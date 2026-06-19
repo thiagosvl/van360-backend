@@ -5,6 +5,7 @@ import { FastifyInstance } from 'fastify';
 import { contractQueue } from './contract.queue.js';
 
 import { whatsappQueue } from './whatsapp.queue.js';
+import { telegramQueue } from './telegram.queue.js';
 
 export const setupBullBoard = (app: FastifyInstance) => {
   const serverAdapter = new FastifyAdapter();
@@ -12,6 +13,7 @@ export const setupBullBoard = (app: FastifyInstance) => {
   createBullBoard({
     queues: [
       new BullMQAdapter(whatsappQueue),
+      new BullMQAdapter(telegramQueue),
       // new BullMQAdapter(receiptQueue),
       // new BullMQAdapter(webhookQueue),
       // new BullMQAdapter(generationQueue),

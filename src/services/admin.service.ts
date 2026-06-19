@@ -78,13 +78,19 @@ export const adminService = {
 
     let digits = null;
     let searchClean = null;
+    let isId = false;
 
     if (search) {
       searchClean = search.trim();
       digits = onlyDigits(searchClean);
+
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(searchClean)) {
+        isId = true;
+      }
     }
 
-    const { data, error, count } = await adminRepository.listUsers({ from, to, searchClean, digits });
+    const { data, error, count } = await adminRepository.listUsers({ from, to, searchClean, digits, isId });
     if (error) {
       logger.error({ error }, "[AdminService] Erro ao listar usuários.");
       throw error;
