@@ -51,7 +51,16 @@ export const AuthController = {
         }
 
         try {
-            const result = await loginService(identifier, password);
+            const ip = request.ip;
+            const userAgent = request.headers['user-agent'] || null;
+            let dispositivo = 'Desconhecido';
+            if (userAgent) {
+                if (/mobile/i.test(userAgent)) dispositivo = 'Mobile';
+                else if (/tablet/i.test(userAgent)) dispositivo = 'Tablet';
+                else dispositivo = 'Desktop';
+            }
+
+            const result = await loginService(identifier, password, { ip, userAgent, dispositivo });
             return reply.status(200).send(result);
         } catch (err: any) {
             logger.warn({ error: err.message, identifier }, "Falha no Login.");

@@ -3,6 +3,7 @@ import {
   EVENTO_ADMIN_NOVO_CADASTRO
 } from "../config/constants.js";
 import { logger } from "../config/logger.js";
+import { getContextIp } from "../utils/context.js";
 import { userRepository } from "../repositories/user.repository.js";
 import { authRepository } from "../repositories/auth.repository.js";
 import { authProvider } from "./providers/auth.provider.js";
@@ -13,6 +14,7 @@ import { historicoService } from "./historico.service.js";
 import { getNowBR, addMinutes, isBeforeNowBR, parseLocalDate, parseBrazilianDateToISO } from "../utils/date.utils.js";
 import { notificationService } from "./notifications/notification.service.js";
 import { EVENTO_AUTH_RECUPERACAO_SENHA, EVENTO_AUTH_SENHA_ALTERADA } from "../config/constants.js";
+import { loginAttemptsRepository } from "../repositories/login-attempts.repository.js";
 
 // ... (interfaces remain unchanged)
 
@@ -266,35 +268,63 @@ export async function registrarUsuario(
   }
 }
 
-export async function login(identifier: string, password: string): Promise<AuthSession> {
-  const cpf = onlyDigits(identifier);
-  if (!cpf) throw new AppError("CPF inválido.", 400);
+export async function login(
+  identifier: string, 
+  password: string,
+  meta: { ip: string | null; userAgent: string | null; dispositivo: string | null } = { ip: null, userAgent: null, dispositivo: null }
+): Promise<AuthSession> {
+  try {
+    const cpf = onlyDigits(identifier);
+    if (!cpf) throw new AppError("CPF inválido.", 400);
 
-  const { data: user, error } = await authRepository.getUserLogin(cpf);
+    const { data: user, error } = await authRepository.getUserLogin(cpf);
 
-  if (error || !user) throw new AppError("Usuário não encontrado com este CPF.", 404);
-  if (!user.ativo) throw new AppError("Sua conta está inativa. Entre em contato com o suporte.", 403);
+    if (error || !user) throw new AppError("Usuário não encontrado com este CPF.", 404);
+    if (!user.ativo) throw new AppError("Sua conta está inativa. Entre em contato com o suporte.", 403);
 
-  const { data, error: authError } = await authProvider.signInWithPassword({
-    email: user.email,
-    password
-  });
+    const { data, error: authError } = await authProvider.signInWithPassword({
+      email: user.email,
+      password
+    });
 
-  if (authError || !data.session) throw new AppError("Credenciais inválidas.", 401);
+    if (authError || !data.session) throw new AppError("Credenciais inválidas.", 401);
 
-  historicoService.log({
-    usuario_id: user.id,
-    entidade_tipo: AtividadeEntidadeTipo.USUARIO,
-    entidade_id: user.id,
-    acao: AtividadeAcao.LOGIN,
-    descricao: `Usuário realizou login com sucesso.`
-  });
+    historicoService.log({
+      usuario_id: user.id,
+      entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+      entidade_id: user.id,
+      acao: AtividadeAcao.LOGIN,
+      descricao: `Usuário realizou login com sucesso.`
+    });
 
-  return {
-    access_token: data.session.access_token,
-    refresh_token: data.session.refresh_token,
-    user: data.user as any
-  };
+    // Auditoria de Sucesso
+    loginAttemptsRepository.logAttempt({
+      login_tentado: identifier,
+      ip: getContextIp() || meta.ip,
+      user_agent: meta.userAgent,
+      dispositivo: meta.dispositivo,
+      sucesso: true,
+      motivo_falha: null
+    });
+
+    return {
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+      user: data.user as any
+    };
+  } catch (err: any) {
+    const isAppError = err instanceof AppError;
+    // Auditoria de Falha
+    loginAttemptsRepository.logAttempt({
+      login_tentado: identifier,
+      ip: getContextIp() || meta.ip,
+      user_agent: meta.userAgent,
+      dispositivo: meta.dispositivo,
+      sucesso: false,
+      motivo_falha: isAppError ? err.message : "Erro desconhecido"
+    });
+    throw err;
+  }
 }
 
 
