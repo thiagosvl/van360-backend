@@ -10,6 +10,11 @@ export interface LoginAttemptPayload {
   motivo_falha: string | null;
 }
 
+export interface LoginAttempt extends LoginAttemptPayload {
+  id: string;
+  created_at: string;
+}
+
 class LoginAttemptsRepository {
   async logAttempt(payload: LoginAttemptPayload): Promise<void> {
     try {
@@ -20,6 +25,34 @@ class LoginAttemptsRepository {
     } catch (err: any) {
       logger.error({ error: err.message }, "Falha inesperada ao registrar tentativa de login.");
     }
+  }
+
+  async listAttempts(filters?: {
+    data_inicio?: string;
+    data_fim?: string;
+    search_cpf?: string;
+  }): Promise<{ data: LoginAttempt[] | null; error: any }> {
+    let query = supabaseAdmin
+      .from("tentativas_login")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (filters?.data_inicio) {
+      query = query.gte("created_at", filters.data_inicio);
+    }
+    
+    if (filters?.data_fim) {
+      query = query.lte("created_at", filters.data_fim);
+    }
+    
+    if (filters?.search_cpf) {
+      query = query.ilike("login_tentado", `%${filters.search_cpf}%`);
+    }
+
+    // Limitando a 200 para evitar queries gigantes no painel admin
+    query = query.limit(200);
+
+    return query;
   }
 }
 

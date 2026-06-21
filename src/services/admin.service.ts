@@ -11,6 +11,7 @@ import { onlyDigits, cleanString } from "../utils/string.utils.js";
 import type { UpdateUserAdminDTO, UpdateSubscriptionAdminDTO, ListUsersQuery, ListUserLogsQuery, UpdatePlanDTO, CreateUserAdminDTO } from "../schemas/admin.schema.js";
 import { subscriptionService } from "./subscriptions/subscription.service.js";
 import { notificationService } from "./notifications/notification.service.js";
+import { loginAttemptsRepository } from "../repositories/login-attempts.repository.js";
 import { EVENTO_MOTORISTA_CADASTRO_ADMIN, EVENTO_MOTORISTA_RESET_SENHA_ADMIN } from "../config/constants.js";
 
 function maskCpfHidden(cpf: string): string {
@@ -135,6 +136,19 @@ export const adminService = {
       total: count ?? 0,
       page,
       limit,
+    };
+  },
+
+  async getLoginAttempts(query: { data_inicio?: string; data_fim?: string; search_cpf?: string }) {
+    const { data, error } = await loginAttemptsRepository.listAttempts(query);
+
+    if (error) {
+      logger.error({ error }, "[AdminService] Erro ao buscar tentativas de login.");
+      throw error;
+    }
+
+    return {
+      data: data || [],
     };
   },
 

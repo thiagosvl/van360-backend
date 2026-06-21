@@ -41,11 +41,18 @@ export const listUserLogsQuerySchema = z.object({
   entidade: z.string().optional(),
 });
 
+export const listLoginAttemptsQuerySchema = z.object({
+  data_inicio: z.string().optional(),
+  data_fim: z.string().optional(),
+  search_cpf: z.string().optional(),
+});
+
 export type UpdateUserAdminDTO = z.infer<typeof updateUserAdminSchema>;
 export type UpdateSubscriptionAdminDTO = z.infer<typeof updateSubscriptionAdminSchema>;
 export type UpdateConfigDTO = z.infer<typeof updateConfigSchema>;
 export type ListUsersQuery = z.infer<typeof listUsersQuerySchema>;
 export type ListUserLogsQuery = z.infer<typeof listUserLogsQuerySchema>;
+export type ListLoginAttemptsQuery = z.infer<typeof listLoginAttemptsQuerySchema>;
 
 export const updatePlanSchema = z.object({
   valor: z.coerce.number().min(0).optional(),
