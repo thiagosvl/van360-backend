@@ -39,8 +39,8 @@ export const veiculoService = {
             entidade_tipo: AtividadeEntidadeTipo.VEICULO,
             entidade_id: inserted.id,
             acao: AtividadeAcao.VEICULO_CRIADO,
-            descricao: `Novo veículo ${inserted.placa} (${inserted.modelo || 'Sem modelo'}) cadastrado.`,
-            meta: { placa: inserted.placa, modelo: inserted.modelo }
+            descricao: `Novo veículo ${inserted.placa} (${inserted.marca} ${inserted.modelo}) cadastrado.`,
+            meta: { placa: inserted.placa, marca: inserted.marca, modelo: inserted.modelo }
         });
 
         return inserted as Veiculo;
