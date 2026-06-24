@@ -242,6 +242,9 @@ export const cobrancaService = {
     if (passError) throw passError;
     if (!passageiros) return { created, skipped };
 
+    const now = getNowBR();
+    const isNextMonthWindow = now.getDate() >= 23;
+
     // 2. Iterar por Passageiro e Gerar Cobrança
     for (const passageiro of passageiros) {
       // Verificar se já existe cobrança para este mês/ano/passageiro
@@ -250,6 +253,16 @@ export const cobrancaService = {
       if (count && count > 0) {
         skipped++;
         continue;
+      }
+
+      // Repescagem (antes do dia 23): Ignora passageiros cadastrados neste mesmo mês
+      if (!isNextMonthWindow && passageiro.created_at) {
+        const passageiroCreatedAt = new Date(passageiro.created_at);
+        const startOfCurrentMonth = new Date(targetYear, targetMonth - 1, 1);
+        if (passageiroCreatedAt >= startOfCurrentMonth) {
+          skipped++;
+          continue;
+        }
       }
 
       // Calcular Vencimento
@@ -429,9 +442,9 @@ export const cobrancaService = {
     if (!motoristas) return { totalMotoristas: 0 };
 
     const now = getNowBR();
-    // Se hoje for dia >= 20, gera para o mês que vem. Se não, para o mês atual (caso falte alguma).
-    const targetMonth = now.getDate() >= 20 ? (now.getMonth() === 11 ? 1 : now.getMonth() + 2) : (now.getMonth() + 1);
-    const targetYear = (now.getDate() >= 20 && now.getMonth() === 11) ? now.getFullYear() + 1 : now.getFullYear();
+    // Se hoje for dia >= 23, gera para o mês que vem. Se não, para o mês atual (repescagem segura).
+    const targetMonth = now.getDate() >= 23 ? (now.getMonth() === 11 ? 1 : now.getMonth() + 2) : (now.getMonth() + 1);
+    const targetYear = (now.getDate() >= 23 && now.getMonth() === 11) ? now.getFullYear() + 1 : now.getFullYear();
 
     let totalCreated = 0;
 

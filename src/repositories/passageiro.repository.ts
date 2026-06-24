@@ -146,7 +146,7 @@ export const passageiroRepository = {
   async listParaCobrancaAutomatica(usuarioId: string) {
     return supabaseAdmin
       .from("passageiros")
-      .select("id, nome, valor_cobranca, dia_vencimento, cpf_responsavel, nome_responsavel")
+      .select("id, nome, valor_cobranca, dia_vencimento, cpf_responsavel, nome_responsavel, created_at")
       .eq("usuario_id", usuarioId)
       .eq("ativo", true)
       .eq("enviar_notificacoes", true);
