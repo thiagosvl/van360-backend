@@ -61,7 +61,7 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO>, usuarioId?: 
     return prepared;
 };
 
-const createPassageiro = async (data: CreatePassageiroDTO): Promise<any> => {
+const createPassageiro = async (data: CreatePassageiroDTO, isPreCadastro: boolean = false): Promise<any> => {
     if (!data.usuario_id) throw new Error("Usuário obrigatório");
     if (!data.nome) throw new Error("Nome do passageiro é obrigatório");
 
@@ -73,18 +73,20 @@ const createPassageiro = async (data: CreatePassageiroDTO): Promise<any> => {
     if (error) throw error;
 
     // --- LOG DE AUDITORIA ---
-    historicoService.log({
-        usuario_id: inserted.usuario_id,
-        entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
-        entidade_id: inserted.id,
-        acao: AtividadeAcao.PASSAGEIRO_CRIADO,
-        descricao: `Novo passageiro ${inserted.nome} cadastrado.`,
-        meta: {
-            nome: inserted.nome,
-            responsavel: inserted.nome_responsavel,
-            valor_cobranca: inserted.valor_cobranca
-        }
-    });
+    if (!isPreCadastro) {
+        historicoService.log({
+            usuario_id: inserted.usuario_id,
+            entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
+            entidade_id: inserted.id,
+            acao: AtividadeAcao.PASSAGEIRO_CRIADO,
+            descricao: `Novo passageiro ${inserted.nome} cadastrado.`,
+            meta: {
+                nome: inserted.nome,
+                responsavel: inserted.nome_responsavel,
+                valor_cobranca: inserted.valor_cobranca
+            }
+        });
+    }
 
     return inserted;
 };
@@ -296,7 +298,7 @@ const finalizePreCadastro = async (
     delete (payload as Record<string, unknown>).updated_at;
 
     // 3. Criar Passageiro
-    const novoPassageiro = await createPassageiro(payload);
+    const novoPassageiro = await createPassageiro(payload, true);
 
     // 4. Trigger de Contrato Automático
     // Removido pois createPassageiro já realiza essa verificação e criação

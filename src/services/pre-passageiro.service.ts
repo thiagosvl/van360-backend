@@ -55,7 +55,23 @@ export const prePassageiroService = {
       data_nascimento: payload.data_nascimento ? toPersistenceString(payload.data_nascimento) : null
     };
 
-    return prePassageiroRepository.insert(prePassageiroData);
+    const { data: inserted, error } = await prePassageiroRepository.insert(prePassageiroData);
+    if (error) throw error;
+
+    // --- LOG DE AUDITORIA ---
+    const { historicoService } = await import("./historico.service.js");
+    const { AtividadeAcao, AtividadeEntidadeTipo } = await import("../types/enums.js");
+
+    historicoService.log({
+        usuario_id: payload.usuario_id,
+        entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
+        entidade_id: inserted.id,
+        acao: AtividadeAcao.PRE_CADASTRO_CRIADO,
+        descricao: `Novo formulário de interesse preenchido para ${inserted.nome}.`,
+        meta: { nome: inserted.nome, responsavel: inserted.nome_responsavel }
+    });
+
+    return inserted;
   },
 
   async deletePrePassageiro(prePassageiroId: string) {
