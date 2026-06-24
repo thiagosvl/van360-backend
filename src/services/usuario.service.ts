@@ -133,3 +133,29 @@ export async function atualizarPixUsuario(usuarioId: string, payload: {
 
   return { success: true };
 }
+
+export async function atualizarCanalAquisicao(usuarioId: string, canalAquisicao: string) {
+  if (!usuarioId) throw new AppError("ID do usuário é obrigatório.", 400);
+
+  const updates: any = {
+    canal_aquisicao: canalAquisicao,
+    updated_at: getNowBR().toISOString()
+  };
+
+  const { error } = await userRepository.update(usuarioId, updates);
+
+  if (error) {
+    throw new AppError(`Erro ao atualizar canal de aquisição: ${error.message}`, 500);
+  }
+
+  historicoService.log({
+    usuario_id: usuarioId,
+    entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+    entidade_id: usuarioId,
+    acao: AtividadeAcao.PERFIL_EDITADO,
+    descricao: "Canal de aquisição informado pelo usuário.",
+    meta: { canal_aquisicao: canalAquisicao }
+  });
+
+  return { success: true };
+}

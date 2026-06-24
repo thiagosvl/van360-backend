@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
-import { atualizarUsuario, atualizarPixUsuario, validarAcessoUsuario } from "../services/usuario.service.js";
+import { atualizarUsuario, atualizarPixUsuario, validarAcessoUsuario, atualizarCanalAquisicao } from "../services/usuario.service.js";
 import { TipoChavePix } from "../types/enums.js";
 
 // Extender FastifyRequest para incluir User
@@ -59,6 +59,29 @@ export const UsuarioController = {
             return reply.status(200).send({ success: true });
         } catch (err: any) {
              logger.error({ error: err.message, usuarioId }, "Falha ao atualizar Pix do usuário.");
+            return reply.status(400).send({ error: err.message });
+        }
+    },
+
+    async atualizarCanalAquisicao(request: FastifyRequest, reply: FastifyReply) {
+        const { id: usuarioId } = request.params as { id: string };
+        const payload = request.body as { 
+            canal_aquisicao: string;
+        };
+        const authUid = (request as AuthenticatedRequest).user?.id;
+
+        if (authUid) {
+            const temAcesso = await validarAcessoUsuario(authUid, usuarioId);
+            if (!temAcesso) {
+                 return reply.status(403).send({ error: "Acesso negado." });
+            }
+        }
+
+        try {
+            await atualizarCanalAquisicao(usuarioId, payload.canal_aquisicao);
+            return reply.status(200).send({ success: true });
+        } catch (err: any) {
+             logger.error({ error: err.message, usuarioId }, "Falha ao atualizar canal de aquisição do usuário.");
             return reply.status(400).send({ error: err.message });
         }
     },

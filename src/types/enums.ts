@@ -265,3 +265,14 @@ export enum CronJob {
   CHARGE_GENERATOR = "charge-generator",
   DAILY_CHARGE_MONITOR = "daily-charge-monitor",
 }
+
+export enum CanalAquisicao {
+  INDICACAO = "INDICACAO",
+  PANFLETO = "PANFLETO",
+  INSTAGRAM = "INSTAGRAM",
+  FACEBOOK = "FACEBOOK",
+  TIKTOK = "TIKTOK",
+  YOUTUBE = "YOUTUBE",
+  GOOGLE = "GOOGLE",
+  OUTROS = "OUTROS"
+}

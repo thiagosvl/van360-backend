@@ -12,6 +12,7 @@ export default async function usuarioRoute(app: FastifyInstance) {
     // --- Rotas de Usuário ---
     app.patch("/:id", { onRequest: [verifySupabaseJWT] }, UsuarioController.atualizarUsuario);
     app.patch("/:id/pix", { onRequest: [verifySupabaseJWT] }, UsuarioController.atualizarPixUsuario);
+    app.patch("/:id/canal-aquisicao", { onRequest: [verifySupabaseJWT] }, UsuarioController.atualizarCanalAquisicao);
     app.get("/:usuarioId/resumo", { onRequest: [verifySupabaseJWT] }, usuarioResumoController.getResumo);
 
 }
