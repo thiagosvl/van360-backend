@@ -60,10 +60,12 @@ export const adminRepository = {
             .eq("usuario_id", userId);
 
         if (filters?.dataInicio) {
-            query = query.gte("created_at", `${filters.dataInicio}T00:00:00`);
+            const inicio = filters.dataInicio.length === 10 ? `${filters.dataInicio}T00:00:00.000-03:00` : filters.dataInicio;
+            query = query.gte("created_at", inicio);
         }
         if (filters?.dataFim) {
-            query = query.lte("created_at", `${filters.dataFim}T23:59:59`);
+            const fim = filters.dataFim.length === 10 ? `${filters.dataFim}T23:59:59.999-03:00` : filters.dataFim;
+            query = query.lte("created_at", fim);
         }
         if (filters?.acao) {
             query = query.eq("acao", filters.acao);

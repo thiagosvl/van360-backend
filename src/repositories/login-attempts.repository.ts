@@ -38,11 +38,13 @@ class LoginAttemptsRepository {
       .order("created_at", { ascending: false });
 
     if (filters?.data_inicio) {
-      query = query.gte("created_at", filters.data_inicio);
+      const inicio = filters.data_inicio.length === 10 ? `${filters.data_inicio}T00:00:00.000-03:00` : filters.data_inicio;
+      query = query.gte("created_at", inicio);
     }
     
     if (filters?.data_fim) {
-      query = query.lte("created_at", filters.data_fim);
+      const fim = filters.data_fim.length === 10 ? `${filters.data_fim}T23:59:59.999-03:00` : filters.data_fim;
+      query = query.lte("created_at", fim);
     }
     
     if (filters?.search_cpf) {
