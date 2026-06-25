@@ -86,7 +86,7 @@ export const adminRepository = {
     ) {
         let query = supabaseAdmin
             .from("historico_atividades")
-            .select("*", { count: "exact" });
+            .select("*, usuarios(nome, telefone)", { count: "exact" });
 
         if (filters?.search_cpf) {
             const cleanSearch = filters.search_cpf.trim();
