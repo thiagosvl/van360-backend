@@ -12,6 +12,7 @@ import { historicoService } from './historico.service.js';
 import { InHouseContractProvider } from './providers/inhouse-contract.provider.js';
 import { notificationService } from './notifications/notification.service.js';
 import { EVENTO_MOTORISTA_CONTRATO_ASSINADO, EVENTO_PASSAGEIRO_CONTRATO_ASSINADO } from '../config/constants.js';
+import { formatarPlacaExibicao } from '../utils/placa.utils.js';
 
 import { contractRepository } from '../repositories/contract.repository.js';
 import { passageiroRepository } from '../repositories/passageiro.repository.js';
@@ -113,7 +114,7 @@ class ContractService {
       nomeCondutor: usuario.nome,
       cpfCnpjCondutor: usuario.cpfcnpj,
       telefoneCondutor: usuario.telefone,
-      placaVeiculo: passageiro.veiculo?.placa || '',
+      placaVeiculo: passageiro.veiculo?.placa ? formatarPlacaExibicao(passageiro.veiculo.placa) : '',
       modeloVeiculo: passageiro.veiculo ? `${passageiro.veiculo.marca} ${passageiro.veiculo.modelo}` : '',
       clausulas: usuario.config_contrato?.clausulas,
       assinaturaCondutorUrl: usuario.assinatura_digital_url,
