@@ -10,6 +10,7 @@ import {
   createUserAdminSchema,
   listUserLogsQuerySchema,
   listLoginAttemptsQuerySchema,
+  listGlobalLogsQuerySchema,
 } from "../schemas/admin.schema.js";
 
 export const AdminController = {
@@ -148,6 +149,17 @@ export const AdminController = {
     } catch (err: any) {
       logger.error({ error: err.message, id }, "[AdminController] Erro ao buscar logs de atividades.");
       return reply.status(500).send({ error: "Erro ao buscar logs de atividades." });
+    }
+  },
+
+  async getGlobalLogs(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const query = listGlobalLogsQuerySchema.parse(request.query);
+      const result = await adminService.getGlobalLogs(query);
+      return reply.status(200).send(result);
+    } catch (err: any) {
+      logger.error({ error: err.message }, "[AdminController] Erro ao buscar logs globais.");
+      return reply.status(500).send({ error: "Erro ao buscar logs globais." });
     }
   },
 

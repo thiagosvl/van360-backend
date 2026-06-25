@@ -31,10 +31,10 @@ class LoginAttemptsRepository {
     data_inicio?: string;
     data_fim?: string;
     search_cpf?: string;
-  }): Promise<{ data: LoginAttempt[] | null; error: any }> {
+  }, from?: number, to?: number): Promise<{ data: LoginAttempt[] | null; count: number | null; error: any }> {
     let query = supabaseAdmin
       .from("tentativas_login")
-      .select("*")
+      .select("*", { count: "exact" })
       .order("created_at", { ascending: false });
 
     if (filters?.data_inicio) {
@@ -48,11 +48,47 @@ class LoginAttemptsRepository {
     }
     
     if (filters?.search_cpf) {
-      query = query.ilike("login_tentado", `%${filters.search_cpf}%`);
+      const cleanSearch = filters.search_cpf.trim();
+      const digits = cleanSearch.replace(/\D/g, "");
+      const isId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanSearch);
+
+      let loginTerms: string[] = [cleanSearch];
+
+      let userQuery = supabaseAdmin.from("usuarios").select("cpfcnpj, email");
+      let doUserQuery = false;
+
+      if (isId) {
+          userQuery = userQuery.eq("id", cleanSearch);
+          doUserQuery = true;
+      } else {
+          if (digits && digits.length >= 3) {
+              userQuery = userQuery.or(`cpfcnpj.ilike.%${digits}%,telefone.ilike.%${digits}%`);
+              doUserQuery = true;
+          } else if (cleanSearch) {
+              userQuery = userQuery.or(`nome.ilike.%${cleanSearch}%`);
+              doUserQuery = true;
+          }
+      }
+
+      if (doUserQuery) {
+          const { data: uData } = await userQuery.limit(50);
+          if (uData && uData.length > 0) {
+              uData.forEach((u: any) => {
+                  if (u.cpfcnpj) loginTerms.push(u.cpfcnpj);
+                  if (u.email) loginTerms.push(u.email);
+              });
+          }
+      }
+
+      const orConditions = loginTerms.map(term => `login_tentado.ilike.%${term}%`).join(',');
+      query = query.or(orConditions);
     }
 
-    // Limitando a 200 para evitar queries gigantes no painel admin
-    query = query.limit(200);
+    if (from !== undefined && to !== undefined) {
+      query = query.range(from, to);
+    } else {
+      query = query.limit(200);
+    }
 
     return query;
   }

@@ -8,7 +8,7 @@ import { SubscriptionStatus, UserType, AtividadeAcao, AtividadeEntidadeTipo } fr
 import { historicoService } from "./historico.service.js";
 import { getNowBR, parseBrazilianDateToISO } from "../utils/date.utils.js";
 import { onlyDigits, cleanString } from "../utils/string.utils.js";
-import type { UpdateUserAdminDTO, UpdateSubscriptionAdminDTO, ListUsersQuery, ListUserLogsQuery, UpdatePlanDTO, CreateUserAdminDTO } from "../schemas/admin.schema.js";
+import type { UpdateUserAdminDTO, UpdateSubscriptionAdminDTO, ListUsersQuery, ListUserLogsQuery, UpdatePlanDTO, CreateUserAdminDTO, ListGlobalLogsQuery } from "../schemas/admin.schema.js";
 import { subscriptionService } from "./subscriptions/subscription.service.js";
 import { notificationService } from "./notifications/notification.service.js";
 import { loginAttemptsRepository } from "../repositories/login-attempts.repository.js";
@@ -139,8 +139,37 @@ export const adminService = {
     };
   },
 
-  async getLoginAttempts(query: { data_inicio?: string; data_fim?: string; search_cpf?: string }) {
-    const { data, error } = await loginAttemptsRepository.listAttempts(query);
+  async getGlobalLogs(query: ListGlobalLogsQuery) {
+    const { page, limit, dataInicio, dataFim, acao, entidade, search_cpf } = query;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    const { data, error, count } = await adminRepository.getGlobalLogs(
+      from,
+      to,
+      { dataInicio, dataFim, acao, entidade, search_cpf }
+    );
+
+    if (error) {
+      logger.error({ error }, "[AdminService] Erro ao buscar logs globais.");
+      throw error;
+    }
+
+    return {
+      data: data || [],
+      total: count ?? 0,
+      page,
+      limit,
+    };
+  },
+
+  async getLoginAttempts(query: { page?: number; limit?: number; data_inicio?: string; data_fim?: string; search_cpf?: string }) {
+    const page = query.page || 1;
+    const limit = query.limit || 20;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    const { data, count, error } = await loginAttemptsRepository.listAttempts(query, from, to);
 
     if (error) {
       logger.error({ error }, "[AdminService] Erro ao buscar tentativas de login.");
@@ -149,6 +178,9 @@ export const adminService = {
 
     return {
       data: data || [],
+      total: count ?? 0,
+      page,
+      limit,
     };
   },
 

@@ -34,7 +34,7 @@ export const listUsersQuerySchema = z.object({
 
 export const listUserLogsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
+  limit: z.coerce.number().int().min(1).max(500).default(20),
   dataInicio: z.string().optional(),
   dataFim: z.string().optional(),
   acao: z.string().optional(),
@@ -42,8 +42,20 @@ export const listUserLogsQuerySchema = z.object({
 });
 
 export const listLoginAttemptsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(500).default(20),
   data_inicio: z.string().optional(),
   data_fim: z.string().optional(),
+  search_cpf: z.string().optional(),
+});
+
+export const listGlobalLogsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(500).default(20),
+  dataInicio: z.string().optional(),
+  dataFim: z.string().optional(),
+  acao: z.string().optional(),
+  entidade: z.string().optional(),
   search_cpf: z.string().optional(),
 });
 
@@ -53,6 +65,7 @@ export type UpdateConfigDTO = z.infer<typeof updateConfigSchema>;
 export type ListUsersQuery = z.infer<typeof listUsersQuerySchema>;
 export type ListUserLogsQuery = z.infer<typeof listUserLogsQuerySchema>;
 export type ListLoginAttemptsQuery = z.infer<typeof listLoginAttemptsQuerySchema>;
+export type ListGlobalLogsQuery = z.infer<typeof listGlobalLogsQuerySchema>;
 
 export const updatePlanSchema = z.object({
   valor: z.coerce.number().min(0).optional(),
