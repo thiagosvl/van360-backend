@@ -170,11 +170,11 @@ export const subscriptionService = {
                 const planRes = sub.plan_id ? await planRepository.getById(sub.plan_id) : null;
                 const plan = planRes ? planRes.data : null;
                 await notificationService.notifyAdmin(EVENTO_ADMIN_ASSINATURA_CANCELADA, {
-                    nomeMotorista: user.nome || "Desconhecido",
-                    telefone: user.telefone || "Não informado",
-                    nomePlano: plan ? plan.nome : "Desconhecido",
-                    valor: plan ? `R$ ${typeof plan.valor === "string" ? parseFloat(plan.valor).toFixed(2).replace('.', ',') : plan.valor.toFixed(2).replace('.', ',')}` : "R$ 0,00",
-                    dataVencimento: sub.current_period_end ? new Date(sub.current_period_end).toLocaleDateString("pt-BR") : "Desconhecida",
+                    nomeMotorista: user.nome,
+                    telefone: user.telefone,
+                    nomePlano: plan.nome,
+                    valor: `R$ ${typeof plan.valor === "string" ? parseFloat(plan.valor).toFixed(2).replace('.', ',') : plan.valor.toFixed(2).replace('.', ',')}`,
+                    dataVencimento: new Date(sub.current_period_end!).toLocaleDateString("pt-BR"),
                     usuarioId: userId
                 });
             }
@@ -247,9 +247,9 @@ export const subscriptionService = {
         // Notificação para o Admin (Telegram)
         const valorNumerico = typeof res.valor === "string" ? parseFloat(res.valor) : (res.valor || 0);
         notificationService.notifyAdmin(EVENTO_ADMIN_NOVA_ASSINATURA, {
-            nomeMotorista: res.usuario_nome || "Desconhecido",
-            telefone: res.usuario_telefone || "Não informado",
-            nomePlano: res.plano_nome || "Desconhecido",
+            nomeMotorista: res.usuario_nome!,
+            telefone: res.usuario_telefone!,
+            nomePlano: res.plano_nome!,
             valor: `R$ ${valorNumerico.toFixed(2).replace('.', ',')}`,
             dataVencimento: new Date(res.new_expiry!).toLocaleDateString('pt-BR'),
             usuarioId: res.usuario_id!
