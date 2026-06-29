@@ -54,8 +54,8 @@ const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.register(historicoRoute, { prefix: "/api/historico" });
 
   // Webhook unificado da Efí Pay (PIX e Cartão)
-  app.post("/api/webhooks/efi", WebhookController.handleEfipay);
-  app.post("/api/webhooks/efi/*", WebhookController.handleEfipay);
+  app.post("/api/webhooks/efi", { config: { rateLimit: false } }, WebhookController.handleEfipay);
+  app.post("/api/webhooks/efi/*", { config: { rateLimit: false } }, WebhookController.handleEfipay);
 
 };
 
