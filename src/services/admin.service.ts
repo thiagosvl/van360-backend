@@ -57,6 +57,16 @@ export const adminService = {
       }
     }
 
+    let whatsappStatus = "UNKNOWN";
+    try {
+      const { GLOBAL_WHATSAPP_INSTANCE } = await import("../config/constants.js");
+      const { whatsappService } = await import("./whatsapp.service.js");
+      const status = await whatsappService.getInstanceStatus(GLOBAL_WHATSAPP_INSTANCE);
+      whatsappStatus = status.state;
+    } catch (err) {
+      logger.error({ err }, "[AdminService] Erro ao buscar status do WhatsApp");
+    }
+
     return {
       totalMotoristas,
       totalPassageiros,
@@ -69,6 +79,7 @@ export const adminService = {
         canceled: statusCounts[SubscriptionStatus.CANCELED] || 0,
       },
       recentUsers: recentUsersRes.data || [],
+      whatsappStatus,
     };
   },
 

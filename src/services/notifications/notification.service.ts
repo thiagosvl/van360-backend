@@ -40,6 +40,9 @@ import {
     EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA,
     EVENTO_ADMIN_NOVO_CADASTRO,
     EVENTO_ADMIN_NOVA_ASSINATURA,
+    EVENTO_ADMIN_ASSINATURA_CANCELADA,
+    EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO,
+    EVENTO_ADMIN_SISTEMA_ALERTA,
     GLOBAL_WHATSAPP_INSTANCE
 } from "../../config/constants.js";
 import { DriverContext, DriverTemplates } from "./templates/driver.template.js";
@@ -49,7 +52,13 @@ import { EvolutionWhatsappQueueAdapter } from "./adapters/evolution.adapter.js";
 import { MockSmsAdapter } from "./adapters/mock-sms.adapter.js";
 import { MockEmailAdapter } from "./adapters/mock-email.adapter.js";
 import { TelegramAdapter } from "./adapters/telegram.adapter.js";
-import { AdminRegistrationContext, AdminSubscriptionContext, AdminTemplates } from "./templates/admin.template.js";
+import { 
+    AdminRegistrationContext, 
+    AdminSubscriptionContext, 
+    AdminPaymentFailedContext,
+    AdminSystemAlertContext,
+    AdminTemplates 
+} from "./templates/admin.template.js";
 
 export type NotificationChannel = "WHATSAPP" | "SMS" | "EMAIL" | "TELEGRAM";
 
@@ -101,7 +110,10 @@ export type DriverEventType =
 
 export type AdminEventType =
     | typeof EVENTO_ADMIN_NOVO_CADASTRO
-    | typeof EVENTO_ADMIN_NOVA_ASSINATURA;
+    | typeof EVENTO_ADMIN_NOVA_ASSINATURA
+    | typeof EVENTO_ADMIN_ASSINATURA_CANCELADA
+    | typeof EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO
+    | typeof EVENTO_ADMIN_SISTEMA_ALERTA;
 
 class NotificationService {
     // Registro dos Adapters que farão o disparo real (ou envio para a fila)
@@ -194,7 +206,7 @@ class NotificationService {
      */
     async notifyAdmin(
         type: AdminEventType,
-        ctx: AdminRegistrationContext | AdminSubscriptionContext,
+        ctx: AdminRegistrationContext | AdminSubscriptionContext | AdminPaymentFailedContext | AdminSystemAlertContext,
         options: NotificationOptions = { channels: ["TELEGRAM"] }
     ): Promise<boolean> {
 
@@ -211,6 +223,15 @@ class NotificationService {
                 break;
             case EVENTO_ADMIN_NOVA_ASSINATURA: 
                 parts = AdminTemplates.newSubscription(ctx as AdminSubscriptionContext); 
+                break;
+            case EVENTO_ADMIN_ASSINATURA_CANCELADA:
+                parts = AdminTemplates.subscriptionCanceled(ctx as AdminSubscriptionContext);
+                break;
+            case EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO:
+                parts = AdminTemplates.paymentFailed(ctx as AdminPaymentFailedContext);
+                break;
+            case EVENTO_ADMIN_SISTEMA_ALERTA:
+                parts = AdminTemplates.systemAlert(ctx as AdminSystemAlertContext);
                 break;
         }
 

@@ -27,6 +27,7 @@ import {
   EVENTO_MOTORISTA_RENOVACAO_URGENCIA,
   EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_1,
   EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_FINAL,
+  EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO
 } from "../../config/constants.js";
 
 /**
@@ -494,6 +495,13 @@ export const subscriptionMonitorService = {
                 nomeMotorista: user.nome,
                 erro: "Número máximo de tentativas atingido.",
               });
+              await notificationService.notifyAdmin(EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO, {
+                nomeMotorista: user.nome,
+                telefone: user.telefone,
+                usuarioId: sub.usuario_id,
+                erro: "Número máximo de tentativas atingido.",
+                planoNome: (sub as any).planos?.nome
+              });
               await this.logNotification(sub.usuario_id, EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO, cicloRef, sub.id, "Aviso de falha na cobrança automática do cartão enviado.");
             }
           }
@@ -546,6 +554,13 @@ export const subscriptionMonitorService = {
           await notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO, {
             nomeMotorista: user.nome,
             erro: e.message || "Cartão recusado",
+          });
+          await notificationService.notifyAdmin(EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO, {
+            nomeMotorista: user.nome,
+            telefone: user.telefone,
+            usuarioId: sub.usuario_id,
+            erro: e.message || "Cartão recusado",
+            planoNome: (sub as any).planos?.nome
           });
           const cicloRef = this.toCicloRef(sub.data_vencimento || new Date());
           await this.logNotification(sub.usuario_id, EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO, cicloRef, sub.id, "Aviso de falha na cobrança do cartão enviado.");

@@ -10,7 +10,7 @@ import {
 import { historicoService } from "../historico.service.js";
 import { getNowBR, getEndOfDayBR, addDays, parseLocalDate } from "../../utils/date.utils.js";
 import { notificationService } from "../notifications/notification.service.js";
-import { EVENTO_MOTORISTA_ASSINATURA_PAGO, EVENTO_ADMIN_NOVA_ASSINATURA } from "../../config/constants.js";
+import { EVENTO_MOTORISTA_ASSINATURA_PAGO, EVENTO_ADMIN_NOVA_ASSINATURA, EVENTO_ADMIN_ASSINATURA_CANCELADA } from "../../config/constants.js";
 import { subscriptionRepository } from "../../repositories/subscription.repository.js";
 import { planRepository } from "../../repositories/plan.repository.js";
 import { invoiceRepository } from "../../repositories/invoice.repository.js";
@@ -157,9 +157,30 @@ export const subscriptionService = {
             usuario_id: userId,
             entidade_tipo: AtividadeEntidadeTipo.SAAS_ASSINATURA,
             entidade_id: sub.id,
-            acao: AtividadeAcao.SAAS_ASSINATURA_ATRASO, // ou podemos não especificar uma ação rígida
+            acao: AtividadeAcao.SAAS_ASSINATURA_CANCELADA,
             descricao: "A assinatura foi cancelada. As cobranças recorrentes foram suspensas."
         });
+
+        // 4. Notificar Admin sobre o Churn (Cancelamento)
+        try {
+            const { userRepository } = await import("../../repositories/user.repository.js");
+            const userRes = await userRepository.getById(userId);
+            const user = userRes.data;
+            if (user) {
+                const planRes = sub.plan_id ? await planRepository.getById(sub.plan_id) : null;
+                const plan = planRes ? planRes.data : null;
+                await notificationService.notifyAdmin(EVENTO_ADMIN_ASSINATURA_CANCELADA, {
+                    nomeMotorista: user.nome || "Desconhecido",
+                    telefone: user.telefone || "Não informado",
+                    nomePlano: plan ? plan.nome : "Desconhecido",
+                    valor: plan ? `R$ ${typeof plan.valor === "string" ? parseFloat(plan.valor).toFixed(2).replace('.', ',') : plan.valor.toFixed(2).replace('.', ',')}` : "R$ 0,00",
+                    dataVencimento: sub.current_period_end ? new Date(sub.current_period_end).toLocaleDateString("pt-BR") : "Desconhecida",
+                    usuarioId: userId
+                });
+            }
+        } catch (err) {
+            logger.error({ err, userId }, "[SubscriptionService] Falha ao notificar admin sobre cancelamento de assinatura");
+        }
 
         logger.info({ subId: sub.id, userId }, "[SubscriptionService] Assinatura cancelada com sucesso.");
         return true;

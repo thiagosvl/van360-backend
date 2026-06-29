@@ -1,6 +1,6 @@
 import { logger } from "../../config/logger.js";
-import { AtividadeAcao, AtividadeEntidadeTipo, EvolutionEvent } from "../../types/enums.js";
-import { historicoService } from "../historico.service.js";
+import { EvolutionEvent } from "../../types/enums.js";
+import { WhatsappStatus } from "../../types/enums.js";
 
 interface EvolutionWebhookPayload {
     event: EvolutionEvent;
@@ -14,7 +14,7 @@ interface EvolutionWebhookPayload {
 export const webhookEvolutionHandler = {
     async handle(payload: EvolutionWebhookPayload): Promise<boolean> {
         const { event, instance, data } = payload;
-        
+
         try {
             switch (event) {
                 case EvolutionEvent.SEND_MESSAGE:
@@ -42,23 +42,24 @@ export const webhookEvolutionHandler = {
      */
     async handleConnectionUpdate(instanceName: string, data: Record<string, unknown>): Promise<boolean> {
         const state = data.state as string;
-        
-        // Extrair usuarioId do nome da instância: motorista-{uuid}
-        const usuarioId = instanceName.split("motorista-")[1];
-        
-        if (!usuarioId || !state) return true;
+
+        if (!state) return true;
 
         logger.info({ instanceName, state }, "[Webhook] Status do WhatsApp alterado");
 
-        // Registrar no histórico de atividades
-        await historicoService.log({
-            usuario_id: usuarioId,
-            entidade_tipo: AtividadeEntidadeTipo.USUARIO,
-            entidade_id: usuarioId,
-            acao: AtividadeAcao.WHATSAPP_STATUS_ALTERADO,
-            descricao: `Conexão do WhatsApp alterada para: ${state}.`,
-            meta: { status: state, instance: instanceName }
-        });
+        if (state === WhatsappStatus.CLOSE || state === WhatsappStatus.DISCONNECTED) {
+            const { notificationService } = await import("../notifications/notification.service.js");
+            const { EVENTO_ADMIN_SISTEMA_ALERTA } = await import("../../config/constants.js");
+            
+            await notificationService.notifyAdmin(EVENTO_ADMIN_SISTEMA_ALERTA, {
+                titulo: "ALERTA DE DESCONEXÃO",
+                mensagem: "A conexão do WhatsApp foi perdida.",
+                detalhes: {
+                    "Instância": instanceName,
+                    "Status": state
+                }
+            });
+        }
 
         return true;
     },
