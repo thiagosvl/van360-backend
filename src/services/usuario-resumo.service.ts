@@ -4,7 +4,7 @@ import { passageiroRepository } from "../repositories/passageiro.repository.js";
 import { prePassageiroRepository } from "../repositories/pre-passageiro.repository.js";
 import { cobrancaRepository } from "../repositories/cobranca.repository.js";
 import { gastoRepository } from "../repositories/gasto.repository.js";
-import { CobrancaStatus } from "../types/enums.js";
+import { CobrancaStatus, GastoCategoria } from "../types/enums.js";
 import { getNowBR, toLocalDateString, getLastDayOfMonth } from "../utils/date.utils.js";
 import { getUsuarioData } from "./usuario.service.js";
 
@@ -54,7 +54,7 @@ interface SystemSummary {
 }
 
 export const usuarioResumoService = {
-  getResumo: async (usuarioId: string, mes?: number, ano?: number): Promise<SystemSummary> => {
+  getResumo: async (usuarioId: string, mes?: number, ano?: number, veiculoId?: string): Promise<SystemSummary> => {
     // 1. Fetch User
     const usuario = await getUsuarioData(usuarioId);
     if (!usuario) throw new Error("Usuário não encontrado");
@@ -68,7 +68,7 @@ export const usuarioResumoService = {
     ] = await Promise.all([
       veiculoRepository.getSummaryForDashboard(usuarioId),
       escolaRepository.getSummaryForDashboard(usuarioId),
-      passageiroRepository.getSummaryForDashboard(usuarioId),
+      passageiroRepository.getSummaryForDashboard(usuarioId, veiculoId),
       prePassageiroRepository.getCountForDashboard(usuarioId),
     ]);
 
@@ -96,8 +96,8 @@ export const usuarioResumoService = {
     const end = `${targetAno}-${String(targetMes).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
     const [cobrancasRes, gastosRes] = await Promise.all([
-      cobrancaRepository.getForPeriodForDashboard(usuarioId, start, end),
-      gastoRepository.getGastosForPeriodForDashboard(usuarioId, start, end)
+      cobrancaRepository.getForPeriodForDashboard(usuarioId, start, end, veiculoId),
+      gastoRepository.getGastosForPeriodForDashboard(usuarioId, start, end, veiculoId)
     ]);
 
     const cobrancas = cobrancasRes.data || [];
@@ -112,7 +112,7 @@ export const usuarioResumoService = {
     const detalhamentoGastos: Record<string, number> = {};
     
     gastos.forEach((g: Record<string, any>) => {
-      const cat = g.categoria || "outros";
+      const cat = g.categoria || GastoCategoria.OUTROS;
       detalhamentoGastos[cat] = (detalhamentoGastos[cat] || 0) + Number(g.valor || 0);
     });
 

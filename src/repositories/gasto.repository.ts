@@ -65,12 +65,18 @@ export const gastoRepository = {
         return query;
     },
 
-    async getGastosForPeriodForDashboard(usuarioId: string, start: string, end: string) {
-        return supabaseAdmin
+    async getGastosForPeriodForDashboard(usuarioId: string, start: string, end: string, veiculoId?: string) {
+        let query = supabaseAdmin
             .from("gastos")
             .select("*")
             .eq("usuario_id", usuarioId)
             .gte("data", start)
             .lte("data", end);
+            
+        if (veiculoId) {
+            query = query.eq("veiculo_id", veiculoId);
+        }
+
+        return query;
     }
 };

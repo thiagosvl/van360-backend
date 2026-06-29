@@ -38,6 +38,7 @@ export const listCobrancasFiltersSchema = z.object({
     dataInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato inválido").optional(),
     dataFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato inválido").optional(),
     search: z.string().optional(),
+    veiculoId: z.string().optional(),
     mes: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),
     ano: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),
 });

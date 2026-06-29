@@ -66,6 +66,7 @@ export const cobrancaRepository = {
             .order("data_vencimento", { ascending: false });
 
         if (filtros.usuarioId) query = query.eq("usuario_id", filtros.usuarioId);
+        if (filtros.veiculoId) query = query.eq("passageiros.veiculo_id", filtros.veiculoId);
         if (filtros.passageiroId) query = query.eq("passageiro_id", filtros.passageiroId);
         if (filtros.status) query = query.eq("status", filtros.status);
         if (filtros.dataInicio) query = query.gte("data_vencimento", filtros.dataInicio);
@@ -167,12 +168,18 @@ export const cobrancaRepository = {
             .single();
     },
 
-    async getForPeriodForDashboard(usuarioId: string, start: string, end: string) {
-        return supabaseAdmin
+    async getForPeriodForDashboard(usuarioId: string, start: string, end: string, veiculoId?: string) {
+        let query = supabaseAdmin
             .from("cobrancas")
-            .select("*")
+            .select(veiculoId ? "*, passageiro:passageiros!inner(veiculo_id)" : "*")
             .eq("usuario_id", usuarioId)
             .gte("data_vencimento", start)
             .lte("data_vencimento", end);
+        
+        if (veiculoId) {
+            query = query.eq("passageiros.veiculo_id", veiculoId);
+        }
+
+        return query;
     }
 };

@@ -15,13 +15,14 @@ export const usuarioResumoController = {
     const querySchema = z.object({
       mes: z.string().optional(),
       ano: z.string().optional(),
+      veiculo_id: z.string().optional(),
     });
 
-    const { mes, ano } = querySchema.parse(request.query);
+    const { mes, ano, veiculo_id } = querySchema.parse(request.query);
     const mesNum = mes ? parseInt(mes) : undefined;
     const anoNum = ano ? parseInt(ano) : undefined;
 
-    const resumo = await usuarioResumoService.getResumo(usuarioId, mesNum, anoNum);
+    const resumo = await usuarioResumoService.getResumo(usuarioId, mesNum, anoNum, veiculo_id);
 
     return reply.send(resumo);
   },

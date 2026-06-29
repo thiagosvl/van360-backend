@@ -47,8 +47,12 @@ export const passageiroRepository = {
     return supabaseAdmin.from("passageiros").delete().eq("id", id);
   },
 
-  async getSummaryForDashboard(usuarioId: string) {
-    return supabaseAdmin.from("passageiros").select("id, ativo").eq("usuario_id", usuarioId);
+  async getSummaryForDashboard(usuarioId: string, veiculoId?: string) {
+    let query = supabaseAdmin.from("passageiros").select("id, ativo").eq("usuario_id", usuarioId);
+    if (veiculoId) {
+      query = query.eq("veiculo_id", veiculoId);
+    }
+    return query;
   },
 
   async getById(id: string) {
