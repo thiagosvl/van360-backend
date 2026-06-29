@@ -334,6 +334,72 @@ const lookupResponsavelByCpf = async (usuarioId: string, cpf: string): Promise<a
     return data;
 };
 
+const listarAniversariantesDoMes = async (usuarioId: string, mes: number) => {
+    if (!usuarioId) throw new Error("Usuário obrigatório");
+    if (mes < 1 || mes > 12) throw new AppError("Mês inválido", 400);
+
+    const { data: todosAtivos, error } = await passageiroRepository.listAniversariantesInfo(usuarioId);
+    if (error) throw new AppError("Erro ao buscar passageiros para aniversários", 500);
+
+    let passageirosSemData = 0;
+    const passageirosSemDataList: any[] = [];
+    const aniversariantesMap = new Map<number, any[]>();
+    // Inicializar as 5 semanas possíveis
+    for (let i = 1; i <= 5; i++) {
+        aniversariantesMap.set(i, []);
+    }
+
+    const passageiros = todosAtivos || [];
+    
+    passageiros.forEach(p => {
+        if (!p.data_nascimento) {
+            passageirosSemData++;
+            passageirosSemDataList.push({
+                id: p.id,
+                nome: p.nome,
+                veiculo: p.veiculo,
+                escola: p.escola
+            });
+            return;
+        }
+
+        const date = parseLocalDate(p.data_nascimento);
+        const pMes = date.getMonth() + 1; // getMonth é 0-indexado
+        
+        if (pMes === mes) {
+            // Calcular em qual semana do mês a data cai
+            const dia = date.getDate();
+            const semanaNoMes = Math.ceil(dia / 7);
+            const semanaGarantida = semanaNoMes > 5 ? 5 : semanaNoMes; // Garantir limite
+
+            const lista = aniversariantesMap.get(semanaGarantida) || [];
+            lista.push({
+                id: p.id,
+                nome: p.nome,
+                dia: dia,
+                veiculo: p.veiculo,
+                escola: p.escola
+            });
+            aniversariantesMap.set(semanaGarantida, lista);
+        }
+    });
+
+    const semanasFormatadas = Array.from(aniversariantesMap.entries()).map(([semana, aniversariantes]) => {
+        // Ordenar por dia dentro da semana
+        aniversariantes.sort((a, b) => a.dia - b.dia);
+        return {
+            semana,
+            aniversariantes
+        };
+    }).filter(s => s.aniversariantes.length > 0);
+
+    return {
+        semanas: semanasFormatadas,
+        passageirosSemData,
+        passageirosSemDataList
+    };
+};
+
 // Exportar objeto unificado no final
 export const passageiroService = {
     createPassageiro,
@@ -344,5 +410,6 @@ export const passageiroService = {
     toggleAtivo,
     countListPassageirosByUsuario,
     finalizePreCadastro,
-    lookupResponsavelByCpf
+    lookupResponsavelByCpf,
+    listarAniversariantesDoMes
 };

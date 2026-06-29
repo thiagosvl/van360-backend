@@ -1,5 +1,5 @@
-import { formatToBrazilianDate } from "../../../utils/date.utils.js";
-import { formatCurrency, getFirstName } from "../../../utils/format.js";
+import { formatToBrazilianDate, getShortWeekDayBR } from "../../../utils/date.utils.js";
+import { formatCurrency, getFirstName, getFirstAndSecondName } from "../../../utils/format.js";
 import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
 
 export interface DriverContext {
@@ -23,6 +23,9 @@ export interface DriverContext {
     isEngaged?: boolean;
     cpfLogin?: string;
     senhaTemporaria?: string;
+    // Aniversários
+    aniversariantesList?: { veiculo: string; nome: string; dia: number; mes: number; escola: string }[];
+    passageirosSemData?: number;
 }
 
 const textPart = (text: string): CompositeMessagePart[] => {
@@ -37,6 +40,44 @@ export const DriverTemplates = {
             `${getFirstName(ctx.nomeMotorista)}, sua conta está ativa com acesso completo até *${validade}*.\n\n` +
             `Comece cadastrando seus passageiros e veja a organização digital da sua van funcionando na prática.\n\n` +
             `Precisa de ajuda? Responda esta mensagem.`);
+    },
+
+    birthdayReminderWeekly: (ctx: DriverContext): CompositeMessagePart[] => {
+        let mensagem = `⭐ *Aniversariantes da semana*\n\n`;
+
+        if (ctx.aniversariantesList && ctx.aniversariantesList.length > 0) {
+
+            const aniversariantesPorVeiculo = new Map<string, typeof ctx.aniversariantesList>();
+            ctx.aniversariantesList.forEach((p) => {
+                const veiculoNome = p.veiculo;
+                if (!aniversariantesPorVeiculo.has(veiculoNome)) {
+                    aniversariantesPorVeiculo.set(veiculoNome, []);
+                }
+                aniversariantesPorVeiculo.get(veiculoNome)?.push(p);
+            });
+
+            const anoAtual = new Date().getFullYear();
+
+            for (const [veiculo, lista] of aniversariantesPorVeiculo.entries()) {
+                mensagem += `🚐 *${veiculo}*\n`;
+                lista.forEach((p) => {
+                    const dataAniversario = new Date(anoAtual, p.mes - 1, p.dia);
+                    const shortWeekDay = getShortWeekDayBR(dataAniversario);
+                    mensagem += `• *${getFirstAndSecondName(p.nome)}* - ${shortWeekDay}, ${String(p.dia).padStart(2, '0')}/${String(p.mes).padStart(2, '0')}\n`;
+                });
+                mensagem += `\n`;
+            }
+
+            mensagem += `Prepare algo especial e não se esqueça de parabenizá-los! 🥳`;
+        } else {
+            mensagem += `Nenhum aniversariante nesta semana! 🥳`;
+        }
+
+        if (ctx.passageirosSemData && ctx.passageirosSemData > 0) {
+            mensagem += `\n\n_(Lembrando que você possui ${ctx.passageirosSemData} passageiros sem data de nascimento cadastrada. Atualize os cadastros para não perder nenhuma data!)_`;
+        }
+
+        return textPart(mensagem);
     },
 
     trialExpiring: (ctx: DriverContext): CompositeMessagePart[] => {

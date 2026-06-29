@@ -20,6 +20,9 @@ const passageiroRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     // Ações Específicas
     app.patch("/:id/toggle-ativo", passageiroController.toggleAtivo);
     app.post("/finalizar-pre-cadastro/:prePassageiroId", passageiroController.finalizePreCadastro);
+
+    // Aniversários
+    app.get("/aniversariantes", passageiroController.getAniversariantesDoMes);
 };
 
 export default passageiroRoute;

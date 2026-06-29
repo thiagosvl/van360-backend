@@ -2,6 +2,7 @@ import { Job, Worker } from 'bullmq';
 import { logger } from '../config/logger.js';
 import { redisConfig } from '../config/redis.js';
 import { QUEUE_NAME_CRON } from '../queues/cron.queue.js';
+import { birthdayReminderJob } from '../services/jobs/birthday-reminder.job.js';
 
 import { subscriptionMonitorService } from '../services/subscriptions/subscription-monitor.service.js';
 import { cobrancaService } from '../services/cobranca.service.js';
@@ -35,6 +36,10 @@ export const cronWorker = new Worker(
 
                 case CronJob.DAILY_CHARGE_MONITOR:
                     await cobrancaService.enviarNotificacoesDiarias();
+                    break;
+
+                case CronJob.BIRTHDAY_REMINDER:
+                    await birthdayReminderJob.runWeekly();
                     break;
 
                 default:

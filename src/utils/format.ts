@@ -1,4 +1,4 @@
-import { PassageiroGenero, PassageiroModalidade, PeriodoEnum } from "../types/enums.js";
+import { CobrancaStatus, PassageiroGenero, PassageiroModalidade, PeriodoEnum } from "../types/enums.js";
 import { parseLocalDate } from "./date.utils.js";
 
 /**
@@ -29,6 +29,18 @@ export function formatDateTime(date: string | Date): string {
 export function getFirstName(name?: string): string {
   if (!name) return "";
   return name.trim().split(/\s+/)[0];
+}
+
+/**
+ * Retorna o primeiro e o segundo nome de uma string (ex: João Silva)
+ */
+export function getFirstAndSecondName(name?: string): string {
+  if (!name) return "";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length > 1) {
+    return `${parts[0]} ${parts[1]}`;
+  }
+  return parts[0];
 }
 
 export function maskCpf(value?: string | null) {

@@ -159,3 +159,11 @@ export async function atualizarCanalAquisicao(usuarioId: string, canalAquisicao:
 
   return { success: true };
 }
+
+export async function listarMotoristasParaLembreteAniversario() {
+  const { data, error } = await userRepository.listMotoristasAtivos();
+  if (error) {
+    throw new AppError("Erro ao buscar motoristas ativos", 500);
+  }
+  return data || [];
+}

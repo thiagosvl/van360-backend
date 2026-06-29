@@ -8,7 +8,8 @@ import {
     finalizePreCadastroSchema,
     listPassageirosFiltersSchema,
     toggleAtivoSchema,
-    updatePassageiroSchema
+    updatePassageiroSchema,
+    getAniversariantesQuerySchema
 } from "../types/dtos/passageiro.dto.js";
 
 
@@ -107,5 +108,16 @@ export const passageiroController = {
     const data = await passageiroService.lookupResponsavelByCpf(authUid, cpf);
 
     return reply.status(200).send(data); 
+  },
+
+  getAniversariantesDoMes: async (request: FastifyRequest, reply: FastifyReply) => {
+    const authUid = (request as any).user?.id;
+    if (!authUid) throw new AppError("Não autorizado", 401);
+
+    const { mes } = getAniversariantesQuerySchema.parse(request.query);
+
+    const data = await passageiroService.listarAniversariantesDoMes(authUid, mes);
+    
+    return reply.status(200).send(data);
   }
 };

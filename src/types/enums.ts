@@ -129,6 +129,12 @@ export enum SubscriptionStatus {
   EXPIRED = "EXPIRED"
 }
 
+export const STATUS_ASSINATURA_LIBERADA = [
+  SubscriptionStatus.TRIAL,
+  SubscriptionStatus.ACTIVE,
+  SubscriptionStatus.PAST_DUE
+];
+
 export enum SubscriptionInvoiceStatus {
   PENDING = "PENDING",
   PAID = "PAID",
@@ -264,6 +270,7 @@ export enum CronJob {
   SUBSCRIPTION_GENERATOR = "subscription-generator",
   CHARGE_GENERATOR = "charge-generator",
   DAILY_CHARGE_MONITOR = "daily-charge-monitor",
+  BIRTHDAY_REMINDER = "birthday-reminder",
 }
 
 export enum CanalAquisicao {

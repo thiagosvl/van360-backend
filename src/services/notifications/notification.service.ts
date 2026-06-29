@@ -37,6 +37,7 @@ import {
     EVENTO_MOTORISTA_CADASTRO_ADMIN,
     EVENTO_MOTORISTA_RESET_SENHA_ADMIN,
     EVENTO_MOTORISTA_INDICACAO_BONUS,
+    EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA,
     EVENTO_ADMIN_NOVO_CADASTRO,
     EVENTO_ADMIN_NOVA_ASSINATURA,
     GLOBAL_WHATSAPP_INSTANCE
@@ -95,7 +96,8 @@ export type DriverEventType =
     | typeof EVENTO_AUTH_SENHA_ALTERADA
     | typeof EVENTO_MOTORISTA_CADASTRO_ADMIN
     | typeof EVENTO_MOTORISTA_RESET_SENHA_ADMIN
-    | typeof EVENTO_MOTORISTA_INDICACAO_BONUS;
+    | typeof EVENTO_MOTORISTA_INDICACAO_BONUS
+    | typeof EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA;
 
 export type AdminEventType =
     | typeof EVENTO_ADMIN_NOVO_CADASTRO
@@ -181,6 +183,7 @@ class NotificationService {
             case EVENTO_MOTORISTA_CADASTRO_ADMIN:               parts = DriverTemplates.welcomeAdminCreated(ctx); break;
             case EVENTO_MOTORISTA_RESET_SENHA_ADMIN:            parts = DriverTemplates.adminResetPassword(ctx); break;
             case EVENTO_MOTORISTA_INDICACAO_BONUS:              parts = DriverTemplates.referralBonusReceived(ctx); break;
+            case EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA:       parts = DriverTemplates.birthdayReminderWeekly(ctx); break;
         }
 
         return await this._processAndEnqueue(to, parts, type as string, options);

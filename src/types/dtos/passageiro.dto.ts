@@ -103,3 +103,7 @@ export const finalizePreCadastroSchema = z.object({
 });
 
 export type FinalizePreCadastroDTO = z.infer<typeof finalizePreCadastroSchema>;
+
+export const getAniversariantesQuerySchema = z.object({
+  mes: z.string().transform(v => Number(v)).refine(val => val >= 1 && val <= 12, "Mês inválido")
+});

@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "../config/supabase.js";
-import { CobrancaStatus } from "../types/enums.js";
+import { CobrancaStatus, SubscriptionStatus, STATUS_ASSINATURA_LIBERADA } from "../types/enums.js";
 import { getLastDayOfMonth } from "../utils/date.utils.js";
 
 export const cobrancaRepository = {
@@ -125,10 +125,14 @@ export const cobrancaRepository = {
             .select(`
                 *,
                 passageiro:passageiros(nome, nome_responsavel, telefone_responsavel, enviar_notificacoes),
-                motorista:usuarios!cobrancas_usuario_id_fkey(nome, apelido, telefone, chave_pix, tipo_chave_pix)
+                motorista:usuarios!cobrancas_usuario_id_fkey!inner(
+                    nome, apelido, telefone, chave_pix, tipo_chave_pix,
+                    assinaturas!inner(status)
+                )
             `)
             .eq("status", CobrancaStatus.PENDENTE)
-            .eq("desativar_lembretes", false);
+            .eq("desativar_lembretes", false)
+            .in("motorista.assinaturas.status", STATUS_ASSINATURA_LIBERADA);
     },
 
     async updateUltimaNotificacao(id: string, dataIso: string) {

@@ -150,5 +150,20 @@ export const passageiroRepository = {
       .eq("usuario_id", usuarioId)
       .eq("ativo", true)
       .eq("enviar_notificacoes", true);
+  },
+
+  async listAniversariantesInfo(usuarioId: string) {
+    return supabaseAdmin
+      .from("passageiros")
+      .select(`
+        id, 
+        nome, 
+        data_nascimento,
+        veiculo:veiculos(id, placa, modelo),
+        escola:escolas(id, nome)
+      `)
+      .eq("usuario_id", usuarioId)
+      .eq("ativo", true)
+      .order("nome", { ascending: true });
   }
 };

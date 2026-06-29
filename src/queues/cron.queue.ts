@@ -30,4 +30,9 @@ export const setupCronJobs = async () => {
     await cronQueue.add(CronJob.DAILY_CHARGE_MONITOR, {}, {
         repeat: { pattern: '30 13 * * *' }
     });
+
+    // Lembrete de Aniversariantes da Semana - Domingo às 14:00 PM
+    await cronQueue.add(CronJob.BIRTHDAY_REMINDER, {}, {
+        repeat: { pattern: '0 14 * * 0' }
+    });
 };
