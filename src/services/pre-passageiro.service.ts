@@ -55,8 +55,7 @@ export const prePassageiroService = {
       data_nascimento: payload.data_nascimento ? toPersistenceString(payload.data_nascimento) : null
     };
 
-    const { data: inserted, error } = await prePassageiroRepository.insert(prePassageiroData);
-    if (error) throw error;
+    const inserted = await prePassageiroRepository.insert(prePassageiroData);
 
     // --- LOG DE AUDITORIA ---
     const { historicoService } = await import("./historico.service.js");
