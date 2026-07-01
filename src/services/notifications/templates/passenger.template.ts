@@ -1,5 +1,5 @@
 import { formatToBrazilianDate } from "../../../utils/date.utils.js";
-import { formatCurrency, getFirstName, maskPhone } from "../../../utils/format.js";
+import { formatCurrency, getFirstAndSecondName, getFirstName, maskPhone } from "../../../utils/format.js";
 import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
 
 export interface PassengerContext {
@@ -40,7 +40,7 @@ const getTipoChavePixLabel = (tipo?: string): string => {
 };
 
 const getSystemFooter = (ctx: PassengerContext) => {
-    const nomeExibicao = ctx.apelidoMotorista || getFirstName(ctx.nomeMotorista);
+    const nomeExibicao = ctx.apelidoMotorista || getFirstAndSecondName(ctx.nomeMotorista);
     return `\n\n———\n🚐 *${nomeExibicao}* · Van360`;
 };
 
