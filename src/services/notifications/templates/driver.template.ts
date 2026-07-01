@@ -265,7 +265,7 @@ export const DriverTemplates = {
         return textPart(`🚀 *Seu acesso ao Van360*\n\n` +
             `${getFirstName(ctx.nomeMotorista)}, sua conta foi criada.\n\n` +
             `*Dados de acesso:*\n` +
-            `👤 CPF: ${ctx.cpfLogin || ""}\n` +
+            `👤 Documento: ${ctx.cpfLogin || ""}\n` +
             `🔑 Senha: ${ctx.senhaTemporaria || ""} _(altere no primeiro acesso)_\n\n` +
             `🔗 Faça login através do app ou acesse o site: https://van360.com.br/login`);
     },
@@ -274,7 +274,7 @@ export const DriverTemplates = {
         return textPart(`🔐 *Senha redefinida — Van360*\n\n` +
             `${getFirstName(ctx.nomeMotorista)}, sua senha foi redefinida pelo administrador.\n\n` +
             `*Novos dados de acesso:*\n` +
-            `👤 CPF: ${ctx.cpfLogin || ""}\n` +
+            `👤 Documento: ${ctx.cpfLogin || ""}\n` +
             `🔑 Nova senha: ${ctx.senhaTemporaria || ""}\n\n` +
             `🔗 Faça login através do app ou acesse o site: https://van360.com.br/login`);
     },

@@ -16,6 +16,7 @@ export const UsuarioController = {
         const { id: usuarioId } = request.params as { id: string };
         const payload = request.body as { 
             nome?: string; 
+            razao_social?: string;
             apelido?: string; 
             telefone?: string; 
             assinatura_digital_url?: string;

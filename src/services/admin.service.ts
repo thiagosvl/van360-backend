@@ -14,10 +14,12 @@ import { notificationService } from "./notifications/notification.service.js";
 import { loginAttemptsRepository } from "../repositories/login-attempts.repository.js";
 import { EVENTO_MOTORISTA_CADASTRO_ADMIN, EVENTO_MOTORISTA_RESET_SENHA_ADMIN } from "../config/constants.js";
 
-function maskCpfHidden(cpf: string): string {
-  const cleaned = cpf.replace(/\D/g, "");
-  if (cleaned.length !== 11) return cpf;
-  return `${cleaned.slice(0, 3)}.${cleaned.slice(3, 4)}**.***-${cleaned.slice(9, 11)}`;
+function maskCpfCnpjHidden(cpfcnpj: string): string {
+  const cleaned = cpfcnpj.replace(/\D/g, "");
+  if (cleaned.length <= 11) {
+    return `${cleaned.slice(0, 3)}.${cleaned.slice(3, 4)}**.***-${cleaned.slice(9, 11)}`;
+  }
+  return `${cleaned.slice(0, 2)}.${cleaned.slice(2, 3)}**.***/****-${cleaned.slice(12, 14)}`;
 }
 
 function generateTempPassword(): string {
@@ -212,6 +214,7 @@ export const adminService = {
     const updatePayload: Record<string, unknown> = {};
 
     if (data.nome !== undefined) updatePayload.nome = cleanString(data.nome, true);
+    if (data.razao_social !== undefined) updatePayload.razao_social = data.razao_social ? cleanString(data.razao_social, true) : null;
     if (data.apelido !== undefined) updatePayload.apelido = data.apelido ? cleanString(data.apelido, true) : null;
     if (data.email !== undefined) updatePayload.email = data.email.toLowerCase().trim();
     if (data.telefone !== undefined) updatePayload.telefone = onlyDigits(data.telefone);
@@ -408,6 +411,7 @@ export const adminService = {
     const { error: insertError } = await userRepository.insert({
         id: userId,
         nome: cleanString(data.nome, true),
+        razao_social: data.razao_social ? cleanString(data.razao_social, true) : null,
         email: emailClean,
         telefone: onlyDigits(data.telefone),
         cpfcnpj: cpfcnpjClean,
@@ -431,7 +435,7 @@ export const adminService = {
     }
 
     if (data.telefone) {
-      const maskedCpf = maskCpfHidden(cpfcnpjClean);
+      const maskedCpf = maskCpfCnpjHidden(cpfcnpjClean);
       notificationService.notifyDriver(data.telefone, EVENTO_MOTORISTA_CADASTRO_ADMIN, {
         nomeMotorista: data.nome,
         cpfLogin: maskedCpf,
@@ -461,7 +465,7 @@ export const adminService = {
     }
 
     if (user.telefone) {
-      const maskedCpf = maskCpfHidden(user.cpfcnpj || "");
+      const maskedCpf = maskCpfCnpjHidden(user.cpfcnpj || "");
       notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_RESET_SENHA_ADMIN, {
         nomeMotorista: user.nome,
         cpfLogin: maskedCpf,

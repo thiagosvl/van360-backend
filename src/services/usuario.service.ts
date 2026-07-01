@@ -22,6 +22,7 @@ export async function validarAcessoUsuario(authUid: string, targetUsuarioId: str
 
 export async function atualizarUsuario(usuarioId: string, payload: {
   nome?: string;
+  razao_social?: string;
   apelido?: string;
   telefone?: string;
   assinatura_digital_url?: string;
@@ -32,6 +33,7 @@ export async function atualizarUsuario(usuarioId: string, payload: {
 
   const updates: any = { updated_at: getNowBR().toISOString() };
   if (payload.nome) updates.nome = cleanString(payload.nome, true);
+  if (payload.razao_social !== undefined) updates.razao_social = payload.razao_social ? cleanString(payload.razao_social, true) : null;
   if (payload.apelido) updates.apelido = cleanString(payload.apelido, true);
   if (payload.telefone) updates.telefone = onlyDigits(payload.telefone);
   if (payload.assinatura_digital_url !== undefined) updates.assinatura_digital_url = payload.assinatura_digital_url;

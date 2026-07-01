@@ -3,6 +3,7 @@ import { SubscriptionStatus, ConfigKey } from "../types/enums.js";
 
 export const updateUserAdminSchema = z.object({
   nome: z.string().min(2).max(120).optional(),
+  razao_social: z.string().optional().nullable(),
   apelido: z.string().max(60).optional().nullable(),
   email: z.string().email().optional(),
   telefone: z.string().min(10).max(15).optional(),
@@ -75,6 +76,7 @@ export type UpdatePlanDTO = z.infer<typeof updatePlanSchema>;
 
 export const createUserAdminSchema = z.object({
   nome: z.string().min(2).max(120),
+  razao_social: z.string().optional().nullable(),
   email: z.string().email(),
   telefone: z.string().min(10).max(15),
   cpfcnpj: z.string().min(11).max(14),

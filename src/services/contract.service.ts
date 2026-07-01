@@ -111,7 +111,7 @@ class ContractService {
       valorParcela: valorMensal,
       multaAtraso: usuario.config_contrato?.multa_atraso || { valor: 10, tipo: ContractMultaTipo.PERCENTUAL },
       multaRescisao: usuario.config_contrato?.multa_rescisao || { valor: 15, tipo: ContractMultaTipo.PERCENTUAL },
-      nomeCondutor: usuario.nome,
+      nomeCondutor: usuario.razao_social || usuario.nome,
       cpfCnpjCondutor: usuario.cpfcnpj,
       telefoneCondutor: usuario.telefone,
       placaVeiculo: passageiro.veiculo?.placa ? formatarPlacaExibicao(passageiro.veiculo.placa) : '',

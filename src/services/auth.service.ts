@@ -22,6 +22,7 @@ const TERMOS_VERSAO_ATUAL = "2026-04";
 
 export interface UsuarioPayload {
   nome: string;
+  razao_social?: string;
   apelido?: string;
   email: string;
   senha: string;
@@ -59,6 +60,7 @@ export interface AuthSession {
 
 export interface RegistroPayload {
   nome: string;
+  razao_social?: string;
   apelido?: string;
   email: string;
   senha: string;
@@ -107,8 +109,8 @@ export async function checkUserStatus(
     user.email?.toLowerCase().trim() === emailNormalizado ? "email" :
       user.telefone === telefoneNormalizado ? "telefone" : undefined;
 
-  const campoEmUso = field === "cpfcnpj" ? "CPF" : field === "email" ? "E-mail" : "Número";
-  const mensagem = campoEmUso ? `${campoEmUso} já está em uso.` : "E-mail/CPF/Número já está em uso.";
+  const campoEmUso = field === "cpfcnpj" ? "CPF/CNPJ" : field === "email" ? "E-mail" : "Número";
+  const mensagem = campoEmUso ? `${campoEmUso} já está em uso.` : "E-mail/CPF/CNPJ/Número já está em uso.";
 
   return {
     action: 'bloqueado_em_uso',
@@ -118,11 +120,12 @@ export async function checkUserStatus(
 }
 
 export async function criarUsuario(data: UsuarioPayload & { tipo?: UserType, id: string }) {
-  const { id, nome, apelido, email, cpfcnpj, telefone, ativo = false, tipo, termos_aceitos, data_nascimento } = data;
+  const { id, nome, razao_social, apelido, email, cpfcnpj, telefone, ativo = false, tipo, termos_aceitos, data_nascimento } = data;
 
   const { data: usuario, error } = await userRepository.insert({
       id,
       nome: cleanString(nome, true),
+      razao_social: razao_social ? cleanString(razao_social, true) : null,
       apelido: apelido ? cleanString(apelido, true) : null,
       email: cleanString(email).toLowerCase(),
       cpfcnpj: onlyDigits(cpfcnpj),
@@ -275,7 +278,7 @@ export async function login(
 ): Promise<AuthSession> {
   try {
     const cpf = onlyDigits(identifier);
-    if (!cpf) throw new AppError("CPF inválido.", 400);
+    if (!cpf) throw new AppError("CPF/CNPJ inválido.", 400);
 
     const { data: user, error } = await authRepository.getUserLogin(cpf);
 
