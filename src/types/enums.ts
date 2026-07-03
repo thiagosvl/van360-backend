@@ -42,6 +42,11 @@ export enum WhatsappStatus {
   NOT_FOUND = "NOT_FOUND"
 }
 
+export enum WhatsappPurpose {
+  TRANSACTIONAL = "TRANSACTIONAL",
+  BULK = "BULK"
+}
+
 export enum EvolutionEvent {
   // Eventos recebidos no Webhook (Lowercase/Dot notation)
   CONNECTION_UPDATE = "connection.update",

@@ -201,5 +201,12 @@ export const adminRepository = {
             .from("assinaturas")
             .update(data)
             .eq("id", id);
+    },
+
+    async getWhatsappInstances() {
+        return supabaseAdmin
+            .from("whatsapp_instances")
+            .select("*")
+            .order("created_at", { ascending: true });
     }
 };

@@ -53,7 +53,7 @@ export const webhookEvolutionHandler = {
             
             await notificationService.notifyAdmin(EVENTO_ADMIN_SISTEMA_ALERTA, {
                 titulo: "ALERTA DE DESCONEXÃO",
-                mensagem: "A conexão do WhatsApp foi perdida.",
+                mensagem: `A conexão do WhatsApp (Instância: ${instanceName}) foi perdida.`,
                 detalhes: {
                     "Instância": instanceName,
                     "Status": state

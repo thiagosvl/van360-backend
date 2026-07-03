@@ -492,4 +492,29 @@ export const adminService = {
 
     return { success: true };
   },
+
+  async getWhatsappInstances() {
+    const { data, error } = await adminRepository.getWhatsappInstances();
+    if (error) {
+      logger.error({ error }, "[AdminService] Erro ao buscar instâncias do WhatsApp no DB.");
+      throw error;
+    }
+
+    // Opcional: Buscar o status em tempo real da Evolution API para cada instância
+    const { whatsappService } = await import("./whatsapp.service.js");
+    const enhancedData = await Promise.all((data || []).map(async (instance: any) => {
+      try {
+        const status = await whatsappService.getInstanceStatus(instance.instance_name);
+        return {
+          ...instance,
+          evolution_status: status.state,
+          evolution_status_reason: status.statusReason
+        };
+      } catch (err) {
+        return { ...instance, evolution_status: "UNKNOWN" };
+      }
+    }));
+
+    return enhancedData;
+  },
 };

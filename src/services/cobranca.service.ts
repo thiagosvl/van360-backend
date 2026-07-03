@@ -446,13 +446,16 @@ export const cobrancaService = {
     const targetMonth = now.getDate() >= 23 ? (now.getMonth() === 11 ? 1 : now.getMonth() + 2) : (now.getMonth() + 1);
     const targetYear = (now.getDate() >= 23 && now.getMonth() === 11) ? now.getFullYear() + 1 : now.getFullYear();
 
-    let totalCreated = 0;
+    const { addToGenerationQueue } = await import("../queues/generation.queue.js");
 
     for (const m of motoristas) {
-      const res = await this.gerarCobrancasMensaisParaMotorista(m.id, targetMonth, targetYear);
-      totalCreated += res.created;
+      await addToGenerationQueue({
+        motoristaId: m.id,
+        mes: targetMonth,
+        ano: targetYear
+      });
     }
 
-    return { totalMotoristas: motoristas.length, totalCreated };
+    return { totalMotoristas: motoristas.length, queued: true };
   }
 };

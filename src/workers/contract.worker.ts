@@ -4,10 +4,8 @@ import { logger } from '../config/logger.js';
 import { redisConfig } from '../config/redis.js';
 import { contractRepository } from '../repositories/contract.repository.js';
 import { ContractJobData, QUEUE_NAME_CONTRACT } from '../queues/contract.queue.js';
-import { addToWhatsappQueue } from '../queues/whatsapp.queue.js';
 import { historicoService } from '../services/historico.service.js';
 import { AtividadeAcao, AtividadeEntidadeTipo, ContratoProvider } from '../types/enums.js';
-import { getFirstName } from '../utils/format.js';
 
 /**
  * Worker responsável por processar a geração de PDFs de contrato.
@@ -16,13 +14,13 @@ export const contractWorker = new Worker<ContractJobData>(
     QUEUE_NAME_CONTRACT,
     async (job: Job<ContractJobData>) => {
         const { contratoId, usuarioId, providerName, dadosContrato, passageiro, tokenAcesso } = job.data;
-        
+
         logger.info({ jobId: job.id, contratoId }, "[Worker] Iniciando processamento de contrato...");
 
         try {
             // 1. Import dinâmico do serviço para evitar circular dependency
             const { contractService } = await import('../services/contract.service.js');
-            
+
             // 2. Gerar PDF usando o provider correspondente
             // Nota: O provider deve ser obtido via service para garantir consistência
             const provider = (contractService as any).getProvider(providerName);
@@ -89,8 +87,8 @@ export const contractWorker = new Worker<ContractJobData>(
         connection: redisConfig,
         concurrency: 2, // Limite de 2 gerações simultâneas para poupar CPU/RAM
         limiter: {
-             max: 10, 
-             duration: 60000 
+            max: 10,
+            duration: 60000
         }
     }
 );

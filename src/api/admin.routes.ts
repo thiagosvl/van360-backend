@@ -25,6 +25,8 @@ const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   app.get("/plans", AdminController.getPlans);
   app.patch("/plans/:id", AdminController.updatePlan);
+
+  app.get("/whatsapp-instances", AdminController.getWhatsappInstances);
 };
 
 export default adminRoutes;
