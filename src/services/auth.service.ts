@@ -415,6 +415,16 @@ export async function solicitarRecuperacaoWhatsapp(cpf: string): Promise<{ telef
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   const expiraEm = addMinutes(getNowBR(), 15).toISOString();
 
+  // Rate Limiting / Cooldown: Previne spam (1 minuto de cooldown)
+  const { data: latestCode } = await authRepository.getLatestActiveRecoveryCode(user.id);
+  
+  if (latestCode) {
+    const diffSeconds = (getNowBR().getTime() - parseLocalDate(latestCode.created_at).getTime()) / 1000;
+    if (diffSeconds < 60) {
+      throw new AppError("Aguarde pelo menos 1 minuto para solicitar um novo código.", 429);
+    }
+  }
+
   // Invalida todos os códigos anteriores pendentes do usuário
   await authRepository.invalidateRecoveryCodes(user.id);
 

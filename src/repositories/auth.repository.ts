@@ -64,6 +64,17 @@ export const authRepository = {
             .maybeSingle();
     },
 
+    async getLatestActiveRecoveryCode(userId: string) {
+        return supabaseAdmin
+            .from("recuperacoes_senha")
+            .select("created_at")
+            .eq("usuario_id", userId)
+            .eq("usado", false)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+    },
+
     async markRecoveryCodeUsed(id: string) {
         return supabaseAdmin
             .from("recuperacoes_senha")
