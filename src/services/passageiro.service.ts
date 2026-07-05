@@ -396,7 +396,8 @@ const listarAniversariantesDoMes = async (usuarioId: string, mes: number) => {
     return {
         semanas: semanasFormatadas,
         passageirosSemData,
-        passageirosSemDataList
+        passageirosSemDataList,
+        totalPassageiros: passageiros.length
     };
 };
 

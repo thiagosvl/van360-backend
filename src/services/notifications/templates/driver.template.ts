@@ -74,7 +74,8 @@ export const DriverTemplates = {
         }
 
         if (ctx.passageirosSemData && ctx.passageirosSemData > 0) {
-            mensagem += `\n\n_(Lembrando que você possui ${ctx.passageirosSemData} passageiros sem data de nascimento cadastrada. Atualize os cadastros para não perder nenhuma data!)_`;
+            const passageiroLabel = ctx.passageirosSemData === 1 ? "passageiro" : "passageiros";
+            mensagem += `\n\n_(Lembrando que você possui ${ctx.passageirosSemData} ${passageiroLabel} sem data de nascimento cadastrada. Atualize os cadastros para não perder nenhuma data!)_`;
         }
 
         return textPart(mensagem);

@@ -28,16 +28,19 @@ export const birthdayReminderJob = {
       if (!usuario.telefone) continue;
 
       try {
-        const { semanas, passageirosSemData } = await passageiroService.listarAniversariantesDoMes(usuario.id, mesAtual);
+        const { semanas, passageirosSemData, totalPassageiros } = await passageiroService.listarAniversariantesDoMes(usuario.id, mesAtual);
 
-        // Precisamos filtrar apenas a semana em que estamos. 
+        if (totalPassageiros === 0) {
+          logger.info({ usuarioId: usuario.id }, "[BirthdayReminder] Usuário sem passageiros cadastrados, pulando...");
+          continue;
+        }
+
         const semanaAtualNoMes = Math.ceil(diaAtual / 7);
         const semanaGarantida = semanaAtualNoMes > 5 ? 5 : semanaAtualNoMes;
 
         const dadosDaSemana = semanas.find(s => s.semana === semanaGarantida);
         const aniversariantesList = dadosDaSemana?.aniversariantes || [];
 
-        // Notificar via notificationService (que gerenciará templates, instâncias, envio)
         await notificationService.notifyDriver(usuario.telefone, EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA, {
             nomeMotorista: usuario.nome,
             aniversariantesList: aniversariantesList.map((p: any) => ({
