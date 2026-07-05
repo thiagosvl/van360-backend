@@ -17,7 +17,10 @@ export const updateSubscriptionAdminSchema = z.object({
   status: z.nativeEnum(SubscriptionStatus).optional(),
   data_vencimento: z.string().optional().nullable(),
   trial_ends_at: z.string().optional().nullable(),
-  valor_promocional: z.coerce.number().min(0).optional().nullable(),
+  valor_base_mensal: z.coerce.number().min(0).optional().nullable(),
+  valor_base_anual: z.coerce.number().min(0).optional().nullable(),
+  valor_promocional_mensal: z.coerce.number().min(0).optional().nullable(),
+  valor_promocional_anual: z.coerce.number().min(0).optional().nullable(),
   data_fim_promocao: z.string().optional().nullable(),
 });
 

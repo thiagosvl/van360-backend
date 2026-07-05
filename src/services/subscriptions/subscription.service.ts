@@ -41,27 +41,37 @@ export const subscriptionService = {
      * Cria um Trial de 15 dias para novos usuários.
      */
     async createTrial(userId: string) {
-        const { data: plano } = await planRepository.getByIdentifier(SubscriptionIdentifer.MONTHLY);
+        const [{ data: planoMensal }, { data: planoAnual }] = await Promise.all([
+            planRepository.getByIdentifier(SubscriptionIdentifer.MONTHLY),
+            planRepository.getByIdentifier(SubscriptionIdentifer.YEARLY)
+        ]);
 
-        if (!plano) {
+        if (!planoMensal || !planoAnual) {
             logger.error({ identificador: SubscriptionIdentifer.MONTHLY }, "[SubscriptionService] Plano inicial não encontrado para criar Trial.");
-            throw new Error(`Plano '${SubscriptionIdentifer.MONTHLY}' não encontrado.`);
+            throw new Error(`Planos '${SubscriptionIdentifer.MONTHLY}' ou '${SubscriptionIdentifer.YEARLY}' não encontrados.`);
         }
 
         const trialEndsAtIso = getEndOfDayBR(addDays(getNowBR(), 15)).toISOString();
 
         const isPromotionActive = await getConfig(ConfigKey.SAAS_PROMOCAO_ATIVA, "false").then(v => v === "true");
-        let valorPromocional = undefined;
-        if (isPromotionActive && plano.valor_promocional !== null && plano.valor_promocional !== undefined) {
-            valorPromocional = Number(plano.valor_promocional);
+        let valorPromocionalMensal = undefined;
+        if (isPromotionActive && planoMensal.valor_promocional !== null && planoMensal.valor_promocional !== undefined) {
+            valorPromocionalMensal = Number(planoMensal.valor_promocional);
+        }
+
+        let valorPromocionalAnual = undefined;
+        if (isPromotionActive && planoAnual.valor_promocional !== null && planoAnual.valor_promocional !== undefined) {
+            valorPromocionalAnual = Number(planoAnual.valor_promocional);
         }
 
         const { data, error } = await subscriptionRepository.createTrial(
             userId, 
-            plano.id, 
+            planoMensal.id, 
             trialEndsAtIso, 
-            Number(plano.valor),
-            valorPromocional
+            Number(planoMensal.valor),
+            valorPromocionalMensal,
+            Number(planoAnual.valor),
+            valorPromocionalAnual
         );
 
         if (error) {

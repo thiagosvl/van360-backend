@@ -5,7 +5,8 @@ import {
     ConfigKey,
     AtividadeAcao,
     AtividadeEntidadeTipo,
-    PaymentProvider
+    PaymentProvider,
+    SubscriptionIdentifer
 } from "../../types/enums.js";
 import { getConfig, getConfigNumber } from "../configuracao.service.js";
 import { historicoService } from "../historico.service.js";
@@ -29,8 +30,14 @@ export const subscriptionBillingService = {
         if (!sub) throw new Error("Erro ao obter assinatura do usuário.");
 
         let valorFinal = Number(plano.valor);
-        if (sub.valor_base !== null && sub.valor_base !== undefined) {
-            valorFinal = Number(sub.valor_base);
+
+        // Define which base/promo values to look at based on the requested plan
+        const isAnual = planIdentificador === SubscriptionIdentifer.YEARLY;
+        const subValorBase = isAnual ? sub.valor_base_anual : sub.valor_base_mensal;
+        const subValorPromo = isAnual ? sub.valor_promocional_anual : sub.valor_promocional_mensal;
+
+        if (subValorBase !== null && subValorBase !== undefined) {
+            valorFinal = Number(subValorBase);
         }
 
         const isPromotionActive = await getConfig(ConfigKey.SAAS_PROMOCAO_ATIVA, "false") === "true";
@@ -39,15 +46,15 @@ export const subscriptionBillingService = {
             valorFinal = Number(plano.valor_promocional);
         }
 
-        if (sub.valor_promocional !== null && sub.valor_promocional !== undefined) {
+        if (subValorPromo !== null && subValorPromo !== undefined) {
             if (!sub.data_fim_promocao) {
                 // Definitivo
-                valorFinal = Number(sub.valor_promocional);
+                valorFinal = Number(subValorPromo);
             } else {
                 const fim = new Date(sub.data_fim_promocao).getTime();
                 const agora = getNowBR().getTime();
                 if (fim >= agora) {
-                    valorFinal = Number(sub.valor_promocional);
+                    valorFinal = Number(subValorPromo);
                 }
             }
         }
@@ -115,9 +122,8 @@ export const subscriptionBillingService = {
         if (!sub) throw new Error("Erro ao obter assinatura.");
 
         if (sub.plano_id !== planId) {
-             await subscriptionRepository.updatePlanAndBaseValue(sub.id, planId, Number(plano.valor));
+             await subscriptionRepository.updatePlan(sub.id, planId);
              sub.plano_id = planId;
-             sub.valor_base = plano.valor;
         }
 
         let currentPaymentToken = paymentToken;

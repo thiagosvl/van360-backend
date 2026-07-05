@@ -274,8 +274,6 @@ export const adminService = {
 
     if (data.plano_id !== undefined && data.plano_id !== sub.plano_id) {
         updatePayload.plano_id = data.plano_id;
-        const { data: novoPlano } = await planRepository.getById(data.plano_id);
-        if (novoPlano) updatePayload.valor_base = novoPlano.valor;
     } else if (data.plano_id !== undefined) {
         updatePayload.plano_id = data.plano_id;
     }
@@ -283,8 +281,10 @@ export const adminService = {
     if (data.data_vencimento !== undefined) updatePayload.data_vencimento = data.data_vencimento;
     if (data.trial_ends_at !== undefined) updatePayload.trial_ends_at = data.trial_ends_at;
     
-    // Novas colunas promocionais
-    if (data.valor_promocional !== undefined) updatePayload.valor_promocional = data.valor_promocional;
+    if (data.valor_base_mensal !== undefined) updatePayload.valor_base_mensal = data.valor_base_mensal;
+    if (data.valor_base_anual !== undefined) updatePayload.valor_base_anual = data.valor_base_anual;
+    if (data.valor_promocional_mensal !== undefined) updatePayload.valor_promocional_mensal = data.valor_promocional_mensal;
+    if (data.valor_promocional_anual !== undefined) updatePayload.valor_promocional_anual = data.valor_promocional_anual;
     if (data.data_fim_promocao !== undefined) updatePayload.data_fim_promocao = data.data_fim_promocao;
 
     updatePayload.updated_at = getNowBR().toISOString();

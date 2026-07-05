@@ -12,7 +12,7 @@ export const subscriptionRepository = {
             .maybeSingle();
     },
 
-    async createTrial(userId: string, planoId: string, trialEndsAtIso: string, valorBase?: number, valorPromocional?: number) {
+    async createTrial(userId: string, planoId: string, trialEndsAtIso: string, valorBaseMensal?: number, valorPromocionalMensal?: number, valorBaseAnual?: number, valorPromocionalAnual?: number) {
         return supabaseAdmin
             .from("assinaturas")
             .insert({
@@ -20,8 +20,10 @@ export const subscriptionRepository = {
                 plano_id: planoId,
                 status: SubscriptionStatus.TRIAL,
                 trial_ends_at: trialEndsAtIso,
-                valor_base: valorBase,
-                valor_promocional: valorPromocional
+                valor_base_mensal: valorBaseMensal,
+                valor_promocional_mensal: valorPromocionalMensal,
+                valor_base_anual: valorBaseAnual,
+                valor_promocional_anual: valorPromocionalAnual
             })
             .select("*, planos(*)")
             .single();
@@ -103,10 +105,10 @@ export const subscriptionRepository = {
         return supabaseAdmin.rpc("confirm_invoice_payment", { p_fatura_id: faturaId });
     },
 
-    async updatePlanAndBaseValue(id: string, planoId: string, valorBase: number) {
+    async updatePlan(id: string, planoId: string) {
         return supabaseAdmin
             .from("assinaturas")
-            .update({ plano_id: planoId, valor_base: valorBase, updated_at: new Date().toISOString() })
+            .update({ plano_id: planoId, updated_at: new Date().toISOString() })
             .eq("id", id);
     }
 };
