@@ -327,7 +327,9 @@ export const subscriptionMonitorService = {
         });
 
         const user = (sub as any).usuarios;
-        if (user?.telefone) {
+        const daysSinceExpiry = sub.data_vencimento ? diffInDays(sub.data_vencimento, now) : 0;
+
+        if (user?.telefone && daysSinceExpiry === 0) {
           await notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_ASSINATURA_VENCEU, {
             nomeMotorista: user.nome,
             planoNome: (sub as any).planos?.nome,

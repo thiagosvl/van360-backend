@@ -2,6 +2,13 @@ import { FastifyReply, FastifyRequest } from "fastify";
 import { subscriptionService } from "../services/subscriptions/subscription.service.js";
 import { logger } from "../config/logger.js";
 
+const EXEMPTED_ROUTES = [
+  "/api/admin",
+  "/api/subscriptions",
+  "/api/payments",
+  "/api/usuarios" // Permite atualizar dados do próprio perfil (canal aquisição, pix, etc)
+];
+
 /**
  * Middleware para bloquear ações de escrita (POST, PUT, DELETE, PATCH)
  * caso a assinatura SaaS do motorista esteja bloqueada/expirada.
@@ -16,8 +23,11 @@ export async function checkSubscriptionAccess(
   if (method === "GET") return;
 
   const url = request.url;
+  const isExempted = EXEMPTED_ROUTES.some(route => url.startsWith(route));
 
-  if (url.includes("/admin") || url.includes("/subscriptions") || url.includes("/payments")) return;
+  if (isExempted) {
+    return;
+  }
 
   const user = (request as any).user;
   if (user?.app_metadata?.role === "admin") return;

@@ -52,12 +52,12 @@ import { EvolutionWhatsappQueueAdapter } from "./adapters/evolution.adapter.js";
 import { MockSmsAdapter } from "./adapters/mock-sms.adapter.js";
 import { MockEmailAdapter } from "./adapters/mock-email.adapter.js";
 import { TelegramAdapter } from "./adapters/telegram.adapter.js";
-import { 
-    AdminRegistrationContext, 
-    AdminSubscriptionContext, 
+import {
+    AdminRegistrationContext,
+    AdminSubscriptionContext,
     AdminPaymentFailedContext,
     AdminSystemAlertContext,
-    AdminTemplates 
+    AdminTemplates
 } from "./templates/admin.template.js";
 
 export type NotificationChannel = "WHATSAPP" | "SMS" | "EMAIL" | "TELEGRAM";
@@ -169,33 +169,33 @@ class NotificationService {
         let parts: CompositeMessagePart[] = [];
 
         switch (type) {
-            case EVENTO_MOTORISTA_TESTE_BOAS_VINDAS:            parts = DriverTemplates.welcomeTrial(ctx); break;
-            case EVENTO_MOTORISTA_TESTE_EXPIRANDO:              parts = DriverTemplates.trialExpiring(ctx); break;
-            case EVENTO_MOTORISTA_TESTE_HOJE:                  parts = DriverTemplates.trialToday(ctx); break;
-            case EVENTO_MOTORISTA_TESTE_ENCERRADO:              parts = DriverTemplates.trialEnded(ctx); break;
-            case EVENTO_MOTORISTA_TRIAL_D7_ENGAJADO:            parts = DriverTemplates.trialMidpointEngaged(ctx); break;
-            case EVENTO_MOTORISTA_TRIAL_D7_INATIVO:             parts = DriverTemplates.trialMidpointInactive(ctx); break;
-            case EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO:       parts = DriverTemplates.trialLastCall(ctx); break;
-            case EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1:          parts = DriverTemplates.trialRecovery1(ctx); break;
-            case EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2:          parts = DriverTemplates.trialRecovery2(ctx); break;
-            case EVENTO_MOTORISTA_TRIAL_RECUPERACAO_FINAL:      parts = DriverTemplates.trialRecoveryFinal(ctx); break;
-            case EVENTO_MOTORISTA_ASSINATURA_PAGO:              parts = DriverTemplates.paymentConfirmed(ctx); break;
-            case EVENTO_MOTORISTA_ASSINATURA_VENCENDO:          parts = DriverTemplates.dueSoon(ctx); break;
-            case EVENTO_MOTORISTA_ASSINATURA_VENCEU:            parts = DriverTemplates.dueToday(ctx); break;
-            case EVENTO_MOTORISTA_ASSINATURA_ATRASADA:          parts = DriverTemplates.overdue(ctx); break;
-            case EVENTO_MOTORISTA_RENOVACAO_LEMBRETE:           parts = DriverTemplates.renewalLembrete(ctx); break;
-            case EVENTO_MOTORISTA_RENOVACAO_URGENCIA:           parts = DriverTemplates.renewalUrgencia(ctx); break;
-            case EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_1:      parts = DriverTemplates.renewalRecovery1(ctx); break;
-            case EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_FINAL:  parts = DriverTemplates.renewalRecoveryFinal(ctx); break;
-            case EVENTO_MOTORISTA_CONTRATO_ASSINADO:            parts = DriverTemplates.contractSigned(ctx); break;
-            case EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO:      parts = DriverTemplates.failedCC(ctx); break;
-            case EVENTO_MOTORISTA_CARTAO_COBRANCA_AVISO:        parts = DriverTemplates.cardChargeNotice(ctx); break;
-            case EVENTO_AUTH_RECUPERACAO_SENHA:                 parts = DriverTemplates.authRecovery(ctx); break;
-            case EVENTO_AUTH_SENHA_ALTERADA:                    parts = DriverTemplates.passwordChanged(ctx); break;
-            case EVENTO_MOTORISTA_CADASTRO_ADMIN:               parts = DriverTemplates.welcomeAdminCreated(ctx); break;
-            case EVENTO_MOTORISTA_RESET_SENHA_ADMIN:            parts = DriverTemplates.adminResetPassword(ctx); break;
-            case EVENTO_MOTORISTA_INDICACAO_BONUS:              parts = DriverTemplates.referralBonusReceived(ctx); break;
-            case EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA:       parts = DriverTemplates.birthdayReminderWeekly(ctx); break;
+            case EVENTO_MOTORISTA_TESTE_BOAS_VINDAS: parts = DriverTemplates.welcomeTrial(ctx); break;
+            case EVENTO_MOTORISTA_TESTE_EXPIRANDO: parts = DriverTemplates.trialExpiring(ctx); break;
+            case EVENTO_MOTORISTA_TESTE_HOJE: parts = DriverTemplates.trialToday(ctx); break;
+            case EVENTO_MOTORISTA_TESTE_ENCERRADO: parts = DriverTemplates.trialEnded(ctx); break;
+            case EVENTO_MOTORISTA_TRIAL_D7_ENGAJADO: parts = DriverTemplates.trialMidpointEngaged(ctx); break;
+            case EVENTO_MOTORISTA_TRIAL_D7_INATIVO: parts = DriverTemplates.trialMidpointInactive(ctx); break;
+            case EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO: parts = DriverTemplates.trialLastCall(ctx); break;
+            case EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1: parts = DriverTemplates.trialRecovery1(ctx); break;
+            case EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2: parts = DriverTemplates.trialRecovery2(ctx); break;
+            case EVENTO_MOTORISTA_TRIAL_RECUPERACAO_FINAL: parts = DriverTemplates.trialRecoveryFinal(ctx); break;
+            case EVENTO_MOTORISTA_ASSINATURA_PAGO: parts = DriverTemplates.paymentConfirmed(ctx); break;
+            case EVENTO_MOTORISTA_ASSINATURA_VENCENDO: parts = DriverTemplates.dueSoon(ctx); break;
+            case EVENTO_MOTORISTA_ASSINATURA_VENCEU: parts = DriverTemplates.dueToday(ctx); break;
+            case EVENTO_MOTORISTA_ASSINATURA_ATRASADA: parts = DriverTemplates.overdue(ctx); break;
+            case EVENTO_MOTORISTA_RENOVACAO_LEMBRETE: parts = DriverTemplates.renewalLembrete(ctx); break;
+            case EVENTO_MOTORISTA_RENOVACAO_URGENCIA: parts = DriverTemplates.renewalUrgencia(ctx); break;
+            case EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_1: parts = DriverTemplates.renewalRecovery1(ctx); break;
+            case EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_FINAL: parts = DriverTemplates.renewalRecoveryFinal(ctx); break;
+            case EVENTO_MOTORISTA_CONTRATO_ASSINADO: parts = DriverTemplates.contractSigned(ctx); break;
+            case EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO: parts = DriverTemplates.failedCC(ctx); break;
+            case EVENTO_MOTORISTA_CARTAO_COBRANCA_AVISO: parts = DriverTemplates.cardChargeNotice(ctx); break;
+            case EVENTO_AUTH_RECUPERACAO_SENHA: parts = DriverTemplates.authRecovery(ctx); break;
+            case EVENTO_AUTH_SENHA_ALTERADA: parts = DriverTemplates.passwordChanged(ctx); break;
+            case EVENTO_MOTORISTA_CADASTRO_ADMIN: parts = DriverTemplates.welcomeAdminCreated(ctx); break;
+            case EVENTO_MOTORISTA_RESET_SENHA_ADMIN: parts = DriverTemplates.adminResetPassword(ctx); break;
+            case EVENTO_MOTORISTA_INDICACAO_BONUS: parts = DriverTemplates.referralBonusReceived(ctx); break;
+            case EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA: parts = DriverTemplates.birthdayReminderWeekly(ctx); break;
         }
 
         return await this._processAndEnqueue(to, parts, type as string, options);
@@ -218,11 +218,11 @@ class NotificationService {
         let parts: CompositeMessagePart[] = [];
 
         switch (type) {
-            case EVENTO_ADMIN_NOVO_CADASTRO: 
-                parts = AdminTemplates.newRegistration(ctx as AdminRegistrationContext); 
+            case EVENTO_ADMIN_NOVO_CADASTRO:
+                parts = AdminTemplates.newRegistration(ctx as AdminRegistrationContext);
                 break;
-            case EVENTO_ADMIN_NOVA_ASSINATURA: 
-                parts = AdminTemplates.newSubscription(ctx as AdminSubscriptionContext); 
+            case EVENTO_ADMIN_NOVA_ASSINATURA:
+                parts = AdminTemplates.newSubscription(ctx as AdminSubscriptionContext);
                 break;
             case EVENTO_ADMIN_ASSINATURA_CANCELADA:
                 parts = AdminTemplates.subscriptionCanceled(ctx as AdminSubscriptionContext);
@@ -249,6 +249,16 @@ class NotificationService {
         options: NotificationOptions = {}
     ): Promise<boolean> {
         if (!parts || parts.length === 0) return false;
+
+        if (process.env.NODE_ENV !== "production") {
+            const devFlag = "\n\n*[AMBIENTE DEV]*";
+            const lastPartWithText = [...parts].reverse().find(p => p.type === "text" || p.content !== undefined);
+            if (lastPartWithText) {
+                lastPartWithText.content = (lastPartWithText.content || "") + devFlag;
+            } else {
+                parts.push({ type: "text", content: devFlag });
+            }
+        }
 
         const { channels = ["WHATSAPP"], whatsapp: whatsappOptions } = options;
 
