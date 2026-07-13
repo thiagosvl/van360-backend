@@ -46,9 +46,14 @@ export const adminService = {
     const totalPassageiros = passageirosRes.count ?? 0;
 
     const statusCounts: Record<string, number> = {};
+    let vitalicios = 0;
     if (assinaturasRes.data) {
       for (const sub of assinaturasRes.data) {
-        statusCounts[sub.status] = (statusCounts[sub.status] || 0) + 1;
+        if (sub.status === SubscriptionStatus.ACTIVE && !sub.data_vencimento) {
+          vitalicios++;
+        } else {
+          statusCounts[sub.status] = (statusCounts[sub.status] || 0) + 1;
+        }
       }
     }
 
@@ -76,6 +81,7 @@ export const adminService = {
       assinaturas: {
         trial: statusCounts[SubscriptionStatus.TRIAL] || 0,
         active: statusCounts[SubscriptionStatus.ACTIVE] || 0,
+        vitalicio: vitalicios,
         past_due: statusCounts[SubscriptionStatus.PAST_DUE] || 0,
         expired: statusCounts[SubscriptionStatus.EXPIRED] || 0,
         canceled: statusCounts[SubscriptionStatus.CANCELED] || 0,

@@ -14,14 +14,14 @@ export const adminRepository = {
                 .eq("ativo", true),
             supabaseAdmin
                 .from("assinaturas")
-                .select("status"),
+                .select("status, data_vencimento"),
             supabaseAdmin
                 .from("assinatura_faturas")
                 .select("valor, status")
                 .eq("status", "PAID"),
             supabaseAdmin
                 .from("usuarios")
-                .select("id, nome, email, telefone, created_at, tipo, assinaturas(status)")
+                .select("id, nome, email, telefone, created_at, tipo, assinaturas(status, data_vencimento)")
                 .eq("tipo", UserType.MOTORISTA)
                 .order("created_at", { ascending: false })
                 .limit(10),
