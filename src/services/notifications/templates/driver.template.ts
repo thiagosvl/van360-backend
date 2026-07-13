@@ -121,8 +121,9 @@ export const DriverTemplates = {
     },
 
     trialRecovery1: (ctx: DriverContext): CompositeMessagePart[] => {
-        return textPart(`🔔 *${getFirstName(ctx.nomeMotorista)}, seu acesso ao Van360 está suspenso*\n\n` +
-            `Seus dados e configurações continuam preservados. Assine pelo app para reativar imediatamente.`);
+        return textPart(`🔔 *${getFirstName(ctx.nomeMotorista)}, sentimos sua falta!*\n\n` +
+            `Seu acesso gratuito ao Van360 encerrou, mas não se preocupe: todos os seus dados e configurações continuam guardados em segurança.\n\n` +
+            `Assine pelo app para reativar seu acesso imediatamente e continuar organizando sua van com tranquilidade.`);
     },
 
     trialRecovery2: (ctx: DriverContext): CompositeMessagePart[] => {
@@ -136,8 +137,9 @@ export const DriverTemplates = {
     },
 
     trialRecoveryFinal: (ctx: DriverContext): CompositeMessagePart[] => {
-        return textPart(`${getFirstName(ctx.nomeMotorista)}, este é nosso último contato sobre o Van360.\n\n` +
-            `Sua conta e dados permanecem preservados caso decida reativar no futuro.`);
+        return textPart(`👋 *Até logo, ${getFirstName(ctx.nomeMotorista)}!*\n\n` +
+            `Não vamos mais te enviar mensagens sobre o Van360, mas saiba que as portas estão sempre abertas para você.\n\n` +
+            `Seus dados, rotas e passageiros continuam guardados com segurança. Sempre que decidir voltar, sua van já estará configurada e pronta para rodar! 🚐💙`);
     },
 
     renewalLembrete: (ctx: DriverContext): CompositeMessagePart[] => {
@@ -170,13 +172,14 @@ export const DriverTemplates = {
 
     renewalRecovery1: (ctx: DriverContext): CompositeMessagePart[] => {
         return textPart(`🔒 *Assinatura suspensa — Van360*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, sua conta foi suspensa por falta de pagamento. Seus dados estão preservados.\n\n` +
-            `Renove pelo app para reativar o acesso.`);
+            `${getFirstName(ctx.nomeMotorista)}, notamos que sua assinatura está com pagamento pendente e, por isso, seu acesso foi temporariamente suspenso.\n\n` +
+            `Fique tranquilo, todos os seus dados estão preservados. Renove pelo app para reativar a conta e voltar a gerenciar sua van sem interrupções!`);
     },
 
     renewalRecoveryFinal: (ctx: DriverContext): CompositeMessagePart[] => {
-        return textPart(`${getFirstName(ctx.nomeMotorista)}, este é nosso último contato sobre sua assinatura Van360.\n\n` +
-            `Sua conta continua disponível para reativação quando quiser.`);
+        return textPart(`👋 *Até logo, ${getFirstName(ctx.nomeMotorista)}!*\n\n` +
+            `Não vamos mais te enviar mensagens sobre a sua assinatura, mas queremos agradecer pelo tempo que esteve com a gente.\n\n` +
+            `Lembre-se de que sua conta e seus dados continuam salvos com segurança. Quando quiser voltar a organizar sua van com o Van360, estaremos aqui te esperando de braços abertos! 🚐💙`);
     },
 
     paymentConfirmed: (ctx: DriverContext): CompositeMessagePart[] => {
