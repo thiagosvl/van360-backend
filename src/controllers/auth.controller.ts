@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
-import { registrarUsuario, login as loginService, logout as logoutService, refreshToken as refreshTokenService, resetPassword as resetPasswordService, updatePassword as updatePasswordService, solicitarRecuperacaoWhatsapp, validarCodigoWhatsApp, resetarSenhaComCodigo } from "../services/auth.service.js";
+import { registrarUsuario, login as loginService, logout as logoutService, refreshToken as refreshTokenService, updatePassword as updatePasswordService, solicitarRecuperacaoWhatsapp, validarCodigoWhatsApp, resetarSenhaComCodigo } from "../services/auth.service.js";
 
 interface RegisterPayload {
     nome: string;
@@ -68,25 +68,6 @@ export const AuthController = {
             return reply.status(status).send({ error: err.message });
         }
     },
-
-    async resetPassword(request: FastifyRequest, reply: FastifyReply) {
-        logger.info("AuthController.resetPassword - Starting");
-        const { identifier, redirectTo } = request.body as any;
-
-        if (!identifier) {
-            return reply.status(400).send({ error: "E-mail ou CPF é obrigatório." });
-        }
-
-        try {
-            await resetPasswordService(identifier, redirectTo);
-            return reply.status(200).send({ success: true, message: "E-mail de recuperação enviado." });
-        } catch (err: any) {
-            logger.error({ error: err.message, identifier }, "Falha na solicitação de recuperação de senha.");
-            const status = err.statusCode || 500;
-            return reply.status(status).send({ error: err.message || "Erro ao processar solicitação." });
-        }
-    },
-
     async updatePassword(request: FastifyRequest, reply: FastifyReply) {
         const authHeader = request.headers.authorization;
         if (!authHeader) return reply.status(401).send({ error: "Token ausente." });

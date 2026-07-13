@@ -5,8 +5,7 @@ import { verifySupabaseJWT } from "../middleware/auth.js";
 export default async function authRoutes(app: FastifyInstance) {
     app.post("/login", AuthController.login);
 
-    app.post("/reset-password", AuthController.resetPassword);
-    
+
     // Recuperação via WhatsApp
     app.post("/recuperacao/solicitar", AuthController.solicitarRecuperacao);
     app.post("/recuperacao/validar", AuthController.validarCodigo);

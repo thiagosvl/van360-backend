@@ -119,9 +119,6 @@ export const cobrancaService = {
     if (data.data_pagamento !== undefined) cobrancaData.data_pagamento = data.data_pagamento;
     if (data.valor_pago !== undefined) cobrancaData.valor_pago = moneyToNumber(data.valor_pago);
 
-    // Lógica de regeneração de PIX removida conforme diretrizes do plano base.
-    let shouldResendNotification = false;
-
     const { data: updated, error } = await cobrancaRepository.update(id, cobrancaData);
 
     if (error) throw new AppError(`Erro ao atualizar cobrança: ${error.message}`, 500);
@@ -244,12 +241,14 @@ export const cobrancaService = {
     const now = getNowBR();
     const isNextMonthWindow = now.getDate() >= 23;
 
+    // Buscar as cobranças que já foram geradas neste mês/ano para este motorista
+    const { data: cobrancasExistentes } = await cobrancaRepository.getByMesAnoParaMotorista(motoristaId, targetMonth, targetYear);
+    const passageirosComCobranca = new Set(cobrancasExistentes?.map((c: any) => c.passageiro_id) || []);
+
     // 2. Iterar por Passageiro e Gerar Cobrança
     for (const passageiro of passageiros) {
       // Verificar se já existe cobrança para este mês/ano/passageiro
-      const { count } = await cobrancaRepository.countForMesAnoPassageiro(passageiro.id, targetMonth, targetYear);
-
-      if (count && count > 0) {
+      if (passageirosComCobranca.has(passageiro.id)) {
         skipped++;
         continue;
       }
@@ -291,18 +290,6 @@ export const cobrancaService = {
       }
     }
 
-    if (created > 0) {
-      // --- LOG DE AUDITORIA ---
-      historicoService.log({
-        usuario_id: motoristaId,
-        entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
-        entidade_id: motoristaId,
-        acao: AtividadeAcao.COBRANCAS_GERADAS,
-        descricao: `Geração automática de ${created} cobranças concluída para ${targetMonth}/${targetYear}.`,
-        meta: { mes: targetMonth, ano: targetYear, criadas: created, puladas: skipped }
-      });
-    }
-
     return { created, skipped };
   },
 
@@ -312,13 +299,30 @@ export const cobrancaService = {
     try {
       const now = getNowBR();
       const todayStr = toPersistenceString(now);
-      
+
       const thresholdDays = await getConfigNumber(ConfigKey.PASSAGEIRO_DIAS_AVISO_VENCIMENTO, 2);
       const thresholdDate = getNowBR();
       thresholdDate.setDate(now.getDate() + thresholdDays);
       const thresholdDateStr = toPersistenceString(thresholdDate);
 
-      const { data: cobrancas, error } = await cobrancaRepository.getPendentesParaNotificacao();
+      const targetDates = [todayStr];
+
+      // Aviso (Hoje + 1 até Hoje + thresholdDays)
+      for (let i = 1; i <= thresholdDays; i++) {
+        const d = getNowBR();
+        d.setDate(d.getDate() + i);
+        targetDates.push(toPersistenceString(d));
+      }
+
+      // Atrasos (Hoje - 3, Hoje - 5, Hoje - 7)
+      const atrasos = [3, 5, 7];
+      for (const dias of atrasos) {
+        const d = getNowBR();
+        d.setDate(d.getDate() - dias);
+        targetDates.push(toPersistenceString(d));
+      }
+
+      const { data: cobrancas, error } = await cobrancaRepository.getPendentesParaNotificacao(targetDates);
 
       if (error) {
         logger.error({ error: error.message }, "[CobrancaService] Erro ao buscar cobranças pendentes para notificações");
@@ -333,13 +337,14 @@ export const cobrancaService = {
       logger.info({ count: cobrancas.length }, "[CobrancaService] Processando notificações para cobranças pendentes...");
 
       let sentCount = 0;
+      const updatedCobrancaIds: string[] = [];
 
       for (const c of cobrancas) {
         const passageiro = c.passageiro;
         const motorista = c.motorista;
 
         if (!passageiro?.telefone_responsavel) continue;
-        
+
         // Verifica a flag global de notificações do passageiro
         if (passageiro?.enviar_notificacoes === false) continue;
 
@@ -400,16 +405,7 @@ export const cobrancaService = {
             );
 
             if (success) {
-              await cobrancaRepository.updateUltimaNotificacao(c.id, new Date().toISOString());
-
-              historicoService.log({
-                usuario_id: c.usuario_id,
-                entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
-                entidade_id: c.id,
-                acao: AtividadeAcao.NOTIFICACAO_WHATSAPP,
-                descricao: `Notificação de cobrança (${eventType}) enviada para o responsável de ${passageiro.nome}.`,
-                meta: { passageiro: passageiro.nome, tipo: eventType }
-              });
+              updatedCobrancaIds.push(c.id);
 
               sentCount++;
             }
@@ -418,6 +414,10 @@ export const cobrancaService = {
             logger.error({ err: msg, cobrancaId: c.id }, "[CobrancaService] Falha ao enviar notificação de cobrança individual");
           }
         }
+      }
+
+      if (updatedCobrancaIds.length > 0) {
+        await cobrancaRepository.updateBulkUltimaNotificacao(updatedCobrancaIds, new Date().toISOString());
       }
 
       logger.info({ sentCount }, "[CobrancaService] Envio diário de notificações de cobrança concluído.");

@@ -24,11 +24,11 @@ export const cobrancaPagamentoService = {
 
     // 2. REGISTRAR NO BANCO
     const { data: updated, error } = await cobrancaRepository.registrarPagamentoManual(cobrancaId, {
-        status: CobrancaStatus.PAGO,
-        pagamento_manual: true,
-        tipo_pagamento: data.tipo_pagamento || CobrancaTipoPagamento.DINHEIRO,
-        data_pagamento: data.data_pagamento || getNowBR(),
-        valor_pago: data.valor_pago || cobranca.valor,
+      status: CobrancaStatus.PAGO,
+      pagamento_manual: true,
+      tipo_pagamento: data.tipo_pagamento || CobrancaTipoPagamento.DINHEIRO,
+      data_pagamento: data.data_pagamento || getNowBR(),
+      valor_pago: data.valor_pago || cobranca.valor,
     });
 
     if (error) throw new AppError(`Erro ao registrar pagamento: ${error.message}`, 500);
@@ -93,11 +93,6 @@ export const cobrancaPagamentoService = {
       logger.error({ error, cobrancaId }, "Erro ao desfazer pagamento da cobrança");
       throw new AppError("Erro ao desfazer pagamento.", 500);
     }
-
-    // Notificação de reabertura manual desativada ou simplificada conforme plano base.
-    // cobrancaService.enviarNotificacaoManual(cobrancaId).catch((err: any) => {
-    //   logger.error({ err, cobrancaId }, "Falha ao enviar notificação manual após desfazer pagamento.");
-    // });
 
     // --- LOG DE AUDITORIA ---
     historicoService.log({

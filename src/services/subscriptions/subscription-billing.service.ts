@@ -201,14 +201,6 @@ export const subscriptionBillingService = {
                 });
 
                 if (failedInvoice) {
-                    await historicoService.log({
-                        usuario_id: userId,
-                        entidade_tipo: AtividadeEntidadeTipo.SAAS_FATURA,
-                        entidade_id: failedInvoice.id,
-                        acao: AtividadeAcao.SAAS_FATURA_GERADA,
-                        descricao: `Exceção na cobrança automática via ${paymentMethod.toUpperCase()} (Valor R$ ${valor}): ${errMsg}`
-                    });
-
                     try {
                         await invoiceRepository.cancelIncompleteInvoicesByUserId(userId, getNowBR().toISOString(), failedInvoice.id);
                     } catch (cleanupErr) {
@@ -239,14 +231,6 @@ export const subscriptionBillingService = {
                 });
 
                 if (failedInvoice) {
-                    await historicoService.log({
-                        usuario_id: userId,
-                        entidade_tipo: AtividadeEntidadeTipo.SAAS_FATURA,
-                        entidade_id: failedInvoice.id,
-                        acao: AtividadeAcao.SAAS_FATURA_GERADA,
-                        descricao: `Tentativa falhou via ${paymentMethod.toUpperCase()} (Valor R$ ${valor}): ${chargeRes.error}`
-                    });
-
                     try {
                         await invoiceRepository.cancelIncompleteInvoicesByUserId(userId, getNowBR().toISOString(), failedInvoice.id);
                     } catch (cleanupErr) {
@@ -322,14 +306,6 @@ export const subscriptionBillingService = {
         } catch (err: unknown) {
             logger.error({ err, userId }, "[SubscriptionBillingService] Falha ao cancelar faturas pendentes/recusadas anteriores.");
         }
-
-        await historicoService.log({
-            usuario_id: userId,
-            entidade_tipo: AtividadeEntidadeTipo.SAAS_FATURA,
-            entidade_id: fatura.id,
-            acao: AtividadeAcao.SAAS_FATURA_GERADA,
-            descricao: `Nova fatura gerada via ${paymentMethod.toUpperCase()} (Valor R$ ${valor})`
-        });
 
         return fatura;
     }

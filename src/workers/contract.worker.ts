@@ -60,19 +60,6 @@ export const contractWorker = new Worker<ContractJobData>(
                     }
                 );
 
-                // --- LOG DE AUDITORIA ---
-                historicoService.log({
-                    usuario_id: usuarioId,
-                    entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
-                    entidade_id: passageiro.id,
-                    acao: AtividadeAcao.NOTIFICACAO_WHATSAPP,
-                    descricao: `Link do contrato enviado via NotificationService para ${passageiro.nome_responsavel}.`,
-                    meta: {
-                        contrato_id: contratoId,
-                        contexto: "CONTRATO_GERADO",
-                    }
-                });
-
                 logger.info({ jobId: job.id, phone: passageiro.telefone_responsavel }, "[Worker] Notificação de contrato processada via NotificationService.");
             }
 

@@ -279,14 +279,14 @@ export const adminService = {
     const updatePayload: Record<string, unknown> = {};
 
     if (data.plano_id !== undefined && data.plano_id !== sub.plano_id) {
-        updatePayload.plano_id = data.plano_id;
+      updatePayload.plano_id = data.plano_id;
     } else if (data.plano_id !== undefined) {
-        updatePayload.plano_id = data.plano_id;
+      updatePayload.plano_id = data.plano_id;
     }
     if (data.status !== undefined) updatePayload.status = data.status;
     if (data.data_vencimento !== undefined) updatePayload.data_vencimento = data.data_vencimento;
     if (data.trial_ends_at !== undefined) updatePayload.trial_ends_at = data.trial_ends_at;
-    
+
     if (data.valor_base_mensal !== undefined) updatePayload.valor_base_mensal = data.valor_base_mensal;
     if (data.valor_base_anual !== undefined) updatePayload.valor_base_anual = data.valor_base_anual;
     if (data.valor_promocional_mensal !== undefined) updatePayload.valor_promocional_mensal = data.valor_promocional_mensal;
@@ -415,18 +415,18 @@ export const adminService = {
     const userId = authUser.user.id;
 
     const { error: insertError } = await userRepository.insert({
-        id: userId,
-        nome: cleanString(data.nome, true),
-        razao_social: data.razao_social ? cleanString(data.razao_social, true) : null,
-        email: emailClean,
-        telefone: onlyDigits(data.telefone),
-        cpfcnpj: cpfcnpjClean,
-        data_nascimento: parseBrazilianDateToISO(data.data_nascimento),
-        tipo: UserType.MOTORISTA,
-        ativo: true,
-        created_at: getNowBR().toISOString(),
-        updated_at: getNowBR().toISOString(),
-      });
+      id: userId,
+      nome: cleanString(data.nome, true),
+      razao_social: data.razao_social ? cleanString(data.razao_social, true) : null,
+      email: emailClean,
+      telefone: onlyDigits(data.telefone),
+      cpfcnpj: cpfcnpjClean,
+      data_nascimento: parseBrazilianDateToISO(data.data_nascimento),
+      tipo: UserType.MOTORISTA,
+      ativo: true,
+      created_at: getNowBR().toISOString(),
+      updated_at: getNowBR().toISOString(),
+    });
 
     if (insertError) {
       logger.error({ insertError, userId }, "[AdminService] Erro ao salvar dados cadastrais do usuário.");

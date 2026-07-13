@@ -43,13 +43,20 @@ export const monitorRepository = {
             .lte("trial_ends_at", now);
     },
 
-    async getExpiredTrialsForRecovery() {
-        return supabaseAdmin
+    async getExpiredTrialsForRecovery(windows: {from: string, to: string}[]) {
+        let query = supabaseAdmin
             .from("assinaturas")
             .select("id, usuario_id, trial_ends_at, usuarios(nome, telefone)")
             .eq("status", SubscriptionStatus.EXPIRED)
             .is("data_vencimento", null)
             .not("trial_ends_at", "is", null);
+
+        if (windows.length > 0) {
+            const orFilters = windows.map(w => `and(trial_ends_at.gte.${w.from},trial_ends_at.lte.${w.to})`);
+            query = query.or(orFilters.join(','));
+        }
+
+        return query;
     },
 
     async getPromotionValue() {
@@ -77,29 +84,61 @@ export const monitorRepository = {
             .lte("data_vencimento", graceLimitDate);
     },
 
-    async getPastDueForReminders() {
-        return supabaseAdmin
+    async getPastDueForReminders(windows: {from: string, to: string}[]) {
+        let query = supabaseAdmin
             .from("assinaturas")
             .select("id, usuario_id, data_vencimento, metodo_pagamento, usuarios(nome, telefone)")
             .eq("status", SubscriptionStatus.PAST_DUE)
             .not("data_vencimento", "is", null);
+
+        if (windows.length > 0) {
+            const orFilters = windows.map(w => `and(data_vencimento.gte.${w.from},data_vencimento.lte.${w.to})`);
+            query = query.or(orFilters.join(','));
+        }
+
+        return query;
     },
 
     async getPendingInvoiceByUserId(userId: string) {
         return supabaseAdmin
             .from("assinatura_faturas")
-            .select("id, valor, pix_copy_paste")
+            .select("valor, pix_copy_paste")
             .eq("usuario_id", userId)
             .eq("status", "PENDING")
+            .order("created_at", { ascending: false })
+            .limit(1)
             .maybeSingle();
     },
 
-    async getExpiredForRecovery() {
-        return supabaseAdmin
+
+    async getExpiredForRenewals(windows: {from: string, to: string}[]) {
+        let query = supabaseAdmin
             .from("assinaturas")
             .select("id, usuario_id, data_vencimento, usuarios(nome, telefone)")
             .eq("status", SubscriptionStatus.EXPIRED)
             .not("data_vencimento", "is", null);
+
+        if (windows.length > 0) {
+            const orFilters = windows.map(w => `and(data_vencimento.gte.${w.from},data_vencimento.lte.${w.to})`);
+            query = query.or(orFilters.join(','));
+        }
+
+        return query;
+    },
+
+    async getExpiredForRecovery(windows: {from: string, to: string}[]) {
+        let query = supabaseAdmin
+            .from("assinaturas")
+            .select("id, usuario_id, data_vencimento, usuarios(nome, telefone)")
+            .eq("status", SubscriptionStatus.EXPIRED)
+            .not("data_vencimento", "is", null);
+
+        if (windows.length > 0) {
+            const orFilters = windows.map(w => `and(data_vencimento.gte.${w.from},data_vencimento.lte.${w.to})`);
+            query = query.or(orFilters.join(','));
+        }
+
+        return query;
     },
 
     async getExpiringSubscriptions(thresholdStr: string) {
@@ -115,6 +154,34 @@ export const monitorRepository = {
             .from("assinatura_faturas")
             .select("id", { count: "exact", head: true })
             .eq("usuario_id", userId)
+            .eq("metodo_pagamento", "credit_card")
+            .eq("status", "FAILED")
+            .gte("created_at", sinceStr);
+    },
+
+    async getPassengerCountsByUsers(userIds: string[]) {
+        if (userIds.length === 0) return { data: [] };
+        return supabaseAdmin
+            .from("passageiros")
+            .select("usuario_id")
+            .in("usuario_id", userIds);
+    },
+
+    async getPendingInvoicesByUsers(userIds: string[]) {
+        if (userIds.length === 0) return { data: [] };
+        return supabaseAdmin
+            .from("assinatura_faturas")
+            .select("id, usuario_id, valor, pix_copy_paste")
+            .in("usuario_id", userIds)
+            .eq("status", "PENDING");
+    },
+
+    async getFailedCardInvoicesByUsers(userIds: string[], sinceStr: string) {
+        if (userIds.length === 0) return { data: [] };
+        return supabaseAdmin
+            .from("assinatura_faturas")
+            .select("usuario_id")
+            .in("usuario_id", userIds)
             .eq("metodo_pagamento", "credit_card")
             .eq("status", "FAILED")
             .gte("created_at", sinceStr);

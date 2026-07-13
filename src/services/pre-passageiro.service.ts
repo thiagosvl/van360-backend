@@ -62,12 +62,12 @@ export const prePassageiroService = {
     const { AtividadeAcao, AtividadeEntidadeTipo } = await import("../types/enums.js");
 
     historicoService.log({
-        usuario_id: payload.usuario_id,
-        entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
-        entidade_id: inserted.id,
-        acao: AtividadeAcao.PRE_CADASTRO_CRIADO,
-        descricao: `Novo formulário de interesse preenchido para ${inserted.nome}.`,
-        meta: { nome: inserted.nome, responsavel: inserted.nome_responsavel }
+      usuario_id: payload.usuario_id,
+      entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
+      entidade_id: inserted.id,
+      acao: AtividadeAcao.PRE_CADASTRO_CRIADO,
+      descricao: `Cadastro de solciitação de passageiro preenchido para ${inserted.nome}.`,
+      meta: { nome: inserted.nome, responsavel: inserted.nome_responsavel }
     });
 
     return inserted;

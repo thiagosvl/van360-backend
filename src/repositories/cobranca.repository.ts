@@ -120,7 +120,16 @@ export const cobrancaRepository = {
             .eq("ano", ano);
     },
 
-    async getPendentesParaNotificacao() {
+    async getByMesAnoParaMotorista(usuarioId: string, mes: number, ano: number) {
+        return supabaseAdmin
+            .from("cobrancas")
+            .select("passageiro_id")
+            .eq("usuario_id", usuarioId)
+            .eq("mes", mes)
+            .eq("ano", ano);
+    },
+
+    async getPendentesParaNotificacao(datasVencimento: string[]) {
         return supabaseAdmin
             .from("cobrancas")
             .select(`
@@ -133,14 +142,23 @@ export const cobrancaRepository = {
             `)
             .eq("status", CobrancaStatus.PENDENTE)
             .eq("desativar_lembretes", false)
-            .in("motorista.assinaturas.status", STATUS_ASSINATURA_LIBERADA);
+            .in("motorista.assinaturas.status", STATUS_ASSINATURA_LIBERADA)
+            .in("data_vencimento", datasVencimento);
     },
 
-    async updateUltimaNotificacao(id: string, dataIso: string) {
+    async updateUltimaNotificacao(id: string, dataISO: string) {
         return supabaseAdmin
             .from("cobrancas")
-            .update({ data_envio_ultima_notificacao: dataIso })
+            .update({ data_envio_ultima_notificacao: dataISO })
             .eq("id", id);
+    },
+
+    async updateBulkUltimaNotificacao(ids: string[], dataISO: string) {
+        if (ids.length === 0) return { data: null, error: null };
+        return supabaseAdmin
+            .from("cobrancas")
+            .update({ data_envio_ultima_notificacao: dataISO })
+            .in("id", ids);
     },
 
     async registrarPagamentoManual(id: string, data: any) {

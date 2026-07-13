@@ -8,6 +8,13 @@ export const historicoRepository = {
             .insert([data]);
     },
 
+    async insertBulk(dataArray: any[]) {
+        if (dataArray.length === 0) return { data: null, error: null };
+        return supabaseAdmin
+            .from('historico_atividades')
+            .insert(dataArray);
+    },
+
     async listByEntidade(tipo: AtividadeEntidadeTipo, id: string) {
         return supabaseAdmin
             .from('historico_atividades')

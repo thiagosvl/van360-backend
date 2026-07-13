@@ -75,16 +75,25 @@ export const subscriptionMonitorService = {
   },
 
   async logNotification(usuarioId: string, tipo: string, cicloRef: string, subId?: string, description?: string): Promise<void> {
-    if (subId) {
-      await historicoService.log({
-        usuario_id: usuarioId,
-        entidade_tipo: AtividadeEntidadeTipo.SAAS_ASSINATURA,
-        entidade_id: subId,
-        acao: AtividadeAcao.NOTIFICACAO_WHATSAPP,
-        descricao: description || `Notificação automática enviada via WhatsApp (${tipo})`
-      });
-    }
     return notificationRepository.logNotification(usuarioId, tipo, cicloRef);
+  },
+
+  async getNotifiedSet(userIds: string[], tipos: string[]): Promise<Set<string>> {
+    const { data } = await notificationRepository.getNotificationsForUsers(userIds, tipos);
+    return new Set(data?.map(d => `${d.usuario_id}:${d.tipo}:${d.ciclo_referencia}`) || []);
+  },
+
+  async logNotificationsBulk(
+    logs: { usuarioId: string, tipo: string, cicloRef: string, subId?: string, description?: string }[]
+  ): Promise<void> {
+    if (logs.length === 0) return;
+
+    const notifLogs = logs.map(l => ({
+      usuario_id: l.usuarioId,
+      tipo: l.tipo,
+      ciclo_referencia: l.cicloRef
+    }));
+    await notificationRepository.logNotificationsBulk(notifLogs);
   },
 
   // Retorna YYYY-MM-DD de uma string ISO ou Date
@@ -134,6 +143,11 @@ export const subscriptionMonitorService = {
 
     if (error || !expiring?.length) return;
 
+    const userIds = expiring.map((sub: any) => sub.usuario_id);
+    const tiposPossiveis = [EVENTO_MOTORISTA_TESTE_EXPIRANDO, EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO, EVENTO_MOTORISTA_TESTE_HOJE];
+    const notifiedSet = await this.getNotifiedSet(userIds, tiposPossiveis);
+    const logsToSave = [];
+
     for (const sub of expiring) {
       const user = (sub as any).usuarios;
       if (!user?.telefone || !sub.trial_ends_at) continue;
@@ -150,15 +164,23 @@ export const subscriptionMonitorService = {
       
       const cicloRef = this.toCicloRef(sub.trial_ends_at);
       
-      if (await this.hasNotified(sub.usuario_id, tipo, cicloRef)) continue;
+      if (notifiedSet.has(`${sub.usuario_id}:${tipo}:${cicloRef}`)) continue;
 
       await notificationService.notifyDriver(user.telefone, tipo, {
         nomeMotorista: user.nome,
         trialDays: daysLeft,
         dataVencimento: sub.trial_ends_at,
       });
-      await this.logNotification(sub.usuario_id, tipo, cicloRef, sub.id, `Aviso de fim de período de testes enviado (Faltam ${daysLeft} dias).`);
+      logsToSave.push({
+        usuarioId: sub.usuario_id,
+        tipo,
+        cicloRef,
+        subId: sub.id,
+        description: `Aviso de fim de período de testes enviado (Faltam ${daysLeft} dias).`
+      });
     }
+
+    await this.logNotificationsBulk(logsToSave);
   },
 
   // ---------------------------------------------------------------------------
@@ -177,6 +199,14 @@ export const subscriptionMonitorService = {
     }
     if (!trials?.length) return;
 
+    const userIds = trials.map((t: any) => t.usuario_id);
+    const { data: passengers } = await monitorRepository.getPassengerCountsByUsers(userIds);
+    const engagedUsers = new Set(passengers?.map((p: any) => p.usuario_id) || []);
+
+    const tiposPossiveis = [EVENTO_MOTORISTA_TRIAL_D7_ENGAJADO, EVENTO_MOTORISTA_TRIAL_D7_INATIVO];
+    const notifiedSet = await this.getNotifiedSet(userIds, tiposPossiveis);
+    const logsToSave = [];
+
     for (const sub of trials) {
       const user = (sub as any).usuarios;
       if (!user?.telefone || !sub.trial_ends_at) continue;
@@ -186,22 +216,28 @@ export const subscriptionMonitorService = {
       const tipoInativo  = EVENTO_MOTORISTA_TRIAL_D7_INATIVO;
 
       // Evita reenvio mesmo que o job rode com atraso
-      const jaEnviouEngajado = await this.hasNotified(sub.usuario_id, tipoEngajado, cicloRef);
-      const jaEnviouInativo  = await this.hasNotified(sub.usuario_id, tipoInativo, cicloRef);
+      const jaEnviouEngajado = notifiedSet.has(`${sub.usuario_id}:${tipoEngajado}:${cicloRef}`);
+      const jaEnviouInativo  = notifiedSet.has(`${sub.usuario_id}:${tipoInativo}:${cicloRef}`);
       if (jaEnviouEngajado || jaEnviouInativo) continue;
 
-      const { count } = await monitorRepository.getPassengerCount(sub.usuario_id);
-
       const daysLeft = diffInDays(now, sub.trial_ends_at);
-      const isEngaged = (count ?? 0) > 0;
+      const isEngaged = engagedUsers.has(sub.usuario_id);
       const tipo = isEngaged ? tipoEngajado : tipoInativo;
 
       await notificationService.notifyDriver(user.telefone, tipo, {
         nomeMotorista: user.nome,
         trialDays: daysLeft,
       });
-      await this.logNotification(sub.usuario_id, tipo, cicloRef, sub.id, `Dica de engajamento no app enviada (Dia 7).`);
+      logsToSave.push({
+        usuarioId: sub.usuario_id,
+        tipo,
+        cicloRef,
+        subId: sub.id,
+        description: `Dica de engajamento no app enviada (Dia 7).`
+      });
     }
+
+    await this.logNotificationsBulk(logsToSave);
   },
 
   // ---------------------------------------------------------------------------
@@ -230,13 +266,7 @@ export const subscriptionMonitorService = {
     for (const sub of expiredTrials) {
       await subscriptionService.updateStatus(sub.id, SubscriptionStatus.EXPIRED, "Período de teste encerrado.");
 
-      await historicoService.log({
-        usuario_id: sub.usuario_id,
-        entidade_tipo: AtividadeEntidadeTipo.SAAS_ASSINATURA,
-        entidade_id: sub.id,
-        acao: AtividadeAcao.SAAS_ASSINATURA_EXPIRADA,
-        descricao: "Seu período de teste grátis expirou. Assine agora para manter o acesso."
-      });
+
 
       const user = (sub as any).usuarios;
       if (user?.telefone) {
@@ -256,7 +286,14 @@ export const subscriptionMonitorService = {
   async notifyTrialRecoveries(): Promise<void> {
     const now = getNowBR();
 
-    const { data: expired, error } = await monitorRepository.getExpiredTrialsForRecovery();
+    const recoverySteps = [
+      { daysAgo: 14, tipo: EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1    },
+      { daysAgo: 20, tipo: EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2    },
+      { daysAgo: 25, tipo: EVENTO_MOTORISTA_TRIAL_RECUPERACAO_FINAL },
+    ];
+
+    const windows = recoverySteps.map(step => this.windowAround(now, step.daysAgo));
+    const { data: expired, error } = await monitorRepository.getExpiredTrialsForRecovery(windows);
 
     if (error) {
       logger.error({ error: error.message }, "[SubscriptionMonitor] Erro ao buscar trials expirados para recuperação");
@@ -271,11 +308,11 @@ export const subscriptionMonitorService = {
       valorPromocional = plano?.valor_promocional ?? undefined;
     }
 
-    const recoverySteps = [
-      { daysAgo: 14, tipo: EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1    },
-      { daysAgo: 20, tipo: EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2    },
-      { daysAgo: 25, tipo: EVENTO_MOTORISTA_TRIAL_RECUPERACAO_FINAL },
-    ];
+
+    const userIds = expired.map((sub: any) => sub.usuario_id);
+    const tiposPossiveis = recoverySteps.map(s => s.tipo);
+    const notifiedSet = await this.getNotifiedSet(userIds, tiposPossiveis);
+    const logsToSave = [];
 
     for (const sub of expired) {
       const user = (sub as any).usuarios;
@@ -287,16 +324,17 @@ export const subscriptionMonitorService = {
       for (const step of recoverySteps) {
         const inWindow = daysSinceExpiry >= step.daysAgo - 1 && daysSinceExpiry <= step.daysAgo + 1;
         if (!inWindow) continue;
-        if (await this.hasNotified(sub.usuario_id, step.tipo, cicloRef)) continue;
+        if (notifiedSet.has(`${sub.usuario_id}:${step.tipo}:${cicloRef}`)) continue;
 
         await notificationService.notifyDriver(user.telefone, step.tipo, {
           nomeMotorista: user.nome,
           valorPromocional: step.tipo === EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2 ? valorPromocional : undefined,
         });
-        await this.logNotification(sub.usuario_id, step.tipo, cicloRef);
+        logsToSave.push({ usuarioId: sub.usuario_id, tipo: step.tipo, cicloRef });
         break; // Um step por execução por usuário
       }
     }
+    await this.logNotificationsBulk(logsToSave);
   },
 
   // ---------------------------------------------------------------------------
@@ -316,16 +354,8 @@ export const subscriptionMonitorService = {
       logger.error({ error: pdError.message }, "[SubscriptionMonitor] Erro ao buscar assinaturas vencidas");
     } else if (pastDue?.length) {
       for (const sub of pastDue) {
-        await subscriptionService.updateStatus(sub.id, SubscriptionStatus.PAST_DUE, "Pagamento pendente (Vencido).");
+        await subscriptionService.updateStatus(sub.id, SubscriptionStatus.PAST_DUE, "Mensalidade não paga no dia do vencimento. Conta em carência.");
         
-        await historicoService.log({
-          usuario_id: sub.usuario_id,
-          entidade_tipo: AtividadeEntidadeTipo.SAAS_ASSINATURA,
-          entidade_id: sub.id,
-          acao: AtividadeAcao.SAAS_ASSINATURA_ATRASO,
-          descricao: "Sua assinatura entrou em carência por falta de pagamento. Regularize para evitar o bloqueio."
-        });
-
         const user = (sub as any).usuarios;
         const daysSinceExpiry = sub.data_vencimento ? diffInDays(sub.data_vencimento, now) : 0;
 
@@ -347,14 +377,6 @@ export const subscriptionMonitorService = {
       for (const sub of expired) {
         await subscriptionService.updateStatus(sub.id, SubscriptionStatus.EXPIRED, `Assinatura expirada por falta de pagamento (${gracePeriod} dias de atraso).`);
 
-        await historicoService.log({
-          usuario_id: sub.usuario_id,
-          entidade_tipo: AtividadeEntidadeTipo.SAAS_ASSINATURA,
-          entidade_id: sub.id,
-          acao: AtividadeAcao.SAAS_ASSINATURA_EXPIRADA,
-          descricao: "Assinatura expirada por falta de pagamento. Acesso bloqueado."
-        });
-
         const user = (sub as any).usuarios;
         if (user?.telefone) {
           await notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_ASSINATURA_ATRASADA, {
@@ -375,7 +397,13 @@ export const subscriptionMonitorService = {
   async notifyOverdueReminders(): Promise<void> {
     const now = getNowBR();
 
-    const { data: pastDue, error } = await monitorRepository.getPastDueForReminders();
+    const reminderSteps: { daysAgo: number, tipo: DriverEventType }[] = [
+      { daysAgo: 1, tipo: EVENTO_MOTORISTA_RENOVACAO_LEMBRETE  },
+      { daysAgo: 2, tipo: EVENTO_MOTORISTA_RENOVACAO_URGENCIA  },
+    ];
+
+    const windows = reminderSteps.map(step => this.windowAround(now, step.daysAgo));
+    const { data: pastDue, error } = await monitorRepository.getPastDueForReminders(windows);
 
     if (error) {
       logger.error({ error: error.message }, "[SubscriptionMonitor] Erro ao buscar PAST_DUE para lembretes");
@@ -383,10 +411,13 @@ export const subscriptionMonitorService = {
     }
     if (!pastDue?.length) return;
 
-    const reminderSteps: { daysAgo: number, tipo: DriverEventType }[] = [
-      { daysAgo: 1, tipo: EVENTO_MOTORISTA_RENOVACAO_LEMBRETE  },
-      { daysAgo: 2, tipo: EVENTO_MOTORISTA_RENOVACAO_URGENCIA  },
-    ];
+
+    const userIds = pastDue.map((sub: any) => sub.usuario_id);
+    const tiposPossiveis = reminderSteps.map(s => s.tipo);
+    const notifiedSet = await this.getNotifiedSet(userIds, tiposPossiveis);
+    const { data: pendingInvoices } = await monitorRepository.getPendingInvoicesByUsers(userIds);
+    const pendingUsersMap = new Map(pendingInvoices?.map((p: any) => [p.usuario_id, p]) || []);
+    const logsToSave = [];
 
     for (const sub of pastDue) {
       const user = (sub as any).usuarios;
@@ -397,10 +428,10 @@ export const subscriptionMonitorService = {
 
       for (const step of reminderSteps) {
         if (daysSince !== step.daysAgo) continue;
-        if (await this.hasNotified(sub.usuario_id, step.tipo, cicloRef)) continue;
+        if (notifiedSet.has(`${sub.usuario_id}:${step.tipo}:${cicloRef}`)) continue;
 
         // Inclui PIX se existir fatura pendente
-        const { data: fatura } = await monitorRepository.getPendingInvoiceByUserId(sub.usuario_id);
+        const fatura = pendingUsersMap.get(sub.usuario_id);
 
         await notificationService.notifyDriver(user.telefone, step.tipo, {
           nomeMotorista: user.nome,
@@ -409,10 +440,18 @@ export const subscriptionMonitorService = {
           metodoCobranca: sub.metodo_pagamento ?? undefined,
           planoNome: (sub as any).planos?.nome,
         });
-        await this.logNotification(sub.usuario_id, step.tipo, cicloRef, sub.id, `Lembrete de pagamento pendente enviado (${step.daysAgo} dias de atraso).`);
+        logsToSave.push({
+          usuarioId: sub.usuario_id,
+          tipo: step.tipo,
+          cicloRef,
+          subId: sub.id,
+          description: `Lembrete de pagamento pendente enviado (${step.daysAgo} dias de atraso).`
+        });
         break;
       }
     }
+
+    await this.logNotificationsBulk(logsToSave);
   },
 
   // ---------------------------------------------------------------------------
@@ -423,7 +462,13 @@ export const subscriptionMonitorService = {
   async notifyRenewalRecoveries(): Promise<void> {
     const now = getNowBR();
 
-    const { data: expired, error } = await monitorRepository.getExpiredForRecovery();
+    const recoverySteps = [
+      { daysAgo: 5,  tipo: EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_1     },
+      { daysAgo: 10, tipo: EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_FINAL  },
+    ];
+
+    const windows = recoverySteps.map(step => this.windowAround(now, step.daysAgo));
+    const { data: expired, error } = await monitorRepository.getExpiredForRecovery(windows);
 
     if (error) {
       logger.error({ error: error.message }, "[SubscriptionMonitor] Erro ao buscar expirados (assinantes) para recuperação");
@@ -431,10 +476,11 @@ export const subscriptionMonitorService = {
     }
     if (!expired?.length) return;
 
-    const recoverySteps = [
-      { daysAgo: 5,  tipo: EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_1     },
-      { daysAgo: 10, tipo: EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_FINAL  },
-    ];
+
+    const userIds = expired.map((sub: any) => sub.usuario_id);
+    const tiposPossiveis = recoverySteps.map(s => s.tipo);
+    const notifiedSet = await this.getNotifiedSet(userIds, tiposPossiveis);
+    const logsToSave = [];
 
     for (const sub of expired) {
       const user = (sub as any).usuarios;
@@ -446,15 +492,23 @@ export const subscriptionMonitorService = {
       for (const step of recoverySteps) {
         const inWindow = daysSince >= step.daysAgo - 1 && daysSince <= step.daysAgo + 1;
         if (!inWindow) continue;
-        if (await this.hasNotified(sub.usuario_id, step.tipo, cicloRef)) continue;
+        if (notifiedSet.has(`${sub.usuario_id}:${step.tipo}:${cicloRef}`)) continue;
 
         await notificationService.notifyDriver(user.telefone, step.tipo, {
           nomeMotorista: user.nome,
         });
-        await this.logNotification(sub.usuario_id, step.tipo, cicloRef, sub.id, `Oferta de recuperação de assinatura enviada (${step.daysAgo} dias após expiração).`);
+        logsToSave.push({
+          usuarioId: sub.usuario_id,
+          tipo: step.tipo,
+          cicloRef,
+          subId: sub.id,
+          description: `Oferta de recuperação de assinatura enviada (${step.daysAgo} dias após expiração).`
+        });
         break;
       }
     }
+
+    await this.logNotificationsBulk(logsToSave);
   },
 
   // ---------------------------------------------------------------------------
@@ -470,11 +524,27 @@ export const subscriptionMonitorService = {
 
     if (error || !expiring) return;
 
+    const userIds = expiring.map((e: any) => e.usuario_id);
+    const cardUserIds = expiring.filter((e: any) => e.metodo_pagamento === "credit_card").map((e: any) => e.usuario_id);
+
+    const { data: pendingInvoices } = await monitorRepository.getPendingInvoicesByUsers(userIds);
+    const pendingUsersMap = new Map(pendingInvoices?.map((p: any) => [p.usuario_id, p]) || []);
+
+    const { data: failedInvoices } = await monitorRepository.getFailedCardInvoicesByUsers(cardUserIds, addDays(now, -30).toISOString());
+    const failedCountsMap = new Map<string, number>();
+    failedInvoices?.forEach((f: any) => {
+        failedCountsMap.set(f.usuario_id, (failedCountsMap.get(f.usuario_id) || 0) + 1);
+    });
+
+    const tiposPossiveis = [EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO, EVENTO_MOTORISTA_CARTAO_COBRANCA_AVISO];
+    const notifiedSet = await this.getNotifiedSet(userIds, tiposPossiveis);
+    const logsToSave = [];
+
     for (const sub of expiring) {
       const user = (sub as any).usuarios;
       const isCard = sub.metodo_pagamento === "credit_card";
 
-      const { data: pendingInvoice } = await monitorRepository.getPendingInvoiceByUserId(sub.usuario_id);
+      const pendingInvoice = pendingUsersMap.get(sub.usuario_id);
 
       if (pendingInvoice) continue;
 
@@ -486,13 +556,13 @@ export const subscriptionMonitorService = {
 
       // Limite de tentativas para cartão: conta faturas FAILED nos últimos 30 dias
       if (isCard) {
-        const { count: failedCount } = await monitorRepository.getFailedCardInvoicesCount(sub.usuario_id, addDays(now, -30).toISOString());
+        const failedCount = failedCountsMap.get(sub.usuario_id) || 0;
 
-        if ((failedCount ?? 0) >= maxRetries) {
+        if (failedCount >= maxRetries) {
           logger.warn({ subId: sub.id, failedCount }, "[SubscriptionMonitor] Limite de tentativas de cartão atingido. Pulando.");
           if (user?.telefone) {
             const cicloRef = this.toCicloRef(sub.data_vencimento);
-            if (!await this.hasNotified(sub.usuario_id, EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO, cicloRef)) {
+            if (!notifiedSet.has(`${sub.usuario_id}:${EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO}:${cicloRef}`)) {
               await notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO, {
                 nomeMotorista: user.nome,
                 erro: "Número máximo de tentativas atingido.",
@@ -504,7 +574,13 @@ export const subscriptionMonitorService = {
                 erro: "Número máximo de tentativas atingido.",
                 planoNome: (sub as any).planos?.nome
               });
-              await this.logNotification(sub.usuario_id, EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO, cicloRef, sub.id, "Aviso de falha na cobrança automática do cartão enviado.");
+              logsToSave.push({
+                usuarioId: sub.usuario_id,
+                tipo: EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO,
+                cicloRef,
+                subId: sub.id,
+                description: "Aviso de falha na cobrança automática do cartão enviado."
+              });
             }
           }
           continue;
@@ -512,7 +588,7 @@ export const subscriptionMonitorService = {
 
         // Aviso antecipado de cobrança automática (apenas uma vez por ciclo)
         const cicloRef = this.toCicloRef(sub.data_vencimento);
-        if (!await this.hasNotified(sub.usuario_id, EVENTO_MOTORISTA_CARTAO_COBRANCA_AVISO, cicloRef)) {
+        if (!notifiedSet.has(`${sub.usuario_id}:${EVENTO_MOTORISTA_CARTAO_COBRANCA_AVISO}:${cicloRef}`)) {
           const cardLast4 = (sub as any).metodos_pagamento?.last_4_digits;
           if (user?.telefone) {
             await notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_CARTAO_COBRANCA_AVISO, {
@@ -522,7 +598,13 @@ export const subscriptionMonitorService = {
               cardLast4,
               planoNome: (sub as any).planos?.nome,
             });
-            await this.logNotification(sub.usuario_id, EVENTO_MOTORISTA_CARTAO_COBRANCA_AVISO, cicloRef, sub.id, "Aviso antecipado de cobrança automática no cartão enviado.");
+            logsToSave.push({
+              usuarioId: sub.usuario_id,
+              tipo: EVENTO_MOTORISTA_CARTAO_COBRANCA_AVISO,
+              cicloRef,
+              subId: sub.id,
+              description: "Aviso antecipado de cobrança automática no cartão enviado."
+            });
           }
         }
       }
@@ -537,15 +619,23 @@ export const subscriptionMonitorService = {
         });
 
         if (!isCard && user?.telefone && fatura.pix_copy_paste) {
-          await notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_ASSINATURA_VENCENDO, {
-            nomeMotorista: user.nome,
-            dataVencimento: sub.data_vencimento,
-            pixCopiaECola: fatura.pix_copy_paste,
-            valor: fatura.valor,
-            planoNome: (sub as any).planos?.nome,
-          });
           const cicloRef = this.toCicloRef(sub.data_vencimento || new Date());
-          await this.logNotification(sub.usuario_id, EVENTO_MOTORISTA_ASSINATURA_VENCENDO, cicloRef, sub.id, "Aviso de vencimento de PIX enviado.");
+          if (!notifiedSet.has(`${sub.usuario_id}:${EVENTO_MOTORISTA_ASSINATURA_VENCENDO}:${cicloRef}`)) {
+            await notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_ASSINATURA_VENCENDO, {
+              nomeMotorista: user.nome,
+              dataVencimento: sub.data_vencimento,
+              pixCopiaECola: fatura.pix_copy_paste,
+              valor: fatura.valor,
+              planoNome: (sub as any).planos?.nome,
+            });
+            logsToSave.push({
+              usuarioId: sub.usuario_id,
+              tipo: EVENTO_MOTORISTA_ASSINATURA_VENCENDO,
+              cicloRef,
+              subId: sub.id,
+              description: "Aviso de vencimento de PIX enviado."
+            });
+          }
         } else if (isCard) {
           logger.info({ userId: sub.usuario_id }, "[SubscriptionMonitor] Cobrança de renovação no cartão gerada com sucesso.");
         }
@@ -565,9 +655,19 @@ export const subscriptionMonitorService = {
             planoNome: (sub as any).planos?.nome
           });
           const cicloRef = this.toCicloRef(sub.data_vencimento || new Date());
-          await this.logNotification(sub.usuario_id, EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO, cicloRef, sub.id, "Aviso de falha na cobrança do cartão enviado.");
+          if (!notifiedSet.has(`${sub.usuario_id}:${EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO}:${cicloRef}`)) {
+            logsToSave.push({
+              usuarioId: sub.usuario_id,
+              tipo: EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO,
+              cicloRef,
+              subId: sub.id,
+              description: "Aviso de falha na cobrança do cartão enviado."
+            });
+          }
         }
       }
     }
+
+    await this.logNotificationsBulk(logsToSave);
   },
 };

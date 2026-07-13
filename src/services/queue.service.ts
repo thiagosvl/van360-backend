@@ -4,6 +4,7 @@ import { generationWorker } from "../workers/generation.worker.js";
 import { whatsappTransactionalWorker, whatsappBulkWorker } from "../workers/whatsapp.worker.js";
 import { telegramWorker } from "../workers/telegram.worker.js";
 import { cronWorker } from "../workers/cron.worker.js";
+import { birthdayWorker } from "../workers/birthday.worker.js";
 import { setupCronJobs } from "../queues/cron.queue.js";
 
 /**
@@ -22,6 +23,7 @@ export const queueService = {
         if (contractWorker) logger.info(`[QueueService] Worker iniciado: ${contractWorker.name}`);
         if (telegramWorker) logger.info(`[QueueService] Worker iniciado: ${telegramWorker.name}`);
         if (cronWorker) logger.info(`[QueueService] Worker iniciado: ${cronWorker.name}`);
+        if (birthdayWorker) logger.info(`[QueueService] Worker iniciado: ${birthdayWorker.name}`);
 
         logger.info("[QueueService] Todos os workers ativos e processando filas.");
     },
@@ -35,6 +37,7 @@ export const queueService = {
             contractWorker.close(),
             telegramWorker.close(),
             cronWorker.close(),
+            birthdayWorker.close(),
         ]);
         logger.info("[QueueService] Workers encerrados.");
     }

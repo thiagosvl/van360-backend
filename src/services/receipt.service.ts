@@ -159,7 +159,7 @@ class ReceiptService {
                                         passageiroFormatado ? this.renderRow("Passageiro", passageiroFormatado) : null,
                                         data.pagadorDocumento ? this.renderRow("CPF/CNPJ", data.pagadorDocumento) : null,
                                         this.renderRow("Data do Pagamento", data.data),
-                                        data.mes ? this.renderRow("Referente a", `${data.descricao || 'Parcela'} - ${referencia}`) :
+                                        data.mes ? this.renderRow("Mês de Referência", `${data.descricao || 'Parcela'} de ${referencia}`) :
                                             (data.descricao ? this.renderRow("Referente a", data.descricao) : null),
                                     ].filter(Boolean)
                                 }

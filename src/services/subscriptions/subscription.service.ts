@@ -227,21 +227,22 @@ export const subscriptionService = {
         
         const safeFaturaIdStr = res.fatura_id ? res.fatura_id.split("-")[0] : faturaId.split("-")[0];
 
-        await historicoService.log({
-            usuario_id: res.usuario_id!,
-            entidade_tipo: AtividadeEntidadeTipo.SAAS_FATURA,
-            entidade_id: res.fatura_id || faturaId,
-            acao: AtividadeAcao.SAAS_PAGAMENTO_RECEBIDO,
-            descricao: `Pagamento confirmado para fatura ${safeFaturaIdStr} (Valor R$ ${res.valor})`
-        });
-
-        await historicoService.log({
-            usuario_id: res.usuario_id!,
-            entidade_tipo: AtividadeEntidadeTipo.SAAS_ASSINATURA,
-            entidade_id: res.assinatura_id!,
-            acao: AtividadeAcao.SAAS_ASSINATURA_ATIVA,
-            descricao: `Assinatura ativada via plano ${res.plano_nome} até ${new Date(res.new_expiry!).toLocaleDateString("pt-BR")}`
-        });
+        await historicoService.bulkLog([
+            {
+                usuario_id: res.usuario_id!,
+                entidade_tipo: AtividadeEntidadeTipo.SAAS_FATURA,
+                entidade_id: res.fatura_id || faturaId,
+                acao: AtividadeAcao.SAAS_PAGAMENTO_RECEBIDO,
+                descricao: `Pagamento confirmado para fatura ${safeFaturaIdStr} (Valor R$ ${res.valor})`
+            },
+            {
+                usuario_id: res.usuario_id!,
+                entidade_tipo: AtividadeEntidadeTipo.SAAS_ASSINATURA,
+                entidade_id: res.assinatura_id!,
+                acao: AtividadeAcao.SAAS_ASSINATURA_ATIVA,
+                descricao: `Assinatura ativada via plano ${res.plano_nome} até ${new Date(res.new_expiry!).toLocaleDateString("pt-BR")}`
+            }
+        ]);
 
         await subscriptionReferralService.completeReferral(res.usuario_id!, res.fatura_id!);
 

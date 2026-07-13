@@ -371,40 +371,6 @@ export async function updatePassword(token: string, newPassword: string, oldPass
     }
   }
 }
-
-export async function resetPassword(identifier: string, redirectTo?: string): Promise<void> {
-  let email = identifier.trim();
-  const isCpf = /^\d+$/.test(identifier);
-  if (isCpf) {
-    const cpf = onlyDigits(identifier);
-    const { data: user, error } = await authRepository.getUserIdAndEmailByCpf(cpf);
-
-    if (error || !user) throw new AppError("Usuário não encontrado.", 404);
-    email = user.email;
-  }
-
-  const { error } = await authProvider.resetPasswordForEmail(email, {
-    redirectTo: redirectTo
-  });
-
-  if (error) {
-    logger.error({ error: error.message, email }, "Erro ao solicitar redefinição de senha.");
-    throw new AppError("Não foi possível enviar o e-mail de recuperação.", 500);
-  }
-
-  const { data: user } = await authRepository.getUserByEmail(email);
-
-  if (user) {
-    historicoService.log({
-      usuario_id: user.id,
-      entidade_tipo: AtividadeEntidadeTipo.USUARIO,
-      entidade_id: user.id,
-      acao: AtividadeAcao.RECUPERACAO_SENHA,
-      descricao: `Solicitação de redefinição de senha enviada para o e-mail.`
-    });
-  }
-}
-
 export async function solicitarRecuperacaoWhatsapp(cpf: string): Promise<{ telefoneMascarado: string }> {
   const cpfClean = onlyDigits(cpf);
   const { data: user, error } = await authRepository.getUserIdAndEmailByCpf(cpfClean);

@@ -38,6 +38,30 @@ export const historicoService = {
         }
     },
 
+    async bulkLog(logs: LogAtividadeParams[]): Promise<void> {
+        if (logs.length === 0) return;
+        try {
+            const contextIp = getContextIp();
+            const dataToInsert = logs.map(params => ({
+                usuario_id: params.usuario_id,
+                entidade_tipo: params.entidade_tipo,
+                entidade_id: params.entidade_id,
+                acao: params.acao,
+                descricao: params.descricao,
+                meta: params.meta || {},
+                ip_address: params.ip_address || contextIp || null
+            }));
+
+            const { error } = await historicoRepository.insertBulk(dataToInsert);
+
+            if (error) {
+                logger.error({ error }, "[historicoService.bulkLog] Erro ao inserir logs de atividade em lote");
+            }
+        } catch (err) {
+            logger.error({ err }, "[historicoService.bulkLog] Erro inesperado ao registrar atividades em lote");
+        }
+    },
+
     /**
      * Lista atividades de uma entidade específica.
      */

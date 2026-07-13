@@ -312,7 +312,7 @@ const finalizePreCadastro = async (
         entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
         entidade_id: novoPassageiro.id,
         acao: AtividadeAcao.PRE_CADASTRO_CONCLUIDO,
-        descricao: `Interesse de vaga (${novoPassageiro.nome}) convertido em passageiro.`,
+        descricao: `Cadastro Pendente de (${novoPassageiro.nome}) aprovado como passageiro.`,
         meta: { pre_id: prePassageiroId }
     });
 
@@ -350,7 +350,7 @@ const listarAniversariantesDoMes = async (usuarioId: string, mes: number) => {
     }
 
     const passageiros = todosAtivos || [];
-    
+
     passageiros.forEach(p => {
         if (!p.data_nascimento) {
             passageirosSemData++;
@@ -365,7 +365,7 @@ const listarAniversariantesDoMes = async (usuarioId: string, mes: number) => {
 
         const date = parseLocalDate(p.data_nascimento);
         const pMes = date.getMonth() + 1; // getMonth é 0-indexado
-        
+
         if (pMes === mes) {
             // Calcular em qual semana do mês a data cai
             const dia = date.getDate();
