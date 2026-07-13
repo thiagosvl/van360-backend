@@ -188,7 +188,7 @@ export class InHouseContractProvider implements ContractProvider {
       else if (
         c.includes('pagará à contratada') ||
         c.includes('parcelas deverão ser pagas') ||
-        c.includes('reajuste da mensalidade')
+        c.includes('reajuste do valor das parcelas')
       ) {
         sections[2].clauses.push(clausula);
       }

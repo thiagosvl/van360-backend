@@ -41,8 +41,7 @@ export const cobrancaService = {
     const cobrancaId = crypto.randomUUID();
     const valorNumerico = typeof data.valor === "string" ? moneyToNumber(data.valor) : data.valor;
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { tipo, ...cobrancaCleanData } = data;
+    const cobrancaCleanData = data;
 
     const cobrancaData: Record<string, unknown> = {
       id: cobrancaId,
@@ -181,7 +180,7 @@ export const cobrancaService = {
       entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
       entidade_id: id,
       acao: AtividadeAcao.COBRANCA_EXCLUIDA,
-      descricao: `Mensalidade de ${cobranca.mes}/${cobranca.ano} do passageiro ${passageiroNomeDelete} foi removida.`,
+      descricao: `Parcela de ${cobranca.mes}/${cobranca.ano} do passageiro ${passageiroNomeDelete} foi removida.`,
       meta: {
         valor: cobranca.valor,
         mes: cobranca.mes,
@@ -221,7 +220,7 @@ export const cobrancaService = {
       entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
       entidade_id: cobrancaId,
       acao: AtividadeAcao.CONFIG_LEMBRETE,
-      descricao: `Lembretes automáticos para esta mensalidade foram ${novoStatus ? 'DESATIVADOS' : 'REATIVADOS'}.`,
+      descricao: `Lembretes automáticos para esta parcela foram ${novoStatus ? 'DESATIVADOS' : 'REATIVADOS'}.`,
       meta: { desativar_lembretes: novoStatus }
     });
 

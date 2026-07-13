@@ -11,14 +11,14 @@ export const jobOrchestratorService = {
 
     const daysBefore = await getConfigNumber(ConfigKey.SAAS_DIAS_ANTECEDENCIA_RENOVACAO, 5);
 
-    // Fase 1: Processamento e Geração (Criar faturas e mensalidades novas)
+    // Fase 1: Processamento e Geração (Criar faturas e parcelas novas)
     const phase1Executions = [
       subscriptionMonitorService.generateRenewalInvoices(daysBefore).catch((err: Error) => {
         logger.error({ err }, "[JobOrchestrator] Erro ao gerar faturas de renovação SaaS");
         throw err;
       }),
       cobrancaService.gerarCobrancasMensaisParaTodos().catch((err: Error) => {
-        logger.error({ err }, "[JobOrchestrator] Erro ao processar mensalidades de passageiros");
+        logger.error({ err }, "[JobOrchestrator] Erro ao processar parcelas de passageiros");
         throw err;
       })
     ];
@@ -40,23 +40,23 @@ export const jobOrchestratorService = {
 
     const now = new Date();
     if (now.getDay() === 0) { // 0 = Domingo
-        phase2Executions.push(
-            birthdayReminderJob.runWeekly().catch((err: Error) => {
-                logger.error({ err }, "[JobOrchestrator] Erro ao processar lembretes de aniversário semanais");
-                throw err;
-            })
-        );
+      phase2Executions.push(
+        birthdayReminderJob.runWeekly().catch((err: Error) => {
+          logger.error({ err }, "[JobOrchestrator] Erro ao processar lembretes de aniversário semanais");
+          throw err;
+        })
+      );
     }
 
     logger.info({ totalJobs: phase2Executions.length }, "[JobOrchestrator] Disparando jobs de Fase 2 (Notificação)...");
     const phase2Results = await Promise.allSettled(phase2Executions);
-    
+
     return {
       status: "completed",
       jobsTriggered: phase1Executions.length + phase2Executions.length,
       results: {
-          phase1: phase1Results.map(r => r.status),
-          phase2: phase2Results.map(r => r.status)
+        phase1: phase1Results.map(r => r.status),
+        phase2: phase2Results.map(r => r.status)
       }
     };
   }

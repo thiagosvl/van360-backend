@@ -17,11 +17,6 @@ export enum CobrancaOrigem {
   AUTOMATICA = "automatica",
 }
 
-export enum CobrancaTipo {
-  MENSALIDADE = "mensalidade",
-  AVULSA = "avulsa"
-}
-
 export enum UserType {
   ADMIN = "admin",
   MOTORISTA = "motorista",

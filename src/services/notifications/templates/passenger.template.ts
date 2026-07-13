@@ -71,8 +71,8 @@ export const PassengerTemplates = {
         const data = formatToBrazilianDate(ctx.dataVencimento || "");
         const diasMsg = ctx.diasAntecedencia ? ` (daqui a ${ctx.diasAntecedencia} dias)` : "";
 
-        const text = `🗓️ *Mensalidade — ${ctx.nomePassageiro}*\n\n` +
-            `${getFirstName(ctx.nomeResponsavel)}, lembrete da mensalidade do transporte.\n\n` +
+        const text = `🗓️ *Parcela — ${ctx.nomePassageiro}*\n\n` +
+            `${getFirstName(ctx.nomeResponsavel)}, lembrete da parcela do transporte.\n\n` +
             `🔹 Valor: *${valor}*\n` +
             `🔹 Vencimento: *${data}*${diasMsg}${getSystemFooter(ctx)}`;
         return textPart(text);
@@ -83,8 +83,8 @@ export const PassengerTemplates = {
         const data = formatToBrazilianDate(ctx.dataVencimento || "");
         const diasMsg = ctx.diasAntecedencia ? ` (daqui a ${ctx.diasAntecedencia} dias)` : "";
 
-        const text = `🗓️ *Mensalidade — ${ctx.nomePassageiro}*\n\n` +
-            `${getFirstName(ctx.nomeResponsavel)}, lembrete da mensalidade do transporte.\n\n` +
+        const text = `🗓️ *Parcela — ${ctx.nomePassageiro}*\n\n` +
+            `${getFirstName(ctx.nomeResponsavel)}, lembrete da parcela do transporte.\n\n` +
             `🔹 Valor: *${valor}*\n` +
             `🔹 Vencimento: *${data}*${diasMsg}${getPixBlock(ctx)}${getSystemFooter(ctx)}`;
         return textPart(text);
@@ -94,8 +94,8 @@ export const PassengerTemplates = {
         const valor = formatCurrency(ctx.valor || 0);
         const data = formatToBrazilianDate(ctx.dataVencimento || "");
 
-        const text = `⚠️ *Mensalidade vence hoje — ${ctx.nomePassageiro}*\n\n` +
-            `${getFirstName(ctx.nomeResponsavel)}, a mensalidade (*${valor}*) está aguardando pagamento.\n\n` +
+        const text = `⚠️ *Parcela vence hoje — ${ctx.nomePassageiro}*\n\n` +
+            `${getFirstName(ctx.nomeResponsavel)}, a parcela (*${valor}*) está aguardando pagamento.\n\n` +
             `🔹 Valor: *${valor}*\n` +
             `🔹 Vencimento: *${data} (Hoje)*${getSystemFooter(ctx)}`;
         return textPart(text);
@@ -105,8 +105,8 @@ export const PassengerTemplates = {
         const valor = formatCurrency(ctx.valor || 0);
         const data = formatToBrazilianDate(ctx.dataVencimento || "");
 
-        const text = `⚠️ *Mensalidade vence hoje — ${ctx.nomePassageiro}*\n\n` +
-            `${getFirstName(ctx.nomeResponsavel)}, a mensalidade (*${valor}*) está aguardando pagamento.\n\n` +
+        const text = `⚠️ *Parcela vence hoje — ${ctx.nomePassageiro}*\n\n` +
+            `${getFirstName(ctx.nomeResponsavel)}, a parcela (*${valor}*) está aguardando pagamento.\n\n` +
             `🔹 Valor: *${valor}*\n` +
             `🔹 Vencimento: *${data} (Hoje)*${getPixBlock(ctx)}${getSystemFooter(ctx)}`;
         return textPart(text);
@@ -116,8 +116,8 @@ export const PassengerTemplates = {
         const valor = formatCurrency(ctx.valor || 0);
         const data = formatToBrazilianDate(ctx.dataVencimento || "");
 
-        const text = `🚨 *Mensalidade em atraso — ${ctx.nomePassageiro}*\n\n` +
-            `${getFirstName(ctx.nomeResponsavel)}, a mensalidade (*${valor}*) ainda não foi paga.\n\n` +
+        const text = `🚨 *Parcela em atraso — ${ctx.nomePassageiro}*\n\n` +
+            `${getFirstName(ctx.nomeResponsavel)}, a parcela (*${valor}*) ainda não foi paga.\n\n` +
             `🔹 Valor pendente: *${valor}*\n` +
             `🔹 Vencida em: *${data}*\n\n` +
             `Entre em contato com o motorista para regularizar.${getSystemFooter(ctx)}`;
@@ -128,8 +128,8 @@ export const PassengerTemplates = {
         const valor = formatCurrency(ctx.valor || 0);
         const data = formatToBrazilianDate(ctx.dataVencimento || "");
 
-        const text = `🚨 *Mensalidade em atraso — ${ctx.nomePassageiro}*\n\n` +
-            `${getFirstName(ctx.nomeResponsavel)}, a mensalidade (*${valor}*) ainda não foi paga.\n\n` +
+        const text = `🚨 *Parcela em atraso — ${ctx.nomePassageiro}*\n\n` +
+            `${getFirstName(ctx.nomeResponsavel)}, a parcela (*${valor}*) ainda não foi paga.\n\n` +
             `🔹 Valor pendente: *${valor}*\n` +
             `🔹 Vencida em: *${data}*${getPixBlock(ctx)}${getSystemFooter(ctx)}`;
         return textPart(text);

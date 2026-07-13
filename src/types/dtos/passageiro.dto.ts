@@ -10,67 +10,66 @@ const optionalString = z.union([z.string(), z.null(), z.undefined()]).transform(
 const optionalNumber = z.union([z.number(), z.string().length(0).transform(() => undefined), z.string().min(1).transform(val => Number(val))]).optional();
 
 export const createPassageiroSchema = z.object({
-    nome: z.string().min(1, "Nome é obrigatório"),
-    usuario_id: z.string().uuid("ID do usuário inválido"),
-    escola_id: z.string().uuid().optional().nullable().or(z.literal("")).transform(v => (v === "" || v === "none") ? null : v),
-    veiculo_id: z.string().uuid().optional().nullable().or(z.literal("")).transform(v => (v === "" || v === "none") ? null : v),
-    // Campos do App antigo / Flexíveis
-    nome_responsavel: optionalString,
-    responsavel_nome: optionalString, // Alias comum
-    cpf_responsavel: optionalString,
-    responsavel_cpf: optionalString, // Alias comum
-    telefone_responsavel: optionalString,
-    responsavel_telefone: optionalString, // Alias comum
+  nome: z.string().min(1, "Nome é obrigatório"),
+  usuario_id: z.string().uuid("ID do usuário inválido"),
+  escola_id: z.string().uuid().optional().nullable().or(z.literal("")).transform(v => (v === "" || v === "none") ? null : v),
+  veiculo_id: z.string().uuid().optional().nullable().or(z.literal("")).transform(v => (v === "" || v === "none") ? null : v),
+  // Campos do App antigo / Flexíveis
+  nome_responsavel: optionalString,
+  responsavel_nome: optionalString, // Alias comum
+  cpf_responsavel: optionalString,
+  responsavel_cpf: optionalString, // Alias comum
+  telefone_responsavel: optionalString,
+  responsavel_telefone: optionalString, // Alias comum
 
-    
-    // Endereço
-    logradouro: optionalString,
-    endereco_logradouro: optionalString,
-    bairro: optionalString,
-    endereco_bairro: optionalString,
-    cidade: optionalString,
-    endereco_cidade: optionalString,
-    referencia: optionalString,
-    observacoes: optionalString,
 
-    // Financeiro
-    dia_vencimento: optionalNumber,
-    valor_cobranca: z.union([z.number(), z.string()]).transform(val => val === "" ? undefined : (typeof val === 'string' ? moneyToNumber(val) : val)).optional(), 
-    valor_mensalidade: z.union([z.number(), z.string()]).transform(val => val === "" ? undefined : (typeof val === 'string' ? moneyToNumber(val) : val)).optional(), 
+  // Endereço
+  logradouro: optionalString,
+  endereco_logradouro: optionalString,
+  bairro: optionalString,
+  endereco_bairro: optionalString,
+  cidade: optionalString,
+  endereco_cidade: optionalString,
+  referencia: optionalString,
+  observacoes: optionalString,
 
-    // Controle
-    ativo: z.boolean().optional(),
-    enviar_notificacoes: z.boolean().optional(),
+  // Financeiro
+  dia_vencimento: optionalNumber,
+  valor_cobranca: z.union([z.number(), z.string()]).transform(val => val === "" ? undefined : (typeof val === 'string' ? moneyToNumber(val) : val)).optional(),
 
-    periodo: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
-      if (v === undefined) return undefined;
-      if (v === null || v === "") return null;
-      return v.toLowerCase();
-    }),
-    genero: optionalString,
-    
-    // Novos Campos
-    modalidade: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
-      if (v === undefined) return undefined;
-      if (v === null || v === "") return null;
-      return v;
-    }),
-    data_nascimento: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
-      if (v === undefined) return undefined;
-      if (v === null || v === "") return null;
-      return parseLocalDate(v);
-    }), // Aceita string ISO e converte
-    parentesco_responsavel: optionalString,
-    data_inicio_transporte: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
-      if (v === undefined) return undefined;
-      if (v === null || v === "") return null;
-      return parseLocalDate(v);
-    }),
-    data_fim_transporte: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
-      if (v === undefined) return undefined;
-      if (v === null || v === "") return null;
-      return parseLocalDate(v);
-    }),
+  // Controle
+  ativo: z.boolean().optional(),
+  enviar_notificacoes: z.boolean().optional(),
+
+  periodo: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
+    if (v === undefined) return undefined;
+    if (v === null || v === "") return null;
+    return v.toLowerCase();
+  }),
+  genero: optionalString,
+
+  // Novos Campos
+  modalidade: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
+    if (v === undefined) return undefined;
+    if (v === null || v === "") return null;
+    return v;
+  }),
+  data_nascimento: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
+    if (v === undefined) return undefined;
+    if (v === null || v === "") return null;
+    return parseLocalDate(v);
+  }), // Aceita string ISO e converte
+  parentesco_responsavel: optionalString,
+  data_inicio_transporte: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
+    if (v === undefined) return undefined;
+    if (v === null || v === "") return null;
+    return parseLocalDate(v);
+  }),
+  data_fim_transporte: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
+    if (v === undefined) return undefined;
+    if (v === null || v === "") return null;
+    return parseLocalDate(v);
+  }),
 
 }).passthrough(); // Permite outros campos não estritos por enquanto (migração suave)
 
@@ -80,18 +79,18 @@ export const updatePassageiroSchema = createPassageiroSchema.partial();
 export type UpdatePassageiroDTO = z.infer<typeof updatePassageiroSchema>;
 
 export const listPassageirosFiltersSchema = z.object({
-    search: z.string().optional(),
-    escola: z.string().optional(),
-    veiculo: z.string().optional(),
-    status: z.string().optional(),
-    periodo: z.string().optional(),
-    ativo: z.string().optional(), // Query params vêm como string
+  search: z.string().optional(),
+  escola: z.string().optional(),
+  veiculo: z.string().optional(),
+  status: z.string().optional(),
+  periodo: z.string().optional(),
+  ativo: z.string().optional(), // Query params vêm como string
 });
 
 export type ListPassageirosFiltersDTO = z.infer<typeof listPassageirosFiltersSchema>;
 
 export const toggleAtivoSchema = z.object({
-    novoStatus: z.boolean()
+  novoStatus: z.boolean()
 });
 
 export type ToggleAtivoDTO = z.infer<typeof toggleAtivoSchema>;
