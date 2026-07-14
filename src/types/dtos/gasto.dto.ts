@@ -14,7 +14,9 @@ export const createGastoSchema = z.object({
   descricao: z.string().optional(),
   km_atual: z.number().int().positive().optional(),
   litros: z.number().positive().optional(),
-  local: z.string().optional()
+  local: z.string().optional(),
+  parcelado: z.boolean().optional(),
+  parcelas: z.number().int().min(2).max(36).optional()
 });
 
 export const updateGastoSchema = createGastoSchema.partial().omit({ usuario_id: true }); // Usuario não muda

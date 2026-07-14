@@ -4,7 +4,7 @@ import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { cleanString } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
-import { toPersistenceString } from "../utils/date.utils.js";
+import { toPersistenceString, parseLocalDate } from "../utils/date.utils.js";
 
 // Helper Methods
 const _prepareGastoData = (data: Partial<CreateGastoDTO>, usuarioId?: string, isUpdate: boolean = false): Record<string, unknown> => {
@@ -30,9 +30,75 @@ const _prepareGastoData = (data: Partial<CreateGastoDTO>, usuarioId?: string, is
     return prepared;
 };
 
+const addMonthsFinancial = (dateStr: string, monthsToAdd: number): string => {
+    const d = parseLocalDate(dateStr);
+    const year = d.getFullYear();
+    const month = d.getMonth();
+    const day = d.getDate();
+
+    const targetDate = new Date(year, month + monthsToAdd, 1);
+    const maxDays = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0).getDate();
+    const targetDay = Math.min(day, maxDays);
+    targetDate.setDate(targetDay);
+    return toPersistenceString(targetDate);
+};
+
 export const gastoService = {
     async createGasto(data: CreateGastoDTO): Promise<any> {
         if (!data.usuario_id) throw new Error("Usuário obrigatório");
+
+        if (data.parcelado && data.parcelas && data.parcelas >= 2) {
+            const parcelasCriadas: any[] = [];
+            const valorTotalCentavos = Math.round(Number(data.valor) * 100);
+            const valorParcelaCentavos = Math.floor(valorTotalCentavos / data.parcelas);
+            const restoCentavos = valorTotalCentavos % data.parcelas;
+
+            for (let i = 1; i <= data.parcelas; i++) {
+                const valorParcela = (valorParcelaCentavos + (i === 1 ? restoCentavos : 0)) / 100;
+                const dataParcela = addMonthsFinancial(toPersistenceString(data.data), i - 1);
+                const descricaoParcela = data.descricao
+                    ? `${cleanString(data.descricao)} ${i}/${data.parcelas}`
+                    : `Parcela ${i}/${data.parcelas}`;
+
+                const parcelaGastoData = _prepareGastoData(
+                    {
+                        ...data,
+                        valor: valorParcela,
+                        data: dataParcela,
+                        descricao: descricaoParcela,
+                    },
+                    data.usuario_id,
+                    false
+                );
+
+                const { data: inserted, error } = await gastoRepository.insert(parcelaGastoData);
+                if (error) throw error;
+
+                parcelasCriadas.push(inserted);
+            }
+
+            // --- LOG DE AUDITORIA ÚNICO ---
+            const valorTotalFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(data.valor));
+            const valorPrimeiraParcelaFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parcelasCriadas[0].valor);
+
+            historicoService.log({
+                usuario_id: data.usuario_id,
+                entidade_tipo: AtividadeEntidadeTipo.GASTO,
+                entidade_id: parcelasCriadas[0].id,
+                acao: AtividadeAcao.GASTO_REGISTRADO,
+                descricao: `Gasto parcelado de ${valorTotalFormatado} registrado em ${data.categoria} (${data.parcelas}x de ${valorPrimeiraParcelaFormatado}).`,
+                meta: {
+                    valor_total: Number(data.valor),
+                    valor_parcela: parcelasCriadas[0].valor,
+                    parcelas: data.parcelas,
+                    categoria: data.categoria,
+                    descricao: data.descricao,
+                    parcelas_ids: parcelasCriadas.map(p => p.id)
+                }
+            });
+
+            return parcelasCriadas[0];
+        }
 
         const gastoData = _prepareGastoData(data, data.usuario_id, false);
 
