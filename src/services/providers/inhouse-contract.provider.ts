@@ -296,10 +296,19 @@ export class InHouseContractProvider implements ContractProvider {
     currentY = drawHeader('DO PERÍODO DO CONTRATO', currentY);
     const currentYear = getNowBR().getFullYear();
 
+    const formatMonthYear = (dateStr?: string) => {
+      if (!dateStr) return "-";
+      const parts = dateStr.split("-");
+      if (parts.length < 2) return "-";
+      return `${parts[1].padStart(2, '0')}/${parts[0]}`;
+    };
+
     page.drawText(`Ano Letivo: ${dados.ano || currentYear}`, { x: margin, y: currentY, size: smallTextSize, font });
-    page.drawText(`Início: ${formatToBrazilianDate(dados.dataInicio)}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
-    page.drawText(`Término: ${formatToBrazilianDate(dados.dataFim)}`, { x: 300, y: currentY - 14, size: smallTextSize, font });
-    currentY -= 55;
+    page.drawText(`Início do Transporte: ${formatToBrazilianDate(dados.dataInicio)}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
+    page.drawText(`Término do Transporte: ${formatToBrazilianDate(dados.dataFim)}`, { x: 300, y: currentY - 14, size: smallTextSize, font });
+    page.drawText(`Primeira Parcela: ${formatMonthYear(dados.dataInicioCobranca)}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
+    page.drawText(`Última Parcela: ${formatMonthYear(dados.dataFimCobranca)}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
+    currentY -= 68;
 
     currentY = drawHeader('DAS CONDIÇÕES DE VALOR', currentY);
     page.drawText(`Valor total do contrato (R$): ${dados.valorTotal.toLocaleString("pt-BR", {

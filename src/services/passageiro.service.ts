@@ -53,8 +53,9 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO>, usuarioId?: 
     if (data.parentesco_responsavel !== undefined) prepared.parentesco_responsavel = data.parentesco_responsavel;
     if (data.data_inicio_transporte !== undefined) prepared.data_inicio_transporte = data.data_inicio_transporte ? toPersistenceString(data.data_inicio_transporte) : null;
     if (data.data_fim_transporte !== undefined) prepared.data_fim_transporte = data.data_fim_transporte ? toPersistenceString(data.data_fim_transporte) : null;
+    if (data.data_inicio_cobranca !== undefined) prepared.data_inicio_cobranca = data.data_inicio_cobranca ? toPersistenceString(data.data_inicio_cobranca) : null;
+    if (data.data_fim_cobranca !== undefined) prepared.data_fim_cobranca = data.data_fim_cobranca ? toPersistenceString(data.data_fim_cobranca) : null;
     if (data.enviar_notificacoes !== undefined) prepared.enviar_notificacoes = data.enviar_notificacoes;
-
 
     // Controle
     if (data.ativo !== undefined) prepared.ativo = data.ativo;
@@ -123,6 +124,8 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO): Promise<
         (data.turma !== undefined && cleanString(data.turma || '', true) !== cleanString(estadoAnterior.turma || '', true)) ||
         (data.data_inicio_transporte !== undefined && data.data_inicio_transporte !== estadoAnterior.data_inicio_transporte) ||
         (data.data_fim_transporte !== undefined && data.data_fim_transporte !== estadoAnterior.data_fim_transporte) ||
+        (data.data_inicio_cobranca !== undefined && data.data_inicio_cobranca !== estadoAnterior.data_inicio_cobranca) ||
+        (data.data_fim_cobranca !== undefined && data.data_fim_cobranca !== estadoAnterior.data_fim_cobranca) ||
         (data.logradouro !== undefined && data.logradouro !== estadoAnterior.logradouro) ||
         (flexData.numero !== undefined && flexData.numero !== estadoAnterior.numero) ||
         (data.bairro !== undefined && data.bairro !== estadoAnterior.bairro) ||

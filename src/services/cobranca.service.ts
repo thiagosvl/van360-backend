@@ -263,6 +263,45 @@ export const cobrancaService = {
         }
       }
 
+      // Validar Período de Cobrança do Passageiro (timezone-safe)
+      const targetDateNum = targetYear * 12 + (targetMonth - 1);
+
+      const getYearMonth = (dateVal: any) => {
+        if (!dateVal) return null;
+        if (dateVal instanceof Date) {
+          return { year: dateVal.getFullYear(), month: dateVal.getMonth() + 1 };
+        }
+        if (typeof dateVal === 'string') {
+          const parts = dateVal.split("-").map(Number);
+          if (parts.length >= 2) {
+            return { year: parts[0], month: parts[1] };
+          }
+        }
+        return null;
+      };
+
+      if (passageiro.data_inicio_cobranca) {
+        const ym = getYearMonth(passageiro.data_inicio_cobranca);
+        if (ym) {
+          const inicioDateNum = ym.year * 12 + (ym.month - 1);
+          if (targetDateNum < inicioDateNum) {
+            skipped++;
+            continue;
+          }
+        }
+      }
+
+      if (passageiro.data_fim_cobranca) {
+        const ym = getYearMonth(passageiro.data_fim_cobranca);
+        if (ym) {
+          const fimDateNum = ym.year * 12 + (ym.month - 1);
+          if (targetDateNum > fimDateNum) {
+            skipped++;
+            continue;
+          }
+        }
+      }
+
       // Calcular Vencimento
       const diaVencimento = passageiro.dia_vencimento;
       const lastDayOfMonth = getLastDayOfMonth(targetYear, targetMonth);
