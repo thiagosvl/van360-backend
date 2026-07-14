@@ -430,7 +430,9 @@ export const cobrancaService = {
               diasAntecedencia: thresholdDays,
               usuarioId: c.usuario_id,
               chavePix: motorista.chave_pix,
-              tipoChavePix: motorista.tipo_chave_pix
+              tipoChavePix: motorista.tipo_chave_pix,
+              mes: c.mes,
+              ano: c.ano
             };
 
             const { notificationService } = await import("./notifications/notification.service.js");

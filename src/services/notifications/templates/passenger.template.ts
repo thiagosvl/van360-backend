@@ -28,9 +28,9 @@ const textPart = (text: string): CompositeMessagePart[] => {
 };
 
 const getParcelaTitle = (nomePassageiro: string, mes?: number): string => {
-    const mesLabel = getMonthNameBR(mes).toLowerCase();
+    const mesLabel = getMonthNameBR(mes);
     return mesLabel
-        ? `Parcela de ${mesLabel} — ${nomePassageiro}`
+        ? `Parcela ${mesLabel} — ${nomePassageiro}`
         : `Parcela — ${nomePassageiro}`;
 };
 
