@@ -1,6 +1,7 @@
 import { formatToBrazilianDate, getShortWeekDayBR } from "../../../utils/date.utils.js";
 import { formatCurrency, getFirstName, getFirstAndSecondName } from "../../../utils/format.js";
 import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
+import { CheckoutPaymentMethod } from "../../../types/enums.js";
 
 export interface DriverContext {
     nomeMotorista: string;
@@ -31,15 +32,12 @@ export interface DriverContext {
 const textPart = (text: string): CompositeMessagePart[] => {
     return [{ type: "text", content: text }];
 };
-
-export const DriverTemplates = {
+export const DriverTemplates = {
 
     welcomeTrial: (ctx: DriverContext): CompositeMessagePart[] => {
-        const validade = ctx.dataVencimento ? formatToBrazilianDate(ctx.dataVencimento) : "15 dias";
-        return textPart(`🚀 *Bem-vindo ao Van360!*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, sua conta está ativa com acesso completo até *${validade}*.\n\n` +
-            `Comece cadastrando seus passageiros e veja a organização digital da sua van funcionando na prática.\n\n` +
-            `Precisa de ajuda? Responda esta mensagem.`);
+        return textPart(`🚀 *Bem-vindo ao Van360, ${getFirstName(ctx.nomeMotorista)}!*\n\n` +
+            `Sua conta está ativa com acesso completo. Comece cadastrando seus passageiros e veja a organização digital da sua van funcionando na prática.\n\n` +
+            `Precisa de ajuda? Responda esta mensagem — estamos aqui.`);
     },
 
     birthdayReminderWeekly: (ctx: DriverContext): CompositeMessagePart[] => {
@@ -70,116 +68,129 @@ export const DriverTemplates = {
 
             mensagem += `Prepare algo especial e não se esqueça de parabenizá-los! 🥳`;
         } else {
-            mensagem += `Nenhum aniversariante nesta semana! 🥳`;
+            mensagem += `Sem aniversariantes nesta semana.`;
         }
 
         if (ctx.passageirosSemData && ctx.passageirosSemData > 0) {
             const passageiroLabel = ctx.passageirosSemData === 1 ? "passageiro" : "passageiros";
-            mensagem += `\n\n_(Lembrando que você possui ${ctx.passageirosSemData} ${passageiroLabel} sem data de nascimento cadastrada. Atualize os cadastros para não perder nenhuma data!)_`;
+            mensagem += `\n\n_(Lembrando que você possui ${ctx.passageirosSemData} ${passageiroLabel} sem data de nascimento cadastrada. Atualize pelo app para não perder nenhuma data!)_`;
         }
 
         return textPart(mensagem);
     },
 
-    trialExpiring: (ctx: DriverContext): CompositeMessagePart[] => {
-        const dias = ctx.trialDays ?? "alguns";
-        const diasLabel = dias === 1 ? "dia" : "dias";
-        const validade = ctx.dataVencimento ? formatToBrazilianDate(ctx.dataVencimento) : "";
-        const prazoStr = validade ? `após *${validade}*` : `em *${dias} ${diasLabel}*`;
-        return textPart(`⏳ *Seu teste gratuito acaba em ${dias} ${diasLabel}*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, ${prazoStr} o acesso será suspenso e você perde o controle de passageiros, cobranças e rotas.\n\n` +
-            `Assine agora pelo app e continue sem interrupção.`);
-    },
-
     trialEnded: (ctx: DriverContext): CompositeMessagePart[] => {
         return textPart(`🔒 *Acesso gratuito encerrado*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, seu período de teste no Van360 terminou. Seus dados estão preservados.\n\n` +
+            `${getFirstName(ctx.nomeMotorista)}, seu período de teste terminou, mas seus dados continuam preservados.\n\n` +
             `Assine pelo app para reativar o acesso imediatamente.`);
-    },
-
-    trialMidpointEngaged: (ctx: DriverContext): CompositeMessagePart[] => {
-        const dias = ctx.trialDays ?? 8;
-        return textPart(`📊 *${getFirstName(ctx.nomeMotorista)}, bom uso do Van360!*\n\n` +
-            `Restam *${dias} dias* do seu acesso gratuito. Assine agora para não perder os passageiros e controles que já configurou.`);
-    },
-
-    trialMidpointInactive: (ctx: DriverContext): CompositeMessagePart[] => {
-        const dias = ctx.trialDays ?? 8;
-        return textPart(`👋 *${getFirstName(ctx.nomeMotorista)}, seu teste está pela metade*\n\n` +
-            `Restam *${dias} dias* gratuitos. Cadastre seu primeiro passageiro agora e veja como a gestão da sua van fica mais simples.\n\n` +
-            `Precisa de ajuda para começar? Responda esta mensagem.`);
     },
 
     trialLastCall: (ctx: DriverContext): CompositeMessagePart[] => {
         return textPart(`⚠️ *${getFirstName(ctx.nomeMotorista)}, amanhã seu acesso expira*\n\n` +
-            `Último dia para assinar e manter o Van360 funcionando sem interrupção.`);
+            `Depois de amanhã, os controles de passageiros, parcelas e rotas serão pausados.\n\n` +
+            `Assine hoje pelo app e continue com tudo funcionando.`);
     },
 
-    trialToday: (ctx: DriverContext): CompositeMessagePart[] => {
-        return textPart(`🚨 *Último dia de acesso gratuito*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, seu teste no Van360 encerra *hoje*. Assine agora pelo app para não perder seus dados e configurações.`);
-    },
 
     trialRecovery1: (ctx: DriverContext): CompositeMessagePart[] => {
-        return textPart(`🔔 *${getFirstName(ctx.nomeMotorista)}, sentimos sua falta!*\n\n` +
-            `Seu acesso gratuito ao Van360 encerrou, mas não se preocupe: todos os seus dados e configurações continuam guardados em segurança.\n\n` +
-            `Assine pelo app para reativar seu acesso imediatamente e continuar organizando sua van com tranquilidade.`);
+        return textPart(`🔔 *Sentimos sua falta, ${getFirstName(ctx.nomeMotorista)}!*\n\n` +
+            `Seu acesso gratuito encerrou, mas todos os seus dados e configurações continuam guardados.\n\n` +
+            `Assine pelo app para reativar seu acesso e voltar a organizar sua van.`);
     },
 
     trialRecovery2: (ctx: DriverContext): CompositeMessagePart[] => {
         if (ctx.valorPromocional) {
-            return textPart(`🎁 *Oferta especial para você, ${getFirstName(ctx.nomeMotorista)}*\n\n` +
-                `Sua conta Van360 está suspensa. Reative agora por apenas *R$ ${ctx.valorPromocional.toFixed(2).replace('.', ',')}/mês* — oferta por tempo limitado.\n\n` +
-                `Seus dados estão preservados. A reativação é imediata pelo app.`);
+            return textPart(`🎁 *Oferta especial pra você, ${getFirstName(ctx.nomeMotorista)}!*\n\n` +
+                `Reative o Van360 por apenas *R$ ${ctx.valorPromocional.toFixed(2).replace('.', ',')}/mês* — oferta por tempo limitado.\n\n` +
+                `Seus dados continuam preservados. A reativação é imediata pelo app.`);
         }
-        return textPart(`🔔 *${getFirstName(ctx.nomeMotorista)}, reative seu Van360*\n\n` +
-            `Sua conta está suspensa, mas seus dados continuam preservados. Assine pelo app para reativar imediatamente.`);
+        return textPart(`🔔 *Reative seu Van360, ${getFirstName(ctx.nomeMotorista)}*\n\n` +
+            `Seus dados continuam preservados. Assine pelo app para reativar agora.`);
     },
 
-    trialRecoveryFinal: (ctx: DriverContext): CompositeMessagePart[] => {
-        return textPart(`👋 *Até logo, ${getFirstName(ctx.nomeMotorista)}!*\n\n` +
-            `Não vamos mais te enviar mensagens sobre o Van360, mas saiba que as portas estão sempre abertas para você.\n\n` +
-            `Seus dados, rotas e passageiros continuam guardados com segurança. Sempre que decidir voltar, sua van já estará configurada e pronta para rodar! 🚐💙`);
-    },
 
     renewalLembrete: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = ctx.valor ? formatCurrency(ctx.valor) : "";
         const valorStr = valor ? ` de *${valor}*` : "";
-        const planoStr = ctx.planoNome ? ` (Plano *${ctx.planoNome}*)` : "";
-        const isCard = ctx.metodoCobranca === "credit_card";
-        const extra = isCard
-            ? ` A cobrança no cartão não foi processada.\n\nAtualize o cartão ou pague via Pix no app.`
-            : ctx.pixCopiaECola
-                ? `\n\n💳 *Pix Copia e Cola:*\n${ctx.pixCopiaECola}\n\n_Copie e pague pelo app do seu banco._`
-                : `\n\nRegularize pelo app para manter o acesso.`;
-        return textPart(`🔔 *Pagamento pendente — Van360*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, sua assinatura${planoStr}${valorStr} venceu ontem.${extra}`);
+        const planoStr = ctx.planoNome ? ` *${ctx.planoNome}*` : "";
+        const isCard = ctx.metodoCobranca === CheckoutPaymentMethod.CREDIT_CARD;
+
+        if (isCard) {
+            return textPart(`🔔 *Pagamento pendente*\n\n` +
+                `${getFirstName(ctx.nomeMotorista)}, sua assinatura${planoStr}${valorStr} venceu ontem e a cobrança no cartão não foi processada.\n\n` +
+                `Atualize o cartão ou pague via Pix pelo app.`);
+        }
+
+        if (ctx.pixCopiaECola) {
+            return [
+                {
+                    type: "text",
+                    content: `🔔 *Pagamento pendente*\n\n` +
+                        `${getFirstName(ctx.nomeMotorista)}, sua assinatura${planoStr}${valorStr} venceu ontem.\n\n` +
+                        `Segue o código Pix Copia e Cola para pagamento:`
+                },
+                {
+                    type: "text",
+                    content: ctx.pixCopiaECola
+                },
+                {
+                    type: "text",
+                    content: `_Copie o código Pix acima e pague pelo app do seu banco._`
+                }
+            ];
+        }
+
+        return textPart(`🔔 *Pagamento pendente*\n\n` +
+            `${getFirstName(ctx.nomeMotorista)}, sua assinatura${planoStr}${valorStr} venceu ontem.\n\n` +
+            `Regularize pelo app para manter o acesso.`);
     },
 
     renewalUrgencia: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = ctx.valor ? formatCurrency(ctx.valor) : "";
         const valorStr = valor ? ` de *${valor}*` : "";
         const planoStr = ctx.planoNome ? ` (Plano *${ctx.planoNome}*)` : "";
-        const isCard = ctx.metodoCobranca === "credit_card";
-        const extra = isCard
-            ? ` Atualize o cartão ou pague via Pix no app para evitar a suspensão.`
-            : ctx.pixCopiaECola
-                ? `\n\n💳 *Pix Copia e Cola:*\n${ctx.pixCopiaECola}\n\n_Copie e pague pelo app do seu banco._`
-                : `\n\nRegularize hoje para evitar a suspensão.`;
-        return textPart(`🚨 *Acesso será suspenso amanhã*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, o pagamento${valorStr} da sua assinatura${planoStr} Van360 não foi confirmado.${extra}`);
+        const isCard = ctx.metodoCobranca === CheckoutPaymentMethod.CREDIT_CARD;
+
+        if (isCard) {
+            return textPart(`🚨 *Acesso será pausado amanhã*\n\n` +
+                `${getFirstName(ctx.nomeMotorista)}, o pagamento${valorStr} da sua assinatura${planoStr} ainda não foi confirmado.\n\n` +
+                `Atualize o cartão ou pague via Pix pelo app para evitar a pausa.`);
+        }
+
+        if (ctx.pixCopiaECola) {
+            return [
+                {
+                    type: "text",
+                    content: `🚨 *Acesso será pausado amanhã*\n\n` +
+                        `${getFirstName(ctx.nomeMotorista)}, o pagamento${valorStr} da sua assinatura${planoStr} ainda não foi confirmado.\n\n` +
+                        `Segue o código Pix Copia e Cola para pagamento:`
+                },
+                {
+                    type: "text",
+                    content: ctx.pixCopiaECola
+                },
+                {
+                    type: "text",
+                    content: `_Copie o código Pix acima e pague pelo app do seu banco._`
+                }
+            ];
+        }
+
+        return textPart(`🚨 *Acesso será pausado amanhã*\n\n` +
+            `${getFirstName(ctx.nomeMotorista)}, o pagamento${valorStr} da sua assinatura${planoStr} ainda não foi confirmado.\n\n` +
+            `Regularize hoje para evitar a pausa.`);
     },
 
     renewalRecovery1: (ctx: DriverContext): CompositeMessagePart[] => {
-        return textPart(`🔒 *Assinatura suspensa — Van360*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, notamos que sua assinatura está com pagamento pendente e, por isso, seu acesso foi temporariamente suspenso.\n\n` +
-            `Fique tranquilo, todos os seus dados estão preservados. Renove pelo app para reativar a conta e voltar a gerenciar sua van sem interrupções!`);
+        return textPart(`🔒 *Assinatura pausada*\n\n` +
+            `${getFirstName(ctx.nomeMotorista)}, seu acesso foi temporariamente pausado por pagamento pendente.\n\n` +
+            `Seus dados estão preservados. Renove pelo app para reativar a conta e voltar a gerenciar sua van.`);
     },
 
     renewalRecoveryFinal: (ctx: DriverContext): CompositeMessagePart[] => {
         return textPart(`👋 *Até logo, ${getFirstName(ctx.nomeMotorista)}!*\n\n` +
-            `Não vamos mais te enviar mensagens sobre a sua assinatura, mas queremos agradecer pelo tempo que esteve com a gente.\n\n` +
-            `Lembre-se de que sua conta e seus dados continuam salvos com segurança. Quando quiser voltar a organizar sua van com o Van360, estaremos aqui te esperando de braços abertos! 🚐💙`);
+            `Não vamos mais enviar mensagens sobre a assinatura, mas agradecemos pelo tempo com a gente.\n\n` +
+            `Sua conta e dados continuam salvos. Quando quiser voltar, estaremos aqui! 🚐💙`);
     },
 
     paymentConfirmed: (ctx: DriverContext): CompositeMessagePart[] => {
@@ -198,8 +209,28 @@ export const DriverTemplates = {
         const valor = ctx.valor ? formatCurrency(ctx.valor) : "";
         const valorStr = valor ? ` de *${valor}*` : "";
         const planoStr = ctx.planoNome ? ` (Plano *${ctx.planoNome}*)` : "";
-        return textPart(`⚠️ *Assinatura venceu hoje — Van360*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, o pagamento${valorStr} da sua assinatura${planoStr} Van360 venceu hoje. Regularize para manter o acesso ativo.`);
+
+        if (ctx.pixCopiaECola) {
+            return [
+                {
+                    type: "text",
+                    content: `⚠️ *Assinatura vence hoje*\n\n` +
+                        `${getFirstName(ctx.nomeMotorista)}, o pagamento${valorStr} da sua assinatura${planoStr} vence hoje.\n\n` +
+                        `Segue o código Pix Copia e Cola para pagamento:`
+                },
+                {
+                    type: "text",
+                    content: ctx.pixCopiaECola
+                },
+                {
+                    type: "text",
+                    content: `_Copie o código Pix acima e pague pelo app do seu banco._`
+                }
+            ];
+        }
+
+        return textPart(`⚠️ *Assinatura vence hoje*\n\n` +
+            `${getFirstName(ctx.nomeMotorista)}, o pagamento${valorStr} da sua assinatura${planoStr} vence hoje. Regularize pelo app para manter o acesso ativo.`);
     },
 
     dueSoon: (ctx: DriverContext): CompositeMessagePart[] => {
@@ -208,20 +239,37 @@ export const DriverTemplates = {
         const valorStr = valor ? ` de *${valor}*` : "";
         const dataTitle = data ? `em ${data}` : "em breve";
         const planoStr = ctx.planoNome ? `\n🏷️ Plano: *${ctx.planoNome}*` : "";
-        const pixExtra = ctx.pixCopiaECola
-            ? `\n\n💳 *Pix Copia e Cola:*\n${ctx.pixCopiaECola}\n\n_Copie e pague pelo app do seu banco._`
-            : "";
+
+        if (ctx.pixCopiaECola) {
+            return [
+                {
+                    type: "text",
+                    content: `🗓️ *Assinatura vence ${dataTitle}*\n\n` +
+                        `${getFirstName(ctx.nomeMotorista)}, sua mensalidade Van360${valorStr} vence em breve.${planoStr}\n\n` +
+                        `Pague em dia para que suas parcelas continuem sendo enviadas sem interrupção.\n\n` +
+                        `Segue o código Pix Copia e Cola para pagamento:`
+                },
+                {
+                    type: "text",
+                    content: ctx.pixCopiaECola
+                },
+                {
+                    type: "text",
+                    content: `_Copie o código Pix acima e pague pelo app do seu banco._`
+                }
+            ];
+        }
 
         return textPart(`🗓️ *Assinatura vence ${dataTitle}*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, sua mensalidade Van360${valorStr} vence em breve.${planoStr}\n\nMantenha em dia para não interromper suas cobranças.${pixExtra}`);
+            `${getFirstName(ctx.nomeMotorista)}, sua mensalidade Van360${valorStr} vence em breve.${planoStr}\n\nPague em dia para que suas parcelas continuem sendo enviadas sem interrupção.`);
     },
 
     overdue: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = ctx.valor ? formatCurrency(ctx.valor) : "";
         const valorStr = valor ? ` de *${valor}*` : "";
-        const planoStr = ctx.planoNome ? ` (Plano *${ctx.planoNome}*)` : "";
-        return textPart(`🚨 *Acesso suspenso — Van360*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, sua assinatura${planoStr}${valorStr} foi suspensa por falta de pagamento. Renove pelo app para reativar.`);
+        const planoStr = ctx.planoNome ? ` *${ctx.planoNome}*` : "";
+        return textPart(`🚨 *Acesso pausado*\n\n` +
+            `${getFirstName(ctx.nomeMotorista)}, sua assinatura${planoStr}${valorStr} foi pausada por pagamento pendente. Renove pelo app para reativar imediatamente.`);
     },
 
     contractSigned: (ctx: DriverContext): CompositeMessagePart[] => {
@@ -229,7 +277,7 @@ export const DriverTemplates = {
         const nomeResp = ctx.nomeResponsavel ? ` (responsável ${getFirstName(ctx.nomeResponsavel)})` : "";
         const linkStr = ctx.contratoUrl ? `\n\n📄 Veja o contrato:\n${ctx.contratoUrl}` : "";
         return textPart(`✍️ *Contrato assinado — ${ctx.nomePassageiro}*\n\n` +
-            `O contrato de *${nomePas}*${nomeResp} foi assinado com sucesso.${linkStr}`);
+            `${getFirstName(ctx.nomeMotorista)}, o contrato de *${nomePas}*${nomeResp} foi assinado com sucesso.${linkStr}`);
     },
 
     authRecovery: (ctx: DriverContext): CompositeMessagePart[] => {
@@ -254,33 +302,33 @@ export const DriverTemplates = {
             `${getFirstName(ctx.nomeMotorista)}, ` +
             (valor ? `*${valor}* será debitado no cartão${cardStr}.\n\n` : `sua assinatura será renovada.\n\n`) +
             planoStr +
-            `Para alterar o cartão ou pagar via Pix, acesse o app antes dessa data.`);
+            `Para alterar o método de pagamento, acesse o app antes dessa data.`);
     },
 
     failedCC: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = ctx.valor ? formatCurrency(ctx.valor) : "";
         const valorStr = valor ? ` *${valor}*` : "";
-        return textPart(`❌ *Falha na cobrança automática — Van360*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, não foi possível cobrar${valorStr} no seu cartão de crédito.\n\n` +
-            `Atualize o cartão ou pague via Pix no app para manter a conta ativa.`);
+        return textPart(`❌ *Falha na cobrança automática*\n\n` +
+            `${getFirstName(ctx.nomeMotorista)}, não conseguimos cobrar${valorStr} no seu cartão de crédito.\n\n` +
+            `Atualize o cartão ou pague via Pix pelo app para manter a conta ativa.`);
     },
 
     welcomeAdminCreated: (ctx: DriverContext): CompositeMessagePart[] => {
-        return textPart(`🚀 *Seu acesso ao Van360*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, sua conta foi criada.\n\n` +
+        return textPart(`🚀 *Bem-vindo ao Van360!*\n\n` +
+            `${getFirstName(ctx.nomeMotorista)}, sua conta foi criada e está pronta para uso.\n\n` +
             `*Dados de acesso:*\n` +
             `👤 Documento: ${ctx.cpfLogin || ""}\n` +
             `🔑 Senha: ${ctx.senhaTemporaria || ""} _(altere no primeiro acesso)_\n\n` +
-            `🔗 Faça login através do app ou acesse o site: https://van360.com.br/login`);
+            `🔗 Acesse: https://van360.com.br/login`);
     },
 
     adminResetPassword: (ctx: DriverContext): CompositeMessagePart[] => {
         return textPart(`🔐 *Senha redefinida — Van360*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, sua senha foi redefinida pelo administrador.\n\n` +
+            `${getFirstName(ctx.nomeMotorista)}, sua senha foi redefinida.\n\n` +
             `*Novos dados de acesso:*\n` +
             `👤 Documento: ${ctx.cpfLogin || ""}\n` +
             `🔑 Nova senha: ${ctx.senhaTemporaria || ""}\n\n` +
-            `🔗 Faça login através do app ou acesse o site: https://van360.com.br/login`);
+            `🔗 Acesse: https://van360.com.br/login`);
     },
 
     referralBonusReceived: (ctx: DriverContext): CompositeMessagePart[] => {
@@ -289,9 +337,9 @@ export const DriverTemplates = {
         const novaValidade = ctx.dataVencimento ? formatToBrazilianDate(ctx.dataVencimento) : "";
         const validadeTexto = novaValidade ? ` A nova validade do seu plano é *${novaValidade}*.` : "";
 
-        return textPart(`🎉 *Recompensa: ${dias} ${diasLabel} grátis! — Van360*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, um motorista que você indicou realizou a assinatura do app.\n\n` +
-            `Como agradecimento, acabamos de adicionar mais *${dias} ${diasLabel}* de acesso gratuito na sua assinatura!${validadeTexto}\n\n` +
-            `Continue indicando o Van360 para ganhar mais.`);
+        return textPart(`🎉 *Recompensa: ${dias} ${diasLabel} grátis!*\n\n` +
+            `${getFirstName(ctx.nomeMotorista)}, um motorista que você indicou assinou o Van360!\n\n` +
+            `Adicionamos *${dias} ${diasLabel}* de acesso gratuito à sua assinatura!${validadeTexto}\n\n` +
+            `Continue indicando para ganhar mais! 🚐`);
     }
 };

@@ -1,6 +1,5 @@
 import { logger } from "../../config/logger.js";
 import { SubscriptionStatus, ConfigKey, CheckoutPaymentMethod, AtividadeAcao, AtividadeEntidadeTipo } from "../../types/enums.js";
-import { historicoService } from "../historico.service.js";
 import { subscriptionService } from "./subscription.service.js";
 import { subscriptionBillingService } from "./subscription-billing.service.js";
 import { monitorRepository } from "../../repositories/monitor.repository.js";
@@ -12,17 +11,12 @@ import {
   EVENTO_MOTORISTA_ASSINATURA_ATRASADA,
   EVENTO_MOTORISTA_ASSINATURA_VENCEU,
   EVENTO_MOTORISTA_TESTE_ENCERRADO,
-  EVENTO_MOTORISTA_TESTE_EXPIRANDO,
   EVENTO_MOTORISTA_ASSINATURA_VENCENDO,
   EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO,
-  EVENTO_MOTORISTA_TESTE_HOJE,
   EVENTO_MOTORISTA_CARTAO_COBRANCA_AVISO,
-  EVENTO_MOTORISTA_TRIAL_D7_ENGAJADO,
-  EVENTO_MOTORISTA_TRIAL_D7_INATIVO,
   EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO,
   EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1,
   EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2,
-  EVENTO_MOTORISTA_TRIAL_RECUPERACAO_FINAL,
   EVENTO_MOTORISTA_RENOVACAO_LEMBRETE,
   EVENTO_MOTORISTA_RENOVACAO_URGENCIA,
   EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_1,
@@ -47,8 +41,7 @@ export const subscriptionMonitorService = {
       const daysBeforeTrial = await getConfigNumber(ConfigKey.SAAS_DIAS_AVISO_TRIAL, 3);
 
       // --- TRIAL ---
-      await this.warnExpiringTrials();                   // Avisos antes de expirar (3 dias, 1 dia)
-      await this.notifyTrialMidpoint();                   // D+7: engajamento ou ativação
+      await this.warnExpiringTrials();                   // Avisos antes de expirar (1 dia)
       await this.expireTrials();                          // D=trial_ends_at: expira + notifica
       await this.notifyTrialRecoveries();                 // D+16/+20/+25: recuperação pós-expiry
 
@@ -74,7 +67,7 @@ export const subscriptionMonitorService = {
     return notificationRepository.hasNotified(usuarioId, tipo, cicloRef);
   },
 
-  async logNotification(usuarioId: string, tipo: string, cicloRef: string, subId?: string, description?: string): Promise<void> {
+  async logNotification(usuarioId: string, tipo: string, cicloRef: string): Promise<void> {
     return notificationRepository.logNotification(usuarioId, tipo, cicloRef);
   },
 
@@ -84,7 +77,7 @@ export const subscriptionMonitorService = {
   },
 
   async logNotificationsBulk(
-    logs: { usuarioId: string, tipo: string, cicloRef: string, subId?: string, description?: string }[]
+    logs: { usuarioId: string, tipo: string, cicloRef: string }[]
   ): Promise<void> {
     if (logs.length === 0) return;
 
@@ -106,7 +99,7 @@ export const subscriptionMonitorService = {
   windowAround(baseDate: Date, daysAgo: number): { from: string; to: string } {
     return {
       from: addDays(baseDate, -(daysAgo + 1)).toISOString(),
-      to:   getEndOfDayBR(addDays(baseDate, -(daysAgo - 1))).toISOString(),
+      to: getEndOfDayBR(addDays(baseDate, -(daysAgo - 1))).toISOString(),
     };
   },
 
@@ -133,8 +126,8 @@ export const subscriptionMonitorService = {
 
   async warnExpiringTrials(): Promise<void> {
     const now = getNowBR();
-    const daysBeforeExpiry = await getConfigNumber(ConfigKey.SAAS_DIAS_AVISO_TRIAL, 3);
-    
+    const daysBeforeExpiry = 1; // Avisar apenas na véspera
+
     // Janela alargada para pegar qualquer um que expire em até N dias
     const windowStart = now.toISOString();
     const windowEnd = getEndOfDayBR(addDays(now, daysBeforeExpiry)).toISOString();
@@ -144,7 +137,7 @@ export const subscriptionMonitorService = {
     if (error || !expiring?.length) return;
 
     const userIds = expiring.map((sub: any) => sub.usuario_id);
-    const tiposPossiveis = [EVENTO_MOTORISTA_TESTE_EXPIRANDO, EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO, EVENTO_MOTORISTA_TESTE_HOJE];
+    const tiposPossiveis = [EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO];
     const notifiedSet = await this.getNotifiedSet(userIds, tiposPossiveis);
     const logsToSave = [];
 
@@ -154,16 +147,11 @@ export const subscriptionMonitorService = {
 
       const daysLeft = diffInDays(now, sub.trial_ends_at);
 
-      // Determinamos o tipo de evento baseado nos dias restantes
-      // 0 dias = Hoje
-      // 1 dia = Amanhã (Urgente)
-      // N dias = Aviso normal
-      let tipo: DriverEventType = EVENTO_MOTORISTA_TESTE_EXPIRANDO;
-      if (daysLeft === 1) tipo = EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO;
-      if (daysLeft === 0) tipo = EVENTO_MOTORISTA_TESTE_HOJE;
-      
+      if (daysLeft !== 1) continue; // Avisamos APENAS faltando 1 dia exato
+
+      const tipo: DriverEventType = EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO;
       const cicloRef = this.toCicloRef(sub.trial_ends_at);
-      
+
       if (notifiedSet.has(`${sub.usuario_id}:${tipo}:${cicloRef}`)) continue;
 
       await notificationService.notifyDriver(user.telefone, tipo, {
@@ -174,71 +162,13 @@ export const subscriptionMonitorService = {
       logsToSave.push({
         usuarioId: sub.usuario_id,
         tipo,
-        cicloRef,
-        subId: sub.id,
-        description: `Aviso de fim de período de testes enviado (Faltam ${daysLeft} dias).`
+        cicloRef
       });
     }
 
     await this.logNotificationsBulk(logsToSave);
   },
 
-  // ---------------------------------------------------------------------------
-  // TRIAL — D+7 engajamento ou ativação
-  // ---------------------------------------------------------------------------
-
-  async notifyTrialMidpoint(): Promise<void> {
-    const now = getNowBR();
-    const { from, to } = this.windowAround(now, 7);
-
-    const { data: trials, error } = await monitorRepository.getMidpointTrials(from, to);
-
-    if (error) {
-      logger.error({ error: error.message }, "[SubscriptionMonitor] Erro ao buscar trials D+7");
-      return;
-    }
-    if (!trials?.length) return;
-
-    const userIds = trials.map((t: any) => t.usuario_id);
-    const { data: passengers } = await monitorRepository.getPassengerCountsByUsers(userIds);
-    const engagedUsers = new Set(passengers?.map((p: any) => p.usuario_id) || []);
-
-    const tiposPossiveis = [EVENTO_MOTORISTA_TRIAL_D7_ENGAJADO, EVENTO_MOTORISTA_TRIAL_D7_INATIVO];
-    const notifiedSet = await this.getNotifiedSet(userIds, tiposPossiveis);
-    const logsToSave = [];
-
-    for (const sub of trials) {
-      const user = (sub as any).usuarios;
-      if (!user?.telefone || !sub.trial_ends_at) continue;
-
-      const cicloRef = this.toCicloRef(sub.trial_ends_at);
-      const tipoEngajado = EVENTO_MOTORISTA_TRIAL_D7_ENGAJADO;
-      const tipoInativo  = EVENTO_MOTORISTA_TRIAL_D7_INATIVO;
-
-      // Evita reenvio mesmo que o job rode com atraso
-      const jaEnviouEngajado = notifiedSet.has(`${sub.usuario_id}:${tipoEngajado}:${cicloRef}`);
-      const jaEnviouInativo  = notifiedSet.has(`${sub.usuario_id}:${tipoInativo}:${cicloRef}`);
-      if (jaEnviouEngajado || jaEnviouInativo) continue;
-
-      const daysLeft = diffInDays(now, sub.trial_ends_at);
-      const isEngaged = engagedUsers.has(sub.usuario_id);
-      const tipo = isEngaged ? tipoEngajado : tipoInativo;
-
-      await notificationService.notifyDriver(user.telefone, tipo, {
-        nomeMotorista: user.nome,
-        trialDays: daysLeft,
-      });
-      logsToSave.push({
-        usuarioId: sub.usuario_id,
-        tipo,
-        cicloRef,
-        subId: sub.id,
-        description: `Dica de engajamento no app enviada (Dia 7).`
-      });
-    }
-
-    await this.logNotificationsBulk(logsToSave);
-  },
 
   // ---------------------------------------------------------------------------
   // TRIAL — D+14 último aviso (só se ainda não tem fatura PENDING)
@@ -273,7 +203,7 @@ export const subscriptionMonitorService = {
         await notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_TESTE_ENCERRADO, {
           nomeMotorista: user.nome,
         });
-        await this.logNotification(sub.usuario_id, EVENTO_MOTORISTA_TESTE_ENCERRADO, this.toCicloRef(sub.trial_ends_at || new Date()), sub.id, "Aviso de expiração de teste grátis enviado.");
+        await this.logNotification(sub.usuario_id, EVENTO_MOTORISTA_TESTE_ENCERRADO, this.toCicloRef(sub.trial_ends_at || new Date()));
       }
     }
   },
@@ -287,9 +217,8 @@ export const subscriptionMonitorService = {
     const now = getNowBR();
 
     const recoverySteps = [
-      { daysAgo: 14, tipo: EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1    },
-      { daysAgo: 20, tipo: EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2    },
-      { daysAgo: 25, tipo: EVENTO_MOTORISTA_TRIAL_RECUPERACAO_FINAL },
+      { daysAgo: 7, tipo: EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1 },
+      { daysAgo: 15, tipo: EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2 },
     ];
 
     const windows = recoverySteps.map(step => this.windowAround(now, step.daysAgo));
@@ -355,7 +284,7 @@ export const subscriptionMonitorService = {
     } else if (pastDue?.length) {
       for (const sub of pastDue) {
         await subscriptionService.updateStatus(sub.id, SubscriptionStatus.PAST_DUE, "Mensalidade não paga no dia do vencimento. Conta em carência.");
-        
+
         const user = (sub as any).usuarios;
         const daysSinceExpiry = sub.data_vencimento ? diffInDays(sub.data_vencimento, now) : 0;
 
@@ -364,7 +293,7 @@ export const subscriptionMonitorService = {
             nomeMotorista: user.nome,
             planoNome: (sub as any).planos?.nome,
           });
-          await this.logNotification(sub.usuario_id, EVENTO_MOTORISTA_ASSINATURA_VENCEU, this.toCicloRef(sub.data_vencimento || new Date()), sub.id, "Aviso de mensalidade vencida enviado.");
+          await this.logNotification(sub.usuario_id, EVENTO_MOTORISTA_ASSINATURA_VENCEU, this.toCicloRef(sub.data_vencimento || new Date()));
         }
       }
     }
@@ -384,7 +313,7 @@ export const subscriptionMonitorService = {
             diasAtraso: gracePeriod,
             planoNome: (sub as any).planos?.nome,
           });
-          await this.logNotification(sub.usuario_id, EVENTO_MOTORISTA_ASSINATURA_ATRASADA, this.toCicloRef(sub.data_vencimento || new Date()), sub.id, "Aviso de assinatura suspensa enviado.");
+          await this.logNotification(sub.usuario_id, EVENTO_MOTORISTA_ASSINATURA_ATRASADA, this.toCicloRef(sub.data_vencimento || new Date()));
         }
       }
     }
@@ -398,8 +327,8 @@ export const subscriptionMonitorService = {
     const now = getNowBR();
 
     const reminderSteps: { daysAgo: number, tipo: DriverEventType }[] = [
-      { daysAgo: 1, tipo: EVENTO_MOTORISTA_RENOVACAO_LEMBRETE  },
-      { daysAgo: 2, tipo: EVENTO_MOTORISTA_RENOVACAO_URGENCIA  },
+      { daysAgo: 1, tipo: EVENTO_MOTORISTA_RENOVACAO_LEMBRETE },
+      { daysAgo: 2, tipo: EVENTO_MOTORISTA_RENOVACAO_URGENCIA },
     ];
 
     const windows = reminderSteps.map(step => this.windowAround(now, step.daysAgo));
@@ -463,8 +392,8 @@ export const subscriptionMonitorService = {
     const now = getNowBR();
 
     const recoverySteps = [
-      { daysAgo: 5,  tipo: EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_1     },
-      { daysAgo: 10, tipo: EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_FINAL  },
+      { daysAgo: 5, tipo: EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_1 },
+      { daysAgo: 10, tipo: EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_FINAL },
     ];
 
     const windows = recoverySteps.map(step => this.windowAround(now, step.daysAgo));
@@ -533,7 +462,7 @@ export const subscriptionMonitorService = {
     const { data: failedInvoices } = await monitorRepository.getFailedCardInvoicesByUsers(cardUserIds, addDays(now, -30).toISOString());
     const failedCountsMap = new Map<string, number>();
     failedInvoices?.forEach((f: any) => {
-        failedCountsMap.set(f.usuario_id, (failedCountsMap.get(f.usuario_id) || 0) + 1);
+      failedCountsMap.set(f.usuario_id, (failedCountsMap.get(f.usuario_id) || 0) + 1);
     });
 
     const tiposPossiveis = [EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO, EVENTO_MOTORISTA_CARTAO_COBRANCA_AVISO];
@@ -550,8 +479,8 @@ export const subscriptionMonitorService = {
 
       // Se for assinatura via cartão, mas não tiver cartão preferencial definido, pula a cobrança automática
       if (isCard && !sub.metodo_pagamento_preferencial_id) {
-          logger.info({ subId: sub.id }, "[SubscriptionMonitor] Assinatura via cartão sem método preferencial. Pulando renovação automática.");
-          continue;
+        logger.info({ subId: sub.id }, "[SubscriptionMonitor] Assinatura via cartão sem método preferencial. Pulando renovação automática.");
+        continue;
       }
 
       // Limite de tentativas para cartão: conta faturas FAILED nos últimos 30 dias
@@ -659,9 +588,7 @@ export const subscriptionMonitorService = {
             logsToSave.push({
               usuarioId: sub.usuario_id,
               tipo: EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO,
-              cicloRef,
-              subId: sub.id,
-              description: "Aviso de falha na cobrança do cartão enviado."
+              cicloRef
             });
           }
         }

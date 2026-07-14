@@ -9,17 +9,12 @@ import {
     EVENTO_MOTORISTA_ASSINATURA_ATRASADA,
     EVENTO_MOTORISTA_TESTE_BOAS_VINDAS,
     EVENTO_MOTORISTA_TESTE_ENCERRADO,
-    EVENTO_MOTORISTA_TESTE_EXPIRANDO,
-    EVENTO_MOTORISTA_TESTE_HOJE,
     EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO,
     EVENTO_MOTORISTA_CARTAO_COBRANCA_AVISO,
     EVENTO_MOTORISTA_CONTRATO_ASSINADO,
-    EVENTO_MOTORISTA_TRIAL_D7_ENGAJADO,
-    EVENTO_MOTORISTA_TRIAL_D7_INATIVO,
     EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO,
     EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1,
     EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2,
-    EVENTO_MOTORISTA_TRIAL_RECUPERACAO_FINAL,
     EVENTO_MOTORISTA_RENOVACAO_LEMBRETE,
     EVENTO_MOTORISTA_RENOVACAO_URGENCIA,
     EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_1,
@@ -29,9 +24,6 @@ import {
     EVENTO_PASSAGEIRO_ATRASADO,
     EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL,
     EVENTO_PASSAGEIRO_CONTRATO_ASSINADO,
-    EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_AVISO,
-    EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_HOJE,
-    EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_ATRASO,
     EVENTO_AUTH_RECUPERACAO_SENHA,
     EVENTO_AUTH_SENHA_ALTERADA,
     EVENTO_MOTORISTA_CADASTRO_ADMIN,
@@ -74,22 +66,14 @@ type PassengerEventType =
     | typeof EVENTO_PASSAGEIRO_VENCIMENTO_HOJE
     | typeof EVENTO_PASSAGEIRO_ATRASADO
     | typeof EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL
-    | typeof EVENTO_PASSAGEIRO_CONTRATO_ASSINADO
-    | typeof EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_AVISO
-    | typeof EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_HOJE
-    | typeof EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_ATRASO;
+    | typeof EVENTO_PASSAGEIRO_CONTRATO_ASSINADO;
 
 export type DriverEventType =
     | typeof EVENTO_MOTORISTA_TESTE_BOAS_VINDAS
-    | typeof EVENTO_MOTORISTA_TESTE_EXPIRANDO
     | typeof EVENTO_MOTORISTA_TESTE_ENCERRADO
-    | typeof EVENTO_MOTORISTA_TESTE_HOJE
-    | typeof EVENTO_MOTORISTA_TRIAL_D7_ENGAJADO
-    | typeof EVENTO_MOTORISTA_TRIAL_D7_INATIVO
     | typeof EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO
     | typeof EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1
     | typeof EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2
-    | typeof EVENTO_MOTORISTA_TRIAL_RECUPERACAO_FINAL
     | typeof EVENTO_MOTORISTA_ASSINATURA_VENCENDO
     | typeof EVENTO_MOTORISTA_ASSINATURA_VENCEU
     | typeof EVENTO_MOTORISTA_ASSINATURA_ATRASADA
@@ -147,9 +131,6 @@ class NotificationService {
             case EVENTO_PASSAGEIRO_ATRASADO: parts = PassengerTemplates.overdue(ctx); break;
             case EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL: parts = PassengerTemplates.contractAvailable(ctx); break;
             case EVENTO_PASSAGEIRO_CONTRATO_ASSINADO: parts = PassengerTemplates.contractSignedBySelf(ctx); break;
-            case EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_AVISO: parts = PassengerTemplates.dueSoonManual(ctx); break;
-            case EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_HOJE: parts = PassengerTemplates.dueTodayManual(ctx); break;
-            case EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_ATRASO: parts = PassengerTemplates.overdueManual(ctx); break;
         }
 
         return await this._processAndEnqueue(to, parts, type as string, options);
@@ -170,15 +151,10 @@ class NotificationService {
 
         switch (type) {
             case EVENTO_MOTORISTA_TESTE_BOAS_VINDAS: parts = DriverTemplates.welcomeTrial(ctx); break;
-            case EVENTO_MOTORISTA_TESTE_EXPIRANDO: parts = DriverTemplates.trialExpiring(ctx); break;
-            case EVENTO_MOTORISTA_TESTE_HOJE: parts = DriverTemplates.trialToday(ctx); break;
             case EVENTO_MOTORISTA_TESTE_ENCERRADO: parts = DriverTemplates.trialEnded(ctx); break;
-            case EVENTO_MOTORISTA_TRIAL_D7_ENGAJADO: parts = DriverTemplates.trialMidpointEngaged(ctx); break;
-            case EVENTO_MOTORISTA_TRIAL_D7_INATIVO: parts = DriverTemplates.trialMidpointInactive(ctx); break;
             case EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO: parts = DriverTemplates.trialLastCall(ctx); break;
             case EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1: parts = DriverTemplates.trialRecovery1(ctx); break;
             case EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2: parts = DriverTemplates.trialRecovery2(ctx); break;
-            case EVENTO_MOTORISTA_TRIAL_RECUPERACAO_FINAL: parts = DriverTemplates.trialRecoveryFinal(ctx); break;
             case EVENTO_MOTORISTA_ASSINATURA_PAGO: parts = DriverTemplates.paymentConfirmed(ctx); break;
             case EVENTO_MOTORISTA_ASSINATURA_VENCENDO: parts = DriverTemplates.dueSoon(ctx); break;
             case EVENTO_MOTORISTA_ASSINATURA_VENCEU: parts = DriverTemplates.dueToday(ctx); break;

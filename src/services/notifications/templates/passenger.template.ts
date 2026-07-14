@@ -1,5 +1,5 @@
-import { formatToBrazilianDate } from "../../../utils/date.utils.js";
-import { formatCurrency, getFirstAndSecondName, getFirstName, maskPhone } from "../../../utils/format.js";
+import { formatToBrazilianDate, getMonthNameBR } from "../../../utils/date.utils.js";
+import { formatCurrency, getFirstAndSecondName, getFirstName, maskCpf, maskCnpj, maskPhone } from "../../../utils/format.js";
 import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
 
 export interface PassengerContext {
@@ -27,6 +27,20 @@ const textPart = (text: string): CompositeMessagePart[] => {
     return [{ type: "text", content: text }];
 };
 
+const getParcelaTitle = (nomePassageiro: string, mes?: number): string => {
+    const mesLabel = getMonthNameBR(mes).toLowerCase();
+    return mesLabel
+        ? `Parcela de ${mesLabel} — ${nomePassageiro}`
+        : `Parcela — ${nomePassageiro}`;
+};
+
+const getParcelaBody = (nomePassageiro: string, mes?: number): string => {
+    const mesLabel = getMonthNameBR(mes).toLowerCase();
+    return mesLabel
+        ? `parcela de ${mesLabel} de *${getFirstName(nomePassageiro)}*`
+        : `parcela de *${getFirstName(nomePassageiro)}*`;
+};
+
 const getTipoChavePixLabel = (tipo?: string): string => {
     if (!tipo) return "";
     const mapping: Record<string, string> = {
@@ -44,10 +58,23 @@ const getSystemFooter = (ctx: PassengerContext) => {
     return `\n\n———\n🚐 *${nomeExibicao}* · Van360`;
 };
 
-const getPixBlock = (ctx: PassengerContext): string => {
-    if (!ctx.chavePix) return "";
-    const labelTipo = getTipoChavePixLabel(ctx.tipoChavePix);
-    return `\n\n💳 *Pix para pagamento:*\nChave (${labelTipo}): ${ctx.chavePix}`;
+const buildPixParts = (mainText: string, chavePix: string, tipoChavePix: string | undefined, ctx: PassengerContext): CompositeMessagePart[] => {
+    const labelTipo = getTipoChavePixLabel(tipoChavePix);
+    const tipoStr = labelTipo ? ` (${labelTipo})` : "";
+    
+    let chaveFormatada = chavePix;
+    if (tipoChavePix) {
+        const t = tipoChavePix.toUpperCase();
+        if (t === "CPF") chaveFormatada = maskCpf(chavePix);
+        else if (t === "CNPJ") chaveFormatada = maskCnpj(chavePix);
+        else if (t === "TELEFONE") chaveFormatada = maskPhone(chavePix);
+    }
+
+    return [
+        { type: "text", content: mainText },
+        { type: "text", content: chaveFormatada },
+        { type: "text", content: `_Copie a chave Pix${tipoStr} acima e pague pelo app do seu banco._${getSystemFooter(ctx)}` }
+    ];
 };
 
 export const PassengerTemplates = {
@@ -70,68 +97,67 @@ export const PassengerTemplates = {
         const valor = formatCurrency(ctx.valor || 0);
         const data = formatToBrazilianDate(ctx.dataVencimento || "");
         const diasMsg = ctx.diasAntecedencia ? ` (daqui a ${ctx.diasAntecedencia} dias)` : "";
+        const titulo = getParcelaTitle(ctx.nomePassageiro, ctx.mes);
+        const corpo = getParcelaBody(ctx.nomePassageiro, ctx.mes);
 
-        const text = `🗓️ *Parcela — ${ctx.nomePassageiro}*\n\n` +
-            `${getFirstName(ctx.nomeResponsavel)}, lembrete da parcela do transporte.\n\n` +
+        if (ctx.chavePix) {
+            const mainText = `🗓️ *${titulo}*\n\n` +
+                `${getFirstName(ctx.nomeResponsavel)}, lembrete da ${corpo}.\n\n` +
+                `🔹 Valor: *${valor}*\n` +
+                `🔹 Vencimento: *${data}*${diasMsg}\n\n` +
+                `Segue a chave Pix para pagamento:`;
+            return buildPixParts(mainText, ctx.chavePix, ctx.tipoChavePix, ctx);
+        }
+
+        const text = `🗓️ *${titulo}*\n\n` +
+            `${getFirstName(ctx.nomeResponsavel)}, lembrete da ${corpo}.\n\n` +
             `🔹 Valor: *${valor}*\n` +
             `🔹 Vencimento: *${data}*${diasMsg}${getSystemFooter(ctx)}`;
-        return textPart(text);
-    },
-
-    dueSoonManual: (ctx: PassengerContext): CompositeMessagePart[] => {
-        const valor = formatCurrency(ctx.valor || 0);
-        const data = formatToBrazilianDate(ctx.dataVencimento || "");
-        const diasMsg = ctx.diasAntecedencia ? ` (daqui a ${ctx.diasAntecedencia} dias)` : "";
-
-        const text = `🗓️ *Parcela — ${ctx.nomePassageiro}*\n\n` +
-            `${getFirstName(ctx.nomeResponsavel)}, lembrete da parcela do transporte.\n\n` +
-            `🔹 Valor: *${valor}*\n` +
-            `🔹 Vencimento: *${data}*${diasMsg}${getPixBlock(ctx)}${getSystemFooter(ctx)}`;
         return textPart(text);
     },
 
     dueToday: (ctx: PassengerContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor || 0);
         const data = formatToBrazilianDate(ctx.dataVencimento || "");
+        const titulo = getParcelaTitle(ctx.nomePassageiro, ctx.mes);
+        const corpo = getParcelaBody(ctx.nomePassageiro, ctx.mes);
 
-        const text = `⚠️ *Parcela vence hoje — ${ctx.nomePassageiro}*\n\n` +
-            `${getFirstName(ctx.nomeResponsavel)}, a parcela (*${valor}*) está aguardando pagamento.\n\n` +
+        if (ctx.chavePix) {
+            const mainText = `⚠️ *${titulo} — vence hoje*\n\n` +
+                `${getFirstName(ctx.nomeResponsavel)}, a ${corpo} vence hoje.\n\n` +
+                `🔹 Valor: *${valor}*\n` +
+                `🔹 Vencimento: *${data} (Hoje)*\n\n` +
+                `Segue a chave Pix para pagamento:`;
+            return buildPixParts(mainText, ctx.chavePix, ctx.tipoChavePix, ctx);
+        }
+
+        const text = `⚠️ *${titulo} — vence hoje*\n\n` +
+            `${getFirstName(ctx.nomeResponsavel)}, a ${corpo} vence hoje.\n\n` +
             `🔹 Valor: *${valor}*\n` +
             `🔹 Vencimento: *${data} (Hoje)*${getSystemFooter(ctx)}`;
-        return textPart(text);
-    },
-
-    dueTodayManual: (ctx: PassengerContext): CompositeMessagePart[] => {
-        const valor = formatCurrency(ctx.valor || 0);
-        const data = formatToBrazilianDate(ctx.dataVencimento || "");
-
-        const text = `⚠️ *Parcela vence hoje — ${ctx.nomePassageiro}*\n\n` +
-            `${getFirstName(ctx.nomeResponsavel)}, a parcela (*${valor}*) está aguardando pagamento.\n\n` +
-            `🔹 Valor: *${valor}*\n` +
-            `🔹 Vencimento: *${data} (Hoje)*${getPixBlock(ctx)}${getSystemFooter(ctx)}`;
         return textPart(text);
     },
 
     overdue: (ctx: PassengerContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor || 0);
         const data = formatToBrazilianDate(ctx.dataVencimento || "");
+        const titulo = getParcelaTitle(ctx.nomePassageiro, ctx.mes);
+        const corpo = getParcelaBody(ctx.nomePassageiro, ctx.mes);
 
-        const text = `🚨 *Parcela em atraso — ${ctx.nomePassageiro}*\n\n` +
-            `${getFirstName(ctx.nomeResponsavel)}, a parcela (*${valor}*) ainda não foi paga.\n\n` +
+        if (ctx.chavePix) {
+            const mainText = `🚨 *${titulo} — em atraso*\n\n` +
+                `${getFirstName(ctx.nomeResponsavel)}, a ${corpo} ainda não foi paga.\n\n` +
+                `🔹 Valor pendente: *${valor}*\n` +
+                `🔹 Vencida em: *${data}*\n\n` +
+                `Segue a chave Pix para pagamento:`;
+            return buildPixParts(mainText, ctx.chavePix, ctx.tipoChavePix, ctx);
+        }
+
+        const text = `🚨 *${titulo} — em atraso*\n\n` +
+            `${getFirstName(ctx.nomeResponsavel)}, a ${corpo} ainda não foi paga.\n\n` +
             `🔹 Valor pendente: *${valor}*\n` +
-            `🔹 Vencida em: *${data}*\n\n` +
-            `Entre em contato com o motorista para regularizar.${getSystemFooter(ctx)}`;
-        return textPart(text);
-    },
-
-    overdueManual: (ctx: PassengerContext): CompositeMessagePart[] => {
-        const valor = formatCurrency(ctx.valor || 0);
-        const data = formatToBrazilianDate(ctx.dataVencimento || "");
-
-        const text = `🚨 *Parcela em atraso — ${ctx.nomePassageiro}*\n\n` +
-            `${getFirstName(ctx.nomeResponsavel)}, a parcela (*${valor}*) ainda não foi paga.\n\n` +
-            `🔹 Valor pendente: *${valor}*\n` +
-            `🔹 Vencida em: *${data}*${getPixBlock(ctx)}${getSystemFooter(ctx)}`;
+            `🔹 Vencida em: *${data}*${getSystemFooter(ctx)}`;
         return textPart(text);
     }
 };
+

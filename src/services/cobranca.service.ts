@@ -6,12 +6,12 @@ import { logger } from "../config/logger.js";
 
 import { AppError } from "../errors/AppError.js";
 import {
-  EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_HOJE,
-  EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_AVISO,
-  EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_ATRASO
+  EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
+  EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
+  EVENTO_PASSAGEIRO_ATRASADO
 } from "../config/constants.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
-import { getNowBR, addDays, getLastDayOfMonth, toPersistenceString, diffInDays } from "../utils/date.utils.js";
+import { getNowBR, getLastDayOfMonth, toPersistenceString, diffInDays } from "../utils/date.utils.js";
 
 import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
 import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaOrigem, CobrancaStatus, ConfigKey } from "../types/enums.js";
@@ -348,36 +348,33 @@ export const cobrancaService = {
         // Verifica a flag global de notificações do passageiro
         if (passageiro?.enviar_notificacoes === false) continue;
 
-        if (!motorista?.chave_pix || !motorista?.tipo_chave_pix) {
-          logger.warn({ cobrancaId: c.id, motoristaId: c.usuario_id }, "[CobrancaService] Motorista sem chave Pix configurada. Notificação ignorada.");
-          continue;
-        }
-
         const dataVencimentoStr = c.data_vencimento;
         const ultimaNotifStr = c.data_envio_ultima_notificacao;
 
         let eventType:
-          | typeof EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_HOJE
-          | typeof EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_AVISO
-          | typeof EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_ATRASO
+          | typeof EVENTO_PASSAGEIRO_VENCIMENTO_HOJE
+          | typeof EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO
+          | typeof EVENTO_PASSAGEIRO_ATRASADO
           | null = null;
         let shouldSend = false;
 
         if (dataVencimentoStr === todayStr) {
-          eventType = EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_HOJE;
+          eventType = EVENTO_PASSAGEIRO_VENCIMENTO_HOJE;
           if (!ultimaNotifStr || !ultimaNotifStr.startsWith(todayStr)) {
             shouldSend = true;
           }
         } else if (dataVencimentoStr > todayStr && dataVencimentoStr <= thresholdDateStr) {
-          eventType = EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_AVISO;
+          eventType = EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO;
           if (!ultimaNotifStr) {
             shouldSend = true;
           }
         } else if (dataVencimentoStr < todayStr) {
-          eventType = EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_ATRASO;
+          eventType = EVENTO_PASSAGEIRO_ATRASADO;
           const daysSinceDue = diffInDays(dataVencimentoStr, now);
           if (daysSinceDue === 3 || daysSinceDue === 5 || daysSinceDue === 7) {
-            shouldSend = true;
+            if (!ultimaNotifStr || !ultimaNotifStr.startsWith(todayStr)) {
+              shouldSend = true;
+            }
           }
         }
 
