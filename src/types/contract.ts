@@ -19,6 +19,7 @@ export interface DadosContrato {
   // Dados da escola
   nomeEscola: string;
   enderecoEscola: string;
+  turma?: string;
   
   // Dados do serviço
   periodo: string; // "Integral", "Manhã", "Tarde"

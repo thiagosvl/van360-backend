@@ -99,7 +99,6 @@ export enum PassageiroModalidade {
 export enum PassageiroGenero {
   MASCULINO = "masculino",
   FEMININO = "feminino",
-  PREFIRO_NAO_INFORMAR = "prefiro_nao_informar"
 }
 
 export enum ParentescoResponsavel {

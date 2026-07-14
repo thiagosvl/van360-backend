@@ -49,6 +49,7 @@ export const prePassageiroService = {
       referencia: payload.referencia || null,
       observacoes: payload.observacoes || null,
       modalidade: payload.modalidade || null,
+      turma: payload.turma || null,
       genero: payload.genero || null,
       parentesco_responsavel: payload.parentesco_responsavel || null,
       data_inicio_transporte: payload.data_inicio_transporte ? toPersistenceString(payload.data_inicio_transporte) : null,

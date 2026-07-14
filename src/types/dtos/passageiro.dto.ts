@@ -60,6 +60,7 @@ export const createPassageiroSchema = z.object({
     return parseLocalDate(v);
   }), // Aceita string ISO e converte
   parentesco_responsavel: optionalString,
+  turma: optionalString,
   data_inicio_transporte: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
     if (v === undefined) return undefined;
     if (v === null || v === "") return null;

@@ -281,11 +281,12 @@ export class InHouseContractProvider implements ContractProvider {
     page.drawText(`Escola: ${dados.nomeEscola}`, { x: 300, y: currentY, size: smallTextSize, font });
 
     page.drawText(`Período: ${formatPeriodo(dados.periodo)}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
-    page.drawText(`Modalidade: ${formatModalidade(dados.modalidade)}`, { x: 300, y: currentY - 14, size: smallTextSize, font });
+    page.drawText(`Turma: ${dados.turma || ''}`, { x: 300, y: currentY - 14, size: smallTextSize, font });
 
-    page.drawText(`Endereço: ${dados.enderecoCompleto}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
+    page.drawText(`Modalidade: ${formatModalidade(dados.modalidade)}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
+    page.drawText(`Endereço: ${dados.enderecoCompleto}`, { x: margin, y: currentY - 42, size: smallTextSize, font });
 
-    currentY -= 70;
+    currentY -= 84;
 
     currentY = drawHeader('VEÍCULO', currentY);
     page.drawText(`Modelo: ${dados.modeloVeiculo}`, { x: margin, y: currentY, size: smallTextSize, font });

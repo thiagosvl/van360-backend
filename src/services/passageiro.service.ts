@@ -48,6 +48,7 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO>, usuarioId?: 
 
     // Novos Campos
     if (data.modalidade !== undefined) prepared.modalidade = data.modalidade;
+    if (data.turma !== undefined) prepared.turma = data.turma ? cleanString(data.turma, true) : null;
     if (data.data_nascimento !== undefined) prepared.data_nascimento = data.data_nascimento ? toPersistenceString(data.data_nascimento) : null;
     if (data.parentesco_responsavel !== undefined) prepared.parentesco_responsavel = data.parentesco_responsavel;
     if (data.data_inicio_transporte !== undefined) prepared.data_inicio_transporte = data.data_inicio_transporte ? toPersistenceString(data.data_inicio_transporte) : null;
@@ -119,6 +120,7 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO): Promise<
         (data.escola_id !== undefined && data.escola_id !== estadoAnterior.escola_id) ||
         (data.periodo !== undefined && data.periodo !== estadoAnterior.periodo) ||
         (data.modalidade !== undefined && data.modalidade !== estadoAnterior.modalidade) ||
+        (data.turma !== undefined && cleanString(data.turma || '', true) !== cleanString(estadoAnterior.turma || '', true)) ||
         (data.data_inicio_transporte !== undefined && data.data_inicio_transporte !== estadoAnterior.data_inicio_transporte) ||
         (data.data_fim_transporte !== undefined && data.data_fim_transporte !== estadoAnterior.data_fim_transporte) ||
         (data.logradouro !== undefined && data.logradouro !== estadoAnterior.logradouro) ||
