@@ -1,12 +1,13 @@
 import { passageiroRepository } from "../repositories/passageiro.repository.js";
 import { prePassageiroRepository } from "../repositories/pre-passageiro.repository.js";
 import { AppError } from "../errors/AppError.js";
-import { CreatePassageiroDTO, ListPassageirosFiltersDTO, UpdatePassageiroDTO } from "../types/dtos/passageiro.dto.js";
-import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
+import { CreatePassageiroDTO, ListPassageirosFiltersDTO, UpdatePassageiroDTO, CreateResponsavelAdicionalDTO, UpdateResponsavelAdicionalDTO } from "../types/dtos/passageiro.dto.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, ParentescoResponsavel } from "../types/enums.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
 import { parseLocalDate, toPersistenceString } from "../utils/date.utils.js";
+import { supabaseAdmin } from "../config/supabase.js";
 
 // Métodos privados auxiliares
 const _preparePassageiroData = (data: Partial<CreatePassageiroDTO>, usuarioId?: string, isUpdate: boolean = false): Record<string, unknown> => {
@@ -406,6 +407,123 @@ const listarAniversariantesDoMes = async (usuarioId: string, mes: number) => {
     };
 };
 
+const addResponsavelAdicional = async (passageiroId: string, data: CreateResponsavelAdicionalDTO) => {
+    const { data: inserted, error } = await supabaseAdmin
+        .from("passageiro_responsaveis_adicionais")
+        .insert([{
+            passageiro_id: passageiroId,
+            nome: cleanString(data.nome, true),
+            telefone: onlyDigits(data.telefone),
+            cpf: onlyDigits(data.cpf),
+            parentesco: data.parentesco,
+            logradouro: data.logradouro ? cleanString(data.logradouro, true) : null,
+            numero: data.numero ? cleanString(data.numero, true) : null,
+            bairro: data.bairro ? cleanString(data.bairro, true) : null,
+            cidade: data.cidade ? cleanString(data.cidade, true) : null,
+            estado: data.estado ? cleanString(data.estado, true) : null,
+            cep: data.cep ? onlyDigits(data.cep) : null,
+            referencia: data.referencia ? cleanString(data.referencia, true) : null,
+        }])
+        .select()
+        .single();
+
+    if (error) throw error;
+    return inserted;
+};
+
+const updateResponsavelAdicional = async (responsavelId: string, data: UpdateResponsavelAdicionalDTO) => {
+    const prepared: Record<string, any> = {};
+    if (data.nome !== undefined) prepared.nome = data.nome ? cleanString(data.nome, true) : null;
+    if (data.telefone !== undefined) prepared.telefone = data.telefone ? onlyDigits(data.telefone) : null;
+    if (data.cpf !== undefined) prepared.cpf = data.cpf ? onlyDigits(data.cpf) : null;
+    if (data.parentesco !== undefined) prepared.parentesco = data.parentesco;
+    if (data.logradouro !== undefined) prepared.logradouro = data.logradouro ? cleanString(data.logradouro, true) : null;
+    if (data.numero !== undefined) prepared.numero = data.numero ? cleanString(data.numero, true) : null;
+    if (data.bairro !== undefined) prepared.bairro = data.bairro ? cleanString(data.bairro, true) : null;
+    if (data.cidade !== undefined) prepared.cidade = data.cidade ? cleanString(data.cidade, true) : null;
+    if (data.estado !== undefined) prepared.estado = data.estado ? cleanString(data.estado, true) : null;
+    if (data.cep !== undefined) prepared.cep = data.cep ? onlyDigits(data.cep) : null;
+    if (data.referencia !== undefined) prepared.referencia = data.referencia ? cleanString(data.referencia, true) : null;
+
+    const { data: updated, error } = await supabaseAdmin
+        .from("passageiro_responsaveis_adicionais")
+        .update(prepared)
+        .eq("id", responsavelId)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return updated;
+};
+
+const deleteResponsavelAdicional = async (responsavelId: string) => {
+    const { error } = await supabaseAdmin
+        .from("passageiro_responsaveis_adicionais")
+        .delete()
+        .eq("id", responsavelId);
+
+    if (error) throw error;
+    return { success: true };
+};
+
+const setPrincipalResponsavel = async (passageiroId: string, responsavelId: string) => {
+    const { data: passageiro, error: passErr } = await supabaseAdmin
+        .from("passageiros")
+        .select("*")
+        .eq("id", passageiroId)
+        .single();
+
+    if (passErr || !passageiro) throw passErr || new Error("Passageiro não encontrado");
+
+    const { data: adicional, error: adErr } = await supabaseAdmin
+        .from("passageiro_responsaveis_adicionais")
+        .select("*")
+        .eq("id", responsavelId)
+        .single();
+
+    if (adErr || !adicional) throw adErr || new Error("Responsável adicional não encontrado");
+
+    const { error: updAdError } = await supabaseAdmin
+        .from("passageiro_responsaveis_adicionais")
+        .update({
+            nome: passageiro.nome_responsavel,
+            telefone: passageiro.telefone_responsavel,
+            cpf: passageiro.cpf_responsavel || adicional.cpf,
+            parentesco: passageiro.parentesco_responsavel || ParentescoResponsavel.OUTRO,
+            logradouro: passageiro.logradouro,
+            numero: passageiro.numero,
+            bairro: passageiro.bairro,
+            cidade: passageiro.cidade,
+            estado: passageiro.estado,
+            cep: passageiro.cep,
+            referencia: passageiro.referencia,
+        })
+        .eq("id", responsavelId);
+
+    if (updAdError) throw updAdError;
+
+    const { error: updPassError } = await supabaseAdmin
+        .from("passageiros")
+        .update({
+            nome_responsavel: adicional.nome,
+            telefone_responsavel: adicional.telefone,
+            cpf_responsavel: adicional.cpf,
+            parentesco_responsavel: adicional.parentesco,
+            logradouro: adicional.logradouro,
+            numero: adicional.numero,
+            bairro: adicional.bairro,
+            cidade: adicional.cidade,
+            estado: adicional.estado,
+            cep: adicional.cep,
+            referencia: adicional.referencia,
+        })
+        .eq("id", passageiroId);
+
+    if (updPassError) throw updPassError;
+
+    return { success: true };
+};
+
 // Exportar objeto unificado no final
 export const passageiroService = {
     createPassageiro,
@@ -417,5 +535,9 @@ export const passageiroService = {
     countListPassageirosByUsuario,
     finalizePreCadastro,
     lookupResponsavelByCpf,
-    listarAniversariantesDoMes
+    listarAniversariantesDoMes,
+    addResponsavelAdicional,
+    updateResponsavelAdicional,
+    deleteResponsavelAdicional,
+    setPrincipalResponsavel
 };

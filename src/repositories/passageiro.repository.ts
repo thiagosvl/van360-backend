@@ -13,7 +13,8 @@ export const passageiroRepository = {
       .select(`
         *,
         escola:escolas(*),
-        veiculo:veiculos(*)
+        veiculo:veiculos(*),
+        responsaveis:passageiro_responsaveis_adicionais(*)
       `)
       .eq("id", id);
 
@@ -62,7 +63,8 @@ export const passageiroRepository = {
             *,
             escola:escolas(id, nome),
             veiculo:veiculos(id, placa, modelo),
-            contratos(id, status, created_at, minuta_url, contrato_final_url, token_acesso)
+            contratos(id, status, created_at, minuta_url, contrato_final_url, token_acesso),
+            responsaveis:passageiro_responsaveis_adicionais(*)
         `)
         .eq("id", id)
         .order('created_at', { foreignTable: 'contratos', ascending: false })
@@ -77,7 +79,8 @@ export const passageiroRepository = {
             *,
             escola:escolas(id, nome),
             veiculo:veiculos(id, placa),
-            contratos(id, status, created_at, minuta_url, contrato_final_url, token_acesso)
+            contratos(id, status, created_at, minuta_url, contrato_final_url, token_acesso),
+            responsaveis:passageiro_responsaveis_adicionais(*)
         `)
         .eq("usuario_id", usuarioId)
         .order("nome", { ascending: true });

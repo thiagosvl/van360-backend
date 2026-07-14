@@ -21,6 +21,12 @@ const passageiroRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     app.patch("/:id/toggle-ativo", passageiroController.toggleAtivo);
     app.post("/finalizar-pre-cadastro/:prePassageiroId", passageiroController.finalizePreCadastro);
 
+    // Responsáveis Adicionais
+    app.post("/:id/responsaveis", passageiroController.addResponsavelAdicional);
+    app.put("/responsaveis/:responsavelId", passageiroController.updateResponsavelAdicional);
+    app.delete("/responsaveis/:responsavelId", passageiroController.deleteResponsavelAdicional);
+    app.patch("/:id/responsaveis/:responsavelId/set-principal", passageiroController.setPrincipalResponsavel);
+
     // Aniversários
     app.get("/aniversariantes", passageiroController.getAniversariantesDoMes);
 };

@@ -64,6 +64,15 @@ export function maskCnpj(value?: string | null) {
     .replace(/(-\d{2})\d+?$/, "$1");
 }
 
+export function formatCpfCnpj(value?: string | null): string {
+  if (!value) return "";
+  const clean = value.replace(/\D/g, "");
+  if (clean.length <= 11) {
+    return maskCpf(clean);
+  }
+  return maskCnpj(clean);
+}
+
 export function maskPhone(value?: string | null) {
   if (!value) return "";
   let r = value.replace(/\D/g, "");

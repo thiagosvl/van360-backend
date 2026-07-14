@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { moneyToNumber } from "../../utils/currency.utils.js";
 import { parseLocalDate } from "../../utils/date.utils.js";
+import { ParentescoResponsavel } from "../enums.js";
 
 const optionalString = z.union([z.string(), z.null(), z.undefined()]).transform(v => {
   if (v === undefined) return undefined;
@@ -117,3 +118,23 @@ export type FinalizePreCadastroDTO = z.infer<typeof finalizePreCadastroSchema>;
 export const getAniversariantesQuerySchema = z.object({
   mes: z.string().transform(v => Number(v)).refine(val => val >= 1 && val <= 12, "Mês inválido")
 });
+
+export const createResponsavelAdicionalSchema = z.object({
+  nome: z.string().min(2, "Nome é obrigatório"),
+  telefone: z.string().min(8, "Telefone é obrigatório"),
+  cpf: z.string().min(11, "CPF inválido"),
+  parentesco: z.nativeEnum(ParentescoResponsavel, { message: "Parentesco é obrigatório" }),
+  logradouro: z.string().min(1, "Logradouro é obrigatório"),
+  numero: z.string().min(1, "Número é obrigatório"),
+  bairro: z.string().min(1, "Bairro é obrigatório"),
+  cidade: z.string().min(1, "Cidade é obrigatório"),
+  estado: z.string().min(2, "Estado é obrigatório"),
+  cep: z.string().min(8, "CEP é obrigatório"),
+  referencia: optionalString,
+});
+
+export type CreateResponsavelAdicionalDTO = z.infer<typeof createResponsavelAdicionalSchema>;
+
+export const updateResponsavelAdicionalSchema = createResponsavelAdicionalSchema.partial();
+export type UpdateResponsavelAdicionalDTO = z.infer<typeof updateResponsavelAdicionalSchema>;
+

@@ -9,7 +9,9 @@ import {
     listPassageirosFiltersSchema,
     toggleAtivoSchema,
     updatePassageiroSchema,
-    getAniversariantesQuerySchema
+    getAniversariantesQuerySchema,
+    createResponsavelAdicionalSchema,
+    updateResponsavelAdicionalSchema
 } from "../types/dtos/passageiro.dto.js";
 
 
@@ -119,5 +121,31 @@ export const passageiroController = {
     const data = await passageiroService.listarAniversariantesDoMes(authUid, mes);
     
     return reply.status(200).send(data);
+  },
+
+  addResponsavelAdicional: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id: passageiroId } = request.params as { id: string };
+    const data = createResponsavelAdicionalSchema.parse(request.body);
+    const result = await passageiroService.addResponsavelAdicional(passageiroId, data);
+    return reply.status(201).send(result);
+  },
+
+  updateResponsavelAdicional: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { responsavelId } = request.params as { responsavelId: string };
+    const data = updateResponsavelAdicionalSchema.parse(request.body);
+    const result = await passageiroService.updateResponsavelAdicional(responsavelId, data);
+    return reply.status(200).send(result);
+  },
+
+  deleteResponsavelAdicional: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { responsavelId } = request.params as { responsavelId: string };
+    const result = await passageiroService.deleteResponsavelAdicional(responsavelId);
+    return reply.status(200).send(result);
+  },
+
+  setPrincipalResponsavel: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id: passageiroId, responsavelId } = request.params as { id: string; responsavelId: string };
+    const result = await passageiroService.setPrincipalResponsavel(passageiroId, responsavelId);
+    return reply.status(200).send(result);
   }
 };
