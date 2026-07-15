@@ -1,6 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { PublicController } from "../controllers/public.controller.js";
 import { subscriptionController } from "../controllers/subscription.controller.js";
+import { publicBlogController } from "../controllers/blog.controller.js";
 
 export default async function publicRoutes(app: FastifyInstance) {
     app.get("/motoristas/:id/validate", PublicController.validateMotorista);
@@ -10,4 +11,8 @@ export default async function publicRoutes(app: FastifyInstance) {
      * Planos SaaS públicos (usado na Landing Page)
      */
     app.get("/subscriptions/plans", subscriptionController.listPlans);
+
+    // Rotas Públicas do Blog
+    app.get("/blog/posts", publicBlogController.list);
+    app.get("/blog/posts/:slug", publicBlogController.get);
 }

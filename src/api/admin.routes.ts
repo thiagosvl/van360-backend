@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { AdminController } from "../controllers/admin.controller.js";
+import { adminBlogController } from "../controllers/blog.controller.js";
 import { verifySupabaseJWT } from "../middleware/auth.js";
 import { verifyAdmin } from "../middleware/admin.js";
 
@@ -27,6 +28,12 @@ const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.patch("/plans/:id", AdminController.updatePlan);
 
   app.get("/whatsapp-instances", AdminController.getWhatsappInstances);
+
+  app.get("/blog/posts", adminBlogController.list);
+  app.get("/blog/posts/:id", adminBlogController.get);
+  app.post("/blog/posts", adminBlogController.create);
+  app.put("/blog/posts/:id", adminBlogController.update);
+  app.delete("/blog/posts/:id", adminBlogController.delete);
 };
 
 export default adminRoutes;

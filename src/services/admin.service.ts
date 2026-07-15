@@ -3,6 +3,7 @@ import { adminRepository } from "../repositories/admin.repository.js";
 import { userRepository } from "../repositories/user.repository.js";
 import { invoiceRepository } from "../repositories/invoice.repository.js";
 import { planRepository } from "../repositories/plan.repository.js";
+import { triggerDeployWebhook } from "../utils/deploy.utils.js";
 import { authProvider } from "./providers/auth.provider.js";
 import { SubscriptionStatus, UserType, AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { historicoService } from "./historico.service.js";
@@ -371,6 +372,8 @@ export const adminService = {
       logger.error({ error, id }, "[AdminService] Erro ao atualizar plano.");
       throw error;
     }
+
+    await triggerDeployWebhook();
 
     return { success: true };
   },
