@@ -2,6 +2,7 @@ import { blogRepository } from "../repositories/blog.repository.js";
 import { CreateBlogPostDTO, UpdateBlogPostDTO } from "../schemas/blog.schema.js";
 import { BlogPostStatus } from "../types/enums.js";
 import { triggerDeployWebhook } from "../utils/deploy.utils.js";
+import { storageProvider } from "./providers/storage.provider.js";
 
 const _generateSlug = (title: string): string => {
     return title
@@ -39,6 +40,7 @@ export const blogService = {
             excerpt: payload.excerpt || null,
             tags: payload.tags || [],
             status: payload.status,
+            cover_image_url: payload.cover_image_url || null,
             author_id: authorId,
         };
 
@@ -68,6 +70,7 @@ export const blogService = {
         if (payload.content !== undefined) data.content = payload.content;
         if (payload.excerpt !== undefined) data.excerpt = payload.excerpt;
         if (payload.tags !== undefined) data.tags = payload.tags;
+        if (payload.cover_image_url !== undefined) data.cover_image_url = payload.cover_image_url;
         if (payload.status !== undefined) {
             data.status = payload.status;
             if (payload.status === BlogPostStatus.PUBLISHED && !current.published_at) {
@@ -130,5 +133,25 @@ export const blogService = {
             page,
             limit
         };
+    },
+
+    async uploadCoverImage(base64File: string, filename: string) {
+        const cleanBase64 = base64File.includes(",") 
+            ? base64File.split(",")[1] 
+            : base64File;
+        const fileBuffer = Buffer.from(cleanBase64, "base64");
+        
+        const fileExt = filename.split(".").pop() || "png";
+        const cleanName = `covers/${Math.random()}-${Date.now()}.${fileExt}`;
+        
+        const { error } = await storageProvider.upload("blog-covers", cleanName, fileBuffer, {
+            contentType: `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`,
+            cacheControl: "3600"
+        });
+        
+        if (error) throw error;
+        
+        const publicUrl = storageProvider.getPublicUrl("blog-covers", cleanName);
+        return { url: publicUrl };
     }
 };

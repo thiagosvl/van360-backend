@@ -43,6 +43,16 @@ export const adminBlogController = {
         logger.info({ postId: id }, "AdminBlogController.delete - Starting");
         await blogService.deletePost(id);
         return reply.status(200).send({ success: true });
+    },
+
+    uploadCover: async (request: FastifyRequest, reply: FastifyReply) => {
+        logger.info("AdminBlogController.uploadCover - Starting");
+        const { file, filename } = request.body as { file: string; filename: string };
+        if (!file || !filename) {
+            return reply.status(400).send({ error: "file and filename are required" });
+        }
+        const result = await blogService.uploadCoverImage(file, filename);
+        return reply.status(200).send(result);
     }
 };
 
