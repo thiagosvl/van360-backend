@@ -30,9 +30,9 @@ const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get("/whatsapp-instances", AdminController.getWhatsappInstances);
 
   app.get("/blog/posts", adminBlogController.list);
-  app.get("/blog/posts/:id", adminBlogController.get);
   app.post("/blog/posts", adminBlogController.create);
   app.post("/blog/posts/upload", adminBlogController.uploadCover);
+  app.get("/blog/posts/:id", adminBlogController.get);
   app.put("/blog/posts/:id", adminBlogController.update);
   app.delete("/blog/posts/:id", adminBlogController.delete);
 };
