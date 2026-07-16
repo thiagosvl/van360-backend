@@ -25,6 +25,7 @@ export async function createApp(): Promise<FastifyInstance> {
       loggerInstance: logger as any, 
       disableRequestLogging: true,
       trustProxy: true,
+      bodyLimit: 10485760, // 10MB para permitir uploads de imagens de capa maiores
     }) as FastifyInstance;
 
     app.addHook("onResponse", (request, reply, done) => {
