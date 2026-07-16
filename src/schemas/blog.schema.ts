@@ -9,6 +9,7 @@ export const createBlogPostSchema = z.object({
   excerpt: z.string().max(500).optional().nullable(),
   tags: z.array(z.string()).default([]),
   status: blogPostStatusSchema.default(BlogPostStatus.DRAFT),
+  cover_image_url: z.string().url().max(500).optional().nullable(),
 });
 
 export const updateBlogPostSchema = z.object({
@@ -18,6 +19,7 @@ export const updateBlogPostSchema = z.object({
   tags: z.array(z.string()).optional(),
   status: blogPostStatusSchema.optional(),
   published_at: z.string().datetime().optional().nullable(),
+  cover_image_url: z.string().url().max(500).optional().nullable(),
 });
 
 export const listBlogPostsQuerySchema = z.object({
