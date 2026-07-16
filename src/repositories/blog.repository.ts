@@ -45,7 +45,7 @@ export const blogRepository = {
     async getPublishedBySlug(slug: string) {
         return supabaseAdmin
             .from("blog_posts")
-            .select("id, title, slug, content, excerpt, tags, views, published_at, created_at, updated_at")
+            .select("id, title, slug, content, excerpt, tags, published_at, created_at, updated_at")
             .eq("slug", slug)
             .eq("status", BlogPostStatus.PUBLISHED)
             .single();
@@ -73,16 +73,9 @@ export const blogRepository = {
 
         return supabaseAdmin
             .from("blog_posts")
-            .select("id, title, slug, excerpt, tags, views, published_at, created_at", { count: "exact" })
+            .select("id, title, slug, excerpt, tags, published_at, created_at", { count: "exact" })
             .eq("status", BlogPostStatus.PUBLISHED)
             .order("published_at", { ascending: false })
             .range(from, to);
-    },
-
-    async incrementViews(id: string, currentViews: number) {
-        return supabaseAdmin
-            .from("blog_posts")
-            .update({ views: currentViews + 1 })
-            .eq("id", id);
     }
 };

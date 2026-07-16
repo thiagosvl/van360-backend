@@ -105,9 +105,6 @@ export const blogService = {
         const { data, error } = await blogRepository.getPublishedBySlug(slug);
         if (error || !data) throw new Error("Artigo não encontrado");
 
-        // Incremento de views em background (assíncrono)
-        blogRepository.incrementViews(data.id, data.views || 0).catch(() => {});
-
         return data;
     },
 
