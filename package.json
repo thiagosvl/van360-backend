@@ -9,10 +9,7 @@
     "start:worker": "tsx src/worker.ts",
     "build:worker": "tsc",
     "build": "echo \"[INIT] Compilando Backend...\" && tsc && echo \"[SUCCESS] Backend Compilado!\"",
-    "convert-certs": "node scripts/converter-certificados-base64.js",
-    "cron:dev": "tsx --env-file=.env scripts/dev-cron.ts",
-    "trigger-job": "tsx scripts/trigger-job.ts",
-    "account": "tsx --env-file=.env scripts/account.ts"
+    "seed:scenario": "tsx --env-file=.env scripts/seed-scenario.ts"
   },
   "keywords": [],
   "author": "",
