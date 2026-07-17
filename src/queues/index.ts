@@ -15,8 +15,8 @@ export const createQueue = (queueName: string) => {
                 type: 'exponential',
                 delay: 1000,
             },
-            removeOnComplete: true, // Remove job se sucesso (economiza RAM)
-            removeOnFail: false // Mantém job se erro (para debug)
+            removeOnComplete: { age: 3600, count: 1000 },
+            removeOnFail: false
         }
     });
 

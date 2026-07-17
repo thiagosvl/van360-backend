@@ -248,6 +248,8 @@ export async function registrarUsuario(
       notificationService.notifyDriver(payload.telefone, EVENTO_MOTORISTA_TESTE_BOAS_VINDAS, {
         nomeMotorista: payload.nome,
         dataVencimento: subscription?.trial_ends_at ?? undefined,
+      }, {
+        jobId: `driver-welcome-${usuarioId}`
       })
         .catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar boas vindas"));
     }
@@ -260,6 +262,8 @@ export async function registrarUsuario(
       cpfcnpj: payload.cpfcnpj,
       dataRegistro: getNowBR().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }),
       usuarioId: usuarioId as string
+    }, {
+      jobId: `admin-cadastro-${usuarioId}`
     }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao notificar admin sobre cadastro"));
 
     return { success: true, session };

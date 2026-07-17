@@ -59,6 +59,7 @@ export interface NotificationOptions {
     whatsapp?: {
         instanceName?: string;
     };
+    jobId?: string;
 }
 
 type PassengerEventType =
@@ -246,7 +247,8 @@ class NotificationService {
                 if (adapter) {
                     const providerOptions = {
                         eventType,
-                        instanceName: channel === "WHATSAPP" ? (whatsappOptions?.instanceName || GLOBAL_WHATSAPP_INSTANCE) : undefined
+                        instanceName: channel === "WHATSAPP" ? (whatsappOptions?.instanceName || GLOBAL_WHATSAPP_INSTANCE) : undefined,
+                        jobId: options?.jobId
                     };
                     results.push(adapter.sendComposite(to, parts, providerOptions));
                 }

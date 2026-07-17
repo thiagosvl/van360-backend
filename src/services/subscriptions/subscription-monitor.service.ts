@@ -502,6 +502,8 @@ export const subscriptionMonitorService = {
                 usuarioId: sub.usuario_id,
                 erro: "Número máximo de tentativas atingido.",
                 planoNome: (sub as any).planos?.nome
+              }, {
+                jobId: `admin-falha-pagamento-${sub.usuario_id}-max-retries-${cicloRef}`
               });
               logsToSave.push({
                 usuarioId: sub.usuario_id,
@@ -582,6 +584,8 @@ export const subscriptionMonitorService = {
             usuarioId: sub.usuario_id,
             erro: e.message || "Cartão recusado",
             planoNome: (sub as any).planos?.nome
+          }, {
+            jobId: `admin-falha-pagamento-${sub.usuario_id}-recusado-${this.toCicloRef(sub.data_vencimento || new Date())}`
           });
           const cicloRef = this.toCicloRef(sub.data_vencimento || new Date());
           if (!notifiedSet.has(`${sub.usuario_id}:${EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO}:${cicloRef}`)) {

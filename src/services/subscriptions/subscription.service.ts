@@ -186,6 +186,8 @@ export const subscriptionService = {
                     valor: `R$ ${typeof plan.valor === "string" ? parseFloat(plan.valor).toFixed(2).replace('.', ',') : plan.valor.toFixed(2).replace('.', ',')}`,
                     dataVencimento: new Date(sub.current_period_end!).toLocaleDateString("pt-BR"),
                     usuarioId: userId
+                }, {
+                    jobId: `admin-assinatura-cancelada-${userId}-${sub.id}`
                 });
             }
         } catch (err) {
@@ -264,6 +266,8 @@ export const subscriptionService = {
             valor: `R$ ${valorNumerico.toFixed(2).replace('.', ',')}`,
             dataVencimento: new Date(res.new_expiry!).toLocaleDateString('pt-BR'),
             usuarioId: res.usuario_id!
+        }, {
+            jobId: `admin-nova-assinatura-${res.usuario_id}-${res.fatura_id}`
         }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "[SubscriptionService] Falha ao notificar admin sobre assinatura paga"));
     }
 };

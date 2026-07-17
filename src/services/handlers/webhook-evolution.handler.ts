@@ -58,6 +58,8 @@ export const webhookEvolutionHandler = {
                     "Instância": instanceName,
                     "Status": state
                 }
+            }, {
+                jobId: `admin-alerta-desconexao-${instanceName}-${state}`
             });
         }
 

@@ -22,7 +22,7 @@ export class TelegramAdapter implements NotificationProviderAdapter {
             await addToTelegramQueue({
                 message: fullMessage,
                 context: options?.eventType
-            });
+            }, options?.jobId);
             return true;
         } catch (error) {
             return false;

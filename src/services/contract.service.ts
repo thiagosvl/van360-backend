@@ -160,7 +160,7 @@ class ContractService {
         telefone_responsavel: passageiro.telefone_responsavel
       },
       tokenAcesso
-    });
+    }, `contract-generate-${contrato.id}`);
 
     logger.info({ contratoId: contrato.id }, 'Fomento de contrato enfileirado com sucesso');
 
@@ -434,7 +434,7 @@ class ContractService {
         telefone_responsavel: passageiro.telefone_responsavel
       },
       tokenAcesso: contrato.token_acesso
-    });
+    }, `contract-resend-${contrato.id}-${Date.now()}`);
 
     return { success: true };
   }

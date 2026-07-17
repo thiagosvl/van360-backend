@@ -56,7 +56,7 @@ export class EvolutionWhatsappQueueAdapter implements NotificationProviderAdapte
 
             const instanceName = options?.instanceName || GLOBAL_WHATSAPP_INSTANCE;
             const eventType = options?.eventType || "UNKNOWN";
-            const jobId = eventType !== "UNKNOWN" ? `whatsapp-${to}-${eventType}-${Date.now()}` : undefined;
+            const jobId = options?.jobId || (eventType !== "UNKNOWN" ? `whatsapp-${to}-${eventType}-${Date.now()}` : undefined);
 
             let purpose = options?.purpose;
             if (!purpose) {
