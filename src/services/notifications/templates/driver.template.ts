@@ -2,6 +2,7 @@ import { formatToBrazilianDate, getShortWeekDayBR } from "../../../utils/date.ut
 import { formatCurrency, getFirstName, getFirstAndSecondName } from "../../../utils/format.js";
 import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
 import { CheckoutPaymentMethod } from "../../../types/enums.js";
+import { env } from "../../../config/env.js";
 
 export interface DriverContext {
     nomeMotorista: string;
@@ -319,7 +320,7 @@ const textPart = (text: string): CompositeMessagePart[] => {
             `*Dados de acesso:*\n` +
             `👤 Documento: ${ctx.cpfLogin || ""}\n` +
             `🔑 Senha: ${ctx.senhaTemporaria || ""} _(altere no primeiro acesso)_\n\n` +
-            `🔗 Acesse: https://van360.com.br/login`);
+            `🔗 Acesse: ${env.FRONTEND_URL}/login`);
     },
 
     adminResetPassword: (ctx: DriverContext): CompositeMessagePart[] => {
@@ -328,7 +329,7 @@ const textPart = (text: string): CompositeMessagePart[] => {
             `*Novos dados de acesso:*\n` +
             `👤 Documento: ${ctx.cpfLogin || ""}\n` +
             `🔑 Nova senha: ${ctx.senhaTemporaria || ""}\n\n` +
-            `🔗 Acesse: https://van360.com.br/login`);
+            `🔗 Acesse: ${env.FRONTEND_URL}/login`);
     },
 
     referralBonusReceived: (ctx: DriverContext): CompositeMessagePart[] => {

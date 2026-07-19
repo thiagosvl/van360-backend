@@ -122,8 +122,8 @@ export const subscriptionBillingService = {
         if (!sub) throw new Error("Erro ao obter assinatura.");
 
         if (sub.plano_id !== planId) {
-             await subscriptionRepository.updatePlan(sub.id, planId);
-             sub.plano_id = planId;
+            await subscriptionRepository.updatePlan(sub.id, planId);
+            sub.plano_id = planId;
         }
 
         let currentPaymentToken = paymentToken;
@@ -168,7 +168,7 @@ export const subscriptionBillingService = {
                 customer: {
                     name: user.nome,
                     document: user.cpfcnpj,
-                    email: user.email || "financeiro@van360.com.br",
+                    email: user.email,
                     phone: user.telefone || "11999999999",
                     birth: birth || "1980-01-01"
                 },

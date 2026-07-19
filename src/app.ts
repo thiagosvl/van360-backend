@@ -8,6 +8,7 @@ import * as Sentry from "@sentry/node";
 import Fastify, { FastifyInstance } from "fastify";
 import routes from "./api/routes.js";
 import { logger } from "./config/logger.js";
+import { env } from "./config/env.js";
 import { globalErrorHandler } from "./errors/errorHandler.js";
 import { setupBullBoard } from "./queues/bull-board.js";
 
@@ -72,12 +73,11 @@ export async function createApp(): Promise<FastifyInstance> {
       "http://localhost:8080",
       "https://localhost", // Android Capacitor fallback
       "capacitor://localhost", // iOS Capacitor fallback
-      "https://app.van360.com.br", // Capacitor Custom Hostname
       "http://localhost" // Web/General
     ];
     
     // Merge unique origins
-    const allowedOrigins = Array.from(new Set([...envOrigins, ...defaultOrigins]));
+    const allowedOrigins = Array.from(new Set([...envOrigins, ...defaultOrigins, env.FRONTEND_URL]));
 
     await app.register(fastifyCors, {
       origin: (origin, callback) => {

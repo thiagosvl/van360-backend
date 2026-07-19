@@ -9,7 +9,7 @@ export const env = {
   EVOLUTION_API_KEY: process.env.EVOLUTION_API_KEY!,
   CRON_SECRET: process.env.CRON_SECRET || "super_secret_cron_key",
   BACKEND_URL: process.env.BACKEND_URL || "http://host.docker.internal:3000",
-  FRONTEND_URL: process.env.FRONTEND_URL || "http://localhost:8080",
+  FRONTEND_URL: process.env.FRONTEND_URL || "",
   
   // Observability
   SENTRY_DSN: process.env.SENTRY_DSN,
