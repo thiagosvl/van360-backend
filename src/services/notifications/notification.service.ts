@@ -187,11 +187,6 @@ class NotificationService {
         options: NotificationOptions
     ): Promise<boolean> {
 
-        if (env.NODE_ENV !== "production") {
-            logger.debug({ type }, "[NotificationService] Admin notification skipped in non-production environment.");
-            return true;
-        }
-
         let parts: CompositeMessagePart[] = [];
 
         switch (type) {
@@ -211,8 +206,6 @@ class NotificationService {
                 parts = AdminTemplates.systemAlert(ctx as AdminSystemAlertContext);
                 break;
         }
-
-        // Para Admin, o 'to' não importa porque o chatId está no .env, passamos vazio
 
         // Para Admin, o 'to' não importa porque o chatId está no .env, passamos vazio
         return await this._processAndEnqueue("", parts, type as string, options);
