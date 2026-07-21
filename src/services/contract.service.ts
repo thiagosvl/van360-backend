@@ -61,6 +61,14 @@ class ContractService {
     });
 
     // 3. Validações e Cálculos dinâmicos
+    const nomeRespNormalized = passageiro.nome_responsavel
+      ? passageiro.nome_responsavel.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      : "";
+      
+    if (!passageiro.nome_responsavel || nomeRespNormalized.includes("responsavel nao info") || nomeRespNormalized.includes("responsavel teste")) {
+      throw new AppError("O nome real do responsável é obrigatório para gerar o contrato. Edite o passageiro para continuar.", 400);
+    }
+
     if (!passageiro.cpf_responsavel) {
       throw new AppError("CPF do responsável é obrigatório para gerar o contrato", 400);
     }
