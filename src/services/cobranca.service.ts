@@ -439,7 +439,8 @@ export const cobrancaService = {
             const success = await notificationService.notifyPassenger(
               passageiro.telefone_responsavel,
               eventType,
-              context
+              context,
+              { channels: ['WHATSAPP'] }
             );
 
             if (success) {

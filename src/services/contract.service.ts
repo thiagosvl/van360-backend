@@ -243,7 +243,8 @@ class ContractService {
           nomeMotorista: usuario.nome,
           contratoUrl: response.documentoFinalUrl,
           usuarioId: usuario.id
-        }
+        },
+        { channels: ['WHATSAPP'] }
       ).catch(err => logger.error({ err }, 'Erro ao notificar responsável sobre assinatura'));
     }
 
@@ -256,7 +257,8 @@ class ContractService {
           nomePassageiro: passageiro.nome,
           nomeResponsavel: passageiro.nome_responsavel,
           contratoUrl: response.documentoFinalUrl
-        }
+        },
+        { channels: ['WHATSAPP'] }
       ).catch(err => logger.error({ err }, 'Erro ao notificar motorista sobre assinatura'));
     }
 

@@ -249,6 +249,7 @@ export async function registrarUsuario(
         nomeMotorista: payload.nome,
         dataVencimento: subscription?.trial_ends_at ?? undefined,
       }, {
+        channels: ['WHATSAPP'],
         jobId: `driver-welcome-${usuarioId}`
       })
         .catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar boas vindas"));
@@ -263,6 +264,7 @@ export async function registrarUsuario(
       dataRegistro: getNowBR().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }),
       usuarioId: usuarioId as string
     }, {
+      channels: ['TELEGRAM'],
       jobId: `admin-cadastro-${usuarioId}`
     }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao notificar admin sobre cadastro"));
 
@@ -371,7 +373,7 @@ export async function updatePassword(token: string, newPassword: string, oldPass
     if (profile.telefone) {
       notificationService.notifyDriver(profile.telefone, EVENTO_AUTH_SENHA_ALTERADA, {
         nomeMotorista: profile.nome
-      }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar notificação de senha alterada"));
+      }, { channels: ['WHATSAPP'] }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar notificação de senha alterada"));
     }
   }
 }
@@ -408,7 +410,7 @@ export async function solicitarRecuperacaoWhatsapp(cpf: string): Promise<{ telef
   await notificationService.notifyDriver(user.telefone, EVENTO_AUTH_RECUPERACAO_SENHA, {
     nomeMotorista: user.nome,
     otpCode: otp
-  }).catch(err => logger.error({ err }, "Falha ao enviar OTP via WhatsApp"));
+  }, { channels: ['WHATSAPP'] }).catch(err => logger.error({ err }, "Falha ao enviar OTP via WhatsApp"));
   
   historicoService.log({
     usuario_id: user.id,
@@ -484,7 +486,7 @@ export async function resetarSenhaComCodigo(recoveryId: string, novaSenha: strin
   if (userProfile?.telefone) {
     notificationService.notifyDriver(userProfile.telefone, EVENTO_AUTH_SENHA_ALTERADA, {
       nomeMotorista: userProfile.nome
-    }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar notificação de senha alterada (reset)"));
+    }, { channels: ['WHATSAPP'] }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar notificação de senha alterada (reset)"));
   }
 
   return {

@@ -57,7 +57,8 @@ export const contractWorker = new Worker<ContractJobData>(
                         nomeMotorista: dadosContrato.nomeCondutor,
                         linkAssinatura,
                         usuarioId: usuarioId
-                    }
+                    },
+                    { channels: ['WHATSAPP'] }
                 );
 
                 logger.info({ jobId: job.id, phone: passageiro.telefone_responsavel }, "[Worker] Notificação de contrato processada via NotificationService.");

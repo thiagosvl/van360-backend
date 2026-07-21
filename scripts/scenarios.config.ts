@@ -16,6 +16,7 @@ export interface ScenarioConfig {
     prePassageiros: {
         quantidade: number;
     };
+    resetarPix?: boolean;
 }
 
 export const cenarios: Record<string, ScenarioConfig> = {
@@ -40,6 +41,7 @@ export const cenarios: Record<string, ScenarioConfig> = {
         passageiros: { quantidade: 0, percentualComAniversario: 0 },
         gastos: { quantidadeTotal: 0, quantidadeSemVeiculo: 0 },
         prePassageiros: { quantidade: 0 },
+        resetarPix: true,
     },
     "cenario-leads": {
         escolas: { quantidade: 1 },

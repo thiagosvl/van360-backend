@@ -37,7 +37,7 @@ export const birthdayWorker = new Worker<BirthdayJobData>(
                     mes: mesAtual
                 })),
                 passageirosSemData
-            });
+            }, { channels: ['WHATSAPP'] });
 
             logger.info({ motoristaId, celular: telefone }, "[Worker] Lembrete enviado com sucesso.");
             return { sent: true };

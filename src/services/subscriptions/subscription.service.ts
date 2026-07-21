@@ -187,6 +187,7 @@ export const subscriptionService = {
                     dataVencimento: new Date(sub.current_period_end!).toLocaleDateString("pt-BR"),
                     usuarioId: userId
                 }, {
+                    channels: ['TELEGRAM'],
                     jobId: `admin-assinatura-cancelada-${userId}-${sub.id}`
                 });
             }
@@ -254,7 +255,7 @@ export const subscriptionService = {
                 valor: typeof res.valor === "string" ? parseFloat(res.valor) : res.valor!,
                 dataVencimento: res.new_expiry!,
                 planoNome: res.plano_nome,
-            }).catch(err => logger.error({ err }, "[SubscriptionService] Falha ao notificar pagamento confirmado"));
+            }, { channels: ['WHATSAPP'] }).catch(err => logger.error({ err }, "[SubscriptionService] Falha ao notificar pagamento confirmado"));
         }
 
         // Notificação para o Admin (Telegram)
@@ -267,6 +268,7 @@ export const subscriptionService = {
             dataVencimento: new Date(res.new_expiry!).toLocaleDateString('pt-BR'),
             usuarioId: res.usuario_id!
         }, {
+            channels: ['TELEGRAM'],
             jobId: `admin-nova-assinatura-${res.usuario_id}-${res.fatura_id}`
         }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "[SubscriptionService] Falha ao notificar admin sobre assinatura paga"));
     }

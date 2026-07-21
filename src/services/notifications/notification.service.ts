@@ -55,7 +55,7 @@ import {
 export type NotificationChannel = "WHATSAPP" | "SMS" | "EMAIL" | "TELEGRAM";
 
 export interface NotificationOptions {
-    channels?: NotificationChannel[];
+    channels: NotificationChannel[];
     whatsapp?: {
         instanceName?: string;
     };
@@ -121,7 +121,7 @@ class NotificationService {
         to: string,
         type: PassengerEventType,
         ctx: PassengerContext & { reciboUrl?: string },
-        options: NotificationOptions = {}
+        options: NotificationOptions
     ): Promise<boolean> {
 
         let parts: CompositeMessagePart[] = [];
@@ -145,7 +145,7 @@ class NotificationService {
         to: string,
         type: DriverEventType,
         ctx: DriverContext & { nomePagador?: string, nomePassageiro?: string, diasAtraso?: number, reciboUrl?: string, trialDays?: number },
-        options: NotificationOptions = {}
+        options: NotificationOptions
     ): Promise<boolean> {
 
         let parts: CompositeMessagePart[] = [];
@@ -184,7 +184,7 @@ class NotificationService {
     async notifyAdmin(
         type: AdminEventType,
         ctx: AdminRegistrationContext | AdminSubscriptionContext | AdminPaymentFailedContext | AdminSystemAlertContext,
-        options: NotificationOptions = { channels: ["TELEGRAM"] }
+        options: NotificationOptions
     ): Promise<boolean> {
 
         if (env.NODE_ENV !== "production") {
@@ -213,6 +213,8 @@ class NotificationService {
         }
 
         // Para Admin, o 'to' não importa porque o chatId está no .env, passamos vazio
+
+        // Para Admin, o 'to' não importa porque o chatId está no .env, passamos vazio
         return await this._processAndEnqueue("", parts, type as string, options);
     }
 
@@ -223,7 +225,7 @@ class NotificationService {
         to: string,
         parts: CompositeMessagePart[],
         eventType: string,
-        options: NotificationOptions = {}
+        options: NotificationOptions
     ): Promise<boolean> {
         if (!parts || parts.length === 0) return false;
 
@@ -237,7 +239,7 @@ class NotificationService {
             }
         }
 
-        const { channels = ["WHATSAPP"], whatsapp: whatsappOptions } = options;
+        const { channels, whatsapp: whatsappOptions } = options;
 
         try {
             const results: Promise<boolean>[] = [];

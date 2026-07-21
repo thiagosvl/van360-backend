@@ -59,6 +59,7 @@ export const webhookEvolutionHandler = {
                     "Status": state
                 }
             }, {
+                channels: ['TELEGRAM'],
                 jobId: `admin-alerta-desconexao-${instanceName}-${state}`
             });
         }

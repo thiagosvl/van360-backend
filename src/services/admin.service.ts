@@ -449,7 +449,7 @@ export const adminService = {
         nomeMotorista: data.nome,
         cpfLogin: maskedCpf,
         senhaTemporaria: data.senha
-      }).catch(err => logger.error({ err, userId }, "[AdminService] Falha ao enviar WhatsApp de boas-vindas."));
+      }, { channels: ['WHATSAPP'] }).catch(err => logger.error({ err, userId }, "[AdminService] Falha ao enviar WhatsApp de boas-vindas."));
     }
 
     return { id: userId, email: emailClean };
@@ -479,7 +479,7 @@ export const adminService = {
         nomeMotorista: user.nome,
         cpfLogin: maskedCpf,
         senhaTemporaria: newPassword
-      }).catch(err => logger.error({ err, userId }, "[AdminService] Falha ao enviar WhatsApp de reset de senha."));
+      }, { channels: ['WHATSAPP'] }).catch(err => logger.error({ err, userId }, "[AdminService] Falha ao enviar WhatsApp de reset de senha."));
     }
 
     return { success: true, senha: newPassword };

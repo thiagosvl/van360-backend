@@ -316,6 +316,21 @@ async function main() {
     try {
         await clearData(usuarioId);
 
+        if (config.resetarPix) {
+            console.log(`[SEED] Resetando configurações de Pix do usuário...`);
+            const { error: updateError } = await supabaseAdmin
+                .from("usuarios")
+                .update({
+                    chave_pix: null,
+                    tipo_chave_pix: null,
+                })
+                .eq("id", usuarioId);
+
+            if (updateError) {
+                console.error("[SEED] Erro ao resetar configurações de Pix:", updateError);
+            }
+        }
+
         const escolasInseridas = await seedEscolas(usuarioId, config);
         const veiculosInseridos = await seedVeiculos(usuarioId, config);
 

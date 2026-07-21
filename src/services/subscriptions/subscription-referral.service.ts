@@ -128,7 +128,8 @@ export const subscriptionReferralService = {
                         nomeMotorista: indicador.nome,
                         trialDays: bonusDays,
                         dataVencimento: getEndOfDayBR(newExpiry).toISOString()
-                    }
+                    },
+                    { channels: ['WHATSAPP'] }
                 ).catch(err => {
                     logger.error({ err, indicadorId: indicador.id }, "[SubscriptionReferralService] Erro ao notificar bônus de indicação");
                 });
