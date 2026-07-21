@@ -39,6 +39,7 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO>, usuarioId?: 
     if (flexData.estado !== undefined) prepared.estado = flexData.estado ? cleanString(flexData.estado, true) : null;
     if (flexData.cep !== undefined) prepared.cep = flexData.cep ? onlyDigits(flexData.cep) : null;
     if (data.referencia !== undefined) prepared.referencia = data.referencia ? cleanString(data.referencia, true) : null;
+    if (data.complemento !== undefined) prepared.complemento = data.complemento ? cleanString(data.complemento, true) : null;
     if (data.observacoes !== undefined) prepared.observacoes = data.observacoes ? cleanString(data.observacoes, true) : null;
 
     // Detalhes
@@ -423,6 +424,7 @@ const addResponsavelAdicional = async (passageiroId: string, data: CreateRespons
             estado: data.estado ? cleanString(data.estado, true) : null,
             cep: data.cep ? onlyDigits(data.cep) : null,
             referencia: data.referencia ? cleanString(data.referencia, true) : null,
+            complemento: data.complemento ? cleanString(data.complemento, true) : null,
         }])
         .select()
         .single();
@@ -444,6 +446,7 @@ const updateResponsavelAdicional = async (responsavelId: string, data: UpdateRes
     if (data.estado !== undefined) prepared.estado = data.estado ? cleanString(data.estado, true) : null;
     if (data.cep !== undefined) prepared.cep = data.cep ? onlyDigits(data.cep) : null;
     if (data.referencia !== undefined) prepared.referencia = data.referencia ? cleanString(data.referencia, true) : null;
+    if (data.complemento !== undefined) prepared.complemento = data.complemento ? cleanString(data.complemento, true) : null;
 
     const { data: updated, error } = await supabaseAdmin
         .from("passageiro_responsaveis_adicionais")
@@ -497,6 +500,7 @@ const setPrincipalResponsavel = async (passageiroId: string, responsavelId: stri
             estado: passageiro.estado,
             cep: passageiro.cep,
             referencia: passageiro.referencia,
+            complemento: passageiro.complemento,
         })
         .eq("id", responsavelId);
 
@@ -516,6 +520,7 @@ const setPrincipalResponsavel = async (passageiroId: string, responsavelId: stri
             estado: adicional.estado,
             cep: adicional.cep,
             referencia: adicional.referencia,
+            complemento: adicional.complemento,
         })
         .eq("id", passageiroId);
 

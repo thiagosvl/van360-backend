@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "../src/config/supabase.js";
+import { env } from "../src/config/env.js";
 import {
     randomNumber,
     escolas,
@@ -22,6 +23,11 @@ import {
 } from "../src/types/enums.js";
 
 import { cenarios, ScenarioConfig } from "./scenarios.config.js";
+
+if (env.NODE_ENV !== "development") {
+    console.error(`[ERRO] O script de seed só pode ser executado em ambiente de desenvolvimento (NODE_ENV=development). Ambiente atual: ${env.NODE_ENV}`);
+    process.exit(1);
+}
 
 const TARGET_PHONE = "11951186951";
 

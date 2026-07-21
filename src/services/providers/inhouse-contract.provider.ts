@@ -340,7 +340,13 @@ export class InHouseContractProvider implements ContractProvider {
     const multaRescisaoLabel = `Multa cancelamento de contrato (${dados.multaRescisao.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}):`;
     const multaRescisaoValor = formatMulta(dados.multaRescisao.tipo, dados.multaRescisao.valor);
     page.drawText(`${multaRescisaoLabel} ${multaRescisaoValor}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
-    currentY -= 60;
+
+    const jurosAtrasoLabel = dados.jurosAtraso.tipo === ContractMultaTipo.PERCENTUAL ? `Juros de mora (atraso):` : `Juros de mora diário:`;
+    const jurosAtrasoFormat = dados.jurosAtraso.tipo === ContractMultaTipo.PERCENTUAL ? ' ao mês' : ' / dia';
+    const jurosAtrasoValor = formatMulta(dados.jurosAtraso.tipo, dados.jurosAtraso.valor);
+    page.drawText(`${jurosAtrasoLabel} ${jurosAtrasoValor}${jurosAtrasoFormat}`, { x: margin, y: currentY - 42, size: smallTextSize, font });
+
+    currentY -= 74;
 
     const intro = "As partes acima identificadas têm, entre si, justo e acertado o presente Contrato de Prestação de Serviços de Transportes Escolares, sob as cláusulas e as seguintes condições.";
     const introLines = await this.splitTextToLines(intro, fontItalic, fontSizeBody, width);
@@ -419,8 +425,8 @@ export class InHouseContractProvider implements ContractProvider {
 
     currentY -= 15;
 
-    page.drawText(`CONTRATADA (${dados.apelidoCondutor || 'Motorista'})`, { x: margin, y: currentY, size: 9, font: fontBold });
-    page.drawText(`CONTRATANTE (${dados.nomeResponsavel || 'Responsável'})`, { x: 335, y: currentY, size: 9, font: fontBold });
+    page.drawText(`CONTRATADO(A)`, { x: margin, y: currentY, size: 9, font: fontBold });
+    page.drawText(`CONTRATANTE`, { x: 335, y: currentY, size: 9, font: fontBold });
 
     if (dados.assinaturaCondutorUrl) {
       try {

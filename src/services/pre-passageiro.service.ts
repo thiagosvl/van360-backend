@@ -47,6 +47,7 @@ export const prePassageiroService = {
       estado: payload.estado || null,
       cep: payload.cep || null,
       referencia: payload.referencia || null,
+      complemento: payload.complemento || null,
       observacoes: payload.observacoes || null,
       modalidade: payload.modalidade || null,
       turma: payload.turma || null,

@@ -132,10 +132,15 @@ export const formatParentesco = (parentesco: string): string => {
   }
 };
 
-export const formatAddress = (data: { logradouro?: string; numero?: string; bairro?: string; cidade?: string; estado?: string }): string => {
+export const formatAddress = (data: { logradouro?: string; numero?: string; complemento?: string | null; bairro?: string; cidade?: string; estado?: string }): string => {
   if (!data.logradouro) return "";
+  let baseLogradouro = `${data.logradouro}${data.numero ? `, ${data.numero}` : ""}`;
+  if (data.complemento) {
+    baseLogradouro += ` - ${data.complemento}`;
+  }
+  
   const parts = [
-    `${data.logradouro}${data.numero ? `, ${data.numero}` : ""}`,
+    baseLogradouro,
     data.bairro,
     `${data.cidade}${data.estado ? `/${data.estado.toUpperCase()}` : ""}`
   ].filter(Boolean);

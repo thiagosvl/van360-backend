@@ -71,6 +71,7 @@ export async function atualizarUsuario(usuarioId: string, payload: {
       meta: {
         usar_contratos: config.usar_contratos,
         multa_atraso: config.multa_atraso,
+        juros_atraso: config.juros_atraso,
         multa_rescisao: config.multa_rescisao,
         campos_alterados: Object.keys(config)
       }

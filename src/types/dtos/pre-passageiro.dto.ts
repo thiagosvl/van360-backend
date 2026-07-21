@@ -19,6 +19,7 @@ export const createPrePassageiroSchema = z.object({
   estado: z.string().length(2).optional().nullable().or(z.literal('')),
   cep: z.string().optional().nullable().or(z.literal('')),
   referencia: z.string().optional().nullable().or(z.literal('')),
+  complemento: z.string().optional().nullable().or(z.literal('')),
   observacoes: z.string().optional().nullable().or(z.literal('')),
   modalidade: z.nativeEnum(PassageiroModalidade).optional().nullable().or(z.literal('')),
   genero: z.nativeEnum(PassageiroGenero).optional().nullable().or(z.literal('')),

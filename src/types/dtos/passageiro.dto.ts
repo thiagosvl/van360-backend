@@ -31,7 +31,9 @@ export const createPassageiroSchema = z.object({
   endereco_bairro: optionalString,
   cidade: optionalString,
   endereco_cidade: optionalString,
+  cep: optionalString,
   referencia: optionalString,
+  complemento: optionalString,
   observacoes: optionalString,
 
   // Financeiro
@@ -131,6 +133,7 @@ export const createResponsavelAdicionalSchema = z.object({
   estado: z.string().min(2, "Estado é obrigatório"),
   cep: z.string().min(8, "CEP é obrigatório"),
   referencia: optionalString,
+  complemento: optionalString,
 });
 
 export type CreateResponsavelAdicionalDTO = z.infer<typeof createResponsavelAdicionalSchema>;

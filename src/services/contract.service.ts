@@ -113,6 +113,7 @@ class ContractService {
       qtdParcelas,
       valorParcela: valorMensal,
       multaAtraso: usuario.config_contrato?.multa_atraso || { valor: 10, tipo: ContractMultaTipo.PERCENTUAL },
+      jurosAtraso: usuario.config_contrato?.juros_atraso || { valor: 1, tipo: ContractMultaTipo.PERCENTUAL },
       multaRescisao: usuario.config_contrato?.multa_rescisao || { valor: 15, tipo: ContractMultaTipo.PERCENTUAL },
       nomeCondutor: usuario.razao_social || usuario.nome,
       cpfCnpjCondutor: usuario.cpfcnpj,
@@ -143,6 +144,8 @@ class ContractService {
       dia_vencimento: dadosContrato.diaVencimento,
       multa_atraso_valor: dadosContrato.multaAtraso.valor,
       multa_atraso_tipo: dadosContrato.multaAtraso.tipo,
+      juros_atraso_valor: dadosContrato.jurosAtraso.valor,
+      juros_atraso_tipo: dadosContrato.jurosAtraso.tipo,
       multa_rescisao_valor: dadosContrato.multaRescisao.valor,
       multa_rescisao_tipo: dadosContrato.multaRescisao.tipo,
     });
@@ -476,6 +479,7 @@ class ContractService {
     const savedConfig = usuario.config_contrato || {};
 
     const multaAtraso = config.multaAtraso || savedConfig.multa_atraso || { valor: 10, tipo: ContractMultaTipo.PERCENTUAL };
+    const jurosAtraso = config.jurosAtraso || savedConfig.juros_atraso || { valor: 1, tipo: ContractMultaTipo.PERCENTUAL };
     const multaRescisao = config.multaRescisao || savedConfig.multa_rescisao || { valor: 15, tipo: ContractMultaTipo.PERCENTUAL };
     const clausulas = config.clausulas || savedConfig.clausulas || [
       "O serviço contratado consiste no transporte do passageiro acima citado, no trajeto com origem e destino acordado entre as partes.",
@@ -507,6 +511,7 @@ class ContractService {
       valorParcela: 200,
 
       multaAtraso,
+      jurosAtraso,
       multaRescisao,
 
       nomeCondutor: usuario.nome,

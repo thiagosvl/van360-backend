@@ -42,6 +42,10 @@ export interface DadosContrato {
     valor: number;
     tipo: ContractMultaTipo;
   };
+  jurosAtraso: {
+    valor: number;
+    tipo: ContractMultaTipo;
+  };
   multaRescisao: {
     valor: number;
     tipo: ContractMultaTipo;
