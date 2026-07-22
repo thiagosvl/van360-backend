@@ -1,4 +1,5 @@
 import { gastoRepository } from "../repositories/gasto.repository.js";
+import { gastoCategoriaRepository } from "../repositories/gasto-categoria.repository.js";
 import { CreateGastoDTO, ListGastosFiltersDTO, UpdateGastoDTO } from "../types/dtos/gasto.dto.js";
 import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
@@ -7,6 +8,26 @@ import { historicoService } from "./historico.service.js";
 import { toPersistenceString, parseLocalDate } from "../utils/date.utils.js";
 
 // Helper Methods
+const _validarObterSlugCategoria = async (categoria: string, usuarioId: string): Promise<string> => {
+    const catsRes = await gastoCategoriaRepository.list(usuarioId);
+    if (catsRes.error) throw new Error("Erro ao validar categoria.");
+    
+    const categorias = catsRes.data || [];
+    
+    // 1. Procurar por slug exato (case-insensitive)
+    const matchSlug = categorias.find(c => c.slug.toLowerCase() === categoria.toLowerCase());
+    if (matchSlug) {
+        return matchSlug.slug;
+    }
+    
+    // 2. Procurar por nome exato (case-insensitive)
+    const matchNome = categorias.find(c => c.nome.toLowerCase() === categoria.toLowerCase());
+    if (matchNome) {
+        return matchNome.slug;
+    }
+    
+    throw new Error(`Categoria "${categoria}" inválida ou não cadastrada.`);
+};
 const _prepareGastoData = (data: Partial<CreateGastoDTO>, usuarioId?: string, isUpdate: boolean = false): Record<string, unknown> => {
     const prepared: Record<string, unknown> = {};
 
@@ -46,6 +67,9 @@ const addMonthsFinancial = (dateStr: string, monthsToAdd: number): string => {
 export const gastoService = {
     async createGasto(data: CreateGastoDTO): Promise<any> {
         if (!data.usuario_id) throw new Error("Usuário obrigatório");
+
+        // Validar e obter o slug correspondente
+        data.categoria = await _validarObterSlugCategoria(data.categoria, data.usuario_id);
 
         if (data.parcelado && data.parcelas && data.parcelas >= 2) {
             const parcelasCriadas: any[] = [];
@@ -120,6 +144,13 @@ export const gastoService = {
 
     async updateGasto(id: string, data: UpdateGastoDTO): Promise<any> {
         if (!id) throw new Error("ID do gasto é obrigatório");
+
+        const gastoExistente = await this.getGasto(id);
+        if (!gastoExistente) throw new Error("Gasto não encontrado");
+
+        if (data.categoria !== undefined) {
+            data.categoria = await _validarObterSlugCategoria(data.categoria, gastoExistente.usuario_id);
+        }
 
         const gastoData = _prepareGastoData(data, undefined, true);
 

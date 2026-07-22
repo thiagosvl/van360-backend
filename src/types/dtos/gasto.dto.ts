@@ -1,8 +1,6 @@
 import { z } from "zod";
 import { moneyToNumber } from "../../utils/currency.utils.js";
 
-import { GastoCategoria } from "../enums.js";
-
 // === Schemas ===
 
 export const createGastoSchema = z.object({
@@ -10,7 +8,7 @@ export const createGastoSchema = z.object({
   veiculo_id: z.string().uuid().optional().nullable(),
   valor: z.union([z.number(), z.string()]).transform(v => typeof v === 'string' ? moneyToNumber(v) : v),
   data: z.string().datetime().or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)), // ISO or YYYY-MM-DD
-  categoria: z.nativeEnum(GastoCategoria),
+  categoria: z.string().min(2).max(50),
   descricao: z.string().optional(),
   km_atual: z.number().int().positive().optional(),
   litros: z.number().positive().optional(),
@@ -23,7 +21,7 @@ export const updateGastoSchema = createGastoSchema.partial().omit({ usuario_id: 
 
 export const listGastosFiltersSchema = z.object({
   veiculo_id: z.string().optional(), // Aceita UUID ou 'unspecified'
-  categoria: z.nativeEnum(GastoCategoria).optional(),
+  categoria: z.string().optional(),
   data_inicio: z.string().optional(),
   data_fim: z.string().optional(),
   search: z.string().optional(),
