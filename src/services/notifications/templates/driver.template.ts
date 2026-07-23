@@ -33,11 +33,12 @@ export interface DriverContext {
 const textPart = (text: string): CompositeMessagePart[] => {
     return [{ type: "text", content: text }];
 };
-export const DriverTemplates = {
+
+export const DriverTemplates = {
 
     welcomeTrial: (ctx: DriverContext): CompositeMessagePart[] => {
         return textPart(`🚀 *Bem-vindo ao Van360, ${getFirstName(ctx.nomeMotorista)}!*\n\n` +
-            `Sua conta está ativa com acesso completo. Comece cadastrando seus passageiros e veja a organização digital da sua van funcionando na prática.\n\n` +
+            `Sua conta está ativa com acesso completo.\n\n` +
             `Precisa de ajuda? Responda esta mensagem — estamos aqui.`);
     },
 

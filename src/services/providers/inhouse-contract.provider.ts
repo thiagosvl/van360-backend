@@ -325,7 +325,10 @@ export class InHouseContractProvider implements ContractProvider {
     // Lógica para formatação de valores de multas
     const formatMulta = (tipo: ContractMultaTipo, valor: number) => {
       if (tipo === ContractMultaTipo.PERCENTUAL) {
-        return valor.toFixed(0).replace('.', ',') + '%'; // Sem decimais se %
+        return valor.toLocaleString("pt-BR", {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 2,
+        }) + '%';
       }
       return valor.toLocaleString("pt-BR", {
         style: "currency",
@@ -333,11 +336,11 @@ export class InHouseContractProvider implements ContractProvider {
       }); // Com decimais se R$
     };
 
-    const multaAtrasoLabel = `Multa mensal atraso de pagamento (${dados.multaAtraso.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}):`;
+    const multaAtrasoLabel = `Multa por atraso de pagamento (${dados.multaAtraso.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}):`;
     const multaAtrasoValor = formatMulta(dados.multaAtraso.tipo, dados.multaAtraso.valor);
     page.drawText(`${multaAtrasoLabel} ${multaAtrasoValor}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
 
-    const multaRescisaoLabel = `Multa cancelamento de contrato (${dados.multaRescisao.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}):`;
+    const multaRescisaoLabel = `Multa por rescisão de contrato (${dados.multaRescisao.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}):`;
     const multaRescisaoValor = formatMulta(dados.multaRescisao.tipo, dados.multaRescisao.valor);
     page.drawText(`${multaRescisaoLabel} ${multaRescisaoValor}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
 

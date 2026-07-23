@@ -105,7 +105,19 @@ export const usuarioResumoService = {
 
     const cobrancasPagas = cobrancas.filter((c: Record<string, any>) => c.status === CobrancaStatus.PAGO);
     const receitaRealizada = cobrancasPagas.reduce((acc: number, c: Record<string, any>) => acc + Number(c.valor || 0), 0);
-    const receitaPrevista = cobrancas.reduce((acc: number, c: Record<string, any>) => acc + Number(c.valor || 0), 0);
+
+    const isPastPeriod = targetAno < now.getFullYear() || (targetAno === now.getFullYear() && targetMes < (now.getMonth() + 1));
+    let receitaProjetada = 0;
+    if (!isPastPeriod) {
+      const passageirosComCobranca = new Set(cobrancas.map((c: Record<string, any>) => c.passageiro_id));
+      passageirosList.forEach((p: Record<string, any>) => {
+        if (p.ativo && !passageirosComCobranca.has(p.id) && Number(p.valor_cobranca) > 0) {
+          receitaProjetada += Number(p.valor_cobranca);
+        }
+      });
+    }
+
+    const receitaPrevista = cobrancas.reduce((acc: number, c: Record<string, any>) => acc + Number(c.valor || 0), 0) + receitaProjetada;
     const taxaRecebimento = receitaPrevista > 0 ? (receitaRealizada / receitaPrevista) * 100 : 0;
 
     const totalDespesas = gastos.reduce((acc: number, g: Record<string, any>) => acc + Number(g.valor || 0), 0);

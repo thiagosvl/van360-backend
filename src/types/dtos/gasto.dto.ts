@@ -24,7 +24,6 @@ export const listGastosFiltersSchema = z.object({
   categoria: z.string().optional(),
   data_inicio: z.string().optional(),
   data_fim: z.string().optional(),
-  search: z.string().optional(),
   limit: z.coerce.number().int().positive().optional(),
   offset: z.coerce.number().int().min(0).optional()
 });

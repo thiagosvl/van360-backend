@@ -49,7 +49,7 @@ export const passageiroRepository = {
   },
 
   async getSummaryForDashboard(usuarioId: string, veiculoId?: string) {
-    let query = supabaseAdmin.from("passageiros").select("id, ativo").eq("usuario_id", usuarioId);
+    let query = supabaseAdmin.from("passageiros").select("id, ativo, valor_cobranca").eq("usuario_id", usuarioId);
     if (veiculoId) {
       query = query.eq("veiculo_id", veiculoId);
     }

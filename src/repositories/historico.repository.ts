@@ -21,7 +21,7 @@ export const historicoRepository = {
             .select('*')
             .eq('entidade_tipo', tipo)
             .eq('entidade_id', id)
-            .order('created_at', { ascending: false });
+            .order('created_at', { ascending: true });
     },
 
     async listByUsuario(usuarioId: string, limit: number) {
@@ -29,7 +29,7 @@ export const historicoRepository = {
             .from('historico_atividades')
             .select('*')
             .eq('usuario_id', usuarioId)
-            .order('created_at', { ascending: false })
+            .order('created_at', { ascending: true })
             .limit(limit);
     }
 };

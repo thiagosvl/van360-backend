@@ -202,6 +202,13 @@ export const subscriptionBillingService = {
 
                 if (failedInvoice) {
                     try {
+                        await historicoService.log({
+                            usuario_id: userId,
+                            entidade_tipo: AtividadeEntidadeTipo.SAAS_FATURA,
+                            entidade_id: failedInvoice.id,
+                            acao: AtividadeAcao.SAAS_FATURA_RECUSADA,
+                            descricao: `Tentativa de pagamento recusada/falha de conexão: ${errMsg}`
+                        });
                         await invoiceRepository.cancelIncompleteInvoicesByUserId(userId, getNowBR().toISOString(), failedInvoice.id);
                     } catch (cleanupErr) {
                         logger.error({ cleanupErr, userId }, "[SubscriptionBillingService] Falha ao limpar faturas pendentes/recusadas anteriores.");
@@ -232,6 +239,13 @@ export const subscriptionBillingService = {
 
                 if (failedInvoice) {
                     try {
+                        await historicoService.log({
+                            usuario_id: userId,
+                            entidade_tipo: AtividadeEntidadeTipo.SAAS_FATURA,
+                            entidade_id: failedInvoice.id,
+                            acao: AtividadeAcao.SAAS_FATURA_RECUSADA,
+                            descricao: `Tentativa de pagamento recusada: ${chargeRes.error}`
+                        });
                         await invoiceRepository.cancelIncompleteInvoicesByUserId(userId, getNowBR().toISOString(), failedInvoice.id);
                     } catch (cleanupErr) {
                         logger.error({ cleanupErr, userId }, "[SubscriptionBillingService] Falha ao limpar faturas pendentes/recusadas anteriores.");
@@ -302,6 +316,13 @@ export const subscriptionBillingService = {
         if (fError || !fatura) throw fError || new Error("Erro ao criar fatura");
 
         try {
+            await historicoService.log({
+                usuario_id: userId,
+                entidade_tipo: AtividadeEntidadeTipo.SAAS_FATURA,
+                entidade_id: fatura.id,
+                acao: AtividadeAcao.SAAS_FATURA_GERADA,
+                descricao: `Cobrança gerada (${paymentMethod === CheckoutPaymentMethod.PIX ? 'Pix' : 'Cartão de Crédito'}). Valor: R$ ${valor.toFixed(2).replace('.', ',')}`
+            });
             await invoiceRepository.cancelIncompleteInvoicesByUserId(userId, getNowBR().toISOString(), fatura.id);
         } catch (err: unknown) {
             logger.error({ err, userId }, "[SubscriptionBillingService] Falha ao cancelar faturas pendentes/recusadas anteriores.");
