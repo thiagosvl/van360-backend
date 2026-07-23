@@ -17,7 +17,7 @@ export const cobrancaPagamentoService = {
   async registrarPagamentoManual(cobrancaId: string, data: RegistrarPagamentoManualDTO): Promise<any> {
     logger.info({ cobrancaId }, "[cobrancaPagamentoService.registrarPagamentoManual] Iniciando registro");
 
-    const { data: cobranca, error: findError } = await cobrancaRepository.getByIdBasic(cobrancaId);
+    const { data: cobranca, error: findError } = await cobrancaRepository.getById(cobrancaId);
 
     if (findError || !cobranca) throw new AppError("Cobrança não encontrada.", 404);
     if (cobranca.status === CobrancaStatus.PAGO) throw new AppError("Esta cobrança já está paga.", 400);
@@ -38,12 +38,12 @@ export const cobrancaPagamentoService = {
       entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
       entidade_id: cobrancaId,
       acao: AtividadeAcao.PAGAMENTO_MANUAL,
-      descricao: `Pagamento manual de ${updated.mes}/${updated.ano} (${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(updated.valor_pago)}) do passageiro ${cobranca.passageiro?.nome} registrado.`,
+      descricao: `Pagamento manual de ${updated.mes}/${updated.ano} (${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(updated.valor_pago)}) do passageiro ${cobranca.passageiro?.nome || cobranca.passageiros?.nome} registrado.`,
       meta: {
         valor_pago: updated.valor_pago,
         tipo_pagamento: updated.tipo_pagamento,
         data_pagamento: updated.data_pagamento,
-        passageiro: cobranca.passageiro?.nome
+        passageiro: cobranca.passageiro?.nome || cobranca.passageiros?.nome
       }
     });
 
