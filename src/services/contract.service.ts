@@ -128,6 +128,7 @@ class ContractService {
       telefoneCondutor: usuario.telefone,
       placaVeiculo: passageiro.veiculo?.placa ? formatarPlacaExibicao(passageiro.veiculo.placa) : '',
       modeloVeiculo: passageiro.veiculo ? `${passageiro.veiculo.marca} ${passageiro.veiculo.modelo}` : '',
+      secoes: usuario.config_contrato?.secoes,
       clausulas: usuario.config_contrato?.clausulas,
       assinaturaCondutorUrl: usuario.assinatura_digital_url,
       apelidoCondutor: usuario.apelido,
@@ -489,10 +490,7 @@ class ContractService {
     const multaAtraso = config.multaAtraso || savedConfig.multa_atraso || { valor: 10, tipo: ContractMultaTipo.FIXO };
     const jurosAtraso = config.jurosAtraso || savedConfig.juros_atraso || { valor: 1, tipo: ContractMultaTipo.PERCENTUAL };
     const multaRescisao = config.multaRescisao || savedConfig.multa_rescisao || { valor: 15, tipo: ContractMultaTipo.FIXO };
-    const clausulas = config.clausulas || savedConfig.clausulas || [
-      "O serviço contratado consiste no transporte do passageiro acima citado, no trajeto com origem e destino acordado entre as partes.",
-      "Somente o passageiro CONTRATANTE está autorizado a utilizar-se do objeto deste contrato, sendo vedado o passageiro se fazer acompanhar de colegas, parentes, amigos e etc."
-    ];
+    const clausulas = config.clausulas !== undefined ? config.clausulas : (savedConfig.clausulas || []);
 
     const dadosContrato: DadosContrato = {
       nomePassageiro: "Passageiro Exemplo da Silva",
@@ -528,6 +526,7 @@ class ContractService {
       placaVeiculo: "ABC-1234",
       modeloVeiculo: "Mercedes Sprinter",
 
+      secoes: config.secoes !== undefined ? config.secoes : savedConfig.secoes,
       clausulas,
 
       assinaturaCondutorUrl: config.assinaturaCondutorUrl || usuario.assinatura_digital_url,

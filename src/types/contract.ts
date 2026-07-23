@@ -63,7 +63,14 @@ export interface DadosContrato {
 
   // Configurações personalizadas
   clausulas?: string[];
+  secoes?: ContractSectionDto[];
   assinaturaCondutorUrl?: string;
+}
+
+export interface ContractSectionDto {
+  id?: string;
+  titulo: string;
+  clausulas: string[];
 }
 
 
