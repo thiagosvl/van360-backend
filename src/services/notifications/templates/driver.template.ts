@@ -216,8 +216,9 @@ export const DriverTemplates = {
             return [
                 {
                     type: "text",
-                    content: `⚠️ *Assinatura vence hoje*\n\n` +
-                        `${getFirstName(ctx.nomeMotorista)}, o pagamento${valorStr} da sua assinatura${planoStr} vence hoje.\n\n` +
+                    content: `⚠️ *Sua assinatura Van360 vence hoje*\n\n` +
+                        `${getFirstName(ctx.nomeMotorista)}, hoje é o dia de renovar o seu acesso${valorStr}${planoStr}.\n\n` +
+                        `📲 _Pague hoje para evitar a pausa nas suas rotas e no controle financeiro da sua van._\n\n` +
                         `Segue o código Pix Copia e Cola para pagamento:`
                 },
                 {
@@ -231,8 +232,8 @@ export const DriverTemplates = {
             ];
         }
 
-        return textPart(`⚠️ *Assinatura vence hoje*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, o pagamento${valorStr} da sua assinatura${planoStr} vence hoje. Regularize pelo app para manter o acesso ativo.`);
+        return textPart(`⚠️ *Sua assinatura Van360 vence hoje*\n\n` +
+            `${getFirstName(ctx.nomeMotorista)}, hoje é o dia de renovar o seu acesso${valorStr}${planoStr}.\n\n📲 _Pague hoje para evitar a pausa nas suas rotas e no controle financeiro da sua van._`);
     },
 
     dueSoon: (ctx: DriverContext): CompositeMessagePart[] => {
@@ -240,15 +241,16 @@ export const DriverTemplates = {
         const data = ctx.dataVencimento ? formatToBrazilianDate(ctx.dataVencimento) : "";
         const valorStr = valor ? ` de *${valor}*` : "";
         const dataTitle = data ? `em ${data}` : "em breve";
+        const dataDia = data ? `dia ${data}` : "em breve";
         const planoStr = ctx.planoNome ? `\n🏷️ Plano: *${ctx.planoNome}*` : "";
 
         if (ctx.pixCopiaECola) {
             return [
                 {
                     type: "text",
-                    content: `🗓️ *Assinatura vence ${dataTitle}*\n\n` +
-                        `${getFirstName(ctx.nomeMotorista)}, sua mensalidade Van360${valorStr} vence em breve.${planoStr}\n\n` +
-                        `Pague em dia para que suas parcelas continuem sendo enviadas sem interrupção.\n\n` +
+                    content: `🗓️ *Assinatura Van360 vence ${dataTitle}*\n\n` +
+                        `${getFirstName(ctx.nomeMotorista)}, sua mensalidade${valorStr} vence ${dataDia}.${planoStr}\n\n` +
+                        `🚐 _Garanta que o envio automático de cobranças e os lembretes para os pais continuem funcionando perfeitamente!_\n\n` +
                         `Segue o código Pix Copia e Cola para pagamento:`
                 },
                 {
@@ -262,24 +264,26 @@ export const DriverTemplates = {
             ];
         }
 
-        return textPart(`🗓️ *Assinatura vence ${dataTitle}*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, sua mensalidade Van360${valorStr} vence em breve.${planoStr}\n\nPague em dia para que suas parcelas continuem sendo enviadas sem interrupção.`);
+        return textPart(`🗓️ *Assinatura Van360 vence ${dataTitle}*\n\n` +
+            `${getFirstName(ctx.nomeMotorista)}, sua mensalidade${valorStr} vence ${dataDia}.${planoStr}\n\n🚐 _Garanta que o envio automático de cobranças e os lembretes para os pais continuem funcionando perfeitamente!_`);
     },
 
     overdue: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = ctx.valor ? formatCurrency(ctx.valor) : "";
         const valorStr = valor ? ` de *${valor}*` : "";
         const planoStr = ctx.planoNome ? ` *${ctx.planoNome}*` : "";
-        return textPart(`🚨 *Acesso pausado*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, sua assinatura${planoStr}${valorStr} foi pausada por pagamento pendente. Renove pelo app para reativar imediatamente.`);
+        return textPart(`🚨 *Acesso temporariamente pausado*\n\n` +
+            `${getFirstName(ctx.nomeMotorista)}, não identificamos o pagamento da sua assinatura${planoStr}${valorStr}. Por isso, as cobranças automáticas para os seus passageiros foram pausadas.\n\n` +
+            `🔓 _A boa notícia é que todos os seus dados estão a salvo! Basta realizar o pagamento no app para reativar seu sistema na hora._`);
     },
 
     contractSigned: (ctx: DriverContext): CompositeMessagePart[] => {
         const nomePas = getFirstName(ctx.nomePassageiro) || "passageiro";
-        const nomeResp = ctx.nomeResponsavel ? ` (responsável ${getFirstName(ctx.nomeResponsavel)})` : "";
+        const nomeResp = ctx.nomeResponsavel ? `a responsável *${getFirstName(ctx.nomeResponsavel)}* acabou de assinar` : "acabou de ser assinado";
         const linkStr = ctx.contratoUrl ? `\n\n📄 Veja o contrato:\n${ctx.contratoUrl}` : "";
-        return textPart(`✍️ *Contrato assinado — ${ctx.nomePassageiro}*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, o contrato de *${nomePas}*${nomeResp} foi assinado com sucesso.${linkStr}`);
+        return textPart(`✅ *Novo contrato assinado! — ${nomePas}*\n\n` +
+            `${getFirstName(ctx.nomeMotorista)}, ótima notícia: ${nomeResp} digitalmente o contrato do passageiro *${nomePas}*.\n\n` +
+            `🚐 _Vaga garantida! O documento já está salvo no seu aplicativo._${linkStr}`);
     },
 
     authRecovery: (ctx: DriverContext): CompositeMessagePart[] => {
@@ -309,10 +313,10 @@ export const DriverTemplates = {
 
     failedCC: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = ctx.valor ? formatCurrency(ctx.valor) : "";
-        const valorStr = valor ? ` *${valor}*` : "";
-        return textPart(`❌ *Falha na cobrança automática*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, não conseguimos cobrar${valorStr} no seu cartão de crédito.\n\n` +
-            `Atualize o cartão ou pague via Pix pelo app para manter a conta ativa.`);
+        const valorStr = valor ? ` de *${valor}*` : "";
+        return textPart(`❌ *Não conseguimos processar seu cartão*\n\n` +
+            `${getFirstName(ctx.nomeMotorista)}, houve uma recusa do banco ao tentar debitar sua assinatura${valorStr} (isso geralmente ocorre por falta de limite ou bloqueio de segurança).\n\n` +
+            `💳 _Atualize o cartão no aplicativo ou gere um Pix para não ter suas automações pausadas._`);
     },
 
     welcomeAdminCreated: (ctx: DriverContext): CompositeMessagePart[] => {

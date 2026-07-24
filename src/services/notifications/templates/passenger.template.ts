@@ -80,9 +80,10 @@ const buildPixParts = (mainText: string, chavePix: string, tipoChavePix: string 
 export const PassengerTemplates = {
 
     contractAvailable: (ctx: PassengerContext): CompositeMessagePart[] => {
-        const linkStr = ctx.linkAssinatura ? `\n\n👉 Assine aqui: ${ctx.linkAssinatura}` : "";
+        const linkStr = ctx.linkAssinatura ? `\n\n👉 Leia e assine aqui: ${ctx.linkAssinatura}` : "";
         const text = `📄 *Contrato de transporte disponível*\n\n` +
-            `${getFirstName(ctx.nomeResponsavel)}, o contrato de *${getFirstName(ctx.nomePassageiro)}* está pronto para assinatura digital.${linkStr}${getSystemFooter(ctx)}`;
+            `${getFirstName(ctx.nomeResponsavel)}, o contrato de prestação de serviços do *${getFirstName(ctx.nomePassageiro)}* já está pronto para assinatura digital.\n\n` +
+            `💡 _A assinatura é rápida, feita pelo celular e garante a vaga e a segurança do transporte._${linkStr}${getSystemFooter(ctx)}`;
         return textPart(text);
     },
 
