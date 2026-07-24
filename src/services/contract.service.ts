@@ -5,7 +5,7 @@ import { AppError } from '../errors/AppError.js';
 import { addToContractQueue } from '../queues/contract.queue.js';
 import { ContractProvider, DadosContrato, SignatureMetadata } from '../types/contract.js';
 import { CreateContractDTO, ListContractsDTO } from '../types/dtos/contract.dto.js';
-import { AtividadeAcao, AtividadeEntidadeTipo, ContractMultaTipo, ContratoProvider, ContratoStatus, PassageiroModalidade, PeriodoEnum } from '../types/enums.js';
+import { AtividadeAcao, AtividadeEntidadeTipo, ContractMultaTipo, ContratoProvider, ContratoStatus, PassageiroModalidade, PeriodoEnum, SubscriptionStatus } from '../types/enums.js';
 import { getNowBR, toLocalDateString, parseLocalDate, addMonths } from '../utils/date.utils.js';
 import { formatAddress } from '../utils/format.js';
 import { historicoService } from './historico.service.js';
@@ -17,6 +17,7 @@ import { formatarPlacaExibicao } from '../utils/placa.utils.js';
 import { contractRepository } from '../repositories/contract.repository.js';
 import { passageiroRepository } from '../repositories/passageiro.repository.js';
 import { userRepository } from '../repositories/user.repository.js';
+import { subscriptionRepository } from '../repositories/subscription.repository.js';
 
 class ContractService {
   private providers: Map<string, ContractProvider> = new Map();
@@ -50,6 +51,15 @@ class ContractService {
 
     if (!usuario.config_contrato?.usar_contratos) {
       throw new AppError("A funcionalidade de contratos não está ativa para este usuário.", 400);
+    }
+
+    // Checagem de limite para o período de testes (TRIAL)
+    const { data: subData } = await subscriptionRepository.getSubscriptionStatus(usuario.id);
+    if (subData?.status === SubscriptionStatus.TRIAL) {
+      const { pendentes, assinados } = await contractRepository.getKPIs(usuario.id);
+      if ((pendentes + assinados) >= 3) {
+        throw new AppError("Você atingiu o limite de 3 contratos do período de testes. Escolha um plano para gerar contratos ilimitados.", 403);
+      }
     }
 
     logger.info({ usuarioId: usuario.id, passageiroId, providerName }, 'Criando contrato');
