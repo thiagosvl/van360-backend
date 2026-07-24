@@ -1,21 +1,19 @@
-import { logger } from "../config/logger.js";
-import { adminRepository } from "../repositories/admin.repository.js";
-import { userRepository } from "../repositories/user.repository.js";
-import { invoiceRepository } from "../repositories/invoice.repository.js";
-import { triggerDeployWebhook } from "../utils/deploy.utils.js";
-import { authProvider } from "./providers/auth.provider.js";
-import { SubscriptionStatus, UserType, AtividadeAcao, AtividadeEntidadeTipo, CanalAquisicao } from "../types/enums.js";
-import { historicoService } from "./historico.service.js";
-import { getNowBR, parseBrazilianDateToISO } from "../utils/date.utils.js";
-import { onlyDigits, cleanString } from "../utils/string.utils.js";
-import type { UpdateUserAdminDTO, UpdateSubscriptionAdminDTO, ListUsersQuery, ListUserLogsQuery, UpdatePlanDTO, CreateUserAdminDTO, ListGlobalLogsQuery } from "../schemas/admin.schema.js";
-import { subscriptionService } from "./subscriptions/subscription.service.js";
-import { notificationService } from "./notifications/notification.service.js";
-import { loginAttemptsRepository } from "../repositories/login-attempts.repository.js";
-import { EVENTO_MOTORISTA_CADASTRO_ADMIN, EVENTO_MOTORISTA_RESET_SENHA_ADMIN } from "../config/constants.js";
-import { adminPassageiroService } from "./admin/admin-passageiro.service.js";
-import { adminVeiculoService } from "./admin/admin-veiculo.service.js";
-import { adminEscolaService } from "./admin/admin-escola.service.js";
+import { logger } from "../../config/logger.js";
+import { adminUserRepository } from "../../repositories/admin/admin-user.repository.js";
+import { userRepository } from "../../repositories/user.repository.js";
+import { invoiceRepository } from "../../repositories/invoice.repository.js";
+import { authProvider } from "../providers/auth.provider.js";
+import { SubscriptionStatus, UserType, AtividadeAcao, AtividadeEntidadeTipo, CanalAquisicao, WhatsappStatus } from "../../types/enums.js";
+import { historicoService } from "../historico.service.js";
+import { getNowBR, parseBrazilianDateToISO } from "../../utils/date.utils.js";
+import { onlyDigits, cleanString } from "../../utils/string.utils.js";
+import type { UpdateUserAdminDTO, UpdateSubscriptionAdminDTO, ListUsersQuery, CreateUserAdminDTO } from "../../schemas/admin.schema.js";
+import { subscriptionService } from "../subscriptions/subscription.service.js";
+import { notificationService } from "../notifications/notification.service.js";
+import { EVENTO_MOTORISTA_CADASTRO_ADMIN, EVENTO_MOTORISTA_RESET_SENHA_ADMIN } from "../../config/constants.js";
+import { adminPassageiroService } from "./admin-passageiro.service.js";
+import { adminVeiculoService } from "./admin-veiculo.service.js";
+import { adminEscolaService } from "./admin-escola.service.js";
 
 function maskCpfCnpjHidden(cpfcnpj: string): string {
   const cleaned = cpfcnpj.replace(/\D/g, "");
@@ -34,8 +32,7 @@ function generateTempPassword(): string {
   return pwd;
 }
 
-export const adminService = {
-
+export const adminUserService = {
   async getDashboardStats() {
     const [
       motoristasRes,
@@ -44,7 +41,7 @@ export const adminService = {
       receitaRes,
       recentUsersRes,
       canaisRes,
-    ] = await adminRepository.getDashboardStats();
+    ] = await adminUserRepository.getDashboardStats();
 
     const totalMotoristas = motoristasRes.count ?? 0;
     const totalPassageiros = passageirosRes.count ?? 0;
@@ -93,14 +90,14 @@ export const adminService = {
       }
     }
 
-    let whatsappStatus = "UNKNOWN";
+    let whatsappStatus: string = WhatsappStatus.UNKNOWN;
     try {
-      const { GLOBAL_WHATSAPP_INSTANCE } = await import("../config/constants.js");
-      const { whatsappService } = await import("./whatsapp.service.js");
+      const { GLOBAL_WHATSAPP_INSTANCE } = await import("../../config/constants.js");
+      const { whatsappService } = await import("../whatsapp.service.js");
       const status = await whatsappService.getInstanceStatus(GLOBAL_WHATSAPP_INSTANCE);
       whatsappStatus = status.state;
     } catch (err) {
-      logger.error({ err }, "[AdminService] Erro ao buscar status do WhatsApp");
+      logger.error({ err }, "[AdminUserService] Erro ao buscar status do WhatsApp");
     }
 
     return {
@@ -126,8 +123,8 @@ export const adminService = {
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
-    let digits = null;
-    let searchClean = null;
+    let digits: string | undefined = undefined;
+    let searchClean: string | undefined = undefined;
     let isId = false;
 
     if (search) {
@@ -140,16 +137,16 @@ export const adminService = {
       }
     }
 
-    const { data, error, count } = await adminRepository.listUsers({ from, to, searchClean, digits, isId });
+    const { data, error, count } = await adminUserRepository.listUsers({ from, to, searchClean, digits, isId });
     if (error) {
-      logger.error({ error }, "[AdminService] Erro ao listar usuários.");
+      logger.error({ error }, "[AdminUserService] Erro ao listar usuários.");
       throw error;
     }
 
     let filtered = data || [];
 
     if (status) {
-      filtered = filtered.filter((u: any) => {
+      filtered = filtered.filter((u: { assinaturas?: Array<{ status: string }> | { status: string } }) => {
         const sub = Array.isArray(u.assinaturas) ? u.assinaturas[0] : u.assinaturas;
         return sub?.status === status;
       });
@@ -157,76 +154,6 @@ export const adminService = {
 
     return {
       data: filtered,
-      total: count ?? 0,
-      page,
-      limit,
-    };
-  },
-
-  async getUserLogs(userId: string, query: ListUserLogsQuery) {
-    const { page, limit, dataInicio, dataFim, acao, entidade } = query;
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
-
-    const { data, error, count } = await adminRepository.getUserLogs(
-      userId,
-      from,
-      to,
-      { dataInicio, dataFim, acao, entidade }
-    );
-
-    if (error) {
-      logger.error({ error, userId }, "[AdminService] Erro ao buscar logs de atividades do usuário.");
-      throw error;
-    }
-
-    return {
-      data: data || [],
-      total: count ?? 0,
-      page,
-      limit,
-    };
-  },
-
-  async getGlobalLogs(query: ListGlobalLogsQuery) {
-    const { page, limit, dataInicio, dataFim, acao, entidade, search_cpf } = query;
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
-
-    const { data, error, count } = await adminRepository.getGlobalLogs(
-      from,
-      to,
-      { dataInicio, dataFim, acao, entidade, search_cpf }
-    );
-
-    if (error) {
-      logger.error({ error }, "[AdminService] Erro ao buscar logs globais.");
-      throw error;
-    }
-
-    return {
-      data: data || [],
-      total: count ?? 0,
-      page,
-      limit,
-    };
-  },
-
-  async getLoginAttempts(query: { page?: number; limit?: number; data_inicio?: string; data_fim?: string; search_cpf?: string }) {
-    const page = query.page || 1;
-    const limit = query.limit || 20;
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
-
-    const { data, count, error } = await loginAttemptsRepository.listAttempts(query, from, to);
-
-    if (error) {
-      logger.error({ error }, "[AdminService] Erro ao buscar tentativas de login.");
-      throw error;
-    }
-
-    return {
-      data: data || [],
       total: count ?? 0,
       page,
       limit,
@@ -241,7 +168,7 @@ export const adminService = {
       veiculosList,
       escolasList,
     ] = await Promise.all([
-      adminRepository.getUserDetails(userId),
+      adminUserRepository.getUserDetails(userId),
       adminPassageiroService.getPassageirosByUserId(userId),
       adminPassageiroService.getPrePassageirosByUserId(userId),
       adminVeiculoService.getVeiculosByUserId(userId),
@@ -287,7 +214,7 @@ export const adminService = {
     const { error } = await userRepository.update(userId, updatePayload);
 
     if (error) {
-      logger.error({ error, userId }, "[AdminService] Erro ao atualizar usuário.");
+      logger.error({ error, userId }, "[AdminUserService] Erro ao atualizar usuário.");
       throw error;
     }
 
@@ -324,7 +251,7 @@ export const adminService = {
   },
 
   async updateSubscription(userId: string, data: UpdateSubscriptionAdminDTO) {
-    const { data: sub, error: fetchError } = await adminRepository.getSubscriptionForUser(userId);
+    const { data: sub, error: fetchError } = await adminUserRepository.getSubscriptionForUser(userId);
 
     if (fetchError || !sub) throw new Error("Assinatura não encontrada para este usuário.");
 
@@ -347,10 +274,10 @@ export const adminService = {
 
     updatePayload.updated_at = getNowBR().toISOString();
 
-    const { error } = await adminRepository.updateSubscription(sub.id, updatePayload);
+    const { error } = await adminUserRepository.updateSubscription(sub.id, updatePayload);
 
     if (error) {
-      logger.error({ error, userId, subId: sub.id }, "[AdminService] Erro ao atualizar assinatura.");
+      logger.error({ error, userId, subId: sub.id }, "[AdminUserService] Erro ao atualizar assinatura.");
       throw error;
     }
 
@@ -379,52 +306,9 @@ export const adminService = {
     }
 
     if (data.status === SubscriptionStatus.CANCELED) {
-      logger.info({ userId }, "[AdminService] Assinatura cancelada, cancelando faturas pendentes...");
+      logger.info({ userId }, "[AdminUserService] Assinatura cancelada, cancelando faturas pendentes...");
       await invoiceRepository.cancelIncompleteInvoicesByUserId(userId, getNowBR().toISOString());
     }
-
-    return { success: true };
-  },
-
-  async listConfigs() {
-    const { data, error } = await adminRepository.listConfigs();
-
-    if (error) throw error;
-    return data || [];
-  },
-
-  async updateConfig(chave: string, valor: string) {
-    const { error } = await adminRepository.updateConfig(chave, valor);
-
-    if (error) {
-      logger.error({ error, chave }, "[AdminService] Erro ao atualizar configuração.");
-      throw error;
-    }
-
-    return { success: true };
-  },
-
-  async listPlans() {
-    const { data, error } = await adminRepository.listPlanos();
-
-    if (error) throw error;
-    return data || [];
-  },
-
-  async updatePlan(id: string, data: UpdatePlanDTO) {
-    const updatePayload: Record<string, unknown> = {};
-    if (data.valor !== undefined) updatePayload.valor = data.valor;
-    if (data.valor_promocional !== undefined) updatePayload.valor_promocional = data.valor_promocional;
-    updatePayload.updated_at = getNowBR().toISOString();
-
-    const { error } = await adminRepository.updatePlano(id, updatePayload);
-
-    if (error) {
-      logger.error({ error, id }, "[AdminService] Erro ao atualizar plano.");
-      throw error;
-    }
-
-    await triggerDeployWebhook();
 
     return { success: true };
   },
@@ -436,7 +320,7 @@ export const adminService = {
     const { data: existingEmail } = await userRepository.getByEmail(emailClean);
 
     if (existingEmail) {
-      const error: any = new Error("Este e-mail já está cadastrado.");
+      const error = new Error("Este e-mail já está cadastrado.") as Error & { statusCode?: number; field?: string };
       error.statusCode = 400;
       error.field = "email";
       throw error;
@@ -445,7 +329,7 @@ export const adminService = {
     const { data: existingCpf } = await userRepository.getByCpfcnpj(cpfcnpjClean);
 
     if (existingCpf) {
-      const error: any = new Error("Este CPF/CNPJ já está cadastrado.");
+      const error = new Error("Este CPF/CNPJ já está cadastrado.") as Error & { statusCode?: number; field?: string };
       error.statusCode = 400;
       error.field = "cpfcnpj";
       throw error;
@@ -462,7 +346,7 @@ export const adminService = {
     });
 
     if (authError || !authUser.user) {
-      logger.error({ authError }, "[AdminService] Erro ao criar usuário no Supabase Auth.");
+      logger.error({ authError }, "[AdminUserService] Erro ao criar usuário no Supabase Auth.");
       throw authError || new Error("Erro ao criar credenciais de acesso.");
     }
 
@@ -483,7 +367,7 @@ export const adminService = {
     });
 
     if (insertError) {
-      logger.error({ insertError, userId }, "[AdminService] Erro ao salvar dados cadastrais do usuário.");
+      logger.error({ insertError, userId }, "[AdminUserService] Erro ao salvar dados cadastrais do usuário.");
       await authProvider.deleteUser(userId);
       throw insertError;
     }
@@ -491,7 +375,7 @@ export const adminService = {
     try {
       await subscriptionService.createTrial(userId);
     } catch (trialError) {
-      logger.error({ trialError, userId }, "[AdminService] Erro não-bloqueante ao criar Trial inicial.");
+      logger.error({ trialError, userId }, "[AdminUserService] Erro não-bloqueante ao criar Trial inicial.");
     }
 
     if (data.telefone) {
@@ -500,7 +384,7 @@ export const adminService = {
         nomeMotorista: data.nome,
         cpfLogin: maskedCpf,
         senhaTemporaria: data.senha
-      }, { channels: ['WHATSAPP'] }).catch(err => logger.error({ err, userId }, "[AdminService] Falha ao enviar WhatsApp de boas-vindas."));
+      }, { channels: ['WHATSAPP'] }).catch(err => logger.error({ err, userId }, "[AdminUserService] Falha ao enviar WhatsApp de boas-vindas."));
     }
 
     return { id: userId, email: emailClean };
@@ -520,7 +404,7 @@ export const adminService = {
     });
 
     if (authError) {
-      logger.error({ authError, userId }, "[AdminService] Erro ao atualizar senha no Supabase Auth.");
+      logger.error({ authError, userId }, "[AdminUserService] Erro ao atualizar senha no Supabase Auth.");
       throw authError;
     }
 
@@ -530,7 +414,7 @@ export const adminService = {
         nomeMotorista: user.nome,
         cpfLogin: maskedCpf,
         senhaTemporaria: newPassword
-      }, { channels: ['WHATSAPP'] }).catch(err => logger.error({ err, userId }, "[AdminService] Falha ao enviar WhatsApp de reset de senha."));
+      }, { channels: ['WHATSAPP'] }).catch(err => logger.error({ err, userId }, "[AdminUserService] Falha ao enviar WhatsApp de reset de senha."));
     }
 
     return { success: true, senha: newPassword };
@@ -546,35 +430,10 @@ export const adminService = {
     const { error: authError } = await authProvider.deleteUser(userId);
 
     if (authError) {
-      logger.error({ authError, userId }, "[AdminService] Erro ao deletar usuário no Supabase Auth.");
+      logger.error({ authError, userId }, "[AdminUserService] Erro ao deletar usuário no Supabase Auth.");
       throw authError;
     }
 
     return { success: true };
-  },
-
-  async getWhatsappInstances() {
-    const { data, error } = await adminRepository.getWhatsappInstances();
-    if (error) {
-      logger.error({ error }, "[AdminService] Erro ao buscar instâncias do WhatsApp no DB.");
-      throw error;
-    }
-
-    // Opcional: Buscar o status em tempo real da Evolution API para cada instância
-    const { whatsappService } = await import("./whatsapp.service.js");
-    const enhancedData = await Promise.all((data || []).map(async (instance: any) => {
-      try {
-        const status = await whatsappService.getInstanceStatus(instance.instance_name);
-        return {
-          ...instance,
-          evolution_status: status.state,
-          evolution_status_reason: status.statusReason
-        };
-      } catch (err) {
-        return { ...instance, evolution_status: "UNKNOWN" };
-      }
-    }));
-
-    return enhancedData;
   },
 };
