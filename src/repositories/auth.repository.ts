@@ -19,11 +19,11 @@ export const authRepository = {
 
 
 
-    async getUserIdAndEmailByCpf(cpf: string) {
+    async getUserIdAndEmailByCpf(cpfcnpj: string) {
         return supabaseAdmin
             .from("usuarios")
             .select("id, email, nome, telefone")
-            .eq("cpfcnpj", cpf)
+            .eq("cpfcnpj", cpfcnpj)
             .single();
     },
 

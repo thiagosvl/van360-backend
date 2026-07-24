@@ -209,11 +209,11 @@ export async function registrarUsuario(
   try {
     payload.ativo = true;
 
-    const cpf = onlyDigits(payload.cpfcnpj);
+    const cpfcnpjClean = onlyDigits(payload.cpfcnpj);
     const email = payload.email.toLowerCase();
     const telefone = onlyDigits(payload.telefone);
 
-    const userStatus = await checkUserStatus(cpf, email, telefone);
+    const userStatus = await checkUserStatus(cpfcnpjClean, email, telefone);
 
     if (userStatus.action === "bloqueado_em_uso") {
       throw new AppError(userStatus.message, 409, true, userStatus.field);
@@ -283,12 +283,15 @@ export async function login(
   meta: { ip: string | null; userAgent: string | null; dispositivo: string | null } = { ip: null, userAgent: null, dispositivo: null }
 ): Promise<AuthSession> {
   try {
-    const cpf = onlyDigits(identifier);
-    if (!cpf) throw new AppError("CPF/CNPJ inválido.", 400);
+    const documentoClean = onlyDigits(identifier);
+    if (!documentoClean) throw new AppError("CPF/CNPJ inválido.", 400);
 
-    const { data: user, error } = await authRepository.getUserLogin(cpf);
+    const isCnpj = documentoClean.length > 11;
+    const tipoDoc = isCnpj ? "CNPJ" : "CPF";
 
-    if (error || !user) throw new AppError("Usuário não encontrado com este CPF.", 404);
+    const { data: user, error } = await authRepository.getUserLogin(documentoClean);
+
+    if (error || !user) throw new AppError(`Usuário não encontrado com este ${tipoDoc}.`, 404);
     if (!user.ativo) throw new AppError("Sua conta está inativa. Entre em contato com o suporte.", 403);
 
     const { data, error: authError } = await authProvider.signInWithPassword({
@@ -377,11 +380,14 @@ export async function updatePassword(token: string, newPassword: string, oldPass
     }
   }
 }
-export async function solicitarRecuperacaoWhatsapp(cpf: string): Promise<{ telefoneMascarado: string }> {
-  const cpfClean = onlyDigits(cpf);
-  const { data: user, error } = await authRepository.getUserIdAndEmailByCpf(cpfClean);
+export async function solicitarRecuperacaoWhatsapp(documento: string): Promise<{ telefoneMascarado: string }> {
+  const documentoClean = onlyDigits(documento);
+  const isCnpj = documentoClean.length > 11;
+  const tipoDoc = isCnpj ? "CNPJ" : "CPF";
 
-  if (error || !user) throw new AppError("Usuário não encontrado com este CPF.", 404);
+  const { data: user, error } = await authRepository.getUserIdAndEmailByCpf(documentoClean);
+
+  if (error || !user) throw new AppError(`Usuário não encontrado com este ${tipoDoc}.`, 404);
   if (!user.telefone) throw new AppError("O usuário não possui telefone cadastrado para recuperação.", 400);
 
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -424,11 +430,14 @@ export async function solicitarRecuperacaoWhatsapp(cpf: string): Promise<{ telef
   return { telefoneMascarado: `(XX) XXXXX-${finalTelefone}` };
 }
 
-export async function validarCodigoWhatsApp(cpf: string, codigo: string): Promise<{ recoveryId: string }> {
-  const cpfClean = onlyDigits(cpf);
-  const { data: user, error: userError } = await authRepository.getUserIdAndEmailByCpf(cpfClean);
+export async function validarCodigoWhatsApp(documento: string, codigo: string): Promise<{ recoveryId: string }> {
+  const documentoClean = onlyDigits(documento);
+  const isCnpj = documentoClean.length > 11;
+  const tipoDoc = isCnpj ? "CNPJ" : "CPF";
 
-  if (userError || !user) throw new AppError("Usuário não encontrado.", 404);
+  const { data: user, error: userError } = await authRepository.getUserIdAndEmailByCpf(documentoClean);
+
+  if (userError || !user) throw new AppError(`Usuário não encontrado com este ${tipoDoc}.`, 404);
 
   const { data: rec, error: recError } = await authRepository.getRecoveryCode(user.id, codigo);
 

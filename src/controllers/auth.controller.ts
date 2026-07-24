@@ -117,11 +117,12 @@ export const AuthController = {
     },
 
     async solicitarRecuperacao(request: FastifyRequest, reply: FastifyReply) {
-        const { cpf } = request.body as any;
-        if (!cpf) return reply.status(400).send({ error: "CPF é obrigatório." });
+        const { cpf, cpfcnpj, documento } = request.body as any;
+        const doc = documento || cpfcnpj || cpf;
+        if (!doc) return reply.status(400).send({ error: "CPF/CNPJ é obrigatório." });
 
         try {
-            const result = await solicitarRecuperacaoWhatsapp(cpf);
+            const result = await solicitarRecuperacaoWhatsapp(doc);
             return reply.status(200).send({ 
                 success: true, 
                 message: "Código enviado ao seu WhatsApp.",
@@ -134,11 +135,12 @@ export const AuthController = {
     },
 
     async validarCodigo(request: FastifyRequest, reply: FastifyReply) {
-        const { cpf, codigo } = request.body as any;
-        if (!cpf || !codigo) return reply.status(400).send({ error: "CPF e Código são obrigatórios." });
+        const { cpf, cpfcnpj, documento, codigo } = request.body as any;
+        const doc = documento || cpfcnpj || cpf;
+        if (!doc || !codigo) return reply.status(400).send({ error: "CPF/CNPJ e Código são obrigatórios." });
 
         try {
-            const result = await validarCodigoWhatsApp(cpf, codigo);
+            const result = await validarCodigoWhatsApp(doc, codigo);
             return reply.status(200).send(result);
         } catch (err: any) {
             const status = err.statusCode || 401;
