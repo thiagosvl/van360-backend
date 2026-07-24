@@ -110,10 +110,48 @@ export const usuarioResumoService = {
     let receitaProjetada = 0;
     if (!isPastPeriod) {
       const passageirosComCobranca = new Set(cobrancas.map((c: Record<string, any>) => c.passageiro_id));
-      passageirosList.forEach((p: Record<string, any>) => {
-        if (p.ativo && !passageirosComCobranca.has(p.id) && Number(p.valor_cobranca) > 0) {
-          receitaProjetada += Number(p.valor_cobranca);
+      const driverCreatedAt = (usuario as Record<string, any>)?.created_at;
+
+      const parseYearMonth = (dateStr?: string | null) => {
+        if (!dateStr) return null;
+        if (dateStr.includes("-")) {
+          const parts = dateStr.split("-");
+          if (parts.length >= 2) {
+            const year = Number(parts[0]);
+            const month = Number(parts[1]);
+            if (!isNaN(year) && !isNaN(month) && month >= 1 && month <= 12) {
+              return { year, month };
+            }
+          }
         }
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return null;
+        return { year: d.getFullYear(), month: d.getMonth() + 1 };
+      };
+
+      passageirosList.forEach((p: Record<string, any>) => {
+        if (!p.ativo || passageirosComCobranca.has(p.id) || !p.valor_cobranca || Number(p.valor_cobranca) <= 0) {
+          return;
+        }
+
+        const inicioStr = p.data_inicio_cobranca || p.created_at || driverCreatedAt;
+        const inicio = parseYearMonth(inicioStr);
+        if (inicio) {
+          if (targetAno < inicio.year || (targetAno === inicio.year && targetMes < inicio.month)) {
+            return;
+          }
+        }
+
+        if (p.data_fim_cobranca) {
+          const fim = parseYearMonth(p.data_fim_cobranca);
+          if (fim) {
+            if (targetAno > fim.year || (targetAno === fim.year && targetMes > fim.month)) {
+              return;
+            }
+          }
+        }
+
+        receitaProjetada += Number(p.valor_cobranca);
       });
     }
 
