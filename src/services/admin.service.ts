@@ -38,15 +38,26 @@ export function resolveDriverContractConfigStatus(
   assinaturaUrl?: string | null,
   configContrato?: any | null
 ): DriverContractConfigStatus {
+  const hasConfig =
+    !!configContrato &&
+    (configContrato.usar_contratos !== undefined ||
+      (Array.isArray(configContrato.secoes) && configContrato.secoes.length > 0) ||
+      (Array.isArray(configContrato.clausulas) && configContrato.clausulas.length > 0) ||
+      !!configContrato.multa_atraso ||
+      !!configContrato.juros_atraso ||
+      !!configContrato.multa_rescisao);
+
   const hasSignature = !!assinaturaUrl;
 
-  if (!hasSignature) {
+  if (!hasConfig && !hasSignature) {
     return DriverContractConfigStatus.NAO_CONFIGURADO;
   }
-  if (configContrato?.usar_contratos === true) {
-    return DriverContractConfigStatus.ATIVO;
+
+  if (configContrato?.usar_contratos === false) {
+    return DriverContractConfigStatus.DESATIVADO;
   }
-  return DriverContractConfigStatus.DESATIVADO;
+
+  return DriverContractConfigStatus.ATIVO;
 }
 
 export const adminService = {
