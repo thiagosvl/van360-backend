@@ -29,6 +29,16 @@ export const adminUserRepository = {
         .from("usuarios")
         .select("canal_aquisicao")
         .eq("tipo", UserType.MOTORISTA),
+      supabaseAdmin
+        .from("contratos")
+        .select("id, status, valor_total"),
+      supabaseAdmin
+        .from("usuarios")
+        .select("config_contrato, assinatura_digital_url")
+        .eq("tipo", UserType.MOTORISTA),
+      supabaseAdmin
+        .from("indicacoes")
+        .select("id, status, indicador_id, indicado_id"),
     ]);
   },
 

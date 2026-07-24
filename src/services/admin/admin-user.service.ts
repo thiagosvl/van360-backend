@@ -3,7 +3,17 @@ import { adminUserRepository } from "../../repositories/admin/admin-user.reposit
 import { userRepository } from "../../repositories/user.repository.js";
 import { invoiceRepository } from "../../repositories/invoice.repository.js";
 import { authProvider } from "../providers/auth.provider.js";
-import { SubscriptionStatus, UserType, AtividadeAcao, AtividadeEntidadeTipo, CanalAquisicao, WhatsappStatus } from "../../types/enums.js";
+import {
+  SubscriptionStatus,
+  UserType,
+  AtividadeAcao,
+  AtividadeEntidadeTipo,
+  CanalAquisicao,
+  WhatsappStatus,
+  ContratoStatus,
+  DriverContractConfigStatus,
+  IndicacaoStatus,
+} from "../../types/enums.js";
 import { historicoService } from "../historico.service.js";
 import { getNowBR, parseBrazilianDateToISO } from "../../utils/date.utils.js";
 import { onlyDigits, cleanString } from "../../utils/string.utils.js";
@@ -33,6 +43,23 @@ function generateTempPassword(): string {
   return pwd;
 }
 
+export function resolveDriverContractConfigStatus(
+  assinaturaUrl?: string | null,
+  configContrato?: any | null
+): DriverContractConfigStatus {
+  // Motorista só é considerado CONFIGURADO se possuir a assinatura digital cadastrada
+  if (!assinaturaUrl) {
+    return DriverContractConfigStatus.NAO_CONFIGURADO;
+  }
+
+  // Com assinatura cadastrada, o contrato está configurado: verifica se está ativo ou pausado
+  if (configContrato?.usar_contratos === false) {
+    return DriverContractConfigStatus.DESATIVADO;
+  }
+
+  return DriverContractConfigStatus.ATIVO;
+}
+
 export const adminUserService = {
   async getDashboardStats() {
     const [
@@ -42,6 +69,9 @@ export const adminUserService = {
       receitaRes,
       recentUsersRes,
       canaisRes,
+      contratosRes,
+      motoristasConfigsRes,
+      indicacoesRes,
     ] = await adminUserRepository.getDashboardStats();
 
     const totalMotoristas = motoristasRes.count ?? 0;
@@ -91,6 +121,90 @@ export const adminUserService = {
       }
     }
 
+    // PROCESSAMENTO DE STATS DE CONTRATOS DIGITAIS
+    let totalContratos = 0;
+    let contratosAssinados = 0;
+    let contratosPendentes = 0;
+    let contratosSubstituidos = 0;
+    let valorTotalContratos = 0;
+
+    if (contratosRes?.data) {
+      totalContratos = contratosRes.data.length;
+      for (const c of contratosRes.data) {
+        if (c.status === ContratoStatus.ASSINADO) {
+          contratosAssinados++;
+          valorTotalContratos += Number(c.valor_total) || 0;
+        } else if (c.status === ContratoStatus.PENDENTE) {
+          contratosPendentes++;
+        } else if (c.status === ContratoStatus.SUBSTITUIDO) {
+          contratosSubstituidos++;
+        }
+      }
+    }
+
+    const motoristasConfigContrato = {
+      ativo: 0,
+      inativo: 0,
+      nao_configurado: 0,
+    };
+
+    if (motoristasConfigsRes?.data) {
+      for (const m of motoristasConfigsRes.data) {
+        const statusConfig = resolveDriverContractConfigStatus(m.assinatura_digital_url, m.config_contrato);
+
+        if (statusConfig === DriverContractConfigStatus.NAO_CONFIGURADO) {
+          motoristasConfigContrato.nao_configurado++;
+        } else if (statusConfig === DriverContractConfigStatus.ATIVO) {
+          motoristasConfigContrato.ativo++;
+        } else {
+          motoristasConfigContrato.inativo++;
+        }
+      }
+    }
+
+    let totalIndicacoes = 0;
+    let indicacoesConcluidas = 0;
+    let indicacoesPendentes = 0;
+
+    if (indicacoesRes?.data) {
+      totalIndicacoes = indicacoesRes.data.length;
+      for (const ind of indicacoesRes.data) {
+        if (ind.status === IndicacaoStatus.COMPLETED) {
+          indicacoesConcluidas++;
+        } else if (ind.status === IndicacaoStatus.PENDING) {
+          indicacoesPendentes++;
+        }
+      }
+    }
+
+    const taxaConversaoIndicacao = totalIndicacoes > 0 ? Math.round((indicacoesConcluidas / totalIndicacoes) * 100) : 0;
+    const diasBonusConcedidos = indicacoesConcluidas * 30;
+    const motoristasIndicadosCount = canaisAquisicao[CanalAquisicao.INDICACAO] || totalIndicacoes;
+
+    const indicacoesStats = {
+      total: totalIndicacoes,
+      concluidas: indicacoesConcluidas,
+      pendentes: indicacoesPendentes,
+      taxaConversao: taxaConversaoIndicacao,
+      diasBonusConcedidos,
+      motoristasIndicados: motoristasIndicadosCount,
+    };
+
+    const motoristasConfiguradosCount = motoristasConfigContrato.ativo + motoristasConfigContrato.inativo;
+
+    const contratosStats = {
+      totalContratos,
+      contratosAssinados,
+      contratosPendentes,
+      contratosSubstituidos,
+      valorTotalContratos,
+      motoristasConfigurados: motoristasConfiguradosCount,
+      motoristasAtivos: motoristasConfigContrato.ativo,
+      motoristasPausados: motoristasConfigContrato.inativo,
+      motoristasNaoConfigurados: motoristasConfigContrato.nao_configurado,
+      motoristasConfig: motoristasConfigContrato,
+    };
+
     let whatsappStatus: string = WhatsappStatus.UNKNOWN;
     try {
       const { GLOBAL_WHATSAPP_INSTANCE } = await import("../../config/constants.js");
@@ -113,6 +227,8 @@ export const adminUserService = {
         expired: statusCounts[SubscriptionStatus.EXPIRED] || 0,
         canceled: statusCounts[SubscriptionStatus.CANCELED] || 0,
       },
+      contratosStats,
+      indicacoesStats,
       recentUsers: recentUsersRes.data || [],
       canaisAquisicao,
       whatsappStatus,
