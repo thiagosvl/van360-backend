@@ -14,6 +14,7 @@ import { EVENTO_MOTORISTA_CADASTRO_ADMIN, EVENTO_MOTORISTA_RESET_SENHA_ADMIN } f
 import { adminPassageiroService } from "./admin-passageiro.service.js";
 import { adminVeiculoService } from "./admin-veiculo.service.js";
 import { adminEscolaService } from "./admin-escola.service.js";
+import { subscriptionReferralService } from "../subscriptions/subscription-referral.service.js";
 
 function maskCpfCnpjHidden(cpfcnpj: string): string {
   const cleaned = cpfcnpj.replace(/\D/g, "");
@@ -167,12 +168,24 @@ export const adminUserService = {
       prePassageirosList,
       veiculosList,
       escolasList,
+      referralSummary,
     ] = await Promise.all([
       adminUserRepository.getUserDetails(userId),
       adminPassageiroService.getPassageirosByUserId(userId),
       adminPassageiroService.getPrePassageirosByUserId(userId),
       adminVeiculoService.getVeiculosByUserId(userId),
       adminEscolaService.getEscolasByUserId(userId),
+      subscriptionReferralService.getReferralSummary(userId).catch(() => ({
+        total: 0,
+        completed: 0,
+        pending: 0,
+        referralCode: userId,
+        referralLink: "",
+        bonusDays: 30,
+        discountPct: 10,
+        hasActiveDiscount: false,
+        hasIndicator: false,
+      })),
     ]);
 
     if (userReq.error || !userReq.data) throw new Error("Usuário não encontrado.");
@@ -188,6 +201,7 @@ export const adminUserService = {
         passageirosCount: passageirosReq.count ?? 0,
         solicitacoesPendentesCount: prePassageirosReq.count ?? 0,
       },
+      referralSummary,
       passageiros: passageirosList,
       prePassageiros: prePassageirosList,
       veiculos: veiculosList,

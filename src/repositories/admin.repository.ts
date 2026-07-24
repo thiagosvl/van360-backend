@@ -29,6 +29,16 @@ export const adminRepository = {
                 .from("usuarios")
                 .select("canal_aquisicao")
                 .eq("tipo", UserType.MOTORISTA),
+            supabaseAdmin
+                .from("contratos")
+                .select("id, status, valor_total"),
+            supabaseAdmin
+                .from("usuarios")
+                .select("config_contrato, assinatura_digital_url")
+                .eq("tipo", UserType.MOTORISTA),
+            supabaseAdmin
+                .from("indicacoes")
+                .select("id, status, indicador_id, indicado_id"),
         ]);
     },
 
@@ -176,6 +186,11 @@ export const adminRepository = {
                 .from("pre_passageiros")
                 .select("id", { count: "exact", head: true })
                 .eq("usuario_id", userId),
+            supabaseAdmin
+                .from("contratos")
+                .select("*, passageiros(id, nome, cpf, responsavel_nome, responsavel_telefone)")
+                .eq("usuario_id", userId)
+                .order("created_at", { ascending: false }),
         ]);
     },
 

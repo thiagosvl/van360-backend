@@ -90,6 +90,12 @@ export enum ContratoStatus {
   SUBSTITUIDO = "substituido"
 }
 
+export enum DriverContractConfigStatus {
+  NAO_CONFIGURADO = "NAO_CONFIGURADO",
+  ATIVO = "ATIVO",
+  DESATIVADO = "DESATIVADO"
+}
+
 export enum PassageiroModalidade {
   IDA = "ida",
   VOLTA = "volta",
