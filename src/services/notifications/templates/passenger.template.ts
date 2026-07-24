@@ -103,16 +103,18 @@ export const PassengerTemplates = {
         if (ctx.chavePix) {
             const mainText = `🗓️ *${titulo}*\n\n` +
                 `${getFirstName(ctx.nomeResponsavel)}, lembrete da ${corpo}.\n\n` +
-                `🔹 Valor: *${valor}*\n` +
-                `🔹 Vencimento: *${data}*${diasMsg}\n\n` +
+                // `🔹 Valor: *${valor}*\n` +
+                `🔹 Vencimento: *${data}*${diasMsg}\n` +
+                `⚠️ Lembre-se de pagar até a data de vencimento para evitar a cobrança de multas e juros.\n\n` +
                 `Segue a chave Pix para pagamento:`;
             return buildPixParts(mainText, ctx.chavePix, ctx.tipoChavePix, ctx);
         }
 
         const text = `🗓️ *${titulo}*\n\n` +
             `${getFirstName(ctx.nomeResponsavel)}, lembrete da ${corpo}.\n\n` +
-            `🔹 Valor: *${valor}*\n` +
-            `🔹 Vencimento: *${data}*${diasMsg}${getSystemFooter(ctx)}`;
+            // `🔹 Valor: *${valor}*\n` +
+            `🔹 Vencimento: *${data}*${diasMsg}\n` +
+            `⚠️ Lembre-se de pagar até a data de vencimento para evitar a cobrança de multas e juros.${getSystemFooter(ctx)}`;
         return textPart(text);
     },
 
@@ -124,17 +126,19 @@ export const PassengerTemplates = {
 
         if (ctx.chavePix) {
             const mainText = `⚠️ *${titulo} — vence hoje*\n\n` +
-                `${getFirstName(ctx.nomeResponsavel)}, a ${corpo} vence hoje.\n\n` +
-                `🔹 Valor: *${valor}*\n` +
-                `🔹 Vencimento: *${data} (Hoje)*\n\n` +
+                `${getFirstName(ctx.nomeResponsavel)}, a ${corpo} vence hoje!\n\n` +
+                // `🔹 Valor: *${valor}*\n` +
+                `🔹 Vencimento: *${data} (Hoje)*\n` +
+                `⚠️ Realize o pagamento hoje para evitar a cobrança de multas e juros.\n\n` +
                 `Segue a chave Pix para pagamento:`;
             return buildPixParts(mainText, ctx.chavePix, ctx.tipoChavePix, ctx);
         }
 
         const text = `⚠️ *${titulo} — vence hoje*\n\n` +
-            `${getFirstName(ctx.nomeResponsavel)}, a ${corpo} vence hoje.\n\n` +
-            `🔹 Valor: *${valor}*\n` +
-            `🔹 Vencimento: *${data} (Hoje)*${getSystemFooter(ctx)}`;
+            `${getFirstName(ctx.nomeResponsavel)}, a ${corpo} vence hoje!\n\n` +
+            // `🔹 Valor: *${valor}*\n` +
+            `🔹 Vencimento: *${data} (Hoje)*\n` +
+            `⚠️ Realize o pagamento hoje para evitar a cobrança de multas e juros.${getSystemFooter(ctx)}`;
         return textPart(text);
     },
 
@@ -143,20 +147,27 @@ export const PassengerTemplates = {
         const data = formatToBrazilianDate(ctx.dataVencimento || "");
         const titulo = getParcelaTitle(ctx.nomePassageiro, ctx.mes);
         const corpo = getParcelaBody(ctx.nomePassageiro, ctx.mes);
+        
+        const diasStr = ctx.diasAtraso ? ` (há ${ctx.diasAtraso} dias)` : "";
+        const introStr = ctx.diasAtraso 
+            ? `consta em nosso sistema que a ${corpo} está atrasada há ${ctx.diasAtraso} dias.` 
+            : `consta em nosso sistema que a ${corpo} ainda está pendente.`;
 
         if (ctx.chavePix) {
             const mainText = `🚨 *${titulo} — em atraso*\n\n` +
-                `${getFirstName(ctx.nomeResponsavel)}, a ${corpo} ainda não foi paga.\n\n` +
-                `🔹 Valor pendente: *${valor}*\n` +
-                `🔹 Vencida em: *${data}*\n\n` +
+                `${getFirstName(ctx.nomeResponsavel)}, ${introStr}\n\n` +
+                // `🔹 Valor pendente: *${valor}*\n` +
+                `🔹 Vencida em: *${data}*${diasStr}\n` +
+                `⚠️ *Importante:* O atraso no pagamento pode gerar cobrança de multas e juros, caso aplicável.\n\n` +
                 `Segue a chave Pix para pagamento:`;
             return buildPixParts(mainText, ctx.chavePix, ctx.tipoChavePix, ctx);
         }
 
         const text = `🚨 *${titulo} — em atraso*\n\n` +
-            `${getFirstName(ctx.nomeResponsavel)}, a ${corpo} ainda não foi paga.\n\n` +
-            `🔹 Valor pendente: *${valor}*\n` +
-            `🔹 Vencida em: *${data}*${getSystemFooter(ctx)}`;
+            `${getFirstName(ctx.nomeResponsavel)}, ${introStr}\n\n` +
+            // `🔹 Valor pendente: *${valor}*\n` +
+            `🔹 Vencida em: *${data}*${diasStr}\n` +
+            `⚠️ *Importante:* O atraso no pagamento pode gerar cobrança de multas e juros, caso aplicável.${getSystemFooter(ctx)}`;
         return textPart(text);
     }
 };
