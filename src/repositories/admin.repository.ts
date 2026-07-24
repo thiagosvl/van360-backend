@@ -25,6 +25,10 @@ export const adminRepository = {
                 .eq("tipo", UserType.MOTORISTA)
                 .order("created_at", { ascending: false })
                 .limit(10),
+            supabaseAdmin
+                .from("usuarios")
+                .select("canal_aquisicao")
+                .eq("tipo", UserType.MOTORISTA),
         ]);
     },
 
@@ -155,7 +159,23 @@ export const adminRepository = {
                 .from("planos")
                 .select("id, nome, identificador, valor, valor_promocional, ativo")
                 .eq("ativo", true)
-                .order("valor", { ascending: true })
+                .order("valor", { ascending: true }),
+            supabaseAdmin
+                .from("veiculos")
+                .select("id", { count: "exact", head: true })
+                .eq("usuario_id", userId),
+            supabaseAdmin
+                .from("escolas")
+                .select("id", { count: "exact", head: true })
+                .eq("usuario_id", userId),
+            supabaseAdmin
+                .from("passageiros")
+                .select("id", { count: "exact", head: true })
+                .eq("usuario_id", userId),
+            supabaseAdmin
+                .from("pre_passageiros")
+                .select("id", { count: "exact", head: true })
+                .eq("usuario_id", userId),
         ]);
     },
 

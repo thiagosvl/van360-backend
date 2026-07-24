@@ -5,7 +5,7 @@ import { invoiceRepository } from "../repositories/invoice.repository.js";
 import { planRepository } from "../repositories/plan.repository.js";
 import { triggerDeployWebhook } from "../utils/deploy.utils.js";
 import { authProvider } from "./providers/auth.provider.js";
-import { SubscriptionStatus, UserType, AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
+import { SubscriptionStatus, UserType, AtividadeAcao, AtividadeEntidadeTipo, CanalAquisicao } from "../types/enums.js";
 import { historicoService } from "./historico.service.js";
 import { getNowBR, parseBrazilianDateToISO } from "../utils/date.utils.js";
 import { onlyDigits, cleanString } from "../utils/string.utils.js";
@@ -41,6 +41,7 @@ export const adminService = {
       assinaturasRes,
       receitaRes,
       recentUsersRes,
+      canaisRes,
     ] = await adminRepository.getDashboardStats();
 
     const totalMotoristas = motoristasRes.count ?? 0;
@@ -62,6 +63,31 @@ export const adminService = {
     if (receitaRes.data) {
       for (const f of receitaRes.data) {
         receitaTotal += Number(f.valor) || 0;
+      }
+    }
+
+    const canaisAquisicao: Record<string, number> = {
+      [CanalAquisicao.PLAY_STORE]: 0,
+      [CanalAquisicao.APP_STORE]: 0,
+      [CanalAquisicao.INDICACAO]: 0,
+      [CanalAquisicao.PANFLETO]: 0,
+      [CanalAquisicao.INSTAGRAM]: 0,
+      [CanalAquisicao.FACEBOOK]: 0,
+      [CanalAquisicao.TIKTOK]: 0,
+      [CanalAquisicao.YOUTUBE]: 0,
+      [CanalAquisicao.GOOGLE]: 0,
+      [CanalAquisicao.OUTROS]: 0,
+      NAO_INFORMADO: 0,
+    };
+
+    if (canaisRes.data) {
+      for (const row of canaisRes.data) {
+        const canal = row.canal_aquisicao;
+        if (canal && canaisAquisicao[canal] !== undefined) {
+          canaisAquisicao[canal]++;
+        } else {
+          canaisAquisicao.NAO_INFORMADO++;
+        }
       }
     }
 
@@ -88,6 +114,7 @@ export const adminService = {
         canceled: statusCounts[SubscriptionStatus.CANCELED] || 0,
       },
       recentUsers: recentUsersRes.data || [],
+      canaisAquisicao,
       whatsappStatus,
     };
   },
@@ -205,7 +232,16 @@ export const adminService = {
   },
 
   async getUserDetails(userId: string) {
-    const [userReq, assinaturaReq, faturasReq, planosReq] = await adminRepository.getUserDetails(userId);
+    const [
+      userReq,
+      assinaturaReq,
+      faturasReq,
+      planosReq,
+      veiculosReq,
+      escolasReq,
+      passageirosReq,
+      prePassageirosReq,
+    ] = await adminRepository.getUserDetails(userId);
 
     if (userReq.error || !userReq.data) throw new Error("Usuário não encontrado.");
 
@@ -214,6 +250,12 @@ export const adminService = {
       assinatura: assinaturaReq.data,
       faturas: faturasReq.data || [],
       planos: planosReq.data || [],
+      kpis: {
+        veiculosCount: veiculosReq.count ?? 0,
+        escolasCount: escolasReq.count ?? 0,
+        passageirosCount: passageirosReq.count ?? 0,
+        solicitacoesPendentesCount: prePassageirosReq.count ?? 0,
+      },
     };
   },
 
