@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { moneyToNumber } from "../../utils/currency.utils.js";
+import { GastoTipoCalculoParcela, GastoEscopoAcao } from "../enums.js";
 
 // === Schemas ===
 
@@ -14,10 +15,13 @@ export const createGastoSchema = z.object({
   litros: z.number().positive().optional(),
   local: z.string().optional(),
   parcelado: z.boolean().optional(),
-  parcelas: z.number().int().min(2).max(36).optional()
+  parcelas: z.number().int().min(2).max(36).optional(),
+  tipo_calculo_parcela: z.nativeEnum(GastoTipoCalculoParcela).optional(),
 });
 
-export const updateGastoSchema = createGastoSchema.partial().omit({ usuario_id: true }); // Usuario não muda
+export const updateGastoSchema = createGastoSchema.partial().omit({ usuario_id: true }).extend({
+  escopo: z.nativeEnum(GastoEscopoAcao).optional(),
+}); // Usuario não muda
 
 export const listGastosFiltersSchema = z.object({
   veiculo_id: z.string().optional(), // Aceita UUID ou 'unspecified'

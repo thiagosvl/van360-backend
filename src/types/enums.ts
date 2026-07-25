@@ -294,3 +294,15 @@ export enum BlogPostStatus {
   DRAFT = "draft",
   PUBLISHED = "published"
 }
+
+export enum GastoTipoCalculoParcela {
+  TOTAL = "total",
+  PARCELA = "parcela",
+}
+
+export enum GastoEscopoAcao {
+  UNICA = "unica",
+  FUTURAS = "futuras",
+  TODAS = "todas",
+}
+

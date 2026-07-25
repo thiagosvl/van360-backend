@@ -23,6 +23,22 @@ export const gastoRepository = {
         return supabaseAdmin.from("gastos").delete().eq("id", id);
     },
 
+    async deleteByParcelamento(parcelamentoId: string, minNumeroParcela?: number) {
+        let query = supabaseAdmin.from("gastos").delete().eq("parcelamento_id", parcelamentoId);
+        if (minNumeroParcela !== undefined) {
+            query = query.gte("numero_parcela", minNumeroParcela);
+        }
+        return query;
+    },
+
+    async updateByParcelamento(parcelamentoId: string, minNumeroParcela: number | undefined, data: Record<string, unknown>) {
+        let query = supabaseAdmin.from("gastos").update(data).eq("parcelamento_id", parcelamentoId);
+        if (minNumeroParcela !== undefined) {
+            query = query.gte("numero_parcela", minNumeroParcela);
+        }
+        return query.select();
+    },
+
     async getById(id: string) {
         return supabaseAdmin
             .from("gastos")
