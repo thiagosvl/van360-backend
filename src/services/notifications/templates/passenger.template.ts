@@ -37,7 +37,7 @@ const getParcelaTitle = (nomePassageiro: string, mes?: number): string => {
 const getParcelaBody = (nomePassageiro: string, mes?: number): string => {
     const mesLabel = getMonthNameBR(mes).toLowerCase();
     return mesLabel
-        ? `parcela de ${mesLabel} de *${getFirstName(nomePassageiro)}*`
+        ? `parcela de *${mesLabel}* de *${getFirstName(nomePassageiro)}*`
         : `parcela de *${getFirstName(nomePassageiro)}*`;
 };
 
@@ -61,7 +61,7 @@ const getSystemFooter = (ctx: PassengerContext) => {
 const buildPixParts = (mainText: string, chavePix: string, tipoChavePix: string | undefined, ctx: PassengerContext): CompositeMessagePart[] => {
     const labelTipo = getTipoChavePixLabel(tipoChavePix);
     const tipoStr = labelTipo ? ` (${labelTipo})` : "";
-    
+
     let chaveFormatada = chavePix;
     if (tipoChavePix) {
         const t = tipoChavePix.toUpperCase();
@@ -129,7 +129,7 @@ export const PassengerTemplates = {
             const mainText = `⚠️ *${titulo} — vence hoje*\n\n` +
                 `${getFirstName(ctx.nomeResponsavel)}, a ${corpo} vence hoje!\n\n` +
                 // `🔹 Valor: *${valor}*\n` +
-                `🔹 Vencimento: *${data} (Hoje)*\n` +
+                `🔹 Vencimento: *${data}*\n` +
                 `⚠️ Realize o pagamento hoje para evitar a cobrança de multas e juros.\n\n` +
                 `Segue a chave Pix para pagamento:`;
             return buildPixParts(mainText, ctx.chavePix, ctx.tipoChavePix, ctx);
@@ -138,7 +138,7 @@ export const PassengerTemplates = {
         const text = `⚠️ *${titulo} — vence hoje*\n\n` +
             `${getFirstName(ctx.nomeResponsavel)}, a ${corpo} vence hoje!\n\n` +
             // `🔹 Valor: *${valor}*\n` +
-            `🔹 Vencimento: *${data} (Hoje)*\n` +
+            `🔹 Vencimento: *${data}*\n` +
             `⚠️ Realize o pagamento hoje para evitar a cobrança de multas e juros.${getSystemFooter(ctx)}`;
         return textPart(text);
     },
@@ -148,17 +148,17 @@ export const PassengerTemplates = {
         const data = formatToBrazilianDate(ctx.dataVencimento || "");
         const titulo = getParcelaTitle(ctx.nomePassageiro, ctx.mes);
         const corpo = getParcelaBody(ctx.nomePassageiro, ctx.mes);
-        
+
         const diasStr = ctx.diasAtraso ? ` (há ${ctx.diasAtraso} dias)` : "";
-        const introStr = ctx.diasAtraso 
-            ? `consta em nosso sistema que a ${corpo} está atrasada há ${ctx.diasAtraso} dias.` 
+        const introStr = ctx.diasAtraso
+            ? `consta em nosso sistema que a ${corpo} está atrasada há ${ctx.diasAtraso} dias.`
             : `consta em nosso sistema que a ${corpo} ainda está pendente.`;
 
         if (ctx.chavePix) {
             const mainText = `🚨 *${titulo} — em atraso*\n\n` +
                 `${getFirstName(ctx.nomeResponsavel)}, ${introStr}\n\n` +
                 // `🔹 Valor pendente: *${valor}*\n` +
-                `🔹 Vencida em: *${data}*${diasStr}\n` +
+                `🔹 Vencida em: *${data}*\n` +
                 `⚠️ *Importante:* O atraso no pagamento pode gerar cobrança de multas e juros, caso aplicável.\n\n` +
                 `Segue a chave Pix para pagamento:`;
             return buildPixParts(mainText, ctx.chavePix, ctx.tipoChavePix, ctx);
@@ -167,7 +167,7 @@ export const PassengerTemplates = {
         const text = `🚨 *${titulo} — em atraso*\n\n` +
             `${getFirstName(ctx.nomeResponsavel)}, ${introStr}\n\n` +
             // `🔹 Valor pendente: *${valor}*\n` +
-            `🔹 Vencida em: *${data}*${diasStr}\n` +
+            `🔹 Vencida em: *${data}*\n` +
             `⚠️ *Importante:* O atraso no pagamento pode gerar cobrança de multas e juros, caso aplicável.${getSystemFooter(ctx)}`;
         return textPart(text);
     }
