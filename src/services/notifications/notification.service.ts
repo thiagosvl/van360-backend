@@ -24,9 +24,6 @@ import {
     EVENTO_PASSAGEIRO_ATRASADO,
     EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL,
     EVENTO_PASSAGEIRO_CONTRATO_ASSINADO,
-    EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_AVISO,
-    EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_HOJE,
-    EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_ATRASO,
     EVENTO_ROTA_A_CAMINHO_IDA,
     EVENTO_ROTA_A_CAMINHO_VOLTA,
     EVENTO_ROTA_EMBARCOU,
@@ -159,7 +156,7 @@ class NotificationService {
         to: string,
         type: RouteEventType,
         ctx: RouteContext,
-        options: NotificationOptions = {}
+        options: NotificationOptions = { channels: ["WHATSAPP"] }
     ): Promise<boolean> {
         let parts: CompositeMessagePart[] = [];
 

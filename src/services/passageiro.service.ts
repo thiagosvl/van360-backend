@@ -9,7 +9,6 @@ import { moneyToNumber } from "../utils/currency.utils.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
 import { parseLocalDate, toPersistenceString } from "../utils/date.utils.js";
-import { supabaseAdmin } from "../config/supabase.js";
 
 // Métodos privados auxiliares
 const geocodeAddress = async (enderecoParts: { logradouro?: string, numero?: string, cidade?: string, estado?: string }): Promise<{lat: number, lon: number} | null> => {
