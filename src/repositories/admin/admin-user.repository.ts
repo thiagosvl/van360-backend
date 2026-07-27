@@ -106,6 +106,11 @@ export const adminUserRepository = {
         .from("pre_passageiros")
         .select("id", { count: "exact", head: true })
         .eq("usuario_id", userId),
+      supabaseAdmin
+        .from("contratos")
+        .select("*, passageiros(id, nome, cpf_responsavel, nome_responsavel, telefone_responsavel)")
+        .eq("usuario_id", userId)
+        .order("created_at", { ascending: false }),
     ]);
   },
 

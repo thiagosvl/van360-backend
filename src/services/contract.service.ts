@@ -468,10 +468,11 @@ class ContractService {
     return provider.baixarDocumento(contratoId);
   }
 
-  async gerarPreview(authId: string, draftConfig?: Partial<DadosContrato>) {
+  async gerarPreview(authId: string, draftConfig?: Partial<DadosContrato> & { usuarioId?: string }) {
+    const targetUserId = draftConfig?.usuarioId || authId;
     let usuario;
     try {
-      const resp = await userRepository.getById(authId);
+      const resp = await userRepository.getById(targetUserId);
       usuario = resp.data;
     } catch(err) {
       throw new AppError('Usuário não encontrado', 404);

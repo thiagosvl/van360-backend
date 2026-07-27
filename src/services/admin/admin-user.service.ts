@@ -279,7 +279,7 @@ export const adminUserService = {
 
   async getUserDetails(userId: string) {
     const [
-      [userReq, assinaturaReq, faturasReq, planosReq, veiculosReq, escolasReq, passageirosReq, prePassageirosReq],
+      [userReq, assinaturaReq, faturasReq, planosReq, veiculosReq, escolasReq, passageirosReq, prePassageirosReq, contratosReq],
       passageirosList,
       prePassageirosList,
       veiculosList,
@@ -306,8 +306,21 @@ export const adminUserService = {
 
     if (userReq.error || !userReq.data) throw new Error("Usuário não encontrado.");
 
+    const userData = userReq.data;
+    const statusConfiguracaoContrato = resolveDriverContractConfigStatus(
+      userData.assinatura_digital_url,
+      userData.config_contrato
+    );
+
+    const contratosList = contratosReq.data || [];
+    const contratosAssinadosCount = contratosList.filter((c: any) => c.status === ContratoStatus.ASSINADO).length;
+    const contratosPendentesCount = contratosList.filter((c: any) => c.status === ContratoStatus.PENDENTE).length;
+    const valorTotalContratos = contratosList
+      .filter((c: any) => c.status === ContratoStatus.ASSINADO)
+      .reduce((acc: number, c: any) => acc + (Number(c.valor_total) || 0), 0);
+
     return {
-      user: userReq.data,
+      user: userData,
       assinatura: assinaturaReq.data,
       faturas: faturasReq.data || [],
       planos: planosReq.data || [],
@@ -316,12 +329,18 @@ export const adminUserService = {
         escolasCount: escolasReq.count ?? 0,
         passageirosCount: passageirosReq.count ?? 0,
         solicitacoesPendentesCount: prePassageirosReq.count ?? 0,
+        contratosCount: contratosList.length,
+        contratosAssinadosCount,
+        contratosPendentesCount,
+        valorTotalContratos,
+        statusConfiguracaoContrato,
       },
       referralSummary,
       passageiros: passageirosList,
       prePassageiros: prePassageirosList,
       veiculos: veiculosList,
       escolas: escolasList,
+      contratos: contratosList,
     };
   },
 
