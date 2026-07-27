@@ -64,6 +64,7 @@ export const createPassageiroSchema = z.object({
   }), // Aceita string ISO e converte
   parentesco_responsavel: optionalString,
   turma: optionalString,
+  nome_professor: optionalString,
   data_inicio_transporte: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
     if (v === undefined) return undefined;
     if (v === null || v === "") return null;

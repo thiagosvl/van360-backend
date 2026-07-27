@@ -51,6 +51,7 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO>, usuarioId?: 
     // Novos Campos
     if (data.modalidade !== undefined) prepared.modalidade = data.modalidade;
     if (data.turma !== undefined) prepared.turma = data.turma ? cleanString(data.turma, true) : null;
+    if (data.nome_professor !== undefined) prepared.nome_professor = data.nome_professor ? cleanString(data.nome_professor, true) : null;
     if (data.data_nascimento !== undefined) prepared.data_nascimento = data.data_nascimento ? toPersistenceString(data.data_nascimento) : null;
     if (data.parentesco_responsavel !== undefined) prepared.parentesco_responsavel = data.parentesco_responsavel;
     if (data.data_inicio_transporte !== undefined) prepared.data_inicio_transporte = data.data_inicio_transporte ? toPersistenceString(data.data_inicio_transporte) : null;
