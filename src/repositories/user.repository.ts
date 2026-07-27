@@ -22,7 +22,7 @@ export const userRepository = {
     async getProfileData(id: string) {
         return supabaseAdmin
             .from("usuarios")
-            .select("id, nome, razao_social, cpfcnpj, telefone, config_contrato, chave_pix, tipo_chave_pix, data_nascimento, logradouro, numero, bairro, cidade, estado, cep, canal_aquisicao, created_at")
+            .select("id, nome, razao_social, cpfcnpj, telefone, config_contrato, chave_pix, tipo_chave_pix, data_nascimento, logradouro, numero, bairro, cidade, estado, cep, canal_aquisicao, dispositivo_cadastro, metadados_cadastro, created_at")
             .eq("id", id)
             .single();
     },

@@ -9,6 +9,7 @@ import {
   AtividadeAcao,
   AtividadeEntidadeTipo,
   CanalAquisicao,
+  DispositivoCadastro,
   WhatsappStatus,
   ContratoStatus,
   DriverContractConfigStatus,
@@ -110,6 +111,15 @@ export const adminUserService = {
       NAO_INFORMADO: 0,
     };
 
+    const dispositivosCadastro: Record<string, number> = {
+      [DispositivoCadastro.APP_ANDROID]: 0,
+      [DispositivoCadastro.APP_IOS]: 0,
+      [DispositivoCadastro.WEB_MOBILE_ANDROID]: 0,
+      [DispositivoCadastro.WEB_MOBILE_IOS]: 0,
+      [DispositivoCadastro.WEB_DESKTOP]: 0,
+      NAO_INFORMADO: 0,
+    };
+
     if (canaisRes.data) {
       for (const row of canaisRes.data) {
         const canal = row.canal_aquisicao;
@@ -117,6 +127,13 @@ export const adminUserService = {
           canaisAquisicao[canal]++;
         } else {
           canaisAquisicao.NAO_INFORMADO++;
+        }
+
+        const disp = (row as any).dispositivo_cadastro;
+        if (disp && dispositivosCadastro[disp] !== undefined) {
+          dispositivosCadastro[disp]++;
+        } else {
+          dispositivosCadastro.NAO_INFORMADO++;
         }
       }
     }
@@ -231,6 +248,7 @@ export const adminUserService = {
       indicacoesStats,
       recentUsers: recentUsersRes.data || [],
       canaisAquisicao,
+      dispositivosCadastro,
       whatsappStatus,
     };
   },

@@ -27,7 +27,7 @@ export const adminUserRepository = {
         .limit(10),
       supabaseAdmin
         .from("usuarios")
-        .select("canal_aquisicao")
+        .select("canal_aquisicao, dispositivo_cadastro")
         .eq("tipo", UserType.MOTORISTA),
       supabaseAdmin
         .from("contratos")
@@ -46,7 +46,7 @@ export const adminUserRepository = {
     let q = supabaseAdmin
       .from("usuarios")
       .select(
-        "id, nome, apelido, email, cpfcnpj, telefone, ativo, tipo, created_at, data_nascimento, assinaturas(id, status, plano_id, data_vencimento, trial_ends_at, planos(id, nome, identificador))",
+        "id, nome, apelido, email, cpfcnpj, telefone, ativo, tipo, created_at, data_nascimento, canal_aquisicao, dispositivo_cadastro, assinaturas(id, status, plano_id, data_vencimento, trial_ends_at, planos(id, nome, identificador))",
         { count: "exact" }
       )
       .eq("tipo", UserType.MOTORISTA)

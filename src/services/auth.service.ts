@@ -8,7 +8,7 @@ import { userRepository } from "../repositories/user.repository.js";
 import { authRepository } from "../repositories/auth.repository.js";
 import { authProvider } from "./providers/auth.provider.js";
 import { AppError } from "../errors/AppError.js";
-import { AtividadeAcao, AtividadeEntidadeTipo, UserType } from "../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, UserType, DispositivoCadastro } from "../types/enums.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
 import { getNowBR, addMinutes, isBeforeNowBR, parseLocalDate, parseBrazilianDateToISO } from "../utils/date.utils.js";
@@ -31,6 +31,8 @@ export interface UsuarioPayload {
   ativo?: boolean;
   termos_aceitos?: boolean;
   data_nascimento?: string;
+  dispositivo_cadastro?: DispositivoCadastro;
+  metadados_cadastro?: Record<string, unknown>;
 }
 
 export interface CheckUserStatusResult {
@@ -70,6 +72,8 @@ export interface RegistroPayload {
   termos_aceitos: boolean;
   indicador_id?: string;
   data_nascimento?: string;
+  dispositivo_cadastro?: DispositivoCadastro;
+  metadados_cadastro?: Record<string, unknown>;
 }
 
 export interface RegistroManualResult {
@@ -120,7 +124,7 @@ export async function checkUserStatus(
 }
 
 export async function criarUsuario(data: UsuarioPayload & { tipo?: UserType, id: string }) {
-  const { id, nome, razao_social, apelido, email, cpfcnpj, telefone, ativo = false, tipo, termos_aceitos, data_nascimento } = data;
+  const { id, nome, razao_social, apelido, email, cpfcnpj, telefone, ativo = false, tipo, termos_aceitos, data_nascimento, dispositivo_cadastro, metadados_cadastro } = data;
 
   const { data: usuario, error } = await userRepository.insert({
       id,
@@ -136,6 +140,8 @@ export async function criarUsuario(data: UsuarioPayload & { tipo?: UserType, id:
       termos_versao: termos_aceitos ? TERMOS_VERSAO_ATUAL : null,
       created_at: getNowBR().toISOString(),
       data_nascimento: parseBrazilianDateToISO(data_nascimento),
+      dispositivo_cadastro: dispositivo_cadastro || null,
+      metadados_cadastro: metadados_cadastro || {},
     });
 
   if (error) {

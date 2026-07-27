@@ -4,7 +4,7 @@ import { userRepository } from "../repositories/user.repository.js";
 import { invoiceRepository } from "../repositories/invoice.repository.js";
 import { triggerDeployWebhook } from "../utils/deploy.utils.js";
 import { authProvider } from "./providers/auth.provider.js";
-import { SubscriptionStatus, UserType, AtividadeAcao, AtividadeEntidadeTipo, CanalAquisicao, ContratoStatus, DriverContractConfigStatus, IndicacaoStatus } from "../types/enums.js";
+import { SubscriptionStatus, UserType, AtividadeAcao, AtividadeEntidadeTipo, CanalAquisicao, DispositivoCadastro, ContratoStatus, DriverContractConfigStatus, IndicacaoStatus } from "../types/enums.js";
 import { historicoService } from "./historico.service.js";
 import { getNowBR, parseBrazilianDateToISO } from "../utils/date.utils.js";
 import { onlyDigits, cleanString } from "../utils/string.utils.js";
@@ -102,6 +102,15 @@ export const adminService = {
       NAO_INFORMADO: 0,
     };
 
+    const dispositivosCadastro: Record<string, number> = {
+      [DispositivoCadastro.APP_ANDROID]: 0,
+      [DispositivoCadastro.APP_IOS]: 0,
+      [DispositivoCadastro.WEB_MOBILE_ANDROID]: 0,
+      [DispositivoCadastro.WEB_MOBILE_IOS]: 0,
+      [DispositivoCadastro.WEB_DESKTOP]: 0,
+      NAO_INFORMADO: 0,
+    };
+
     if (canaisRes.data) {
       for (const row of canaisRes.data) {
         const canal = row.canal_aquisicao;
@@ -109,6 +118,13 @@ export const adminService = {
           canaisAquisicao[canal]++;
         } else {
           canaisAquisicao.NAO_INFORMADO++;
+        }
+
+        const disp = row.dispositivo_cadastro;
+        if (disp && dispositivosCadastro[disp] !== undefined) {
+          dispositivosCadastro[disp]++;
+        } else {
+          dispositivosCadastro.NAO_INFORMADO++;
         }
       }
     }
@@ -221,6 +237,7 @@ export const adminService = {
       indicacoesStats,
       recentUsers: recentUsersRes.data || [],
       canaisAquisicao,
+      dispositivosCadastro,
       whatsappStatus,
     };
   },

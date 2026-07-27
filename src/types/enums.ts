@@ -306,3 +306,12 @@ export enum GastoEscopoAcao {
   TODAS = "todas",
 }
 
+export enum DispositivoCadastro {
+  APP_ANDROID = "APP_ANDROID",
+  APP_IOS = "APP_IOS",
+  WEB_MOBILE_ANDROID = "WEB_MOBILE_ANDROID",
+  WEB_MOBILE_IOS = "WEB_MOBILE_IOS",
+  WEB_DESKTOP = "WEB_DESKTOP",
+}
+
+

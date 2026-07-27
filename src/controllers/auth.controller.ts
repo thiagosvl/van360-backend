@@ -1,22 +1,13 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
 import { registrarUsuario, login as loginService, logout as logoutService, refreshToken as refreshTokenService, updatePassword as updatePasswordService, solicitarRecuperacaoWhatsapp, validarCodigoWhatsApp, resetarSenhaComCodigo } from "../services/auth.service.js";
-
-interface RegisterPayload {
-    nome: string;
-    apelido?: string;
-    cpfcnpj: string;
-    email: string;
-    telefone: string;
-    senha: string;
-    termos_aceitos: boolean;
-}
+import { RegistrarUsuarioBodyDTO } from "../types/dtos/auth.dto.js";
 
 export const AuthController = {
 
     async registrar(request: FastifyRequest, reply: FastifyReply) {
         logger.info("AuthController.registrar - Starting");
-        const payload = request.body as RegisterPayload;
+        const payload = request.body as RegistrarUsuarioBodyDTO;
 
         if (!payload.email || !payload.senha || !payload.nome || !payload.cpfcnpj) {
             return reply.status(400).send({ error: "Dados de registro incompletos." });
@@ -27,11 +18,24 @@ export const AuthController = {
         }
 
         try {
-            const result = await registrarUsuario(payload);
+            const ip = request.ip;
+            const userAgent = (request.headers['user-agent'] as string) || undefined;
+
+            const metadados_cadastro = {
+                ...(payload.metadados_cadastro || {}),
+                ip: ip || payload.metadados_cadastro?.ip,
+                user_agent: userAgent || payload.metadados_cadastro?.user_agent,
+            };
+
+            const result = await registrarUsuario({
+                ...payload,
+                metadados_cadastro,
+            });
             return reply.status(200).send({
                 success: true,
                 session: result.session,
             });
+
         } catch (err: any) {
             logger.error(
                 { error: err.message, payload: { email: payload.email } },

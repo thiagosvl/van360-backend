@@ -27,7 +27,7 @@ export const adminRepository = {
                 .limit(10),
             supabaseAdmin
                 .from("usuarios")
-                .select("canal_aquisicao")
+                .select("canal_aquisicao, dispositivo_cadastro")
                 .eq("tipo", UserType.MOTORISTA),
             supabaseAdmin
                 .from("contratos")
