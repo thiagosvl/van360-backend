@@ -150,72 +150,7 @@ export class InHouseContractProvider implements ContractProvider {
     return lines;
   }
 
-  private groupClauses(clausulas: string[]) {
-    // Helper to identify clause groups based on content keywords or order
-    const sections: { title: string; clauses: string[] }[] = [
-      { title: 'DO OBJETO', clauses: [] },
-      { title: 'DA PRESTAÇÃO DO SERVIÇO', clauses: [] },
-      { title: 'DO VALOR', clauses: [] },
-      { title: 'DA RESCISÃO', clauses: [] },
-      { title: 'DAS DISPOSIÇÕES FINAIS', clauses: [] },
-      { title: 'CLÁUSULAS ADICIONAIS', clauses: [] }
-    ];
 
-    clausulas.forEach(clausula => {
-      const c = clausula.toLowerCase();
-
-      // DO OBJETO
-      if (c.includes('consiste no transporte')) {
-        sections[0].clauses.push(clausula);
-      }
-      // DA PRESTAÇÃO DO SERVIÇO (Clauses 2-11)
-      else if (
-        c.includes('somente o passageiro') ||
-        c.includes('horário regular') ||
-        c.includes('retirada e entrega') ||
-        c.includes('segurança do passageiro') ||
-        c.includes('horários previamente combinados') ||
-        c.includes('buscá-lo no lugar') ||
-        c.includes('informar a contratada') ||
-        c.includes('consumo de alimentos') ||
-        c.includes('doença infectocontagiosa') ||
-        c.includes('duas vistorias anuais') ||
-        c.includes('veículo passa por duas vistorias')
-      ) {
-        sections[1].clauses.push(clausula);
-      }
-      // DO VALOR (Clauses 12-14)
-      else if (
-        c.includes('pagará à contratada') ||
-        c.includes('parcelas deverão ser pagas') ||
-        c.includes('reajuste da mensalidade')
-      ) {
-        sections[2].clauses.push(clausula);
-      }
-      // DA RESCISÃO (Clauses 15-16)
-      else if (
-        c.includes('comportamento inadequado') ||
-        c.includes('rescindido imotivadamente')
-      ) {
-        sections[3].clauses.push(clausula);
-      }
-      // DAS DISPOSIÇÕES FINAIS (Clauses 17-19)
-      else if (
-        c.includes('vigilância de objetos') ||
-        c.includes('título executivo') ||
-        c.includes('serviço do transporte escolar será prestado')
-      ) {
-        sections[4].clauses.push(clausula);
-      }
-      // ADICIONAIS
-      else {
-        sections[5].clauses.push(clausula);
-      }
-    });
-
-    // Remove empty sections
-    return sections.filter(s => s.clauses.length > 0);
-  }
 
   async criarPdfBase(dados: DadosContrato): Promise<PDFDocument> {
     const pdfDoc = await PDFDocument.create();
@@ -262,16 +197,16 @@ export class InHouseContractProvider implements ContractProvider {
     // CONTRATANTE
     page.drawText('CONTRATANTE (Responsável)', { x: margin, y: currentY, size: smallTextSize, font: fontBold });
     page.drawText(`Nome: ${dados.nomeResponsavel}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
-    page.drawText(`Documento (CPF): ${maskCpf(dados.cpfResponsavel)}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
+    page.drawText(`Documento: ${maskCpf(dados.cpfResponsavel)}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
     page.drawText(`Telefone: ${maskPhone(dados.telefoneResponsavel)}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
-    page.drawText(`Parentesco do Passageiro: ${formatParentesco(dados.parentescoResponsavel || '')}`, { x: margin, y: currentY - 42, size: smallTextSize, font });
+    page.drawText(`Parentesco: ${formatParentesco(dados.parentescoResponsavel || '')}`, { x: margin, y: currentY - 42, size: smallTextSize, font });
 
     currentY -= 80;
 
     // CONTRATADA
     page.drawText('PRESTADOR(A) DE SERVIÇOS DE TRANSPORTE', { x: margin, y: currentY, size: smallTextSize, font: fontBold });
     page.drawText(`Nome: ${dados.nomeCondutor}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
-    page.drawText(`Documento (CPF): ${maskDoc(dados.cpfCnpjCondutor)}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
+    page.drawText(`Documento: ${maskDoc(dados.cpfCnpjCondutor)}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
     page.drawText(`Telefone: ${maskPhone(dados.telefoneCondutor)}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
 
     currentY -= 70;
@@ -295,10 +230,19 @@ export class InHouseContractProvider implements ContractProvider {
     currentY = drawHeader('DO PERÍODO DO CONTRATO', currentY);
     const currentYear = getNowBR().getFullYear();
 
+    const formatMonthYear = (dateStr?: string) => {
+      if (!dateStr) return "-";
+      const parts = dateStr.split("-");
+      if (parts.length < 2) return "-";
+      return `${parts[1].padStart(2, '0')}/${parts[0]}`;
+    };
+
     page.drawText(`Ano Letivo: ${dados.ano || currentYear}`, { x: margin, y: currentY, size: smallTextSize, font });
-    page.drawText(`Início: ${formatToBrazilianDate(dados.dataInicio)}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
-    page.drawText(`Término: ${formatToBrazilianDate(dados.dataFim)}`, { x: 300, y: currentY - 14, size: smallTextSize, font });
-    currentY -= 55;
+    page.drawText(`Início do Transporte: ${formatToBrazilianDate(dados.dataInicio)}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
+    page.drawText(`Término do Transporte: ${formatToBrazilianDate(dados.dataFim)}`, { x: 300, y: currentY - 14, size: smallTextSize, font });
+    page.drawText(`Primeira Parcela: ${formatMonthYear(dados.dataInicioCobranca)}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
+    page.drawText(`Última Parcela: ${formatMonthYear(dados.dataFimCobranca)}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
+    currentY -= 68;
 
     currentY = drawHeader('DAS CONDIÇÕES DE VALOR', currentY);
     page.drawText(`Valor total do contrato (R$): ${dados.valorTotal.toLocaleString("pt-BR", {
@@ -315,7 +259,10 @@ export class InHouseContractProvider implements ContractProvider {
     // Lógica para formatação de valores de multas
     const formatMulta = (tipo: ContractMultaTipo, valor: number) => {
       if (tipo === ContractMultaTipo.PERCENTUAL) {
-        return valor.toFixed(0).replace('.', ',') + '%'; // Sem decimais se %
+        return valor.toLocaleString("pt-BR", {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 2,
+        }) + '%';
       }
       return valor.toLocaleString("pt-BR", {
         style: "currency",
@@ -323,14 +270,20 @@ export class InHouseContractProvider implements ContractProvider {
       }); // Com decimais se R$
     };
 
-    const multaAtrasoLabel = `Multa mensal atraso de pagamento (${dados.multaAtraso.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}):`;
+    const multaAtrasoLabel = `Multa por atraso de pagamento (${dados.multaAtraso.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}):`;
     const multaAtrasoValor = formatMulta(dados.multaAtraso.tipo, dados.multaAtraso.valor);
     page.drawText(`${multaAtrasoLabel} ${multaAtrasoValor}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
 
-    const multaRescisaoLabel = `Multa cancelamento de contrato (${dados.multaRescisao.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}):`;
+    const multaRescisaoLabel = `Multa por rescisão de contrato (${dados.multaRescisao.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}):`;
     const multaRescisaoValor = formatMulta(dados.multaRescisao.tipo, dados.multaRescisao.valor);
     page.drawText(`${multaRescisaoLabel} ${multaRescisaoValor}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
-    currentY -= 60;
+
+    const jurosAtrasoLabel = dados.jurosAtraso.tipo === ContractMultaTipo.PERCENTUAL ? `Juros de mora (atraso):` : `Juros de mora diário:`;
+    const jurosAtrasoFormat = dados.jurosAtraso.tipo === ContractMultaTipo.PERCENTUAL ? ' ao mês' : ' / dia';
+    const jurosAtrasoValor = formatMulta(dados.jurosAtraso.tipo, dados.jurosAtraso.valor);
+    page.drawText(`${jurosAtrasoLabel} ${jurosAtrasoValor}${jurosAtrasoFormat}`, { x: margin, y: currentY - 42, size: smallTextSize, font });
+
+    currentY -= 74;
 
     const intro = "As partes acima identificadas têm, entre si, justo e acertado o presente Contrato de Prestação de Serviços de Transportes Escolares, sob as cláusulas e as seguintes condições.";
     const introLines = await this.splitTextToLines(intro, fontItalic, fontSizeBody, width);
@@ -345,22 +298,48 @@ export class InHouseContractProvider implements ContractProvider {
 
     currentY -= 15;
 
-    // Grouping Clauses
-    const clausulasRaw = dados.clausulas || ["Serviço de transporte acordado."];
-    const sections = this.groupClauses(clausulasRaw);
+    // Processamento Dinâmico de Seções e Cláusulas
+    let sections: { title: string; clauses: string[] }[] = [];
+    if (dados.secoes && dados.secoes.length > 0) {
+      sections = dados.secoes
+        .map((s) => ({
+          title: (s.titulo && s.titulo.trim()) ? s.titulo.trim().toUpperCase() : "SEÇÃO SEM TÍTULO",
+          clauses: (s.clausulas || []).filter((c) => c && c.trim() !== ""),
+        }))
+        .filter((s) => s.clauses.length > 0);
+    } else if (dados.clausulas && dados.clausulas.length > 0) {
+      sections = [
+        {
+          title: "DA PRESTAÇÃO DO SERVIÇO",
+          clauses: dados.clausulas.filter((c) => c && c.trim() !== ""),
+        },
+      ];
+    } else {
+      sections = [];
+    }
 
     let clauseCounter = 1;
 
     for (const section of sections) {
-      // Draw Section Header
-      if (currentY < 80) {
+      currentY -= 20;
+
+      // Calcular altura necessária para o Título da Seção + 1ª Cláusula da Seção (Evitar cabeçalho órfão)
+      let firstClauseHeight = 60;
+      if (section.clauses.length > 0) {
+        const firstClauseText = `Cláusula ${clauseCounter}ª - ${section.clauses[0]}`;
+        const firstClauseLines = await this.splitTextToLines(firstClauseText, font, fontSizeBody, width);
+        firstClauseHeight = firstClauseLines.length * lineHeight + (lineHeight / 2);
+      }
+
+      const totalSectionHeaderSpace = (headerSpacing + 6) + firstClauseHeight + 20;
+
+      if (currentY - totalSectionHeaderSpace < 50) {
         page = pdfDoc.addPage([595, 842]);
         currentY = 800;
       }
 
-      currentY -= 10;
       page.drawText(section.title, { x: margin, y: currentY, size: fontSizeHeader, font: fontBold });
-      currentY -= headerSpacing;
+      currentY -= (headerSpacing + 6);
 
       for (const clausula of section.clauses) {
         const text = `Cláusula ${clauseCounter}ª - ${clausula}`;
@@ -385,6 +364,9 @@ export class InHouseContractProvider implements ContractProvider {
         currentY -= (lineHeight / 2); // Espaço extra entre cláusulas
         clauseCounter++;
       }
+
+      // Espaçamento adicional após cada seção completa
+      currentY -= 16;
     }
 
     if (currentY < 200) { // Garantir espaço para assinaturas
@@ -409,8 +391,8 @@ export class InHouseContractProvider implements ContractProvider {
 
     currentY -= 15;
 
-    page.drawText(`CONTRATADA (${dados.apelidoCondutor || 'Motorista'})`, { x: margin, y: currentY, size: 9, font: fontBold });
-    page.drawText(`CONTRATANTE (${dados.nomeResponsavel || 'Responsável'})`, { x: 335, y: currentY, size: 9, font: fontBold });
+    page.drawText(`CONTRATADO(A)`, { x: margin, y: currentY, size: 9, font: fontBold });
+    page.drawText(`CONTRATANTE`, { x: 335, y: currentY, size: 9, font: fontBold });
 
     if (dados.assinaturaCondutorUrl) {
       try {

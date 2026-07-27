@@ -2,20 +2,27 @@ import { logger } from "../config/logger.js";
 import { adminRepository } from "../repositories/admin.repository.js";
 import { userRepository } from "../repositories/user.repository.js";
 import { invoiceRepository } from "../repositories/invoice.repository.js";
+import { triggerDeployWebhook } from "../utils/deploy.utils.js";
 import { authProvider } from "./providers/auth.provider.js";
-import { SubscriptionStatus, UserType, AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
+import { SubscriptionStatus, UserType, AtividadeAcao, AtividadeEntidadeTipo, CanalAquisicao, DispositivoCadastro, ContratoStatus, DriverContractConfigStatus, IndicacaoStatus } from "../types/enums.js";
 import { historicoService } from "./historico.service.js";
 import { getNowBR, parseBrazilianDateToISO } from "../utils/date.utils.js";
 import { onlyDigits, cleanString } from "../utils/string.utils.js";
-import type { UpdateUserAdminDTO, UpdateSubscriptionAdminDTO, ListUsersQuery, ListUserLogsQuery, UpdatePlanDTO, CreateUserAdminDTO } from "../schemas/admin.schema.js";
+import type { UpdateUserAdminDTO, UpdateSubscriptionAdminDTO, ListUsersQuery, ListUserLogsQuery, UpdatePlanDTO, CreateUserAdminDTO, ListGlobalLogsQuery } from "../schemas/admin.schema.js";
 import { subscriptionService } from "./subscriptions/subscription.service.js";
 import { notificationService } from "./notifications/notification.service.js";
+import { loginAttemptsRepository } from "../repositories/login-attempts.repository.js";
 import { EVENTO_MOTORISTA_CADASTRO_ADMIN, EVENTO_MOTORISTA_RESET_SENHA_ADMIN } from "../config/constants.js";
+import { adminPassageiroService } from "./admin/admin-passageiro.service.js";
+import { adminVeiculoService } from "./admin/admin-veiculo.service.js";
+import { adminEscolaService } from "./admin/admin-escola.service.js";
 
-function maskCpfHidden(cpf: string): string {
-  const cleaned = cpf.replace(/\D/g, "");
-  if (cleaned.length !== 11) return cpf;
-  return `${cleaned.slice(0, 3)}.${cleaned.slice(3, 4)}**.***-${cleaned.slice(9, 11)}`;
+function maskCpfCnpjHidden(cpfcnpj: string): string {
+  const cleaned = cpfcnpj.replace(/\D/g, "");
+  if (cleaned.length <= 11) {
+    return `${cleaned.slice(0, 3)}.${cleaned.slice(3, 4)}**.***-${cleaned.slice(9, 11)}`;
+  }
+  return `${cleaned.slice(0, 2)}.${cleaned.slice(2, 3)}**.***/****-${cleaned.slice(12, 14)}`;
 }
 
 function generateTempPassword(): string {
@@ -27,6 +34,23 @@ function generateTempPassword(): string {
   return pwd;
 }
 
+export function resolveDriverContractConfigStatus(
+  assinaturaUrl?: string | null,
+  configContrato?: any | null
+): DriverContractConfigStatus {
+  // Motorista só é considerado CONFIGURADO se possuir a assinatura digital cadastrada
+  if (!assinaturaUrl) {
+    return DriverContractConfigStatus.NAO_CONFIGURADO;
+  }
+
+  // Com assinatura cadastrada, o contrato está configurado: verifica se está ativo ou pausado
+  if (configContrato?.usar_contratos === false) {
+    return DriverContractConfigStatus.DESATIVADO;
+  }
+
+  return DriverContractConfigStatus.ATIVO;
+}
+
 export const adminService = {
 
   async getDashboardStats() {
@@ -36,15 +60,24 @@ export const adminService = {
       assinaturasRes,
       receitaRes,
       recentUsersRes,
+      canaisRes,
+      contratosRes,
+      motoristasConfigsRes,
+      indicacoesRes,
     ] = await adminRepository.getDashboardStats();
 
     const totalMotoristas = motoristasRes.count ?? 0;
     const totalPassageiros = passageirosRes.count ?? 0;
 
     const statusCounts: Record<string, number> = {};
+    let vitalicios = 0;
     if (assinaturasRes.data) {
       for (const sub of assinaturasRes.data) {
-        statusCounts[sub.status] = (statusCounts[sub.status] || 0) + 1;
+        if (sub.status === SubscriptionStatus.ACTIVE && !sub.data_vencimento) {
+          vitalicios++;
+        } else {
+          statusCounts[sub.status] = (statusCounts[sub.status] || 0) + 1;
+        }
       }
     }
 
@@ -55,6 +88,128 @@ export const adminService = {
       }
     }
 
+    const canaisAquisicao: Record<string, number> = {
+      [CanalAquisicao.PLAY_STORE]: 0,
+      [CanalAquisicao.APP_STORE]: 0,
+      [CanalAquisicao.INDICACAO]: 0,
+      [CanalAquisicao.PANFLETO]: 0,
+      [CanalAquisicao.INSTAGRAM]: 0,
+      [CanalAquisicao.FACEBOOK]: 0,
+      [CanalAquisicao.TIKTOK]: 0,
+      [CanalAquisicao.YOUTUBE]: 0,
+      [CanalAquisicao.GOOGLE]: 0,
+      [CanalAquisicao.OUTROS]: 0,
+      NAO_INFORMADO: 0,
+    };
+
+    const dispositivosCadastro: Record<string, number> = {
+      [DispositivoCadastro.APP_ANDROID]: 0,
+      [DispositivoCadastro.APP_IOS]: 0,
+      [DispositivoCadastro.WEB_MOBILE_ANDROID]: 0,
+      [DispositivoCadastro.WEB_MOBILE_IOS]: 0,
+      [DispositivoCadastro.WEB_DESKTOP]: 0,
+      NAO_INFORMADO: 0,
+    };
+
+    if (canaisRes.data) {
+      for (const row of canaisRes.data) {
+        const canal = row.canal_aquisicao;
+        if (canal && canaisAquisicao[canal] !== undefined) {
+          canaisAquisicao[canal]++;
+        } else {
+          canaisAquisicao.NAO_INFORMADO++;
+        }
+
+        const disp = row.dispositivo_cadastro;
+        if (disp && dispositivosCadastro[disp] !== undefined) {
+          dispositivosCadastro[disp]++;
+        } else {
+          dispositivosCadastro.NAO_INFORMADO++;
+        }
+      }
+    }
+
+    // PROCESSAMENTO DE STATS DE CONTRATOS DIGITAIS
+    let totalContratos = 0;
+    let contratosAssinados = 0;
+    let contratosPendentes = 0;
+    let contratosSubstituidos = 0;
+    let valorTotalContratos = 0;
+
+    if (contratosRes.data) {
+      totalContratos = contratosRes.data.length;
+      for (const c of contratosRes.data) {
+        if (c.status === ContratoStatus.ASSINADO) {
+          contratosAssinados++;
+          valorTotalContratos += Number(c.valor_total) || 0;
+        } else if (c.status === ContratoStatus.PENDENTE) {
+          contratosPendentes++;
+        } else if (c.status === ContratoStatus.SUBSTITUIDO) {
+          contratosSubstituidos++;
+        }
+      }
+    }
+
+    const motoristasConfigContrato = {
+      ativo: 0,
+      inativo: 0,
+      nao_configurado: 0,
+    };
+
+    if (motoristasConfigsRes.data) {
+      for (const m of motoristasConfigsRes.data) {
+        const statusConfig = resolveDriverContractConfigStatus(m.assinatura_digital_url, m.config_contrato);
+
+        if (statusConfig === DriverContractConfigStatus.NAO_CONFIGURADO) {
+          motoristasConfigContrato.nao_configurado++;
+        } else if (statusConfig === DriverContractConfigStatus.ATIVO) {
+          motoristasConfigContrato.ativo++;
+        } else {
+          motoristasConfigContrato.inativo++;
+        }
+      }
+    }
+
+    let whatsappStatus = "UNKNOWN";
+    try {
+      const { GLOBAL_WHATSAPP_INSTANCE } = await import("../config/constants.js");
+      const { whatsappService } = await import("./whatsapp.service.js");
+      const status = await whatsappService.getInstanceStatus(GLOBAL_WHATSAPP_INSTANCE);
+      whatsappStatus = status.state;
+    } catch (err) {
+      logger.error({ err }, "[AdminService] Erro ao buscar status do WhatsApp");
+    }
+
+    let totalIndicacoes = 0;
+    let indicacoesConcluidas = 0;
+    let indicacoesPendentes = 0;
+
+    if (indicacoesRes.data) {
+      totalIndicacoes = indicacoesRes.data.length;
+      for (const ind of indicacoesRes.data) {
+        if (ind.status === IndicacaoStatus.COMPLETED) {
+          indicacoesConcluidas++;
+        } else if (ind.status === IndicacaoStatus.PENDING) {
+          indicacoesPendentes++;
+        }
+      }
+    }
+
+    const taxaConversaoIndicacao = totalIndicacoes > 0 ? Math.round((indicacoesConcluidas / totalIndicacoes) * 100) : 0;
+    const diasBonusConcedidos = indicacoesConcluidas * 30;
+    const motoristasIndicadosCount = canaisAquisicao[CanalAquisicao.INDICACAO] || totalIndicacoes;
+
+    const indicacoesStats = {
+      total: totalIndicacoes,
+      concluidas: indicacoesConcluidas,
+      pendentes: indicacoesPendentes,
+      taxaConversao: taxaConversaoIndicacao,
+      diasBonusConcedidos,
+      motoristasIndicados: motoristasIndicadosCount,
+    };
+
+    const motoristasConfiguradosCount = motoristasConfigContrato.ativo + motoristasConfigContrato.inativo;
+
     return {
       totalMotoristas,
       totalPassageiros,
@@ -62,11 +217,28 @@ export const adminService = {
       assinaturas: {
         trial: statusCounts[SubscriptionStatus.TRIAL] || 0,
         active: statusCounts[SubscriptionStatus.ACTIVE] || 0,
+        vitalicio: vitalicios,
         past_due: statusCounts[SubscriptionStatus.PAST_DUE] || 0,
         expired: statusCounts[SubscriptionStatus.EXPIRED] || 0,
         canceled: statusCounts[SubscriptionStatus.CANCELED] || 0,
       },
+      contratosStats: {
+        totalContratos,
+        contratosAssinados,
+        contratosPendentes,
+        contratosSubstituidos,
+        valorTotalContratos,
+        motoristasConfigurados: motoristasConfiguradosCount,
+        motoristasAtivos: motoristasConfigContrato.ativo,
+        motoristasPausados: motoristasConfigContrato.inativo,
+        motoristasNaoConfigurados: motoristasConfigContrato.nao_configurado,
+        motoristasConfig: motoristasConfigContrato,
+      },
+      indicacoesStats,
       recentUsers: recentUsersRes.data || [],
+      canaisAquisicao,
+      dispositivosCadastro,
+      whatsappStatus,
     };
   },
 
@@ -77,13 +249,19 @@ export const adminService = {
 
     let digits = null;
     let searchClean = null;
+    let isId = false;
 
     if (search) {
       searchClean = search.trim();
       digits = onlyDigits(searchClean);
+
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(searchClean)) {
+        isId = true;
+      }
     }
 
-    const { data, error, count } = await adminRepository.listUsers({ from, to, searchClean, digits });
+    const { data, error, count } = await adminRepository.listUsers({ from, to, searchClean, digits, isId });
     if (error) {
       logger.error({ error }, "[AdminService] Erro ao listar usuários.");
       throw error;
@@ -131,16 +309,102 @@ export const adminService = {
     };
   },
 
+  async getGlobalLogs(query: ListGlobalLogsQuery) {
+    const { page, limit, dataInicio, dataFim, acao, entidade, search_cpf } = query;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    const { data, error, count } = await adminRepository.getGlobalLogs(
+      from,
+      to,
+      { dataInicio, dataFim, acao, entidade, search_cpf }
+    );
+
+    if (error) {
+      logger.error({ error }, "[AdminService] Erro ao buscar logs globais.");
+      throw error;
+    }
+
+    return {
+      data: data || [],
+      total: count ?? 0,
+      page,
+      limit,
+    };
+  },
+
+  async getLoginAttempts(query: { page?: number; limit?: number; data_inicio?: string; data_fim?: string; search_cpf?: string }) {
+    const page = query.page || 1;
+    const limit = query.limit || 20;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    const { data, count, error } = await loginAttemptsRepository.listAttempts(query, from, to);
+
+    if (error) {
+      logger.error({ error }, "[AdminService] Erro ao buscar tentativas de login.");
+      throw error;
+    }
+
+    return {
+      data: data || [],
+      total: count ?? 0,
+      page,
+      limit,
+    };
+  },
+
   async getUserDetails(userId: string) {
-    const [userReq, assinaturaReq, faturasReq, planosReq] = await adminRepository.getUserDetails(userId);
+    const [
+      [userReq, assinaturaReq, faturasReq, planosReq, veiculosReq, escolasReq, passageirosReq, prePassageirosReq, contratosReq],
+      passageirosList,
+      prePassageirosList,
+      veiculosList,
+      escolasList,
+    ] = await Promise.all([
+      adminRepository.getUserDetails(userId),
+      adminPassageiroService.getPassageirosByUserId(userId),
+      adminPassageiroService.getPrePassageirosByUserId(userId),
+      adminVeiculoService.getVeiculosByUserId(userId),
+      adminEscolaService.getEscolasByUserId(userId),
+    ]);
 
     if (userReq.error || !userReq.data) throw new Error("Usuário não encontrado.");
 
+    const userData = userReq.data;
+    const statusConfiguracaoContrato = resolveDriverContractConfigStatus(
+      userData.assinatura_digital_url,
+      userData.config_contrato
+    );
+
+    const contratosList = contratosReq.data || [];
+    const contratosAssinadosCount = contratosList.filter((c: any) => c.status === ContratoStatus.ASSINADO).length;
+    const contratosPendentesCount = contratosList.filter((c: any) => c.status === ContratoStatus.PENDENTE).length;
+    const valorTotalContratos = contratosList
+      .filter((c: any) => c.status === ContratoStatus.ASSINADO)
+      .reduce((acc: number, c: any) => acc + (Number(c.valor_total) || 0), 0);
+
     return {
-      user: userReq.data,
+      user: userData,
       assinatura: assinaturaReq.data,
       faturas: faturasReq.data || [],
       planos: planosReq.data || [],
+      kpis: {
+        veiculosCount: veiculosReq.count ?? 0,
+        escolasCount: escolasReq.count ?? 0,
+        passageirosCount: passageirosReq.count ?? 0,
+        solicitacoesPendentesCount: prePassageirosReq.count ?? 0,
+        contratosCount: contratosList.length,
+        contratosAssinadosCount,
+        contratosPendentesCount,
+        valorTotalContratos,
+        statusConfiguracaoContrato,
+      },
+      passageiros: passageirosList,
+      prePassageiros: prePassageirosList,
+      veiculos: veiculosList,
+      escolas: escolasList,
+      contratos: contratosList,
     };
   },
 
@@ -148,6 +412,7 @@ export const adminService = {
     const updatePayload: Record<string, unknown> = {};
 
     if (data.nome !== undefined) updatePayload.nome = cleanString(data.nome, true);
+    if (data.razao_social !== undefined) updatePayload.razao_social = data.razao_social ? cleanString(data.razao_social, true) : null;
     if (data.apelido !== undefined) updatePayload.apelido = data.apelido ? cleanString(data.apelido, true) : null;
     if (data.email !== undefined) updatePayload.email = data.email.toLowerCase().trim();
     if (data.telefone !== undefined) updatePayload.telefone = onlyDigits(data.telefone);
@@ -205,10 +470,20 @@ export const adminService = {
 
     const updatePayload: Record<string, unknown> = {};
 
-    if (data.plano_id !== undefined) updatePayload.plano_id = data.plano_id;
+    if (data.plano_id !== undefined && data.plano_id !== sub.plano_id) {
+      updatePayload.plano_id = data.plano_id;
+    } else if (data.plano_id !== undefined) {
+      updatePayload.plano_id = data.plano_id;
+    }
     if (data.status !== undefined) updatePayload.status = data.status;
     if (data.data_vencimento !== undefined) updatePayload.data_vencimento = data.data_vencimento;
     if (data.trial_ends_at !== undefined) updatePayload.trial_ends_at = data.trial_ends_at;
+
+    if (data.valor_base_mensal !== undefined) updatePayload.valor_base_mensal = data.valor_base_mensal;
+    if (data.valor_base_anual !== undefined) updatePayload.valor_base_anual = data.valor_base_anual;
+    if (data.valor_promocional_mensal !== undefined) updatePayload.valor_promocional_mensal = data.valor_promocional_mensal;
+    if (data.valor_promocional_anual !== undefined) updatePayload.valor_promocional_anual = data.valor_promocional_anual;
+    if (data.data_fim_promocao !== undefined) updatePayload.data_fim_promocao = data.data_fim_promocao;
 
     updatePayload.updated_at = getNowBR().toISOString();
 
@@ -289,6 +564,8 @@ export const adminService = {
       throw error;
     }
 
+    await triggerDeployWebhook();
+
     return { success: true };
   },
 
@@ -332,17 +609,18 @@ export const adminService = {
     const userId = authUser.user.id;
 
     const { error: insertError } = await userRepository.insert({
-        id: userId,
-        nome: cleanString(data.nome, true),
-        email: emailClean,
-        telefone: onlyDigits(data.telefone),
-        cpfcnpj: cpfcnpjClean,
-        data_nascimento: parseBrazilianDateToISO(data.data_nascimento),
-        tipo: UserType.MOTORISTA,
-        ativo: true,
-        created_at: getNowBR().toISOString(),
-        updated_at: getNowBR().toISOString(),
-      });
+      id: userId,
+      nome: cleanString(data.nome, true),
+      razao_social: data.razao_social ? cleanString(data.razao_social, true) : null,
+      email: emailClean,
+      telefone: onlyDigits(data.telefone),
+      cpfcnpj: cpfcnpjClean,
+      data_nascimento: parseBrazilianDateToISO(data.data_nascimento),
+      tipo: UserType.MOTORISTA,
+      ativo: true,
+      created_at: getNowBR().toISOString(),
+      updated_at: getNowBR().toISOString(),
+    });
 
     if (insertError) {
       logger.error({ insertError, userId }, "[AdminService] Erro ao salvar dados cadastrais do usuário.");
@@ -357,12 +635,12 @@ export const adminService = {
     }
 
     if (data.telefone) {
-      const maskedCpf = maskCpfHidden(cpfcnpjClean);
+      const maskedCpf = maskCpfCnpjHidden(cpfcnpjClean);
       notificationService.notifyDriver(data.telefone, EVENTO_MOTORISTA_CADASTRO_ADMIN, {
         nomeMotorista: data.nome,
         cpfLogin: maskedCpf,
         senhaTemporaria: data.senha
-      }).catch(err => logger.error({ err, userId }, "[AdminService] Falha ao enviar WhatsApp de boas-vindas."));
+      }, { channels: ['WHATSAPP'] }).catch(err => logger.error({ err, userId }, "[AdminService] Falha ao enviar WhatsApp de boas-vindas."));
     }
 
     return { id: userId, email: emailClean };
@@ -387,12 +665,12 @@ export const adminService = {
     }
 
     if (user.telefone) {
-      const maskedCpf = maskCpfHidden(user.cpfcnpj || "");
+      const maskedCpf = maskCpfCnpjHidden(user.cpfcnpj || "");
       notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_RESET_SENHA_ADMIN, {
         nomeMotorista: user.nome,
         cpfLogin: maskedCpf,
         senhaTemporaria: newPassword
-      }).catch(err => logger.error({ err, userId }, "[AdminService] Falha ao enviar WhatsApp de reset de senha."));
+      }, { channels: ['WHATSAPP'] }).catch(err => logger.error({ err, userId }, "[AdminService] Falha ao enviar WhatsApp de reset de senha."));
     }
 
     return { success: true, senha: newPassword };
@@ -413,5 +691,30 @@ export const adminService = {
     }
 
     return { success: true };
+  },
+
+  async getWhatsappInstances() {
+    const { data, error } = await adminRepository.getWhatsappInstances();
+    if (error) {
+      logger.error({ error }, "[AdminService] Erro ao buscar instâncias do WhatsApp no DB.");
+      throw error;
+    }
+
+    // Opcional: Buscar o status em tempo real da Evolution API para cada instância
+    const { whatsappService } = await import("./whatsapp.service.js");
+    const enhancedData = await Promise.all((data || []).map(async (instance: any) => {
+      try {
+        const status = await whatsappService.getInstanceStatus(instance.instance_name);
+        return {
+          ...instance,
+          evolution_status: status.state,
+          evolution_status_reason: status.statusReason
+        };
+      } catch (err) {
+        return { ...instance, evolution_status: "UNKNOWN" };
+      }
+    }));
+
+    return enhancedData;
   },
 };

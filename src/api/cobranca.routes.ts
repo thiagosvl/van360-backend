@@ -2,7 +2,6 @@ import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { cobrancaController } from "../controllers/cobranca.controller.js";
 import { authenticate } from "../middleware/auth.js";
 
-
 const cobrancaRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     app.addHook("onRequest", authenticate);
 

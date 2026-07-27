@@ -1,4 +1,4 @@
-import { PassageiroGenero, PassageiroModalidade, PeriodoEnum } from "../types/enums.js";
+import { CobrancaStatus, PassageiroGenero, PassageiroModalidade, PeriodoEnum } from "../types/enums.js";
 import { parseLocalDate } from "./date.utils.js";
 
 /**
@@ -31,6 +31,18 @@ export function getFirstName(name?: string): string {
   return name.trim().split(/\s+/)[0];
 }
 
+/**
+ * Retorna o primeiro e o segundo nome de uma string (ex: João Silva)
+ */
+export function getFirstAndSecondName(name?: string): string {
+  if (!name) return "";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length > 1) {
+    return `${parts[0]} ${parts[1]}`;
+  }
+  return parts[0];
+}
+
 export function maskCpf(value?: string | null) {
   if (!value) return "";
   return value
@@ -50,6 +62,15 @@ export function maskCnpj(value?: string | null) {
     .replace(/(\d{3})(\d)/, "$1/$2")
     .replace(/(\d{4})(\d)/, "$1-$2")
     .replace(/(-\d{2})\d+?$/, "$1");
+}
+
+export function formatCpfCnpj(value?: string | null): string {
+  if (!value) return "";
+  const clean = value.replace(/\D/g, "");
+  if (clean.length <= 11) {
+    return maskCpf(clean);
+  }
+  return maskCnpj(clean);
 }
 
 export function maskPhone(value?: string | null) {
@@ -91,7 +112,6 @@ export const formatGenero = (genero: string): string => {
   switch (genero) {
     case PassageiroGenero.MASCULINO: return 'Masculino';
     case PassageiroGenero.FEMININO: return 'Feminino';
-    case PassageiroGenero.PREFIRO_NAO_INFORMAR: return 'Prefiro não informar';
     default: return genero || '';
   }
 };
@@ -112,10 +132,15 @@ export const formatParentesco = (parentesco: string): string => {
   }
 };
 
-export const formatAddress = (data: { logradouro?: string; numero?: string; bairro?: string; cidade?: string; estado?: string }): string => {
+export const formatAddress = (data: { logradouro?: string; numero?: string; complemento?: string | null; bairro?: string; cidade?: string; estado?: string }): string => {
   if (!data.logradouro) return "";
+  let baseLogradouro = `${data.logradouro}${data.numero ? `, ${data.numero}` : ""}`;
+  if (data.complemento) {
+    baseLogradouro += ` - ${data.complemento}`;
+  }
+  
   const parts = [
-    `${data.logradouro}${data.numero ? `, ${data.numero}` : ""}`,
+    baseLogradouro,
     data.bairro,
     `${data.cidade}${data.estado ? `/${data.estado.toUpperCase()}` : ""}`
   ].filter(Boolean);

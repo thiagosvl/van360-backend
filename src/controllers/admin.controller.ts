@@ -9,6 +9,8 @@ import {
   updatePlanSchema,
   createUserAdminSchema,
   listUserLogsQuerySchema,
+  listLoginAttemptsQuerySchema,
+  listGlobalLogsQuerySchema,
 } from "../schemas/admin.schema.js";
 
 export const AdminController = {
@@ -150,6 +152,28 @@ export const AdminController = {
     }
   },
 
+  async getGlobalLogs(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const query = listGlobalLogsQuerySchema.parse(request.query);
+      const result = await adminService.getGlobalLogs(query);
+      return reply.status(200).send(result);
+    } catch (err: any) {
+      logger.error({ error: err.message }, "[AdminController] Erro ao buscar logs globais.");
+      return reply.status(500).send({ error: "Erro ao buscar logs globais." });
+    }
+  },
+
+  async getLoginAttempts(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const query = listLoginAttemptsQuerySchema.parse(request.query);
+      const result = await adminService.getLoginAttempts(query);
+      return reply.status(200).send(result);
+    } catch (err: any) {
+      logger.error({ error: err.message }, "[AdminController] Erro ao buscar tentativas de login.");
+      return reply.status(500).send({ error: "Erro ao buscar tentativas de login." });
+    }
+  },
+
   async deleteUser(request: FastifyRequest, reply: FastifyReply) {
     try {
       const { id } = request.params as { id: string };
@@ -159,6 +183,16 @@ export const AdminController = {
       const error = err as Error;
       logger.error({ error: error.message }, "[AdminController] Erro ao deletar usuário.");
       return reply.status(400).send({ error: error.message });
+    }
+  },
+
+  async getWhatsappInstances(_request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const instances = await adminService.getWhatsappInstances();
+      return reply.status(200).send(instances);
+    } catch (err: any) {
+      logger.error({ error: err.message }, "[AdminController] Erro ao buscar instâncias de WhatsApp.");
+      return reply.status(500).send({ error: "Erro ao buscar instâncias de WhatsApp." });
     }
   },
 };

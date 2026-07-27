@@ -2,6 +2,7 @@ import { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { gastoService } from "../services/gasto.service.js";
 import { createGastoSchema, listGastosFiltersSchema, updateGastoSchema } from "../types/dtos/gasto.dto.js";
+import { GastoEscopoAcao } from "../types/enums.js";
 
 export const gastoController = {
     async create(request: FastifyRequest, reply: FastifyReply) {
@@ -13,13 +14,14 @@ export const gastoController = {
     async update(request: FastifyRequest, reply: FastifyReply) {
         const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
         const data = updateGastoSchema.parse(request.body);
-        await gastoService.updateGasto(id, data);
+        await gastoService.updateGasto(id, data, data.escopo);
         return reply.status(200).send({ success: true });
     },
 
     async delete(request: FastifyRequest, reply: FastifyReply) {
         const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
-        await gastoService.deleteGasto(id);
+        const { escopo } = z.object({ escopo: z.nativeEnum(GastoEscopoAcao).optional() }).parse(request.query);
+        await gastoService.deleteGasto(id, escopo);
         return reply.status(200).send({ success: true });
     },
 

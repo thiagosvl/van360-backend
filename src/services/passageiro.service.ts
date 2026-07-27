@@ -3,12 +3,13 @@ import { supabaseAdmin } from "../config/supabase.js";
 import { passageiroRepository } from "../repositories/passageiro.repository.js";
 import { prePassageiroRepository } from "../repositories/pre-passageiro.repository.js";
 import { AppError } from "../errors/AppError.js";
-import { CreatePassageiroDTO, ListPassageirosFiltersDTO, UpdatePassageiroDTO } from "../types/dtos/passageiro.dto.js";
-import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
+import { CreatePassageiroDTO, ListPassageirosFiltersDTO, UpdatePassageiroDTO, CreateResponsavelAdicionalDTO, UpdateResponsavelAdicionalDTO } from "../types/dtos/passageiro.dto.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, ParentescoResponsavel } from "../types/enums.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
 import { parseLocalDate, toPersistenceString } from "../utils/date.utils.js";
+import { supabaseAdmin } from "../config/supabase.js";
 
 // Métodos privados auxiliares
 const geocodeAddress = async (enderecoParts: { logradouro?: string, numero?: string, cidade?: string, estado?: string }): Promise<{lat: number, lon: number} | null> => {
@@ -62,7 +63,7 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO>, usuarioId?: 
     if (data.nome_responsavel !== undefined) prepared.nome_responsavel = data.nome_responsavel ? cleanString(data.nome_responsavel, true) : null;
     if (data.cpf_responsavel !== undefined) prepared.cpf_responsavel = data.cpf_responsavel ? onlyDigits(data.cpf_responsavel) : null;
     if (data.telefone_responsavel !== undefined) prepared.telefone_responsavel = data.telefone_responsavel ? onlyDigits(data.telefone_responsavel) : null;
-    if (data.email_responsavel !== undefined) prepared.email_responsavel = data.email_responsavel ? cleanString(data.email_responsavel) : null;
+
 
     // Endereço (Algumas chaves podem vir no passthrough)
     const flexData = data as Record<string, any>;
@@ -73,6 +74,7 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO>, usuarioId?: 
     if (flexData.estado !== undefined) prepared.estado = flexData.estado ? cleanString(flexData.estado, true) : null;
     if (flexData.cep !== undefined) prepared.cep = flexData.cep ? onlyDigits(flexData.cep) : null;
     if (data.referencia !== undefined) prepared.referencia = data.referencia ? cleanString(data.referencia, true) : null;
+    if (data.complemento !== undefined) prepared.complemento = data.complemento ? cleanString(data.complemento, true) : null;
     if (data.observacoes !== undefined) prepared.observacoes = data.observacoes ? cleanString(data.observacoes, true) : null;
     if (data.latitude !== undefined) prepared.latitude = data.latitude !== null ? Number(data.latitude) : null;
     if (data.longitude !== undefined) prepared.longitude = data.longitude !== null ? Number(data.longitude) : null;
@@ -85,12 +87,15 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO>, usuarioId?: 
 
     // Novos Campos
     if (data.modalidade !== undefined) prepared.modalidade = data.modalidade;
+    if (data.turma !== undefined) prepared.turma = data.turma ? cleanString(data.turma, true) : null;
+    if (data.nome_professor !== undefined) prepared.nome_professor = data.nome_professor ? cleanString(data.nome_professor, true) : null;
     if (data.data_nascimento !== undefined) prepared.data_nascimento = data.data_nascimento ? toPersistenceString(data.data_nascimento) : null;
     if (data.parentesco_responsavel !== undefined) prepared.parentesco_responsavel = data.parentesco_responsavel;
     if (data.data_inicio_transporte !== undefined) prepared.data_inicio_transporte = data.data_inicio_transporte ? toPersistenceString(data.data_inicio_transporte) : null;
     if (data.data_fim_transporte !== undefined) prepared.data_fim_transporte = data.data_fim_transporte ? toPersistenceString(data.data_fim_transporte) : null;
+    if (data.data_inicio_cobranca !== undefined) prepared.data_inicio_cobranca = data.data_inicio_cobranca ? toPersistenceString(data.data_inicio_cobranca) : null;
+    if (data.data_fim_cobranca !== undefined) prepared.data_fim_cobranca = data.data_fim_cobranca ? toPersistenceString(data.data_fim_cobranca) : null;
     if (data.enviar_notificacoes !== undefined) prepared.enviar_notificacoes = data.enviar_notificacoes;
-
 
     // Controle
     if (data.ativo !== undefined) prepared.ativo = data.ativo;
@@ -98,7 +103,7 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO>, usuarioId?: 
     return prepared;
 };
 
-const createPassageiro = async (data: CreatePassageiroDTO): Promise<any> => {
+const createPassageiro = async (data: CreatePassageiroDTO, isPreCadastro: boolean = false): Promise<any> => {
     if (!data.usuario_id) throw new Error("Usuário obrigatório");
     if (!data.nome) throw new Error("Nome do passageiro é obrigatório");
 
@@ -123,18 +128,20 @@ const createPassageiro = async (data: CreatePassageiroDTO): Promise<any> => {
     if (error) throw error;
 
     // --- LOG DE AUDITORIA ---
-    historicoService.log({
-        usuario_id: inserted.usuario_id,
-        entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
-        entidade_id: inserted.id,
-        acao: AtividadeAcao.PASSAGEIRO_CRIADO,
-        descricao: `Novo passageiro ${inserted.nome} cadastrado.`,
-        meta: {
-            nome: inserted.nome,
-            responsavel: inserted.nome_responsavel,
-            valor_cobranca: inserted.valor_cobranca
-        }
-    });
+    if (!isPreCadastro) {
+        historicoService.log({
+            usuario_id: inserted.usuario_id,
+            entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
+            entidade_id: inserted.id,
+            acao: AtividadeAcao.PASSAGEIRO_CRIADO,
+            descricao: `Novo passageiro ${inserted.nome} cadastrado.`,
+            meta: {
+                nome: inserted.nome,
+                responsavel: inserted.nome_responsavel,
+                valor_cobranca: inserted.valor_cobranca
+            }
+        });
+    }
 
     return inserted;
 };
@@ -190,8 +197,11 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO): Promise<
         (data.escola_id !== undefined && data.escola_id !== estadoAnterior.escola_id) ||
         (data.periodo !== undefined && data.periodo !== estadoAnterior.periodo) ||
         (data.modalidade !== undefined && data.modalidade !== estadoAnterior.modalidade) ||
+        (data.turma !== undefined && cleanString(data.turma || '', true) !== cleanString(estadoAnterior.turma || '', true)) ||
         (data.data_inicio_transporte !== undefined && data.data_inicio_transporte !== estadoAnterior.data_inicio_transporte) ||
         (data.data_fim_transporte !== undefined && data.data_fim_transporte !== estadoAnterior.data_fim_transporte) ||
+        (data.data_inicio_cobranca !== undefined && data.data_inicio_cobranca !== estadoAnterior.data_inicio_cobranca) ||
+        (data.data_fim_cobranca !== undefined && data.data_fim_cobranca !== estadoAnterior.data_fim_cobranca) ||
         (data.logradouro !== undefined && data.logradouro !== estadoAnterior.logradouro) ||
         (flexData.numero !== undefined && flexData.numero !== estadoAnterior.numero) ||
         (data.bairro !== undefined && data.bairro !== estadoAnterior.bairro) ||
@@ -227,7 +237,7 @@ const deletePassageiro = async (id: string): Promise<void> => {
         if (countError) throw countError;
 
         if (count && count > 0) {
-            throw new AppError("Passageiro possui mensalidades. Para excluir, é necessário antes excluir as mensalidades. Se preferir, você também pode apenas desativar o cadastro.", 400);
+            throw new AppError("Passageiro possui parcelas. Para excluir, é necessário antes excluir as parcelas. Se preferir, você também pode apenas desativar o cadastro.", 400);
         }
 
         const { error } = await passageiroRepository.delete(id);
@@ -369,7 +379,7 @@ const finalizePreCadastro = async (
     delete (payload as Record<string, unknown>).updated_at;
 
     // 3. Criar Passageiro
-    const novoPassageiro = await createPassageiro(payload);
+    const novoPassageiro = await createPassageiro(payload, true);
 
     // 4. Trigger de Contrato Automático
     // Removido pois createPassageiro já realiza essa verificação e criação
@@ -383,7 +393,7 @@ const finalizePreCadastro = async (
         entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
         entidade_id: novoPassageiro.id,
         acao: AtividadeAcao.PRE_CADASTRO_CONCLUIDO,
-        descricao: `Interesse de vaga (${novoPassageiro.nome}) convertido em passageiro.`,
+        descricao: `Cadastro Pendente de (${novoPassageiro.nome}) aprovado como passageiro.`,
         meta: { pre_id: prePassageiroId }
     });
 
@@ -405,6 +415,194 @@ const lookupResponsavelByCpf = async (usuarioId: string, cpf: string): Promise<a
     return data;
 };
 
+const listarAniversariantesDoMes = async (usuarioId: string, mes: number) => {
+    if (!usuarioId) throw new Error("Usuário obrigatório");
+    if (mes < 1 || mes > 12) throw new AppError("Mês inválido", 400);
+
+    const { data: todosAtivos, error } = await passageiroRepository.listAniversariantesInfo(usuarioId);
+    if (error) throw new AppError("Erro ao buscar passageiros para aniversários", 500);
+
+    let passageirosSemData = 0;
+    const passageirosSemDataList: any[] = [];
+    const aniversariantesMap = new Map<number, any[]>();
+    // Inicializar as 5 semanas possíveis
+    for (let i = 1; i <= 5; i++) {
+        aniversariantesMap.set(i, []);
+    }
+
+    const passageiros = todosAtivos || [];
+
+    passageiros.forEach(p => {
+        if (!p.data_nascimento) {
+            passageirosSemData++;
+            passageirosSemDataList.push({
+                id: p.id,
+                nome: p.nome,
+                veiculo: p.veiculo,
+                escola: p.escola
+            });
+            return;
+        }
+
+        const date = parseLocalDate(p.data_nascimento);
+        const pMes = date.getMonth() + 1; // getMonth é 0-indexado
+
+        if (pMes === mes) {
+            // Calcular em qual semana do mês a data cai
+            const dia = date.getDate();
+            const semanaNoMes = Math.ceil(dia / 7);
+            const semanaGarantida = semanaNoMes > 5 ? 5 : semanaNoMes; // Garantir limite
+
+            const lista = aniversariantesMap.get(semanaGarantida) || [];
+            lista.push({
+                id: p.id,
+                nome: p.nome,
+                dia: dia,
+                veiculo: p.veiculo,
+                escola: p.escola
+            });
+            aniversariantesMap.set(semanaGarantida, lista);
+        }
+    });
+
+    const semanasFormatadas = Array.from(aniversariantesMap.entries()).map(([semana, aniversariantes]) => {
+        // Ordenar por dia dentro da semana
+        aniversariantes.sort((a, b) => a.dia - b.dia);
+        return {
+            semana,
+            aniversariantes
+        };
+    }).filter(s => s.aniversariantes.length > 0);
+
+    return {
+        semanas: semanasFormatadas,
+        passageirosSemData,
+        passageirosSemDataList,
+        totalPassageiros: passageiros.length
+    };
+};
+
+const addResponsavelAdicional = async (passageiroId: string, data: CreateResponsavelAdicionalDTO) => {
+    const { data: inserted, error } = await supabaseAdmin
+        .from("passageiro_responsaveis_adicionais")
+        .insert([{
+            passageiro_id: passageiroId,
+            nome: cleanString(data.nome, true),
+            telefone: onlyDigits(data.telefone),
+            cpf: onlyDigits(data.cpf),
+            parentesco: data.parentesco,
+            logradouro: data.logradouro ? cleanString(data.logradouro, true) : null,
+            numero: data.numero ? cleanString(data.numero, true) : null,
+            bairro: data.bairro ? cleanString(data.bairro, true) : null,
+            cidade: data.cidade ? cleanString(data.cidade, true) : null,
+            estado: data.estado ? cleanString(data.estado, true) : null,
+            cep: data.cep ? onlyDigits(data.cep) : null,
+            referencia: data.referencia ? cleanString(data.referencia, true) : null,
+            complemento: data.complemento ? cleanString(data.complemento, true) : null,
+        }])
+        .select()
+        .single();
+
+    if (error) throw error;
+    return inserted;
+};
+
+const updateResponsavelAdicional = async (responsavelId: string, data: UpdateResponsavelAdicionalDTO) => {
+    const prepared: Record<string, any> = {};
+    if (data.nome !== undefined) prepared.nome = data.nome ? cleanString(data.nome, true) : null;
+    if (data.telefone !== undefined) prepared.telefone = data.telefone ? onlyDigits(data.telefone) : null;
+    if (data.cpf !== undefined) prepared.cpf = data.cpf ? onlyDigits(data.cpf) : null;
+    if (data.parentesco !== undefined) prepared.parentesco = data.parentesco;
+    if (data.logradouro !== undefined) prepared.logradouro = data.logradouro ? cleanString(data.logradouro, true) : null;
+    if (data.numero !== undefined) prepared.numero = data.numero ? cleanString(data.numero, true) : null;
+    if (data.bairro !== undefined) prepared.bairro = data.bairro ? cleanString(data.bairro, true) : null;
+    if (data.cidade !== undefined) prepared.cidade = data.cidade ? cleanString(data.cidade, true) : null;
+    if (data.estado !== undefined) prepared.estado = data.estado ? cleanString(data.estado, true) : null;
+    if (data.cep !== undefined) prepared.cep = data.cep ? onlyDigits(data.cep) : null;
+    if (data.referencia !== undefined) prepared.referencia = data.referencia ? cleanString(data.referencia, true) : null;
+    if (data.complemento !== undefined) prepared.complemento = data.complemento ? cleanString(data.complemento, true) : null;
+
+    const { data: updated, error } = await supabaseAdmin
+        .from("passageiro_responsaveis_adicionais")
+        .update(prepared)
+        .eq("id", responsavelId)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return updated;
+};
+
+const deleteResponsavelAdicional = async (responsavelId: string) => {
+    const { error } = await supabaseAdmin
+        .from("passageiro_responsaveis_adicionais")
+        .delete()
+        .eq("id", responsavelId);
+
+    if (error) throw error;
+    return { success: true };
+};
+
+const setPrincipalResponsavel = async (passageiroId: string, responsavelId: string) => {
+    const { data: passageiro, error: passErr } = await supabaseAdmin
+        .from("passageiros")
+        .select("*")
+        .eq("id", passageiroId)
+        .single();
+
+    if (passErr || !passageiro) throw passErr || new Error("Passageiro não encontrado");
+
+    const { data: adicional, error: adErr } = await supabaseAdmin
+        .from("passageiro_responsaveis_adicionais")
+        .select("*")
+        .eq("id", responsavelId)
+        .single();
+
+    if (adErr || !adicional) throw adErr || new Error("Responsável adicional não encontrado");
+
+    const { error: updAdError } = await supabaseAdmin
+        .from("passageiro_responsaveis_adicionais")
+        .update({
+            nome: passageiro.nome_responsavel,
+            telefone: passageiro.telefone_responsavel,
+            cpf: passageiro.cpf_responsavel || adicional.cpf,
+            parentesco: passageiro.parentesco_responsavel || ParentescoResponsavel.OUTRO,
+            logradouro: passageiro.logradouro,
+            numero: passageiro.numero,
+            bairro: passageiro.bairro,
+            cidade: passageiro.cidade,
+            estado: passageiro.estado,
+            cep: passageiro.cep,
+            referencia: passageiro.referencia,
+            complemento: passageiro.complemento,
+        })
+        .eq("id", responsavelId);
+
+    if (updAdError) throw updAdError;
+
+    const { error: updPassError } = await supabaseAdmin
+        .from("passageiros")
+        .update({
+            nome_responsavel: adicional.nome,
+            telefone_responsavel: adicional.telefone,
+            cpf_responsavel: adicional.cpf,
+            parentesco_responsavel: adicional.parentesco,
+            logradouro: adicional.logradouro,
+            numero: adicional.numero,
+            bairro: adicional.bairro,
+            cidade: adicional.cidade,
+            estado: adicional.estado,
+            cep: adicional.cep,
+            referencia: adicional.referencia,
+            complemento: adicional.complemento,
+        })
+        .eq("id", passageiroId);
+
+    if (updPassError) throw updPassError;
+
+    return { success: true };
+};
+
 // Exportar objeto unificado no final
 export const passageiroService = {
     createPassageiro,
@@ -415,5 +613,10 @@ export const passageiroService = {
     toggleAtivo,
     countListPassageirosByUsuario,
     finalizePreCadastro,
-    lookupResponsavelByCpf
+    lookupResponsavelByCpf,
+    listarAniversariantesDoMes,
+    addResponsavelAdicional,
+    updateResponsavelAdicional,
+    deleteResponsavelAdicional,
+    setPrincipalResponsavel
 };

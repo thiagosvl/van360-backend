@@ -6,12 +6,12 @@ import { logger } from "../config/logger.js";
 
 import { AppError } from "../errors/AppError.js";
 import {
-  EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_HOJE,
-  EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_AVISO,
-  EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_ATRASO
+  EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
+  EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
+  EVENTO_PASSAGEIRO_ATRASADO
 } from "../config/constants.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
-import { getNowBR, addDays, getLastDayOfMonth, toPersistenceString, diffInDays } from "../utils/date.utils.js";
+import { getNowBR, getLastDayOfMonth, toPersistenceString, diffInDays } from "../utils/date.utils.js";
 
 import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
 import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaOrigem, CobrancaStatus, ConfigKey } from "../types/enums.js";
@@ -41,8 +41,7 @@ export const cobrancaService = {
     const cobrancaId = crypto.randomUUID();
     const valorNumerico = typeof data.valor === "string" ? moneyToNumber(data.valor) : data.valor;
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { tipo, ...cobrancaCleanData } = data;
+    const cobrancaCleanData = data;
 
     const cobrancaData: Record<string, unknown> = {
       id: cobrancaId,
@@ -120,9 +119,6 @@ export const cobrancaService = {
     if (data.data_pagamento !== undefined) cobrancaData.data_pagamento = data.data_pagamento;
     if (data.valor_pago !== undefined) cobrancaData.valor_pago = moneyToNumber(data.valor_pago);
 
-    // Lógica de regeneração de PIX removida conforme diretrizes do plano base.
-    let shouldResendNotification = false;
-
     const { data: updated, error } = await cobrancaRepository.update(id, cobrancaData);
 
     if (error) throw new AppError(`Erro ao atualizar cobrança: ${error.message}`, 500);
@@ -181,7 +177,7 @@ export const cobrancaService = {
       entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
       entidade_id: id,
       acao: AtividadeAcao.COBRANCA_EXCLUIDA,
-      descricao: `Mensalidade de ${cobranca.mes}/${cobranca.ano} do passageiro ${passageiroNomeDelete} foi removida.`,
+      descricao: `Parcela de ${cobranca.mes}/${cobranca.ano} do passageiro ${passageiroNomeDelete} foi removida.`,
       meta: {
         valor: cobranca.valor,
         mes: cobranca.mes,
@@ -221,7 +217,7 @@ export const cobrancaService = {
       entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
       entidade_id: cobrancaId,
       acao: AtividadeAcao.CONFIG_LEMBRETE,
-      descricao: `Lembretes automáticos para esta mensalidade foram ${novoStatus ? 'DESATIVADOS' : 'REATIVADOS'}.`,
+      descricao: `Lembretes automáticos para esta parcela foram ${novoStatus ? 'DESATIVADOS' : 'REATIVADOS'}.`,
       meta: { desativar_lembretes: novoStatus }
     });
 
@@ -242,14 +238,68 @@ export const cobrancaService = {
     if (passError) throw passError;
     if (!passageiros) return { created, skipped };
 
+    const now = getNowBR();
+    const isNextMonthWindow = now.getDate() >= 23;
+
+    // Buscar as cobranças que já foram geradas neste mês/ano para este motorista
+    const { data: cobrancasExistentes } = await cobrancaRepository.getByMesAnoParaMotorista(motoristaId, targetMonth, targetYear);
+    const passageirosComCobranca = new Set(cobrancasExistentes?.map((c: any) => c.passageiro_id) || []);
+
     // 2. Iterar por Passageiro e Gerar Cobrança
     for (const passageiro of passageiros) {
       // Verificar se já existe cobrança para este mês/ano/passageiro
-      const { count } = await cobrancaRepository.countForMesAnoPassageiro(passageiro.id, targetMonth, targetYear);
-
-      if (count && count > 0) {
+      if (passageirosComCobranca.has(passageiro.id)) {
         skipped++;
         continue;
+      }
+
+      // Repescagem (antes do dia 23): Ignora passageiros cadastrados neste mesmo mês
+      if (!isNextMonthWindow && passageiro.created_at) {
+        const passageiroCreatedAt = new Date(passageiro.created_at);
+        const startOfCurrentMonth = new Date(targetYear, targetMonth - 1, 1);
+        if (passageiroCreatedAt >= startOfCurrentMonth) {
+          skipped++;
+          continue;
+        }
+      }
+
+      // Validar Período de Cobrança do Passageiro (timezone-safe)
+      const targetDateNum = targetYear * 12 + (targetMonth - 1);
+
+      const getYearMonth = (dateVal: any) => {
+        if (!dateVal) return null;
+        if (dateVal instanceof Date) {
+          return { year: dateVal.getFullYear(), month: dateVal.getMonth() + 1 };
+        }
+        if (typeof dateVal === 'string') {
+          const parts = dateVal.split("-").map(Number);
+          if (parts.length >= 2) {
+            return { year: parts[0], month: parts[1] };
+          }
+        }
+        return null;
+      };
+
+      if (passageiro.data_inicio_cobranca) {
+        const ym = getYearMonth(passageiro.data_inicio_cobranca);
+        if (ym) {
+          const inicioDateNum = ym.year * 12 + (ym.month - 1);
+          if (targetDateNum < inicioDateNum) {
+            skipped++;
+            continue;
+          }
+        }
+      }
+
+      if (passageiro.data_fim_cobranca) {
+        const ym = getYearMonth(passageiro.data_fim_cobranca);
+        if (ym) {
+          const fimDateNum = ym.year * 12 + (ym.month - 1);
+          if (targetDateNum > fimDateNum) {
+            skipped++;
+            continue;
+          }
+        }
       }
 
       // Calcular Vencimento
@@ -279,18 +329,6 @@ export const cobrancaService = {
       }
     }
 
-    if (created > 0) {
-      // --- LOG DE AUDITORIA ---
-      historicoService.log({
-        usuario_id: motoristaId,
-        entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
-        entidade_id: motoristaId,
-        acao: AtividadeAcao.COBRANCAS_GERADAS,
-        descricao: `Geração automática de ${created} cobranças concluída para ${targetMonth}/${targetYear}.`,
-        meta: { mes: targetMonth, ano: targetYear, criadas: created, puladas: skipped }
-      });
-    }
-
     return { created, skipped };
   },
 
@@ -300,13 +338,30 @@ export const cobrancaService = {
     try {
       const now = getNowBR();
       const todayStr = toPersistenceString(now);
-      
+
       const thresholdDays = await getConfigNumber(ConfigKey.PASSAGEIRO_DIAS_AVISO_VENCIMENTO, 2);
       const thresholdDate = getNowBR();
       thresholdDate.setDate(now.getDate() + thresholdDays);
       const thresholdDateStr = toPersistenceString(thresholdDate);
 
-      const { data: cobrancas, error } = await cobrancaRepository.getPendentesParaNotificacao();
+      const targetDates = [todayStr];
+
+      // Aviso (Hoje + 1 até Hoje + thresholdDays)
+      for (let i = 1; i <= thresholdDays; i++) {
+        const d = getNowBR();
+        d.setDate(d.getDate() + i);
+        targetDates.push(toPersistenceString(d));
+      }
+
+      // Atrasos (Hoje - 3, Hoje - 5, Hoje - 7)
+      const atrasos = [3, 5, 7];
+      for (const dias of atrasos) {
+        const d = getNowBR();
+        d.setDate(d.getDate() - dias);
+        targetDates.push(toPersistenceString(d));
+      }
+
+      const { data: cobrancas, error } = await cobrancaRepository.getPendentesParaNotificacao(targetDates);
 
       if (error) {
         logger.error({ error: error.message }, "[CobrancaService] Erro ao buscar cobranças pendentes para notificações");
@@ -321,46 +376,44 @@ export const cobrancaService = {
       logger.info({ count: cobrancas.length }, "[CobrancaService] Processando notificações para cobranças pendentes...");
 
       let sentCount = 0;
+      const updatedCobrancaIds: string[] = [];
 
       for (const c of cobrancas) {
         const passageiro = c.passageiro;
         const motorista = c.motorista;
 
         if (!passageiro?.telefone_responsavel) continue;
-        
+
         // Verifica a flag global de notificações do passageiro
         if (passageiro?.enviar_notificacoes === false) continue;
-
-        if (!motorista?.chave_pix || !motorista?.tipo_chave_pix) {
-          logger.warn({ cobrancaId: c.id, motoristaId: c.usuario_id }, "[CobrancaService] Motorista sem chave Pix configurada. Notificação ignorada.");
-          continue;
-        }
 
         const dataVencimentoStr = c.data_vencimento;
         const ultimaNotifStr = c.data_envio_ultima_notificacao;
 
         let eventType:
-          | typeof EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_HOJE
-          | typeof EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_AVISO
-          | typeof EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_ATRASO
+          | typeof EVENTO_PASSAGEIRO_VENCIMENTO_HOJE
+          | typeof EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO
+          | typeof EVENTO_PASSAGEIRO_ATRASADO
           | null = null;
         let shouldSend = false;
 
         if (dataVencimentoStr === todayStr) {
-          eventType = EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_HOJE;
+          eventType = EVENTO_PASSAGEIRO_VENCIMENTO_HOJE;
           if (!ultimaNotifStr || !ultimaNotifStr.startsWith(todayStr)) {
             shouldSend = true;
           }
         } else if (dataVencimentoStr > todayStr && dataVencimentoStr <= thresholdDateStr) {
-          eventType = EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_AVISO;
+          eventType = EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO;
           if (!ultimaNotifStr) {
             shouldSend = true;
           }
         } else if (dataVencimentoStr < todayStr) {
-          eventType = EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_ATRASO;
+          eventType = EVENTO_PASSAGEIRO_ATRASADO;
           const daysSinceDue = diffInDays(dataVencimentoStr, now);
           if (daysSinceDue === 3 || daysSinceDue === 5 || daysSinceDue === 7) {
-            shouldSend = true;
+            if (!ultimaNotifStr || !ultimaNotifStr.startsWith(todayStr)) {
+              shouldSend = true;
+            }
           }
         }
 
@@ -374,30 +427,25 @@ export const cobrancaService = {
               telefoneMotorista: motorista.telefone,
               valor: Number(c.valor),
               dataVencimento: dataVencimentoStr,
-              diasAntecedencia: thresholdDays,
+              diasAntecedencia: eventType === EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO ? thresholdDays : undefined,
+              diasAtraso: eventType === EVENTO_PASSAGEIRO_ATRASADO ? diffInDays(dataVencimentoStr, now) : undefined,
               usuarioId: c.usuario_id,
               chavePix: motorista.chave_pix,
-              tipoChavePix: motorista.tipo_chave_pix
+              tipoChavePix: motorista.tipo_chave_pix,
+              mes: c.mes,
+              ano: c.ano
             };
 
             const { notificationService } = await import("./notifications/notification.service.js");
             const success = await notificationService.notifyPassenger(
               passageiro.telefone_responsavel,
               eventType,
-              context
+              context,
+              { channels: ['WHATSAPP'] }
             );
 
             if (success) {
-              await cobrancaRepository.updateUltimaNotificacao(c.id, new Date().toISOString());
-
-              historicoService.log({
-                usuario_id: c.usuario_id,
-                entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
-                entidade_id: c.id,
-                acao: AtividadeAcao.NOTIFICACAO_WHATSAPP,
-                descricao: `Notificação de cobrança (${eventType}) enviada para o responsável de ${passageiro.nome}.`,
-                meta: { passageiro: passageiro.nome, tipo: eventType }
-              });
+              updatedCobrancaIds.push(c.id);
 
               sentCount++;
             }
@@ -406,6 +454,10 @@ export const cobrancaService = {
             logger.error({ err: msg, cobrancaId: c.id }, "[CobrancaService] Falha ao enviar notificação de cobrança individual");
           }
         }
+      }
+
+      if (updatedCobrancaIds.length > 0) {
+        await cobrancaRepository.updateBulkUltimaNotificacao(updatedCobrancaIds, new Date().toISOString());
       }
 
       logger.info({ sentCount }, "[CobrancaService] Envio diário de notificações de cobrança concluído.");
@@ -429,17 +481,20 @@ export const cobrancaService = {
     if (!motoristas) return { totalMotoristas: 0 };
 
     const now = getNowBR();
-    // Se hoje for dia >= 20, gera para o mês que vem. Se não, para o mês atual (caso falte alguma).
-    const targetMonth = now.getDate() >= 20 ? (now.getMonth() === 11 ? 1 : now.getMonth() + 2) : (now.getMonth() + 1);
-    const targetYear = (now.getDate() >= 20 && now.getMonth() === 11) ? now.getFullYear() + 1 : now.getFullYear();
+    // Se hoje for dia >= 23, gera para o mês que vem. Se não, para o mês atual (repescagem segura).
+    const targetMonth = now.getDate() >= 23 ? (now.getMonth() === 11 ? 1 : now.getMonth() + 2) : (now.getMonth() + 1);
+    const targetYear = (now.getDate() >= 23 && now.getMonth() === 11) ? now.getFullYear() + 1 : now.getFullYear();
 
-    let totalCreated = 0;
+    const { addToGenerationQueue } = await import("../queues/generation.queue.js");
 
     for (const m of motoristas) {
-      const res = await this.gerarCobrancasMensaisParaMotorista(m.id, targetMonth, targetYear);
-      totalCreated += res.created;
+      await addToGenerationQueue({
+        motoristaId: m.id,
+        mes: targetMonth,
+        ano: targetYear
+      });
     }
 
-    return { totalMotoristas: motoristas.length, totalCreated };
+    return { totalMotoristas: motoristas.length, queued: true };
   }
 };

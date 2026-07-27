@@ -4,19 +4,19 @@ import { FastifyAdapter } from '@bull-board/fastify';
 import { FastifyInstance } from 'fastify';
 import { contractQueue } from './contract.queue.js';
 
-import { whatsappQueue } from './whatsapp.queue.js';
+import { whatsappTransactionalQueue, whatsappBulkQueue } from './whatsapp.queue.js';
+import { telegramQueue } from './telegram.queue.js';
+import { generationQueue } from './generation.queue.js';
 
 export const setupBullBoard = (app: FastifyInstance) => {
   const serverAdapter = new FastifyAdapter();
 
   createBullBoard({
     queues: [
-      new BullMQAdapter(whatsappQueue),
-      // new BullMQAdapter(receiptQueue),
-      // new BullMQAdapter(webhookQueue),
-      // new BullMQAdapter(generationQueue),
-      // new BullMQAdapter(pixQueue),
-      // new BullMQAdapter(payoutQueue),
+      new BullMQAdapter(whatsappTransactionalQueue),
+      new BullMQAdapter(whatsappBulkQueue),
+      new BullMQAdapter(telegramQueue),
+      new BullMQAdapter(generationQueue),
       new BullMQAdapter(contractQueue),
     ],
     serverAdapter,

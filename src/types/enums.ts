@@ -17,11 +17,6 @@ export enum CobrancaOrigem {
   AUTOMATICA = "automatica",
 }
 
-export enum CobrancaTipo {
-  MENSALIDADE = "mensalidade",
-  AVULSA = "avulsa"
-}
-
 export enum UserType {
   ADMIN = "admin",
   MOTORISTA = "motorista",
@@ -40,6 +35,11 @@ export enum WhatsappStatus {
   // Estados Internos do Sistema
   UNKNOWN = "UNKNOWN",
   NOT_FOUND = "NOT_FOUND"
+}
+
+export enum WhatsappPurpose {
+  TRANSACTIONAL = "TRANSACTIONAL",
+  BULK = "BULK"
 }
 
 export enum EvolutionEvent {
@@ -90,6 +90,12 @@ export enum ContratoStatus {
   SUBSTITUIDO = "substituido"
 }
 
+export enum DriverContractConfigStatus {
+  NAO_CONFIGURADO = "NAO_CONFIGURADO",
+  ATIVO = "ATIVO",
+  DESATIVADO = "DESATIVADO"
+}
+
 export enum PassageiroModalidade {
   IDA = "ida",
   VOLTA = "volta",
@@ -99,7 +105,6 @@ export enum PassageiroModalidade {
 export enum PassageiroGenero {
   MASCULINO = "masculino",
   FEMININO = "feminino",
-  PREFIRO_NAO_INFORMAR = "prefiro_nao_informar"
 }
 
 export enum ParentescoResponsavel {
@@ -128,6 +133,12 @@ export enum SubscriptionStatus {
   CANCELED = "CANCELED",
   EXPIRED = "EXPIRED"
 }
+
+export const STATUS_ASSINATURA_LIBERADA = [
+  SubscriptionStatus.TRIAL,
+  SubscriptionStatus.ACTIVE,
+  SubscriptionStatus.PAST_DUE
+];
 
 export enum SubscriptionInvoiceStatus {
   PENDING = "PENDING",
@@ -190,6 +201,7 @@ export enum AtividadeEntidadeTipo {
   CONTRATO = "CONTRATO",
   SAAS_ASSINATURA = "SAAS_ASSINATURA",
   SAAS_FATURA = "SAAS_FATURA",
+  BLOG_POST = "BLOG_POST",
 }
 
 export enum AtividadeAcao {
@@ -207,6 +219,7 @@ export enum AtividadeAcao {
   PASSAGEIRO_EDITADO = "PASSAGEIRO_EDITADO",
   PASSAGEIRO_STATUS = "PASSAGEIRO_STATUS",
   PASSAGEIRO_EXCLUIDO = "PASSAGEIRO_EXCLUIDO",
+  PRE_CADASTRO_CRIADO = "PRE_CADASTRO_CRIADO",
   PRE_CADASTRO_CONCLUIDO = "PRE_CADASTRO_CONCLUIDO",
 
   // Perfil / Sistema
@@ -236,16 +249,15 @@ export enum AtividadeAcao {
   ESCOLA_STATUS = "ESCOLA_STATUS",
   ESCOLA_EXCLUIDA = "ESCOLA_EXCLUIDA",
 
-  // Jobs
-  COBRANCAS_GERADAS = "COBRANCAS_GERADAS",
-
   // SaaS / Assinaturas
   SAAS_ASSINATURA_ATIVA = "SAAS_ASSINATURA_ATIVA",
   SAAS_ASSINATURA_CANCELADA = "SAAS_ASSINATURA_CANCELADA",
   SAAS_ASSINATURA_ATRASO = "SAAS_ASSINATURA_ATRASO",
   SAAS_ASSINATURA_EXPIRADA = "SAAS_ASSINATURA_EXPIRADA",
+  SAAS_PAGAMENTO_RECEBIDO = "SAAS_PAGAMENTO_RECEBIDO",
+  SAAS_REFERRAL_BONUS_RECEIVED = "SAAS_REFERRAL_BONUS_RECEIVED",
   SAAS_FATURA_GERADA = "SAAS_FATURA_GERADA",
-  SAAS_PAGAMENTO_RECEBIDO = "SAAS_PAGAMENTO_RECEBIDO"
+  SAAS_FATURA_RECUSADA = "SAAS_FATURA_RECUSADA"
 }
 
 export enum TipoChavePix {
@@ -262,6 +274,7 @@ export enum CronJob {
   SUBSCRIPTION_GENERATOR = "subscription-generator",
   CHARGE_GENERATOR = "charge-generator",
   DAILY_CHARGE_MONITOR = "daily-charge-monitor",
+  BIRTHDAY_REMINDER = "birthday-reminder",
 }
 
 export enum RouteExecutionStatus {
@@ -276,3 +289,41 @@ export enum RouteStopStatus {
   EMBARCADO = "embarcado",
   AUSENTE = "ausente"
 }
+
+export enum CanalAquisicao {
+  PLAY_STORE = "PLAY_STORE",
+  APP_STORE = "APP_STORE",
+  INDICACAO = "INDICACAO",
+  PANFLETO = "PANFLETO",
+  INSTAGRAM = "INSTAGRAM",
+  FACEBOOK = "FACEBOOK",
+  TIKTOK = "TIKTOK",
+  YOUTUBE = "YOUTUBE",
+  GOOGLE = "GOOGLE",
+  OUTROS = "OUTROS"
+}
+
+export enum BlogPostStatus {
+  DRAFT = "draft",
+  PUBLISHED = "published"
+}
+
+export enum GastoTipoCalculoParcela {
+  TOTAL = "total",
+  PARCELA = "parcela",
+}
+
+export enum GastoEscopoAcao {
+  UNICA = "unica",
+  FUTURAS = "futuras",
+  TODAS = "todas",
+}
+
+export enum DispositivoCadastro {
+  APP_ANDROID = "APP_ANDROID",
+  APP_IOS = "APP_IOS",
+  WEB_MOBILE_ANDROID = "WEB_MOBILE_ANDROID",
+  WEB_MOBILE_IOS = "WEB_MOBILE_IOS",
+  WEB_DESKTOP = "WEB_DESKTOP",
+}
+

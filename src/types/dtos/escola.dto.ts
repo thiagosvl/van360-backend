@@ -12,6 +12,7 @@ export const createEscolaSchema = z.object({
   estado: z.string().length(2).optional().or(z.literal("")).transform(v => v === "" ? undefined : v),
   cep: optionalString,
   referencia: optionalString,
+  complemento: optionalString,
   ativo: z.boolean().optional()
 });
 

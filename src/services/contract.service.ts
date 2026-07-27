@@ -12,6 +12,7 @@ import { historicoService } from './historico.service.js';
 import { InHouseContractProvider } from './providers/inhouse-contract.provider.js';
 import { notificationService } from './notifications/notification.service.js';
 import { EVENTO_MOTORISTA_CONTRATO_ASSINADO, EVENTO_PASSAGEIRO_CONTRATO_ASSINADO } from '../config/constants.js';
+import { formatarPlacaExibicao } from '../utils/placa.utils.js';
 
 import { contractRepository } from '../repositories/contract.repository.js';
 import { passageiroRepository } from '../repositories/passageiro.repository.js';
@@ -59,14 +60,29 @@ class ContractService {
       throw new AppError('Passageiro não encontrado', 404);
     });
 
-    // 3. Cálculos dinâmicos
+    // 3. Validações e Cálculos dinâmicos
+    const nomeRespNormalized = passageiro.nome_responsavel
+      ? passageiro.nome_responsavel.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      : "";
+      
+    if (!passageiro.nome_responsavel || nomeRespNormalized.includes("responsavel nao info") || nomeRespNormalized.includes("responsavel teste")) {
+      throw new AppError("O nome real do responsável é obrigatório para gerar o contrato. Edite o passageiro para continuar.", 400);
+    }
+
+    if (!passageiro.cpf_responsavel) {
+      throw new AppError("CPF do responsável é obrigatório para gerar o contrato", 400);
+    }
+
     const hoje = getNowBR();
-    const dataInicio = customTerms.dataInicio || passageiro.data_inicio_transporte || toLocalDateString(hoje);
+    const dataInicio = customTerms.dataInicio || passageiro.data_inicio_transporte;
+    if (!dataInicio) {
+      throw new AppError("Data de início de transporte é obrigatória para gerar o contrato", 400);
+    }
     const dInicio = parseLocalDate(dataInicio);
 
-    let dataFim = customTerms.dataFim || passageiro.data_fim_transporte;
+    const dataFim = customTerms.dataFim || passageiro.data_fim_transporte;
     if (!dataFim) {
-      dataFim = `${dInicio.getFullYear()}-12-31`;
+      throw new AppError("Data de término de transporte é obrigatória para gerar o contrato", 400);
     }
     const dFim = parseLocalDate(dataFim);
 
@@ -85,7 +101,7 @@ class ContractService {
       nomeResponsavel: passageiro.nome_responsavel,
       cpfResponsavel: passageiro.cpf_responsavel,
       telefoneResponsavel: passageiro.telefone_responsavel,
-      emailResponsavel: passageiro.email_responsavel,
+
       parentescoResponsavel: passageiro.parentesco_responsavel,
       enderecoCompleto: formatAddress(passageiro),
       nomeEscola: passageiro.escola?.nome || '',
@@ -98,16 +114,20 @@ class ContractService {
       ano: dInicio.getFullYear(),
       dataInicio,
       dataFim,
+      dataInicioCobranca: passageiro.data_inicio_cobranca,
+      dataFimCobranca: passageiro.data_fim_cobranca,
       valorTotal,
       qtdParcelas,
       valorParcela: valorMensal,
-      multaAtraso: usuario.config_contrato?.multa_atraso || { valor: 10, tipo: ContractMultaTipo.PERCENTUAL },
-      multaRescisao: usuario.config_contrato?.multa_rescisao || { valor: 15, tipo: ContractMultaTipo.PERCENTUAL },
-      nomeCondutor: usuario.nome,
+      multaAtraso: usuario.config_contrato?.multa_atraso || { valor: 10, tipo: ContractMultaTipo.FIXO },
+      jurosAtraso: usuario.config_contrato?.juros_atraso || { valor: 1, tipo: ContractMultaTipo.PERCENTUAL },
+      multaRescisao: usuario.config_contrato?.multa_rescisao || { valor: 15, tipo: ContractMultaTipo.FIXO },
+      nomeCondutor: usuario.razao_social || usuario.nome,
       cpfCnpjCondutor: usuario.cpfcnpj,
       telefoneCondutor: usuario.telefone,
-      placaVeiculo: passageiro.veiculo?.placa || '',
+      placaVeiculo: passageiro.veiculo?.placa ? formatarPlacaExibicao(passageiro.veiculo.placa) : '',
       modeloVeiculo: passageiro.veiculo ? `${passageiro.veiculo.marca} ${passageiro.veiculo.modelo}` : '',
+      secoes: usuario.config_contrato?.secoes,
       clausulas: usuario.config_contrato?.clausulas,
       assinaturaCondutorUrl: usuario.assinatura_digital_url,
       apelidoCondutor: usuario.apelido,
@@ -132,6 +152,8 @@ class ContractService {
       dia_vencimento: dadosContrato.diaVencimento,
       multa_atraso_valor: dadosContrato.multaAtraso.valor,
       multa_atraso_tipo: dadosContrato.multaAtraso.tipo,
+      juros_atraso_valor: dadosContrato.jurosAtraso.valor,
+      juros_atraso_tipo: dadosContrato.jurosAtraso.tipo,
       multa_rescisao_valor: dadosContrato.multaRescisao.valor,
       multa_rescisao_tipo: dadosContrato.multaRescisao.tipo,
     });
@@ -149,7 +171,7 @@ class ContractService {
         telefone_responsavel: passageiro.telefone_responsavel
       },
       tokenAcesso
-    });
+    }, `contract-generate-${contrato.id}`);
 
     logger.info({ contratoId: contrato.id }, 'Fomento de contrato enfileirado com sucesso');
 
@@ -232,7 +254,8 @@ class ContractService {
           nomeMotorista: usuario.nome,
           contratoUrl: response.documentoFinalUrl,
           usuarioId: usuario.id
-        }
+        },
+        { channels: ['WHATSAPP'] }
       ).catch(err => logger.error({ err }, 'Erro ao notificar responsável sobre assinatura'));
     }
 
@@ -245,7 +268,8 @@ class ContractService {
           nomePassageiro: passageiro.nome,
           nomeResponsavel: passageiro.nome_responsavel,
           contratoUrl: response.documentoFinalUrl
-        }
+        },
+        { channels: ['WHATSAPP'] }
       ).catch(err => logger.error({ err }, 'Erro ao notificar motorista sobre assinatura'));
     }
 
@@ -423,7 +447,7 @@ class ContractService {
         telefone_responsavel: passageiro.telefone_responsavel
       },
       tokenAcesso: contrato.token_acesso
-    });
+    }, `contract-resend-${contrato.id}-${Date.now()}`);
 
     return { success: true };
   }
@@ -443,10 +467,11 @@ class ContractService {
     return provider.baixarDocumento(contratoId);
   }
 
-  async gerarPreview(authId: string, draftConfig?: Partial<DadosContrato>) {
+  async gerarPreview(authId: string, draftConfig?: Partial<DadosContrato> & { usuarioId?: string }) {
+    const targetUserId = draftConfig?.usuarioId || authId;
     let usuario;
     try {
-      const resp = await userRepository.getById(authId);
+      const resp = await userRepository.getById(targetUserId);
       usuario = resp.data;
     } catch(err) {
       throw new AppError('Usuário não encontrado', 404);
@@ -462,19 +487,17 @@ class ContractService {
     const config = draftConfig || {};
     const savedConfig = usuario.config_contrato || {};
 
-    const multaAtraso = config.multaAtraso || savedConfig.multa_atraso || { valor: 10, tipo: ContractMultaTipo.PERCENTUAL };
-    const multaRescisao = config.multaRescisao || savedConfig.multa_rescisao || { valor: 15, tipo: ContractMultaTipo.PERCENTUAL };
-    const clausulas = config.clausulas || savedConfig.clausulas || [
-      "O serviço contratado consiste no transporte do passageiro acima citado, no trajeto com origem e destino acordado entre as partes.",
-      "Somente o passageiro CONTRATANTE está autorizado a utilizar-se do objeto deste contrato, sendo vedado o passageiro se fazer acompanhar de colegas, parentes, amigos e etc."
-    ];
+    const multaAtraso = config.multaAtraso || savedConfig.multa_atraso || { valor: 10, tipo: ContractMultaTipo.FIXO };
+    const jurosAtraso = config.jurosAtraso || savedConfig.juros_atraso || { valor: 1, tipo: ContractMultaTipo.PERCENTUAL };
+    const multaRescisao = config.multaRescisao || savedConfig.multa_rescisao || { valor: 15, tipo: ContractMultaTipo.FIXO };
+    const clausulas = config.clausulas !== undefined ? config.clausulas : (savedConfig.clausulas || []);
 
     const dadosContrato: DadosContrato = {
       nomePassageiro: "Passageiro Exemplo da Silva",
       nomeResponsavel: "Responsável Fictício de Souza",
       cpfResponsavel: "000.000.000-00",
       telefoneResponsavel: "(11) 99999-9999",
-      emailResponsavel: "exemplo@email.com",
+
       parentescoResponsavel: "pai",
       enderecoCompleto: "Rua das Flores, 123 - Centro, Cidade/EST",
       nomeEscola: "Escola Municipal de Exemplo",
@@ -486,11 +509,14 @@ class ContractService {
       ano: anoVigente,
       dataInicio: toLocalDateString(hoje),
       dataFim: `${anoVigente}-12-31`,
+      dataInicioCobranca: toLocalDateString(hoje),
+      dataFimCobranca: `${anoVigente}-12-31`,
       valorTotal: 2400,
       qtdParcelas: 12,
       valorParcela: 200,
 
       multaAtraso,
+      jurosAtraso,
       multaRescisao,
 
       nomeCondutor: usuario.nome,
@@ -499,6 +525,7 @@ class ContractService {
       placaVeiculo: "ABC-1234",
       modeloVeiculo: "Mercedes Sprinter",
 
+      secoes: config.secoes !== undefined ? config.secoes : savedConfig.secoes,
       clausulas,
 
       assinaturaCondutorUrl: config.assinaturaCondutorUrl || usuario.assinatura_digital_url,

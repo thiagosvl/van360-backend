@@ -1,14 +1,16 @@
 import { logger } from "../../config/logger.js";
+import { getConfig } from "../configuracao.service.js";
 import {
     SubscriptionStatus,
     SubscriptionIdentifer,
     AtividadeAcao,
     AtividadeEntidadeTipo,
+    ConfigKey,
 } from "../../types/enums.js";
 import { historicoService } from "../historico.service.js";
 import { getNowBR, getEndOfDayBR, addDays, parseLocalDate } from "../../utils/date.utils.js";
 import { notificationService } from "../notifications/notification.service.js";
-import { EVENTO_MOTORISTA_ASSINATURA_PAGO } from "../../config/constants.js";
+import { EVENTO_MOTORISTA_ASSINATURA_PAGO, EVENTO_ADMIN_NOVA_ASSINATURA, EVENTO_ADMIN_ASSINATURA_CANCELADA } from "../../config/constants.js";
 import { subscriptionRepository } from "../../repositories/subscription.repository.js";
 import { planRepository } from "../../repositories/plan.repository.js";
 import { invoiceRepository } from "../../repositories/invoice.repository.js";
@@ -39,16 +41,38 @@ export const subscriptionService = {
      * Cria um Trial de 15 dias para novos usuários.
      */
     async createTrial(userId: string) {
-        const { data: plano } = await planRepository.getByIdentifier(SubscriptionIdentifer.MONTHLY);
+        const [{ data: planoMensal }, { data: planoAnual }] = await Promise.all([
+            planRepository.getByIdentifier(SubscriptionIdentifer.MONTHLY),
+            planRepository.getByIdentifier(SubscriptionIdentifer.YEARLY)
+        ]);
 
-        if (!plano) {
+        if (!planoMensal || !planoAnual) {
             logger.error({ identificador: SubscriptionIdentifer.MONTHLY }, "[SubscriptionService] Plano inicial não encontrado para criar Trial.");
-            throw new Error(`Plano '${SubscriptionIdentifer.MONTHLY}' não encontrado.`);
+            throw new Error(`Planos '${SubscriptionIdentifer.MONTHLY}' ou '${SubscriptionIdentifer.YEARLY}' não encontrados.`);
         }
 
         const trialEndsAtIso = getEndOfDayBR(addDays(getNowBR(), 15)).toISOString();
 
-        const { data, error } = await subscriptionRepository.createTrial(userId, plano.id, trialEndsAtIso);
+        const isPromotionActive = await getConfig(ConfigKey.SAAS_PROMOCAO_ATIVA, "false").then(v => v === "true");
+        let valorPromocionalMensal = undefined;
+        if (isPromotionActive && planoMensal.valor_promocional !== null && planoMensal.valor_promocional !== undefined) {
+            valorPromocionalMensal = Number(planoMensal.valor_promocional);
+        }
+
+        let valorPromocionalAnual = undefined;
+        if (isPromotionActive && planoAnual.valor_promocional !== null && planoAnual.valor_promocional !== undefined) {
+            valorPromocionalAnual = Number(planoAnual.valor_promocional);
+        }
+
+        const { data, error } = await subscriptionRepository.createTrial(
+            userId, 
+            planoMensal.id, 
+            trialEndsAtIso, 
+            Number(planoMensal.valor),
+            valorPromocionalMensal,
+            Number(planoAnual.valor),
+            valorPromocionalAnual
+        );
 
         if (error) {
             logger.error({ error, userId }, "[SubscriptionService] Erro ao criar Trial.");
@@ -93,9 +117,9 @@ export const subscriptionService = {
         }
 
         if (sub.status === SubscriptionStatus.TRIAL) {
-            if (!sub.trial_ends_at) return true;
+            if (!sub.trial_ends_at) return false;
             const trialLimit = parseLocalDate(sub.trial_ends_at);
-            if (isNaN(trialLimit.getTime())) return true;
+            if (isNaN(trialLimit.getTime())) return false;
             return trialLimit < getNowBR();
         }
 
@@ -143,9 +167,33 @@ export const subscriptionService = {
             usuario_id: userId,
             entidade_tipo: AtividadeEntidadeTipo.SAAS_ASSINATURA,
             entidade_id: sub.id,
-            acao: AtividadeAcao.SAAS_ASSINATURA_ATRASO, // ou podemos não especificar uma ação rígida
+            acao: AtividadeAcao.SAAS_ASSINATURA_CANCELADA,
             descricao: "A assinatura foi cancelada. As cobranças recorrentes foram suspensas."
         });
+
+        // 4. Notificar Admin sobre o Churn (Cancelamento)
+        try {
+            const { userRepository } = await import("../../repositories/user.repository.js");
+            const userRes = await userRepository.getById(userId);
+            const user = userRes.data;
+            if (user) {
+                const planRes = sub.plan_id ? await planRepository.getById(sub.plan_id) : null;
+                const plan = planRes ? planRes.data : null;
+                await notificationService.notifyAdmin(EVENTO_ADMIN_ASSINATURA_CANCELADA, {
+                    nomeMotorista: user.nome,
+                    telefone: user.telefone,
+                    nomePlano: plan.nome,
+                    valor: `R$ ${typeof plan.valor === "string" ? parseFloat(plan.valor).toFixed(2).replace('.', ',') : plan.valor.toFixed(2).replace('.', ',')}`,
+                    dataVencimento: new Date(sub.current_period_end!).toLocaleDateString("pt-BR"),
+                    usuarioId: userId
+                }, {
+                    channels: ['TELEGRAM'],
+                    jobId: `admin-assinatura-cancelada-${userId}-${sub.id}`
+                });
+            }
+        } catch (err) {
+            logger.error({ err, userId }, "[SubscriptionService] Falha ao notificar admin sobre cancelamento de assinatura");
+        }
 
         logger.info({ subId: sub.id, userId }, "[SubscriptionService] Assinatura cancelada com sucesso.");
         return true;
@@ -182,21 +230,22 @@ export const subscriptionService = {
         
         const safeFaturaIdStr = res.fatura_id ? res.fatura_id.split("-")[0] : faturaId.split("-")[0];
 
-        await historicoService.log({
-            usuario_id: res.usuario_id!,
-            entidade_tipo: AtividadeEntidadeTipo.SAAS_FATURA,
-            entidade_id: res.fatura_id || faturaId,
-            acao: AtividadeAcao.SAAS_PAGAMENTO_RECEBIDO,
-            descricao: `Pagamento confirmado para fatura ${safeFaturaIdStr} (Valor R$ ${res.valor})`
-        });
-
-        await historicoService.log({
-            usuario_id: res.usuario_id!,
-            entidade_tipo: AtividadeEntidadeTipo.SAAS_ASSINATURA,
-            entidade_id: res.assinatura_id!,
-            acao: AtividadeAcao.SAAS_ASSINATURA_ATIVA,
-            descricao: `Assinatura ativada via plano ${res.plano_nome} até ${new Date(res.new_expiry!).toLocaleDateString("pt-BR")}`
-        });
+        await historicoService.bulkLog([
+            {
+                usuario_id: res.usuario_id!,
+                entidade_tipo: AtividadeEntidadeTipo.SAAS_FATURA,
+                entidade_id: res.fatura_id || faturaId,
+                acao: AtividadeAcao.SAAS_PAGAMENTO_RECEBIDO,
+                descricao: `Pagamento confirmado para fatura ${safeFaturaIdStr} (Valor R$ ${res.valor})`
+            },
+            {
+                usuario_id: res.usuario_id!,
+                entidade_tipo: AtividadeEntidadeTipo.SAAS_ASSINATURA,
+                entidade_id: res.assinatura_id!,
+                acao: AtividadeAcao.SAAS_ASSINATURA_ATIVA,
+                descricao: `Assinatura ativada via plano ${res.plano_nome} até ${new Date(res.new_expiry!).toLocaleDateString("pt-BR")}`
+            }
+        ]);
 
         await subscriptionReferralService.completeReferral(res.usuario_id!, res.fatura_id!);
 
@@ -206,7 +255,21 @@ export const subscriptionService = {
                 valor: typeof res.valor === "string" ? parseFloat(res.valor) : res.valor!,
                 dataVencimento: res.new_expiry!,
                 planoNome: res.plano_nome,
-            }).catch(err => logger.error({ err }, "[SubscriptionService] Falha ao notificar pagamento confirmado"));
+            }, { channels: ['WHATSAPP'] }).catch(err => logger.error({ err }, "[SubscriptionService] Falha ao notificar pagamento confirmado"));
         }
+
+        // Notificação para o Admin (Telegram)
+        const valorNumerico = typeof res.valor === "string" ? parseFloat(res.valor) : (res.valor || 0);
+        notificationService.notifyAdmin(EVENTO_ADMIN_NOVA_ASSINATURA, {
+            nomeMotorista: res.usuario_nome!,
+            telefone: res.usuario_telefone!,
+            nomePlano: res.plano_nome!,
+            valor: `R$ ${valorNumerico.toFixed(2).replace('.', ',')}`,
+            dataVencimento: new Date(res.new_expiry!).toLocaleDateString('pt-BR'),
+            usuarioId: res.usuario_id!
+        }, {
+            channels: ['TELEGRAM'],
+            jobId: `admin-nova-assinatura-${res.usuario_id}-${res.fatura_id}`
+        }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "[SubscriptionService] Falha ao notificar admin sobre assinatura paga"));
     }
 };

@@ -4,13 +4,13 @@ import { cobrancaPagamentoService } from "../services/cobranca-pagamento.service
 import { cobrancaService } from "../services/cobranca.service.js";
 import { historicoService } from "../services/historico.service.js";
 import {
-    createCobrancaSchema,
-    listCobrancasFiltersSchema,
-    registrarPagamentoManualSchema,
-    toggleNotificacoesSchema,
-    updateCobrancaSchema
+  createCobrancaSchema,
+  listCobrancasFiltersSchema,
+  registrarPagamentoManualSchema,
+  toggleNotificacoesSchema,
+  updateCobrancaSchema
 } from "../types/dtos/cobranca.dto.js";
-import { AtividadeEntidadeTipo } from "../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 
 export const cobrancaController = {
   create: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -61,15 +61,13 @@ export const cobrancaController = {
   },
 
 
-
   listNotificacoes: async (request: FastifyRequest, reply: FastifyReply) => {
     const { cobrancaId } = request.params as { cobrancaId: string };
     const historico = await historicoService.listByEntidade(AtividadeEntidadeTipo.COBRANCA, cobrancaId);
-    
-    // Mapeia para o formato que o frontend antigo ou legados esperariam,
-    // mas priorizando o conteúdo do histórico de atividades.
+
+    // Mapeia para o formato esperado pelo frontend.
     const notificacoesOldFormat = historico
-      .filter(h => h.acao === 'NOTIFICACAO_WHATSAPP')
+      .filter(h => h.acao === AtividadeAcao.NOTIFICACAO_WHATSAPP)
       .map(h => ({
         id: h.id,
         cobranca_id: h.entidade_id,

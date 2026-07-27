@@ -1,13 +1,12 @@
 import { z } from "zod";
 import { moneyToNumber } from "../../utils/currency.utils.js";
-import { CobrancaOrigem, CobrancaTipo, CobrancaTipoPagamento } from "../enums.js";
+import { CobrancaOrigem, CobrancaTipoPagamento } from "../enums.js";
 
 export const createCobrancaSchema = z.object({
     usuario_id: z.string().uuid(),
     passageiro_id: z.string().uuid().optional(),
     valor: z.union([z.number(), z.string()]).transform(v => typeof v === 'string' ? moneyToNumber(v) : v),
     data_vencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve estar no formato YYYY-MM-DD"),
-    tipo: z.nativeEnum(CobrancaTipo).optional(),
 
     mes: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),
     ano: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),
@@ -38,6 +37,7 @@ export const listCobrancasFiltersSchema = z.object({
     dataInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato inválido").optional(),
     dataFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato inválido").optional(),
     search: z.string().optional(),
+    veiculoId: z.string().optional(),
     mes: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),
     ano: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),
 });

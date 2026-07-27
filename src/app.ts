@@ -1,11 +1,14 @@
 // Aplicação Fastify compartilhada
 // Usado tanto para desenvolvimento local quanto para Vercel serverless
 import fastifyCors from "@fastify/cors";
+import fastifyHelmet from "@fastify/helmet";
+import fastifyRateLimit from "@fastify/rate-limit";
 import { fastifyRequestContext } from "@fastify/request-context";
 import * as Sentry from "@sentry/node";
 import Fastify, { FastifyInstance } from "fastify";
 import routes from "./api/routes.js";
 import { logger } from "./config/logger.js";
+import { env } from "./config/env.js";
 import { globalErrorHandler } from "./errors/errorHandler.js";
 import { setupBullBoard } from "./queues/bull-board.js";
 
@@ -23,6 +26,7 @@ export async function createApp(): Promise<FastifyInstance> {
       loggerInstance: logger as any, 
       disableRequestLogging: true,
       trustProxy: true,
+      bodyLimit: 10485760, // 10MB para permitir uploads de imagens de capa maiores
     }) as FastifyInstance;
 
     app.addHook("onResponse", (request, reply, done) => {
@@ -50,6 +54,16 @@ export async function createApp(): Promise<FastifyInstance> {
     // Global Error Handler
     app.setErrorHandler(globalErrorHandler);
 
+    // Segurança Defensiva: Proteção de Cabeçalhos HTTP (Helmet)
+    await app.register(fastifyHelmet, { global: true });
+
+    // Segurança Defensiva: Limite de Requisições (Rate Limiting)
+    await app.register(fastifyRateLimit, {
+      max: 100, // Limite de 100 requisições...
+      timeWindow: "1 minute", // ...por 1 minuto
+      // request.ip é usado por padrão, alinhado com o trustProxy
+    });
+
     // Configuração de CORS
     const envOrigins = process.env.ALLOWED_ORIGINS
       ? process.env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim())
@@ -57,13 +71,13 @@ export async function createApp(): Promise<FastifyInstance> {
 
     const defaultOrigins = [
       "http://localhost:8080",
-      "https://localhost", // Android Capacitor
-      "capacitor://localhost", // iOS Capacitor
+      "https://localhost", // Android Capacitor fallback
+      "capacitor://localhost", // iOS Capacitor fallback
       "http://localhost" // Web/General
     ];
     
     // Merge unique origins
-    const allowedOrigins = Array.from(new Set([...envOrigins, ...defaultOrigins]));
+    const allowedOrigins = Array.from(new Set([...envOrigins, ...defaultOrigins, env.FRONTEND_URL]));
 
     await app.register(fastifyCors, {
       origin: (origin, callback) => {

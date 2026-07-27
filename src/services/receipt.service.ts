@@ -7,7 +7,7 @@ import { logger } from "../config/logger.js";
 import { storageProvider } from "./providers/storage.provider.js";
 import { cobrancaRepository } from "../repositories/cobranca.repository.js";
 import { getMonthNameBR, getNowBR, formatToBrazilianDate } from "../utils/date.utils.js";
-import { formatCurrency, capitalize, formatPaymentMethod } from "../utils/format.js";
+import { formatCurrency, capitalize, formatPaymentMethod, formatCpfCnpj } from "../utils/format.js";
 
 // Utilitário para caminhos absolutos em ESM
 const __filename = fileURLToPath(import.meta.url);
@@ -25,7 +25,7 @@ export interface ReceiptData {
     mes?: number;
     ano?: number;
     pagadorDocumento?: string;
-    descricao?: string; // Ex: Mensalidade
+    descricao?: string; // Ex: Parcela
     vencimento?: string;
     metodoPagamento: string;
     tipo: 'PASSAGEIRO' | 'ASSINATURA';
@@ -157,9 +157,9 @@ class ReceiptService {
                                     children: [
                                         this.renderRow("Pagador", pagadorFormatado),
                                         passageiroFormatado ? this.renderRow("Passageiro", passageiroFormatado) : null,
-                                        data.pagadorDocumento ? this.renderRow("CPF/CNPJ", data.pagadorDocumento) : null,
+                                        data.pagadorDocumento ? this.renderRow("CPF/CNPJ", formatCpfCnpj(data.pagadorDocumento)) : null,
                                         this.renderRow("Data do Pagamento", data.data),
-                                        data.mes ? this.renderRow("Referente a", `${data.descricao || 'Mensalidade'} - ${referencia}`) :
+                                        data.mes ? this.renderRow("Mês de Referência", `${data.descricao || 'Parcela'} de ${referencia}`) :
                                             (data.descricao ? this.renderRow("Referente a", data.descricao) : null),
                                     ].filter(Boolean)
                                 }
@@ -260,7 +260,7 @@ class ReceiptService {
                 mes: cobranca.mes,
                 ano: cobranca.ano,
                 pagadorDocumento: passageiroInfo?.cpf_responsavel,
-                descricao: cobranca.mes ? "Mensalidade" : "Cobrança Avulsa",
+                descricao: cobranca.mes ? "Parcela" : "Cobrança Avulsa",
                 metodoPagamento: cobranca.tipo_pagamento,
                 tipo: 'PASSAGEIRO'
             };

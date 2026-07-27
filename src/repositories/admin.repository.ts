@@ -14,17 +14,31 @@ export const adminRepository = {
                 .eq("ativo", true),
             supabaseAdmin
                 .from("assinaturas")
-                .select("status"),
+                .select("status, data_vencimento"),
             supabaseAdmin
                 .from("assinatura_faturas")
                 .select("valor, status")
                 .eq("status", "PAID"),
             supabaseAdmin
                 .from("usuarios")
-                .select("id, nome, email, telefone, created_at, tipo, assinaturas(status)")
+                .select("id, nome, email, telefone, created_at, tipo, assinaturas(status, data_vencimento)")
                 .eq("tipo", UserType.MOTORISTA)
                 .order("created_at", { ascending: false })
                 .limit(10),
+            supabaseAdmin
+                .from("usuarios")
+                .select("canal_aquisicao, dispositivo_cadastro")
+                .eq("tipo", UserType.MOTORISTA),
+            supabaseAdmin
+                .from("contratos")
+                .select("id, status, valor_total"),
+            supabaseAdmin
+                .from("usuarios")
+                .select("config_contrato, assinatura_digital_url")
+                .eq("tipo", UserType.MOTORISTA),
+            supabaseAdmin
+                .from("indicacoes")
+                .select("id, status, indicador_id, indicado_id"),
         ]);
     },
 
@@ -36,7 +50,9 @@ export const adminRepository = {
             .order("created_at", { ascending: false })
             .range(query.from, query.to);
 
-        if (query.searchClean) {
+        if (query.isId) {
+            q = q.eq("id", query.searchClean);
+        } else if (query.searchClean) {
             if (query.digits && query.digits.length >= 3) {
                 q = q.or(`nome.ilike.%${query.searchClean}%,telefone.ilike.%${query.digits}%`);
             } else {
@@ -58,10 +74,64 @@ export const adminRepository = {
             .eq("usuario_id", userId);
 
         if (filters?.dataInicio) {
-            query = query.gte("created_at", `${filters.dataInicio}T00:00:00`);
+            const inicio = filters.dataInicio.length === 10 ? `${filters.dataInicio}T00:00:00.000-03:00` : filters.dataInicio;
+            query = query.gte("created_at", inicio);
         }
         if (filters?.dataFim) {
-            query = query.lte("created_at", `${filters.dataFim}T23:59:59`);
+            const fim = filters.dataFim.length === 10 ? `${filters.dataFim}T23:59:59.999-03:00` : filters.dataFim;
+            query = query.lte("created_at", fim);
+        }
+        if (filters?.acao) {
+            query = query.eq("acao", filters.acao);
+        }
+        if (filters?.entidade) {
+            query = query.eq("entidade_tipo", filters.entidade);
+        }
+
+        return query
+            .order("created_at", { ascending: false })
+            .range(from, to);
+    },
+
+    async getGlobalLogs(
+        from: number,
+        to: number,
+        filters?: { dataInicio?: string; dataFim?: string; acao?: string; entidade?: string; search_cpf?: string }
+    ) {
+        let query = supabaseAdmin
+            .from("historico_atividades")
+            .select("*, usuarios(nome, telefone)", { count: "exact" });
+
+        if (filters?.search_cpf) {
+            const cleanSearch = filters.search_cpf.trim();
+            const digits = cleanSearch.replace(/\D/g, "");
+            const isId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanSearch);
+
+            if (isId) {
+                query = query.in("usuario_id", [cleanSearch]);
+            } else {
+                let userQuery = supabaseAdmin.from("usuarios").select("id");
+                if (digits && digits.length >= 3) {
+                    userQuery = userQuery.or(`cpfcnpj.ilike.%${digits}%,telefone.ilike.%${digits}%`);
+                } else if (cleanSearch) {
+                    userQuery = userQuery.or(`nome.ilike.%${cleanSearch}%`);
+                }
+                const { data: uData } = await userQuery;
+                if (uData && uData.length > 0) {
+                    query = query.in("usuario_id", uData.map((u: any) => u.id));
+                } else {
+                    return { data: [], count: 0, error: null };
+                }
+            }
+        }
+
+        if (filters?.dataInicio) {
+            const inicio = filters.dataInicio.length === 10 ? `${filters.dataInicio}T00:00:00.000-03:00` : filters.dataInicio;
+            query = query.gte("created_at", inicio);
+        }
+        if (filters?.dataFim) {
+            const fim = filters.dataFim.length === 10 ? `${filters.dataFim}T23:59:59.999-03:00` : filters.dataFim;
+            query = query.lte("created_at", fim);
         }
         if (filters?.acao) {
             query = query.eq("acao", filters.acao);
@@ -99,7 +169,28 @@ export const adminRepository = {
                 .from("planos")
                 .select("id, nome, identificador, valor, valor_promocional, ativo")
                 .eq("ativo", true)
-                .order("valor", { ascending: true })
+                .order("valor", { ascending: true }),
+            supabaseAdmin
+                .from("veiculos")
+                .select("id", { count: "exact", head: true })
+                .eq("usuario_id", userId),
+            supabaseAdmin
+                .from("escolas")
+                .select("id", { count: "exact", head: true })
+                .eq("usuario_id", userId),
+            supabaseAdmin
+                .from("passageiros")
+                .select("id", { count: "exact", head: true })
+                .eq("usuario_id", userId),
+            supabaseAdmin
+                .from("pre_passageiros")
+                .select("id", { count: "exact", head: true })
+                .eq("usuario_id", userId),
+            supabaseAdmin
+                .from("contratos")
+                .select("*, passageiros(id, nome, cpf, responsavel_nome, responsavel_telefone)")
+                .eq("usuario_id", userId)
+                .order("created_at", { ascending: false }),
         ]);
     },
 
@@ -133,7 +224,7 @@ export const adminRepository = {
     async getSubscriptionForUser(userId: string) {
         return supabaseAdmin
             .from("assinaturas")
-            .select("id, status")
+            .select("id, status, plano_id")
             .eq("usuario_id", userId)
             .order("created_at", { ascending: false })
             .limit(1)
@@ -145,5 +236,12 @@ export const adminRepository = {
             .from("assinaturas")
             .update(data)
             .eq("id", id);
+    },
+
+    async getWhatsappInstances() {
+        return supabaseAdmin
+            .from("whatsapp_instances")
+            .select("*")
+            .order("created_at", { ascending: true });
     }
 };

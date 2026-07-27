@@ -1,4 +1,6 @@
 import { CompositeMessagePart } from "../../types/dtos/whatsapp.dto.js";
+import { env } from "../../config/env.js";
+import { logger } from "../../config/logger.js";
 
 import {
     EVENTO_MOTORISTA_ASSINATURA_PAGO,
@@ -7,17 +9,12 @@ import {
     EVENTO_MOTORISTA_ASSINATURA_ATRASADA,
     EVENTO_MOTORISTA_TESTE_BOAS_VINDAS,
     EVENTO_MOTORISTA_TESTE_ENCERRADO,
-    EVENTO_MOTORISTA_TESTE_EXPIRANDO,
-    EVENTO_MOTORISTA_TESTE_HOJE,
     EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO,
     EVENTO_MOTORISTA_CARTAO_COBRANCA_AVISO,
     EVENTO_MOTORISTA_CONTRATO_ASSINADO,
-    EVENTO_MOTORISTA_TRIAL_D7_ENGAJADO,
-    EVENTO_MOTORISTA_TRIAL_D7_INATIVO,
     EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO,
     EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1,
     EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2,
-    EVENTO_MOTORISTA_TRIAL_RECUPERACAO_FINAL,
     EVENTO_MOTORISTA_RENOVACAO_LEMBRETE,
     EVENTO_MOTORISTA_RENOVACAO_URGENCIA,
     EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_1,
@@ -38,6 +35,13 @@ import {
     EVENTO_AUTH_SENHA_ALTERADA,
     EVENTO_MOTORISTA_CADASTRO_ADMIN,
     EVENTO_MOTORISTA_RESET_SENHA_ADMIN,
+    EVENTO_MOTORISTA_INDICACAO_BONUS,
+    EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA,
+    EVENTO_ADMIN_NOVO_CADASTRO,
+    EVENTO_ADMIN_NOVA_ASSINATURA,
+    EVENTO_ADMIN_ASSINATURA_CANCELADA,
+    EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO,
+    EVENTO_ADMIN_SISTEMA_ALERTA,
     GLOBAL_WHATSAPP_INSTANCE
 } from "../../config/constants.js";
 import { DriverContext, DriverTemplates } from "./templates/driver.template.js";
@@ -47,14 +51,23 @@ import { NotificationProviderAdapter } from "./ports/notification-provider.port.
 import { EvolutionWhatsappQueueAdapter } from "./adapters/evolution.adapter.js";
 import { MockSmsAdapter } from "./adapters/mock-sms.adapter.js";
 import { MockEmailAdapter } from "./adapters/mock-email.adapter.js";
+import { TelegramAdapter } from "./adapters/telegram.adapter.js";
+import {
+    AdminRegistrationContext,
+    AdminSubscriptionContext,
+    AdminPaymentFailedContext,
+    AdminSystemAlertContext,
+    AdminTemplates
+} from "./templates/admin.template.js";
 
-export type NotificationChannel = "WHATSAPP" | "SMS" | "EMAIL";
+export type NotificationChannel = "WHATSAPP" | "SMS" | "EMAIL" | "TELEGRAM";
 
 export interface NotificationOptions {
-    channels?: NotificationChannel[];
+    channels: NotificationChannel[];
     whatsapp?: {
         instanceName?: string;
     };
+    jobId?: string;
 }
 
 type PassengerEventType =
@@ -62,10 +75,7 @@ type PassengerEventType =
     | typeof EVENTO_PASSAGEIRO_VENCIMENTO_HOJE
     | typeof EVENTO_PASSAGEIRO_ATRASADO
     | typeof EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL
-    | typeof EVENTO_PASSAGEIRO_CONTRATO_ASSINADO
-    | typeof EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_AVISO
-    | typeof EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_HOJE
-    | typeof EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_ATRASO;
+    | typeof EVENTO_PASSAGEIRO_CONTRATO_ASSINADO;
 
 export type RouteEventType =
     | typeof EVENTO_ROTA_A_CAMINHO_IDA
@@ -75,15 +85,10 @@ export type RouteEventType =
 
 export type DriverEventType =
     | typeof EVENTO_MOTORISTA_TESTE_BOAS_VINDAS
-    | typeof EVENTO_MOTORISTA_TESTE_EXPIRANDO
     | typeof EVENTO_MOTORISTA_TESTE_ENCERRADO
-    | typeof EVENTO_MOTORISTA_TESTE_HOJE
-    | typeof EVENTO_MOTORISTA_TRIAL_D7_ENGAJADO
-    | typeof EVENTO_MOTORISTA_TRIAL_D7_INATIVO
     | typeof EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO
     | typeof EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1
     | typeof EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2
-    | typeof EVENTO_MOTORISTA_TRIAL_RECUPERACAO_FINAL
     | typeof EVENTO_MOTORISTA_ASSINATURA_VENCENDO
     | typeof EVENTO_MOTORISTA_ASSINATURA_VENCEU
     | typeof EVENTO_MOTORISTA_ASSINATURA_ATRASADA
@@ -98,7 +103,16 @@ export type DriverEventType =
     | typeof EVENTO_AUTH_RECUPERACAO_SENHA
     | typeof EVENTO_AUTH_SENHA_ALTERADA
     | typeof EVENTO_MOTORISTA_CADASTRO_ADMIN
-    | typeof EVENTO_MOTORISTA_RESET_SENHA_ADMIN;
+    | typeof EVENTO_MOTORISTA_RESET_SENHA_ADMIN
+    | typeof EVENTO_MOTORISTA_INDICACAO_BONUS
+    | typeof EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA;
+
+export type AdminEventType =
+    | typeof EVENTO_ADMIN_NOVO_CADASTRO
+    | typeof EVENTO_ADMIN_NOVA_ASSINATURA
+    | typeof EVENTO_ADMIN_ASSINATURA_CANCELADA
+    | typeof EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO
+    | typeof EVENTO_ADMIN_SISTEMA_ALERTA;
 
 class NotificationService {
     // Registro dos Adapters que farão o disparo real (ou envio para a fila)
@@ -108,7 +122,8 @@ class NotificationService {
         this.adapters = {
             "WHATSAPP": new EvolutionWhatsappQueueAdapter(),
             "SMS": new MockSmsAdapter(),
-            "EMAIL": new MockEmailAdapter()
+            "EMAIL": new MockEmailAdapter(),
+            "TELEGRAM": new TelegramAdapter()
         };
     }
 
@@ -120,7 +135,7 @@ class NotificationService {
         to: string,
         type: PassengerEventType,
         ctx: PassengerContext & { reciboUrl?: string },
-        options: NotificationOptions = {}
+        options: NotificationOptions
     ): Promise<boolean> {
 
         let parts: CompositeMessagePart[] = [];
@@ -131,9 +146,6 @@ class NotificationService {
             case EVENTO_PASSAGEIRO_ATRASADO: parts = PassengerTemplates.overdue(ctx); break;
             case EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL: parts = PassengerTemplates.contractAvailable(ctx); break;
             case EVENTO_PASSAGEIRO_CONTRATO_ASSINADO: parts = PassengerTemplates.contractSignedBySelf(ctx); break;
-            case EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_AVISO: parts = PassengerTemplates.dueSoonManual(ctx); break;
-            case EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_HOJE: parts = PassengerTemplates.dueTodayManual(ctx); break;
-            case EVENTO_PASSAGEIRO_COBRANCA_PIX_MANUAL_ATRASO: parts = PassengerTemplates.overdueManual(ctx); break;
         }
 
         return await this._processAndEnqueue(to, parts, type as string, options);
@@ -169,40 +181,70 @@ class NotificationService {
         to: string,
         type: DriverEventType,
         ctx: DriverContext & { nomePagador?: string, nomePassageiro?: string, diasAtraso?: number, reciboUrl?: string, trialDays?: number },
-        options: NotificationOptions = {}
+        options: NotificationOptions
     ): Promise<boolean> {
 
         let parts: CompositeMessagePart[] = [];
 
         switch (type) {
-            case EVENTO_MOTORISTA_TESTE_BOAS_VINDAS:            parts = DriverTemplates.welcomeTrial(ctx); break;
-            case EVENTO_MOTORISTA_TESTE_EXPIRANDO:              parts = DriverTemplates.trialExpiring(ctx); break;
-            case EVENTO_MOTORISTA_TESTE_HOJE:                  parts = DriverTemplates.trialToday(ctx); break;
-            case EVENTO_MOTORISTA_TESTE_ENCERRADO:              parts = DriverTemplates.trialEnded(ctx); break;
-            case EVENTO_MOTORISTA_TRIAL_D7_ENGAJADO:            parts = DriverTemplates.trialMidpointEngaged(ctx); break;
-            case EVENTO_MOTORISTA_TRIAL_D7_INATIVO:             parts = DriverTemplates.trialMidpointInactive(ctx); break;
-            case EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO:       parts = DriverTemplates.trialLastCall(ctx); break;
-            case EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1:          parts = DriverTemplates.trialRecovery1(ctx); break;
-            case EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2:          parts = DriverTemplates.trialRecovery2(ctx); break;
-            case EVENTO_MOTORISTA_TRIAL_RECUPERACAO_FINAL:      parts = DriverTemplates.trialRecoveryFinal(ctx); break;
-            case EVENTO_MOTORISTA_ASSINATURA_PAGO:              parts = DriverTemplates.paymentConfirmed(ctx); break;
-            case EVENTO_MOTORISTA_ASSINATURA_VENCENDO:          parts = DriverTemplates.dueSoon(ctx); break;
-            case EVENTO_MOTORISTA_ASSINATURA_VENCEU:            parts = DriverTemplates.dueToday(ctx); break;
-            case EVENTO_MOTORISTA_ASSINATURA_ATRASADA:          parts = DriverTemplates.overdue(ctx); break;
-            case EVENTO_MOTORISTA_RENOVACAO_LEMBRETE:           parts = DriverTemplates.renewalLembrete(ctx); break;
-            case EVENTO_MOTORISTA_RENOVACAO_URGENCIA:           parts = DriverTemplates.renewalUrgencia(ctx); break;
-            case EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_1:      parts = DriverTemplates.renewalRecovery1(ctx); break;
-            case EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_FINAL:  parts = DriverTemplates.renewalRecoveryFinal(ctx); break;
-            case EVENTO_MOTORISTA_CONTRATO_ASSINADO:            parts = DriverTemplates.contractSigned(ctx); break;
-            case EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO:      parts = DriverTemplates.failedCC(ctx); break;
-            case EVENTO_MOTORISTA_CARTAO_COBRANCA_AVISO:        parts = DriverTemplates.cardChargeNotice(ctx); break;
-            case EVENTO_AUTH_RECUPERACAO_SENHA:                 parts = DriverTemplates.authRecovery(ctx); break;
-            case EVENTO_AUTH_SENHA_ALTERADA:                    parts = DriverTemplates.passwordChanged(ctx); break;
-            case EVENTO_MOTORISTA_CADASTRO_ADMIN:               parts = DriverTemplates.welcomeAdminCreated(ctx); break;
-            case EVENTO_MOTORISTA_RESET_SENHA_ADMIN:            parts = DriverTemplates.adminResetPassword(ctx); break;
+            case EVENTO_MOTORISTA_TESTE_BOAS_VINDAS: parts = DriverTemplates.welcomeTrial(ctx); break;
+            case EVENTO_MOTORISTA_TESTE_ENCERRADO: parts = DriverTemplates.trialEnded(ctx); break;
+            case EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO: parts = DriverTemplates.trialLastCall(ctx); break;
+            case EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1: parts = DriverTemplates.trialRecovery1(ctx); break;
+            case EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2: parts = DriverTemplates.trialRecovery2(ctx); break;
+            case EVENTO_MOTORISTA_ASSINATURA_PAGO: parts = DriverTemplates.paymentConfirmed(ctx); break;
+            case EVENTO_MOTORISTA_ASSINATURA_VENCENDO: parts = DriverTemplates.dueSoon(ctx); break;
+            case EVENTO_MOTORISTA_ASSINATURA_VENCEU: parts = DriverTemplates.dueToday(ctx); break;
+            case EVENTO_MOTORISTA_ASSINATURA_ATRASADA: parts = DriverTemplates.overdue(ctx); break;
+            case EVENTO_MOTORISTA_RENOVACAO_LEMBRETE: parts = DriverTemplates.renewalLembrete(ctx); break;
+            case EVENTO_MOTORISTA_RENOVACAO_URGENCIA: parts = DriverTemplates.renewalUrgencia(ctx); break;
+            case EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_1: parts = DriverTemplates.renewalRecovery1(ctx); break;
+            case EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_FINAL: parts = DriverTemplates.renewalRecoveryFinal(ctx); break;
+            case EVENTO_MOTORISTA_CONTRATO_ASSINADO: parts = DriverTemplates.contractSigned(ctx); break;
+            case EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO: parts = DriverTemplates.failedCC(ctx); break;
+            case EVENTO_MOTORISTA_CARTAO_COBRANCA_AVISO: parts = DriverTemplates.cardChargeNotice(ctx); break;
+            case EVENTO_AUTH_RECUPERACAO_SENHA: parts = DriverTemplates.authRecovery(ctx); break;
+            case EVENTO_AUTH_SENHA_ALTERADA: parts = DriverTemplates.passwordChanged(ctx); break;
+            case EVENTO_MOTORISTA_CADASTRO_ADMIN: parts = DriverTemplates.welcomeAdminCreated(ctx); break;
+            case EVENTO_MOTORISTA_RESET_SENHA_ADMIN: parts = DriverTemplates.adminResetPassword(ctx); break;
+            case EVENTO_MOTORISTA_INDICACAO_BONUS: parts = DriverTemplates.referralBonusReceived(ctx); break;
+            case EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA: parts = DriverTemplates.birthdayReminderWeekly(ctx); break;
         }
 
         return await this._processAndEnqueue(to, parts, type as string, options);
+    }
+
+    /**
+     * Envia notificação para Administrador
+     */
+    async notifyAdmin(
+        type: AdminEventType,
+        ctx: AdminRegistrationContext | AdminSubscriptionContext | AdminPaymentFailedContext | AdminSystemAlertContext,
+        options: NotificationOptions
+    ): Promise<boolean> {
+
+        let parts: CompositeMessagePart[] = [];
+
+        switch (type) {
+            case EVENTO_ADMIN_NOVO_CADASTRO:
+                parts = AdminTemplates.newRegistration(ctx as AdminRegistrationContext);
+                break;
+            case EVENTO_ADMIN_NOVA_ASSINATURA:
+                parts = AdminTemplates.newSubscription(ctx as AdminSubscriptionContext);
+                break;
+            case EVENTO_ADMIN_ASSINATURA_CANCELADA:
+                parts = AdminTemplates.subscriptionCanceled(ctx as AdminSubscriptionContext);
+                break;
+            case EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO:
+                parts = AdminTemplates.paymentFailed(ctx as AdminPaymentFailedContext);
+                break;
+            case EVENTO_ADMIN_SISTEMA_ALERTA:
+                parts = AdminTemplates.systemAlert(ctx as AdminSystemAlertContext);
+                break;
+        }
+
+        // Para Admin, o 'to' não importa porque o chatId está no .env, passamos vazio
+        return await this._processAndEnqueue("", parts, type as string, options);
     }
 
     /**
@@ -212,11 +254,21 @@ class NotificationService {
         to: string,
         parts: CompositeMessagePart[],
         eventType: string,
-        options: NotificationOptions = {}
+        options: NotificationOptions
     ): Promise<boolean> {
         if (!parts || parts.length === 0) return false;
 
-        const { channels = ["WHATSAPP"], whatsapp: whatsappOptions } = options;
+        if (process.env.NODE_ENV !== "production") {
+            const devFlag = "\n\n*[AMBIENTE DEV]*";
+            const lastPartWithText = [...parts].reverse().find(p => p.type === "text" || p.content !== undefined);
+            if (lastPartWithText) {
+                lastPartWithText.content = (lastPartWithText.content || "") + devFlag;
+            } else {
+                parts.push({ type: "text", content: devFlag });
+            }
+        }
+
+        const { channels, whatsapp: whatsappOptions } = options;
 
         try {
             const results: Promise<boolean>[] = [];
@@ -226,7 +278,8 @@ class NotificationService {
                 if (adapter) {
                     const providerOptions = {
                         eventType,
-                        instanceName: channel === "WHATSAPP" ? (whatsappOptions?.instanceName || GLOBAL_WHATSAPP_INSTANCE) : undefined
+                        instanceName: channel === "WHATSAPP" ? (whatsappOptions?.instanceName || GLOBAL_WHATSAPP_INSTANCE) : undefined,
+                        jobId: options?.jobId
                     };
                     results.push(adapter.sendComposite(to, parts, providerOptions));
                 }

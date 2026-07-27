@@ -121,6 +121,11 @@ export const getMonthNameBR = (monthNumber?: number): string => {
   return names[monthNumber - 1];
 };
 
+export const getShortWeekDayBR = (date: Date): string => {
+  const days = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+  return days[date.getDay()];
+};
+
 export const getLastDayOfMonth = (year: number, month: number): number => {
   return new Date(year, month, 0).getDate();
 };

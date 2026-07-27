@@ -49,6 +49,7 @@ services:
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - EVOLUTION_API_URL=http://evolution_api:8080
       - EVOLUTION_API_KEY=${EVOLUTION_API_KEY}
+      - FRONTEND_URL=${FRONTEND_URL}
       # Adicione outras variáveis de ambiente necessárias aqui
     depends_on:
       - redis

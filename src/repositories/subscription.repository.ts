@@ -12,14 +12,18 @@ export const subscriptionRepository = {
             .maybeSingle();
     },
 
-    async createTrial(userId: string, planoId: string, trialEndsAtIso: string) {
+    async createTrial(userId: string, planoId: string, trialEndsAtIso: string, valorBaseMensal?: number, valorPromocionalMensal?: number, valorBaseAnual?: number, valorPromocionalAnual?: number) {
         return supabaseAdmin
             .from("assinaturas")
             .insert({
                 usuario_id: userId,
                 plano_id: planoId,
                 status: SubscriptionStatus.TRIAL,
-                trial_ends_at: trialEndsAtIso
+                trial_ends_at: trialEndsAtIso,
+                valor_base_mensal: valorBaseMensal,
+                valor_promocional_mensal: valorPromocionalMensal,
+                valor_base_anual: valorBaseAnual,
+                valor_promocional_anual: valorPromocionalAnual
             })
             .select("*, planos(*)")
             .single();
@@ -90,7 +94,21 @@ export const subscriptionRepository = {
             .eq("id", id);
     },
 
+    async extendTrial(id: string, newTrialEnd: string) {
+        return supabaseAdmin
+            .from("assinaturas")
+            .update({ trial_ends_at: newTrialEnd, updated_at: new Date().toISOString() })
+            .eq("id", id);
+    },
+
     async confirmInvoicePaymentRpc(faturaId: string) {
         return supabaseAdmin.rpc("confirm_invoice_payment", { p_fatura_id: faturaId });
+    },
+
+    async updatePlan(id: string, planoId: string) {
+        return supabaseAdmin
+            .from("assinaturas")
+            .update({ plano_id: planoId, updated_at: new Date().toISOString() })
+            .eq("id", id);
     }
 };

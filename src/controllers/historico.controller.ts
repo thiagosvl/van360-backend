@@ -6,8 +6,7 @@ import { AtividadeEntidadeTipo } from "../types/enums.js";
 export const historicoController = {
   listByEntidade: async (request: FastifyRequest, reply: FastifyReply) => {
     const { entidadeTipo, entidadeId } = request.params as { entidadeTipo: string; entidadeId: string };
-    
-    // Validar se o tipo de entidade é válido
+
     if (!Object.values(AtividadeEntidadeTipo).includes(entidadeTipo as any)) {
       throw new AppError("Tipo de entidade inválido", 400);
     }

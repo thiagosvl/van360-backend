@@ -5,7 +5,8 @@ import {
     ConfigKey,
     AtividadeAcao,
     AtividadeEntidadeTipo,
-    PaymentProvider
+    PaymentProvider,
+    SubscriptionIdentifer
 } from "../../types/enums.js";
 import { getConfig, getConfigNumber } from "../configuracao.service.js";
 import { historicoService } from "../historico.service.js";
@@ -25,11 +26,37 @@ export const subscriptionBillingService = {
 
         if (!plano) throw new Error(`Plano '${planIdentificador}' não encontrado.`);
 
-        const isPromotionActive = await getConfig(ConfigKey.SAAS_PROMOCAO_ATIVA, "false") === "true";
+        const sub = await subscriptionService.getOrCreateSubscription(userId);
+        if (!sub) throw new Error("Erro ao obter assinatura do usuário.");
 
         let valorFinal = Number(plano.valor);
+
+        // Define which base/promo values to look at based on the requested plan
+        const isAnual = planIdentificador === SubscriptionIdentifer.YEARLY;
+        const subValorBase = isAnual ? sub.valor_base_anual : sub.valor_base_mensal;
+        const subValorPromo = isAnual ? sub.valor_promocional_anual : sub.valor_promocional_mensal;
+
+        if (subValorBase !== null && subValorBase !== undefined) {
+            valorFinal = Number(subValorBase);
+        }
+
+        const isPromotionActive = await getConfig(ConfigKey.SAAS_PROMOCAO_ATIVA, "false") === "true";
+
         if (isPromotionActive && plano.valor_promocional) {
             valorFinal = Number(plano.valor_promocional);
+        }
+
+        if (subValorPromo !== null && subValorPromo !== undefined) {
+            if (!sub.data_fim_promocao) {
+                // Definitivo
+                valorFinal = Number(subValorPromo);
+            } else {
+                const fim = new Date(sub.data_fim_promocao).getTime();
+                const agora = getNowBR().getTime();
+                if (fim >= agora) {
+                    valorFinal = Number(subValorPromo);
+                }
+            }
         }
 
         const { data: indicacao } = await referralRepository.getPendingReferralByIndicadoId(userId);
@@ -94,6 +121,11 @@ export const subscriptionBillingService = {
         const sub = await subscriptionService.getOrCreateSubscription(userId);
         if (!sub) throw new Error("Erro ao obter assinatura.");
 
+        if (sub.plano_id !== planId) {
+            await subscriptionRepository.updatePlan(sub.id, planId);
+            sub.plano_id = planId;
+        }
+
         let currentPaymentToken = paymentToken;
         let preferredMethodId: string | null = sub.metodo_pagamento_preferencial_id;
 
@@ -136,7 +168,7 @@ export const subscriptionBillingService = {
                 customer: {
                     name: user.nome,
                     document: user.cpfcnpj,
-                    email: user.email || "financeiro@van360.com.br",
+                    email: user.email,
                     phone: user.telefone || "11999999999",
                     birth: birth || "1980-01-01"
                 },
@@ -169,15 +201,14 @@ export const subscriptionBillingService = {
                 });
 
                 if (failedInvoice) {
-                    await historicoService.log({
-                        usuario_id: userId,
-                        entidade_tipo: AtividadeEntidadeTipo.SAAS_FATURA,
-                        entidade_id: failedInvoice.id,
-                        acao: AtividadeAcao.SAAS_FATURA_GERADA,
-                        descricao: `Exceção na cobrança automática via ${paymentMethod.toUpperCase()} (Valor R$ ${valor}): ${errMsg}`
-                    });
-
                     try {
+                        await historicoService.log({
+                            usuario_id: userId,
+                            entidade_tipo: AtividadeEntidadeTipo.SAAS_FATURA,
+                            entidade_id: failedInvoice.id,
+                            acao: AtividadeAcao.SAAS_FATURA_RECUSADA,
+                            descricao: `Tentativa de pagamento recusada/falha de conexão: ${errMsg}`
+                        });
                         await invoiceRepository.cancelIncompleteInvoicesByUserId(userId, getNowBR().toISOString(), failedInvoice.id);
                     } catch (cleanupErr) {
                         logger.error({ cleanupErr, userId }, "[SubscriptionBillingService] Falha ao limpar faturas pendentes/recusadas anteriores.");
@@ -207,15 +238,14 @@ export const subscriptionBillingService = {
                 });
 
                 if (failedInvoice) {
-                    await historicoService.log({
-                        usuario_id: userId,
-                        entidade_tipo: AtividadeEntidadeTipo.SAAS_FATURA,
-                        entidade_id: failedInvoice.id,
-                        acao: AtividadeAcao.SAAS_FATURA_GERADA,
-                        descricao: `Tentativa falhou via ${paymentMethod.toUpperCase()} (Valor R$ ${valor}): ${chargeRes.error}`
-                    });
-
                     try {
+                        await historicoService.log({
+                            usuario_id: userId,
+                            entidade_tipo: AtividadeEntidadeTipo.SAAS_FATURA,
+                            entidade_id: failedInvoice.id,
+                            acao: AtividadeAcao.SAAS_FATURA_RECUSADA,
+                            descricao: `Tentativa de pagamento recusada: ${chargeRes.error}`
+                        });
                         await invoiceRepository.cancelIncompleteInvoicesByUserId(userId, getNowBR().toISOString(), failedInvoice.id);
                     } catch (cleanupErr) {
                         logger.error({ cleanupErr, userId }, "[SubscriptionBillingService] Falha ao limpar faturas pendentes/recusadas anteriores.");
@@ -286,18 +316,17 @@ export const subscriptionBillingService = {
         if (fError || !fatura) throw fError || new Error("Erro ao criar fatura");
 
         try {
+            await historicoService.log({
+                usuario_id: userId,
+                entidade_tipo: AtividadeEntidadeTipo.SAAS_FATURA,
+                entidade_id: fatura.id,
+                acao: AtividadeAcao.SAAS_FATURA_GERADA,
+                descricao: `Cobrança gerada (${paymentMethod === CheckoutPaymentMethod.PIX ? 'Pix' : 'Cartão de Crédito'}). Valor: R$ ${valor.toFixed(2).replace('.', ',')}`
+            });
             await invoiceRepository.cancelIncompleteInvoicesByUserId(userId, getNowBR().toISOString(), fatura.id);
         } catch (err: unknown) {
             logger.error({ err, userId }, "[SubscriptionBillingService] Falha ao cancelar faturas pendentes/recusadas anteriores.");
         }
-
-        await historicoService.log({
-            usuario_id: userId,
-            entidade_tipo: AtividadeEntidadeTipo.SAAS_FATURA,
-            entidade_id: fatura.id,
-            acao: AtividadeAcao.SAAS_FATURA_GERADA,
-            descricao: `Nova fatura gerada via ${paymentMethod.toUpperCase()} (Valor R$ ${valor})`
-        });
 
         return fatura;
     }

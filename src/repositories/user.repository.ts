@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "../config/supabase.js";
+import { SubscriptionStatus, STATUS_ASSINATURA_LIBERADA } from "../types/enums.js";
 
 export const userRepository = {
     async getById(id: string) {
@@ -21,7 +22,7 @@ export const userRepository = {
     async getProfileData(id: string) {
         return supabaseAdmin
             .from("usuarios")
-            .select("id, nome, cpfcnpj, telefone, config_contrato, chave_pix, tipo_chave_pix, data_nascimento, logradouro, numero, bairro, cidade, estado, cep")
+            .select("id, nome, razao_social, cpfcnpj, telefone, config_contrato, chave_pix, tipo_chave_pix, data_nascimento, logradouro, numero, bairro, cidade, estado, cep, canal_aquisicao, dispositivo_cadastro, metadados_cadastro, created_at")
             .eq("id", id)
             .single();
     },
@@ -50,12 +51,26 @@ export const userRepository = {
     },
 
     async listMotoristasAtivos() {
-        return supabaseAdmin
+        // Usa !inner para garantir que só retorna usuários que possuem uma assinatura válida (não expirada/cancelada)
+        const { data, error } = await supabaseAdmin
             .from("usuarios")
-            .select("id")
+            .select(`
+                id, 
+                telefone, 
+                nome,
+                assinaturas!inner(status)
+            `)
             .eq("ativo", true)
-            .eq("tipo", "motorista");
+            .eq("tipo", "motorista")
+            .in("assinaturas.status", STATUS_ASSINATURA_LIBERADA);
+
+        if (error) {
+            throw error;
+        }
+
+        return { data, error: null };
     },
+
 
     async getByEmail(email: string) {
         return supabaseAdmin

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { moneyToNumber } from "../../utils/currency.utils.js";
 import { parseLocalDate } from "../../utils/date.utils.js";
+import { ParentescoResponsavel } from "../enums.js";
 
 const optionalString = z.union([z.string(), z.null(), z.undefined()]).transform(v => {
   if (v === undefined) return undefined;
@@ -10,69 +11,83 @@ const optionalString = z.union([z.string(), z.null(), z.undefined()]).transform(
 const optionalNumber = z.union([z.number(), z.string().length(0).transform(() => undefined), z.string().min(1).transform(val => Number(val))]).optional();
 
 export const createPassageiroSchema = z.object({
-    nome: z.string().min(1, "Nome é obrigatório"),
-    usuario_id: z.string().uuid("ID do usuário inválido"),
-    escola_id: z.string().uuid().optional().nullable().or(z.literal("")).transform(v => (v === "" || v === "none") ? null : v),
-    veiculo_id: z.string().uuid().optional().nullable().or(z.literal("")).transform(v => (v === "" || v === "none") ? null : v),
-    // Campos do App antigo / Flexíveis
-    nome_responsavel: optionalString,
-    responsavel_nome: optionalString, // Alias comum
-    cpf_responsavel: optionalString,
-    responsavel_cpf: optionalString, // Alias comum
-    telefone_responsavel: optionalString,
-    responsavel_telefone: optionalString, // Alias comum
-    email_responsavel: z.string().email().optional().or(z.literal("")).transform(v => v === "" ? undefined : v),
-    
-    // Endereço
-    logradouro: optionalString,
-    endereco_logradouro: optionalString,
-    bairro: optionalString,
-    endereco_bairro: optionalString,
-    cidade: optionalString,
-    endereco_cidade: optionalString,
-    referencia: optionalString,
-    observacoes: optionalString,
-    latitude: z.union([z.number(), z.string().transform(v => v === "" ? undefined : Number(v))]).optional().nullable(),
-    longitude: z.union([z.number(), z.string().transform(v => v === "" ? undefined : Number(v))]).optional().nullable(),
+  nome: z.string().min(1, "Nome é obrigatório"),
+  usuario_id: z.string().uuid("ID do usuário inválido"),
+  escola_id: z.string().uuid().optional().nullable().or(z.literal("")).transform(v => (v === "" || v === "none") ? null : v),
+  veiculo_id: z.string().uuid().optional().nullable().or(z.literal("")).transform(v => (v === "" || v === "none") ? null : v),
+  // Campos do App antigo / Flexíveis
+  nome_responsavel: optionalString,
+  responsavel_nome: optionalString, // Alias comum
+  cpf_responsavel: optionalString,
+  responsavel_cpf: optionalString, // Alias comum
+  telefone_responsavel: optionalString,
+  responsavel_telefone: optionalString, // Alias comum
+  email_responsavel: z.string().email().optional().or(z.literal("")).transform(v => v === "" ? undefined : v),
 
-    // Financeiro
-    dia_vencimento: optionalNumber,
-    valor_cobranca: z.union([z.number(), z.string()]).transform(val => val === "" ? undefined : (typeof val === 'string' ? moneyToNumber(val) : val)).optional(), 
-    valor_mensalidade: z.union([z.number(), z.string()]).transform(val => val === "" ? undefined : (typeof val === 'string' ? moneyToNumber(val) : val)).optional(), 
 
-    // Controle
-    ativo: z.boolean().optional(),
-    enviar_notificacoes: z.boolean().optional(),
+  // Endereço
+  logradouro: optionalString,
+  endereco_logradouro: optionalString,
+  bairro: optionalString,
+  endereco_bairro: optionalString,
+  cidade: optionalString,
+  endereco_cidade: optionalString,
+  cep: optionalString,
+  referencia: optionalString,
+  complemento: optionalString,
+  observacoes: optionalString,
+  latitude: z.union([z.number(), z.string().transform(v => v === "" ? undefined : Number(v))]).optional().nullable(),
+  longitude: z.union([z.number(), z.string().transform(v => v === "" ? undefined : Number(v))]).optional().nullable(),
 
-    periodo: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
-      if (v === undefined) return undefined;
-      if (v === null || v === "") return null;
-      return v.toLowerCase();
-    }),
-    genero: optionalString,
-    
-    // Novos Campos
-    modalidade: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
-      if (v === undefined) return undefined;
-      if (v === null || v === "") return null;
-      return v;
-    }),
-    data_nascimento: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
-      if (v === undefined) return undefined;
-      if (v === null || v === "") return null;
-      return parseLocalDate(v);
-    }), // Aceita string ISO e converte
-    parentesco_responsavel: optionalString,
-    data_inicio_transporte: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
-      if (v === undefined) return undefined;
-      if (v === null || v === "") return null;
-      return parseLocalDate(v);
-    }),
-    data_fim_transporte: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
-      if (v === undefined) return undefined;
-      if (v === null || v === "") return null;
-      return parseLocalDate(v);
-    }),
+  // Financeiro
+  dia_vencimento: optionalNumber,
+  valor_cobranca: z.union([z.number(), z.string()]).transform(val => val === "" ? undefined : (typeof val === 'string' ? moneyToNumber(val) : val)).optional(),
+
+  // Controle
+  ativo: z.boolean().optional(),
+  enviar_notificacoes: z.boolean().optional(),
+
+  periodo: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
+    if (v === undefined) return undefined;
+    if (v === null || v === "") return null;
+    return v.toLowerCase();
+  }),
+  genero: optionalString,
+
+  // Novos Campos
+  modalidade: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
+    if (v === undefined) return undefined;
+    if (v === null || v === "") return null;
+    return v;
+  }),
+  data_nascimento: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
+    if (v === undefined) return undefined;
+    if (v === null || v === "") return null;
+    return parseLocalDate(v);
+  }), // Aceita string ISO e converte
+  parentesco_responsavel: optionalString,
+  turma: optionalString,
+  nome_professor: optionalString,
+  data_inicio_transporte: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
+    if (v === undefined) return undefined;
+    if (v === null || v === "") return null;
+    return parseLocalDate(v);
+  }),
+  data_fim_transporte: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
+    if (v === undefined) return undefined;
+    if (v === null || v === "") return null;
+    return parseLocalDate(v);
+  }),
+  data_inicio_cobranca: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
+    if (v === undefined) return undefined;
+    if (v === null || v === "") return null;
+    return parseLocalDate(v);
+  }),
+  data_fim_cobranca: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
+    if (v === undefined) return undefined;
+    if (v === null || v === "") return null;
+    return parseLocalDate(v);
+  }),
 
 }).passthrough(); // Permite outros campos não estritos por enquanto (migração suave)
 
@@ -82,18 +97,18 @@ export const updatePassageiroSchema = createPassageiroSchema.partial();
 export type UpdatePassageiroDTO = z.infer<typeof updatePassageiroSchema>;
 
 export const listPassageirosFiltersSchema = z.object({
-    search: z.string().optional(),
-    escola: z.string().optional(),
-    veiculo: z.string().optional(),
-    status: z.string().optional(),
-    periodo: z.string().optional(),
-    ativo: z.string().optional(), // Query params vêm como string
+  search: z.string().optional(),
+  escola: z.string().optional(),
+  veiculo: z.string().optional(),
+  status: z.string().optional(),
+  periodo: z.string().optional(),
+  ativo: z.string().optional(), // Query params vêm como string
 });
 
 export type ListPassageirosFiltersDTO = z.infer<typeof listPassageirosFiltersSchema>;
 
 export const toggleAtivoSchema = z.object({
-    novoStatus: z.boolean()
+  novoStatus: z.boolean()
 });
 
 export type ToggleAtivoDTO = z.infer<typeof toggleAtivoSchema>;
@@ -105,3 +120,28 @@ export const finalizePreCadastroSchema = z.object({
 });
 
 export type FinalizePreCadastroDTO = z.infer<typeof finalizePreCadastroSchema>;
+
+export const getAniversariantesQuerySchema = z.object({
+  mes: z.string().transform(v => Number(v)).refine(val => val >= 1 && val <= 12, "Mês inválido")
+});
+
+export const createResponsavelAdicionalSchema = z.object({
+  nome: z.string().min(2, "Nome é obrigatório"),
+  telefone: z.string().min(8, "Telefone é obrigatório"),
+  cpf: z.string().min(11, "CPF inválido"),
+  parentesco: z.nativeEnum(ParentescoResponsavel, { message: "Parentesco é obrigatório" }),
+  logradouro: z.string().min(1, "Logradouro é obrigatório"),
+  numero: z.string().min(1, "Número é obrigatório"),
+  bairro: z.string().min(1, "Bairro é obrigatório"),
+  cidade: z.string().min(1, "Cidade é obrigatório"),
+  estado: z.string().min(2, "Estado é obrigatório"),
+  cep: z.string().min(8, "CEP é obrigatório"),
+  referencia: optionalString,
+  complemento: optionalString,
+});
+
+export type CreateResponsavelAdicionalDTO = z.infer<typeof createResponsavelAdicionalSchema>;
+
+export const updateResponsavelAdicionalSchema = createResponsavelAdicionalSchema.partial();
+export type UpdateResponsavelAdicionalDTO = z.infer<typeof updateResponsavelAdicionalSchema>;
+

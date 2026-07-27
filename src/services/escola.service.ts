@@ -21,6 +21,7 @@ const _prepareEscolaData = (data: Partial<CreateEscolaDTO>, usuarioId?: string, 
     if (data.estado !== undefined) prepared.estado = data.estado ? cleanString(data.estado, true) : null;
     if (data.cep !== undefined) prepared.cep = data.cep ? cleanString(data.cep) : null;
     if (data.referencia !== undefined) prepared.referencia = data.referencia ? cleanString(data.referencia, true) : null;
+    if (data.complemento !== undefined) prepared.complemento = data.complemento ? cleanString(data.complemento, true) : null;
     if (data.ativo !== undefined) prepared.ativo = data.ativo;
 
     return prepared;

@@ -23,6 +23,22 @@ export const gastoRepository = {
         return supabaseAdmin.from("gastos").delete().eq("id", id);
     },
 
+    async deleteByParcelamento(parcelamentoId: string, minNumeroParcela?: number) {
+        let query = supabaseAdmin.from("gastos").delete().eq("parcelamento_id", parcelamentoId);
+        if (minNumeroParcela !== undefined) {
+            query = query.gte("numero_parcela", minNumeroParcela);
+        }
+        return query;
+    },
+
+    async updateByParcelamento(parcelamentoId: string, minNumeroParcela: number | undefined, data: Record<string, unknown>) {
+        let query = supabaseAdmin.from("gastos").update(data).eq("parcelamento_id", parcelamentoId);
+        if (minNumeroParcela !== undefined) {
+            query = query.gte("numero_parcela", minNumeroParcela);
+        }
+        return query.select();
+    },
+
     async getById(id: string) {
         return supabaseAdmin
             .from("gastos")
@@ -54,10 +70,6 @@ export const gastoRepository = {
         if (filtros?.data_inicio) query = query.gte("data", filtros.data_inicio);
         if (filtros?.data_fim) query = query.lte("data", filtros.data_fim);
 
-        if (filtros?.search) {
-             query = query.ilike('descricao', `%${filtros.search}%`);
-        }
-
         // Pagination
         if (filtros?.limit) query = query.limit(filtros.limit);
         if (filtros?.offset) query = query.range(filtros.offset, filtros.offset + (filtros.limit || 10) - 1);
@@ -65,12 +77,18 @@ export const gastoRepository = {
         return query;
     },
 
-    async getGastosForPeriodForDashboard(usuarioId: string, start: string, end: string) {
-        return supabaseAdmin
+    async getGastosForPeriodForDashboard(usuarioId: string, start: string, end: string, veiculoId?: string) {
+        let query = supabaseAdmin
             .from("gastos")
             .select("*")
             .eq("usuario_id", usuarioId)
             .gte("data", start)
             .lte("data", end);
+            
+        if (veiculoId) {
+            query = query.eq("veiculo_id", veiculoId);
+        }
+
+        return query;
     }
 };

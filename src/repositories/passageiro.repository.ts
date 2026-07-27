@@ -13,7 +13,8 @@ export const passageiroRepository = {
       .select(`
         *,
         escola:escolas(*),
-        veiculo:veiculos(*)
+        veiculo:veiculos(*),
+        responsaveis:passageiro_responsaveis_adicionais(*)
       `)
       .eq("id", id);
 
@@ -47,8 +48,12 @@ export const passageiroRepository = {
     return supabaseAdmin.from("passageiros").delete().eq("id", id);
   },
 
-  async getSummaryForDashboard(usuarioId: string) {
-    return supabaseAdmin.from("passageiros").select("id, ativo").eq("usuario_id", usuarioId);
+  async getSummaryForDashboard(usuarioId: string, veiculoId?: string) {
+    let query = supabaseAdmin.from("passageiros").select("id, ativo, valor_cobranca, data_inicio_cobranca, data_fim_cobranca, created_at").eq("usuario_id", usuarioId);
+    if (veiculoId) {
+      query = query.eq("veiculo_id", veiculoId);
+    }
+    return query;
   },
 
   async getById(id: string) {
@@ -58,7 +63,8 @@ export const passageiroRepository = {
             *,
             escola:escolas(id, nome),
             veiculo:veiculos(id, placa, modelo),
-            contratos(id, status, created_at, minuta_url, contrato_final_url, token_acesso)
+            contratos(id, status, created_at, minuta_url, contrato_final_url, token_acesso),
+            responsaveis:passageiro_responsaveis_adicionais(*)
         `)
         .eq("id", id)
         .order('created_at', { foreignTable: 'contratos', ascending: false })
@@ -73,7 +79,8 @@ export const passageiroRepository = {
             *,
             escola:escolas(id, nome),
             veiculo:veiculos(id, placa),
-            contratos(id, status, created_at, minuta_url, contrato_final_url, token_acesso)
+            contratos(id, status, created_at, minuta_url, contrato_final_url, token_acesso),
+            responsaveis:passageiro_responsaveis_adicionais(*)
         `)
         .eq("usuario_id", usuarioId)
         .order("nome", { ascending: true });
@@ -128,7 +135,7 @@ export const passageiroRepository = {
   async lookupResponsavel(usuarioId: string, cpfLimpo: string) {
     return supabaseAdmin
         .from("passageiros")
-        .select("nome_responsavel, email_responsavel, telefone_responsavel")
+        .select("nome_responsavel, telefone_responsavel")
         .eq("usuario_id", usuarioId)
         .eq("cpf_responsavel", cpfLimpo)
         .limit(1)
@@ -146,9 +153,24 @@ export const passageiroRepository = {
   async listParaCobrancaAutomatica(usuarioId: string) {
     return supabaseAdmin
       .from("passageiros")
-      .select("id, nome, valor_cobranca, dia_vencimento, cpf_responsavel, nome_responsavel")
+      .select("id, nome, valor_cobranca, dia_vencimento, cpf_responsavel, nome_responsavel, created_at, data_inicio_cobranca, data_fim_cobranca")
       .eq("usuario_id", usuarioId)
       .eq("ativo", true)
       .eq("enviar_notificacoes", true);
+  },
+
+  async listAniversariantesInfo(usuarioId: string) {
+    return supabaseAdmin
+      .from("passageiros")
+      .select(`
+        id, 
+        nome, 
+        data_nascimento,
+        veiculo:veiculos(id, placa, modelo),
+        escola:escolas(id, nome)
+      `)
+      .eq("usuario_id", usuarioId)
+      .eq("ativo", true)
+      .order("nome", { ascending: true });
   }
 };

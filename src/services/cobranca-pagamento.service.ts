@@ -17,18 +17,18 @@ export const cobrancaPagamentoService = {
   async registrarPagamentoManual(cobrancaId: string, data: RegistrarPagamentoManualDTO): Promise<any> {
     logger.info({ cobrancaId }, "[cobrancaPagamentoService.registrarPagamentoManual] Iniciando registro");
 
-    const { data: cobranca, error: findError } = await cobrancaRepository.getByIdBasic(cobrancaId);
+    const { data: cobranca, error: findError } = await cobrancaRepository.getById(cobrancaId);
 
     if (findError || !cobranca) throw new AppError("Cobrança não encontrada.", 404);
     if (cobranca.status === CobrancaStatus.PAGO) throw new AppError("Esta cobrança já está paga.", 400);
 
     // 2. REGISTRAR NO BANCO
     const { data: updated, error } = await cobrancaRepository.registrarPagamentoManual(cobrancaId, {
-        status: CobrancaStatus.PAGO,
-        pagamento_manual: true,
-        tipo_pagamento: data.tipo_pagamento || CobrancaTipoPagamento.DINHEIRO,
-        data_pagamento: data.data_pagamento || getNowBR(),
-        valor_pago: data.valor_pago || cobranca.valor,
+      status: CobrancaStatus.PAGO,
+      pagamento_manual: true,
+      tipo_pagamento: data.tipo_pagamento || CobrancaTipoPagamento.DINHEIRO,
+      data_pagamento: data.data_pagamento || getNowBR(),
+      valor_pago: data.valor_pago || cobranca.valor,
     });
 
     if (error) throw new AppError(`Erro ao registrar pagamento: ${error.message}`, 500);
@@ -38,12 +38,12 @@ export const cobrancaPagamentoService = {
       entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
       entidade_id: cobrancaId,
       acao: AtividadeAcao.PAGAMENTO_MANUAL,
-      descricao: `Pagamento manual de ${updated.mes}/${updated.ano} (${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(updated.valor_pago)}) do passageiro ${cobranca.passageiro?.nome} registrado.`,
+      descricao: `Pagamento manual de ${updated.mes}/${updated.ano} (${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(updated.valor_pago)}) do passageiro ${cobranca.passageiro?.nome || cobranca.passageiros?.nome} registrado.`,
       meta: {
         valor_pago: updated.valor_pago,
         tipo_pagamento: updated.tipo_pagamento,
         data_pagamento: updated.data_pagamento,
-        passageiro: cobranca.passageiro?.nome
+        passageiro: cobranca.passageiro?.nome || cobranca.passageiros?.nome
       }
     });
 
@@ -93,11 +93,6 @@ export const cobrancaPagamentoService = {
       logger.error({ error, cobrancaId }, "Erro ao desfazer pagamento da cobrança");
       throw new AppError("Erro ao desfazer pagamento.", 500);
     }
-
-    // Notificação de reabertura manual desativada ou simplificada conforme plano base.
-    // cobrancaService.enviarNotificacaoManual(cobrancaId).catch((err: any) => {
-    //   logger.error({ err, cobrancaId }, "Falha ao enviar notificação manual após desfazer pagamento.");
-    // });
 
     // --- LOG DE AUDITORIA ---
     historicoService.log({

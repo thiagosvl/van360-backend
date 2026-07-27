@@ -17,31 +17,13 @@ export const authRepository = {
             .single();
     },
 
-    async getPassageiroResponsavel(cpf: string, email: string) {
-        return supabaseAdmin
-            .from("passageiros")
-            .select("usuario_id")
-            .eq("cpf_responsavel", cpf)
-            .eq("email_responsavel", email)
-            .limit(1)
-            .single();
-    },
 
-    async listPassageirosResponsavel(cpf: string, email: string, usuarioId: string) {
-        return supabaseAdmin
-            .from("passageiros")
-            .select("*, escolas(nome), veiculos(placa)")
-            .eq("cpf_responsavel", cpf)
-            .eq("email_responsavel", email)
-            .eq("usuario_id", usuarioId)
-            .order("nome", { ascending: true });
-    },
 
-    async getUserIdAndEmailByCpf(cpf: string) {
+    async getUserIdAndEmailByCpf(cpfcnpj: string) {
         return supabaseAdmin
             .from("usuarios")
             .select("id, email, nome, telefone")
-            .eq("cpfcnpj", cpf)
+            .eq("cpfcnpj", cpfcnpj)
             .single();
     },
 
@@ -77,6 +59,17 @@ export const authRepository = {
             .select("id, expira_em, usado")
             .eq("usuario_id", userId)
             .eq("codigo", codigo)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+    },
+
+    async getLatestActiveRecoveryCode(userId: string) {
+        return supabaseAdmin
+            .from("recuperacoes_senha")
+            .select("created_at")
+            .eq("usuario_id", userId)
+            .eq("usado", false)
             .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle();

@@ -2,6 +2,7 @@ import { veiculoRepository } from "../repositories/veiculo.repository.js";
 import { CreateVeiculoDTO, ListVeiculosFiltersDTO, UpdateVeiculoDTO, Veiculo, VeiculoComContagem } from "../types/dtos/veiculo.dto.js";
 import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { cleanString } from "../utils/string.utils.js";
+import { limparPlaca } from "../utils/placa.utils.js";
 import { historicoService } from "./historico.service.js";
 
 // Helper Methods
@@ -13,7 +14,7 @@ const _prepareVeiculoData = (data: Partial<CreateVeiculoDTO>, usuarioId?: string
         prepared.ativo = true;
     }
 
-    if (data.placa) prepared.placa = cleanString(data.placa).toUpperCase();
+    if (data.placa) prepared.placa = limparPlaca(data.placa);
     if (data.marca !== undefined) prepared.marca = data.marca ? cleanString(data.marca) : null;
     if (data.modelo !== undefined) prepared.modelo = data.modelo ? cleanString(data.modelo) : null;
     if (data.ano !== undefined) prepared.ano = data.ano;
@@ -39,8 +40,8 @@ export const veiculoService = {
             entidade_tipo: AtividadeEntidadeTipo.VEICULO,
             entidade_id: inserted.id,
             acao: AtividadeAcao.VEICULO_CRIADO,
-            descricao: `Novo veículo ${inserted.placa} (${inserted.modelo || 'Sem modelo'}) cadastrado.`,
-            meta: { placa: inserted.placa, modelo: inserted.modelo }
+            descricao: `Novo veículo ${inserted.placa} (${inserted.marca} ${inserted.modelo}) cadastrado.`,
+            meta: { placa: inserted.placa, marca: inserted.marca, modelo: inserted.modelo }
         });
 
         return inserted as Veiculo;

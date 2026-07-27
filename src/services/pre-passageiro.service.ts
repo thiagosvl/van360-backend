@@ -33,7 +33,7 @@ export const prePassageiroService = {
       usuario_id: payload.usuario_id,
       nome: cleanString(payload.nome, true),
       nome_responsavel: cleanString(payload.nome_responsavel, true),
-      email_responsavel: payload.email_responsavel ? cleanString(payload.email_responsavel) : null,
+
       cpf_responsavel: payload.cpf_responsavel ? onlyDigits(payload.cpf_responsavel) : null,
       telefone_responsavel: payload.telefone_responsavel ? onlyDigits(payload.telefone_responsavel) : null,
       escola_id: payload.escola_id || null,
@@ -47,15 +47,33 @@ export const prePassageiroService = {
       estado: payload.estado || null,
       cep: payload.cep || null,
       referencia: payload.referencia || null,
+      complemento: payload.complemento || null,
       observacoes: payload.observacoes || null,
       modalidade: payload.modalidade || null,
+      turma: payload.turma || null,
+      nome_professor: payload.nome_professor || null,
       genero: payload.genero || null,
       parentesco_responsavel: payload.parentesco_responsavel || null,
       data_inicio_transporte: payload.data_inicio_transporte ? toPersistenceString(payload.data_inicio_transporte) : null,
       data_nascimento: payload.data_nascimento ? toPersistenceString(payload.data_nascimento) : null
     };
 
-    return prePassageiroRepository.insert(prePassageiroData);
+    const inserted = await prePassageiroRepository.insert(prePassageiroData);
+
+    // --- LOG DE AUDITORIA ---
+    const { historicoService } = await import("./historico.service.js");
+    const { AtividadeAcao, AtividadeEntidadeTipo } = await import("../types/enums.js");
+
+    historicoService.log({
+      usuario_id: payload.usuario_id,
+      entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
+      entidade_id: inserted.id,
+      acao: AtividadeAcao.PRE_CADASTRO_CRIADO,
+      descricao: `Cadastro de solicitação de passageiro preenchido para ${inserted.nome}.`,
+      meta: { nome: inserted.nome, responsavel: inserted.nome_responsavel }
+    });
+
+    return inserted;
   },
 
   async deletePrePassageiro(prePassageiroId: string) {

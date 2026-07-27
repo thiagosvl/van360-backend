@@ -12,13 +12,14 @@ export interface DadosContrato {
   nomeResponsavel: string;
   cpfResponsavel: string;
   telefoneResponsavel: string;
-  emailResponsavel: string;
+
   parentescoResponsavel?: string;
   enderecoCompleto: string;
   
   // Dados da escola
   nomeEscola: string;
   enderecoEscola: string;
+
   
   // Dados do serviço
   periodo: string; // "Integral", "Manhã", "Tarde"
@@ -30,12 +31,18 @@ export interface DadosContrato {
   ano: number;
   dataInicio: string; // YYYY-MM-DD
   dataFim: string; // YYYY-MM-DD
+  dataInicioCobranca?: string; // YYYY-MM-DD
+  dataFimCobranca?: string; // YYYY-MM-DD
   valorTotal: number;
   qtdParcelas: number;
   valorParcela: number;
 
   // Multas
   multaAtraso: {
+    valor: number;
+    tipo: ContractMultaTipo;
+  };
+  jurosAtraso: {
     valor: number;
     tipo: ContractMultaTipo;
   };
@@ -56,7 +63,14 @@ export interface DadosContrato {
 
   // Configurações personalizadas
   clausulas?: string[];
+  secoes?: ContractSectionDto[];
   assinaturaCondutorUrl?: string;
+}
+
+export interface ContractSectionDto {
+  id?: string;
+  titulo: string;
+  clausulas: string[];
 }
 
 

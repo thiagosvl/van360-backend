@@ -22,6 +22,7 @@ export async function validarAcessoUsuario(authUid: string, targetUsuarioId: str
 
 export async function atualizarUsuario(usuarioId: string, payload: {
   nome?: string;
+  razao_social?: string;
   apelido?: string;
   telefone?: string;
   assinatura_digital_url?: string;
@@ -32,6 +33,7 @@ export async function atualizarUsuario(usuarioId: string, payload: {
 
   const updates: any = { updated_at: getNowBR().toISOString() };
   if (payload.nome) updates.nome = cleanString(payload.nome, true);
+  if (payload.razao_social !== undefined) updates.razao_social = payload.razao_social ? cleanString(payload.razao_social, true) : null;
   if (payload.apelido) updates.apelido = cleanString(payload.apelido, true);
   if (payload.telefone) updates.telefone = onlyDigits(payload.telefone);
   if (payload.assinatura_digital_url !== undefined) updates.assinatura_digital_url = payload.assinatura_digital_url;
@@ -69,6 +71,7 @@ export async function atualizarUsuario(usuarioId: string, payload: {
       meta: {
         usar_contratos: config.usar_contratos,
         multa_atraso: config.multa_atraso,
+        juros_atraso: config.juros_atraso,
         multa_rescisao: config.multa_rescisao,
         campos_alterados: Object.keys(config)
       }
@@ -132,4 +135,38 @@ export async function atualizarPixUsuario(usuarioId: string, payload: {
   });
 
   return { success: true };
+}
+
+export async function atualizarCanalAquisicao(usuarioId: string, canalAquisicao: string) {
+  if (!usuarioId) throw new AppError("ID do usuário é obrigatório.", 400);
+
+  const updates: any = {
+    canal_aquisicao: canalAquisicao,
+    updated_at: getNowBR().toISOString()
+  };
+
+  const { error } = await userRepository.update(usuarioId, updates);
+
+  if (error) {
+    throw new AppError(`Erro ao atualizar canal de aquisição: ${error.message}`, 500);
+  }
+
+  historicoService.log({
+    usuario_id: usuarioId,
+    entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+    entidade_id: usuarioId,
+    acao: AtividadeAcao.PERFIL_EDITADO,
+    descricao: "Canal de aquisição informado pelo usuário.",
+    meta: { canal_aquisicao: canalAquisicao }
+  });
+
+  return { success: true };
+}
+
+export async function listarMotoristasParaLembreteAniversario() {
+  const { data, error } = await userRepository.listMotoristasAtivos();
+  if (error) {
+    throw new AppError("Erro ao buscar motoristas ativos", 500);
+  }
+  return data || [];
 }

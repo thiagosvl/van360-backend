@@ -4,7 +4,7 @@ import { passageiroRepository } from "../repositories/passageiro.repository.js";
 import { prePassageiroRepository } from "../repositories/pre-passageiro.repository.js";
 import { cobrancaRepository } from "../repositories/cobranca.repository.js";
 import { gastoRepository } from "../repositories/gasto.repository.js";
-import { CobrancaStatus } from "../types/enums.js";
+import { CobrancaStatus, GastoCategoria } from "../types/enums.js";
 import { getNowBR, toLocalDateString, getLastDayOfMonth } from "../utils/date.utils.js";
 import { getUsuarioData } from "./usuario.service.js";
 
@@ -54,7 +54,7 @@ interface SystemSummary {
 }
 
 export const usuarioResumoService = {
-  getResumo: async (usuarioId: string, mes?: number, ano?: number): Promise<SystemSummary> => {
+  getResumo: async (usuarioId: string, mes?: number, ano?: number, veiculoId?: string): Promise<SystemSummary> => {
     // 1. Fetch User
     const usuario = await getUsuarioData(usuarioId);
     if (!usuario) throw new Error("Usuário não encontrado");
@@ -68,7 +68,7 @@ export const usuarioResumoService = {
     ] = await Promise.all([
       veiculoRepository.getSummaryForDashboard(usuarioId),
       escolaRepository.getSummaryForDashboard(usuarioId),
-      passageiroRepository.getSummaryForDashboard(usuarioId),
+      passageiroRepository.getSummaryForDashboard(usuarioId, veiculoId),
       prePassageiroRepository.getCountForDashboard(usuarioId),
     ]);
 
@@ -96,8 +96,8 @@ export const usuarioResumoService = {
     const end = `${targetAno}-${String(targetMes).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
     const [cobrancasRes, gastosRes] = await Promise.all([
-      cobrancaRepository.getForPeriodForDashboard(usuarioId, start, end),
-      gastoRepository.getGastosForPeriodForDashboard(usuarioId, start, end)
+      cobrancaRepository.getForPeriodForDashboard(usuarioId, start, end, veiculoId),
+      gastoRepository.getGastosForPeriodForDashboard(usuarioId, start, end, veiculoId)
     ]);
 
     const cobrancas = cobrancasRes.data || [];
@@ -105,14 +105,64 @@ export const usuarioResumoService = {
 
     const cobrancasPagas = cobrancas.filter((c: Record<string, any>) => c.status === CobrancaStatus.PAGO);
     const receitaRealizada = cobrancasPagas.reduce((acc: number, c: Record<string, any>) => acc + Number(c.valor || 0), 0);
-    const receitaPrevista = cobrancas.reduce((acc: number, c: Record<string, any>) => acc + Number(c.valor || 0), 0);
+
+    const isPastPeriod = targetAno < now.getFullYear() || (targetAno === now.getFullYear() && targetMes < (now.getMonth() + 1));
+    let receitaProjetada = 0;
+    if (!isPastPeriod) {
+      const passageirosComCobranca = new Set(cobrancas.map((c: Record<string, any>) => c.passageiro_id));
+      const driverCreatedAt = (usuario as Record<string, any>)?.created_at;
+
+      const parseYearMonth = (dateStr?: string | null) => {
+        if (!dateStr) return null;
+        if (dateStr.includes("-")) {
+          const parts = dateStr.split("-");
+          if (parts.length >= 2) {
+            const year = Number(parts[0]);
+            const month = Number(parts[1]);
+            if (!isNaN(year) && !isNaN(month) && month >= 1 && month <= 12) {
+              return { year, month };
+            }
+          }
+        }
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return null;
+        return { year: d.getFullYear(), month: d.getMonth() + 1 };
+      };
+
+      passageirosList.forEach((p: Record<string, any>) => {
+        if (!p.ativo || passageirosComCobranca.has(p.id) || !p.valor_cobranca || Number(p.valor_cobranca) <= 0) {
+          return;
+        }
+
+        const inicioStr = p.data_inicio_cobranca || p.created_at || driverCreatedAt;
+        const inicio = parseYearMonth(inicioStr);
+        if (inicio) {
+          if (targetAno < inicio.year || (targetAno === inicio.year && targetMes < inicio.month)) {
+            return;
+          }
+        }
+
+        if (p.data_fim_cobranca) {
+          const fim = parseYearMonth(p.data_fim_cobranca);
+          if (fim) {
+            if (targetAno > fim.year || (targetAno === fim.year && targetMes > fim.month)) {
+              return;
+            }
+          }
+        }
+
+        receitaProjetada += Number(p.valor_cobranca);
+      });
+    }
+
+    const receitaPrevista = cobrancas.reduce((acc: number, c: Record<string, any>) => acc + Number(c.valor || 0), 0) + receitaProjetada;
     const taxaRecebimento = receitaPrevista > 0 ? (receitaRealizada / receitaPrevista) * 100 : 0;
 
     const totalDespesas = gastos.reduce((acc: number, g: Record<string, any>) => acc + Number(g.valor || 0), 0);
     const detalhamentoGastos: Record<string, number> = {};
     
     gastos.forEach((g: Record<string, any>) => {
-      const cat = g.categoria || "outros";
+      const cat = g.categoria || GastoCategoria.OUTROS;
       detalhamentoGastos[cat] = (detalhamentoGastos[cat] || 0) + Number(g.valor || 0);
     });
 

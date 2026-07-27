@@ -12,8 +12,7 @@ export const prePassageiroController = {
       const prePassageiros = await prePassageiroService.listPrePassageiros(usuarioId, search);
       return reply.status(200).send(prePassageiros);
     } catch (err: unknown) {
-      const error = err instanceof Error ? err.message : String(err);
-      return reply.status(400).send({ error });
+      throw err;
     }
   },
 
@@ -26,8 +25,7 @@ export const prePassageiroController = {
       if (err instanceof z.ZodError) {
         return reply.status(400).send({ error: "Dados inválidos.", details: err.issues });
       }
-      const error = err instanceof Error ? err.message : String(err);
-      return reply.status(400).send({ error });
+      throw err;
     }
   },
 
@@ -37,8 +35,7 @@ export const prePassageiroController = {
       await prePassageiroService.deletePrePassageiro(prePassageiroId);
       return reply.status(200).send({ success: true });
     } catch (err: unknown) {
-      const error = err instanceof Error ? err.message : String(err);
-      return reply.status(400).send({ error });
+      throw err;
     }
   }
 };
