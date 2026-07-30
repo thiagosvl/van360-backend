@@ -1,6 +1,6 @@
 import { AppError } from "../errors/AppError.js";
 import { CreateRouteDTO, UpdateRouteDTO, StepRouteExecutionDTO, ReorderExecucaoDTO } from "../types/dtos/route.dto.js";
-import { RouteExecutionStatus, RouteStopStatus, RouteNodeType } from "../types/enums.js";
+import { RouteExecutionStatus, RouteStopStatus, RouteNodeType, RouteSentido } from "../types/enums.js";
 import { routeRepository } from "../repositories/route.repository.js";
 
 const createRoute = async (data: CreateRouteDTO): Promise<any> => {

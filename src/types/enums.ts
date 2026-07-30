@@ -294,6 +294,11 @@ export enum RouteNodeType {
   ESCOLA = "escola"
 }
 
+export enum RouteSentido {
+  INDO = "indo",
+  VOLTANDO = "voltando"
+}
+
 export enum CanalAquisicao {
   PLAY_STORE = "PLAY_STORE",
   APP_STORE = "APP_STORE",

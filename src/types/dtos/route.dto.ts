@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { RouteStopStatus } from "../enums.js";
+import { RouteStopStatus, RouteNodeType, RouteSentido } from "../enums.js";
 
 const optionalString = z.union([z.string(), z.null(), z.undefined()]).transform(v => {
   if (v === undefined) return undefined;
@@ -8,11 +8,11 @@ const optionalString = z.union([z.string(), z.null(), z.undefined()]).transform(
 });
 
 export const routeNodeSchema = z.object({
-  tipo_no: z.enum(["passageiro", "escola"]).default("passageiro"),
+  tipo_no: z.nativeEnum(RouteNodeType).default(RouteNodeType.PASSAGEIRO),
   passageiro_id: z.string().uuid().optional().nullable(),
   escola_id: z.string().uuid().optional().nullable(),
   ordem: z.number().int(),
-  sentido: z.enum(["indo", "voltando"]).optional().nullable()
+  sentido: z.nativeEnum(RouteSentido).optional().nullable()
 });
 
 export const createRouteSchema = z.object({
@@ -35,7 +35,7 @@ export type UpdateRouteDTO = z.infer<typeof updateRouteSchema>;
 export const stepRouteExecutionSchema = z.object({
   passageiro_id: z.string().uuid().optional().nullable(),
   escola_id: z.string().uuid().optional().nullable(),
-  status: z.enum([RouteStopStatus.EMBARCADO, RouteStopStatus.AUSENTE], { message: "Status inválido" })
+  status: z.nativeEnum(RouteStopStatus, { message: "Status inválido" })
 });
 
 export type StepRouteExecutionDTO = z.infer<typeof stepRouteExecutionSchema>;
@@ -53,7 +53,7 @@ export const createAusenciaSchema = z.object({
   passageiro_id: z.string().uuid("ID do passageiro é obrigatório"),
   data_ausencia: z.string().min(1, "Data é obrigatória"),
   turno: z.string().default("manha"),
-  sentido: z.enum(["indo", "voltando"]).optional().nullable(),
+  sentido: z.nativeEnum(RouteSentido).optional().nullable(),
   motivo: optionalString
 });
 
