@@ -51,7 +51,7 @@ export const cenarios: Record<string, ScenarioConfig> = {
         passageiros: {
             quantidade: 50,
             percentualComAniversario: 75,
-            percentualSemEndereco: 10,
+            percentualSemEndereco: 30,
             percentualComResponsaveisAdicionais: 40,
         },
         gastos: {
