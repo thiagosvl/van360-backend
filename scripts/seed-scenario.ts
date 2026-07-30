@@ -24,8 +24,10 @@ import {
 
 import { cenarios, ScenarioConfig } from "./scenarios.config.js";
 
-if (env.NODE_ENV !== "development") {
-    console.error(`[ERRO] O script de seed só pode ser executado em ambiente de desenvolvimento (NODE_ENV=development). Ambiente atual: ${env.NODE_ENV}`);
+const ALLOW_PROD = process.argv.includes("--allow-prod") || process.env.ALLOW_SEED_PROD === "true";
+
+if (env.NODE_ENV !== "development" && !ALLOW_PROD) {
+    console.error(`[ERRO] O script de seed requer a flag --allow-prod ou a variável ALLOW_SEED_PROD=true para execução fora do ambiente de desenvolvimento. Ambiente atual: ${env.NODE_ENV}`);
     process.exit(1);
 }
 
