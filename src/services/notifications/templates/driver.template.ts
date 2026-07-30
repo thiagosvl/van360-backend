@@ -278,11 +278,10 @@ export const DriverTemplates = {
     },
 
     contractSigned: (ctx: DriverContext): CompositeMessagePart[] => {
-        const nomePas = getFirstName(ctx.nomePassageiro) || "passageiro";
-        const nomeResp = ctx.nomeResponsavel ? `a responsável *${getFirstName(ctx.nomeResponsavel)}* acabou de assinar` : "acabou de ser assinado";
+        const nomePas = getFirstName(ctx.nomePassageiro);
         const linkStr = ctx.contratoUrl ? `\n\n📄 Veja o contrato:\n${ctx.contratoUrl}` : "";
         return textPart(`✅ *Novo contrato assinado! — ${nomePas}*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, ótima notícia: ${nomeResp} digitalmente o contrato do passageiro *${nomePas}*.\n\n` +
+            `*${getFirstName(ctx.nomeResponsavel)}* acabou de assinar digitalmente o contrato do passageiro *${nomePas}*.\n\n` +
             `🚐 _Vaga garantida! O documento já está salvo no seu aplicativo._${linkStr}`);
     },
 

@@ -12,6 +12,7 @@ import {
 } from "../config/constants.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { getNowBR, getLastDayOfMonth, toPersistenceString, diffInDays } from "../utils/date.utils.js";
+import { getDriverDisplayName } from "../utils/format.js";
 
 import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
 import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaOrigem, CobrancaStatus, ConfigKey } from "../types/enums.js";
@@ -82,6 +83,40 @@ export const cobrancaService = {
           throw new Error("Não foi possível gerar o recibo para a cobrança paga.");
         }
         inserted.recibo_url = url;
+
+        // Se gerar recibo e não for explicitamente desativado o envio
+        if (data.enviar_recibo_whatsapp !== false) {
+          try {
+            const { data: fullCobranca } = await cobrancaRepository.getByIdWithPassageiroAndMotorista(inserted.id);
+            const passageiroInfo = fullCobranca?.passageiro as Record<string, any> | undefined;
+            const motoristaInfo = fullCobranca?.motorista as Record<string, any> | undefined;
+
+            if (passageiroInfo?.telefone_responsavel) {
+              const { notificationService } = await import("./notifications/notification.service.js");
+              const { EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO } = await import("../config/constants.js");
+              await notificationService.notifyPassenger(
+                passageiroInfo.telefone_responsavel,
+                EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO,
+                {
+                  nomeResponsavel: passageiroInfo.nome_responsavel || passageiroInfo.nome || "",
+                  nomePassageiro: passageiroInfo.nome || "",
+                  nomeMotorista: getDriverDisplayName(motoristaInfo),
+                  apelidoMotorista: motoristaInfo?.apelido,
+                  valor: Number(inserted.valor),
+                  dataPagamento: inserted.data_pagamento || undefined,
+                  mes: inserted.mes,
+                  ano: inserted.ano,
+                  reciboUrl: inserted.recibo_url,
+                  usuarioId: inserted.usuario_id
+                },
+                { channels: ["WHATSAPP"] }
+              );
+            }
+          } catch (notifErr: unknown) {
+            const msg = notifErr instanceof Error ? notifErr.message : String(notifErr);
+            logger.error({ error: msg, cobrancaId: inserted.id }, "Erro ao enviar recibo por WhatsApp pós-criação da cobrança já paga");
+          }
+        }
       } catch (e: unknown) {
         // Rollback manual
         await cobrancaRepository.delete(inserted.id);
@@ -422,12 +457,12 @@ export const cobrancaService = {
             const context = {
               nomeResponsavel: passageiro.nome_responsavel,
               nomePassageiro: passageiro.nome,
-              nomeMotorista: motorista.nome,
+              nomeMotorista: getDriverDisplayName(motorista),
               apelidoMotorista: motorista.apelido,
               telefoneMotorista: motorista.telefone,
               valor: Number(c.valor),
               dataVencimento: dataVencimentoStr,
-              diasAntecedencia: eventType === EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO ? thresholdDays : undefined,
+              diasAntecedencia: eventType === EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO ? diffInDays(now, dataVencimentoStr) : undefined,
               diasAtraso: eventType === EVENTO_PASSAGEIRO_ATRASADO ? diffInDays(dataVencimentoStr, now) : undefined,
               usuarioId: c.usuario_id,
               chavePix: motorista.chave_pix,

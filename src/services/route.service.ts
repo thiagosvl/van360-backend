@@ -1,48 +1,35 @@
-import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
-import { CreateRouteDTO, UpdateRouteDTO } from "../types/dtos/route.dto.js";
-import { notificationService } from "./notifications/notification.service.js";
-import { RouteExecutionStatus, RouteStopStatus } from "../types/enums.js";
-import {
-  EVENTO_ROTA_A_CAMINHO_IDA,
-  EVENTO_ROTA_A_CAMINHO_VOLTA,
-  EVENTO_ROTA_EMBARCOU,
-  EVENTO_ROTA_DESEMBARCOU
-} from "../config/constants.js";
+import { CreateRouteDTO, UpdateRouteDTO, StepRouteExecutionDTO, ReorderExecucaoDTO } from "../types/dtos/route.dto.js";
+import { RouteExecutionStatus, RouteStopStatus, RouteNodeType } from "../types/enums.js";
+import { routeRepository } from "../repositories/route.repository.js";
 
 const createRoute = async (data: CreateRouteDTO): Promise<any> => {
   if (!data.usuario_id) throw new AppError("Usuário obrigatório", 400);
   if (!data.nome) throw new AppError("Nome da rota é obrigatório", 400);
 
-  const { data: inserted, error } = await supabaseAdmin
-    .from("rotas")
-    .insert([{
-      usuario_id: data.usuario_id,
-      nome: data.nome,
-      periodo: data.periodo,
-      tipo: data.tipo
-    }])
-    .select()
-    .single();
+  const { data: inserted, error } = await routeRepository.insert(
+    data.usuario_id,
+    data.nome,
+    data.veiculo_id || null
+  );
 
   if (error) throw error;
 
   if (data.passageiros && data.passageiros.length > 0) {
-    const records = data.passageiros.map(p => ({
+    const records = data.passageiros.map((p, idx) => ({
       rota_id: inserted.id,
-      passageiro_id: p.passageiro_id,
-      ordem: p.ordem
+      tipo_no: p.tipo_no || (p.escola_id ? RouteNodeType.ESCOLA : RouteNodeType.PASSAGEIRO),
+      passageiro_id: p.passageiro_id || null,
+      escola_id: p.escola_id || null,
+      ordem: p.ordem !== undefined ? p.ordem : idx + 1,
+      sentido: p.sentido || null
     }));
 
     try {
-      const { error: assocError } = await supabaseAdmin
-        .from("rota_passageiros")
-        .insert(records);
-
+      const { error: assocError } = await routeRepository.insertPassageiros(records);
       if (assocError) throw assocError;
     } catch (assocError) {
-      // Rollback: exclui a rota mestre recém-criada
-      await supabaseAdmin.from("rotas").delete().eq("id", inserted.id);
+      await routeRepository.delete(inserted.id);
       throw assocError;
     }
   }
@@ -55,58 +42,34 @@ const updateRoute = async (id: string, data: UpdateRouteDTO): Promise<any> => {
 
   const updatePayload: any = {};
   if (data.nome !== undefined) updatePayload.nome = data.nome;
-  if (data.periodo !== undefined) updatePayload.periodo = data.periodo;
-  if (data.tipo !== undefined) updatePayload.tipo = data.tipo;
+  if (data.veiculo_id !== undefined) updatePayload.veiculo_id = data.veiculo_id;
 
   if (Object.keys(updatePayload).length > 0) {
-    const { error } = await supabaseAdmin
-      .from("rotas")
-      .update(updatePayload)
-      .eq("id", id);
-
+    const { error } = await routeRepository.update(id, updatePayload);
     if (error) throw error;
   }
 
   if (data.passageiros !== undefined) {
-    // 1. Fazer backup dos passageiros originais
-    const { data: oldPassengers, error: fetchError } = await supabaseAdmin
-      .from("rota_passageiros")
-      .select("passageiro_id, ordem")
-      .eq("rota_id", id);
+    const { data: oldPassengers } = await routeRepository.getPassageirosByRotaId(id);
 
-    if (fetchError) throw fetchError;
+    await routeRepository.deletePassageiros(id);
 
-    // 2. Deletar os atuais
-    const { error: deleteError } = await supabaseAdmin
-      .from("rota_passageiros")
-      .delete()
-      .eq("rota_id", id);
-
-    if (deleteError) throw deleteError;
-
-    // 3. Tentar inserir novos
     if (data.passageiros && data.passageiros.length > 0) {
-      const records = data.passageiros.map(p => ({
+      const records = data.passageiros.map((p, idx) => ({
         rota_id: id,
-        passageiro_id: p.passageiro_id,
-        ordem: p.ordem
+        tipo_no: p.tipo_no || (p.escola_id ? RouteNodeType.ESCOLA : RouteNodeType.PASSAGEIRO),
+        passageiro_id: p.passageiro_id || null,
+        escola_id: p.escola_id || null,
+        ordem: p.ordem !== undefined ? p.ordem : idx + 1,
+        sentido: p.sentido || null
       }));
 
       try {
-        const { error: insertError } = await supabaseAdmin
-          .from("rota_passageiros")
-          .insert(records);
-
+        const { error: insertError } = await routeRepository.insertPassageiros(records);
         if (insertError) throw insertError;
       } catch (insertError) {
-        // Rollback: restaurar os anteriores
         if (oldPassengers && oldPassengers.length > 0) {
-          const restoreRecords = oldPassengers.map((op: any) => ({
-            rota_id: id,
-            passageiro_id: op.passageiro_id,
-            ordem: op.ordem
-          }));
-          await supabaseAdmin.from("rota_passageiros").insert(restoreRecords);
+          await routeRepository.insertPassageiros(oldPassengers);
         }
         throw insertError;
       }
@@ -119,53 +82,32 @@ const updateRoute = async (id: string, data: UpdateRouteDTO): Promise<any> => {
 const deleteRoute = async (id: string): Promise<void> => {
   if (!id) throw new AppError("ID da rota é obrigatório", 400);
 
-  const { error } = await supabaseAdmin
-    .from("rotas")
-    .delete()
-    .eq("id", id);
-
+  const { error } = await routeRepository.delete(id);
   if (error) throw error;
 };
 
 const getRoute = async (id: string): Promise<any> => {
-  const { data: route, error } = await supabaseAdmin
-    .from("rotas")
-    .select(`
-      *,
-      rota_passageiros (
-        id,
-        ordem,
-        passageiro:passageiros (
-          id,
-          nome,
-          nome_responsavel,
-          telefone_responsavel,
-          logradouro,
-          numero,
-          bairro,
-          cidade,
-          ativo,
-          escola:escolas (
-            id,
-            nome
-          )
-        )
-      )
-    `)
-    .eq("id", id)
-    .single();
+  const { data: route, error } = await routeRepository.getById(id);
 
   if (error) throw error;
+  if (!route) {
+    throw new AppError("Rota não encontrada", 404);
+  }
 
   if (route.rota_passageiros) {
     route.passageiros = route.rota_passageiros
       .map((rp: any) => ({
-        ...rp.passageiro,
+        id: rp.id,
+        tipo_no: rp.tipo_no || (rp.escola_id ? RouteNodeType.ESCOLA : RouteNodeType.PASSAGEIRO),
         ordem: rp.ordem,
-        rota_passageiro_id: rp.id
+        passageiro_id: rp.passageiro_id,
+        escola_id: rp.escola_id,
+        sentido: rp.sentido || null,
+        passageiro: rp.passageiro,
+        escola: rp.escola
       }))
       .sort((a: any, b: any) => a.ordem - b.ordem);
-    
+
     delete route.rota_passageiros;
   } else {
     route.passageiros = [];
@@ -177,102 +119,70 @@ const getRoute = async (id: string): Promise<any> => {
 const listRoutesByUsuario = async (usuarioId: string): Promise<any[]> => {
   if (!usuarioId) throw new AppError("ID do usuário é obrigatório", 400);
 
-  const { data: routes, error } = await supabaseAdmin
-    .from("rotas")
-    .select(`
-      *,
-      rota_passageiros (
-        id,
-        ordem,
-        passageiro_id
-      )
-    `)
-    .eq("usuario_id", usuarioId)
-    .order("created_at", { ascending: false });
+  try {
+    const { data: routes, error } = await routeRepository.listByUsuario(usuarioId);
 
-  if (error) throw error;
+    if (error) {
+      const { data: fallbackRoutes, error: fbError } = await routeRepository.listByUsuarioFallback(usuarioId);
 
-  return (routes || []).map((route: any) => {
-    const count = route.rota_passageiros ? route.rota_passageiros.length : 0;
-    delete route.rota_passageiros;
-    return {
-      ...route,
-      numero_passageiros: count
-    };
-  });
+      if (fbError) return [];
+      return (fallbackRoutes || []).map(r => ({ ...r, numero_passageiros: 0 }));
+    }
+
+    return (routes || []).map((route: any) => {
+      const count = route.rota_passageiros ? route.rota_passageiros.length : 0;
+      delete route.rota_passageiros;
+      return {
+        ...route,
+        numero_passageiros: count
+      };
+    });
+  } catch (err) {
+    return [];
+  }
 };
 
 const listExecucoesByUsuario = async (usuarioId: string): Promise<any[]> => {
   if (!usuarioId) throw new AppError("ID do usuário é obrigatório", 400);
 
-  const { data: execs, error } = await supabaseAdmin
-    .from("execucoes_rota")
-    .select(`
-      *,
-      rota:rotas (
-        id,
-        nome
-      )
-    `)
-    .eq("usuario_id", usuarioId)
-    .order("iniciada_em", { ascending: false });
+  try {
+    const { data: execs, error } = await routeRepository.listExecucoesByUsuario(usuarioId);
 
-  if (error) throw error;
-  return execs || [];
+    if (error) {
+      const { data: fallbackExecs } = await routeRepository.listExecucoesByUsuarioFallback(usuarioId);
+      return fallbackExecs || [];
+    }
+    return execs || [];
+  } catch (err) {
+    return [];
+  }
 };
 
 const getExecucaoDetail = async (id: string): Promise<any> => {
-  const { data: exec, error } = await supabaseAdmin
-    .from("execucoes_rota")
-    .select(`
-      *,
-      rota:rotas (
-        id,
-        nome
-      ),
-      execucoes_rota_passageiros (
-        id,
-        status,
-        ordem,
-        notificado_em,
-        visitado_em,
-        passageiro_id,
-        passageiro:passageiros (
-          id,
-          nome,
-          nome_responsavel,
-          telefone_responsavel,
-          logradouro,
-          numero,
-          bairro,
-          cidade,
-          latitude,
-          longitude,
-          escola:escolas (
-            id,
-            nome
-          )
-        )
-      )
-    `)
-    .eq("id", id)
-    .single();
+  const { data: exec, error } = await routeRepository.getExecucaoDetail(id);
 
   if (error) throw error;
+  if (!exec) {
+    throw new AppError("Execução de rota não encontrada", 404);
+  }
 
   if (exec.execucoes_rota_passageiros) {
     exec.paradas = exec.execucoes_rota_passageiros
       .map((erp: any) => ({
-        ...erp.passageiro,
-        passageiro_id: erp.passageiro_id,
+        id: erp.id,
+        tipo_no: erp.tipo_no || (erp.escola_id ? RouteNodeType.ESCOLA : RouteNodeType.PASSAGEIRO),
         status: erp.status,
         ordem: erp.ordem,
         notificado_em: erp.notificado_em,
         visitado_em: erp.visitado_em,
-        execucao_passageiro_id: erp.id
+        passageiro_id: erp.passageiro_id,
+        escola_id: erp.escola_id,
+        sentido: erp.sentido,
+        passageiro: erp.passageiro,
+        escola: erp.escola
       }))
       .sort((a: any, b: any) => a.ordem - b.ordem);
-    
+
     delete exec.execucoes_rota_passageiros;
   } else {
     exec.paradas = [];
@@ -285,227 +195,134 @@ const iniciarRota = async (rotaId: string, usuarioId: string): Promise<any> => {
   if (!rotaId) throw new AppError("ID da rota é obrigatório", 400);
   if (!usuarioId) throw new AppError("ID do usuário é obrigatório", 400);
 
-  const { data: activeExec, error: checkError } = await supabaseAdmin
-    .from("execucoes_rota")
-    .select("id")
-    .eq("usuario_id", usuarioId)
-    .eq("status", RouteExecutionStatus.INICIADA)
-    .maybeSingle();
+  const { data: activeExec, error: checkError } = await routeRepository.getExecucaoAtiva(usuarioId);
 
   if (checkError) throw checkError;
   if (activeExec) {
-    throw new AppError("Já existe uma rota ativa em andamento. Finalize-a antes de iniciar outra.", 400);
+    throw new AppError("Você já possui uma rota em andamento. Finalize-a antes de iniciar outra.", 400);
   }
 
   const route = await getRoute(rotaId);
   if (!route) throw new AppError("Rota não encontrada", 404);
   if (!route.passageiros || route.passageiros.length === 0) {
-    throw new AppError("A rota selecionada não possui passageiros cadastrados.", 400);
+    throw new AppError("A rota selecionada não possui paradas cadastradas.", 400);
   }
 
-  const { data: exec, error: execError } = await supabaseAdmin
-    .from("execucoes_rota")
-    .insert([{
-      rota_id: rotaId,
-      usuario_id: usuarioId,
-      status: RouteExecutionStatus.INICIADA,
-      tipo: route.tipo
-    }])
-    .select()
-    .single();
+  let inativosContador = 0;
+  const paradasValidas = route.passageiros.filter((p: any) => {
+    if (p.tipo_no === RouteNodeType.PASSAGEIRO && p.passageiro) {
+      if (p.passageiro.ativo === false) {
+        inativosContador++;
+        return false;
+      }
+    }
+    return true;
+  });
+
+  if (paradasValidas.length === 0) {
+    throw new AppError("Não há passageiros ativos cadastrados nesta rota.", 400);
+  }
+
+  const { data: exec, error: execError } = await routeRepository.insertExecucao(rotaId, usuarioId);
 
   if (execError) throw execError;
 
-  const paradasRecords = route.passageiros.map((p: any) => ({
-    execucao_rota_id: exec.id,
-    passageiro_id: p.id,
-    ordem: p.ordem,
-    status: RouteStopStatus.PENDENTE
-  }));
+  const paradasRecords = paradasValidas.map((p: any, idx: number) => {
+    return {
+      execucao_rota_id: exec.id,
+      tipo_no: p.tipo_no,
+      passageiro_id: p.passageiro_id || null,
+      escola_id: p.escola_id || null,
+      ordem: idx + 1,
+      status: RouteStopStatus.PENDENTE,
+      visitado_em: null,
+      sentido: p.sentido || null
+    };
+  });
 
-  const { error: paradasError } = await supabaseAdmin
-    .from("execucoes_rota_passageiros")
-    .insert(paradasRecords);
+  const { error: paradasError } = await routeRepository.insertExecucaoParadas(paradasRecords);
 
   if (paradasError) throw paradasError;
 
-  await avancarProximoPassageiro(exec.id);
-
-  return await getExecucaoDetail(exec.id);
+  const result = await getExecucaoDetail(exec.id);
+  return {
+    ...result,
+    alertaInativos: inativosContador > 0 ? `${inativosContador} passageiro(s) inativo(s) foram desconsiderados nesta corrida.` : null
+  };
 };
 
-const avancarProximoPassageiro = async (execucaoId: string): Promise<any> => {
-  const { data: exec, error: execError } = await supabaseAdmin
-    .from("execucoes_rota")
-    .select("id, status, tipo, usuario_id")
-    .eq("id", execucaoId)
-    .single();
+const atualizarParadaStatus = async (
+  execucaoId: string,
+  paradaId: string,
+  novoStatus: RouteStopStatus.EMBARCADO | RouteStopStatus.AUSENTE
+): Promise<any> => {
+  if (!execucaoId) throw new AppError("ID da execução é obrigatório", 400);
+  if (!paradaId) throw new AppError("ID da parada é obrigatório", 400);
+
+  const { data: exec, error: execError } = await routeRepository.getExecucaoResumida(execucaoId);
 
   if (execError) throw execError;
-  if (exec.status !== RouteExecutionStatus.INICIADA) return await getExecucaoDetail(execucaoId);
-
-  const { data: paradas, error: paradasError } = await supabaseAdmin
-    .from("execucoes_rota_passageiros")
-    .select("id, status, ordem, passageiro_id")
-    .eq("execucao_rota_id", execucaoId)
-    .order("ordem", { ascending: true });
-
-  if (paradasError) throw paradasError;
-
-  const jaTemAlguemACaminho = (paradas || []).some((p: any) => p.status === RouteStopStatus.A_CAMINHO);
-  if (jaTemAlguemACaminho) {
-    return await getExecucaoDetail(execucaoId);
+  if (exec.status !== RouteExecutionStatus.INICIADA) {
+    throw new AppError("Esta rota não está ativa.", 400);
   }
 
-  const proximo = (paradas || []).find((p: any) => p.status === RouteStopStatus.PENDENTE);
+  const { data: paradaObj } = await routeRepository.getParadaById(paradaId);
+  const { data: paradaAtualObj } = await routeRepository.getParadaAtualPendente(execucaoId);
 
-  if (!proximo) {
-    const { error: updateExecError } = await supabaseAdmin
-      .from("execucoes_rota")
-      .update({
-        status: RouteExecutionStatus.CONCLUIDA,
-        finalizada_em: new Date().toISOString()
-      })
-      .eq("id", execucaoId);
+  const isEmbarqueEscola = paradaObj?.tipo_no === RouteNodeType.PASSAGEIRO &&
+    paradaAtualObj && paradaAtualObj.length > 0 &&
+    paradaAtualObj[0].tipo_no === RouteNodeType.ESCOLA &&
+    novoStatus === RouteStopStatus.EMBARCADO;
 
-    if (updateExecError) throw updateExecError;
-    return await getExecucaoDetail(execucaoId);
-  }
-
-  const { error: updateParadaError } = await supabaseAdmin
-    .from("execucoes_rota_passageiros")
-    .update({ status: RouteStopStatus.A_CAMINHO })
-    .eq("id", proximo.id);
-
-  if (updateParadaError) throw updateParadaError;
-
-  const { data: passData, error: passError } = await supabaseAdmin
-    .from("passageiros")
-    .select("nome, nome_responsavel, telefone_responsavel")
-    .eq("id", proximo.passageiro_id)
-    .single();
-
-  if (passError) throw passError;
-
-  const { data: motorista, error: motError } = await supabaseAdmin
-    .from("usuarios")
-    .select("nome, apelido, telefone")
-    .eq("id", exec.usuario_id)
-    .single();
-
-  if (motError) throw motError;
-
-  if (passData.telefone_responsavel) {
-    const evento = exec.tipo === "ida" ? EVENTO_ROTA_A_CAMINHO_IDA : EVENTO_ROTA_A_CAMINHO_VOLTA;
-    await notificationService.notifyRoute(
-      passData.telefone_responsavel,
-      evento,
-      {
-        nomeResponsavel: passData.nome_responsavel || "Responsável",
-        nomePassageiro: passData.nome || "Passageiro",
-        nomeMotorista: motorista.nome,
-        apelidoMotorista: motorista.apelido,
-        telefoneMotorista: motorista.telefone
-      }
+  if (novoStatus === RouteStopStatus.AUSENTE && paradaObj?.passageiro_id) {
+    // Se o passageiro faltou, marca TODAS as paradas dele nesta execução como AUSENTE
+    await routeRepository.updateTodasParadasDoPassageiroStatus(
+      paradaObj.passageiro_id,
+      execucaoId,
+      RouteStopStatus.AUSENTE,
+      new Date().toISOString()
     );
+  } else {
+    const { error: updateError } = await routeRepository.updateParadaStatus(
+      paradaId,
+      execucaoId,
+      novoStatus,
+      isEmbarqueEscola ? null : new Date().toISOString()
+    );
+    if (updateError) throw updateError;
+  }
 
-    await supabaseAdmin
-      .from("execucoes_rota_passageiros")
-      .update({ notificado_em: new Date().toISOString() })
-      .eq("id", proximo.id);
+  const { data: pendentes } = await routeRepository.getPendentes(execucaoId);
+
+  if (!pendentes || pendentes.length === 0) {
+    await routeRepository.updateExecucaoStatus(
+      execucaoId,
+      RouteExecutionStatus.CONCLUIDA,
+      new Date().toISOString()
+    );
   }
 
   return await getExecucaoDetail(execucaoId);
 };
 
-const atualizarParadaStatus = async (
-  execucaoId: string,
-  passageiroId: string,
-  novoStatus: RouteStopStatus.EMBARCADO | RouteStopStatus.AUSENTE
-): Promise<any> => {
+const reordenarExecucao = async (execucaoId: string, data: ReorderExecucaoDTO): Promise<any> => {
   if (!execucaoId) throw new AppError("ID da execução é obrigatório", 400);
-  if (!passageiroId) throw new AppError("ID do passageiro é obrigatório", 400);
 
-  const { data: exec, error: execError } = await supabaseAdmin
-    .from("execucoes_rota")
-    .select("id, tipo, usuario_id, status")
-    .eq("id", execucaoId)
-    .single();
-
-  if (execError) throw execError;
-  if (exec.status !== RouteExecutionStatus.INICIADA) {
-    throw new AppError("A rota selecionada não está ativa.", 400);
+  for (const item of data.paradas) {
+    await routeRepository.updateParadaOrdem(item.id, execucaoId, item.ordem);
   }
 
-  const { data: parada, error: paradaError } = await supabaseAdmin
-    .from("execucoes_rota_passageiros")
-    .select("id, status")
-    .eq("execucao_rota_id", execucaoId)
-    .eq("passageiro_id", passageiroId)
-    .single();
-
-  if (paradaError) throw paradaError;
-
-  if (parada.status === RouteStopStatus.EMBARCADO || parada.status === RouteStopStatus.AUSENTE) {
-    throw new AppError("Esta parada já foi concluída.", 400);
-  }
-
-  const { error: updateError } = await supabaseAdmin
-    .from("execucoes_rota_passageiros")
-    .update({
-      status: novoStatus,
-      visitado_em: new Date().toISOString()
-    })
-    .eq("id", parada.id);
-
-  if (updateError) throw updateError;
-
-  if (novoStatus === RouteStopStatus.EMBARCADO) {
-    const { data: passData, error: passError } = await supabaseAdmin
-      .from("passageiros")
-      .select("nome, nome_responsavel, telefone_responsavel")
-      .eq("id", passageiroId)
-      .single();
-
-    if (passError) throw passError;
-
-    const { data: motorista, error: motError } = await supabaseAdmin
-      .from("usuarios")
-      .select("nome, apelido, telefone")
-      .eq("id", exec.usuario_id)
-      .single();
-
-    if (motError) throw motError;
-
-    if (passData.telefone_responsavel) {
-      const evento = exec.tipo === "ida" ? EVENTO_ROTA_EMBARCOU : EVENTO_ROTA_DESEMBARCOU;
-      await notificationService.notifyRoute(
-        passData.telefone_responsavel,
-        evento,
-        {
-          nomeResponsavel: passData.nome_responsavel || "Responsável",
-          nomePassageiro: passData.nome || "Passageiro",
-          nomeMotorista: motorista.nome,
-          apelidoMotorista: motorista.apelido,
-          telefoneMotorista: motorista.telefone
-        }
-      );
-    }
-  }
-
-  return await avancarProximoPassageiro(execucaoId);
+  return await getExecucaoDetail(execucaoId);
 };
 
 const cancelarExecucao = async (execucaoId: string): Promise<any> => {
   if (!execucaoId) throw new AppError("ID da execução é obrigatório", 400);
 
-  const { error } = await supabaseAdmin
-    .from("execucoes_rota")
-    .update({
-      status: RouteExecutionStatus.CANCELADA,
-      finalizada_em: new Date().toISOString()
-    })
-    .eq("id", execucaoId);
+  const { error } = await routeRepository.updateExecucaoStatus(
+    execucaoId,
+    RouteExecutionStatus.CANCELADA,
+    new Date().toISOString()
+  );
 
   if (error) throw error;
   return await getExecucaoDetail(execucaoId);
@@ -520,7 +337,7 @@ export const routeService = {
   listExecucoesByUsuario,
   getExecucaoDetail,
   iniciarRota,
-  avancarProximoPassageiro,
   atualizarParadaStatus,
+  reordenarExecucao,
   cancelarExecucao
 };

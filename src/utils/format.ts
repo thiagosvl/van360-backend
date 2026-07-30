@@ -161,10 +161,35 @@ export const formatPaymentMethod = (method: string): string => {
 
 export const capitalize = (str?: string): string => {
   if (!str) return "";
+  const lowercaseWords = new Set(["de", "da", "do", "dos", "das", "e"]);
   return str
     .trim()
     .toLowerCase()
     .split(/\s+/)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .map((word, index) => {
+      if (index > 0 && lowercaseWords.has(word)) {
+        return word;
+      }
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
     .join(" ");
+};
+
+export const getDriverDisplayName = (usuario?: {
+  cpfcnpj?: string | null;
+  cpf_cnpj?: string | null;
+  apelido?: string | null;
+  razao_social?: string | null;
+  nome?: string | null;
+} | null): string => {
+  if (!usuario) return "";
+  if (usuario.apelido && usuario.apelido.trim()) {
+    return usuario.apelido.trim();
+  }
+  const doc = usuario.cpfcnpj || usuario.cpf_cnpj;
+  const isCnpj = doc ? doc.replace(/\D/g, "").length > 11 : false;
+  if (isCnpj && usuario.razao_social && usuario.razao_social.trim()) {
+    return usuario.razao_social.trim();
+  }
+  return usuario.nome || usuario.razao_social || "";
 };

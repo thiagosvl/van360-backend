@@ -1,5 +1,5 @@
 import { formatToBrazilianDate, getMonthNameBR } from "../../../utils/date.utils.js";
-import { formatCurrency, getFirstAndSecondName, getFirstName, maskCpf, maskCnpj, maskPhone } from "../../../utils/format.js";
+import { formatCurrency, getFirstAndSecondName, getFirstName, maskCpf, maskCnpj, maskPhone, capitalize } from "../../../utils/format.js";
 import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
 
 export interface PassengerContext {
@@ -21,6 +21,7 @@ export interface PassengerContext {
     contratoUrl?: string;
     chavePix?: string;
     tipoChavePix?: string;
+    dataPagamento?: string;
 }
 
 const textPart = (text: string): CompositeMessagePart[] => {
@@ -54,8 +55,9 @@ const getTipoChavePixLabel = (tipo?: string): string => {
 };
 
 const getSystemFooter = (ctx: PassengerContext) => {
-    const nomeExibicao = ctx.apelidoMotorista || getFirstAndSecondName(ctx.nomeMotorista);
-    return `\n\n———\n🚐 *${nomeExibicao}* · Van360`;
+    const rawNome = ctx.apelidoMotorista || getFirstAndSecondName(ctx.nomeMotorista);
+    const nomeExibicao = capitalize(rawNome);
+    return `\n\n———\n🚐 *${nomeExibicao}* · Van360\n_Esta é uma mensagem automática. Por favor, não responda._`;
 };
 
 const buildPixParts = (mainText: string, chavePix: string, tipoChavePix: string | undefined, ctx: PassengerContext): CompositeMessagePart[] => {
@@ -97,7 +99,7 @@ export const PassengerTemplates = {
     dueSoon: (ctx: PassengerContext): CompositeMessagePart[] => {
         const valor = formatCurrency(ctx.valor || 0);
         const data = formatToBrazilianDate(ctx.dataVencimento || "");
-        const diasMsg = ctx.diasAntecedencia ? ` (daqui a ${ctx.diasAntecedencia} dias)` : "";
+        const diasMsg = ctx.diasAntecedencia ? (ctx.diasAntecedencia === 1 ? " (daqui a 1 dia)" : ` (daqui a ${ctx.diasAntecedencia} dias)`) : "";
         const titulo = getParcelaTitle(ctx.nomePassageiro, ctx.mes);
         const corpo = getParcelaBody(ctx.nomePassageiro, ctx.mes);
 
@@ -170,6 +172,27 @@ export const PassengerTemplates = {
             `🔹 Vencida em: *${data}*\n` +
             `⚠️ *Importante:* O atraso no pagamento pode gerar cobrança de multas e juros, caso aplicável.${getSystemFooter(ctx)}`;
         return textPart(text);
+    },
+
+    paymentReceipt: (ctx: PassengerContext): CompositeMessagePart[] => {
+        const corpo = getParcelaBody(ctx.nomePassageiro, ctx.mes);
+
+        const text = `✅ *Comprovante de Pagamento — ${getFirstName(ctx.nomePassageiro)}*\n\n` +
+            `${getFirstName(ctx.nomeResponsavel)}, segue o comprovante de pagamento da ${corpo}.${getSystemFooter(ctx)}`;
+
+        const parts: CompositeMessagePart[] = [];
+        if (ctx.reciboUrl) {
+            parts.push({
+                type: "image",
+                mediaBase64: ctx.reciboUrl
+            });
+        }
+        parts.push({
+            type: "text",
+            content: text
+        });
+
+        return parts;
     }
 };
 

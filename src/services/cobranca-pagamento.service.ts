@@ -70,6 +70,40 @@ export const cobrancaPagamentoService = {
       throw new AppError(msg || "Erro ao gerar recibo.", 500);
     }
 
+    if (data.enviar_recibo_whatsapp !== false && updated.recibo_url) {
+      try {
+        const { data: cobrancaCompleta } = await cobrancaRepository.getByIdWithPassageiroAndMotorista(cobrancaId);
+        const passageiroInfo = cobrancaCompleta?.passageiro as Record<string, any> | undefined;
+        const motoristaInfo = cobrancaCompleta?.motorista as Record<string, any> | undefined;
+
+        if (passageiroInfo?.telefone_responsavel) {
+          const { notificationService } = await import("./notifications/notification.service.js");
+          const { EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO } = await import("../config/constants.js");
+          const { getDriverDisplayName } = await import("../utils/format.js");
+          await notificationService.notifyPassenger(
+            passageiroInfo.telefone_responsavel,
+            EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO,
+            {
+              nomeResponsavel: passageiroInfo.nome_responsavel || passageiroInfo.nome || "",
+              nomePassageiro: passageiroInfo.nome || "",
+              nomeMotorista: getDriverDisplayName(motoristaInfo),
+              apelidoMotorista: motoristaInfo?.apelido,
+              valor: Number(updated.valor_pago || updated.valor),
+              dataPagamento: updated.data_pagamento || undefined,
+              mes: updated.mes,
+              ano: updated.ano,
+              reciboUrl: updated.recibo_url,
+              usuarioId: updated.usuario_id
+            },
+            { channels: ["WHATSAPP"] }
+          );
+        }
+      } catch (notifErr: unknown) {
+        const msg = notifErr instanceof Error ? notifErr.message : String(notifErr);
+        logger.error({ error: msg, cobrancaId }, "Erro ao enviar recibo por WhatsApp pós-pagamento manual");
+      }
+    }
+
     return updated;
   },
 

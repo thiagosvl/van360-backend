@@ -47,6 +47,7 @@ export const contractWorker = new Worker<ContractJobData>(
 
                 const { notificationService } = await import('../services/notifications/notification.service.js');
                 const { EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL } = await import('../config/constants.js');
+                const { getDriverDisplayName } = await import('../utils/format.js');
 
                 await notificationService.notifyPassenger(
                     passageiro.telefone_responsavel,
@@ -54,7 +55,13 @@ export const contractWorker = new Worker<ContractJobData>(
                     {
                         nomeResponsavel: passageiro.nome_responsavel,
                         nomePassageiro: passageiro.nome,
-                        nomeMotorista: dadosContrato.nomeCondutor,
+                        nomeMotorista: getDriverDisplayName({
+                            cpfcnpj: dadosContrato.cpfCnpjCondutor,
+                            apelido: dadosContrato.apelidoCondutor,
+                            razao_social: dadosContrato.nomeCondutor,
+                            nome: dadosContrato.nomeCondutor
+                        }),
+                        apelidoMotorista: dadosContrato.apelidoCondutor,
                         linkAssinatura,
                         usuarioId: usuarioId
                     },

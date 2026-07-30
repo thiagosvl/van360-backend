@@ -52,8 +52,8 @@ export const cobrancaRepository = {
             .from("cobrancas")
             .select(`
                 *,
-                passageiro:passageiros (nome, nome_responsavel, cpf_responsavel),
-                motorista:usuarios (nome, apelido)
+                passageiro:passageiros (nome, nome_responsavel, cpf_responsavel, telefone_responsavel),
+                motorista:usuarios (nome, apelido, razao_social, cpfcnpj)
             `)
             .eq("id", id)
             .single();

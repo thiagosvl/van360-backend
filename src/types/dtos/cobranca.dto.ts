@@ -19,6 +19,8 @@ export const createCobrancaSchema = z.object({
     data_pagamento: z.string().nullable().optional(),
     valor_pago: z.union([z.number(), z.string()]).transform(v => typeof v === 'string' ? moneyToNumber(v) : v).optional(),
     recibo_url: z.string().nullable().optional(),
+    desativar_lembretes: z.boolean().optional(),
+    enviar_recibo_whatsapp: z.boolean().optional(),
 });
 
 export type CreateCobrancaDTO = z.infer<typeof createCobrancaSchema>;
@@ -61,6 +63,7 @@ export const registrarPagamentoManualSchema = z.object({
     valor_pago: z.union([z.number(), z.string()]).transform(v => typeof v === 'string' ? moneyToNumber(v) : v).optional(),
     data_pagamento: z.string().optional(),
     tipo_pagamento: z.nativeEnum(CobrancaTipoPagamento).optional(),
+    enviar_recibo_whatsapp: z.boolean().optional().default(true),
 });
 
 export type RegistrarPagamentoManualDTO = z.infer<typeof registrarPagamentoManualSchema>;

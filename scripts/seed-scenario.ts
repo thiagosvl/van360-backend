@@ -47,11 +47,15 @@ async function clearData(usuarioId: string) {
     const tablesToClean = [
         "historico_atividades",
         "cobrancas",
+        "contratos",
         "gastos",
         "pre_passageiros",
+        "execucoes_rota",
+        "rotas",
         "passageiros",
         "escolas",
         "veiculos",
+        "gasto_categorias",
     ];
 
     for (const table of tablesToClean) {
@@ -63,6 +67,7 @@ async function clearData(usuarioId: string) {
 
         if (error) {
             console.error(`Erro ao limpar tabela ${table}:`, error);
+            throw error;
         }
     }
     console.log("[SEED] Banco limpo com sucesso.");
@@ -116,7 +121,10 @@ async function seedPassageiros(usuarioId: string, escolasInseridas: any[], veicu
     const passageirosToInsert = Array.from({ length: config.passageiros.quantidade }).map(() => {
         const escola = escolasInseridas[randomNumber(0, escolasInseridas.length - 1)];
         const veiculo = veiculosInseridos[randomNumber(0, veiculosInseridos.length - 1)];
-        const endereco = generateAddress();
+        const semEndereco = config.passageiros.percentualSemEndereco
+            ? randomNumber(1, 100) <= config.passageiros.percentualSemEndereco
+            : false;
+        const endereco = semEndereco ? null : generateAddress();
 
         // Aniversariantes no mês atual baseado na porcentagem configurada
         let data_nascimento = null;
@@ -144,13 +152,13 @@ async function seedPassageiros(usuarioId: string, escolasInseridas: any[], veicu
             telefone_responsavel: "11951186951",
             parentesco_responsavel: parentescos[randomNumber(0, parentescos.length - 1)],
 
-            logradouro: endereco.logradouro,
-            numero: endereco.numero,
-            bairro: endereco.bairro,
-            cidade: endereco.cidade,
-            estado: endereco.estado,
-            cep: endereco.cep,
-            referencia: endereco.referencia,
+            logradouro: endereco ? endereco.logradouro : null,
+            numero: endereco ? endereco.numero : null,
+            bairro: endereco ? endereco.bairro : null,
+            cidade: endereco ? endereco.cidade : null,
+            estado: endereco ? endereco.estado : null,
+            cep: endereco ? endereco.cep : null,
+            referencia: endereco ? endereco.referencia : null,
 
             dia_vencimento: [5, 10, 15, 20][randomNumber(0, 3)],
             valor_cobranca: generateValorCobranca(),
@@ -303,6 +311,46 @@ async function seedCobrancas(usuarioId: string, passageirosInseridos: any[]) {
     if (error) throw error;
 }
 
+async function seedResponsaveisAdicionais(passageirosInseridos: any[], config: ScenarioConfig) {
+    if (!config.passageiros.percentualComResponsaveisAdicionais || config.passageiros.percentualComResponsaveisAdicionais === 0) return;
+    if (!passageirosInseridos || passageirosInseridos.length === 0) return;
+
+    console.log(`[SEED] Inserindo responsáveis adicionais para passageiros...`);
+    const parentescos = Object.values(ParentescoResponsavel);
+
+    const responsaveisToInsert = [];
+
+    for (const passageiro of passageirosInseridos) {
+        const deveTerResponsavel = randomNumber(1, 100) <= config.passageiros.percentualComResponsaveisAdicionais;
+        if (deveTerResponsavel) {
+            const endereco = generateAddress();
+            responsaveisToInsert.push({
+                passageiro_id: passageiro.id,
+                nome: generateName(),
+                telefone: "11951186951",
+                cpf: generateCPF(),
+                parentesco: parentescos[randomNumber(0, parentescos.length - 1)],
+                logradouro: endereco.logradouro,
+                numero: endereco.numero,
+                bairro: endereco.bairro,
+                cidade: endereco.cidade,
+                estado: endereco.estado,
+                cep: endereco.cep,
+                referencia: endereco.referencia,
+            });
+        }
+    }
+
+    if (responsaveisToInsert.length === 0) return;
+
+    const { error } = await supabaseAdmin
+        .from("passageiro_responsaveis_adicionais")
+        .insert(responsaveisToInsert);
+
+    if (error) throw error;
+    console.log(`[SEED] Inseridos ${responsaveisToInsert.length} responsáveis adicionais.`);
+}
+
 async function main() {
     console.log(`[SEED] Buscando usuário pelo telefone: ${TARGET_PHONE}...`);
     const { data: usuario, error: userError } = await supabaseAdmin
@@ -342,6 +390,8 @@ async function main() {
 
         if (escolasInseridas && veiculosInseridos) {
             const passageirosInseridos = await seedPassageiros(usuarioId, escolasInseridas, veiculosInseridos, config);
+
+            await seedResponsaveisAdicionais(passageirosInseridos, config);
 
             await seedGastos(usuarioId, veiculosInseridos, config);
             await seedPrePassageiros(usuarioId, config);

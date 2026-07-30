@@ -7,7 +7,7 @@ import { logger } from "../config/logger.js";
 import { storageProvider } from "./providers/storage.provider.js";
 import { cobrancaRepository } from "../repositories/cobranca.repository.js";
 import { getMonthNameBR, getNowBR, formatToBrazilianDate } from "../utils/date.utils.js";
-import { formatCurrency, capitalize, formatPaymentMethod, formatCpfCnpj } from "../utils/format.js";
+import { formatCurrency, capitalize, formatPaymentMethod, formatCpfCnpj, getDriverDisplayName } from "../utils/format.js";
 
 // Utilitário para caminhos absolutos em ESM
 const __filename = fileURLToPath(import.meta.url);
@@ -252,7 +252,7 @@ class ReceiptService {
             const receiptData: ReceiptData = {
                 id: cobranca.id,
                 titulo: "Comprovante de Pagamento",
-                subtitulo: motoristaInfo?.apelido || motoristaInfo?.nome || "Transporte Escolar",
+                subtitulo: getDriverDisplayName(motoristaInfo) || "Transporte Escolar",
                 valor: cobranca.valor_pago || cobranca.valor,
                 data: cobranca.pago_em ? formatToBrazilianDate(cobranca.pago_em) : formatToBrazilianDate(getNowBR()),
                 pagadorNome: passageiroInfo?.nome_responsavel || passageiroInfo?.nome || 'Cliente',

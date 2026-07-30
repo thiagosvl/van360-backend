@@ -1,43 +1,60 @@
 import { z } from "zod";
 import { RouteStopStatus } from "../enums.js";
 
+const optionalString = z.union([z.string(), z.null(), z.undefined()]).transform(v => {
+  if (v === undefined) return undefined;
+  if (v === null || v === "") return null;
+  return v;
+});
+
+export const routeNodeSchema = z.object({
+  tipo_no: z.enum(["passageiro", "escola"]).default("passageiro"),
+  passageiro_id: z.string().uuid().optional().nullable(),
+  escola_id: z.string().uuid().optional().nullable(),
+  ordem: z.number().int(),
+  sentido: z.enum(["indo", "voltando"]).optional().nullable()
+});
+
 export const createRouteSchema = z.object({
   usuario_id: z.string().uuid("ID do usuário inválido"),
   nome: z.string().min(1, "Nome é obrigatório"),
-  periodo: z.string().min(1, "Período é obrigatório"), // 'manha', 'tarde', 'noite'
-  tipo: z.enum(["ida", "volta"], { message: "Tipo de trajeto é obrigatório" }),
-  passageiros: z.array(z.object({
-    passageiro_id: z.string().uuid(),
-    ordem: z.number().int()
-  })).optional()
+  veiculo_id: z.string().uuid().optional().nullable(),
+  passageiros: z.array(routeNodeSchema).optional()
 });
 
 export type CreateRouteDTO = z.infer<typeof createRouteSchema>;
 
 export const updateRouteSchema = z.object({
   nome: z.string().min(1).optional(),
-  periodo: z.string().min(1).optional(),
-  tipo: z.enum(["ida", "volta"]).optional(),
-  passageiros: z.array(z.object({
-    passageiro_id: z.string().uuid(),
-    ordem: z.number().int()
-  })).optional()
+  veiculo_id: z.string().uuid().optional().nullable(),
+  passageiros: z.array(routeNodeSchema).optional()
 });
 
 export type UpdateRouteDTO = z.infer<typeof updateRouteSchema>;
 
-export const setRoutePassengersSchema = z.object({
-  passageiros: z.array(z.object({
-    passageiro_id: z.string().uuid(),
+export const stepRouteExecutionSchema = z.object({
+  passageiro_id: z.string().uuid().optional().nullable(),
+  escola_id: z.string().uuid().optional().nullable(),
+  status: z.enum([RouteStopStatus.EMBARCADO, RouteStopStatus.AUSENTE], { message: "Status inválido" })
+});
+
+export type StepRouteExecutionDTO = z.infer<typeof stepRouteExecutionSchema>;
+
+export const reorderExecucaoSchema = z.object({
+  paradas: z.array(z.object({
+    id: z.string().uuid(),
     ordem: z.number().int()
   }))
 });
 
-export type SetRoutePassengersDTO = z.infer<typeof setRoutePassengersSchema>;
+export type ReorderExecucaoDTO = z.infer<typeof reorderExecucaoSchema>;
 
-export const stepRouteExecutionSchema = z.object({
-  passageiro_id: z.string().uuid("ID do passageiro inválido"),
-  status: z.enum([RouteStopStatus.EMBARCADO, RouteStopStatus.AUSENTE], { message: "Novo status ('embarcado' ou 'ausente') é obrigatório" })
+export const createAusenciaSchema = z.object({
+  passageiro_id: z.string().uuid("ID do passageiro é obrigatório"),
+  data_ausencia: z.string().min(1, "Data é obrigatória"),
+  turno: z.string().default("manha"),
+  sentido: z.enum(["indo", "voltando"]).optional().nullable(),
+  motivo: optionalString
 });
 
-export type StepRouteExecutionDTO = z.infer<typeof stepRouteExecutionSchema>;
+export type CreateAusenciaDTO = z.infer<typeof createAusenciaSchema>;

@@ -285,9 +285,13 @@ export enum RouteExecutionStatus {
 
 export enum RouteStopStatus {
   PENDENTE = "pendente",
-  A_CAMINHO = "a_caminho",
   EMBARCADO = "embarcado",
   AUSENTE = "ausente"
+}
+
+export enum RouteNodeType {
+  PASSAGEIRO = "passageiro",
+  ESCOLA = "escola"
 }
 
 export enum CanalAquisicao {

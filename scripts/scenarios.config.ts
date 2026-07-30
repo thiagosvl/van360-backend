@@ -8,6 +8,8 @@ export interface ScenarioConfig {
     passageiros: {
         quantidade: number;
         percentualComAniversario: number;
+        percentualSemEndereco?: number;
+        percentualComResponsaveisAdicionais?: number;
     };
     gastos: {
         quantidadeTotal: number;
@@ -43,11 +45,21 @@ export const cenarios: Record<string, ScenarioConfig> = {
         prePassageiros: { quantidade: 0 },
         resetarPix: true,
     },
-    "cenario-leads": {
-        escolas: { quantidade: 1 },
-        veiculos: { quantidade: 1 },
-        passageiros: { quantidade: 5, percentualComAniversario: 100 },
-        gastos: { quantidadeTotal: 2, quantidadeSemVeiculo: 0 },
-        prePassageiros: { quantidade: 15 },
+    "cenario-rotas": {
+        escolas: { quantidade: 2 },
+        veiculos: { quantidade: 2 },
+        passageiros: {
+            quantidade: 50,
+            percentualComAniversario: 75,
+            percentualSemEndereco: 10,
+            percentualComResponsaveisAdicionais: 40,
+        },
+        gastos: {
+            quantidadeTotal: 20,
+            quantidadeSemVeiculo: 5,
+        },
+        prePassageiros: {
+            quantidade: 2,
+        },
     }
 };

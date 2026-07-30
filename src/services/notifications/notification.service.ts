@@ -24,6 +24,7 @@ import {
     EVENTO_PASSAGEIRO_ATRASADO,
     EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL,
     EVENTO_PASSAGEIRO_CONTRATO_ASSINADO,
+    EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO,
     EVENTO_ROTA_A_CAMINHO_IDA,
     EVENTO_ROTA_A_CAMINHO_VOLTA,
     EVENTO_ROTA_EMBARCOU,
@@ -72,7 +73,8 @@ type PassengerEventType =
     | typeof EVENTO_PASSAGEIRO_VENCIMENTO_HOJE
     | typeof EVENTO_PASSAGEIRO_ATRASADO
     | typeof EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL
-    | typeof EVENTO_PASSAGEIRO_CONTRATO_ASSINADO;
+    | typeof EVENTO_PASSAGEIRO_CONTRATO_ASSINADO
+    | typeof EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO;
 
 export type RouteEventType =
     | typeof EVENTO_ROTA_A_CAMINHO_IDA
@@ -143,6 +145,7 @@ class NotificationService {
             case EVENTO_PASSAGEIRO_ATRASADO: parts = PassengerTemplates.overdue(ctx); break;
             case EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL: parts = PassengerTemplates.contractAvailable(ctx); break;
             case EVENTO_PASSAGEIRO_CONTRATO_ASSINADO: parts = PassengerTemplates.contractSignedBySelf(ctx); break;
+            case EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO: parts = PassengerTemplates.paymentReceipt(ctx); break;
         }
 
         return await this._processAndEnqueue(to, parts, type as string, options);

@@ -164,8 +164,8 @@ export class WhatsappService {
                 rejectCall: true,
                 msgCall: "Desculpe, este número não aceita chamadas de voz.",
                 groupsIgnore: true,
-                alwaysOnline: true,
-                readMessages: true,
+                alwaysOnline: false,
+                readMessages: false,
                 readStatus: false,
                 syncFullHistory: false
             }, { headers: EVO_HEADERS });

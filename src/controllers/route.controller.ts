@@ -6,16 +6,14 @@ import { routeService } from "../services/route.service.js";
 import {
   createRouteSchema,
   updateRouteSchema,
-  stepRouteExecutionSchema
+  stepRouteExecutionSchema,
+  reorderExecucaoSchema
 } from "../types/dtos/route.dto.js";
 
 export const routeController = {
   create: async (request: FastifyRequest, reply: FastifyReply) => {
     logger.info("RouteController.create - Starting");
     const data = createRouteSchema.parse(request.body);
-
-
-
     const result = await routeService.createRoute(data);
     return reply.status(201).send(result);
   },
@@ -23,12 +21,6 @@ export const routeController = {
   update: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     logger.info({ routeId: id }, "RouteController.update - Starting");
-
-    const authUid = (request as any).user?.id;
-    if (authUid) {
-      // access control handled by middleware
-    }
-
     const data = updateRouteSchema.parse(request.body);
     const result = await routeService.updateRoute(id, data);
     return reply.status(200).send(result);
@@ -37,12 +29,6 @@ export const routeController = {
   delete: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     logger.info({ routeId: id }, "RouteController.delete - Starting");
-
-    const authUid = (request as any).user?.id;
-    if (authUid) {
-      // access control handled by middleware
-    }
-
     await routeService.deleteRoute(id);
     return reply.status(200).send({ success: true });
   },
@@ -84,35 +70,28 @@ export const routeController = {
       throw new AppError("Não autorizado", 401);
     }
 
-
-
     const result = await routeService.iniciarRota(id, authUid);
     return reply.status(201).send(result);
   },
 
   atualizarParadaStatus: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
-    logger.info({ execucaoId: id }, "RouteController.atualizarParadaStatus - Starting");
+    const { parada_id, status } = request.body as { parada_id: string; status: any };
+    logger.info({ execucaoId: id, parada_id, status }, "RouteController.atualizarParadaStatus");
+    const result = await routeService.atualizarParadaStatus(id, parada_id, status);
+    return reply.status(200).send(result);
+  },
 
-    const authUid = (request as any).user?.id;
-    if (authUid) {
-      // access control handled by middleware
-    }
-
-    const { passageiro_id, status } = stepRouteExecutionSchema.parse(request.body);
-    const result = await routeService.atualizarParadaStatus(id, passageiro_id, status);
+  reordenarExecucao: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const data = reorderExecucaoSchema.parse(request.body);
+    const result = await routeService.reordenarExecucao(id, data);
     return reply.status(200).send(result);
   },
 
   cancelarExecucao: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     logger.info({ execucaoId: id }, "RouteController.cancelarExecucao - Starting");
-
-    const authUid = (request as any).user?.id;
-    if (authUid) {
-      // access control handled by middleware
-    }
-
     const result = await routeService.cancelarExecucao(id);
     return reply.status(200).send(result);
   }

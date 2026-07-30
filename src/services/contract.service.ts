@@ -7,7 +7,7 @@ import { ContractProvider, DadosContrato, SignatureMetadata } from '../types/con
 import { CreateContractDTO, ListContractsDTO } from '../types/dtos/contract.dto.js';
 import { AtividadeAcao, AtividadeEntidadeTipo, ContractMultaTipo, ContratoProvider, ContratoStatus, PassageiroModalidade, PeriodoEnum } from '../types/enums.js';
 import { getNowBR, toLocalDateString, parseLocalDate, addMonths } from '../utils/date.utils.js';
-import { formatAddress } from '../utils/format.js';
+import { formatAddress, getDriverDisplayName } from '../utils/format.js';
 import { historicoService } from './historico.service.js';
 import { InHouseContractProvider } from './providers/inhouse-contract.provider.js';
 import { notificationService } from './notifications/notification.service.js';
@@ -122,7 +122,7 @@ class ContractService {
       multaAtraso: usuario.config_contrato?.multa_atraso || { valor: 10, tipo: ContractMultaTipo.FIXO },
       jurosAtraso: usuario.config_contrato?.juros_atraso || { valor: 1, tipo: ContractMultaTipo.PERCENTUAL },
       multaRescisao: usuario.config_contrato?.multa_rescisao || { valor: 15, tipo: ContractMultaTipo.FIXO },
-      nomeCondutor: usuario.razao_social || usuario.nome,
+      nomeCondutor: getDriverDisplayName(usuario),
       cpfCnpjCondutor: usuario.cpfcnpj,
       telefoneCondutor: usuario.telefone,
       placaVeiculo: passageiro.veiculo?.placa ? formatarPlacaExibicao(passageiro.veiculo.placa) : '',
@@ -252,6 +252,7 @@ class ContractService {
           nomeResponsavel: passageiro.nome_responsavel,
           nomePassageiro: passageiro.nome,
           nomeMotorista: usuario.nome,
+          apelidoMotorista: usuario.apelido,
           contratoUrl: response.documentoFinalUrl,
           usuarioId: usuario.id
         },
@@ -519,7 +520,7 @@ class ContractService {
       jurosAtraso,
       multaRescisao,
 
-      nomeCondutor: usuario.nome,
+      nomeCondutor: getDriverDisplayName(usuario),
       cpfCnpjCondutor: usuario.cpfcnpj,
       telefoneCondutor: usuario.telefone,
       placaVeiculo: "ABC-1234",

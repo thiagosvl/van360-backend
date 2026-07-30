@@ -17,6 +17,7 @@ const routeRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get("/execucoes/:id", routeController.getExecucaoDetail);
   app.post("/:id/iniciar", routeController.iniciarRota);
   app.post("/execucoes/:id/parada", routeController.atualizarParadaStatus);
+  app.post("/execucoes/:id/reordenar", routeController.reordenarExecucao);
   app.post("/execucoes/:id/cancelar", routeController.cancelarExecucao);
 };
 
