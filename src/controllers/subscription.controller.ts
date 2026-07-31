@@ -152,25 +152,4 @@ export const subscriptionController = {
       return reply.status(500).send({ error: "Erro ao deletar método de pagamento." });
     }
   },
-
-  async claimReferral(request: FastifyRequest, reply: FastifyReply) {
-    const authRequest = request as AuthenticatedRequest;
-    const userId = authRequest.usuario_id;
-    const bodySchema = z.object({
-      phone: z.string().min(10).max(15),
-    });
-
-    try {
-      const { phone } = bodySchema.parse(request.body);
-      await subscriptionReferralService.claimReferral(userId, phone);
-      return reply.send({ success: true, message: "Indicação vinculada com sucesso!" });
-    } catch (err) {
-      if (err instanceof z.ZodError) {
-        return reply.status(400).send({ error: "Número de telefone inválido." });
-      }
-      const error = err as Error;
-      logger.error({ err: error, userId }, "[SubscriptionController] Erro ao resgatar convite.");
-      return reply.status(400).send({ error: "Erro ao resgatar convite. Tente novamente ou contate o suporte." });
-    }
-  },
 };

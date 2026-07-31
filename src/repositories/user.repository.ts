@@ -10,6 +10,14 @@ export const userRepository = {
             .single();
     },
 
+    async getByPhone(phone: string) {
+        return supabaseAdmin
+            .from("usuarios")
+            .select("id")
+            .eq("telefone", phone)
+            .maybeSingle();
+    },
+
     async getByPhoneExcludingId(phone: string, excludeId: string) {
         return supabaseAdmin
             .from("usuarios")

@@ -71,6 +71,7 @@ export interface RegistroPayload {
   ativo?: boolean;
   termos_aceitos: boolean;
   indicador_id?: string;
+  indicador_telefone?: string;
   data_nascimento?: string;
   dispositivo_cadastro?: DispositivoCadastro;
   metadados_cadastro?: Record<string, unknown>;
@@ -78,11 +79,10 @@ export interface RegistroPayload {
 
 export interface RegistroManualResult {
   success: boolean;
-  session: {
-    access_token: string;
-    refresh_token: string;
-    user: any;
-  };
+  session: any;
+  user?: any;
+  message?: string;
+  referralStatus?: "linked" | "not_found";
 }
 
 export async function checkUserStatus(
@@ -225,6 +225,25 @@ export async function registrarUsuario(
       throw new AppError(userStatus.message, 409, true, userStatus.field);
     }
 
+    // Validar telefone do indicador (se fornecido)
+    let resolvedIndicadorId: string | null = payload.indicador_id || null;
+    const rawReferralPhone = payload.indicador_telefone || (resolvedIndicadorId && !resolvedIndicadorId.includes("-") ? resolvedIndicadorId : null);
+
+    if (rawReferralPhone) {
+      const cleanRefPhone = rawReferralPhone.replace(/\D/g, "");
+      if (cleanRefPhone) {
+        if (cleanRefPhone === telefone) {
+          throw new AppError("Você não pode utilizar seu próprio WhatsApp como indicação.", 400, true, "indicador_telefone");
+        }
+        const { userRepository } = await import("../repositories/user.repository.js");
+        const { data: indicador } = await userRepository.getByPhone(cleanRefPhone);
+        if (!indicador) {
+          throw new AppError("Não encontramos esse motorista. Verifique se o WhatsApp está correto.", 400, true, "indicador_telefone");
+        }
+        resolvedIndicadorId = indicador.id;
+      }
+    }
+
     const session = await criarUsuarioAuth(email, payload.senha);
     authUid = session.user.id;
     usuarioId = authUid;
@@ -240,10 +259,10 @@ export async function registrarUsuario(
     // 1. Iniciar Trial de 15 dias
     const subscription = await subscriptionService.getOrCreateSubscription(usuarioId);
 
-    // 2. Vincular Indicador (se houver indicador_id no payload)
-    if (subscription && payload.indicador_id) {
+    // 2. Vincular Indicador se validado com sucesso
+    if (subscription && resolvedIndicadorId) {
       try {
-        await subscriptionReferralService.registerReferral(payload.indicador_id, usuarioId);
+        await subscriptionReferralService.registerReferral(resolvedIndicadorId, usuarioId);
       } catch (e) {
         logger.error({ error: e }, "Falha ao registrar referral");
       }

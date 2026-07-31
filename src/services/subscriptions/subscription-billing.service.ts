@@ -121,11 +121,6 @@ export const subscriptionBillingService = {
         const sub = await subscriptionService.getOrCreateSubscription(userId);
         if (!sub) throw new Error("Erro ao obter assinatura.");
 
-        if (sub.plano_id !== planId) {
-            await subscriptionRepository.updatePlan(sub.id, planId);
-            sub.plano_id = planId;
-        }
-
         let currentPaymentToken = paymentToken;
         let preferredMethodId: string | null = sub.metodo_pagamento_preferencial_id;
 

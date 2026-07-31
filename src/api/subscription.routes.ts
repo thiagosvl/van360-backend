@@ -59,9 +59,4 @@ export default async function subscriptionRoutes(app: FastifyInstance) {
    * DELETE /api/subscriptions/payment-methods/:id
    */
   app.delete("/payment-methods/:id", subscriptionController.deletePaymentMethod);
-
-  /**
-   * [DEBUG/TESTE] Resgate de convite (vincular indicador pelo WhatsApp)
-   */
-  app.post("/referral/claim", subscriptionController.claimReferral);
 }

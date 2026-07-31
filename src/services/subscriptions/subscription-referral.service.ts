@@ -12,7 +12,7 @@ import { referralRepository } from "../../repositories/referral.repository.js";
 import { userRepository } from "../../repositories/user.repository.js";
 import { subscriptionRepository } from "../../repositories/subscription.repository.js";
 import { notificationService } from "../notifications/notification.service.js";
-import { EVENTO_MOTORISTA_INDICACAO_BONUS } from "../../config/constants.js";
+import { EVENTO_MOTORISTA_INDICACAO_BONUS, EVENTO_MOTORISTA_INDICACAO_CADASTRO } from "../../config/constants.js";
 
 export const subscriptionReferralService = {
     async getReferralSummary(userId: string) {
@@ -45,33 +45,6 @@ export const subscriptionReferralService = {
         };
     },
 
-    async claimReferral(userId: string, phone: string) {
-        const cleanPhone = phone.replace(/\D/g, "");
-
-        // 1. Verificar se o usuário está em Trial
-        const { data: currentSub } = await subscriptionRepository.getSubscriptionStatus(userId);
-
-        if (currentSub?.status !== SubscriptionStatus.TRIAL) {
-            throw new Error("O resgate de convite só é permitido durante o período de Trial.");
-        }
-
-        // 2. Verificar se já possui indicação
-        const { data: existingRef } = await referralRepository.getReferralByIndicadoId(userId);
-
-        if (existingRef) {
-            throw new Error("Você já possui um indicador vinculado.");
-        }
-
-        // 3. Buscar indicador
-        const { data: indicador } = await userRepository.getByPhoneExcludingId(cleanPhone, userId);
-
-        if (!indicador) {
-            throw new Error("Motorista não encontrado com esse número.");
-        }
-
-        return this.registerReferral(indicador.id, userId);
-    },
-
     async registerReferral(indicadorId: string, indicadoId: string): Promise<void> {
         const { error } = await referralRepository.createReferral({
             indicador_id: indicadorId,
@@ -82,6 +55,27 @@ export const subscriptionReferralService = {
         if (error) {
             logger.error({ error, indicadorId, indicadoId }, "[SubscriptionReferralService] Erro ao registrar indicação.");
             throw error;
+        }
+
+        // Notificar motorista indicador sobre o novo cadastro
+        try {
+            const { data: indicador } = await userRepository.getById(indicadorId);
+            if (indicador?.telefone) {
+                const bonusDays = await getConfigNumber(ConfigKey.SAAS_REFERRAL_BONUS_DAYS, 30);
+                await notificationService.notifyDriver(
+                    indicador.telefone,
+                    EVENTO_MOTORISTA_INDICACAO_CADASTRO,
+                    {
+                        nomeMotorista: indicador.nome,
+                        trialDays: bonusDays
+                    },
+                    { channels: ['WHATSAPP'] }
+                ).catch(err => {
+                    logger.error({ err, indicadorId }, "[SubscriptionReferralService] Erro ao notificar novo cadastro por indicação.");
+                });
+            }
+        } catch (notifyErr) {
+            logger.error({ notifyErr, indicadorId, indicadoId }, "[SubscriptionReferralService] Erro ao buscar indicador para notificação.");
         }
     },
 

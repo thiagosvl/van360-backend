@@ -346,5 +346,13 @@ export const DriverTemplates = {
             `${getFirstName(ctx.nomeMotorista)}, um motorista que você indicou assinou o Van360!\n\n` +
             `Adicionamos *${dias} ${diasLabel}* de acesso gratuito à sua assinatura!${validadeTexto}\n\n` +
             `Continue indicando para ganhar mais! 🚐`);
+    },
+
+    referralRegistered: (ctx: DriverContext): CompositeMessagePart[] => {
+        const bonusDays = ctx.trialDays || 30;
+        return textPart(`🎉 *Novo cadastro por indicação — Van360*\n\n` +
+            `${getFirstName(ctx.nomeMotorista)}, um novo motorista acabou de se cadastrar utilizando o seu convite!\n\n` +
+            `Assim que ele assinar o primeiro plano, você ganha *+${bonusDays} dias grátis* automaticamente na sua assinatura! 🚀\n\n` +
+            `Continue indicando e garanta mais meses de acesso gratuito! 🚐💙`);
     }
 };
