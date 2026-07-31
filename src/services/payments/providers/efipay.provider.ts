@@ -59,7 +59,7 @@ export class EfipayProvider implements PaymentProviderAdapter {
                     },
                     payment: {
                         credit_card: {
-                            installments: 1,
+                            installments: request.installments || 1,
                             payment_token: request.paymentToken,
                             customer: {
                                 name: request.customer.name,

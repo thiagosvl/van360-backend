@@ -4,6 +4,7 @@ import { CheckoutPaymentMethod } from "../enums.js";
 export const createInvoiceSchema = z.object({
     planId: z.string().uuid(),
     paymentMethod: z.nativeEnum(CheckoutPaymentMethod).default(CheckoutPaymentMethod.PIX),
+    installments: z.number().int().min(1).max(24).optional(),
     paymentToken: z.string().optional(),
     savedCardId: z.string().uuid().optional(),
     saveCard: z.boolean().optional().default(true),

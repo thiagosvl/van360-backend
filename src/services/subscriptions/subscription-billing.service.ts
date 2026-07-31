@@ -102,7 +102,7 @@ export const subscriptionBillingService = {
 
     async createInvoice(userId: string, requestData: CreateInvoiceDTO) {
         const {
-            planId, paymentMethod, paymentToken, savedCardId, saveCard, cardBrand, cardLast4, expireMonth, expireYear,
+            planId, paymentMethod, installments, paymentToken, savedCardId, saveCard, cardBrand, cardLast4, expireMonth, expireYear,
             birth, street, number, neighborhood, zipcode, city, state
         } = requestData;
 
@@ -159,6 +159,7 @@ export const subscriptionBillingService = {
                 dueDate: dataVencimentoFatura,
                 externalId: `sub_${sub.id}_${Date.now()}`,
                 paymentMethod: paymentMethod,
+                installments: installments,
                 paymentToken: currentPaymentToken,
                 customer: {
                     name: user.nome,
@@ -296,6 +297,7 @@ export const subscriptionBillingService = {
             }
         }
 
+        const numParcelas = installments || 1;
         const { data: fatura, error: fError } = await invoiceRepository.createInvoice({
             usuario_id: userId,
             assinatura_id: sub.id,
@@ -305,7 +307,10 @@ export const subscriptionBillingService = {
             status: SubscriptionInvoiceStatus.PENDING,
             data_vencimento: dataVencimentoFatura,
             gateway_txid: chargeRes.providerId,
-            pix_copy_paste: chargeRes.pixCopyPaste
+            pix_copy_paste: chargeRes.pixCopyPaste,
+            parcelas: numParcelas,
+            valor_parcela: Number((valor / numParcelas).toFixed(2)),
+            valor_total: valor
         });
 
         if (fError || !fatura) throw fError || new Error("Erro ao criar fatura");

@@ -292,16 +292,6 @@ const atualizarParadaStatus = async (
     if (updateError) throw updateError;
   }
 
-  const { data: pendentes } = await routeRepository.getPendentes(execucaoId);
-
-  if (!pendentes || pendentes.length === 0) {
-    await routeRepository.updateExecucaoStatus(
-      execucaoId,
-      RouteExecutionStatus.CONCLUIDA,
-      new Date().toISOString()
-    );
-  }
-
   return await getExecucaoDetail(execucaoId);
 };
 
@@ -328,6 +318,19 @@ const cancelarExecucao = async (execucaoId: string): Promise<any> => {
   return await getExecucaoDetail(execucaoId);
 };
 
+const finalizarExecucao = async (execucaoId: string): Promise<any> => {
+  if (!execucaoId) throw new AppError("ID da execução é obrigatório", 400);
+
+  const { error } = await routeRepository.updateExecucaoStatus(
+    execucaoId,
+    RouteExecutionStatus.CONCLUIDA,
+    new Date().toISOString()
+  );
+
+  if (error) throw error;
+  return await getExecucaoDetail(execucaoId);
+};
+
 export const routeService = {
   createRoute,
   updateRoute,
@@ -339,5 +342,6 @@ export const routeService = {
   iniciarRota,
   atualizarParadaStatus,
   reordenarExecucao,
-  cancelarExecucao
+  cancelarExecucao,
+  finalizarExecucao
 };

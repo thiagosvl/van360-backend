@@ -12,6 +12,9 @@ export const invoiceRepository = {
         data_vencimento: string;
         gateway_txid?: string;
         pix_copy_paste?: string;
+        parcelas?: number;
+        valor_parcela?: number;
+        valor_total?: number;
     }) {
         return supabaseAdmin
             .from("assinatura_faturas")

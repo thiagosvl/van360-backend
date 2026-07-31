@@ -94,5 +94,12 @@ export const routeController = {
     logger.info({ execucaoId: id }, "RouteController.cancelarExecucao - Starting");
     const result = await routeService.cancelarExecucao(id);
     return reply.status(200).send(result);
+  },
+
+  finalizarExecucao: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    logger.info({ execucaoId: id }, "RouteController.finalizarExecucao");
+    const result = await routeService.finalizarExecucao(id);
+    return reply.status(200).send(result);
   }
 };

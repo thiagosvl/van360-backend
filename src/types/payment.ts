@@ -5,6 +5,7 @@ export interface CreateChargeRequest {
     amount: number;
     description: string;
     paymentMethod: CheckoutPaymentMethod;
+    installments?: number;
     paymentToken?: string;
     customer: {
         name: string;
