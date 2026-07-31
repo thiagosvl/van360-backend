@@ -42,7 +42,7 @@ export const cobrancaService = {
     const cobrancaId = crypto.randomUUID();
     const valorNumerico = typeof data.valor === "string" ? moneyToNumber(data.valor) : data.valor;
 
-    const cobrancaCleanData = data;
+    const { enviar_recibo_whatsapp, ...cobrancaCleanData } = data;
 
     const cobrancaData: Record<string, unknown> = {
       id: cobrancaId,

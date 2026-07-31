@@ -15,8 +15,10 @@ export function globalErrorHandler(error: FastifyError, request: FastifyRequest,
     if (error instanceof AppError || error.name === 'AppError' || (error as any).isOperational) {
         const statusCode = (error as any).statusCode || 500;
         const message = error.message || "Erro desconhecido";
+        
+        const logMethod = statusCode >= 500 ? 'error' : 'warn';
 
-        logger.warn({
+        logger[logMethod]({
             msg: "Erro Operacional",
             error: message,
             statusCode: statusCode,
