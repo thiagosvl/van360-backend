@@ -106,8 +106,12 @@ export const usuarioResumoService = {
     const cobrancasPagas = cobrancas.filter((c: Record<string, any>) => c.status === CobrancaStatus.PAGO);
     const receitaRealizada = cobrancasPagas.reduce((acc: number, c: Record<string, any>) => acc + Number(c.valor || 0), 0);
 
+    const hoje = toLocalDateString(getNowBR());
     const isPastPeriod = targetAno < now.getFullYear() || (targetAno === now.getFullYear() && targetMes < (now.getMonth() + 1));
     let receitaProjetada = 0;
+    let atrasosProjetadosValor = 0;
+    let atrasosProjetadosCount = 0;
+
     if (!isPastPeriod) {
       const passageirosComCobranca = new Set(cobrancas.map((c: Record<string, any>) => c.passageiro_id));
       const driverCreatedAt = (usuario as Record<string, any>)?.created_at;
@@ -152,6 +156,15 @@ export const usuarioResumoService = {
         }
 
         receitaProjetada += Number(p.valor_cobranca);
+
+        const diaVenc = p.dia_vencimento ? String(p.dia_vencimento).padStart(2, "0") : "10";
+        const mesStr = String(targetMes).padStart(2, "0");
+        const dataVencProj = `${targetAno}-${mesStr}-${diaVenc}`;
+
+        if (dataVencProj < hoje) {
+          atrasosProjetadosValor += Number(p.valor_cobranca);
+          atrasosProjetadosCount += 1;
+        }
       });
     }
 
@@ -168,9 +181,11 @@ export const usuarioResumoService = {
 
     const margemOperacional = receitaRealizada > 0 ? ((receitaRealizada - totalDespesas) / receitaRealizada) * 100 : 0;
 
-    const hoje = toLocalDateString(getNowBR());
-    const atrasos = cobrancas.filter((c: Record<string, any>) => c.status === CobrancaStatus.PENDENTE && c.data_vencimento < hoje);
-    const valorAtrasos = atrasos.reduce((acc: number, c: Record<string, any>) => acc + Number(c.valor || 0), 0);
+    const atrasosReais = cobrancas.filter((c: Record<string, any>) => c.status === CobrancaStatus.PENDENTE && c.data_vencimento < hoje);
+    const valorAtrasosReais = atrasosReais.reduce((acc: number, c: Record<string, any>) => acc + Number(c.valor || 0), 0);
+
+    const valorAtrasos = valorAtrasosReais + atrasosProjetadosValor;
+    const countAtrasos = atrasosReais.length + atrasosProjetadosCount;
 
     const passageirosPagos = new Set(cobrancasPagas.map((c: Record<string, any>) => c.passageiro_id)).size;
     const ticketMedio = passageirosPagos > 0 ? receitaRealizada / passageirosPagos : 0;
@@ -189,7 +204,7 @@ export const usuarioResumoService = {
       },
       atrasos: {
         valor: valorAtrasos,
-        count: atrasos.length
+        count: countAtrasos
       },
       ticket_medio: ticketMedio
     };
