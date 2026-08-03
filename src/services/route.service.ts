@@ -444,6 +444,13 @@ const registrarAusenciaAntecipada = async (data: CreateAusenciaDTO & { registrad
   if (!data.rota_id) throw new AppError("Rota é obrigatória", 400);
   if (!data.data_ausencia) throw new AppError("Data da ausência é obrigatória", 400);
 
+  // Prevenção de duplicidade: se já existir ausência cadastrada para esta rota, passageiro e data, reaproveita
+  const { data: ausenciasExistentes } = await routeRepository.getAusenciasByRotaEData(data.rota_id, data.data_ausencia);
+  const existente = ausenciasExistentes?.find((a: any) => a.passageiro_id === data.passageiro_id);
+  if (existente) {
+    return existente;
+  }
+
   const { data: inserted, error } = await routeRepository.insertAusencia({
     passageiro_id: data.passageiro_id,
     rota_id: data.rota_id,
@@ -461,7 +468,7 @@ const registrarAusenciaAntecipada = async (data: CreateAusenciaDTO & { registrad
       entidade_tipo: AtividadeEntidadeTipo.ROTA,
       entidade_id: data.rota_id,
       acao: AtividadeAcao.PASSAGEIRO_STATUS,
-      descricao: `Registrou ausência antecipada para o passageiro "${inserted.passageiro?.nome || 'Passageiro'}" na data ${data.data_ausencia}.`,
+      descricao: `Registrou ausência antecipada para o passageiro "${inserted?.passageiro?.nome || 'Passageiro'}" na data ${data.data_ausencia}.`,
       meta: { passageiro_id: data.passageiro_id, rota_id: data.rota_id, data_ausencia: data.data_ausencia }
     });
   }
@@ -470,15 +477,25 @@ const registrarAusenciaAntecipada = async (data: CreateAusenciaDTO & { registrad
 };
 
 const removerAusenciaAntecipada = async (id: string, passageiroId?: string, rotaId?: string, dataAusencia?: string): Promise<void> => {
+  let targetPid = passageiroId;
+  let targetRotaId = rotaId;
+  let targetDate = dataAusencia;
+
   if (id && id !== DELETE_AUSENCIA_BY_QUERY_PARAM) {
-    const { error } = await routeRepository.deleteAusencia(id);
-    if (error) throw error;
-    return;
+    const { data: aus } = await routeRepository.getAusenciaById(id);
+    if (aus) {
+      targetPid = aus.passageiro_id;
+      targetRotaId = aus.rota_id;
+      targetDate = aus.data_ausencia;
+    }
   }
 
-  if (passageiroId && rotaId) {
-    const targetDate = dataAusencia || getTodayLocalDateStr();
-    const { error } = await routeRepository.deleteAusenciaByPassageiroERota(passageiroId, rotaId, targetDate);
+  if (targetPid && targetRotaId) {
+    const dateStr = targetDate || getTodayLocalDateStr();
+    const { error } = await routeRepository.deleteAusenciaByPassageiroERota(targetPid, targetRotaId, dateStr);
+    if (error) throw error;
+  } else if (id && id !== DELETE_AUSENCIA_BY_QUERY_PARAM) {
+    const { error } = await routeRepository.deleteAusencia(id);
     if (error) throw error;
   }
 };

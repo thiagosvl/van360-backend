@@ -363,6 +363,14 @@ export const routeRepository = {
       .single();
   },
 
+  async getAusenciaById(id: string) {
+    return supabaseAdmin
+      .from("rota_ausencias")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+  },
+
   async deleteAusencia(id: string) {
     return supabaseAdmin
       .from("rota_ausencias")
