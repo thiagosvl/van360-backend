@@ -243,7 +243,7 @@ export const routeRepository = {
   async getExecucaoResumida(execucaoId: string) {
     return supabaseAdmin
       .from("execucoes_rota")
-      .select("id, rota_id, status")
+      .select("id, rota_id, status, usuario_id")
       .eq("id", execucaoId)
       .single();
   },

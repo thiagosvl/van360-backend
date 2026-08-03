@@ -3,6 +3,8 @@ import { CreateRouteDTO, UpdateRouteDTO, StepRouteExecutionDTO, ReorderExecucaoD
 import { RouteExecutionStatus, RouteStopStatus, RouteNodeType, RouteSentido, AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { routeRepository } from "../repositories/route.repository.js";
 import { historicoService } from "./historico.service.js";
+import { logger } from "../config/logger.js";
+import { getNowBR, toPersistenceString } from "../utils/date.utils.js";
 
 const createRoute = async (data: CreateRouteDTO): Promise<any> => {
   if (!data.usuario_id) throw new AppError("Usuário obrigatório", 400);
@@ -128,11 +130,7 @@ const deleteRoute = async (id: string): Promise<void> => {
 };
 
 const getTodayLocalDateStr = (): string => {
-  const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return toPersistenceString(getNowBR());
 };
 
 const getRoute = async (id: string, dataAusencia?: string): Promise<any> => {
@@ -355,12 +353,15 @@ const atualizarParadaStatus = async (
       const { data: ausenciasExistentes } = await routeRepository.getAusenciasByRotaEData(exec.rota_id, todayStr);
       const jaExiste = ausenciasExistentes?.some((a: any) => a.passageiro_id === paradaObj.passageiro_id);
       if (!jaExiste) {
-        await routeRepository.insertAusencia({
+        const { error: insError } = await routeRepository.insertAusencia({
           passageiro_id: paradaObj.passageiro_id,
           rota_id: exec.rota_id,
           data_ausencia: todayStr,
-          criado_por_usuario_id: (exec as any).usuario_id || null,
+          registrado_por: exec.usuario_id || null,
         });
+        if (insError) {
+          logger.error({ insError }, "Erro ao inserir em rota_ausencias durante a execução");
+        }
       }
     }
   } else if (novoStatus === RouteStopStatus.PENDENTE && paradaObj?.passageiro_id) {
