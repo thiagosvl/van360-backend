@@ -7,7 +7,8 @@ import {
   createRouteSchema,
   updateRouteSchema,
   stepRouteExecutionSchema,
-  reorderExecucaoSchema
+  reorderExecucaoSchema,
+  createAusenciaSchema
 } from "../types/dtos/route.dto.js";
 
 export const routeController = {
@@ -101,5 +102,32 @@ export const routeController = {
     logger.info({ execucaoId: id }, "RouteController.finalizarExecucao");
     const result = await routeService.finalizarExecucao(id);
     return reply.status(200).send(result);
+  },
+
+  createAusencia: async (request: FastifyRequest, reply: FastifyReply) => {
+    logger.info("RouteController.createAusencia - Starting");
+    const data = createAusenciaSchema.parse(request.body);
+    const authUid = (request as any).user?.id;
+    const result = await routeService.registrarAusenciaAntecipada({
+      ...data,
+      registrado_por: authUid
+    });
+    return reply.status(201).send(result);
+  },
+
+  deleteAusencia: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const { passageiro_id, rota_id, data_ausencia } = (request.query || {}) as { passageiro_id?: string; rota_id?: string; data_ausencia?: string };
+    logger.info({ ausenciaId: id, passageiro_id, rota_id }, "RouteController.deleteAusencia - Starting");
+    await routeService.removerAusenciaAntecipada(id, passageiro_id, rota_id, data_ausencia);
+    return reply.status(200).send({ success: true });
+  },
+
+  listAusencias: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const { data } = request.query as { data?: string };
+    logger.info({ rotaId: id, data }, "RouteController.listAusencias");
+    const ausencias = await routeService.listAusenciasByRota(id, data);
+    return reply.status(200).send(ausencias);
   }
 };

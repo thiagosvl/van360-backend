@@ -243,7 +243,7 @@ export const routeRepository = {
   async getExecucaoResumida(execucaoId: string) {
     return supabaseAdmin
       .from("execucoes_rota")
-      .select("id, status")
+      .select("id, rota_id, status")
       .eq("id", execucaoId)
       .single();
   },
@@ -312,5 +312,70 @@ export const routeRepository = {
       .update({ ordem })
       .eq("id", paradaId)
       .eq("execucao_rota_id", execucaoId);
+  },
+
+  async getAusenciasByRotaEData(rotaId: string, dataAusencia: string) {
+    return supabaseAdmin
+      .from("rota_ausencias")
+      .select(`
+        *,
+        passageiro:passageiros (
+          id,
+          nome
+        )
+      `)
+      .eq("rota_id", rotaId)
+      .eq("data_ausencia", dataAusencia);
+  },
+
+  async getAusenciasByUsuarioEData(usuarioId: string, dataAusencia: string) {
+    return supabaseAdmin
+      .from("rota_ausencias")
+      .select(`
+        *,
+        passageiro:passageiros (
+          id,
+          nome
+        ),
+        rota:rotas (
+          id,
+          nome
+        )
+      `)
+      .eq("data_ausencia", dataAusencia);
+  },
+
+  async insertAusencia(record: any) {
+    return supabaseAdmin
+      .from("rota_ausencias")
+      .insert([record])
+      .select(`
+        *,
+        passageiro:passageiros (
+          id,
+          nome
+        ),
+        rota:rotas (
+          id,
+          nome
+        )
+      `)
+      .single();
+  },
+
+  async deleteAusencia(id: string) {
+    return supabaseAdmin
+      .from("rota_ausencias")
+      .delete()
+      .eq("id", id);
+  },
+
+  async deleteAusenciaByPassageiroERota(passageiroId: string, rotaId: string, dataAusencia: string) {
+    return supabaseAdmin
+      .from("rota_ausencias")
+      .delete()
+      .eq("passageiro_id", passageiroId)
+      .eq("rota_id", rotaId)
+      .eq("data_ausencia", dataAusencia);
   }
 };

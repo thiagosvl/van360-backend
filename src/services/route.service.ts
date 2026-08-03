@@ -1,5 +1,5 @@
 import { AppError } from "../errors/AppError.js";
-import { CreateRouteDTO, UpdateRouteDTO, StepRouteExecutionDTO, ReorderExecucaoDTO } from "../types/dtos/route.dto.js";
+import { CreateRouteDTO, UpdateRouteDTO, StepRouteExecutionDTO, ReorderExecucaoDTO, CreateAusenciaDTO, DELETE_AUSENCIA_BY_QUERY_PARAM } from "../types/dtos/route.dto.js";
 import { RouteExecutionStatus, RouteStopStatus, RouteNodeType, RouteSentido, AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { routeRepository } from "../repositories/route.repository.js";
 import { historicoService } from "./historico.service.js";
@@ -127,7 +127,15 @@ const deleteRoute = async (id: string): Promise<void> => {
   }
 };
 
-const getRoute = async (id: string): Promise<any> => {
+const getTodayLocalDateStr = (): string => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getRoute = async (id: string, dataAusencia?: string): Promise<any> => {
   const { data: route, error } = await routeRepository.getById(id);
 
   if (error) throw error;
@@ -135,18 +143,30 @@ const getRoute = async (id: string): Promise<any> => {
     throw new AppError("Rota não encontrada", 404);
   }
 
+  const targetDate = dataAusencia || getTodayLocalDateStr();
+  const { data: ausencias } = await routeRepository.getAusenciasByRotaEData(id, targetDate);
+  const ausentesMap = new Map((ausencias || []).map((a: any) => [a.passageiro_id, a]));
+
   if (route.rota_passageiros) {
     route.passageiros = route.rota_passageiros
-      .map((rp: any) => ({
-        id: rp.id,
-        tipo_no: rp.tipo_no || (rp.escola_id ? RouteNodeType.ESCOLA : RouteNodeType.PASSAGEIRO),
-        ordem: rp.ordem,
-        passageiro_id: rp.passageiro_id,
-        escola_id: rp.escola_id,
-        sentido: rp.sentido || null,
-        passageiro: rp.passageiro,
-        escola: rp.escola
-      }))
+      .map((rp: any) => {
+        const isAusente = rp.passageiro_id && ausentesMap.has(rp.passageiro_id);
+        const ausObj = isAusente ? ausentesMap.get(rp.passageiro_id) : null;
+
+        return {
+          id: rp.id,
+          tipo_no: rp.tipo_no || (rp.escola_id ? RouteNodeType.ESCOLA : RouteNodeType.PASSAGEIRO),
+          ordem: rp.ordem,
+          passageiro_id: rp.passageiro_id,
+          escola_id: rp.escola_id,
+          sentido: rp.sentido || null,
+          passageiro: rp.passageiro,
+          escola: rp.escola,
+          status: isAusente ? RouteStopStatus.AUSENTE : RouteStopStatus.PENDENTE,
+          is_ausente: isAusente,
+          ausencia_id: ausObj?.id
+        };
+      })
       .sort((a: any, b: any) => a.ordem - b.ordem);
 
     delete route.rota_passageiros;
@@ -154,6 +174,7 @@ const getRoute = async (id: string): Promise<any> => {
     route.passageiros = [];
   }
 
+  route.ausencias = ausencias || [];
   return route;
 };
 
@@ -268,15 +289,21 @@ const iniciarRota = async (rotaId: string, usuarioId: string): Promise<any> => {
 
   if (execError) throw execError;
 
+  const todayStr = getTodayLocalDateStr();
+  const { data: ausenciasHoje } = await routeRepository.getAusenciasByRotaEData(rotaId, todayStr);
+  const ausentesSet = new Set((ausenciasHoje || []).map((a: any) => a.passageiro_id));
+
   const paradasRecords = paradasValidas.map((p: any, idx: number) => {
+    const isAusentePrevia = p.tipo_no === RouteNodeType.PASSAGEIRO && p.passageiro_id && ausentesSet.has(p.passageiro_id);
+
     return {
       execucao_rota_id: exec.id,
       tipo_no: p.tipo_no,
       passageiro_id: p.passageiro_id || null,
       escola_id: p.escola_id || null,
       ordem: idx + 1,
-      status: RouteStopStatus.PENDENTE,
-      visitado_em: null,
+      status: isAusentePrevia ? RouteStopStatus.AUSENTE : RouteStopStatus.PENDENTE,
+      visitado_em: isAusentePrevia ? new Date().toISOString() : null,
       sentido: p.sentido || null
     };
   });
@@ -295,7 +322,7 @@ const iniciarRota = async (rotaId: string, usuarioId: string): Promise<any> => {
 const atualizarParadaStatus = async (
   execucaoId: string,
   paradaId: string,
-  novoStatus: RouteStopStatus.EMBARCADO | RouteStopStatus.AUSENTE
+  novoStatus: RouteStopStatus.EMBARCADO | RouteStopStatus.AUSENTE | RouteStopStatus.PENDENTE
 ): Promise<any> => {
   if (!execucaoId) throw new AppError("ID da execução é obrigatório", 400);
   if (!paradaId) throw new AppError("ID da parada é obrigatório", 400);
@@ -316,19 +343,29 @@ const atualizarParadaStatus = async (
     novoStatus === RouteStopStatus.EMBARCADO;
 
   if (novoStatus === RouteStopStatus.AUSENTE && paradaObj?.passageiro_id) {
-    // Se o passageiro faltou, marca TODAS as paradas dele nesta execução como AUSENTE
     await routeRepository.updateTodasParadasDoPassageiroStatus(
       paradaObj.passageiro_id,
       execucaoId,
       RouteStopStatus.AUSENTE,
       new Date().toISOString()
     );
+  } else if (novoStatus === RouteStopStatus.PENDENTE && paradaObj?.passageiro_id) {
+    await routeRepository.updateTodasParadasDoPassageiroStatus(
+      paradaObj.passageiro_id,
+      execucaoId,
+      RouteStopStatus.PENDENTE,
+      null
+    );
+    if (exec.rota_id) {
+      const todayStr = getTodayLocalDateStr();
+      await routeRepository.deleteAusenciaByPassageiroERota(paradaObj.passageiro_id, exec.rota_id, todayStr);
+    }
   } else {
     const { error: updateError } = await routeRepository.updateParadaStatus(
       paradaId,
       execucaoId,
       novoStatus,
-      isEmbarqueEscola ? null : new Date().toISOString()
+      novoStatus === RouteStopStatus.PENDENTE ? null : (isEmbarqueEscola ? null : new Date().toISOString())
     );
     if (updateError) throw updateError;
   }
@@ -387,6 +424,60 @@ const finalizarExecucao = async (execucaoId: string): Promise<any> => {
   return execDetail;
 };
 
+const registrarAusenciaAntecipada = async (data: CreateAusenciaDTO & { registrado_por?: string }): Promise<any> => {
+  if (!data.passageiro_id) throw new AppError("Passageiro é obrigatório", 400);
+  if (!data.rota_id) throw new AppError("Rota é obrigatória", 400);
+  if (!data.data_ausencia) throw new AppError("Data da ausência é obrigatória", 400);
+
+  const { data: inserted, error } = await routeRepository.insertAusencia({
+    passageiro_id: data.passageiro_id,
+    rota_id: data.rota_id,
+    data_ausencia: data.data_ausencia,
+    sentido: data.sentido || null,
+    registrado_por: data.registrado_por || null
+  });
+
+  if (error) throw error;
+
+  // --- LOG DE AUDITORIA ---
+  if (data.registrado_por) {
+    historicoService.log({
+      usuario_id: data.registrado_por,
+      entidade_tipo: AtividadeEntidadeTipo.ROTA,
+      entidade_id: data.rota_id,
+      acao: AtividadeAcao.PASSAGEIRO_STATUS,
+      descricao: `Registrou ausência antecipada para o passageiro "${inserted.passageiro?.nome || 'Passageiro'}" na data ${data.data_ausencia}.`,
+      meta: { passageiro_id: data.passageiro_id, rota_id: data.rota_id, data_ausencia: data.data_ausencia }
+    });
+  }
+
+  return inserted;
+};
+
+const removerAusenciaAntecipada = async (id: string, passageiroId?: string, rotaId?: string, dataAusencia?: string): Promise<void> => {
+  if (id && id !== DELETE_AUSENCIA_BY_QUERY_PARAM) {
+    const { error } = await routeRepository.deleteAusencia(id);
+    if (error) throw error;
+    return;
+  }
+
+  if (passageiroId && rotaId) {
+    const targetDate = dataAusencia || getTodayLocalDateStr();
+    const { error } = await routeRepository.deleteAusenciaByPassageiroERota(passageiroId, rotaId, targetDate);
+    if (error) throw error;
+  }
+};
+
+const listAusenciasByRota = async (rotaId: string, dataAusencia?: string): Promise<any[]> => {
+  if (!rotaId) throw new AppError("ID da rota é obrigatório", 400);
+  const targetDate = dataAusencia || new Date().toISOString().split("T")[0];
+
+  const { data: ausencias, error } = await routeRepository.getAusenciasByRotaEData(rotaId, targetDate);
+  if (error) throw error;
+
+  return ausencias || [];
+};
+
 export const routeService = {
   createRoute,
   updateRoute,
@@ -399,5 +490,8 @@ export const routeService = {
   atualizarParadaStatus,
   reordenarExecucao,
   cancelarExecucao,
-  finalizarExecucao
+  finalizarExecucao,
+  registrarAusenciaAntecipada,
+  removerAusenciaAntecipada,
+  listAusenciasByRota
 };

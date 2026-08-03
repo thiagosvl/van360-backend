@@ -51,10 +51,11 @@ export type ReorderExecucaoDTO = z.infer<typeof reorderExecucaoSchema>;
 
 export const createAusenciaSchema = z.object({
   passageiro_id: z.string().uuid("ID do passageiro é obrigatório"),
+  rota_id: z.string().uuid("ID da rota é obrigatório"),
   data_ausencia: z.string().min(1, "Data é obrigatória"),
-  turno: z.string().default("manha"),
-  sentido: z.nativeEnum(RouteSentido).optional().nullable(),
-  motivo: optionalString
+  sentido: z.nativeEnum(RouteSentido).optional().nullable()
 });
 
 export type CreateAusenciaDTO = z.infer<typeof createAusenciaSchema>;
+
+export const DELETE_AUSENCIA_BY_QUERY_PARAM = "by-query";
