@@ -230,15 +230,6 @@ const deletePassageiro = async (id: string): Promise<void> => {
     const passageiro = await getPassageiro(id);
 
     if (passageiro?.id) {
-        // Verificar se tem cobranças (pendentes ou pagas)
-        const { count, error: countError } = await passageiroRepository.countCobrancas(id);
-
-        if (countError) throw countError;
-
-        if (count && count > 0) {
-            throw new AppError("Passageiro possui parcelas. Para excluir, é necessário antes excluir as parcelas. Se preferir, você também pode apenas desativar o cadastro.", 400);
-        }
-
         const { error } = await passageiroRepository.delete(id);
         if (error) throw error;
 
