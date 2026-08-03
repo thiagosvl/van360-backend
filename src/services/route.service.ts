@@ -1,7 +1,8 @@
 import { AppError } from "../errors/AppError.js";
 import { CreateRouteDTO, UpdateRouteDTO, StepRouteExecutionDTO, ReorderExecucaoDTO } from "../types/dtos/route.dto.js";
-import { RouteExecutionStatus, RouteStopStatus, RouteNodeType, RouteSentido } from "../types/enums.js";
+import { RouteExecutionStatus, RouteStopStatus, RouteNodeType, RouteSentido, AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { routeRepository } from "../repositories/route.repository.js";
+import { historicoService } from "./historico.service.js";
 
 const createRoute = async (data: CreateRouteDTO): Promise<any> => {
   if (!data.usuario_id) throw new AppError("Usuário obrigatório", 400);
@@ -34,7 +35,19 @@ const createRoute = async (data: CreateRouteDTO): Promise<any> => {
     }
   }
 
-  return await getRoute(inserted.id);
+  const createdRoute = await getRoute(inserted.id);
+
+  // --- LOG DE AUDITORIA ---
+  historicoService.log({
+    usuario_id: data.usuario_id,
+    entidade_tipo: AtividadeEntidadeTipo.ROTA,
+    entidade_id: inserted.id,
+    acao: AtividadeAcao.ROTA_CRIADA,
+    descricao: `Nova rota "${createdRoute?.nome || data.nome}" cadastrada.`,
+    meta: { nome: createdRoute?.nome || data.nome, total_paradas: createdRoute?.passageiros?.length || 0 }
+  });
+
+  return createdRoute;
 };
 
 const updateRoute = async (id: string, data: UpdateRouteDTO): Promise<any> => {
@@ -76,14 +89,42 @@ const updateRoute = async (id: string, data: UpdateRouteDTO): Promise<any> => {
     }
   }
 
-  return await getRoute(id);
+  const updatedRoute = await getRoute(id);
+
+  // --- LOG DE AUDITORIA ---
+  if (updatedRoute?.usuario_id) {
+    historicoService.log({
+      usuario_id: updatedRoute.usuario_id,
+      entidade_tipo: AtividadeEntidadeTipo.ROTA,
+      entidade_id: id,
+      acao: AtividadeAcao.ROTA_EDITADA,
+      descricao: `Configuração da rota "${updatedRoute.nome}" atualizada.`,
+      meta: { nome: updatedRoute.nome, total_paradas: updatedRoute.passageiros?.length || 0 }
+    });
+  }
+
+  return updatedRoute;
 };
 
 const deleteRoute = async (id: string): Promise<void> => {
   if (!id) throw new AppError("ID da rota é obrigatório", 400);
 
+  const oldRoute = await routeRepository.getById(id).then(res => res.data);
+
   const { error } = await routeRepository.delete(id);
   if (error) throw error;
+
+  // --- LOG DE AUDITORIA ---
+  if (oldRoute?.usuario_id) {
+    historicoService.log({
+      usuario_id: oldRoute.usuario_id,
+      entidade_tipo: AtividadeEntidadeTipo.ROTA,
+      entidade_id: id,
+      acao: AtividadeAcao.ROTA_EXCLUIDA,
+      descricao: `Rota "${oldRoute.nome || 'Rota'}" excluída do sistema.`,
+      meta: { backup: oldRoute }
+    });
+  }
 };
 
 const getRoute = async (id: string): Promise<any> => {
@@ -328,7 +369,22 @@ const finalizarExecucao = async (execucaoId: string): Promise<any> => {
   );
 
   if (error) throw error;
-  return await getExecucaoDetail(execucaoId);
+
+  const execDetail = await getExecucaoDetail(execucaoId);
+
+  // --- LOG DE AUDITORIA ---
+  if (execDetail?.usuario_id) {
+    historicoService.log({
+      usuario_id: execDetail.usuario_id,
+      entidade_tipo: AtividadeEntidadeTipo.ROTA,
+      entidade_id: execDetail.rota_id || execucaoId,
+      acao: AtividadeAcao.ROTA_CONCLUIDA,
+      descricao: `Execução da rota "${execDetail.rota?.nome || 'Rota'}" foi concluída com sucesso.`,
+      meta: { execucao_id: execucaoId, total_paradas: execDetail.paradas?.length || 0 }
+    });
+  }
+
+  return execDetail;
 };
 
 export const routeService = {
