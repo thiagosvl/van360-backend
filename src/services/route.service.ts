@@ -349,6 +349,20 @@ const atualizarParadaStatus = async (
       RouteStopStatus.AUSENTE,
       new Date().toISOString()
     );
+
+    if (exec.rota_id) {
+      const todayStr = getTodayLocalDateStr();
+      const { data: ausenciasExistentes } = await routeRepository.getAusenciasByRotaEData(exec.rota_id, todayStr);
+      const jaExiste = ausenciasExistentes?.some((a: any) => a.passageiro_id === paradaObj.passageiro_id);
+      if (!jaExiste) {
+        await routeRepository.insertAusencia({
+          passageiro_id: paradaObj.passageiro_id,
+          rota_id: exec.rota_id,
+          data_ausencia: todayStr,
+          criado_por_usuario_id: (exec as any).usuario_id || null,
+        });
+      }
+    }
   } else if (novoStatus === RouteStopStatus.PENDENTE && paradaObj?.passageiro_id) {
     await routeRepository.updateTodasParadasDoPassageiroStatus(
       paradaObj.passageiro_id,
