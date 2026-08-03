@@ -377,5 +377,32 @@ export const routeRepository = {
       .eq("passageiro_id", passageiroId)
       .eq("rota_id", rotaId)
       .eq("data_ausencia", dataAusencia);
+  },
+
+  async getAusenciasByPassageiro(passageiroId: string) {
+    return supabaseAdmin
+      .from("rota_ausencias")
+      .select(`
+        *,
+        passageiro:passageiros (
+          id,
+          nome
+        ),
+        rota:rotas (
+          id,
+          nome
+        )
+      `)
+      .eq("passageiro_id", passageiroId)
+      .order("data_ausencia", { ascending: false });
+  },
+
+  async getRotasByPassageiro(passageiroId: string) {
+    return supabaseAdmin
+      .from("rota_passageiros")
+      .select(`
+        rota:rotas (*)
+      `)
+      .eq("passageiro_id", passageiroId);
   }
 };

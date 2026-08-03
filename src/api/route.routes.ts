@@ -25,6 +25,8 @@ const routeRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post("/ausencias", routeController.createAusencia);
   app.delete("/ausencias/:id", routeController.deleteAusencia);
   app.get("/:id/ausencias", routeController.listAusencias);
+  app.get("/passageiros/:id/ausencias", routeController.listAusenciasByPassageiro);
+  app.get("/passageiros/:id/rotas", routeController.listRotasByPassageiro);
 };
 
 export default routeRoutes;

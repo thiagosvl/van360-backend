@@ -129,5 +129,19 @@ export const routeController = {
     logger.info({ rotaId: id, data }, "RouteController.listAusencias");
     const ausencias = await routeService.listAusenciasByRota(id, data);
     return reply.status(200).send(ausencias);
+  },
+
+  listAusenciasByPassageiro: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    logger.info({ passageiroId: id }, "RouteController.listAusenciasByPassageiro");
+    const ausencias = await routeService.listAusenciasByPassageiro(id);
+    return reply.status(200).send(ausencias);
+  },
+
+  listRotasByPassageiro: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    logger.info({ passageiroId: id }, "RouteController.listRotasByPassageiro");
+    const rotas = await routeService.listRotasByPassageiro(id);
+    return reply.status(200).send(rotas);
   }
 };

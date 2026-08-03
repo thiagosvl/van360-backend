@@ -180,19 +180,18 @@ export const PassengerTemplates = {
         const text = `✅ *Comprovante de Pagamento — ${getFirstName(ctx.nomePassageiro)}*\n\n` +
             `${getFirstName(ctx.nomeResponsavel)}, segue o comprovante de pagamento da ${corpo}.${getSystemFooter(ctx)}`;
 
-        const parts: CompositeMessagePart[] = [];
         if (ctx.reciboUrl) {
-            parts.push({
+            return [{
                 type: "image",
-                mediaBase64: ctx.reciboUrl
-            });
+                mediaBase64: ctx.reciboUrl,
+                content: text
+            }];
         }
-        parts.push({
+
+        return [{
             type: "text",
             content: text
-        });
-
-        return parts;
+        }];
     }
 };
 

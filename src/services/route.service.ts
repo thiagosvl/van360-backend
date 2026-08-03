@@ -478,6 +478,24 @@ const listAusenciasByRota = async (rotaId: string, dataAusencia?: string): Promi
   return ausencias || [];
 };
 
+const listAusenciasByPassageiro = async (passageiroId: string): Promise<any[]> => {
+  if (!passageiroId) throw new AppError("ID do passageiro é obrigatório", 400);
+
+  const { data: ausencias, error } = await routeRepository.getAusenciasByPassageiro(passageiroId);
+  if (error) throw error;
+
+  return ausencias || [];
+};
+
+const listRotasByPassageiro = async (passageiroId: string): Promise<any[]> => {
+  if (!passageiroId) throw new AppError("ID do passageiro é obrigatório", 400);
+
+  const { data, error } = await routeRepository.getRotasByPassageiro(passageiroId);
+  if (error) throw error;
+
+  return (data || []).map((item: any) => item.rota).filter(Boolean);
+};
+
 export const routeService = {
   createRoute,
   updateRoute,
@@ -493,5 +511,7 @@ export const routeService = {
   finalizarExecucao,
   registrarAusenciaAntecipada,
   removerAusenciaAntecipada,
-  listAusenciasByRota
+  listAusenciasByRota,
+  listAusenciasByPassageiro,
+  listRotasByPassageiro
 };
