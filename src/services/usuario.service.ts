@@ -164,9 +164,9 @@ export async function atualizarCanalAquisicao(usuarioId: string, canalAquisicao:
 }
 
 export async function listarMotoristasParaLembreteAniversario() {
-  const { data, error } = await userRepository.listMotoristasAtivos();
+  const { data, error } = await userRepository.listMotoristasAtivosParaAniversario();
   if (error) {
-    throw new AppError("Erro ao buscar motoristas ativos", 500);
+    throw new AppError("Erro ao buscar motoristas ativos para aniversário", 500);
   }
   return data || [];
 }

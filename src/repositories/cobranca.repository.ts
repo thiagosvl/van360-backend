@@ -137,12 +137,14 @@ export const cobrancaRepository = {
                 passageiro:passageiros(nome, nome_responsavel, telefone_responsavel, enviar_notificacoes),
                 motorista:usuarios!cobrancas_usuario_id_fkey!inner(
                     nome, apelido, telefone, chave_pix, tipo_chave_pix,
-                    assinaturas!inner(status)
+                    assinaturas!inner(status),
+                    usuario_configuracoes!inner(notificar_pais_cobrancas)
                 )
             `)
             .eq("status", CobrancaStatus.PENDENTE)
             .eq("desativar_lembretes", false)
             .in("motorista.assinaturas.status", STATUS_ASSINATURA_LIBERADA)
+            .eq("motorista.usuario_configuracoes.notificar_pais_cobrancas", true)
             .in("data_vencimento", datasVencimento);
     },
 

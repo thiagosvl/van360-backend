@@ -148,6 +148,14 @@ export async function criarUsuario(data: UsuarioPayload & { tipo?: UserType, id:
     logger.error({ error: error.message }, "Falha ao criar usuário no DB.");
     throw new AppError("Falha ao criar usuário.", 500);
   }
+
+  const targetTipo = tipo || UserType.MOTORISTA;
+  if (targetTipo === UserType.MOTORISTA) {
+    const { usuarioConfiguracoesRepository } = await import("../repositories/usuario-configuracoes.repository.js");
+    await usuarioConfiguracoesRepository.getByUsuarioId(id).catch((err) => {
+      logger.error({ err, usuarioId: id }, "Falha ao criar configurações padrão do motorista.");
+    });
+  }
   return usuario;
 }
 
@@ -259,7 +267,11 @@ export async function registrarUsuario(
     // 1. Iniciar Trial de 15 dias
     const subscription = await subscriptionService.getOrCreateSubscription(usuarioId);
 
-    // 2. Vincular Indicador se validado com sucesso
+    // 2. Inicializar Configurações Padrão de Notificação do Motorista
+    const { usuarioConfiguracoesRepository } = await import("../repositories/usuario-configuracoes.repository.js");
+    await usuarioConfiguracoesRepository.getByUsuarioId(usuarioId);
+
+    // 3. Vincular Indicador se validado com sucesso
     if (subscription && resolvedIndicadorId) {
       try {
         await subscriptionReferralService.registerReferral(resolvedIndicadorId, usuarioId);

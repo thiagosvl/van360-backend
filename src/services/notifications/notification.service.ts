@@ -26,9 +26,9 @@ import {
     EVENTO_PASSAGEIRO_CONTRATO_ASSINADO,
     EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO,
     EVENTO_ROTA_A_CAMINHO_IDA,
+    EVENTO_ROTA_EMBARCOU_IDA,
     EVENTO_ROTA_A_CAMINHO_VOLTA,
-    EVENTO_ROTA_EMBARCOU,
-    EVENTO_ROTA_DESEMBARCOU,
+    EVENTO_ROTA_DESEMBARCOU_VOLTA,
     EVENTO_AUTH_RECUPERACAO_SENHA,
     EVENTO_AUTH_SENHA_ALTERADA,
     EVENTO_MOTORISTA_CADASTRO_ADMIN,
@@ -79,9 +79,9 @@ type PassengerEventType =
 
 export type RouteEventType =
     | typeof EVENTO_ROTA_A_CAMINHO_IDA
+    | typeof EVENTO_ROTA_EMBARCOU_IDA
     | typeof EVENTO_ROTA_A_CAMINHO_VOLTA
-    | typeof EVENTO_ROTA_EMBARCOU
-    | typeof EVENTO_ROTA_DESEMBARCOU;
+    | typeof EVENTO_ROTA_DESEMBARCOU_VOLTA;
 
 export type DriverEventType =
     | typeof EVENTO_MOTORISTA_TESTE_BOAS_VINDAS
@@ -167,9 +167,9 @@ class NotificationService {
 
         switch (type) {
             case EVENTO_ROTA_A_CAMINHO_IDA: parts = RouteTemplates.enRouteIda(ctx); break;
+            case EVENTO_ROTA_EMBARCOU_IDA: parts = RouteTemplates.boardedIda(ctx); break;
             case EVENTO_ROTA_A_CAMINHO_VOLTA: parts = RouteTemplates.enRouteVolta(ctx); break;
-            case EVENTO_ROTA_EMBARCOU: parts = RouteTemplates.boarded(ctx); break;
-            case EVENTO_ROTA_DESEMBARCOU: parts = RouteTemplates.delivered(ctx); break;
+            case EVENTO_ROTA_DESEMBARCOU_VOLTA: parts = RouteTemplates.deliveredVolta(ctx); break;
         }
 
         return await this._processAndEnqueue(to, parts, type as string, options);

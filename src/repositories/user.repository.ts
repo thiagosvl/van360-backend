@@ -66,11 +66,34 @@ export const userRepository = {
                 id, 
                 telefone, 
                 nome,
+                usuario_configuracoes(notificar_motorista_aniversarios, notificar_motorista_parcelas),
                 assinaturas!inner(status)
             `)
             .eq("ativo", true)
             .eq("tipo", "motorista")
             .in("assinaturas.status", STATUS_ASSINATURA_LIBERADA);
+
+        if (error) {
+            throw error;
+        }
+
+        return { data, error: null };
+    },
+
+    async listMotoristasAtivosParaAniversario() {
+        const { data, error } = await supabaseAdmin
+            .from("usuarios")
+            .select(`
+                id, 
+                telefone, 
+                nome,
+                assinaturas!inner(status),
+                usuario_configuracoes!inner(notificar_motorista_aniversarios)
+            `)
+            .eq("ativo", true)
+            .eq("tipo", "motorista")
+            .in("assinaturas.status", STATUS_ASSINATURA_LIBERADA)
+            .eq("usuario_configuracoes.notificar_motorista_aniversarios", true);
 
         if (error) {
             throw error;

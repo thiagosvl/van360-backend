@@ -418,8 +418,6 @@ export const cobrancaService = {
         const motorista = c.motorista;
 
         if (!passageiro?.telefone_responsavel) continue;
-
-        // Verifica a flag global de notificações do passageiro
         if (passageiro?.enviar_notificacoes === false) continue;
 
         const dataVencimentoStr = c.data_vencimento;

@@ -25,44 +25,44 @@ const getSystemFooter = (ctx: RouteContext) => {
 
 export const RouteTemplates = {
   /**
-   * Ida - Van a caminho para buscar a criança
+   * 1. Ida - Van a caminho da residência para buscar a criança
    */
   enRouteIda: (ctx: RouteContext): CompositeMessagePart[] => {
     const text = `🚌 *Van a Caminho!*\n\n` +
-      `A van já está a caminho para buscar *${ctx.nomePassageiro}*. 🎒\n\n` +
+      `A van está a caminho da sua residência para buscar *${ctx.nomePassageiro}*. 🎒\n\n` +
       `Por favor, certifique-se de que ele(a) esteja pronto(a) para o embarque!${getSystemFooter(ctx)}`;
 
     return textPart(text);
   },
 
   /**
-   * Volta - Van a caminho de trazer a criança para casa
+   * 2. Ida - Confirmação de Embarque na porta de casa
+   */
+  boardedIda: (ctx: RouteContext): CompositeMessagePart[] => {
+    const text = `✅ *Embarque Confirmado*\n\n` +
+      `O passageiro *${ctx.nomePassageiro}* já embarcou na van a caminho da escola! 🎒🚌${getSystemFooter(ctx)}`;
+
+    return textPart(text);
+  },
+
+  /**
+   * 3. Volta - Van a caminho da residência para entregar a criança
    */
   enRouteVolta: (ctx: RouteContext): CompositeMessagePart[] => {
-    const text = `🏡 *Passageiro chegando em casa!*\n\n` +
-      `A van já iniciou o trajeto de retorno de *${ctx.nomePassageiro}* para casa. 🚌\n\n` +
+    const text = `🏡 *Passageiro Chegando!*\n\n` +
+      `A van está a caminho da sua residência para entregar *${ctx.nomePassageiro}*. 🚌\n\n` +
       `Logo mais chegaremos ao destino!${getSystemFooter(ctx)}`;
 
     return textPart(text);
   },
 
   /**
-   * Confirmação de Embarque
+   * 4. Volta - Confirmação de Entrega na residência
    */
-  boarded: (ctx: RouteContext): CompositeMessagePart[] => {
-    const text = `✅ *Embarque Confirmado*\n\n` +
-      `O passageiro *${ctx.nomePassageiro}* já embarcou na van! 🎒🚌${getSystemFooter(ctx)}`;
+  deliveredVolta: (ctx: RouteContext): CompositeMessagePart[] => {
+    const text = `✅ *Entrega Confirmada*\n\n` +
+      `Confirmamos que o passageiro *${ctx.nomePassageiro}* foi entregue em segurança na sua residência! 🏡🚌${getSystemFooter(ctx)}`;
 
     return textPart(text);
   },
-
-  /**
-   * Confirmação de Desembarque (Entrega)
-   */
-  delivered: (ctx: RouteContext): CompositeMessagePart[] => {
-    const text = `✅ *Entrega Confirmada*\n\n` +
-      `Confirmamos que o passageiro *${ctx.nomePassageiro}* foi entregue com segurança! 🏡🚌${getSystemFooter(ctx)}`;
-
-    return textPart(text);
-  }
 };
