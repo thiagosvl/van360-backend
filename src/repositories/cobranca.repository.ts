@@ -200,5 +200,19 @@ export const cobrancaRepository = {
         }
 
         return query;
+    },
+
+    async getCobrancasPendentesPorPeriodo(usuarioId: string, start: string, end: string) {
+        return supabaseAdmin
+            .from("cobrancas")
+            .select(`
+                *,
+                passageiro:passageiros(nome, nome_responsavel, telefone_responsavel)
+            `)
+            .eq("usuario_id", usuarioId)
+            .eq("status", CobrancaStatus.PENDENTE)
+            .gte("data_vencimento", start)
+            .lte("data_vencimento", end)
+            .order("data_vencimento", { ascending: true });
     }
 };

@@ -42,6 +42,10 @@ export const cronWorker = new Worker(
                     await birthdayReminderJob.runWeekly();
                     break;
 
+                case CronJob.WEEKLY_DRIVER_CHARGE_SUMMARY:
+                    await cobrancaService.enviarResumoSemanalMotoristas();
+                    break;
+
                 default:
                     logger.warn({ jobName: job.name }, "[CronWorker] Job DESATIVADO ou desconhecido recebido.");
             }

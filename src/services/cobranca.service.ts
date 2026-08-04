@@ -11,7 +11,7 @@ import {
   EVENTO_PASSAGEIRO_ATRASADO
 } from "../config/constants.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
-import { getNowBR, getLastDayOfMonth, toPersistenceString, diffInDays } from "../utils/date.utils.js";
+import { getNowBR, getLastDayOfMonth, toPersistenceString, diffInDays, formatToBrazilianDate, getMonthNameBR, getShortWeekDayBR, parseLocalDate } from "../utils/date.utils.js";
 import { getDriverDisplayName } from "../utils/format.js";
 
 import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
@@ -530,5 +530,126 @@ export const cobrancaService = {
     }
 
     return { totalMotoristas: motoristas.length, queued: true };
+  },
+
+  async enviarResumoSemanalMotoristas() {
+    logger.info("[CobrancaService] Iniciando envio do resumo semanal de cobrança para motoristas...");
+
+    try {
+      const now = getNowBR();
+      const day = String(now.getDate()).padStart(2, "0");
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const dataRefStr = `${day}/${month}`;
+      const hojeStr = toPersistenceString(now);
+
+      const ontem = new Date(now);
+      ontem.setDate(now.getDate() - 1);
+      const ontemStr = toPersistenceString(ontem);
+
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth();
+      const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+      const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+      const primeiroDiaMesAnterior = new Date(prevYear, prevMonth, 1);
+      const primeiroDiaMesAnteriorStr = toPersistenceString(primeiroDiaMesAnterior);
+
+      const proximos7Dias = new Date(now);
+      proximos7Dias.setDate(now.getDate() + 7);
+      const proximos7DiasStr = toPersistenceString(proximos7Dias);
+
+      const { data: motoristas } = await userRepository.listMotoristasAtivosParaResumoCobranca();
+
+      if (!motoristas || motoristas.length === 0) {
+        logger.info("[CobrancaService] Nenhum motorista elegível para receber o resumo de cobrança hoje.");
+        return;
+      }
+
+      const { notificationService } = await import("./notifications/notification.service.js");
+      const { EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS } = await import("../config/constants.js");
+
+      let sentCount = 0;
+
+      for (const m of motoristas) {
+        if (!m.telefone) continue;
+
+        const { data: cobrancasAtrasadas } = await cobrancaRepository.getCobrancasPendentesPorPeriodo(
+          m.id,
+          primeiroDiaMesAnteriorStr,
+          ontemStr
+        );
+
+        const { data: cobrancasProximos } = await cobrancaRepository.getCobrancasPendentesPorPeriodo(
+          m.id,
+          hojeStr,
+          proximos7DiasStr
+        );
+
+        const atrasadosList = (cobrancasAtrasadas || []).map((c: any) => {
+          const passageiroInfo = c.passageiro as Record<string, any> | undefined;
+          const diasAtraso = diffInDays(c.data_vencimento, now);
+
+          let mesOrigemStr: string | undefined = undefined;
+          if (c.mes !== (now.getMonth() + 1) || c.ano !== now.getFullYear()) {
+            const nomeMes = getMonthNameBR(c.mes);
+            mesOrigemStr = `${nomeMes}/${c.ano}`;
+          }
+
+          return {
+            passageiroNome: passageiroInfo?.nome || "Passageiro",
+            responsavelNome: passageiroInfo?.nome_responsavel || "",
+            telefoneResponsavel: passageiroInfo?.telefone_responsavel || "",
+            valor: Number(c.valor) || 0,
+            diasAtraso,
+            mesOrigemStr
+          };
+        });
+
+        // Ordenar do maior tempo de atraso para o menor
+        atrasadosList.sort((a, b) => b.diasAtraso - a.diasAtraso);
+
+        const proximosList = (cobrancasProximos || []).map((c: any) => {
+          const passageiroInfo = c.passageiro as Record<string, any> | undefined;
+          const dt = parseLocalDate(c.data_vencimento);
+          const diaSemanaStr = getShortWeekDayBR(dt);
+          const dataVencimentoStr = `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}`;
+
+          return {
+            passageiroNome: passageiroInfo?.nome || "Passageiro",
+            responsavelNome: passageiroInfo?.nome_responsavel || "",
+            dataVencimentoStr,
+            diaSemanaStr,
+            valor: Number(c.valor) || 0
+          };
+        });
+
+        const totalAtrasado = atrasadosList.reduce((acc, curr) => acc + curr.valor, 0);
+        const totalProximos = proximosList.reduce((acc, curr) => acc + curr.valor, 0);
+
+        try {
+          await notificationService.notifyDriver(
+            m.telefone,
+            EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS,
+            {
+              nomeMotorista: m.nome,
+              dataRefStr,
+              cobrancasAtrasadasList: atrasadosList,
+              cobrancasProximos7DiasList: proximosList,
+              totalAtrasado,
+              totalProximos
+            },
+            { channels: ["WHATSAPP"] }
+          );
+          sentCount++;
+        } catch (notifErr: unknown) {
+          const errorMsg = notifErr instanceof Error ? notifErr.message : String(notifErr);
+          logger.error({ error: errorMsg, motoristaId: m.id }, "[CobrancaService] Erro ao enviar resumo de cobrança para motorista");
+        }
+      }
+
+      logger.info({ sentCount }, "[CobrancaService] Processamento do resumo semanal de cobrança concluído.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error({ err: msg }, "[CobrancaService] Erro no envio do resumo semanal de cobrança para motoristas");
+    }
   }
 };

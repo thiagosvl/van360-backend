@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "../config/supabase.js";
-import { SubscriptionStatus, STATUS_ASSINATURA_LIBERADA } from "../types/enums.js";
+import { STATUS_ASSINATURA_LIBERADA } from "../types/enums.js";
 
 export const userRepository = {
     async getById(id: string) {
@@ -94,6 +94,28 @@ export const userRepository = {
             .eq("tipo", "motorista")
             .in("assinaturas.status", STATUS_ASSINATURA_LIBERADA)
             .eq("usuario_configuracoes.notificar_motorista_aniversarios", true);
+
+        if (error) {
+            throw error;
+        }
+
+        return { data, error: null };
+    },
+
+    async listMotoristasAtivosParaResumoCobranca() {
+        const { data, error } = await supabaseAdmin
+            .from("usuarios")
+            .select(`
+                id, 
+                telefone, 
+                nome,
+                assinaturas!inner(status),
+                usuario_configuracoes!inner(notificar_motorista_parcelas)
+            `)
+            .eq("ativo", true)
+            .eq("tipo", "motorista")
+            .in("assinaturas.status", STATUS_ASSINATURA_LIBERADA)
+            .eq("usuario_configuracoes.notificar_motorista_parcelas", true);
 
         if (error) {
             throw error;

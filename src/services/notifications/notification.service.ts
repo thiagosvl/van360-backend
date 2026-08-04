@@ -34,6 +34,7 @@ import {
     EVENTO_MOTORISTA_INDICACAO_BONUS,
     EVENTO_MOTORISTA_INDICACAO_CADASTRO,
     EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA,
+    EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS,
     EVENTO_ADMIN_NOVO_CADASTRO,
     EVENTO_ADMIN_NOVA_ASSINATURA,
     EVENTO_ADMIN_ASSINATURA_CANCELADA,
@@ -103,7 +104,8 @@ export type DriverEventType =
     | typeof EVENTO_MOTORISTA_RESET_SENHA_ADMIN
     | typeof EVENTO_MOTORISTA_INDICACAO_BONUS
     | typeof EVENTO_MOTORISTA_INDICACAO_CADASTRO
-    | typeof EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA;
+    | typeof EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA
+    | typeof EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS;
 
 export type AdminEventType =
     | typeof EVENTO_ADMIN_NOVO_CADASTRO
@@ -208,6 +210,7 @@ class NotificationService {
             case EVENTO_MOTORISTA_INDICACAO_BONUS: parts = DriverTemplates.referralBonusReceived(ctx); break;
             case EVENTO_MOTORISTA_INDICACAO_CADASTRO: parts = DriverTemplates.referralRegistered(ctx); break;
             case EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA: parts = DriverTemplates.birthdayReminderWeekly(ctx); break;
+            case EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS: parts = DriverTemplates.chargeSummaryWeekly(ctx); break;
         }
 
         return await this._processAndEnqueue(to, parts, type as string, options);

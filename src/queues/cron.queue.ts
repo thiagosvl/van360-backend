@@ -35,4 +35,9 @@ export const setupCronJobs = async () => {
     await cronQueue.add(CronJob.BIRTHDAY_REMINDER, {}, {
         repeat: { pattern: '0 14 * * 0' }
     });
+
+    // Resumo Semanal de Cobranças para o Motorista - Segunda-feira às 10:00 AM (13:00 UTC)
+    await cronQueue.add(CronJob.WEEKLY_DRIVER_CHARGE_SUMMARY, {}, {
+        repeat: { pattern: '0 13 * * 1' }
+    });
 };

@@ -28,6 +28,12 @@ export interface DriverContext {
     // Aniversários
     aniversariantesList?: { veiculo: string; nome: string; dia: number; mes: number; escola: string }[];
     passageirosSemData?: number;
+    // Resumo de cobrança do motorista
+    cobrancasAtrasadasList?: { passageiroNome: string; responsavelNome: string; telefoneResponsavel: string; valor: number; diasAtraso: number; mesOrigemStr?: string }[];
+    cobrancasProximos7DiasList?: { passageiroNome: string; responsavelNome?: string; dataVencimentoStr: string; diaSemanaStr: string; valor: number }[];
+    totalAtrasado?: number;
+    totalProximos?: number;
+    dataRefStr?: string;
 }
 
 const textPart = (text: string): CompositeMessagePart[] => {
@@ -348,5 +354,77 @@ export const DriverTemplates = {
             `${getFirstName(ctx.nomeMotorista)}, um novo motorista acabou de se cadastrar utilizando o seu convite!\n\n` +
             `Assim que ele assinar o primeiro plano, você ganha *+${bonusDays} dias grátis* automaticamente na sua assinatura! 🚀\n\n` +
             `Continue indicando e garanta mais meses de acesso gratuito! 🚐💙`);
+    },
+
+    chargeSummaryWeekly: (ctx: DriverContext): CompositeMessagePart[] => {
+        const nomeMotorista = getFirstName(ctx.nomeMotorista);
+        const atrasados = ctx.cobrancasAtrasadasList || [];
+        const proximos = ctx.cobrancasProximos7DiasList || [];
+
+        const totalAtrasadoStr = formatCurrency(ctx.totalAtrasado || 0);
+        const totalProximosStr = formatCurrency(ctx.totalProximos || 0);
+
+        const qtdAtrasadosLabel = atrasados.length === 1 ? "parcela" : "parcelas";
+        const qtdProximosLabel = proximos.length === 1 ? "parcela" : "parcelas";
+
+        if (atrasados.length === 0 && proximos.length === 0) {
+            return textPart(
+                `📊 *Resumo financeiro da semana*\n\n` +
+                `🎉 *Excelente notícia, ${nomeMotorista}!*\n\n` +
+                `Todos os seus passageiros estão com os pagamentos em dia e não há parcelas a vencer nos próximos 7 dias.\n\n` +
+                `Tenha uma ótima semana! 🚌`
+            );
+        }
+
+        let msg = `📊 *Resumo financeiro da semana*\n\n` +
+            `🔴 *Em atraso*\n` +
+            `${totalAtrasadoStr} • ${atrasados.length} ${qtdAtrasadosLabel}\n\n` +
+            `🟢 *Próximos 7 dias*\n` +
+            `${totalProximosStr} • ${proximos.length} ${qtdProximosLabel}\n\n` +
+            `━━━━━━━━━━━━━━━━\n\n`;
+
+        if (atrasados.length > 0) {
+            msg += `🔴 *Parcelas em atraso*\n\n`;
+            atrasados.forEach((item) => {
+                const passName = getFirstName(item.passageiroNome);
+                const respName = item.responsavelNome ? getFirstName(item.responsavelNome) : "";
+                const respText = respName ? ` (${respName})` : "";
+                const valorFormatted = formatCurrency(item.valor);
+                const diasText = item.diasAtraso === 1 ? "1 dia" : `${item.diasAtraso} dias`;
+
+                msg += `• *${passName}*${respText}\n` +
+                    `  ${valorFormatted} • há ${diasText}\n\n`;
+            });
+        }
+
+        if (proximos.length > 0) {
+            if (atrasados.length > 0) {
+                msg += `━━━━━━━━━━━━━━━━\n\n`;
+            }
+
+            const limit = 7;
+            const exibidos = proximos.slice(0, limit);
+            const restantes = proximos.length - limit;
+
+            msg += `🟢 *Próximos vencimentos*\n\n`;
+            exibidos.forEach((item) => {
+                const passName = getFirstName(item.passageiroNome);
+                const respName = item.responsavelNome ? getFirstName(item.responsavelNome) : "";
+                const respText = respName ? ` (${respName})` : "";
+                const valorFormatted = formatCurrency(item.valor);
+
+                msg += `• *${passName}*${respText}\n` +
+                    `  ${item.diaSemanaStr} (${item.dataVencimentoStr}) • ${valorFormatted}\n\n`;
+            });
+
+            if (restantes > 0) {
+                const parcelasLabel = restantes === 1 ? "parcela" : "parcelas";
+                msg += `+${restantes} ${parcelasLabel} a vencer\n\n`;
+            }
+        }
+
+        msg += `📲 Abra o Van360 para ver todos os detalhes e registrar os pagamentos.`;
+
+        return textPart(msg);
     }
 };

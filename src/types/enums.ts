@@ -281,6 +281,7 @@ export enum CronJob {
   CHARGE_GENERATOR = "charge-generator",
   DAILY_CHARGE_MONITOR = "daily-charge-monitor",
   BIRTHDAY_REMINDER = "birthday-reminder",
+  WEEKLY_DRIVER_CHARGE_SUMMARY = "weekly-driver-charge-summary",
 }
 
 export enum RouteExecutionStatus {
