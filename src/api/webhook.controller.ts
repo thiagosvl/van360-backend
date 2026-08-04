@@ -48,7 +48,7 @@ export const WebhookController = {
           await invoiceRepository.updateInvoiceStatus(fatura.id, SubscriptionInvoiceStatus.CANCELED);
 
           if (fatura.assinatura_id) {
-            await subscriptionRepository.updateStatus(fatura.assinatura_id, SubscriptionStatus.PAST_DUE);
+            await subscriptionRepository.updateStatus(fatura.assinatura_id, SubscriptionStatus.EXPIRED);
           }
         }
         return reply.code(200).send({ success: true });

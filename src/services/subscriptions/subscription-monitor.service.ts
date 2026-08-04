@@ -1,19 +1,18 @@
 import { logger } from "../../config/logger.js";
-import { SubscriptionStatus, ConfigKey, CheckoutPaymentMethod, AtividadeAcao, AtividadeEntidadeTipo } from "../../types/enums.js";
+import { SubscriptionStatus, ConfigKey, CheckoutPaymentMethod } from "../../types/enums.js";
 import { subscriptionService } from "./subscription.service.js";
 import { subscriptionBillingService } from "./subscription-billing.service.js";
 import { monitorRepository } from "../../repositories/monitor.repository.js";
 import { notificationRepository } from "../../repositories/notification.repository.js";
 import { notificationService, DriverEventType } from "../notifications/notification.service.js";
 import { getConfigNumber, getConfig } from "../configuracao.service.js";
-import { getNowBR, getEndOfDayBR, addDays, parseLocalDate, diffInDays } from "../../utils/date.utils.js";
+import { getNowBR, getEndOfDayBR, addDays, diffInDays, toPersistenceString } from "../../utils/date.utils.js";
 import {
   EVENTO_MOTORISTA_ASSINATURA_ATRASADA,
   EVENTO_MOTORISTA_ASSINATURA_VENCEU,
   EVENTO_MOTORISTA_TESTE_ENCERRADO,
   EVENTO_MOTORISTA_ASSINATURA_VENCENDO,
   EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO,
-  EVENTO_MOTORISTA_CARTAO_COBRANCA_AVISO,
   EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO,
   EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1,
   EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2,
@@ -89,10 +88,13 @@ export const subscriptionMonitorService = {
     await notificationRepository.logNotificationsBulk(notifLogs);
   },
 
-  // Retorna YYYY-MM-DD de uma string ISO ou Date
+  // Retorna YYYY-MM-DD de uma string ISO ou Date no fuso de Brasília
   toCicloRef(date: string | Date): string {
-    const d = typeof date === "string" ? parseLocalDate(date) : date;
-    return d.toISOString().slice(0, 10);
+    return toPersistenceString(date);
+  },
+
+  getUserObject(rawUser: any): any {
+    return Array.isArray(rawUser) ? rawUser[0] : rawUser;
   },
 
   // Janela de N±1 dias a partir de uma data de referência (resistente a job skippe)
@@ -142,7 +144,7 @@ export const subscriptionMonitorService = {
     const logsToSave = [];
 
     for (const sub of expiring) {
-      const user = (sub as any).usuarios;
+      const user = this.getUserObject((sub as any).usuarios);
       if (!user?.telefone || !sub.trial_ends_at) continue;
 
       const daysLeft = diffInDays(now, sub.trial_ends_at);
@@ -196,9 +198,7 @@ export const subscriptionMonitorService = {
     for (const sub of expiredTrials) {
       await subscriptionService.updateStatus(sub.id, SubscriptionStatus.EXPIRED, "Período de teste encerrado.");
 
-
-
-      const user = (sub as any).usuarios;
+      const user = this.getUserObject((sub as any).usuarios);
       if (user?.telefone) {
         await notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_TESTE_ENCERRADO, {
           nomeMotorista: user.nome,
@@ -244,7 +244,7 @@ export const subscriptionMonitorService = {
     const logsToSave = [];
 
     for (const sub of expired) {
-      const user = (sub as any).usuarios;
+      const user = this.getUserObject((sub as any).usuarios);
       if (!user?.telefone || !sub.trial_ends_at) continue;
 
       const cicloRef = this.toCicloRef(sub.trial_ends_at);
@@ -285,7 +285,7 @@ export const subscriptionMonitorService = {
       for (const sub of pastDue) {
         await subscriptionService.updateStatus(sub.id, SubscriptionStatus.PAST_DUE, "Mensalidade não paga no dia do vencimento. Conta em carência.");
 
-        const user = (sub as any).usuarios;
+        const user = this.getUserObject((sub as any).usuarios);
         const daysSinceExpiry = sub.data_vencimento ? diffInDays(sub.data_vencimento, now) : 0;
 
         if (user?.telefone && daysSinceExpiry === 0) {
@@ -306,12 +306,14 @@ export const subscriptionMonitorService = {
       for (const sub of expired) {
         await subscriptionService.updateStatus(sub.id, SubscriptionStatus.EXPIRED, `Assinatura expirada por falta de pagamento (${gracePeriod} dias de atraso).`);
 
-        const user = (sub as any).usuarios;
+        const user = this.getUserObject((sub as any).usuarios);
         if (user?.telefone) {
           await notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_ASSINATURA_ATRASADA, {
             nomeMotorista: user.nome,
             diasAtraso: gracePeriod,
             planoNome: (sub as any).planos?.nome,
+            valor: (sub as any).planos?.valor ? Number((sub as any).planos.valor) : undefined,
+            metodoCobranca: (sub as any).metodo_pagamento ?? undefined,
           }, { channels: ['WHATSAPP'] });
           await this.logNotification(sub.usuario_id, EVENTO_MOTORISTA_ASSINATURA_ATRASADA, this.toCicloRef(sub.data_vencimento || new Date()));
         }
@@ -349,7 +351,7 @@ export const subscriptionMonitorService = {
     const logsToSave = [];
 
     for (const sub of pastDue) {
-      const user = (sub as any).usuarios;
+      const user = this.getUserObject((sub as any).usuarios);
       if (!user?.telefone || !sub.data_vencimento) continue;
 
       const cicloRef = this.toCicloRef(sub.data_vencimento);
@@ -412,7 +414,7 @@ export const subscriptionMonitorService = {
     const logsToSave = [];
 
     for (const sub of expired) {
-      const user = (sub as any).usuarios;
+      const user = this.getUserObject((sub as any).usuarios);
       if (!user?.telefone || !sub.data_vencimento) continue;
 
       const cicloRef = this.toCicloRef(sub.data_vencimento);
@@ -459,18 +461,19 @@ export const subscriptionMonitorService = {
     const { data: pendingInvoices } = await monitorRepository.getPendingInvoicesByUsers(userIds);
     const pendingUsersMap = new Map(pendingInvoices?.map((p: any) => [p.usuario_id, p]) || []);
 
-    const { data: failedInvoices } = await monitorRepository.getFailedCardInvoicesByUsers(cardUserIds, addDays(now, -30).toISOString());
+    const { data: failedNotifs } = await notificationRepository.getNotificationsForUsers(cardUserIds, [EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO]);
     const failedCountsMap = new Map<string, number>();
-    failedInvoices?.forEach((f: any) => {
-      failedCountsMap.set(f.usuario_id, (failedCountsMap.get(f.usuario_id) || 0) + 1);
+    failedNotifs?.forEach((f: any) => {
+      const key = `${f.usuario_id}:${f.ciclo_referencia}`;
+      failedCountsMap.set(key, (failedCountsMap.get(key) || 0) + 1);
     });
 
-    const tiposPossiveis = [EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO, EVENTO_MOTORISTA_CARTAO_COBRANCA_AVISO];
+    const tiposPossiveis = [EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO];
     const notifiedSet = await this.getNotifiedSet(userIds, tiposPossiveis);
     const logsToSave = [];
 
     for (const sub of expiring) {
-      const user = (sub as any).usuarios;
+      const user = this.getUserObject((sub as any).usuarios);
       const isCard = sub.metodo_pagamento === "credit_card";
 
       const pendingInvoice = pendingUsersMap.get(sub.usuario_id);
@@ -483,14 +486,14 @@ export const subscriptionMonitorService = {
         continue;
       }
 
-      // Limite de tentativas para cartão: conta faturas FAILED nos últimos 30 dias
+      // Limite de tentativas para cartão: conta notificações de falha no ciclo atual da assinatura
       if (isCard) {
-        const failedCount = failedCountsMap.get(sub.usuario_id) || 0;
+        const cicloRef = this.toCicloRef(sub.data_vencimento || new Date());
+        const failedCount = failedCountsMap.get(`${sub.usuario_id}:${cicloRef}`) || 0;
 
         if (failedCount >= maxRetries) {
-          logger.warn({ subId: sub.id, failedCount }, "[SubscriptionMonitor] Limite de tentativas de cartão atingido. Pulando.");
+          logger.warn({ subId: sub.id, failedCount, cicloRef }, "[SubscriptionMonitor] Limite de tentativas de cartão atingido para o ciclo. Pulando.");
           if (user?.telefone) {
-            const cicloRef = this.toCicloRef(sub.data_vencimento);
             if (!notifiedSet.has(`${sub.usuario_id}:${EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO}:${cicloRef}`)) {
               await notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO, {
                 nomeMotorista: user.nome,
@@ -501,7 +504,8 @@ export const subscriptionMonitorService = {
                 telefone: user.telefone,
                 usuarioId: sub.usuario_id,
                 erro: "Número máximo de tentativas atingido.",
-                planoNome: (sub as any).planos?.nome
+                planoNome: (sub as any).planos?.nome,
+                origem: "AUTOMATICO"
               }, {
                 channels: ['TELEGRAM'],
                 jobId: `admin-falha-pagamento-${sub.usuario_id}-max-retries-${cicloRef}`
@@ -516,28 +520,6 @@ export const subscriptionMonitorService = {
             }
           }
           continue;
-        }
-
-        // Aviso antecipado de cobrança automática (apenas uma vez por ciclo)
-        const cicloRef = this.toCicloRef(sub.data_vencimento);
-        if (!notifiedSet.has(`${sub.usuario_id}:${EVENTO_MOTORISTA_CARTAO_COBRANCA_AVISO}:${cicloRef}`)) {
-          const cardLast4 = (sub as any).metodos_pagamento?.last_4_digits;
-          if (user?.telefone) {
-            await notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_CARTAO_COBRANCA_AVISO, {
-              nomeMotorista: user.nome,
-              valor: (sub as any).planos?.valor ? Number((sub as any).planos.valor) : undefined,
-              dataVencimento: sub.data_vencimento,
-              cardLast4,
-              planoNome: (sub as any).planos?.nome,
-            }, { channels: ['WHATSAPP'] });
-            logsToSave.push({
-              usuarioId: sub.usuario_id,
-              tipo: EVENTO_MOTORISTA_CARTAO_COBRANCA_AVISO,
-              cicloRef,
-              subId: sub.id,
-              description: "Aviso antecipado de cobrança automática no cartão enviado."
-            });
-          }
         }
       }
 
@@ -584,7 +566,8 @@ export const subscriptionMonitorService = {
             telefone: user.telefone,
             usuarioId: sub.usuario_id,
             erro: e.message || "Cartão recusado",
-            planoNome: (sub as any).planos?.nome
+            planoNome: (sub as any).planos?.nome,
+            origem: "AUTOMATICO"
           }, {
             channels: ['TELEGRAM'],
             jobId: `admin-falha-pagamento-${sub.usuario_id}-recusado-${this.toCicloRef(sub.data_vencimento || new Date())}`

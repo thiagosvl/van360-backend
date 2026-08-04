@@ -422,6 +422,7 @@ export const cobrancaService = {
 
         const dataVencimentoStr = c.data_vencimento;
         const ultimaNotifStr = c.data_envio_ultima_notificacao;
+        const lastNotifDateStr = ultimaNotifStr ? toPersistenceString(ultimaNotifStr) : null;
 
         let eventType:
           | typeof EVENTO_PASSAGEIRO_VENCIMENTO_HOJE
@@ -432,7 +433,7 @@ export const cobrancaService = {
 
         if (dataVencimentoStr === todayStr) {
           eventType = EVENTO_PASSAGEIRO_VENCIMENTO_HOJE;
-          if (!ultimaNotifStr || !ultimaNotifStr.startsWith(todayStr)) {
+          if (lastNotifDateStr !== todayStr) {
             shouldSend = true;
           }
         } else if (dataVencimentoStr > todayStr && dataVencimentoStr <= thresholdDateStr) {
@@ -444,7 +445,7 @@ export const cobrancaService = {
           eventType = EVENTO_PASSAGEIRO_ATRASADO;
           const daysSinceDue = diffInDays(dataVencimentoStr, now);
           if (daysSinceDue === 3 || daysSinceDue === 5 || daysSinceDue === 7) {
-            if (!ultimaNotifStr || !ultimaNotifStr.startsWith(todayStr)) {
+            if (lastNotifDateStr !== todayStr) {
               shouldSend = true;
             }
           }
@@ -490,7 +491,7 @@ export const cobrancaService = {
       }
 
       if (updatedCobrancaIds.length > 0) {
-        await cobrancaRepository.updateBulkUltimaNotificacao(updatedCobrancaIds, new Date().toISOString());
+        await cobrancaRepository.updateBulkUltimaNotificacao(updatedCobrancaIds, toPersistenceString(now));
       }
 
       logger.info({ sentCount }, "[CobrancaService] Envio diário de notificações de cobrança concluído.");

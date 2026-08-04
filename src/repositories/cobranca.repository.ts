@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "../config/supabase.js";
-import { CobrancaStatus, SubscriptionStatus, STATUS_ASSINATURA_LIBERADA } from "../types/enums.js";
+import { CobrancaStatus, STATUS_ASSINATURA_LIBERADA } from "../types/enums.js";
 import { getLastDayOfMonth } from "../utils/date.utils.js";
 
 export const cobrancaRepository = {
@@ -195,7 +195,6 @@ export const cobrancaRepository = {
             .eq("usuario_id", usuarioId)
             .gte("data_vencimento", start)
             .lte("data_vencimento", end);
-        
         if (veiculoId) {
             query = query.eq("passageiros.veiculo_id", veiculoId);
         }

@@ -4,6 +4,7 @@ import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { cleanString } from "../utils/string.utils.js";
 import { limparPlaca } from "../utils/placa.utils.js";
 import { historicoService } from "./historico.service.js";
+import { AppError } from "../errors/AppError.js";
 
 // Helper Methods
 const _prepareVeiculoData = (data: Partial<CreateVeiculoDTO>, usuarioId?: string, isUpdate: boolean = false): Record<string, unknown> => {
@@ -26,8 +27,8 @@ const _prepareVeiculoData = (data: Partial<CreateVeiculoDTO>, usuarioId?: string
 
 export const veiculoService = {
     async createVeiculo(data: CreateVeiculoDTO): Promise<Veiculo> {
-        if (!data.usuario_id) throw new Error("Usuário obrigatório");
-        if (!data.placa) throw new Error("Placa é obrigatória");
+        if (!data.usuario_id) throw new AppError("Usuário obrigatório", 400);
+        if (!data.placa) throw new AppError("Placa é obrigatória", 400);
 
         const veiculoData = _prepareVeiculoData(data, data.usuario_id, false);
 
@@ -48,7 +49,7 @@ export const veiculoService = {
     },
 
     async updateVeiculo(id: string, data: UpdateVeiculoDTO): Promise<Veiculo> {
-        if (!id) throw new Error("ID do veículo é obrigatório");
+        if (!id) throw new AppError("ID do veículo é obrigatório", 400);
 
         const veiculoData = _prepareVeiculoData(data, undefined, true);
 

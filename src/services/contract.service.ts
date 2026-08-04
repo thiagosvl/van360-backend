@@ -86,6 +86,10 @@ class ContractService {
     }
     const dFim = parseLocalDate(dataFim);
 
+    if (dFim < dInicio) {
+      throw new AppError("Data de término do transporte não pode ser anterior à data de início", 400);
+    }
+
     let qtdParcelas = customTerms.qtdParcelas;
     if (!qtdParcelas) {
       const diffMonths = (dFim.getFullYear() - dInicio.getFullYear()) * 12 + (dFim.getMonth() - dInicio.getMonth());
@@ -133,7 +137,10 @@ class ContractService {
       apelidoCondutor: usuario.apelido,
     };
 
-    // 5. Gerar token único e criar registro no banco via Repositorio
+    // 5. Aposentar rascunhos PENDENTES anteriores do mesmo passageiro
+    await contractRepository.aposentarContratosPassageiro(data.passageiroId, true);
+
+    // 6. Gerar token único e criar registro no banco via Repositorio
     const tokenAcesso = uuidv4();
 
     const contrato = await contractRepository.insert({
@@ -381,7 +388,7 @@ class ContractService {
       throw new AppError('Contrato não encontrado', 404);
     }
 
-    await contractRepository.aposentarContratosPassageiro(contratoOriginal.passageiro_id);
+    await contractRepository.aposentarContratosPassageiro(contratoOriginal.passageiro_id, true);
 
     return this.criarContrato(authId, {
       passageiroId: contratoOriginal.passageiro_id,

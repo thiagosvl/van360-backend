@@ -3,6 +3,7 @@ import { CreateEscolaDTO, ListEscolasFiltersDTO, UpdateEscolaDTO } from "../type
 import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { cleanString } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
+import { AppError } from "../errors/AppError.js";
 
 // Helper Methods
 const _prepareEscolaData = (data: Partial<CreateEscolaDTO>, usuarioId?: string, isUpdate: boolean = false): Record<string, unknown> => {
@@ -29,8 +30,8 @@ const _prepareEscolaData = (data: Partial<CreateEscolaDTO>, usuarioId?: string, 
 
 export const escolaService = {
     async createEscola(data: CreateEscolaDTO): Promise<any> {
-        if (!data.usuario_id) throw new Error("Usuário obrigatório");
-        if (!data.nome) throw new Error("Nome da escola é obrigatório");
+        if (!data.usuario_id) throw new AppError("Usuário obrigatório", 400);
+        if (!data.nome) throw new AppError("Nome da escola é obrigatório", 400);
 
         const escolaData = _prepareEscolaData(data, data.usuario_id, false);
 
@@ -51,7 +52,7 @@ export const escolaService = {
     },
 
     async updateEscola(id: string, data: UpdateEscolaDTO): Promise<any> {
-        if (!id) throw new Error("ID da escola é obrigatório");
+        if (!id) throw new AppError("ID da escola é obrigatório", 400);
 
         const escolaData = _prepareEscolaData(data, undefined, true);
 

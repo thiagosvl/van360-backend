@@ -210,7 +210,7 @@ export async function rollbackCadastro({
       await authProvider.deleteUser(authUid);
     }
   } catch (err: any) {
-    logger.warn({ error: err.message }, "Erro durante rollback (pode ser parcial).");
+    logger.error({ error: err?.message || String(err), usuarioId, authUid }, "[AuthService] Erro crítico durante rollback de cadastro");
   }
 }
 
@@ -275,8 +275,8 @@ export async function registrarUsuario(
     if (subscription && resolvedIndicadorId) {
       try {
         await subscriptionReferralService.registerReferral(resolvedIndicadorId, usuarioId);
-      } catch (e) {
-        logger.error({ error: e }, "Falha ao registrar referral");
+      } catch (e: any) {
+        logger.error({ error: e?.message || String(e), indicadorId: resolvedIndicadorId, usuarioId }, "[AuthService] Falha ao registrar vínculo de indicação");
       }
     }
 
@@ -450,10 +450,15 @@ export async function solicitarRecuperacaoWhatsapp(documento: string): Promise<{
     throw new AppError("Erro ao processar solicitação de recuperação.", 500);
   }
 
-  await notificationService.notifyDriver(user.telefone, EVENTO_AUTH_RECUPERACAO_SENHA, {
+  const sent = await notificationService.notifyDriver(user.telefone, EVENTO_AUTH_RECUPERACAO_SENHA, {
     nomeMotorista: user.nome,
     otpCode: otp
-  }, { channels: ['WHATSAPP'] }).catch(err => logger.error({ err }, "Falha ao enviar OTP via WhatsApp"));
+  }, { channels: ['WHATSAPP'] });
+
+  if (!sent) {
+    logger.error({ userId: user.id }, "[AuthService] Falha ao entregar código OTP via WhatsApp");
+    throw new AppError("Falha ao entregar o código por WhatsApp. Verifique se o número está correto e tente novamente.", 500);
+  }
   
   historicoService.log({
     usuario_id: user.id,

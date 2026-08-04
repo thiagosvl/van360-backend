@@ -75,7 +75,7 @@ export const DriverTemplates = {
 
         if (ctx.passageirosSemData && ctx.passageirosSemData > 0) {
             const passageiroLabel = ctx.passageirosSemData === 1 ? "passageiro" : "passageiros";
-            mensagem += `\n\n_(Lembrando que você possui ${ctx.passageirosSemData} ${passageiroLabel} sem data de nascimento cadastrada. Atualize pelo app para não perder nenhuma data!)_`;
+            mensagem += `\n\n_(Lembrando que você possui ${ctx.passageirosSemData} ${passageiroLabel} sem data de nascimento cadastrada. Atualize pelo aplicativo para não perder nenhuma data!)_`;
         }
 
         return textPart(mensagem);
@@ -84,30 +84,30 @@ export const DriverTemplates = {
     trialEnded: (ctx: DriverContext): CompositeMessagePart[] => {
         return textPart(`🔒 *Acesso gratuito encerrado*\n\n` +
             `${getFirstName(ctx.nomeMotorista)}, seu período de teste terminou, mas seus dados continuam preservados.\n\n` +
-            `Assine pelo app para reativar o acesso imediatamente.`);
+            `Assine pelo aplicativo para reativar o acesso imediatamente.`);
     },
 
     trialLastCall: (ctx: DriverContext): CompositeMessagePart[] => {
         return textPart(`⚠️ *${getFirstName(ctx.nomeMotorista)}, amanhã seu acesso expira*\n\n` +
             `Depois de amanhã, os controles de passageiros, parcelas e rotas serão pausados.\n\n` +
-            `Assine hoje pelo app e continue com tudo funcionando.`);
+            `Assine hoje pelo aplicativo e continue com tudo funcionando.`);
     },
 
 
     trialRecovery1: (ctx: DriverContext): CompositeMessagePart[] => {
         return textPart(`🔔 *Sentimos sua falta, ${getFirstName(ctx.nomeMotorista)}!*\n\n` +
             `Seu acesso gratuito encerrou, mas todos os seus dados e configurações continuam guardados.\n\n` +
-            `Assine pelo app para reativar seu acesso e voltar a organizar sua van.`);
+            `Assine pelo aplicativo para reativar seu acesso e voltar a organizar sua van.`);
     },
 
     trialRecovery2: (ctx: DriverContext): CompositeMessagePart[] => {
         if (ctx.valorPromocional) {
             return textPart(`🎁 *Oferta especial pra você, ${getFirstName(ctx.nomeMotorista)}!*\n\n` +
                 `Reative o Van360 por apenas *R$ ${ctx.valorPromocional.toFixed(2).replace('.', ',')}/mês* — oferta por tempo limitado.\n\n` +
-                `Seus dados continuam preservados. A reativação é imediata pelo app.`);
+                `Seus dados continuam preservados. A reativação é imediata pelo aplicativo.`);
         }
         return textPart(`🔔 *Reative seu Van360, ${getFirstName(ctx.nomeMotorista)}*\n\n` +
-            `Seus dados continuam preservados. Assine pelo app para reativar agora.`);
+            `Seus dados continuam preservados. Assine pelo aplicativo para reativar agora.`);
     },
 
 
@@ -120,7 +120,7 @@ export const DriverTemplates = {
         if (isCard) {
             return textPart(`🔔 *Pagamento pendente*\n\n` +
                 `${getFirstName(ctx.nomeMotorista)}, sua assinatura${planoStr}${valorStr} venceu ontem e a cobrança no cartão não foi processada.\n\n` +
-                `Atualize o cartão ou pague via Pix pelo app.`);
+                `Atualize o cartão ou pague via Pix pelo aplicativo.`);
         }
 
         if (ctx.pixCopiaECola) {
@@ -144,7 +144,7 @@ export const DriverTemplates = {
 
         return textPart(`🔔 *Pagamento pendente*\n\n` +
             `${getFirstName(ctx.nomeMotorista)}, sua assinatura${planoStr}${valorStr} venceu ontem.\n\n` +
-            `Regularize pelo app para manter o acesso.`);
+            `Regularize pelo aplicativo para manter o acesso.`);
     },
 
     renewalUrgencia: (ctx: DriverContext): CompositeMessagePart[] => {
@@ -156,7 +156,7 @@ export const DriverTemplates = {
         if (isCard) {
             return textPart(`🚨 *Acesso será pausado amanhã*\n\n` +
                 `${getFirstName(ctx.nomeMotorista)}, o pagamento${valorStr} da sua assinatura${planoStr} ainda não foi confirmado.\n\n` +
-                `Atualize o cartão ou pague via Pix pelo app para evitar a pausa.`);
+                `Atualize o cartão ou pague via Pix pelo aplicativo para evitar a pausa.`);
         }
 
         if (ctx.pixCopiaECola) {
@@ -186,7 +186,7 @@ export const DriverTemplates = {
     renewalRecovery1: (ctx: DriverContext): CompositeMessagePart[] => {
         return textPart(`🔒 *Assinatura pausada*\n\n` +
             `${getFirstName(ctx.nomeMotorista)}, seu acesso foi temporariamente pausado por pagamento pendente.\n\n` +
-            `Seus dados estão preservados. Renove pelo app para reativar a conta e voltar a gerenciar sua van.`);
+            `Seus dados estão preservados. Renove pelo aplicativo para reativar a conta e voltar a gerenciar sua van.`);
     },
 
     renewalRecoveryFinal: (ctx: DriverContext): CompositeMessagePart[] => {
@@ -272,9 +272,15 @@ export const DriverTemplates = {
         const valor = ctx.valor ? formatCurrency(ctx.valor) : "";
         const valorStr = valor ? ` de *${valor}*` : "";
         const planoStr = ctx.planoNome ? ` *${ctx.planoNome}*` : "";
+        const isCard = ctx.metodoCobranca === CheckoutPaymentMethod.CREDIT_CARD;
+
+        const instrucao = isCard
+            ? "Acesse o aplicativo para atualizar seu cartão ou efetuar o pagamento e reativar seu acesso na hora."
+            : "Pague o Pix enviado anteriormente (ou acesse o aplicativo) para reativar seu acesso na hora.";
+
         return textPart(`🚨 *Acesso temporariamente pausado*\n\n` +
             `${getFirstName(ctx.nomeMotorista)}, não identificamos o pagamento da sua assinatura${planoStr}${valorStr}. Por isso, as cobranças automáticas para os seus passageiros foram pausadas.\n\n` +
-            `🔓 _A boa notícia é que todos os seus dados estão a salvo! Basta realizar o pagamento no app para reativar seu sistema na hora._`);
+            `🔓 _A boa notícia é que todos os seus dados estão a salvo! ${instrucao}_`);
     },
 
     contractSigned: (ctx: DriverContext): CompositeMessagePart[] => {
@@ -298,24 +304,12 @@ export const DriverTemplates = {
             `🛑 *Não foi você?* Entre em contato com o suporte imediatamente.`);
     },
 
-    cardChargeNotice: (ctx: DriverContext): CompositeMessagePart[] => {
-        const valor = ctx.valor ? formatCurrency(ctx.valor) : "";
-        const cardStr = ctx.cardLast4 ? ` final *${ctx.cardLast4}*` : "";
-        const dataStr = ctx.dataVencimento ? `em ${formatToBrazilianDate(ctx.dataVencimento)}` : "em breve";
-        const planoStr = ctx.planoNome ? `🏷️ Plano: *${ctx.planoNome}*\n\n` : "";
-        return textPart(`🔄 *Renovação automática ${dataStr}*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, ` +
-            (valor ? `*${valor}* será debitado no cartão${cardStr}.\n\n` : `sua assinatura será renovada.\n\n`) +
-            planoStr +
-            `Para alterar o método de pagamento, acesse o app antes dessa data.`);
-    },
-
     failedCC: (ctx: DriverContext): CompositeMessagePart[] => {
         const valor = ctx.valor ? formatCurrency(ctx.valor) : "";
         const valorStr = valor ? ` de *${valor}*` : "";
         return textPart(`❌ *Não conseguimos processar seu cartão*\n\n` +
             `${getFirstName(ctx.nomeMotorista)}, houve uma recusa do banco ao tentar debitar sua assinatura${valorStr} (isso geralmente ocorre por falta de limite ou bloqueio de segurança).\n\n` +
-            `💳 _Atualize o cartão no aplicativo ou gere um Pix para não ter suas automações pausadas._`);
+            `💳 _Atualize o cartão ou gere um Pix para não ter suas automações pausadas._`);
     },
 
     welcomeAdminCreated: (ctx: DriverContext): CompositeMessagePart[] => {

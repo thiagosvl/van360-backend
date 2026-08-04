@@ -1,5 +1,4 @@
 import { CompositeMessagePart } from "../../types/dtos/whatsapp.dto.js";
-import { env } from "../../config/env.js";
 import { logger } from "../../config/logger.js";
 
 import {
@@ -10,7 +9,6 @@ import {
     EVENTO_MOTORISTA_TESTE_BOAS_VINDAS,
     EVENTO_MOTORISTA_TESTE_ENCERRADO,
     EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO,
-    EVENTO_MOTORISTA_CARTAO_COBRANCA_AVISO,
     EVENTO_MOTORISTA_CONTRATO_ASSINADO,
     EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO,
     EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1,
@@ -99,7 +97,6 @@ export type DriverEventType =
     | typeof EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_FINAL
     | typeof EVENTO_MOTORISTA_CONTRATO_ASSINADO
     | typeof EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO
-    | typeof EVENTO_MOTORISTA_CARTAO_COBRANCA_AVISO
     | typeof EVENTO_AUTH_RECUPERACAO_SENHA
     | typeof EVENTO_AUTH_SENHA_ALTERADA
     | typeof EVENTO_MOTORISTA_CADASTRO_ADMIN
@@ -204,7 +201,6 @@ class NotificationService {
             case EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_FINAL: parts = DriverTemplates.renewalRecoveryFinal(ctx); break;
             case EVENTO_MOTORISTA_CONTRATO_ASSINADO: parts = DriverTemplates.contractSigned(ctx); break;
             case EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO: parts = DriverTemplates.failedCC(ctx); break;
-            case EVENTO_MOTORISTA_CARTAO_COBRANCA_AVISO: parts = DriverTemplates.cardChargeNotice(ctx); break;
             case EVENTO_AUTH_RECUPERACAO_SENHA: parts = DriverTemplates.authRecovery(ctx); break;
             case EVENTO_AUTH_SENHA_ALTERADA: parts = DriverTemplates.passwordChanged(ctx); break;
             case EVENTO_MOTORISTA_CADASTRO_ADMIN: parts = DriverTemplates.welcomeAdminCreated(ctx); break;
@@ -291,6 +287,7 @@ class NotificationService {
             const statuses = await Promise.all(results);
             return statuses.some(s => s); // true se pelo menos um canal teve sucesso
         } catch (error) {
+            logger.error({ error, eventType, to }, "[NotificationService] Erro ao processar/enfileirar notificação");
             return false;
         }
     }

@@ -5,7 +5,7 @@ import {
     ConfigKey,
 } from "../../types/enums.js";
 import { getConfigNumber } from "../configuracao.service.js";
-import { getNowBR, parseLocalDate, getEndOfDayBR } from "../../utils/date.utils.js";
+import { getNowBR, parseLocalDate, addDays, toPersistenceString } from "../../utils/date.utils.js";
 import { env } from "../../config/env.js";
 import { subscriptionService } from "./subscription.service.js";
 import { referralRepository } from "../../repositories/referral.repository.js";
@@ -98,16 +98,14 @@ export const subscriptionReferralService = {
                 baseDate = getNowBR();
             }
 
-            const newExpiry = getEndOfDayBR(baseDate);
             const bonusDays = await getConfigNumber(ConfigKey.SAAS_REFERRAL_BONUS_DAYS, 30);
-            newExpiry.setDate(newExpiry.getDate() + bonusDays);
-
-            const newExpiryIso = getEndOfDayBR(newExpiry).toISOString();
+            const newExpiryDate = addDays(baseDate, bonusDays);
+            const newExpiryStr = toPersistenceString(newExpiryDate);
 
             if (sub.status === SubscriptionStatus.TRIAL) {
-                await subscriptionRepository.extendTrial(sub.id, newExpiryIso);
+                await subscriptionRepository.extendTrial(sub.id, newExpiryStr);
             } else {
-                await subscriptionRepository.updateExpiry(sub.id, newExpiryIso);
+                await subscriptionRepository.updateExpiry(sub.id, newExpiryStr);
             }
 
             logger.info({ indicadorId: indicacao.indicador_id, dias: bonusDays }, "[SubscriptionReferralService] Bônus de indicação aplicado.");
@@ -121,7 +119,7 @@ export const subscriptionReferralService = {
                     {
                         nomeMotorista: indicador.nome,
                         trialDays: bonusDays,
-                        dataVencimento: getEndOfDayBR(newExpiry).toISOString()
+                        dataVencimento: newExpiryStr
                     },
                     { channels: ['WHATSAPP'] }
                 ).catch(err => {

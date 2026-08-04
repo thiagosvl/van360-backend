@@ -79,7 +79,7 @@ export const monitorRepository = {
     async getExpiredForGracePeriod(graceLimitDate: string) {
         return supabaseAdmin
             .from("assinaturas")
-            .select("id, usuario_id, data_vencimento, usuarios(nome, telefone)")
+            .select("id, usuario_id, data_vencimento, metodo_pagamento, planos(nome, valor), usuarios(nome, telefone)")
             .in("status", [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE])
             .lte("data_vencimento", graceLimitDate);
     },

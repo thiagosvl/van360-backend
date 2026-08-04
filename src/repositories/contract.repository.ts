@@ -116,12 +116,16 @@ export const contractRepository = {
     return true;
   },
 
-  async aposentarContratosPassageiro(passageiroId: string) {
+  async aposentarContratosPassageiro(passageiroId: string, apenasPendentes = false) {
+    const statusList = apenasPendentes
+      ? [ContratoStatus.PENDENTE]
+      : [ContratoStatus.PENDENTE, ContratoStatus.ASSINADO];
+
     const { error } = await supabaseAdmin
       .from("contratos")
       .update({ status: ContratoStatus.SUBSTITUIDO })
       .eq("passageiro_id", passageiroId)
-      .in("status", [ContratoStatus.PENDENTE, ContratoStatus.ASSINADO]);
+      .in("status", statusList);
 
     if (error) throw error;
     return true;

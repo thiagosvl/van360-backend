@@ -210,6 +210,22 @@ export const subscriptionBillingService = {
                         logger.error({ cleanupErr, userId }, "[SubscriptionBillingService] Falha ao limpar faturas pendentes/recusadas anteriores.");
                     }
                 }
+
+                if (paymentMethod === CheckoutPaymentMethod.CREDIT_CARD) {
+                    const { notificationService } = await import("../notifications/notification.service.js");
+                    const { EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO } = await import("../../config/constants.js");
+                    notificationService.notifyAdmin(EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO, {
+                        nomeMotorista: user.nome,
+                        telefone: user.telefone,
+                        usuarioId: userId,
+                        erro: errMsg,
+                        planoNome: plano.nome,
+                        origem: "MANUAL"
+                    }, {
+                        channels: ['TELEGRAM'],
+                        jobId: `admin-falha-pagamento-${userId}-manual-${Date.now()}`
+                    }).catch(err => logger.error({ err }, "[SubscriptionBillingService] Falha ao notificar admin sobre recusa manual de cartão"));
+                }
             } catch (dbError) {
                 logger.error({ userId, dbError }, "[SubscriptionBillingService] Erro ao gravar fatura falha no banco.");
             }
@@ -246,6 +262,22 @@ export const subscriptionBillingService = {
                     } catch (cleanupErr) {
                         logger.error({ cleanupErr, userId }, "[SubscriptionBillingService] Falha ao limpar faturas pendentes/recusadas anteriores.");
                     }
+                }
+
+                if (paymentMethod === CheckoutPaymentMethod.CREDIT_CARD) {
+                    const { notificationService } = await import("../notifications/notification.service.js");
+                    const { EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO } = await import("../../config/constants.js");
+                    notificationService.notifyAdmin(EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO, {
+                        nomeMotorista: user.nome,
+                        telefone: user.telefone,
+                        usuarioId: userId,
+                        erro: chargeRes.error || "Cartão recusado",
+                        planoNome: plano.nome,
+                        origem: "MANUAL"
+                    }, {
+                        channels: ['TELEGRAM'],
+                        jobId: `admin-falha-pagamento-${userId}-manual-${Date.now()}`
+                    }).catch(err => logger.error({ err }, "[SubscriptionBillingService] Falha ao notificar admin sobre recusa manual de cartão"));
                 }
             } catch (dbError) {
                 logger.error({ userId, dbError }, "[SubscriptionBillingService] Erro ao gravar fatura falha no banco.");

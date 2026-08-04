@@ -3,7 +3,7 @@ import { cobrancaRepository } from "../repositories/cobranca.repository.js";
 import { AppError } from "../errors/AppError.js";
 import { RegistrarPagamentoManualDTO } from "../types/dtos/cobranca.dto.js";
 import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaStatus, CobrancaTipoPagamento } from "../types/enums.js";
-import { getNowBR } from "../utils/date.utils.js";
+import { getNowBR, toPersistenceString } from "../utils/date.utils.js";
 import { historicoService } from "./historico.service.js";
 import { receiptService } from "./receipt.service.js";
 
@@ -23,11 +23,13 @@ export const cobrancaPagamentoService = {
     if (cobranca.status === CobrancaStatus.PAGO) throw new AppError("Esta cobrança já está paga.", 400);
 
     // 2. REGISTRAR NO BANCO
+    const dataPagamentoStr = data.data_pagamento ? toPersistenceString(data.data_pagamento) : toPersistenceString(getNowBR());
+
     const { data: updated, error } = await cobrancaRepository.registrarPagamentoManual(cobrancaId, {
       status: CobrancaStatus.PAGO,
       pagamento_manual: true,
       tipo_pagamento: data.tipo_pagamento || CobrancaTipoPagamento.DINHEIRO,
-      data_pagamento: data.data_pagamento || getNowBR(),
+      data_pagamento: dataPagamentoStr,
       valor_pago: data.valor_pago || cobranca.valor,
     });
 

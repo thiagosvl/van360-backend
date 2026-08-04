@@ -25,6 +25,7 @@ export interface AdminPaymentFailedContext {
     usuarioId: string;
     erro: string;
     planoNome?: string;
+    origem?: "MANUAL" | "AUTOMATICO";
 }
 
 export interface AdminSystemAlertContext {
@@ -92,18 +93,27 @@ export class AdminTemplates {
     static paymentFailed(ctx: AdminPaymentFailedContext): CompositeMessagePart[] {
         const telLine = ctx.telefone && ctx.telefone !== "Não informado" ? `<b>Telefone:</b> ${maskPhone(ctx.telefone)}\n` : "";
         const planLine = ctx.planoNome ? `<b>Plano:</b> ${ctx.planoNome}\n` : "";
+        const isManual = ctx.origem === "MANUAL";
+        const origemText = isManual ? "Checkout Manual (Tentativa do Usuário)" : "Renovação Automática (Robô)";
+        const descText = isManual
+            ? "Tentativa manual de pagamento/checkout com cartão recusada."
+            : "O sistema não conseguiu renovar a assinatura de um cliente automaticamente.";
+        const footerText = isManual
+            ? "<i>Verifique a tentativa de pagamento se necessário.</i>"
+            : "<i>O cliente já foi notificado. Acompanhe se ele atualizará o cartão.</i>";
 
         return [
             {
                 type: "text",
                 content: `⚠️ <b>Falha de Cobrança (Cartão)</b>\n\n` +
-                         `O sistema não conseguiu renovar a assinatura de um cliente.\n\n` +
+                         `${descText}\n\n` +
                          `<b>Motorista:</b> ${ctx.nomeMotorista}\n` +
                          telLine +
                          planLine +
+                         `<b>Origem:</b> ${origemText}\n` +
                          `<b>Motivo/Erro:</b> ${ctx.erro}\n` +
                          `<b>ID:</b> ${ctx.usuarioId}\n\n` +
-                         `<i>O cliente já foi notificado. Acompanhe se ele atualizará o cartão.</i>`
+                         footerText
             }
         ];
     }

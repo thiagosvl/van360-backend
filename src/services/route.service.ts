@@ -185,7 +185,7 @@ const listRoutesByUsuario = async (usuarioId: string): Promise<any[]> => {
     if (error) {
       const { data: fallbackRoutes, error: fbError } = await routeRepository.listByUsuarioFallback(usuarioId);
 
-      if (fbError) return [];
+      if (fbError) throw new AppError(`Erro ao buscar rotas: ${fbError.message}`, 500);
       return (fallbackRoutes || []).map(r => ({ ...r, numero_passageiros: 0 }));
     }
 
@@ -197,8 +197,10 @@ const listRoutesByUsuario = async (usuarioId: string): Promise<any[]> => {
         numero_passageiros: count
       };
     });
-  } catch (err) {
-    return [];
+  } catch (err: any) {
+    if (err instanceof AppError) throw err;
+    logger.error({ error: err?.message || String(err), usuarioId }, "[RouteService] Erro ao listar rotas do usuário");
+    throw new AppError("Erro ao buscar rotas do usuário", 500);
   }
 };
 
@@ -209,12 +211,15 @@ const listExecucoesByUsuario = async (usuarioId: string): Promise<any[]> => {
     const { data: execs, error } = await routeRepository.listExecucoesByUsuario(usuarioId);
 
     if (error) {
-      const { data: fallbackExecs } = await routeRepository.listExecucoesByUsuarioFallback(usuarioId);
+      const { data: fallbackExecs, error: fbError } = await routeRepository.listExecucoesByUsuarioFallback(usuarioId);
+      if (fbError) throw new AppError(`Erro ao buscar execuções: ${fbError.message}`, 500);
       return fallbackExecs || [];
     }
     return execs || [];
-  } catch (err) {
-    return [];
+  } catch (err: any) {
+    if (err instanceof AppError) throw err;
+    logger.error({ error: err?.message || String(err), usuarioId }, "[RouteService] Erro ao listar execuções do usuário");
+    throw new AppError("Erro ao buscar execuções de rotas", 500);
   }
 };
 
@@ -259,6 +264,9 @@ const iniciarRota = async (rotaId: string, usuarioId: string): Promise<any> => {
 
   if (checkError) throw checkError;
   if (activeExec) {
+    if ((activeExec as any).rota_id === rotaId) {
+      return getExecucaoDetail(activeExec.id);
+    }
     throw new AppError("Você já possui uma rota em andamento. Finalize-a antes de iniciar outra.", 400);
   }
 
@@ -502,7 +510,7 @@ const removerAusenciaAntecipada = async (id: string, passageiroId?: string, rota
 
 const listAusenciasByRota = async (rotaId: string, dataAusencia?: string): Promise<any[]> => {
   if (!rotaId) throw new AppError("ID da rota é obrigatório", 400);
-  const targetDate = dataAusencia || new Date().toISOString().split("T")[0];
+  const targetDate = dataAusencia || toPersistenceString(getNowBR());
 
   const { data: ausencias, error } = await routeRepository.getAusenciasByRotaEData(rotaId, targetDate);
   if (error) throw error;
