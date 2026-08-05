@@ -20,8 +20,10 @@ export const passageiroController = {
   create: async (request: FastifyRequest, reply: FastifyReply) => {
     logger.info("PassageiroController.create - Starting");
     const data = createPassageiroSchema.parse(request.body);
-    
-
+    const reqAny = request as any;
+    if (reqAny.data_owner_id) {
+      data.usuario_id = reqAny.data_owner_id;
+    }
 
     const result = await passageiroService.createPassageiro(data);
     return reply.status(201).send(result);
@@ -59,8 +61,15 @@ export const passageiroController = {
   listByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {
     const { usuarioId } = request.params as { usuarioId: string };
     const filtros = listPassageirosFiltersSchema.parse(request.query);
-    logger.info({ usuarioId, filtros }, "PassageiroController.listByUsuario");
-    const passageiros = await passageiroService.listPassageiros(usuarioId, filtros);
+    const reqAny = request as any;
+
+    const targetOwnerId = reqAny.data_owner_id || usuarioId;
+    if (reqAny.assigned_veiculo_id && !filtros.veiculo) {
+      filtros.veiculo = reqAny.assigned_veiculo_id;
+    }
+
+    logger.info({ usuarioId, targetOwnerId, filtros }, "PassageiroController.listByUsuario");
+    const passageiros = await passageiroService.listPassageiros(targetOwnerId, filtros);
     return reply.status(200).send(passageiros);
   },
 
@@ -88,7 +97,14 @@ export const passageiroController = {
   countByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {
     const { usuarioId } = request.params as { usuarioId: string };
     const filtros: any = request.query || {}; 
-    const count = await passageiroService.countListPassageirosByUsuario(usuarioId, filtros as any);
+    const reqAny = request as any;
+
+    const targetOwnerId = reqAny.data_owner_id || usuarioId;
+    if (reqAny.assigned_veiculo_id && !filtros.veiculo) {
+      filtros.veiculo = reqAny.assigned_veiculo_id;
+    }
+
+    const count = await passageiroService.countListPassageirosByUsuario(targetOwnerId, filtros as any);
     return reply.status(200).send({ count });
   },
 
@@ -113,12 +129,15 @@ export const passageiroController = {
   },
 
   getAniversariantesDoMes: async (request: FastifyRequest, reply: FastifyReply) => {
-    const authUid = (request as any).user?.id;
-    if (!authUid) throw new AppError("Não autorizado", 401);
+    const reqAny = request as any;
+    const targetOwnerId = reqAny.data_owner_id || reqAny.user?.id;
+    const assignedVeiculoId = reqAny.assigned_veiculo_id;
+
+    if (!targetOwnerId) throw new AppError("Não autorizado", 401);
 
     const { mes } = getAniversariantesQuerySchema.parse(request.query);
 
-    const data = await passageiroService.listarAniversariantesDoMes(authUid, mes);
+    const data = await passageiroService.listarAniversariantesDoMes(targetOwnerId, mes, assignedVeiculoId);
     
     return reply.status(200).send(data);
   },

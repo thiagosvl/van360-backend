@@ -405,11 +405,11 @@ const lookupResponsavelByCpf = async (usuarioId: string, cpf: string): Promise<a
     return data;
 };
 
-const listarAniversariantesDoMes = async (usuarioId: string, mes: number) => {
+const listarAniversariantesDoMes = async (usuarioId: string, mes: number, veiculoId?: string) => {
     if (!usuarioId) throw new Error("Usuário obrigatório");
     if (mes < 1 || mes > 12) throw new AppError("Mês inválido", 400);
 
-    const { data: todosAtivos, error } = await passageiroRepository.listAniversariantesInfo(usuarioId);
+    const { data: todosAtivos, error } = await passageiroRepository.listAniversariantesInfo(usuarioId, veiculoId);
     if (error) throw new AppError("Erro ao buscar passageiros para aniversários", 500);
 
     let passageirosSemData = 0;

@@ -16,7 +16,10 @@ export const escolaController = {
     logger.info("EscolaController.create - Starting");
     try {
         const data = createEscolaSchema.parse(request.body);
-        
+        const reqAny = request as any;
+        if (reqAny.data_owner_id) {
+            data.usuario_id = reqAny.data_owner_id;
+        }
 
         const result = await escolaService.createEscola(data);
         return reply.status(201).send(result);
@@ -62,21 +65,27 @@ export const escolaController = {
 
   listByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {
     const { usuarioId } = request.params as { usuarioId: string };
+    const reqAny = request as any;
+    const targetOwnerId = reqAny.data_owner_id || usuarioId;
     const filtros = listEscolasFiltersSchema.parse(request.query);
-    const escolas = await escolaService.listEscolas(usuarioId, filtros);
+    const escolas = await escolaService.listEscolas(targetOwnerId, filtros);
     return reply.status(200).send(escolas);
   },
 
   listWithContagem: async (request: FastifyRequest, reply: FastifyReply) => {
     const { usuarioId } = request.params as { usuarioId: string };
+    const reqAny = request as any;
+    const targetOwnerId = reqAny.data_owner_id || usuarioId;
     const filtros = listEscolasFiltersSchema.parse(request.query);
-    const escolas = await escolaService.listEscolasComContagemAtivos(usuarioId, filtros);
+    const escolas = await escolaService.listEscolasComContagemAtivos(targetOwnerId, filtros);
     return reply.status(200).send(escolas);
   },
 
   countByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {
     const { usuarioId } = request.params as { usuarioId: string };
-    const count = await escolaService.countListEscolasByUsuario(usuarioId);
+    const reqAny = request as any;
+    const targetOwnerId = reqAny.data_owner_id || usuarioId;
+    const count = await escolaService.countListEscolasByUsuario(targetOwnerId);
     return reply.status(200).send({ count });
   },
 

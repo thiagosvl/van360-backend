@@ -121,6 +121,7 @@ export const passageiroRepository = {
         .eq("usuario_id", usuarioId);
 
     if (filtros?.ativo !== undefined) query = query.eq("ativo", filtros.ativo === "true");
+    if (filtros?.veiculo) query = query.eq("veiculo_id", filtros.veiculo);
 
     return query;
   },
@@ -159,8 +160,8 @@ export const passageiroRepository = {
       .eq("enviar_notificacoes", true);
   },
 
-  async listAniversariantesInfo(usuarioId: string) {
-    return supabaseAdmin
+  async listAniversariantesInfo(usuarioId: string, veiculoId?: string) {
+    let query = supabaseAdmin
       .from("passageiros")
       .select(`
         id, 
@@ -170,7 +171,12 @@ export const passageiroRepository = {
         escola:escolas(id, nome)
       `)
       .eq("usuario_id", usuarioId)
-      .eq("ativo", true)
-      .order("nome", { ascending: true });
+      .eq("ativo", true);
+
+    if (veiculoId) {
+      query = query.eq("veiculo_id", veiculoId);
+    }
+
+    return query.order("nome", { ascending: true });
   }
 };

@@ -20,6 +20,7 @@ import usuarioRoute from "./usuario.route.js";
 import veiculoRoutes from "./veiculo.routes.js";
 
 import configuracoesRoutes from "./configuracoes.routes.js";
+import motoristaEquipeRoutes from "./motorista-equipe.routes.js";
 import { checkSubscriptionAccess } from "../middleware/subscription.js";
 import { WebhookController } from "./webhook.controller.js";
 
@@ -35,6 +36,7 @@ const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.register(appRoutes, { prefix: "/api/app" });
   app.register(publicRoutes, { prefix: "/api/public" });
   app.register(usuarioRoute, { prefix: "/api/usuarios" });
+  app.register(motoristaEquipeRoutes, { prefix: "/api/motoristas-equipe" });
 
   // Assinaturas SaaS (Gestão do Motorista)
   app.register(subscriptionRoutes, { prefix: "/api/subscriptions" });

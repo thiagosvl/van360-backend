@@ -22,7 +22,11 @@ export const usuarioResumoController = {
     const mesNum = mes ? parseInt(mes) : undefined;
     const anoNum = ano ? parseInt(ano) : undefined;
 
-    const resumo = await usuarioResumoService.getResumo(usuarioId, mesNum, anoNum, veiculo_id);
+    const reqAny = request as any;
+    const targetOwnerId = reqAny.data_owner_id || usuarioId;
+    const targetVeiculoId = veiculo_id || reqAny.assigned_veiculo_id;
+
+    const resumo = await usuarioResumoService.getResumo(targetOwnerId, mesNum, anoNum, targetVeiculoId);
 
     return reply.send(resumo);
   },

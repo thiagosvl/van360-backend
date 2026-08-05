@@ -176,14 +176,14 @@ const getRoute = async (id: string, dataAusencia?: string): Promise<any> => {
   return route;
 };
 
-const listRoutesByUsuario = async (usuarioId: string): Promise<any[]> => {
+const listRoutesByUsuario = async (usuarioId: string, veiculoId?: string): Promise<any[]> => {
   if (!usuarioId) throw new AppError("ID do usuário é obrigatório", 400);
 
   try {
-    const { data: routes, error } = await routeRepository.listByUsuario(usuarioId);
+    const { data: routes, error } = await routeRepository.listByUsuario(usuarioId, veiculoId);
 
     if (error) {
-      const { data: fallbackRoutes, error: fbError } = await routeRepository.listByUsuarioFallback(usuarioId);
+      const { data: fallbackRoutes, error: fbError } = await routeRepository.listByUsuarioFallback(usuarioId, veiculoId);
 
       if (fbError) throw new AppError(`Erro ao buscar rotas: ${fbError.message}`, 500);
       return (fallbackRoutes || []).map(r => ({ ...r, numero_passageiros: 0 }));
@@ -204,11 +204,11 @@ const listRoutesByUsuario = async (usuarioId: string): Promise<any[]> => {
   }
 };
 
-const listExecucoesByUsuario = async (usuarioId: string): Promise<any[]> => {
+const listExecucoesByUsuario = async (usuarioId: string, veiculoId?: string): Promise<any[]> => {
   if (!usuarioId) throw new AppError("ID do usuário é obrigatório", 400);
 
   try {
-    const { data: execs, error } = await routeRepository.listExecucoesByUsuario(usuarioId);
+    const { data: execs, error } = await routeRepository.listExecucoesByUsuario(usuarioId, veiculoId);
 
     if (error) {
       const { data: fallbackExecs, error: fbError } = await routeRepository.listExecucoesByUsuarioFallback(usuarioId);

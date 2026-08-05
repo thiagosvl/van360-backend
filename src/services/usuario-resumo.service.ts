@@ -59,6 +59,10 @@ export const usuarioResumoService = {
     const usuario = await getUsuarioData(usuarioId);
     if (!usuario) throw new Error("Usuário não encontrado");
 
+    const isSubAccount = Boolean(usuario.conta_pai_id);
+    const dataOwnerId = usuario.conta_pai_id || usuarioId;
+    const targetVeiculoId = veiculoId || usuario.veiculo_id;
+
     // 2. Parallel Fetching for Counters & Status
     const [
       veiculosCount,
@@ -66,10 +70,10 @@ export const usuarioResumoService = {
       passData,
       prePassageirosCount,
     ] = await Promise.all([
-      veiculoRepository.getSummaryForDashboard(usuarioId),
-      escolaRepository.getSummaryForDashboard(usuarioId),
-      passageiroRepository.getSummaryForDashboard(usuarioId, veiculoId),
-      prePassageiroRepository.getCountForDashboard(usuarioId),
+      veiculoRepository.getSummaryForDashboard(dataOwnerId),
+      escolaRepository.getSummaryForDashboard(dataOwnerId),
+      passageiroRepository.getSummaryForDashboard(dataOwnerId, targetVeiculoId),
+      prePassageiroRepository.getCountForDashboard(dataOwnerId),
     ]);
 
     // Process Counters
@@ -96,8 +100,8 @@ export const usuarioResumoService = {
     const end = `${targetAno}-${String(targetMes).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
     const [cobrancasRes, gastosRes] = await Promise.all([
-      cobrancaRepository.getForPeriodForDashboard(usuarioId, start, end, veiculoId),
-      gastoRepository.getGastosForPeriodForDashboard(usuarioId, start, end, veiculoId)
+      cobrancaRepository.getForPeriodForDashboard(dataOwnerId, start, end, targetVeiculoId),
+      gastoRepository.getGastosForPeriodForDashboard(dataOwnerId, start, end, targetVeiculoId)
     ]);
 
     const cobrancas = cobrancasRes.data || [];
@@ -234,7 +238,7 @@ export const usuarioResumoService = {
           inativos: escInativos
         }
       },
-      financeiro
+      financeiro: isSubAccount ? undefined : financeiro
     };
   }
 };

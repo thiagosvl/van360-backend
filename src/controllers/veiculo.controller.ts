@@ -15,8 +15,10 @@ export const veiculoController = {
     logger.info("VeiculoController.create - Starting");
     try {
         const data = createVeiculoSchema.parse(request.body);
-        
-
+        const reqAny = request as any;
+        if (reqAny.data_owner_id) {
+            data.usuario_id = reqAny.data_owner_id;
+        }
 
         const result = await veiculoService.createVeiculo(data);
         return reply.status(201).send(result);
@@ -64,21 +66,27 @@ export const veiculoController = {
 
   listByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {
     const { usuarioId } = request.params as { usuarioId: string };
+    const reqAny = request as any;
+    const targetOwnerId = reqAny.data_owner_id || usuarioId;
     const filtros = listVeiculosFiltersSchema.parse(request.query);
-    const veiculos = await veiculoService.listVeiculos(usuarioId, filtros);
+    const veiculos = await veiculoService.listVeiculos(targetOwnerId, filtros);
     return reply.status(200).send(veiculos);
   },
 
   listWithContagem: async (request: FastifyRequest, reply: FastifyReply) => {
     const { usuarioId } = request.params as { usuarioId: string };
+    const reqAny = request as any;
+    const targetOwnerId = reqAny.data_owner_id || usuarioId;
     const filtros = listVeiculosFiltersSchema.parse(request.query);
-    const veiculos = await veiculoService.listVeiculosComContagemAtivos(usuarioId, filtros);
+    const veiculos = await veiculoService.listVeiculosComContagemAtivos(targetOwnerId, filtros);
     return reply.status(200).send(veiculos);
   },
 
   countByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {
     const { usuarioId } = request.params as { usuarioId: string };
-    const count = await veiculoService.countListVeiculosByUsuario(usuarioId);
+    const reqAny = request as any;
+    const targetOwnerId = reqAny.data_owner_id || usuarioId;
+    const count = await veiculoService.countListVeiculosByUsuario(targetOwnerId);
     return reply.status(200).send({ count });
   },
 

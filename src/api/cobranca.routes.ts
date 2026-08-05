@@ -1,9 +1,11 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { cobrancaController } from "../controllers/cobranca.controller.js";
 import { authenticate } from "../middleware/auth.js";
+import { requirePermission } from "../middleware/permissions.middleware.js";
 
 const cobrancaRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     app.addHook("onRequest", authenticate);
+    app.addHook("preHandler", requirePermission("cobrancas.gerenciar"));
 
     // CRUD Básico
     app.post("/", cobrancaController.create);
@@ -15,7 +17,6 @@ const cobrancaRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     // Contexto de Passageiro
     app.get("/passageiro/:passageiroId", cobrancaController.listByPassageiro);
     app.get("/passageiro/:passageiroId/count", cobrancaController.countByPassageiro);
-
 
     // Notificações
     app.get("/:cobrancaId/notificacoes", cobrancaController.listNotificacoes);

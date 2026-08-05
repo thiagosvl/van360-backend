@@ -45,9 +45,8 @@ export const webhookEvolutionHandler = {
 
         if (!state) return true;
 
-        logger.info({ instanceName, state }, "[Webhook] Status do WhatsApp alterado");
-
         if (state === WhatsappStatus.CLOSE || state === WhatsappStatus.DISCONNECTED) {
+            logger.warn({ instanceName, state }, "[Webhook] Status do WhatsApp ALERTA: Desconectado");
             const { notificationService } = await import("../notifications/notification.service.js");
             const { EVENTO_ADMIN_SISTEMA_ALERTA } = await import("../../config/constants.js");
             
@@ -62,6 +61,8 @@ export const webhookEvolutionHandler = {
                 channels: ['TELEGRAM'],
                 jobId: `admin-alerta-desconexao-${instanceName}-${state}`
             });
+        } else {
+            logger.debug({ instanceName, state }, "[Webhook] Status do WhatsApp alterado");
         }
 
         return true;

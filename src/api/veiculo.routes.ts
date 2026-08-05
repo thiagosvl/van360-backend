@@ -1,24 +1,25 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { veiculoController } from "../controllers/veiculo.controller.js";
 import { authenticate } from "../middleware/auth.js";
+import { requirePermission } from "../middleware/permissions.middleware.js";
 
 
 const veiculoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     app.addHook("onRequest", authenticate);
 
-    // CRUD Básico
-    app.post("/", veiculoController.create);
-    app.put("/:id", veiculoController.update);
-    app.delete("/:id", veiculoController.delete);
-    app.get("/:id", veiculoController.get);
+    // CRUD Básico (Apenas quem tem veiculos.gerenciar)
+    app.post("/", { preHandler: [requirePermission("veiculos.gerenciar")] }, veiculoController.create);
+    app.put("/:id", { preHandler: [requirePermission("veiculos.gerenciar")] }, veiculoController.update);
+    app.delete("/:id", { preHandler: [requirePermission("veiculos.gerenciar")] }, veiculoController.delete);
+    app.get("/:id", { preHandler: [requirePermission("veiculos.gerenciar")] }, veiculoController.get);
 
     // Listagens e Contagens
-    app.get("/usuario/:usuarioId", veiculoController.listByUsuario);
-    app.get("/usuario/:usuarioId/com-contagem", veiculoController.listWithContagem);
-    app.get("/usuario/:usuarioId/contagem", veiculoController.countByUsuario);
+    app.get("/usuario/:usuarioId", { preHandler: [requirePermission("veiculos.gerenciar")] }, veiculoController.listByUsuario);
+    app.get("/usuario/:usuarioId/com-contagem", { preHandler: [requirePermission("veiculos.gerenciar")] }, veiculoController.listWithContagem);
+    app.get("/usuario/:usuarioId/contagem", { preHandler: [requirePermission("veiculos.gerenciar")] }, veiculoController.countByUsuario);
 
     // Ações Específicas
-    app.patch("/:id/toggle-ativo", veiculoController.toggleAtivo);
+    app.patch("/:id/toggle-ativo", { preHandler: [requirePermission("veiculos.gerenciar")] }, veiculoController.toggleAtivo);
 };
 
 export default veiculoRoute;

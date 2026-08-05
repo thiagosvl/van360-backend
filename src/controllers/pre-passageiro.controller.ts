@@ -4,12 +4,14 @@ import { prePassageiroService } from "../services/pre-passageiro.service.js";
 import { createPrePassageiroSchema } from "../types/dtos/pre-passageiro.dto.js";
 
 export const prePassageiroController = {
-  async listByUsuario(request: FastifyRequest<{ Params: { usuarioId: string }, Querystring: { search?: string } }>, reply: FastifyReply) {
-    const { usuarioId } = request.params;
-    const { search } = request.query;
+  async listByUsuario(request: FastifyRequest, reply: FastifyReply) {
+    const { usuarioId } = request.params as { usuarioId: string };
+    const { search } = request.query as { search?: string };
+    const reqAny = request as any;
+    const targetOwnerId = reqAny.data_owner_id || usuarioId;
 
     try {
-      const prePassageiros = await prePassageiroService.listPrePassageiros(usuarioId, search);
+      const prePassageiros = await prePassageiroService.listPrePassageiros(targetOwnerId, search);
       return reply.status(200).send(prePassageiros);
     } catch (err: unknown) {
       throw err;
@@ -29,8 +31,8 @@ export const prePassageiroController = {
     }
   },
 
-  async delete(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
-    const prePassageiroId = request.params.id;
+  async delete(request: FastifyRequest, reply: FastifyReply) {
+    const { id: prePassageiroId } = request.params as { id: string };
     try {
       await prePassageiroService.deletePrePassageiro(prePassageiroId);
       return reply.status(200).send({ success: true });

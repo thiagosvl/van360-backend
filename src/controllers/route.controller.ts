@@ -15,6 +15,15 @@ export const routeController = {
   create: async (request: FastifyRequest, reply: FastifyReply) => {
     logger.info("RouteController.create - Starting");
     const data = createRouteSchema.parse(request.body);
+    const reqAny = request as any;
+
+    if (reqAny.data_owner_id) {
+      data.usuario_id = reqAny.data_owner_id;
+    }
+    if (reqAny.assigned_veiculo_id && !data.veiculo_id) {
+      data.veiculo_id = reqAny.assigned_veiculo_id;
+    }
+
     const result = await routeService.createRoute(data);
     return reply.status(201).send(result);
   },
@@ -43,15 +52,23 @@ export const routeController = {
 
   listByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {
     const { usuarioId } = request.params as { usuarioId: string };
-    logger.info({ usuarioId }, "RouteController.listByUsuario");
-    const routes = await routeService.listRoutesByUsuario(usuarioId);
+    const reqAny = request as any;
+    const targetOwnerId = reqAny.data_owner_id || usuarioId;
+    const assignedVeiculoId = reqAny.assigned_veiculo_id;
+
+    logger.info({ usuarioId, targetOwnerId, assignedVeiculoId }, "RouteController.listByUsuario");
+    const routes = await routeService.listRoutesByUsuario(targetOwnerId, assignedVeiculoId);
     return reply.status(200).send(routes);
   },
 
   listExecucoesByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {
     const { usuarioId } = request.params as { usuarioId: string };
-    logger.info({ usuarioId }, "RouteController.listExecucoesByUsuario");
-    const execs = await routeService.listExecucoesByUsuario(usuarioId);
+    const reqAny = request as any;
+    const targetOwnerId = reqAny.data_owner_id || usuarioId;
+    const assignedVeiculoId = reqAny.assigned_veiculo_id;
+
+    logger.info({ usuarioId, targetOwnerId, assignedVeiculoId }, "RouteController.listExecucoesByUsuario");
+    const execs = await routeService.listExecucoesByUsuario(targetOwnerId, assignedVeiculoId);
     return reply.status(200).send(execs);
   },
 

@@ -16,6 +16,10 @@ export const cobrancaController = {
   create: async (request: FastifyRequest, reply: FastifyReply) => {
     logger.info("CobrancaController.create - Starting");
     const data = createCobrancaSchema.parse(request.body);
+    const reqAny = request as any;
+    if (reqAny.data_owner_id) {
+      data.usuario_id = reqAny.data_owner_id;
+    }
     const cobranca = await cobrancaService.createCobranca(data);
     return reply.status(201).send(cobranca);
   },
@@ -43,6 +47,13 @@ export const cobrancaController = {
 
   listWithFilters: async (request: FastifyRequest, reply: FastifyReply) => {
     const filtros = listCobrancasFiltersSchema.parse(request.query);
+    const reqAny = request as any;
+    if (reqAny.data_owner_id) {
+      filtros.usuarioId = reqAny.data_owner_id;
+    }
+    if (reqAny.assigned_veiculo_id && !filtros.veiculoId) {
+      filtros.veiculoId = reqAny.assigned_veiculo_id;
+    }
     const cobrancas = await cobrancaService.listCobrancasWithFilters(filtros);
     return reply.status(200).send(cobrancas);
   },

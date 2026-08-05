@@ -101,8 +101,8 @@ export const routeRepository = {
       .maybeSingle();
   },
 
-  async listByUsuario(usuarioId: string) {
-    return supabaseAdmin
+  async listByUsuario(usuarioId: string, veiculoId?: string) {
+    let query = supabaseAdmin
       .from("rotas")
       .select(`
         *,
@@ -119,30 +119,46 @@ export const routeRepository = {
           marca
         )
       `)
-      .eq("usuario_id", usuarioId)
-      .order("created_at", { ascending: false });
+      .eq("usuario_id", usuarioId);
+
+    if (veiculoId) {
+      query = query.eq("veiculo_id", veiculoId);
+    }
+
+    return query.order("created_at", { ascending: false });
   },
 
-  async listByUsuarioFallback(usuarioId: string) {
-    return supabaseAdmin
+  async listByUsuarioFallback(usuarioId: string, veiculoId?: string) {
+    let query = supabaseAdmin
       .from("rotas")
       .select("*")
-      .eq("usuario_id", usuarioId)
-      .order("created_at", { ascending: false });
+      .eq("usuario_id", usuarioId);
+
+    if (veiculoId) {
+      query = query.eq("veiculo_id", veiculoId);
+    }
+
+    return query.order("created_at", { ascending: false });
   },
 
-  async listExecucoesByUsuario(usuarioId: string) {
-    return supabaseAdmin
+  async listExecucoesByUsuario(usuarioId: string, veiculoId?: string) {
+    let query = supabaseAdmin
       .from("execucoes_rota")
       .select(`
         *,
         rota:rotas (
           id,
-          nome
+          nome,
+          veiculo_id
         )
       `)
-      .eq("usuario_id", usuarioId)
-      .order("iniciada_em", { ascending: false });
+      .eq("usuario_id", usuarioId);
+
+    if (veiculoId) {
+      query = query.eq("rota.veiculo_id", veiculoId);
+    }
+
+    return query.order("iniciada_em", { ascending: false });
   },
 
   async listExecucoesByUsuarioFallback(usuarioId: string) {

@@ -4,6 +4,8 @@ import { toPersistenceString } from "../utils/date.utils.js";
 import { CreatePrePassageiroDTO } from "../types/dtos/pre-passageiro.dto.js";
 import { prePassageiroRepository } from "../repositories/pre-passageiro.repository.js";
 
+import { userRepository } from "../repositories/user.repository.js";
+
 export const prePassageiroService = {
   async listPrePassageiros(usuarioId: string, search?: string) {
     return prePassageiroRepository.listPrePassageiros(usuarioId, search);
@@ -29,8 +31,11 @@ export const prePassageiroService = {
       }
     }
 
+    const { data: targetUser } = await userRepository.getById(payload.usuario_id);
+    const targetOwnerId = targetUser?.conta_pai_id || payload.usuario_id;
+
     const prePassageiroData = {
-      usuario_id: payload.usuario_id,
+      usuario_id: targetOwnerId,
       nome: cleanString(payload.nome, true),
       nome_responsavel: cleanString(payload.nome_responsavel, true),
 

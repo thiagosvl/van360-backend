@@ -20,6 +20,9 @@ export enum CobrancaOrigem {
 export enum UserType {
   ADMIN = "admin",
   MOTORISTA = "motorista",
+  MOTORISTA_AUXILIAR = "motorista_auxiliar",
+  MONITOR = "monitor",
+  RESPONSAVEL = "responsavel",
 }
 
 export enum WhatsappStatus {

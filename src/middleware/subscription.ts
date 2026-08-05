@@ -2,6 +2,8 @@ import { FastifyReply, FastifyRequest } from "fastify";
 import { subscriptionService } from "../services/subscriptions/subscription.service.js";
 import { logger } from "../config/logger.js";
 
+import { UserType } from "../types/enums.js";
+
 const EXEMPTED_ROUTES = [
   "/api/admin",
   "/api/subscriptions",
@@ -30,20 +32,27 @@ export async function checkSubscriptionAccess(
   }
 
   const user = (request as any).user;
-  if (user?.app_metadata?.role === "admin") return;
+  if (user?.app_metadata?.role === UserType.ADMIN) return;
 
   if (!userId) return;
 
+  const targetUserId = (request as any).data_owner_id || userId;
+  const isSubAccount = Boolean((request as any).profile?.conta_pai_id);
+
   try {
-    const isBlocked = await subscriptionService.isBlocked(userId);
+    const isBlocked = await subscriptionService.isBlocked(targetUserId);
 
     if (isBlocked) {
-      logger.warn({ userId, url, method }, "[SubscriptionMiddleware] Ação bloqueada — Assinatura SaaS EXPIRADA.");
+      logger.warn({ userId, targetUserId, url, method }, "[SubscriptionMiddleware] Ação bloqueada — Assinatura SaaS da frota EXPIRADA.");
 
       return reply.status(403).send({
-        error: "Acesso bloqueado. Sua assinatura expirou.",
+        error: isSubAccount
+          ? "Acesso temporariamente suspenso"
+          : "Acesso bloqueado. Sua assinatura expirou.",
         code: "SAAS_EXPIRED",
-        message: "Sua conta está em modo leitura. Regularize seu pagamento para continuar criando cobranças e gerenciando passageiros."
+        message: isSubAccount
+          ? "O acesso à sua frota está temporariamente suspenso. Por favor, entre em contato com o seu gestor."
+          : "Sua conta está em modo leitura. Regularize seu pagamento para continuar criando cobranças e gerenciando passageiros."
       });
     }
   } catch (err) {

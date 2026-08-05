@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "../config/supabase.js";
-import { STATUS_ASSINATURA_LIBERADA } from "../types/enums.js";
+import { STATUS_ASSINATURA_LIBERADA, UserType } from "../types/enums.js";
 
 export const userRepository = {
     async getById(id: string) {
@@ -30,7 +30,7 @@ export const userRepository = {
     async getProfileData(id: string) {
         return supabaseAdmin
             .from("usuarios")
-            .select("id, nome, razao_social, cpfcnpj, telefone, config_contrato, chave_pix, tipo_chave_pix, data_nascimento, logradouro, numero, bairro, cidade, estado, cep, canal_aquisicao, dispositivo_cadastro, metadados_cadastro, created_at")
+            .select("id, nome, razao_social, cpfcnpj, telefone, tipo, conta_pai_id, veiculo_id, config_contrato, chave_pix, tipo_chave_pix, data_nascimento, logradouro, numero, bairro, cidade, estado, cep, canal_aquisicao, dispositivo_cadastro, metadados_cadastro, created_at")
             .eq("id", id)
             .single();
     },
@@ -70,7 +70,7 @@ export const userRepository = {
                 assinaturas!inner(status)
             `)
             .eq("ativo", true)
-            .eq("tipo", "motorista")
+            .eq("tipo", UserType.MOTORISTA)
             .in("assinaturas.status", STATUS_ASSINATURA_LIBERADA);
 
         if (error) {
@@ -91,7 +91,7 @@ export const userRepository = {
                 usuario_configuracoes!inner(notificar_motorista_aniversarios)
             `)
             .eq("ativo", true)
-            .eq("tipo", "motorista")
+            .eq("tipo", UserType.MOTORISTA)
             .in("assinaturas.status", STATUS_ASSINATURA_LIBERADA)
             .eq("usuario_configuracoes.notificar_motorista_aniversarios", true);
 
@@ -113,7 +113,7 @@ export const userRepository = {
                 usuario_configuracoes!inner(notificar_motorista_parcelas)
             `)
             .eq("ativo", true)
-            .eq("tipo", "motorista")
+            .eq("tipo", UserType.MOTORISTA)
             .in("assinaturas.status", STATUS_ASSINATURA_LIBERADA)
             .eq("usuario_configuracoes.notificar_motorista_parcelas", true);
 

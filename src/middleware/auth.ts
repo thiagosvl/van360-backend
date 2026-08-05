@@ -2,6 +2,8 @@ import { FastifyReply, FastifyRequest } from "fastify";
 import { authProvider } from "../services/providers/auth.provider.js";
 import { authRepository } from "../repositories/auth.repository.js";
 
+import { UserType } from "../types/enums.js";
+
 export async function verifySupabaseJWT(
   request: FastifyRequest,
   reply: FastifyReply
@@ -48,6 +50,8 @@ export async function verifySupabaseJWT(
       });
     }
 
+    const isSubAccount = !!profile.conta_pai_id || profile.tipo === UserType.MOTORISTA_AUXILIAR || profile.tipo === UserType.MONITOR;
+
     (request as any).user = {
       ...user,
       app_metadata: {
@@ -55,7 +59,10 @@ export async function verifySupabaseJWT(
         role: profile.tipo,
       },
     };
+    (request as any).profile = profile;
     (request as any).usuario_id = profile.id;
+    (request as any).data_owner_id = profile.conta_pai_id || profile.id;
+    (request as any).assigned_veiculo_id = isSubAccount ? (profile.veiculo_id || null) : null;
 
   } catch (err: any) {
     return reply.status(401).send({ error: "Falha na autenticação", code: "AUTH_UNEXPECTED_ERROR" });

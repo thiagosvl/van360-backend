@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
 import { webhookEvolutionHandler } from "../services/handlers/webhook-evolution.handler.js";
-import { EvolutionEvent } from "../types/enums.js";
+import { EvolutionEvent, WhatsappStatus } from "../types/enums.js";
 import { getNowBR, parseLocalDate } from "../utils/date.utils.js";
 
 interface EvolutionPayload {
@@ -20,19 +20,19 @@ export const evolutionController = {
         const payload = request.body as EvolutionPayload;
         const params = request.params as { '*': string };
 
-        // Log principal (visibilidade garantida)
-        logger.info({ 
-            event: payload.event || params['*'], 
-            instance: payload.instance 
-        }, "[EvolutionController] Webhook recebido");
-        
-        // Se a Evolution mandou via sub-rota (*), extraímos o evento da URL
-        if (params['*'] && !payload.event) {
-            const eventFromUrl = params['*'].replace(/-/g, '.');
-            payload.event = eventFromUrl as EvolutionEvent;
-        }
+        const { event, instance, data, date_time } = payload;
+        const state = data?.state;
 
-        const { event, instance, date_time } = payload;
+        // Identifica se é um webhook rotineiro de conexão (ex: estado OPEN ou CONNECTING)
+        const isRoutineConnection =
+            (event === EvolutionEvent.CONNECTION_UPDATE || (payload.event as string) === EvolutionEvent._CONNECTION_UPDATE) &&
+            (state === WhatsappStatus.OPEN || state === WhatsappStatus.CONNECTED || state === "open" || state === "connecting" || !state);
+
+        if (isRoutineConnection) {
+            logger.debug({ event, instance, state }, "[EvolutionController] Webhook recebido (rotina)");
+        } else {
+            logger.info({ event, instance, state }, "[EvolutionController] Webhook recebido");
+        }
       
         // Prevenir processamento de weblogs muito antigos (+2 min)
         if (date_time) {

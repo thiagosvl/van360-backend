@@ -17,7 +17,8 @@ export const historicoController = {
 
   listByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {
     const { usuarioId } = request.params as { usuarioId: string };
-    const atividades = await historicoService.listByUsuario(usuarioId);
+    const targetOwnerId = (request as any).data_owner_id || usuarioId;
+    const atividades = await historicoService.listByUsuario(targetOwnerId);
     return reply.status(200).send(atividades);
   }
 };
