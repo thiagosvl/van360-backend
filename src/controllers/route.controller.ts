@@ -78,8 +78,11 @@ export const routeController = {
   atualizarParadaStatus: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     const { parada_id, status } = request.body as { parada_id: string; status: any };
-    logger.info({ execucaoId: id, parada_id, status }, "RouteController.atualizarParadaStatus");
+    const startTime = Date.now();
+    logger.info({ execucaoId: id, parada_id, status }, "RouteController.atualizarParadaStatus - Starting");
     const result = await routeService.atualizarParadaStatus(id, parada_id, status);
+    const duration = Date.now() - startTime;
+    logger.info({ execucaoId: id, parada_id, durationMs: duration }, "RouteController.atualizarParadaStatus - Completed");
     return reply.status(200).send(result);
   },
 
