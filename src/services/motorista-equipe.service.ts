@@ -5,6 +5,12 @@ import { authRepository } from "../repositories/auth.repository.js";
 import { CreateMembroEquipeDTO, UpdateMembroEquipeDTO } from "../types/dtos/motorista-equipe.dto.js";
 import { AppError } from "../errors/AppError.js";
 import { logger } from "../config/logger.js";
+import { notificationService } from "./notifications/notification.service.js";
+import {
+  EVENTO_MOTORISTA_EQUIPE_CADASTRO,
+  EVENTO_MOTORISTA_EQUIPE_RESET_SENHA,
+  EVENTO_MOTORISTA_EQUIPE_STATUS_ALTERADO,
+} from "../config/constants.js";
 
 export const motoristaEquipeService = {
   async listMembros(gestorId: string, veiculoIdFilter?: string) {
@@ -110,6 +116,20 @@ export const motoristaEquipeService = {
         throw new AppError(profileError.message || "Erro ao criar perfil da equipe no banco de dados", 400);
       }
 
+      // Disparar notificação via WhatsApp (em segundo plano)
+      if (dto.telefone) {
+        notificationService.notifyDriver(
+          dto.telefone,
+          EVENTO_MOTORISTA_EQUIPE_CADASTRO,
+          {
+            nomeMotorista: dto.nome,
+            cpfLogin: dto.cpf,
+            senhaTemporaria: dto.senha,
+          },
+          { usuarioId: gestorId }
+        ).catch((err) => logger.warn({ err, userId }, "[MotoristaEquipeService] Falha ao enviar WhatsApp de boas-vindas"));
+      }
+
       return profile;
     } catch (err: any) {
       try {
@@ -159,6 +179,18 @@ export const motoristaEquipeService = {
       throw new AppError("Erro ao redefinir a senha do membro da equipe", 500);
     }
 
+    if (membro.data.telefone) {
+      notificationService.notifyDriver(
+        membro.data.telefone,
+        EVENTO_MOTORISTA_EQUIPE_RESET_SENHA,
+        {
+          nomeMotorista: membro.data.nome,
+          senhaTemporaria: novaSenha,
+        },
+        { usuarioId: gestorId }
+      ).catch((err) => logger.warn({ err, id }, "[MotoristaEquipeService] Falha ao enviar WhatsApp de redefinição de senha"));
+    }
+
     return { message: "Senha redefinida com sucesso!" };
   },
 
@@ -166,6 +198,18 @@ export const motoristaEquipeService = {
     const { data, error } = await motoristaEquipeRepository.softDelete(id, gestorId);
     if (error || !data) {
       throw new AppError("Membro da equipe não encontrado", 404);
+    }
+
+    if (data.telefone) {
+      notificationService.notifyDriver(
+        data.telefone,
+        EVENTO_MOTORISTA_EQUIPE_STATUS_ALTERADO,
+        {
+          nomeMotorista: data.nome,
+          isEngaged: data.ativo !== false,
+        },
+        { usuarioId: gestorId }
+      ).catch((err) => logger.warn({ err, id }, "[MotoristaEquipeService] Falha ao enviar WhatsApp de status alterado"));
     }
 
     return data;

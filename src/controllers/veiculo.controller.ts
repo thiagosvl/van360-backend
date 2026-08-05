@@ -68,8 +68,13 @@ export const veiculoController = {
     const { usuarioId } = request.params as { usuarioId: string };
     const reqAny = request as any;
     const targetOwnerId = reqAny.data_owner_id || usuarioId;
+    const assignedVeiculoId = reqAny.assigned_veiculo_id || reqAny.profile?.veiculo_id;
     const filtros = listVeiculosFiltersSchema.parse(request.query);
-    const veiculos = await veiculoService.listVeiculos(targetOwnerId, filtros);
+
+    let veiculos = await veiculoService.listVeiculos(targetOwnerId, filtros);
+    if (assignedVeiculoId) {
+      veiculos = veiculos.filter((v: any) => v.id === assignedVeiculoId);
+    }
     return reply.status(200).send(veiculos);
   },
 
@@ -77,8 +82,13 @@ export const veiculoController = {
     const { usuarioId } = request.params as { usuarioId: string };
     const reqAny = request as any;
     const targetOwnerId = reqAny.data_owner_id || usuarioId;
+    const assignedVeiculoId = reqAny.assigned_veiculo_id || reqAny.profile?.veiculo_id;
     const filtros = listVeiculosFiltersSchema.parse(request.query);
-    const veiculos = await veiculoService.listVeiculosComContagemAtivos(targetOwnerId, filtros);
+
+    let veiculos = await veiculoService.listVeiculosComContagemAtivos(targetOwnerId, filtros);
+    if (assignedVeiculoId) {
+      veiculos = veiculos.filter((v: any) => v.id === assignedVeiculoId);
+    }
     return reply.status(200).send(veiculos);
   },
 
@@ -86,6 +96,10 @@ export const veiculoController = {
     const { usuarioId } = request.params as { usuarioId: string };
     const reqAny = request as any;
     const targetOwnerId = reqAny.data_owner_id || usuarioId;
+    const assignedVeiculoId = reqAny.assigned_veiculo_id || reqAny.profile?.veiculo_id;
+    if (assignedVeiculoId) {
+      return reply.status(200).send({ count: 1 });
+    }
     const count = await veiculoService.countListVeiculosByUsuario(targetOwnerId);
     return reply.status(200).send({ count });
   },

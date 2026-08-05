@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { moneyToNumber } from "../../utils/currency.utils.js";
-import { parseLocalDate } from "../../utils/date.utils.js";
+import { parseLocalDate, getNowBR } from "../../utils/date.utils.js";
 import { ParentescoResponsavel } from "../enums.js";
 
 const optionalString = z.union([z.string(), z.null(), z.undefined()]).transform(v => {
@@ -64,7 +64,10 @@ export const createPassageiroSchema = z.object({
     if (v === undefined) return undefined;
     if (v === null || v === "") return null;
     return parseLocalDate(v);
-  }), // Aceita string ISO e converte
+  }).refine(v => {
+    if (!v) return true;
+    return v.getTime() <= getNowBR().getTime();
+  }, { message: "Data de nascimento não pode ser no futuro" }),
   parentesco_responsavel: optionalString,
   turma: optionalString,
   nome_professor: optionalString,

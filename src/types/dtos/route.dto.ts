@@ -19,7 +19,24 @@ export const createRouteSchema = z.object({
   usuario_id: z.string().uuid("ID do usuário inválido"),
   nome: z.string().min(1, "Nome é obrigatório"),
   veiculo_id: z.string().uuid().optional().nullable(),
-  passageiros: z.array(routeNodeSchema).optional()
+  passageiros: z.array(routeNodeSchema).optional(),
+  horario_inicio: optionalString,
+  horario_fim: optionalString,
+  horario_termino: optionalString,
+  horario_saida: optionalString,
+  horario_chegada: optionalString,
+  hora_inicio: optionalString,
+  hora_fim: optionalString,
+}).refine(data => {
+  const inicio = data.horario_inicio || data.hora_inicio || data.horario_saida;
+  const fim = data.horario_fim || data.horario_termino || data.hora_fim || data.horario_chegada;
+  if (inicio && fim) {
+    return fim >= inicio;
+  }
+  return true;
+}, {
+  message: "Horário de término não pode ser anterior ao horário de início",
+  path: ["horario_fim"],
 });
 
 export type CreateRouteDTO = z.infer<typeof createRouteSchema>;
@@ -27,7 +44,24 @@ export type CreateRouteDTO = z.infer<typeof createRouteSchema>;
 export const updateRouteSchema = z.object({
   nome: z.string().min(1).optional(),
   veiculo_id: z.string().uuid().optional().nullable(),
-  passageiros: z.array(routeNodeSchema).optional()
+  passageiros: z.array(routeNodeSchema).optional(),
+  horario_inicio: optionalString,
+  horario_fim: optionalString,
+  horario_termino: optionalString,
+  horario_saida: optionalString,
+  horario_chegada: optionalString,
+  hora_inicio: optionalString,
+  hora_fim: optionalString,
+}).refine(data => {
+  const inicio = data.horario_inicio || data.hora_inicio || data.horario_saida;
+  const fim = data.horario_fim || data.horario_termino || data.hora_fim || data.horario_chegada;
+  if (inicio && fim) {
+    return fim >= inicio;
+  }
+  return true;
+}, {
+  message: "Horário de término não pode ser anterior ao horário de início",
+  path: ["horario_fim"],
 });
 
 export type UpdateRouteDTO = z.infer<typeof updateRouteSchema>;

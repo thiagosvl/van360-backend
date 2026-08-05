@@ -96,5 +96,12 @@ export const authRepository = {
             .select("id, ativo, tipo, conta_pai_id, veiculo_id")
             .eq("id", userId)
             .maybeSingle();
+    },
+
+    async deleteExpiredRecoveryCodes(nowIso: string) {
+        return supabaseAdmin
+            .from("recuperacoes_senha")
+            .delete()
+            .lt("expira_em", nowIso);
     }
 };

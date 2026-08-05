@@ -5,23 +5,23 @@ import { createContractSchema, listContractsSchema, signContractSchema } from '.
 export const contractController = {
   create: async (req: FastifyRequest, reply: FastifyReply) => {
     const data = createContractSchema.parse(req.body);
-    const usuarioId = (req as any).data_owner_id || (req as any).user?.id;
+    const usuarioId = (req.data_owner_id || req.user?.id)!;
 
     const contrato = await contractService.criarContrato(usuarioId, data);
     return reply.status(201).send(contrato);
   },
 
   getKPIs: async (req: FastifyRequest, reply: FastifyReply) => {
-    const usuarioId = (req as any).data_owner_id || (req as any).user?.id;
+    const usuarioId = (req.data_owner_id || req.user?.id)!;
     const kpis = await contractService.getKPIs(usuarioId);
     return reply.status(200).send(kpis);
   },
 
   list: async (req: FastifyRequest, reply: FastifyReply) => {
     const filters = listContractsSchema.parse(req.query);
-    const usuarioId = (req as any).data_owner_id || (req as any).user?.id;
+    const usuarioId = (req.data_owner_id || req.user?.id)!;
 
-    const result = await contractService.listarContratos(usuarioId, filters as any);
+    const result = await contractService.listarContratos(usuarioId, filters);
     return reply.status(200).send(result);
   },
 
@@ -41,17 +41,15 @@ export const contractController = {
 
   cancel: async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const usuarioId = (req as any).data_owner_id || (req as any).user?.id;
+    const usuarioId = (req.data_owner_id || req.user?.id)!;
 
-    // Conforme pedido, cancelamento agora é EXCLUSÃO ou SUBSTITUIÇÃO
-    // Mas manteremos o método para compatibilidade se necessário ou redirecionamos para delete
     const result = await contractService.excluirContrato(id, usuarioId);
     return reply.status(200).send(result);
   },
 
   excluir: async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const usuarioId = (req as any).data_owner_id || (req as any).user?.id;
+    const usuarioId = (req.data_owner_id || req.user?.id)!;
 
     const result = await contractService.excluirContrato(id, usuarioId);
     return reply.status(200).send(result);
@@ -59,7 +57,7 @@ export const contractController = {
 
   substituir: async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const usuarioId = (req as any).data_owner_id || (req as any).user?.id;
+    const usuarioId = (req.data_owner_id || req.user?.id)!;
 
     const result = await contractService.substituirContrato(usuarioId, id);
     return reply.status(200).send(result);
@@ -67,7 +65,7 @@ export const contractController = {
 
   download: async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const usuarioId = (req as any).data_owner_id || (req as any).user?.id;
+    const usuarioId = (req.data_owner_id || req.user?.id)!;
 
     const pdfBuffer = await contractService.baixarContrato(id, usuarioId);
     
@@ -78,10 +76,10 @@ export const contractController = {
   },
   
   preview: async (req: FastifyRequest, reply: FastifyReply) => {
-    const authId = (req as any).data_owner_id || (req as any).user?.id;
-    const draftConfig = req.body as any; // Allow relaxed typing for now or define a schema
+    const authId = (req.data_owner_id || req.user?.id)!;
+    const draftConfig = (req.body || {}) as Record<string, unknown>;
     
-    const pdfBuffer = await contractService.gerarPreview(authId, draftConfig);
+    const pdfBuffer = await contractService.gerarPreview(authId, draftConfig as any);
     
     reply.header('Content-Type', 'application/pdf');
     reply.header('Content-Disposition', `inline; filename="preview-contrato.pdf"`);

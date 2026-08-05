@@ -8,8 +8,6 @@ export const createVeiculoSchema = z.object({
     placa: z.string().min(1, "Placa é obrigatória"),
     marca: optionalString,
     modelo: optionalString,
-    ano: optionalNumber,
-    capacidade: optionalNumber,
     ativo: z.boolean().optional()
 });
 
@@ -41,8 +39,6 @@ export interface Veiculo {
     placa: string;
     marca: string | null;
     modelo: string | null;
-    ano: number | null;
-    capacidade: number | null;
     ativo: boolean;
     created_at: string;
     updated_at: string;

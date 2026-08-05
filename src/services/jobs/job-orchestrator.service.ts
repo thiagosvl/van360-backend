@@ -1,6 +1,7 @@
 import { logger } from "../../config/logger.js";
 import { subscriptionMonitorService } from "../subscriptions/subscription-monitor.service.js";
 import { cobrancaService } from "../cobranca.service.js";
+import { expurgarCodigosRecuperacaoExpirados } from "../auth.service.js";
 import { getConfigNumber } from "../configuracao.service.js";
 import { ConfigKey } from "../../types/enums.js";
 import { birthdayReminderJob } from "./birthday-reminder.job.js";
@@ -26,7 +27,7 @@ export const jobOrchestratorService = {
     logger.info({ totalJobs: phase1Executions.length }, "[JobOrchestrator] Disparando jobs de Fase 1 (Geração)...");
     const phase1Results = await Promise.allSettled(phase1Executions);
 
-    // Fase 2: Notificações (Alertas de vencimento, cobrança, aniversário)
+    // Fase 2: Notificações (Alertas de vencimento, cobrança, aniversário) e Limpeza
     const phase2Executions = [
       subscriptionMonitorService.runDailyCheck().catch((err: Error) => {
         logger.error({ err }, "[JobOrchestrator] Erro ao processar assinaturas diárias");
@@ -34,6 +35,10 @@ export const jobOrchestratorService = {
       }),
       cobrancaService.enviarNotificacoesDiarias().catch((err: Error) => {
         logger.error({ err }, "[JobOrchestrator] Erro ao enviar lembretes diários de cobrança");
+        throw err;
+      }),
+      expurgarCodigosRecuperacaoExpirados().catch((err: Error) => {
+        logger.error({ err }, "[JobOrchestrator] Erro ao expurgar códigos OTP expirados");
         throw err;
       })
     ];

@@ -59,7 +59,7 @@ export const gastoRepository = {
             query = query.eq('categoria', filtros.categoria);
         }
 
-        if (filtros && filtros.veiculo_id) {
+        if (filtros && filtros.veiculo_id && filtros.veiculo_id !== 'all' && filtros.veiculo_id !== 'TODOS') {
             if (filtros.veiculo_id === 'unspecified') {
                  query = query.is('veiculo_id', null);
             } else {

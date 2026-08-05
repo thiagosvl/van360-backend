@@ -8,7 +8,7 @@ import { AtividadeAcao, AtividadeEntidadeTipo, ParentescoResponsavel } from "../
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
-import { parseLocalDate, toPersistenceString } from "../utils/date.utils.js";
+import { parseLocalDate, toPersistenceString, getNowBR } from "../utils/date.utils.js";
 
 // Métodos privados auxiliares
 const geocodeAddress = async (enderecoParts: { logradouro?: string, numero?: string, cidade?: string, estado?: string }): Promise<{lat: number, lon: number} | null> => {
@@ -88,7 +88,14 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO>, usuarioId?: 
     if (data.modalidade !== undefined) prepared.modalidade = data.modalidade;
     if (data.turma !== undefined) prepared.turma = data.turma ? cleanString(data.turma, true) : null;
     if (data.nome_professor !== undefined) prepared.nome_professor = data.nome_professor ? cleanString(data.nome_professor, true) : null;
-    if (data.data_nascimento !== undefined) prepared.data_nascimento = data.data_nascimento ? toPersistenceString(data.data_nascimento) : null;
+    if (data.data_nascimento !== undefined && data.data_nascimento) {
+      if (data.data_nascimento.getTime() > getNowBR().getTime()) {
+        throw new AppError("Data de nascimento não pode ser no futuro", 400);
+      }
+      prepared.data_nascimento = toPersistenceString(data.data_nascimento);
+    } else if (data.data_nascimento === null) {
+      prepared.data_nascimento = null;
+    }
     if (data.parentesco_responsavel !== undefined) prepared.parentesco_responsavel = data.parentesco_responsavel;
     if (data.data_inicio_transporte !== undefined) prepared.data_inicio_transporte = data.data_inicio_transporte ? toPersistenceString(data.data_inicio_transporte) : null;
     if (data.data_fim_transporte !== undefined) prepared.data_fim_transporte = data.data_fim_transporte ? toPersistenceString(data.data_fim_transporte) : null;

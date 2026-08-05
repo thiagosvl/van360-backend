@@ -29,3 +29,35 @@ export interface RegistrarUsuarioBodyDTO {
   dispositivo_cadastro?: DispositivoCadastro;
   metadados_cadastro?: MetadadosCadastroDTO;
 }
+
+export interface LoginBodyDTO {
+  identifier: string;
+  password?: string;
+}
+
+export interface UpdatePasswordBodyDTO {
+  password?: string;
+  oldPassword?: string;
+}
+
+export interface RefreshTokenBodyDTO {
+  refresh_token?: string;
+}
+
+export interface SolicitarRecuperacaoBodyDTO {
+  cpf?: string;
+  cpfcnpj?: string;
+  documento?: string;
+}
+
+export interface ValidarCodigoBodyDTO {
+  cpf?: string;
+  cpfcnpj?: string;
+  documento?: string;
+  codigo?: string;
+}
+
+export interface ConfirmarResetBodyDTO {
+  recoveryId?: string;
+  password?: string;
+}

@@ -14,10 +14,10 @@ interface AuthenticatedRequest extends FastifyRequest {
 export const subscriptionController = {
   async getMySubscription(request: FastifyRequest, reply: FastifyReply) {
     const authRequest = request as AuthenticatedRequest;
-    const userId = authRequest.usuario_id;
+    const targetUserId = authRequest.data_owner_id || authRequest.usuario_id;
 
     try {
-      const subscription = await subscriptionService.getOrCreateSubscription(userId);
+      const subscription = await subscriptionService.getOrCreateSubscription(targetUserId);
 
       if (!subscription) {
         return reply.status(404).send({ error: "Assinatura não encontrada." });
@@ -26,7 +26,7 @@ export const subscriptionController = {
       return reply.send(subscription);
     } catch (err) {
       const error = err as Error;
-      logger.error({ err: error, userId }, "[SubscriptionController] Erro ao buscar assinatura.");
+      logger.error({ err: error, targetUserId }, "[SubscriptionController] Erro ao buscar assinatura.");
       return reply.status(500).send({ error: "Erro interno ao buscar assinatura." });
     }
   },
@@ -123,10 +123,9 @@ export const subscriptionController = {
     }
   },
 
-  async setDefaultPaymentMethod(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
-    const authRequest = request as any as AuthenticatedRequest;
-    const userId = authRequest.usuario_id;
-    const { id } = request.params;
+  async setDefaultPaymentMethod(request: FastifyRequest, reply: FastifyReply) {
+    const userId = request.usuario_id!;
+    const { id } = request.params as { id: string };
 
     try {
       await subscriptionBillingService.updateDefaultPaymentMethod(userId, id);
@@ -138,10 +137,9 @@ export const subscriptionController = {
     }
   },
 
-  async deletePaymentMethod(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
-    const authRequest = request as any as AuthenticatedRequest;
-    const userId = authRequest.usuario_id;
-    const { id } = request.params;
+  async deletePaymentMethod(request: FastifyRequest, reply: FastifyReply) {
+    const userId = request.usuario_id!;
+    const { id } = request.params as { id: string };
 
     try {
       await subscriptionBillingService.deletePaymentMethod(userId, id);

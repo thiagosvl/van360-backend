@@ -572,3 +572,13 @@ export async function refreshToken(refreshToken: string): Promise<AuthSession> {
     user: data.user as any
   };
 }
+
+export async function expurgarCodigosRecuperacaoExpirados(): Promise<number> {
+  const nowIso = getNowBR().toISOString();
+  const { data, error } = await authRepository.deleteExpiredRecoveryCodes(nowIso);
+  if (error) {
+    logger.error({ error: error.message }, "Erro ao expurgar códigos de recuperação expirados.");
+    throw new AppError("Erro ao expurgar códigos expirados.", 500);
+  }
+  return data ? (data as any[]).length : 0;
+}

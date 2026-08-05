@@ -1,5 +1,5 @@
 import { formatToBrazilianDate, getShortWeekDayBR } from "../../../utils/date.utils.js";
-import { formatCurrency, getFirstName, getFirstAndSecondName } from "../../../utils/format.js";
+import { formatCurrency, formatCpfCnpj, getFirstName, getFirstAndSecondName } from "../../../utils/format.js";
 import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
 import { CheckoutPaymentMethod } from "../../../types/enums.js";
 import { env } from "../../../config/env.js";
@@ -426,5 +426,38 @@ export const DriverTemplates = {
         msg += `📲 Abra o Van360 para ver todos os detalhes e registrar os pagamentos.`;
 
         return textPart(msg);
+    },
+
+    teamMemberCreated: (ctx: DriverContext): CompositeMessagePart[] => {
+        const appUrl = env.FRONTEND_URL || "https://app.van360.com.br";
+        const loginStr = ctx.cpfLogin ? formatCpfCnpj(ctx.cpfLogin) : "";
+        return textPart(
+            `🚐 *Acesso Van360*\n\n` +
+            `Seu acesso ao aplicativo Van360 foi criado com sucesso.\n\n` +
+            `📱 *Acesse em:* ${appUrl}\n` +
+            `👤 *Login (CPF/CNPJ):* ${loginStr}\n` +
+            `🔑 *Senha:* ${ctx.senhaTemporaria || ""}`
+        );
+    },
+
+    teamMemberResetPassword: (ctx: DriverContext): CompositeMessagePart[] => {
+        return textPart(
+            `🔑 *Van360 - Redefinição de Senha*\n\n` +
+            `Sua senha de acesso ao aplicativo foi redefinida.\n\n` +
+            `🔑 *Nova Senha:* ${ctx.senhaTemporaria || ""}`
+        );
+    },
+
+    teamMemberStatusChanged: (ctx: DriverContext): CompositeMessagePart[] => {
+        if (ctx.isEngaged) {
+            return textPart(
+                `✅ *Van360 - Status do Acesso*\n\n` +
+                `Seu acesso ao aplicativo Van360 foi reativado. Você já pode realizar login normalmente.`
+            );
+        }
+        return textPart(
+            `🔒 *Van360 - Status do Acesso*\n\n` +
+            `Seu acesso ao aplicativo Van360 foi desativado.`
+        );
     }
 };

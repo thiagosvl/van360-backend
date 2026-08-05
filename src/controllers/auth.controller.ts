@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
 import { registrarUsuario, login as loginService, logout as logoutService, refreshToken as refreshTokenService, updatePassword as updatePasswordService, solicitarRecuperacaoWhatsapp, validarCodigoWhatsApp, resetarSenhaComCodigo } from "../services/auth.service.js";
-import { RegistrarUsuarioBodyDTO } from "../types/dtos/auth.dto.js";
+import { RegistrarUsuarioBodyDTO, LoginBodyDTO, UpdatePasswordBodyDTO, RefreshTokenBodyDTO, SolicitarRecuperacaoBodyDTO, ValidarCodigoBodyDTO, ConfirmarResetBodyDTO } from "../types/dtos/auth.dto.js";
 
 export const AuthController = {
 
@@ -48,7 +48,7 @@ export const AuthController = {
 
     async login(request: FastifyRequest, reply: FastifyReply) {
         logger.info("AuthController.login - Starting");
-        const { identifier, password } = request.body as any;
+        const { identifier, password } = (request.body || {}) as LoginBodyDTO;
 
         if (!identifier || !password) {
             return reply.status(400).send({ error: "E-mail/CPF e senha são obrigatórios." });
@@ -68,7 +68,7 @@ export const AuthController = {
             return reply.status(200).send(result);
         } catch (err: any) {
             logger.warn({ error: err.message, identifier }, "Falha no Login.");
-            const status = err.statusCode || 401; // Default to 401 for login failures
+            const status = err.statusCode || 401;
             return reply.status(status).send({ error: err.message });
         }
     },
@@ -77,7 +77,7 @@ export const AuthController = {
         if (!authHeader) return reply.status(401).send({ error: "Token ausente." });
         const token = authHeader.split(" ")[1];
 
-        const { password, oldPassword } = request.body as any;
+        const { password, oldPassword } = (request.body || {}) as UpdatePasswordBodyDTO;
 
         if (!password) {
             return reply.status(400).send({ error: "Nova senha é obrigatória." });
@@ -96,7 +96,7 @@ export const AuthController = {
         const authHeader = request.headers.authorization;
         if (authHeader) {
             const token = authHeader.split(" ")[1];
-            const usuarioId = (request as any).usuario_id;
+            const usuarioId = request.usuario_id;
             await logoutService(token, usuarioId);
         }
         return reply.status(200).send({ success: true });
@@ -104,7 +104,7 @@ export const AuthController = {
 
     async refresh(request: FastifyRequest, reply: FastifyReply) {
         logger.info("AuthController.refresh - Starting");
-        const { refresh_token } = request.body as any;
+        const { refresh_token } = (request.body || {}) as RefreshTokenBodyDTO;
 
         if (!refresh_token) {
             return reply.status(400).send({ error: "Refresh token é obrigatório." });
@@ -121,7 +121,7 @@ export const AuthController = {
     },
 
     async solicitarRecuperacao(request: FastifyRequest, reply: FastifyReply) {
-        const { cpf, cpfcnpj, documento } = request.body as any;
+        const { cpf, cpfcnpj, documento } = (request.body || {}) as SolicitarRecuperacaoBodyDTO;
         const doc = documento || cpfcnpj || cpf;
         if (!doc) return reply.status(400).send({ error: "CPF/CNPJ é obrigatório." });
 
@@ -139,7 +139,7 @@ export const AuthController = {
     },
 
     async validarCodigo(request: FastifyRequest, reply: FastifyReply) {
-        const { cpf, cpfcnpj, documento, codigo } = request.body as any;
+        const { cpf, cpfcnpj, documento, codigo } = (request.body || {}) as ValidarCodigoBodyDTO;
         const doc = documento || cpfcnpj || cpf;
         if (!doc || !codigo) return reply.status(400).send({ error: "CPF/CNPJ e Código são obrigatórios." });
 
@@ -153,7 +153,7 @@ export const AuthController = {
     },
 
     async confirmarReset(request: FastifyRequest, reply: FastifyReply) {
-        const { recoveryId, password } = request.body as any;
+        const { recoveryId, password } = (request.body || {}) as ConfirmarResetBodyDTO;
         if (!recoveryId || !password) return reply.status(400).send({ error: "Dados incompletos." });
 
         try {

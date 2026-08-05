@@ -25,6 +25,7 @@ export async function atualizarUsuario(usuarioId: string, payload: {
   razao_social?: string;
   apelido?: string;
   telefone?: string;
+  avatar_url?: string;
   assinatura_digital_url?: string;
   config_contrato?: any;
   data_nascimento?: string;
@@ -36,6 +37,7 @@ export async function atualizarUsuario(usuarioId: string, payload: {
   if (payload.razao_social !== undefined) updates.razao_social = payload.razao_social ? cleanString(payload.razao_social, true) : null;
   if (payload.apelido) updates.apelido = cleanString(payload.apelido, true);
   if (payload.telefone) updates.telefone = onlyDigits(payload.telefone);
+  if (payload.avatar_url !== undefined) updates.avatar_url = payload.avatar_url;
   if (payload.assinatura_digital_url !== undefined) updates.assinatura_digital_url = payload.assinatura_digital_url;
   if (payload.config_contrato !== undefined) updates.config_contrato = payload.config_contrato;
 
@@ -49,7 +51,7 @@ export async function atualizarUsuario(usuarioId: string, payload: {
     throw new AppError(`Erro ao atualizar usuário: ${error.message}`, 500);
   }
 
-  const perfilAlterado = payload.nome || payload.apelido || payload.telefone || payload.data_nascimento;
+  const perfilAlterado = payload.nome || payload.apelido || payload.telefone || payload.data_nascimento || payload.avatar_url;
 
   if (perfilAlterado) {
     historicoService.log({
@@ -57,8 +59,8 @@ export async function atualizarUsuario(usuarioId: string, payload: {
       entidade_tipo: AtividadeEntidadeTipo.USUARIO,
       entidade_id: usuarioId,
       acao: AtividadeAcao.PERFIL_EDITADO,
-      descricao: "Dados de identificação do perfil (nome/apelido/telefone/data_nascimento) atualizados.",
-      meta: { campos: Object.keys(payload).filter(k => ['nome', 'apelido', 'telefone', 'data_nascimento'].includes(k)) }
+      descricao: "Dados de identificação do perfil (nome/apelido/telefone/data_nascimento/avatar) atualizados.",
+      meta: { campos: Object.keys(payload).filter(k => ['nome', 'apelido', 'telefone', 'data_nascimento', 'avatar_url'].includes(k)) }
     });
   } else if (payload.config_contrato !== undefined) {
     const config = payload.config_contrato;
@@ -79,6 +81,64 @@ export async function atualizarUsuario(usuarioId: string, payload: {
   }
 
   return { success: true };
+}
+
+export async function uploadAvatar(usuarioId: string, avatarUrl: string) {
+  if (!usuarioId) throw new AppError("ID do usuário é obrigatório.", 400);
+  if (!avatarUrl || typeof avatarUrl !== "string" || !avatarUrl.trim()) {
+    throw new AppError("URL do avatar é obrigatória.", 400);
+  }
+
+  const cleanUrl = avatarUrl.trim();
+  const { error } = await userRepository.update(usuarioId, {
+    avatar_url: cleanUrl,
+    updated_at: getNowBR().toISOString()
+  });
+
+  if (error) {
+    throw new AppError(`Erro ao atualizar avatar do usuário: ${error.message}`, 500);
+  }
+
+  historicoService.log({
+    usuario_id: usuarioId,
+    entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+    entidade_id: usuarioId,
+    acao: AtividadeAcao.PERFIL_EDITADO,
+    descricao: "Avatar do perfil atualizado.",
+    meta: { avatar_url: cleanUrl }
+  });
+
+  return { success: true, avatar_url: cleanUrl };
+}
+
+export async function alterarTelefoneUsuario(usuarioId: string, telefone: string) {
+  if (!usuarioId) throw new AppError("ID do usuário é obrigatório.", 400);
+  if (!telefone) throw new AppError("Novo número de telefone é obrigatório.", 400);
+
+  const telefoneLimpo = onlyDigits(telefone);
+  if (!telefoneLimpo || telefoneLimpo.length < 10 || telefoneLimpo.length > 11) {
+    throw new AppError("Número de telefone inválido. Informe DDD e número com 10 ou 11 dígitos.", 400);
+  }
+
+  const { error } = await userRepository.update(usuarioId, {
+    telefone: telefoneLimpo,
+    updated_at: getNowBR().toISOString()
+  });
+
+  if (error) {
+    throw new AppError(`Erro ao alterar telefone do usuário: ${error.message}`, 500);
+  }
+
+  historicoService.log({
+    usuario_id: usuarioId,
+    entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+    entidade_id: usuarioId,
+    acao: AtividadeAcao.PERFIL_EDITADO,
+    descricao: "Telefone de contato do usuário alterado.",
+    meta: { telefone: telefoneLimpo }
+  });
+
+  return { success: true, telefone: telefoneLimpo };
 }
 
 export async function atualizarPixUsuario(usuarioId: string, payload: {

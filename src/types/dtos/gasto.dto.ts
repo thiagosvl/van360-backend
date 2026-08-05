@@ -7,13 +7,12 @@ import { GastoTipoCalculoParcela, GastoEscopoAcao } from "../enums.js";
 export const createGastoSchema = z.object({
   usuario_id: z.string().uuid(),
   veiculo_id: z.string().uuid().optional().nullable(),
-  valor: z.union([z.number(), z.string()]).transform(v => typeof v === 'string' ? moneyToNumber(v) : v),
+  valor: z.union([z.number(), z.string()])
+    .transform(v => typeof v === 'string' ? moneyToNumber(v) : v)
+    .refine(v => typeof v === 'number' && !isNaN(v) && v >= 0, "Valor do gasto não pode ser negativo"),
   data: z.string().datetime().or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)), // ISO or YYYY-MM-DD
   categoria: z.string().min(2).max(50),
   descricao: z.string().optional(),
-  km_atual: z.number().int().positive().optional(),
-  litros: z.number().positive().optional(),
-  local: z.string().optional(),
   parcelado: z.boolean().optional(),
   parcelas: z.number().int().min(2).max(36).optional(),
   tipo_calculo_parcela: z.nativeEnum(GastoTipoCalculoParcela).optional(),

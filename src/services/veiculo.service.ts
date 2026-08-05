@@ -18,8 +18,6 @@ const _prepareVeiculoData = (data: Partial<CreateVeiculoDTO>, usuarioId?: string
     if (data.placa) prepared.placa = limparPlaca(data.placa);
     if (data.marca !== undefined) prepared.marca = data.marca ? cleanString(data.marca) : null;
     if (data.modelo !== undefined) prepared.modelo = data.modelo ? cleanString(data.modelo) : null;
-    if (data.ano !== undefined) prepared.ano = data.ano;
-    if (data.capacidade !== undefined) prepared.capacidade = data.capacidade;
     if (data.ativo !== undefined) prepared.ativo = data.ativo;
 
     return prepared;

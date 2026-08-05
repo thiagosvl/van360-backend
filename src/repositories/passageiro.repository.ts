@@ -91,9 +91,9 @@ export const passageiroRepository = {
         );
     }
 
-    if (filtros?.escola) query = query.eq("escola_id", filtros.escola);
-    if (filtros?.veiculo) query = query.eq("veiculo_id", filtros.veiculo);
-    if (filtros?.periodo) query = query.eq("periodo", filtros.periodo.toLowerCase());
+    if (filtros?.escola && filtros.escola !== "all" && filtros.escola !== "TODAS") query = query.eq("escola_id", filtros.escola);
+    if (filtros?.veiculo && filtros.veiculo !== "all" && filtros.veiculo !== "TODOS") query = query.eq("veiculo_id", filtros.veiculo);
+    if (filtros?.periodo && filtros.periodo !== "all" && filtros.periodo !== "TODOS") query = query.eq("periodo", filtros.periodo.toLowerCase());
     if (filtros?.ativo !== undefined) query = query.eq("ativo", filtros.ativo === "true");
 
     return query;
@@ -121,7 +121,7 @@ export const passageiroRepository = {
         .eq("usuario_id", usuarioId);
 
     if (filtros?.ativo !== undefined) query = query.eq("ativo", filtros.ativo === "true");
-    if (filtros?.veiculo) query = query.eq("veiculo_id", filtros.veiculo);
+    if (filtros?.veiculo && filtros.veiculo !== "all" && filtros.veiculo !== "TODOS") query = query.eq("veiculo_id", filtros.veiculo);
 
     return query;
   },

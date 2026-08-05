@@ -35,6 +35,9 @@ import {
     EVENTO_MOTORISTA_INDICACAO_CADASTRO,
     EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA,
     EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS,
+    EVENTO_MOTORISTA_EQUIPE_CADASTRO,
+    EVENTO_MOTORISTA_EQUIPE_RESET_SENHA,
+    EVENTO_MOTORISTA_EQUIPE_STATUS_ALTERADO,
     EVENTO_ADMIN_NOVO_CADASTRO,
     EVENTO_ADMIN_NOVA_ASSINATURA,
     EVENTO_ADMIN_ASSINATURA_CANCELADA,
@@ -61,11 +64,12 @@ import {
 export type NotificationChannel = "WHATSAPP" | "SMS" | "EMAIL" | "TELEGRAM";
 
 export interface NotificationOptions {
-    channels: NotificationChannel[];
+    channels?: NotificationChannel[];
     whatsapp?: {
         instanceName?: string;
     };
     jobId?: string;
+    usuarioId?: string;
 }
 
 type PassengerEventType =
@@ -105,7 +109,10 @@ export type DriverEventType =
     | typeof EVENTO_MOTORISTA_INDICACAO_BONUS
     | typeof EVENTO_MOTORISTA_INDICACAO_CADASTRO
     | typeof EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA
-    | typeof EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS;
+    | typeof EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS
+    | typeof EVENTO_MOTORISTA_EQUIPE_CADASTRO
+    | typeof EVENTO_MOTORISTA_EQUIPE_RESET_SENHA
+    | typeof EVENTO_MOTORISTA_EQUIPE_STATUS_ALTERADO;
 
 export type AdminEventType =
     | typeof EVENTO_ADMIN_NOVO_CADASTRO
@@ -182,7 +189,7 @@ class NotificationService {
         to: string,
         type: DriverEventType,
         ctx: DriverContext & { nomePagador?: string, nomePassageiro?: string, diasAtraso?: number, reciboUrl?: string, trialDays?: number },
-        options: NotificationOptions
+        options: NotificationOptions = { channels: ["WHATSAPP"] }
     ): Promise<boolean> {
 
         let parts: CompositeMessagePart[] = [];
@@ -211,6 +218,9 @@ class NotificationService {
             case EVENTO_MOTORISTA_INDICACAO_CADASTRO: parts = DriverTemplates.referralRegistered(ctx); break;
             case EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA: parts = DriverTemplates.birthdayReminderWeekly(ctx); break;
             case EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS: parts = DriverTemplates.chargeSummaryWeekly(ctx); break;
+            case EVENTO_MOTORISTA_EQUIPE_CADASTRO: parts = DriverTemplates.teamMemberCreated(ctx); break;
+            case EVENTO_MOTORISTA_EQUIPE_RESET_SENHA: parts = DriverTemplates.teamMemberResetPassword(ctx); break;
+            case EVENTO_MOTORISTA_EQUIPE_STATUS_ALTERADO: parts = DriverTemplates.teamMemberStatusChanged(ctx); break;
         }
 
         return await this._processAndEnqueue(to, parts, type as string, options);
@@ -222,7 +232,7 @@ class NotificationService {
     async notifyAdmin(
         type: AdminEventType,
         ctx: AdminRegistrationContext | AdminSubscriptionContext | AdminPaymentFailedContext | AdminSystemAlertContext,
-        options: NotificationOptions
+        options: NotificationOptions = { channels: ["WHATSAPP"] }
     ): Promise<boolean> {
 
         let parts: CompositeMessagePart[] = [];
@@ -256,7 +266,7 @@ class NotificationService {
         to: string,
         parts: CompositeMessagePart[],
         eventType: string,
-        options: NotificationOptions
+        options: NotificationOptions = { channels: ["WHATSAPP"] }
     ): Promise<boolean> {
         if (!parts || parts.length === 0) return false;
 
@@ -270,7 +280,7 @@ class NotificationService {
             }
         }
 
-        const { channels, whatsapp: whatsappOptions } = options;
+        const { channels = ["WHATSAPP"], whatsapp: whatsappOptions } = options || {};
 
         try {
             const results: Promise<boolean>[] = [];

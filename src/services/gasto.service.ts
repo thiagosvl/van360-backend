@@ -4,6 +4,7 @@ import { CreateGastoDTO, ListGastosFiltersDTO, UpdateGastoDTO } from "../types/d
 import { AtividadeAcao, AtividadeEntidadeTipo, GastoEscopoAcao, GastoTipoCalculoParcela } from "../types/enums.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { cleanString } from "../utils/string.utils.js";
+import { AppError } from "../errors/AppError.js";
 import { historicoService } from "./historico.service.js";
 import { toPersistenceString, parseLocalDate } from "../utils/date.utils.js";
 import { supabaseAdmin } from "../config/supabase.js";
@@ -34,7 +35,11 @@ const _prepareGastoData = (data: Partial<CreateGastoDTO>, usuarioId?: string, is
         prepared.usuario_id = usuarioId;
     }
 
-    if (data.valor !== undefined) prepared.valor = typeof data.valor === "string" ? moneyToNumber(data.valor) : data.valor;
+    if (data.valor !== undefined) {
+        const val = typeof data.valor === "string" ? moneyToNumber(data.valor) : data.valor;
+        if (val < 0) throw new AppError("Valor do gasto não pode ser negativo", 400);
+        prepared.valor = val;
+    }
     if (data.data !== undefined) prepared.data = data.data ? toPersistenceString(data.data) : null;
     if (data.descricao !== undefined) {
         const str = data.descricao ? cleanString(data.descricao) : null;
@@ -45,10 +50,6 @@ const _prepareGastoData = (data: Partial<CreateGastoDTO>, usuarioId?: string, is
     if (data.veiculo_id !== undefined) {
         prepared.veiculo_id = (data.veiculo_id === "none" || !data.veiculo_id) ? null : data.veiculo_id;
     }
-
-    if (data.km_atual !== undefined) prepared.km_atual = data.km_atual || null;
-    if (data.litros !== undefined) prepared.litros = data.litros || null;
-    if (data.local !== undefined) prepared.local = data.local || null;
 
     return prepared;
 };

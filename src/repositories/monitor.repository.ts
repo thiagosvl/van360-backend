@@ -1,12 +1,12 @@
 import { supabaseAdmin } from "../config/supabase.js";
-import { SubscriptionStatus } from "../types/enums.js";
+import { SubscriptionStatus, SubscriptionInvoiceStatus, CheckoutPaymentMethod, SubscriptionIdentifer } from "../types/enums.js";
 
 export const monitorRepository = {
     async cancelExpiredPendingInvoices(now: string) {
         return supabaseAdmin
             .from("assinatura_faturas")
-            .update({ status: "CANCELED", updated_at: now })
-            .eq("status", "PENDING")
+            .update({ status: SubscriptionInvoiceStatus.CANCELED, updated_at: now })
+            .eq("status", SubscriptionInvoiceStatus.PENDING)
             .lt("data_vencimento", now);
     },
 
@@ -63,7 +63,7 @@ export const monitorRepository = {
         return supabaseAdmin
             .from("planos")
             .select("valor_promocional")
-            .eq("identificador", "MONTHLY")
+            .eq("identificador", SubscriptionIdentifer.MONTHLY)
             .maybeSingle();
     },
 
@@ -104,7 +104,7 @@ export const monitorRepository = {
             .from("assinatura_faturas")
             .select("valor, pix_copy_paste")
             .eq("usuario_id", userId)
-            .eq("status", "PENDING")
+            .eq("status", SubscriptionInvoiceStatus.PENDING)
             .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle();
@@ -154,8 +154,8 @@ export const monitorRepository = {
             .from("assinatura_faturas")
             .select("id", { count: "exact", head: true })
             .eq("usuario_id", userId)
-            .eq("metodo_pagamento", "credit_card")
-            .eq("status", "FAILED")
+            .eq("metodo_pagamento", CheckoutPaymentMethod.CREDIT_CARD)
+            .eq("status", SubscriptionInvoiceStatus.FAILED)
             .gte("created_at", sinceStr);
     },
 
@@ -173,7 +173,7 @@ export const monitorRepository = {
             .from("assinatura_faturas")
             .select("id, usuario_id, valor, pix_copy_paste")
             .in("usuario_id", userIds)
-            .eq("status", "PENDING");
+            .eq("status", SubscriptionInvoiceStatus.PENDING);
     },
 
     async getFailedCardInvoicesByUsers(userIds: string[], sinceStr: string) {
@@ -182,8 +182,8 @@ export const monitorRepository = {
             .from("assinatura_faturas")
             .select("usuario_id")
             .in("usuario_id", userIds)
-            .eq("metodo_pagamento", "credit_card")
-            .eq("status", "FAILED")
+            .eq("metodo_pagamento", CheckoutPaymentMethod.CREDIT_CARD)
+            .eq("status", SubscriptionInvoiceStatus.FAILED)
             .gte("created_at", sinceStr);
     }
 };

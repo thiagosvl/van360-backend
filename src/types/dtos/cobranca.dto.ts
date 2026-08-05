@@ -5,14 +5,18 @@ import { CobrancaOrigem, CobrancaTipoPagamento } from "../enums.js";
 export const createCobrancaSchema = z.object({
     usuario_id: z.string().uuid(),
     passageiro_id: z.string().uuid().optional(),
-    valor: z.union([z.number(), z.string()]).transform(v => typeof v === 'string' ? moneyToNumber(v) : v),
+    valor: z.union([z.number(), z.string()])
+      .transform(v => typeof v === 'string' ? moneyToNumber(v) : v)
+      .refine(v => typeof v === 'number' && !isNaN(v) && v > 0, "Valor da cobrança deve ser maior que zero"),
     data_vencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve estar no formato YYYY-MM-DD"),
 
     mes: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),
     ano: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),
 
     status: z.string().optional(),
-    origem: z.nativeEnum(CobrancaOrigem).optional(), // Changed from z.string().optional() to z.nativeEnum(CobrancaOrigem).optional()
+    origem: z.nativeEnum(CobrancaOrigem).optional(),
+    parcelas: z.number().int().positive("Número de parcelas deve ser maior que zero").optional(),
+    qtd_parcelas: z.number().int().positive("Número de parcelas deve ser maior que zero").optional(),
 
     pagamento_manual: z.boolean().optional(),
     tipo_pagamento: z.nativeEnum(CobrancaTipoPagamento).nullable().optional(),

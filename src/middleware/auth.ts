@@ -64,6 +64,20 @@ export async function verifySupabaseJWT(
     (request as any).data_owner_id = profile.conta_pai_id || profile.id;
     (request as any).assigned_veiculo_id = isSubAccount ? (profile.veiculo_id || null) : null;
 
+    if (isSubAccount && profile.conta_pai_id) {
+      const bodyContaPai = (request.body as any)?.conta_pai_id;
+      const queryContaPai = (request.query as any)?.conta_pai_id;
+      const paramContaPai = (request.params as any)?.conta_pai_id;
+      const attemptedContaPai = bodyContaPai || queryContaPai || paramContaPai;
+
+      if (attemptedContaPai && attemptedContaPai !== profile.conta_pai_id) {
+        return reply.status(403).send({
+          error: "Operação negada: sub-conta não pode manipular dados de outro gestor",
+          code: "FORBIDDEN_CONTA_PAI_MISMATCH"
+        });
+      }
+    }
+
   } catch (err: any) {
     return reply.status(401).send({ error: "Falha na autenticação", code: "AUTH_UNEXPECTED_ERROR" });
   }

@@ -41,6 +41,9 @@ export const cobrancaService = {
 
     const cobrancaId = crypto.randomUUID();
     const valorNumerico = typeof data.valor === "string" ? moneyToNumber(data.valor) : data.valor;
+    if (valorNumerico <= 0) throw new AppError("Valor da cobrança deve ser maior que zero", 400);
+    if ((data as any).parcelas !== undefined && (data as any).parcelas <= 0) throw new AppError("Número de parcelas deve ser maior que zero", 400);
+    if ((data as any).qtd_parcelas !== undefined && (data as any).qtd_parcelas <= 0) throw new AppError("Número de parcelas deve ser maior que zero", 400);
 
     const { enviar_recibo_whatsapp, ...cobrancaCleanData } = data;
 

@@ -88,6 +88,7 @@ export enum ConfigKey {
 }
 
 export enum ContratoStatus {
+  RASCUNHO = "rascunho",
   PENDENTE = "pendente",
   ASSINADO = "assinado",
   SUBSTITUIDO = "substituido"
@@ -296,6 +297,7 @@ export enum RouteExecutionStatus {
 export enum RouteStopStatus {
   PENDENTE = "pendente",
   EMBARCADO = "embarcado",
+  DESEMBARCADO = "desembarcado",
   AUSENTE = "ausente"
 }
 

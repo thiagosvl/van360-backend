@@ -8,7 +8,11 @@ import { getNowBR, toPersistenceString } from "../utils/date.utils.js";
 
 const createRoute = async (data: CreateRouteDTO): Promise<any> => {
   if (!data.usuario_id) throw new AppError("Usuário obrigatório", 400);
-  if (!data.nome) throw new AppError("Nome da rota é obrigatório", 400);
+  const inicio = (data as any).horario_inicio || (data as any).hora_inicio || (data as any).horario_saida;
+  const fim = (data as any).horario_fim || (data as any).horario_termino || (data as any).hora_fim || (data as any).horario_chegada;
+  if (inicio && fim && fim < inicio) {
+    throw new AppError("Horário de término não pode ser anterior ao horário de início", 400);
+  }
 
   const { data: inserted, error } = await routeRepository.insert(
     data.usuario_id,

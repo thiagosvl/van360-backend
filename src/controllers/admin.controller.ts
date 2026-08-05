@@ -19,8 +19,9 @@ export const AdminController = {
     try {
       const stats = await adminService.getDashboardStats();
       return reply.status(200).send(stats);
-    } catch (err: any) {
-      logger.error({ error: err.message }, "[AdminController] Erro no dashboard.");
+    } catch (err) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminController] Erro no dashboard.");
       return reply.status(500).send({ error: "Erro ao buscar estatísticas." });
     }
   },
@@ -30,8 +31,9 @@ export const AdminController = {
       const query = listUsersQuerySchema.parse(request.query);
       const result = await adminService.listUsers(query);
       return reply.status(200).send(result);
-    } catch (err: any) {
-      logger.error({ error: err.message }, "[AdminController] Erro ao listar usuários.");
+    } catch (err) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminController] Erro ao listar usuários.");
       return reply.status(500).send({ error: "Erro ao buscar usuários." });
     }
   },
@@ -41,10 +43,11 @@ export const AdminController = {
       const { id } = request.params as { id: string };
       const result = await adminService.getUserDetails(id);
       return reply.status(200).send(result);
-    } catch (err: any) {
-      logger.error({ error: err.message }, "[AdminController] Erro ao buscar detalhes.");
-      const status = err.message?.includes("não encontrado") ? 404 : 500;
-      return reply.status(status).send({ error: err.message });
+    } catch (err) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminController] Erro ao buscar detalhes.");
+      const status = error.message?.includes("não encontrado") ? 404 : 500;
+      return reply.status(status).send({ error: error.message });
     }
   },
 
@@ -54,9 +57,10 @@ export const AdminController = {
       const body = updateUserAdminSchema.parse(request.body);
       const result = await adminService.updateUser(id, body);
       return reply.status(200).send(result);
-    } catch (err: any) {
-      logger.error({ error: err.message }, "[AdminController] Erro ao atualizar usuário.");
-      return reply.status(400).send({ error: err.message });
+    } catch (err) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminController] Erro ao atualizar usuário.");
+      return reply.status(400).send({ error: error.message });
     }
   },
 
@@ -66,9 +70,10 @@ export const AdminController = {
       const body = updateSubscriptionAdminSchema.parse(request.body);
       const result = await adminService.updateSubscription(id, body);
       return reply.status(200).send(result);
-    } catch (err: any) {
-      logger.error({ error: err.message }, "[AdminController] Erro ao atualizar assinatura.");
-      return reply.status(400).send({ error: err.message });
+    } catch (err) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminController] Erro ao atualizar assinatura.");
+      return reply.status(400).send({ error: error.message });
     }
   },
 
@@ -76,8 +81,9 @@ export const AdminController = {
     try {
       const configs = await adminService.listConfigs();
       return reply.status(200).send(configs);
-    } catch (err: any) {
-      logger.error({ error: err.message }, "[AdminController] Erro ao listar configs.");
+    } catch (err) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminController] Erro ao listar configs.");
       return reply.status(500).send({ error: "Erro ao buscar configurações." });
     }
   },
@@ -87,9 +93,10 @@ export const AdminController = {
       const body = updateConfigSchema.parse(request.body);
       const result = await adminService.updateConfig(body.chave, body.valor);
       return reply.status(200).send(result);
-    } catch (err: any) {
-      logger.error({ error: err.message }, "[AdminController] Erro ao atualizar config.");
-      return reply.status(400).send({ error: err.message });
+    } catch (err) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminController] Erro ao atualizar config.");
+      return reply.status(400).send({ error: error.message });
     }
   },
 
@@ -97,8 +104,9 @@ export const AdminController = {
     try {
       const plans = await adminService.listPlans();
       return reply.status(200).send(plans);
-    } catch (err: any) {
-      logger.error({ error: err.message }, "[AdminController] Erro ao listar planos.");
+    } catch (err) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminController] Erro ao listar planos.");
       return reply.status(500).send({ error: "Erro ao buscar planos." });
     }
   },
@@ -109,9 +117,10 @@ export const AdminController = {
       const body = updatePlanSchema.parse(request.body);
       const result = await adminService.updatePlan(id, body);
       return reply.status(200).send(result);
-    } catch (err: any) {
-      logger.error({ error: err.message }, "[AdminController] Erro ao atualizar plano.");
-      return reply.status(400).send({ error: err.message });
+    } catch (err) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminController] Erro ao atualizar plano.");
+      return reply.status(400).send({ error: error.message });
     }
   },
 
@@ -120,12 +129,13 @@ export const AdminController = {
       const body = createUserAdminSchema.parse(request.body);
       const result = await adminService.createUser(body);
       return reply.status(201).send(result);
-    } catch (err: any) {
-      logger.error({ error: err.message }, "[AdminController] Erro ao criar usuário.");
-      if (err.field) {
-        return reply.status(400).send({ error: err.message, field: err.field });
+    } catch (err) {
+      const error = err as Error & { field?: string };
+      logger.error({ error: error.message }, "[AdminController] Erro ao criar usuário.");
+      if (error.field) {
+        return reply.status(400).send({ error: error.message, field: error.field });
       }
-      return reply.status(400).send({ error: err.message });
+      return reply.status(400).send({ error: error.message });
     }
   },
 
@@ -134,9 +144,10 @@ export const AdminController = {
       const { id } = request.params as { id: string };
       const result = await adminService.resetUserPassword(id);
       return reply.status(200).send(result);
-    } catch (err: any) {
-      logger.error({ error: err.message }, "[AdminController] Erro ao resetar senha.");
-      return reply.status(400).send({ error: err.message });
+    } catch (err) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminController] Erro ao resetar senha.");
+      return reply.status(400).send({ error: error.message });
     }
   },
 
@@ -146,8 +157,9 @@ export const AdminController = {
       const query = listUserLogsQuerySchema.parse(request.query);
       const result = await adminService.getUserLogs(id, query);
       return reply.status(200).send(result);
-    } catch (err: any) {
-      logger.error({ error: err.message, id }, "[AdminController] Erro ao buscar logs de atividades.");
+    } catch (err) {
+      const error = err as Error;
+      logger.error({ error: error.message, id }, "[AdminController] Erro ao buscar logs de atividades.");
       return reply.status(500).send({ error: "Erro ao buscar logs de atividades." });
     }
   },
@@ -157,8 +169,9 @@ export const AdminController = {
       const query = listGlobalLogsQuerySchema.parse(request.query);
       const result = await adminService.getGlobalLogs(query);
       return reply.status(200).send(result);
-    } catch (err: any) {
-      logger.error({ error: err.message }, "[AdminController] Erro ao buscar logs globais.");
+    } catch (err) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminController] Erro ao buscar logs globais.");
       return reply.status(500).send({ error: "Erro ao buscar logs globais." });
     }
   },
@@ -168,8 +181,9 @@ export const AdminController = {
       const query = listLoginAttemptsQuerySchema.parse(request.query);
       const result = await adminService.getLoginAttempts(query);
       return reply.status(200).send(result);
-    } catch (err: any) {
-      logger.error({ error: err.message }, "[AdminController] Erro ao buscar tentativas de login.");
+    } catch (err) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminController] Erro ao buscar tentativas de login.");
       return reply.status(500).send({ error: "Erro ao buscar tentativas de login." });
     }
   },
@@ -190,8 +204,9 @@ export const AdminController = {
     try {
       const instances = await adminService.getWhatsappInstances();
       return reply.status(200).send(instances);
-    } catch (err: any) {
-      logger.error({ error: err.message }, "[AdminController] Erro ao buscar instâncias de WhatsApp.");
+    } catch (err) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminController] Erro ao buscar instâncias de WhatsApp.");
       return reply.status(500).send({ error: "Erro ao buscar instâncias de WhatsApp." });
     }
   },

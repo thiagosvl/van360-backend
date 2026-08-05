@@ -66,7 +66,6 @@ export const ROLE_PERMISSIONS: Record<UserType, PermissionKey[]> = {
   [UserType.MOTORISTA]: ALL_PERMISSIONS,
 
   [UserType.MOTORISTA_AUXILIAR]: [
-    "equipe.gerenciar_monitores",
     "passageiros.visualizar",
     "passageiros.presenca_marcar",
     "gastos.visualizar",
@@ -76,15 +75,15 @@ export const ROLE_PERMISSIONS: Record<UserType, PermissionKey[]> = {
     "rotas.excluir",
     "rotas.iniciar_encerrar",
     "rotas.executar_paradas",
-    "escolas.visualizar",
     "aniversarios.visualizar",
   ],
 
   [UserType.MONITOR]: [
     "passageiros.visualizar",
+    "passageiros.presenca_marcar",
     "rotas.visualizar",
     "rotas.executar_paradas",
-    "escolas.visualizar",
+    "aniversarios.visualizar",
   ],
 
   [UserType.RESPONSAVEL]: [

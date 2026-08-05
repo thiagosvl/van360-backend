@@ -53,11 +53,11 @@ export default async function subscriptionRoutes(app: FastifyInstance) {
    * Definir método de pagamento como padrão
    * PUT /api/subscriptions/payment-methods/:id/default
    */
-  app.put("/payment-methods/:id/default", { preHandler: [requirePermission("assinatura.gerenciar")] }, (req, reply) => subscriptionController.setDefaultPaymentMethod(req as any, reply));
+  app.put("/payment-methods/:id/default", { preHandler: [requirePermission("assinatura.gerenciar")] }, subscriptionController.setDefaultPaymentMethod);
 
   /**
    * Excluir método de pagamento
    * DELETE /api/subscriptions/payment-methods/:id
    */
-  app.delete("/payment-methods/:id", { preHandler: [requirePermission("assinatura.gerenciar")] }, (req, reply) => subscriptionController.deletePaymentMethod(req as any, reply));
+  app.delete("/payment-methods/:id", { preHandler: [requirePermission("assinatura.gerenciar")] }, subscriptionController.deletePaymentMethod);
 }
