@@ -6,6 +6,7 @@ import {
     AtividadeAcao,
     AtividadeEntidadeTipo,
     ConfigKey,
+    SubscriptionInvoiceStatus
 } from "../../types/enums.js";
 import { historicoService } from "../historico.service.js";
 import { getNowBR, getEndOfDayBR, addDays, parseLocalDate } from "../../utils/date.utils.js";
@@ -249,12 +250,22 @@ export const subscriptionService = {
 
         await subscriptionReferralService.completeReferral(res.usuario_id!, res.fatura_id!);
 
+        let isFirstSubscription = true;
+        try {
+            const { data: userInvoices } = await invoiceRepository.getInvoicesByUserId(res.usuario_id!);
+            const paidCount = userInvoices ? userInvoices.filter(i => i.status === SubscriptionInvoiceStatus.PAID).length : 1;
+            isFirstSubscription = paidCount <= 1;
+        } catch (err) {
+            logger.error({ err, userId: res.usuario_id }, "[SubscriptionService] Erro ao consultar histórico de faturas do usuário.");
+        }
+
         if (res.usuario_telefone) {
             notificationService.notifyDriver(res.usuario_telefone, EVENTO_MOTORISTA_ASSINATURA_PAGO, {
                 nomeMotorista: res.usuario_nome!,
                 valor: typeof res.valor === "string" ? parseFloat(res.valor) : res.valor!,
                 dataVencimento: res.new_expiry!,
                 planoNome: res.plano_nome,
+                isFirstSubscription
             }, { channels: ['WHATSAPP'] }).catch(err => logger.error({ err }, "[SubscriptionService] Falha ao notificar pagamento confirmado"));
         }
 
