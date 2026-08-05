@@ -25,6 +25,7 @@ export interface DriverContext {
     isEngaged?: boolean;
     cpfLogin?: string;
     senhaTemporaria?: string;
+    isFirstSubscription?: boolean;
     // Aniversários
     aniversariantesList?: { veiculo: string; nome: string; dia: number; mes: number; escola: string }[];
     passageirosSemData?: number;
@@ -205,12 +206,25 @@ export const DriverTemplates = {
         const data = ctx.dataVencimento ? formatToBrazilianDate(ctx.dataVencimento) : "";
         const planoStr = ctx.planoNome ? `🏷️ Plano: *${ctx.planoNome}*` : "";
         const dataStr = data ? `📅 Próximo vencimento: *${data}*` : "";
-
         const details = [planoStr, dataStr].filter(Boolean).join('\n');
 
-        return textPart(`✅ *Pagamento confirmado — Van360*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, pagamento recebido com sucesso. Seu acesso está ativo.` +
-            (details ? `\n\n${details}` : ""));
+        const firstName = getFirstName(ctx.nomeMotorista);
+
+        if (ctx.isFirstSubscription) {
+            return textPart(
+                `🎉 *Assinatura Ativada — Van360*\n\n` +
+                `Parabéns, ${firstName}! Sua assinatura foi ativada com sucesso.\n\n` +
+                `Seu acesso ao Van360 já está liberado para você continuar gerenciando passageiros, pagamentos, contratos e rotas em um só lugar.` +
+                (details ? `\n\n${details}` : "")
+            );
+        }
+
+        return textPart(
+            `✨ *Assinatura Renovada — Van360*\n\n` +
+            `${firstName}, sua assinatura foi renovada com sucesso.\n\n` +
+            `Seu acesso ao Van360 permanece ativo, para que você continue gerenciando passageiros, pagamentos, contratos e rotas sem interrupções.` +
+            (details ? `\n\n${details}` : "")
+        );
     },
 
     dueToday: (ctx: DriverContext): CompositeMessagePart[] => {

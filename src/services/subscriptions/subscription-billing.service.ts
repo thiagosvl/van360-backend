@@ -11,7 +11,7 @@ import {
 import { getConfig, getConfigNumber } from "../configuracao.service.js";
 import { historicoService } from "../historico.service.js";
 import { getNowBR, toPersistenceString, addDays } from "../../utils/date.utils.js";
-import { extractErrorMessage } from "../../utils/string.utils.js";
+import { extractErrorMessage, onlyDigits } from "../../utils/string.utils.js";
 import type { CreateInvoiceDTO } from "../../types/dtos/subscription.dto.js";
 import { subscriptionService } from "./subscription.service.js";
 import { planRepository } from "../../repositories/plan.repository.js";
@@ -145,6 +145,22 @@ export const subscriptionBillingService = {
             }
         } else {
             await subscriptionRepository.updatePaymentMethod(userId, "", CheckoutPaymentMethod.PIX);
+        }
+
+        if (street) {
+            try {
+                await userRepository.update(userId, {
+                    logradouro: street,
+                    numero: number,
+                    bairro: neighborhood,
+                    cidade: city,
+                    estado: state,
+                    cep: zipcode ? onlyDigits(zipcode) : undefined,
+                    data_nascimento: birth || undefined
+                });
+            } catch (updateErr) {
+                logger.error({ userId, updateErr }, "[SubscriptionBillingService] Erro ao salvar endereço do usuário antes do checkout.");
+            }
         }
 
         const invoiceDays = await getConfigNumber(ConfigKey.SAAS_DIAS_VENCIMENTO, 30);
