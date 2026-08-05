@@ -12,6 +12,7 @@ import {
 } from "../../../types/payment.js";
 import { CheckoutPaymentMethod, PaymentProvider } from "../../../types/enums.js";
 import { parseLocalDate } from "../../../utils/date.utils.js";
+import { onlyDigits, extractErrorMessage } from "../../../utils/string.utils.js";
 
 export class EfipayProvider implements PaymentProviderAdapter {
     readonly providerName = PaymentProvider.EFIPAY;
@@ -38,11 +39,32 @@ export class EfipayProvider implements PaymentProviderAdapter {
                 if (!request.customer.phone) {
                     throw new Error("Telefone do cliente é obrigatório para pagamento com cartão.");
                 }
+                const cleanDoc = onlyDigits(request.customer.document);
+                const isCnpj = cleanDoc.length > 11;
+
                 if (!request.customer.email) {
                     throw new Error("E-mail do cliente é obrigatório para pagamento com cartão.");
                 }
-                if (!request.customer.birth) {
-                    throw new Error("Data de nascimento é obrigatória para pagamento com cartão.");
+                if (!isCnpj && !request.customer.birth) {
+                    throw new Error("Data de nascimento é obrigatória para pagamento com cartão de pessoa física.");
+                }
+
+                const customerData: Record<string, unknown> = {
+                    email: request.customer.email,
+                    phone_number: onlyDigits(request.customer.phone || ""),
+                };
+
+                if (isCnpj) {
+                    customerData.juridical_person = {
+                        corporate_name: request.customer.name,
+                        cnpj: cleanDoc
+                    };
+                } else {
+                    customerData.name = request.customer.name;
+                    customerData.cpf = cleanDoc;
+                    if (request.customer.birth) {
+                        customerData.birth = request.customer.birth;
+                    }
                 }
 
                 const body = {
@@ -61,13 +83,7 @@ export class EfipayProvider implements PaymentProviderAdapter {
                         credit_card: {
                             installments: request.installments || 1,
                             payment_token: request.paymentToken,
-                            customer: {
-                                name: request.customer.name,
-                                [request.customer.document.replace(/\D/g, "").length > 11 ? "cnpj" : "cpf"]: request.customer.document.replace(/\D/g, ""),
-                                phone_number: request.customer.phone.replace(/\D/g, ""),
-                                email: request.customer.email,
-                                birth: request.customer.birth,
-                            },
+                            customer: customerData,
                             billing_address: request.billingAddress || {
                                 street: "Rua Não Informada",
                                 number: "0",
@@ -86,16 +102,20 @@ export class EfipayProvider implements PaymentProviderAdapter {
                 const chargeId = ccResponse.data?.charge_id?.toString();
 
                 if (status === "declined" || status === "unpaid") {
-                    throw new Error("Cartão recusado pela operadora.");
+                    const refusalReason = ccResponse.data?.refusal?.reason;
+                    const reasonText = refusalReason ? `: ${refusalReason}` : "";
+                    const err = new Error(`Cartão recusado pela operadora${reasonText}`);
+                    (err as any).isUserFacing = true;
+                    throw err;
                 }
 
                 return {
                     success: true,
-                    providerId: chargeId, // Cartão usa charge_id em vez de txid
+                    providerId: chargeId,
                 };
 
             } else {
-                let expiracaoSegundos = 3600 * 24; // Padrão: 24 horas
+                let expiracaoSegundos = 3600 * 24;
                 if (request.dueDate) {
                     const dueDate = new Date(request.dueDate);
                     const now = new Date();
@@ -105,12 +125,13 @@ export class EfipayProvider implements PaymentProviderAdapter {
                     }
                 }
 
+                const cleanDoc = onlyDigits(request.customer.document);
                 const body = {
                     calendario: {
                         expiracao: expiracaoSegundos
                     },
                     devedor: {
-                        [request.customer.document.replace(/\D/g, "").length > 11 ? "cnpj" : "cpf"]: request.customer.document.replace(/\D/g, ""),
+                        [cleanDoc.length > 11 ? "cnpj" : "cpf"]: cleanDoc,
                         nome: request.customer.name
                     },
                     valor: {
@@ -146,17 +167,24 @@ export class EfipayProvider implements PaymentProviderAdapter {
                     pixQrCodeUrl: qrcodeResponse.imagemQrcode,
                 };
             }
-        } catch (error: any) {
-            // Extrai a mensagem de erro mais detalhada da Efí se disponível
-            const errorDetail = error?.error_description || error?.message || "Erro desconhecido na Efí Pay";
-            
+        } catch (error: unknown) {
+            const errorDetail = extractErrorMessage(error, "Erro desconhecido na Efí Pay");
+            const isUserFacing = Boolean((error as any)?.isUserFacing) || (
+                typeof errorDetail === "string" && (
+                    errorDetail.toLowerCase().includes("recusado") ||
+                    errorDetail.toLowerCase().includes("saldo") ||
+                    errorDetail.toLowerCase().includes("expirado") ||
+                    errorDetail.toLowerCase().includes("bloqueado")
+                )
+            );
+
             logger.error({ 
                 error: errorDetail, 
-                fullError: error, // Loga o objeto completo para debug
+                fullError: error,
                 externalId: request.externalId 
             }, "[EfipayProvider] Erro ao criar cobrança");
 
-            return { success: false, error: errorDetail };
+            return { success: false, error: errorDetail, isUserFacing };
         }
     }
 

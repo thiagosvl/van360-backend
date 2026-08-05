@@ -11,6 +11,7 @@ import {
 import { getConfig, getConfigNumber } from "../configuracao.service.js";
 import { historicoService } from "../historico.service.js";
 import { getNowBR, toPersistenceString, addDays } from "../../utils/date.utils.js";
+import { extractErrorMessage } from "../../utils/string.utils.js";
 import type { CreateInvoiceDTO } from "../../types/dtos/subscription.dto.js";
 import { subscriptionService } from "./subscription.service.js";
 import { planRepository } from "../../repositories/plan.repository.js";
@@ -178,8 +179,7 @@ export const subscriptionBillingService = {
                 } : undefined
             }, PaymentProvider.EFIPAY);
         } catch (gatewayErr) {
-            const isError = gatewayErr instanceof Error;
-            const errMsg = isError ? gatewayErr.message : String(gatewayErr);
+            const errMsg = extractErrorMessage(gatewayErr, "Erro de conexão com gateway de pagamento.");
 
             logger.error({ userId, error: errMsg }, "[SubscriptionBillingService] Erro de conexão/exceção no Gateway");
 
@@ -230,11 +230,13 @@ export const subscriptionBillingService = {
                 logger.error({ userId, dbError }, "[SubscriptionBillingService] Erro ao gravar fatura falha no banco.");
             }
 
-            throw isError ? gatewayErr : new Error(errMsg);
+            throw gatewayErr instanceof Error ? gatewayErr : new Error(errMsg);
         }
 
         if (!chargeRes.success) {
-            logger.error({ userId, error: chargeRes.error }, "[SubscriptionBillingService] Erro ao gerar Cobrança no Gateway");
+            const errorString = extractErrorMessage(chargeRes.error, "Cartão recusado");
+
+            logger.error({ userId, error: errorString }, "[SubscriptionBillingService] Erro ao gerar Cobrança no Gateway");
 
             try {
                 const { data: failedInvoice } = await invoiceRepository.createInvoice({
@@ -256,7 +258,7 @@ export const subscriptionBillingService = {
                             entidade_tipo: AtividadeEntidadeTipo.SAAS_FATURA,
                             entidade_id: failedInvoice.id,
                             acao: AtividadeAcao.SAAS_FATURA_RECUSADA,
-                            descricao: `Tentativa de pagamento recusada: ${chargeRes.error}`
+                            descricao: `Tentativa de pagamento recusada: ${errorString}`
                         });
                         await invoiceRepository.cancelIncompleteInvoicesByUserId(userId, getNowBR().toISOString(), failedInvoice.id);
                     } catch (cleanupErr) {
@@ -271,7 +273,7 @@ export const subscriptionBillingService = {
                         nomeMotorista: user.nome,
                         telefone: user.telefone,
                         usuarioId: userId,
-                        erro: chargeRes.error || "Cartão recusado",
+                        erro: errorString,
                         planoNome: plano.nome,
                         origem: "MANUAL"
                     }, {
@@ -283,7 +285,11 @@ export const subscriptionBillingService = {
                 logger.error({ userId, dbError }, "[SubscriptionBillingService] Erro ao gravar fatura falha no banco.");
             }
 
-            throw new Error(`${chargeRes.error}`);
+            const userFacingMessage = chargeRes.isUserFacing
+                ? errorString
+                : "Não foi possível processar o pagamento com cartão no momento. Por favor, tente novamente ou entre em contato com o suporte.";
+
+            throw new Error(userFacingMessage);
         }
 
         if (paymentMethod === CheckoutPaymentMethod.CREDIT_CARD && currentPaymentToken && saveCard && cardLast4 && cardBrand) {

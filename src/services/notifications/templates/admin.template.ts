@@ -1,5 +1,6 @@
 import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
 import { maskCpf, maskCnpj, maskPhone } from "../../../utils/format.js";
+import { extractErrorMessage } from "../../../utils/string.utils.js";
 
 export interface AdminRegistrationContext {
     nome: string;
@@ -102,6 +103,8 @@ export class AdminTemplates {
             ? "<i>Verifique a tentativa de pagamento se necessário.</i>"
             : "<i>O cliente já foi notificado. Acompanhe se ele atualizará o cartão.</i>";
 
+        const errorText = extractErrorMessage(ctx.erro, "Sem detalhe");
+
         return [
             {
                 type: "text",
@@ -111,7 +114,7 @@ export class AdminTemplates {
                          telLine +
                          planLine +
                          `<b>Origem:</b> ${origemText}\n` +
-                         `<b>Motivo/Erro:</b> ${ctx.erro}\n` +
+                         `<b>Motivo/Erro:</b> ${errorText}\n` +
                          `<b>ID:</b> ${ctx.usuarioId}\n\n` +
                          footerText
             }

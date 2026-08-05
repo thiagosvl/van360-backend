@@ -40,6 +40,7 @@ export interface ChargeResponse {
     paymentLink?: string;
     invoiceUrl?: string;
     error?: string;
+    isUserFacing?: boolean;
 }
 
 export interface NormalizedPaymentEvent {
