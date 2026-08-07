@@ -1,13 +1,13 @@
 import { logger } from "../../config/logger.js";
-import { adminWhatsappRepository } from "../../repositories/admin/admin-whatsapp.repository.js";
+import { adminEvolutionRepository } from "../../repositories/admin/admin-evolution.repository.js";
 import { evolutionService } from "../evolution.service.js";
 import { EvolutionConnectionStatus } from "../../types/enums.js";
 
 export const adminEvolutionService = {
-  async getWhatsappInstances() {
-    const { data, error } = await adminWhatsappRepository.getWhatsappInstances();
+  async getEvolutionInstances() {
+    const { data, error } = await adminEvolutionRepository.getEvolutionInstances();
     if (error) {
-      logger.error({ error }, "[AdminEvolutionService] Erro ao buscar instâncias de WhatsApp.");
+      logger.error({ error }, "[AdminEvolutionService] Erro ao buscar instâncias da Evolution.");
       throw error;
     }
 

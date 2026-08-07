@@ -111,7 +111,7 @@ export const subscriptionReferralService = {
 
             logger.info({ indicadorId: indicacao.indicador_id, dias: bonusDays }, "[SubscriptionReferralService] Bônus de indicação aplicado.");
 
-            // Enviar notificação via WhatsApp
+            // Enviar notificação
             const { data: indicador } = await userRepository.getById(indicacao.indicador_id);
             if (indicador?.telefone) {
                 await notificationService.notifyDriver(

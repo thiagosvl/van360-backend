@@ -70,7 +70,7 @@ export enum EvolutionEvent {
   _LOGOUT_INSTANCE = "LOGOUT_INSTANCE",
 }
 
-export enum WhatsappMediaType {
+export enum EvolutionMediaType {
   TEXT = "text",
   IMAGE = "image",
   VIDEO = "video",

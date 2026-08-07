@@ -186,13 +186,13 @@ export const AdminController = {
     }
   },
 
-  async getWhatsappInstances(_request: FastifyRequest, reply: FastifyReply) {
+  async getEvolutionInstances(_request: FastifyRequest, reply: FastifyReply) {
     try {
-      const instances = await adminService.getWhatsappInstances();
+      const instances = await adminService.getEvolutionInstances();
       return reply.status(200).send(instances);
     } catch (err: any) {
-      logger.error({ error: err.message }, "[AdminController] Erro ao buscar instâncias de WhatsApp.");
-      return reply.status(500).send({ error: "Erro ao buscar instâncias de WhatsApp." });
+      logger.error({ error: err.message }, "[AdminController] Erro ao buscar instâncias da Evolution.");
+      return reply.status(500).send({ error: "Erro ao buscar instâncias da Evolution." });
     }
   },
 };

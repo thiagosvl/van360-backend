@@ -39,7 +39,6 @@ export const contractWorker = new Worker<ContractJobData>(
 
             logger.info({ jobId: job.id, contratoId }, "[Worker] Contrato atualizado com minuta URL.");
 
-            // 4. Enviar para a fila de WhatsApp se houver telefone
             // 4. Notificar Responsável via NotificationService
             if (passageiro.telefone_responsavel) {
                 const linkAssinatura = providerName === ContratoProvider.INHOUSE

@@ -115,7 +115,7 @@ export const cobrancaService = {
             }
           } catch (notifErr: unknown) {
             const msg = notifErr instanceof Error ? notifErr.message : String(notifErr);
-            logger.error({ error: msg, cobrancaId: inserted.id }, "Erro ao enviar recibo por WhatsApp pós-criação da cobrança já paga");
+            logger.error({ error: msg, cobrancaId: inserted.id }, "Erro ao enviar recibo pós-criação da cobrança já paga");
           }
         }
       } catch (e: unknown) {
@@ -470,9 +470,9 @@ export const cobrancaService = {
               passageiro.telefone_responsavel,
               eventType,
               context,
-              { 
+              {
                 channels: [NotificationChannelEnum.EVOLUTION],
-                metadata: { cobrancaId: c.id } 
+                metadata: { cobrancaId: c.id }
               }
             );
 

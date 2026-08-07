@@ -1,5 +1,5 @@
 import { logger } from "../../../config/logger.js";
-import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
+import { CompositeMessagePart } from "../../../types/dtos/evolution.dto.js";
 import { NotificationProviderAdapter } from "../ports/notification-provider.port.js";
 
 /**

@@ -7,9 +7,9 @@ import {
     EvolutionInstance,
     CompositeMessagePart,
     EvolutionInstanceFallback
-} from "../types/dtos/whatsapp.dto.js";
-import { EvolutionEvent, EvolutionIntegration, WhatsappMediaType, EvolutionConnectionStatus } from "../types/enums.js";
-import { formatWhatsAppNumber } from "../utils/string.utils.js";
+} from "../types/dtos/evolution.dto.js";
+import { EvolutionEvent, EvolutionIntegration, EvolutionMediaType, EvolutionConnectionStatus } from "../types/enums.js";
+import { formatEvolutionNumber } from "../utils/string.utils.js";
 
 const EVO_URL = env.EVOLUTION_API_URL;
 const EVO_KEY = env.EVOLUTION_API_KEY;
@@ -23,7 +23,7 @@ export class EvolutionService {
             const { data } = await axios.get(url, { headers: EVO_HEADERS });
 
             const rawState = data?.instance?.state || data?.state;
-            
+
             return {
                 state: (rawState as EvolutionConnectionStatus) || EvolutionConnectionStatus.UNKNOWN,
                 status: data?.instance?.status || data?.status,
@@ -31,7 +31,7 @@ export class EvolutionService {
             };
         } catch (error) {
             const err = error as AxiosError;
-            
+
             try {
                 const fallbackUrl = `${EVO_URL}/instance/fetchInstances?instanceName=${instanceName}`;
                 const { data } = await axios.get(fallbackUrl, { headers: EVO_HEADERS });
@@ -52,7 +52,7 @@ export class EvolutionService {
             if (err.response?.status === 404) {
                 return { state: EvolutionConnectionStatus.NOT_FOUND };
             }
-            
+
             logger.error({ err: err.message, instanceName }, "[EvolutionService] Erro ao consultar status");
             return { state: EvolutionConnectionStatus.UNKNOWN };
         }
@@ -60,7 +60,7 @@ export class EvolutionService {
 
     async sendText(number: string, text: string, instanceName: string): Promise<boolean> {
         try {
-            const finalNumber = formatWhatsAppNumber(number);
+            const finalNumber = formatEvolutionNumber(number);
 
             const url = `${EVO_URL}/message/sendText/${instanceName}`;
             await axios.post(url, {
@@ -80,7 +80,7 @@ export class EvolutionService {
 
     async sendImage(number: string, media: string, caption: string, instanceName: string): Promise<boolean> {
         try {
-            const finalNumber = formatWhatsAppNumber(number);
+            const finalNumber = formatEvolutionNumber(number);
 
             const url = `${EVO_URL}/message/sendMedia/${instanceName}`;
             const cleanBase64 = media.includes('base64,') ? media.split('base64,')[1] : media;
@@ -88,7 +88,7 @@ export class EvolutionService {
             const body = {
                 number: finalNumber,
                 media: cleanBase64,
-                mediatype: WhatsappMediaType.IMAGE,
+                mediatype: EvolutionMediaType.IMAGE,
                 caption: caption || ""
             };
 
@@ -102,7 +102,7 @@ export class EvolutionService {
     }
 
     async sendCompositeMessage(number: string, parts: CompositeMessagePart[], instanceName: string): Promise<boolean> {
-        const finalNumber = formatWhatsAppNumber(number);
+        const finalNumber = formatEvolutionNumber(number);
         let success = true;
 
         for (const part of parts) {
@@ -110,11 +110,11 @@ export class EvolutionService {
                 await new Promise(resolve => setTimeout(resolve, part.delayMs));
             }
 
-            if (part.type === WhatsappMediaType.TEXT && part.content) {
+            if (part.type === EvolutionMediaType.TEXT && part.content) {
                 const sent = await this.sendText(finalNumber, part.content, instanceName);
                 if (!sent) success = false;
-            } 
-            else if (part.type === WhatsappMediaType.IMAGE && part.mediaBase64) {
+            }
+            else if (part.type === EvolutionMediaType.IMAGE && part.mediaBase64) {
                 const sent = await this.sendImage(finalNumber, part.mediaBase64, part.content || "", instanceName);
                 if (!sent) success = false;
             }
@@ -126,7 +126,7 @@ export class EvolutionService {
     async setWebhook(instanceName: string, url: string): Promise<boolean> {
         try {
             const settingsUrl = `${EVO_URL}/webhook/set/${instanceName}`;
-            
+
             const payload = {
                 webhook: {
                     url: url,
@@ -146,10 +146,10 @@ export class EvolutionService {
             return true;
         } catch (error) {
             const err = error as AxiosError;
-            logger.error({ 
-                err: err.response?.data, 
+            logger.error({
+                err: err.response?.data,
                 instanceName,
-                statusCode: err.response?.status 
+                statusCode: err.response?.status
             }, "[EvolutionService] Falha ao configurar webhook");
             return false;
         }
@@ -158,7 +158,7 @@ export class EvolutionService {
     async updateSettings(instanceName: string): Promise<boolean> {
         try {
             const settingsUrl = `${EVO_URL}/settings/set/${instanceName}`;
-            
+
             // Endpoint de settings na v2 costuma ser PLANO (flat)
             await axios.post(settingsUrl, {
                 rejectCall: true,
@@ -182,12 +182,12 @@ export class EvolutionService {
         try {
             logger.info({ instanceName, enableQrcode }, "[EvolutionService] Iniciando criação de instância...");
             const url = `${EVO_URL}/instance/create`;
-            
+
             try {
                 const payload = {
                     instanceName: instanceName,
-                    token: env.EVOLUTION_API_KEY, 
-                    qrcode: enableQrcode, 
+                    token: env.EVOLUTION_API_KEY,
+                    qrcode: enableQrcode,
                     integration: EvolutionIntegration.BAILEYS,
                     webhook: {
                         url: WEBHOOK_URL,
@@ -207,10 +207,10 @@ export class EvolutionService {
                 return true;
             } catch (createError) {
                 const err = createError as AxiosError;
-                
+
                 if (err.response?.status === 403) {
                     logger.warn({ instanceName }, "[EvolutionService] Instância já existe. Reconfigurando...");
-                    
+
                     await this.setWebhook(instanceName, WEBHOOK_URL);
                     await this.updateSettings(instanceName);
                     return true;
@@ -219,9 +219,9 @@ export class EvolutionService {
             }
         } catch (error) {
             const err = error as AxiosError;
-            logger.error({ 
-                err: err.response?.data || err.message, 
-                instanceName 
+            logger.error({
+                err: err.response?.data || err.message,
+                instanceName
             }, "[EvolutionService] Falha crítica ao criar/verificar instância");
             return false;
         }
@@ -257,7 +257,7 @@ export class EvolutionService {
 
             // Fluxo de Pairing Code
             if (phoneNumber) {
-                const finalPhone = formatWhatsAppNumber(phoneNumber);
+                const finalPhone = formatEvolutionNumber(phoneNumber);
 
                 const maxAttempts = 5;
                 for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -300,7 +300,7 @@ export class EvolutionService {
         } catch (error) {
             const err = error as AxiosError;
             logger.error({ err: err.response?.data || err.message, instanceName }, "[EvolutionService] Falha ao conectar");
-            throw new Error("Falha ao configurar conexão do WhatsApp.");
+            throw new Error("Falha ao configurar conexão do Evolution.");
         }
     }
 

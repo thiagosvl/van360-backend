@@ -223,14 +223,14 @@ export const adminUserService = {
       motoristasConfig: motoristasConfigContrato,
     };
 
-    let whatsappStatus: string = EvolutionConnectionStatus.UNKNOWN;
+    let evolutionStatus: string = EvolutionConnectionStatus.UNKNOWN;
     try {
       const { EVOLUTION_GLOBAL_INSTANCE } = await import("../../config/constants.js");
       const { evolutionService } = await import("../evolution.service.js");
       const status = await evolutionService.getInstanceStatus(EVOLUTION_GLOBAL_INSTANCE);
-      whatsappStatus = status.state;
+      evolutionStatus = status.state;
     } catch (err) {
-      logger.error({ err }, "[AdminUserService] Erro ao buscar status do WhatsApp");
+      logger.error({ err }, "[AdminUserService] Erro ao buscar status da Evolution");
     }
 
     return {
@@ -250,7 +250,7 @@ export const adminUserService = {
       recentUsers: recentUsersRes.data || [],
       canaisAquisicao,
       dispositivosCadastro,
-      whatsappStatus,
+      evolutionStatus,
     };
   },
 
@@ -552,7 +552,7 @@ export const adminUserService = {
         nomeMotorista: data.nome,
         cpfLogin: maskedCpf,
         senhaTemporaria: data.senha
-      }, { channels: [NotificationChannelEnum.EVOLUTION] }).catch(err => logger.error({ err, userId }, "[AdminUserService] Falha ao enviar WhatsApp de boas-vindas."));
+      }, { channels: [NotificationChannelEnum.EVOLUTION] }).catch(err => logger.error({ err, userId }, "[AdminUserService] Falha ao enviar mensagem de boas-vindas."));
     }
 
     return { id: userId, email: emailClean };
@@ -582,7 +582,7 @@ export const adminUserService = {
         nomeMotorista: user.nome,
         cpfLogin: maskedCpf,
         senhaTemporaria: newPassword
-      }, { channels: [NotificationChannelEnum.EVOLUTION] }).catch(err => logger.error({ err, userId }, "[AdminUserService] Falha ao enviar WhatsApp de reset de senha."));
+      }, { channels: [NotificationChannelEnum.EVOLUTION] }).catch(err => logger.error({ err, userId }, "[AdminUserService] Falha ao enviar mensagem de reset de senha."));
     }
 
     return { success: true, senha: newPassword };

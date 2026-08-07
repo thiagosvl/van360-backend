@@ -103,7 +103,7 @@ export const cobrancaPagamentoService = {
         }
       } catch (notifErr: unknown) {
         const msg = notifErr instanceof Error ? notifErr.message : String(notifErr);
-        logger.error({ error: msg, cobrancaId }, "Erro ao enviar recibo por WhatsApp pós-pagamento manual");
+        logger.error({ error: msg, cobrancaId }, "Erro ao enviar recibo pós-pagamento manual");
       }
     }
 

@@ -1,5 +1,5 @@
 import { NotificationChannelEnum } from "../../types/enums.js";
-import { CompositeMessagePart } from "../../types/dtos/whatsapp.dto.js";
+import { CompositeMessagePart } from "../../types/dtos/evolution.dto.js";
 import { logger } from "../../config/logger.js";
 
 import {
@@ -59,11 +59,11 @@ import {
     AdminTemplates
 } from "./templates/admin.template.js";
 
-export type NotificationChannel = "WHATSAPP" | "SMS" | "EMAIL" | "TELEGRAM";
+export type NotificationChannel = "EVOLUTION" | "SMS" | "EMAIL" | "TELEGRAM";
 
 export interface NotificationOptions {
     channels: NotificationChannelEnum[];
-    whatsapp?: {
+    evolution?: {
         instanceName?: string;
     };
     jobId?: string;
@@ -273,7 +273,7 @@ class NotificationService {
             }
         }
 
-        const { channels, whatsapp: evolutionOptions } = options;
+        const { channels, evolution: evolutionOptions } = options;
 
         try {
             const results: Promise<boolean>[] = [];

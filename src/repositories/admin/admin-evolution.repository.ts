@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "../../config/supabase.js";
 
-export const adminWhatsappRepository = {
-  async getWhatsappInstances() {
+export const adminEvolutionRepository = {
+  async getEvolutionInstances() {
     return supabaseAdmin
       .from("whatsapp_instances")
       .select("*")

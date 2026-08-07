@@ -1,6 +1,6 @@
 import { formatToBrazilianDate, getShortWeekDayBR } from "../../../utils/date.utils.js";
 import { formatCurrency, getFirstName, getFirstAndSecondName } from "../../../utils/format.js";
-import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
+import { CompositeMessagePart } from "../../../types/dtos/evolution.dto.js";
 import { CheckoutPaymentMethod } from "../../../types/enums.js";
 import { env } from "../../../config/env.js";
 

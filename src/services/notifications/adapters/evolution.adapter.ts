@@ -1,4 +1,4 @@
-import { 
+import {
     EVOLUTION_GLOBAL_INSTANCE,
     EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
     EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
@@ -18,8 +18,8 @@ import {
     EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA
 } from "../../../config/constants.js";
 import { logger } from "../../../config/logger.js";
-import { addToWhatsappQueue } from "../../../queues/evolution.queue.js";
-import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
+import { addToQueue } from "../../../queues/evolution.queue.js";
+import { CompositeMessagePart } from "../../../types/dtos/evolution.dto.js";
 import { EvolutionPurpose } from "../../../types/enums.js";
 import { NotificationProviderAdapter } from "../ports/notification-provider.port.js";
 
@@ -42,7 +42,7 @@ const BULK_EVENTS = [
 ];
 
 /**
- * Adapter para WhatsApp usando a fila (BullMQ) + Evolution API
+ * Adapter para Evolution usando a fila (BullMQ) + Evolution API
  */
 export class EvolutionQueueAdapter implements NotificationProviderAdapter {
     getProviderId(): string {
@@ -56,7 +56,7 @@ export class EvolutionQueueAdapter implements NotificationProviderAdapter {
 
             const instanceName = options?.instanceName || EVOLUTION_GLOBAL_INSTANCE;
             const eventType = options?.eventType || "UNKNOWN";
-            const jobId = options?.jobId || (eventType !== "UNKNOWN" ? `whatsapp-${to}-${eventType}-${Date.now()}` : undefined);
+            const jobId = options?.jobId || (eventType !== "UNKNOWN" ? `evolution-${to}-${eventType}-${Date.now()}` : undefined);
 
             let purpose = options?.purpose;
             if (!purpose) {
@@ -65,7 +65,7 @@ export class EvolutionQueueAdapter implements NotificationProviderAdapter {
                 purpose = isBulkEvent ? EvolutionPurpose.BULK : EvolutionPurpose.TRANSACTIONAL;
             }
 
-            await addToWhatsappQueue({
+            await addToQueue({
                 phone: to,
                 compositeMessage: validParts,
                 context: eventType,

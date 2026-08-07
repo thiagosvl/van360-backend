@@ -38,14 +38,14 @@ export const webhookEvolutionHandler = {
     },
 
     /**
-     * Processa atualização de conexão (WhatsApp)
+     * Processa atualização de conexão (Evolution)
      */
     async handleConnectionUpdate(instanceName: string, data: Record<string, unknown>): Promise<boolean> {
         const state = data.state as string;
 
         if (!state) return true;
 
-        logger.info({ instanceName, state }, "[Webhook] Status do WhatsApp alterado");
+        logger.info({ instanceName, state }, "[Webhook] Status da conexão alterado");
 
         const offlineStates = [EvolutionConnectionStatus.CLOSE, EvolutionConnectionStatus.DISCONNECTED, EvolutionConnectionStatus.REFUSED, "connecting", "refused"];
         const isOffline = offlineStates.includes(state as EvolutionConnectionStatus) || offlineStates.includes(state);
@@ -55,7 +55,7 @@ export const webhookEvolutionHandler = {
             const { Redis } = await import("ioredis");
             const redisClient = new Redis(redisConfig as any);
             const throttleKey = `alert:evolution:${instanceName}`;
-            
+
             const isThrottled = await redisClient.get(throttleKey);
             if (isThrottled) {
                 logger.info({ instanceName, state }, "[Webhook] Alerta do Telegram silenciado pelo Throttle do Redis (Cooldown).");
@@ -69,10 +69,10 @@ export const webhookEvolutionHandler = {
 
             const { notificationService } = await import("../notifications/notification.service.js");
             const { EVENTO_ADMIN_SISTEMA_ALERTA } = await import("../../config/constants.js");
-            
+
             await notificationService.notifyAdmin(EVENTO_ADMIN_SISTEMA_ALERTA, {
-                titulo: "ALERTA DE INSTABILIDADE (WHATSAPP)",
-                mensagem: `O WhatsApp (Instância: ${instanceName}) reportou instabilidade ou queda.`,
+                titulo: "ALERTA DE INSTABILIDADE (EVOLUTION)",
+                mensagem: `A Evolution (Instância: ${instanceName}) reportou instabilidade ou queda.`,
                 detalhes: {
                     "Instância": instanceName,
                     "Status": state

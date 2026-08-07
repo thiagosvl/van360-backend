@@ -1,7 +1,7 @@
-import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
+import { CompositeMessagePart } from "../../../types/dtos/evolution.dto.js";
 
 /**
- * Interface que todo provedor de notificação (WhatsApp, SMS, E-mail) deve implementar
+ * Interface que todo provedor de notificação (Evolution, SMS, E-mail) deve implementar
  */
 export interface NotificationProviderAdapter {
     /**

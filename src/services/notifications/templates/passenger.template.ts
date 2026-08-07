@@ -1,6 +1,6 @@
 import { formatToBrazilianDate, getMonthNameBR } from "../../../utils/date.utils.js";
 import { formatCurrency, getFirstAndSecondName, getFirstName, maskCpf, maskCnpj, maskPhone, capitalize } from "../../../utils/format.js";
-import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
+import { CompositeMessagePart } from "../../../types/dtos/evolution.dto.js";
 
 export interface PassengerContext {
     nomeResponsavel: string;

@@ -23,11 +23,11 @@ const createEvolutionProcessor = (isBulk: boolean) => async (job: Job<EvolutionJ
 
         let instanceStatus = await evolutionService.getInstanceStatus(targetInstance);
         const state = instanceStatus.state;
-        
+
         const isConnected = state === EvolutionConnectionStatus.CONNECTED || state === EvolutionConnectionStatus.OPEN;
         const isConnecting = state === EvolutionConnectionStatus.CONNECTING;
 
-        const ERROR_WAITING_CONNECTION = "AGUARDANDO_CONEXAO_WHATSAPP";
+        const ERROR_WAITING_CONNECTION = "AGUARDANDO_CONEXAO_EVOLUTION";
 
         if (!isConnected) {
             if (isConnecting) {
@@ -37,23 +37,23 @@ const createEvolutionProcessor = (isBulk: boolean) => async (job: Job<EvolutionJ
                 try {
                     logger.warn({ targetInstance }, "[EvolutionWorker] Instância offline. Tentando restabelecer link...");
                     await evolutionService.connectInstance(targetInstance);
-                    
+
                     // Pequeno delay para a Evolution processar o comando
                     await new Promise(r => setTimeout(r, 2000));
-                    
+
                     // Lança o erro de aguardar para que o próximo retry já tente enviar ou mostre que está 'connecting'
                     throw new Error(ERROR_WAITING_CONNECTION);
                 } catch (reconnectErr: unknown) {
                     const errMsg = reconnectErr instanceof Error ? reconnectErr.message : "Erro desconhecido";
                     if (errMsg === ERROR_WAITING_CONNECTION) throw reconnectErr;
-                    
+
                     throw new Error(`Falha no auto-reconnect: ${errMsg}`);
                 }
             }
         }
 
         let success = false;
-        
+
         try {
             if (compositeMessage) {
                 success = await evolutionService.sendCompositeMessage(phone, compositeMessage, targetInstance);
@@ -66,7 +66,7 @@ const createEvolutionProcessor = (isBulk: boolean) => async (job: Job<EvolutionJ
 
         if (!success && targetInstance !== EVOLUTION_GLOBAL_INSTANCE) {
             logger.warn({ phone, jobId: job.id }, "[EvolutionWorker] Fallback para instância GLOBAL...");
-            
+
             targetInstance = EVOLUTION_GLOBAL_INSTANCE;
             const globalStatus = await evolutionService.getInstanceStatus(EVOLUTION_GLOBAL_INSTANCE);
             const globalConnected = globalStatus.state === EvolutionConnectionStatus.CONNECTED || globalStatus.state === EvolutionConnectionStatus.OPEN;
@@ -74,7 +74,7 @@ const createEvolutionProcessor = (isBulk: boolean) => async (job: Job<EvolutionJ
             if (!globalConnected) {
                 throw new Error("Instância GLOBAL offline.");
             }
-            
+
             if (compositeMessage) {
                 const fallbackComposite = compositeMessage.map((p: any) => ({
                     ...p,
@@ -115,10 +115,10 @@ export const evolutionTransactionalWorker = new Worker<EvolutionJobData>(
     createEvolutionProcessor(false),
     {
         connection: redisConfig,
-        concurrency: 1, 
+        concurrency: 1,
         limiter: {
-             max: 50, // Permite 50 mensagens
-             duration: 10000 // a cada 10 segundos
+            max: 50, // Permite 50 mensagens
+            duration: 10000 // a cada 10 segundos
         }
     }
 );
@@ -128,10 +128,10 @@ export const evolutionBulkWorker = new Worker<EvolutionJobData>(
     createEvolutionProcessor(true),
     {
         connection: redisConfig,
-        concurrency: 1, 
+        concurrency: 1,
         limiter: {
-             max: 1, // Permite 1 mensagem
-             duration: 15000 // a cada 15 segundos
+            max: 1, // Permite 1 mensagem
+            duration: 15000 // a cada 15 segundos
         }
     }
 );
@@ -156,7 +156,7 @@ const startGlobalHealthCheck = () => {
             if (!isConnected && !isConnecting) {
                 await evolutionService.connectInstance(EVOLUTION_GLOBAL_INSTANCE);
             }
-        } catch (error: unknown) {}
+        } catch (error: unknown) { }
     };
 
     setTimeout(check, 5000);
