@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { SubscriptionStatus, WhatsappStatus } from "../src/types/enums.js";
+import { SubscriptionStatus, EvolutionConnectionStatus } from "../src/types/enums.js";
 import { adminUserService } from "../src/services/admin/admin-user.service.js";
-import { adminWhatsappService } from "../src/services/admin/admin-whatsapp.service.js";
+import { adminEvolutionService } from "../src/services/admin/admin-evolution.service.js";
 import { adminLoginAttemptsService } from "../src/services/admin/admin-login-attempts.service.js";
 import { adminUserRepository } from "../src/repositories/admin/admin-user.repository.js";
-import { adminWhatsappRepository } from "../src/repositories/admin/admin-whatsapp.repository.js";
+import { adminEvolutionRepository } from "../src/repositories/admin/admin-evolution.repository.js";
 import { loginAttemptsRepository } from "../src/repositories/login-attempts.repository.js";
-import { whatsappService } from "../src/services/whatsapp.service.js";
+import { evolutionService } from "../src/services/evolution.service.js";
 import { createApp } from "../src/app.js";
 
 vi.mock("../src/middleware/auth.js", () => ({
@@ -15,18 +15,18 @@ vi.mock("../src/middleware/auth.js", () => ({
     request.profile = { id: "00000000-0000-0000-0000-000000000001", tipo: "ADMIN" };
     request.usuario_id = "00000000-0000-0000-0000-000000000001";
   },
-  verifySupabaseJWT: async () => {},
+  verifySupabaseJWT: async () => { },
 }));
 
 vi.mock("../src/middleware/admin.js", () => ({
-  verifyAdmin: async () => {},
+  verifyAdmin: async () => { },
 }));
 
 vi.mock("../src/middleware/subscription.js", () => ({
-  checkSubscriptionAccess: async () => {},
+  checkSubscriptionAccess: async () => { },
 }));
 
-describe("Suíte de Testes - Métricas SaaS Admin, Instâncias WhatsApp e Tentativas de Login", () => {
+describe("Suíte de Testes - Métricas SaaS Admin, Instâncias Evolution e Tentativas de Login", () => {
   let app: any;
 
   beforeEach(async () => {
@@ -63,7 +63,7 @@ describe("Suíte de Testes - Métricas SaaS Admin, Instâncias WhatsApp e Tentat
       ];
 
       vi.spyOn(adminUserRepository, "getDashboardStats").mockResolvedValue(mockStats as any);
-      vi.spyOn(whatsappService, "getInstanceStatus").mockResolvedValue({ state: "open" } as any);
+      vi.spyOn(evolutionService, "getInstanceStatus").mockResolvedValue({ state: "open" } as any);
 
       const stats = await adminUserService.getDashboardStats();
 
@@ -91,7 +91,7 @@ describe("Suíte de Testes - Métricas SaaS Admin, Instâncias WhatsApp e Tentat
       ];
 
       vi.spyOn(adminUserRepository, "getDashboardStats").mockResolvedValue(mockStatsEmpty as any);
-      vi.spyOn(whatsappService, "getInstanceStatus").mockResolvedValue({ state: "close" } as any);
+      vi.spyOn(evolutionService, "getInstanceStatus").mockResolvedValue({ state: "close" } as any);
 
       const stats = await adminUserService.getDashboardStats();
 
@@ -101,21 +101,21 @@ describe("Suíte de Testes - Métricas SaaS Admin, Instâncias WhatsApp e Tentat
     });
   });
 
-  describe("2. Gestão e Monitoramento de Instâncias WhatsApp", () => {
+  describe("2. Gestão e Monitoramento de Instâncias Evolution", () => {
     it("Deve enriquecer os dados da instância com o status ao vivo da Evolution API", async () => {
-      vi.spyOn(adminWhatsappRepository, "getWhatsappInstances").mockResolvedValue({
+      vi.spyOn(adminEvolutionRepository, "getEvolutionInstances").mockResolvedValue({
         data: [
           { id: "inst-1", instance_name: "van360_global", usuario_id: "user-1" },
         ],
         error: null,
       } as any);
 
-      vi.spyOn(whatsappService, "getInstanceStatus").mockResolvedValue({
+      vi.spyOn(evolutionService, "getInstanceStatus").mockResolvedValue({
         state: "open",
         statusReason: 200,
       } as any);
 
-      const instances = await adminWhatsappService.getWhatsappInstances();
+      const instances = await adminEvolutionService.getEvolutionInstances();
 
       expect(instances).toHaveLength(1);
       expect(instances[0].instance_name).toBe("van360_global");
@@ -123,19 +123,19 @@ describe("Suíte de Testes - Métricas SaaS Admin, Instâncias WhatsApp e Tentat
     });
 
     it("Deve retornar status UNKNOWN quando houver falha de comunicação com o Evolution API", async () => {
-      vi.spyOn(adminWhatsappRepository, "getWhatsappInstances").mockResolvedValue({
+      vi.spyOn(adminEvolutionRepository, "getEvolutionInstances").mockResolvedValue({
         data: [
           { id: "inst-2", instance_name: "van360_offline", usuario_id: "user-2" },
         ],
         error: null,
       } as any);
 
-      vi.spyOn(whatsappService, "getInstanceStatus").mockRejectedValue(new Error("Timeout Evolution API"));
+      vi.spyOn(evolutionService, "getInstanceStatus").mockRejectedValue(new Error("Timeout Evolution API"));
 
-      const instances = await adminWhatsappService.getWhatsappInstances();
+      const instances = await adminEvolutionService.getEvolutionInstances();
 
       expect(instances).toHaveLength(1);
-      expect(instances[0].evolution_status).toBe(WhatsappStatus.UNKNOWN);
+      expect(instances[0].evolution_status).toBe(EvolutionConnectionStatus.UNKNOWN);
     });
   });
 
@@ -184,14 +184,14 @@ describe("Suíte de Testes - Métricas SaaS Admin, Instâncias WhatsApp e Tentat
       expect(payload.receitaTotal).toBe(1500);
     });
 
-    it("GET /api/admin/whatsapp-instances - Deve retornar status HTTP 200 e instâncias", async () => {
-      vi.spyOn(adminWhatsappService, "getWhatsappInstances").mockResolvedValue([
+    it("GET /api/admin/evolution-instances - Deve retornar status HTTP 200 e instâncias", async () => {
+      vi.spyOn(adminEvolutionService, "getEvolutionInstances").mockResolvedValue([
         { id: "1", instance_name: "inst_1", evolution_status: "open" },
       ]);
 
       const res = await app.inject({
         method: "GET",
-        url: "/api/admin/whatsapp-instances",
+        url: "/api/admin/evolution-instances",
       });
 
       expect(res.statusCode).toBe(200);
@@ -202,7 +202,18 @@ describe("Suíte de Testes - Métricas SaaS Admin, Instâncias WhatsApp e Tentat
 
     it("GET /api/admin/login-attempts - Deve retornar status HTTP 200 e relatório paginado", async () => {
       vi.spyOn(adminLoginAttemptsService, "getLoginAttempts").mockResolvedValue({
-        data: [{ id: "1", cpf: "00000000000", sucesso: false }],
+        data: [
+          {
+            id: "1",
+            login_tentado: "00000000000",
+            ip: null,
+            user_agent: null,
+            dispositivo: null,
+            sucesso: false,
+            motivo_falha: null,
+            created_at: "2026-08-07T00:00:00.000Z",
+          },
+        ],
         total: 1,
         page: 1,
         limit: 20,

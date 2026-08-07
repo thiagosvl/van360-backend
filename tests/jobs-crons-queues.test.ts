@@ -19,8 +19,8 @@ import { createApp } from "../src/app.js";
 describe("Suíte de Testes Automatizados - Jobs, Crons e Filas de Segundo Plano", () => {
 
   describe("1. Jobs e Rota de Cobranças e Notificações (jobs/cobrancas-notificacoes.job.ts & jobs.route.ts)", () => {
-    
-    it("Deve identificar cobranças vencendo hoje, com antecedência e em atraso, e disparar notificações WhatsApp sem duplicidade", async () => {
+
+    it("Deve identificar cobranças vencendo hoje, com antecedência e em atraso, e disparar notificações sem duplicidade", async () => {
       const now = getNowBR();
       const todayStr = toPersistenceString(now);
       const in3DaysStr = toPersistenceString(addDays(now, 2));
@@ -192,7 +192,7 @@ describe("Suíte de Testes Automatizados - Jobs, Crons e Filas de Segundo Plano"
   });
 
   describe("2. Job de Expiração de Trial e Bloqueio de Acesso (jobs/assinaturas-vencimento.job.ts)", () => {
-    
+
     it("Deve transicionar status de motoristas com trial expirado para 'EXPIRED' e bloqueá-los no sistema", async () => {
       const mockExpiredTrial = {
         id: "sub-expired-1",

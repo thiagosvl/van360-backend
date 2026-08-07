@@ -3,11 +3,10 @@ import { veiculoService } from "../src/services/veiculo.service.js";
 import { escolaService } from "../src/services/escola.service.js";
 import { veiculoRepository } from "../src/repositories/veiculo.repository.js";
 import { escolaRepository } from "../src/repositories/escola.repository.js";
-import { historicoRepository } from "../src/repositories/historico.repository.js";
 import { AppError } from "../src/errors/AppError.js";
 import { maskPhone, formatCurrency, capitalize, getFirstName, getFirstAndSecondName } from "../src/utils/format.js";
 import { moneyToNumber } from "../src/utils/currency.utils.js";
-import { cleanString, onlyDigits, formatWhatsAppNumber } from "../src/utils/string.utils.js";
+import { cleanString, onlyDigits, formatEvolutionNumber } from "../src/utils/string.utils.js";
 import { limparPlaca } from "../src/utils/placa.utils.js";
 import {
   parseLocalDate,
@@ -347,9 +346,9 @@ describe("Suíte de Testes Unificados: Veículos, Escolas e Utilitários do Back
         expect(maskPhone("1134567890")).toBe("(11) 3456-7890");
       });
 
-      it("Deve formatar número para padrão WhatsApp com DDI 55", () => {
-        expect(formatWhatsAppNumber("11987654321")).toBe("5511987654321");
-        expect(formatWhatsAppNumber("5511987654321")).toBe("5511987654321");
+      it("Deve formatar número para padrão telefone com DDI 55", () => {
+        expect(formatEvolutionNumber("11987654321")).toBe("5511987654321");
+        expect(formatEvolutionNumber("5511987654321")).toBe("5511987654321");
       });
 
       it("Deve extrair DDD de uma string de telefone", () => {

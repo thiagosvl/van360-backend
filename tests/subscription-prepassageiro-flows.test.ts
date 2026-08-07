@@ -10,7 +10,6 @@ import { subscriptionRepository } from "../src/repositories/subscription.reposit
 import { planRepository } from "../src/repositories/plan.repository.js";
 import { invoiceRepository } from "../src/repositories/invoice.repository.js";
 import { referralRepository } from "../src/repositories/referral.repository.js";
-import { paymentMethodRepository } from "../src/repositories/payment-method.repository.js";
 import { paymentService } from "../src/services/payments/payment.service.js";
 import * as authService from "../src/services/auth.service.js";
 import { authRepository } from "../src/repositories/auth.repository.js";
@@ -23,7 +22,6 @@ import {
   SubscriptionIdentifer,
   SubscriptionInvoiceStatus,
   CheckoutPaymentMethod,
-  ConfigKey,
   PeriodoEnum,
   PassageiroGenero,
   PassageiroModalidade,
@@ -353,7 +351,7 @@ describe("Suíte de Testes Avançados - Pre-Passageiro, Subscription SaaS e Auth
   });
 
   describe("3. Rotação de Tokens de Auth, Recuperação de Senha e Segurança (auth.service.ts)", () => {
-    it("Deve solicitar código de recuperação via WhatsApp gerando OTP e aplicando cooldown de 1 minuto", async () => {
+    it("Deve solicitar código de recuperação gerando OTP e aplicando cooldown de 1 minuto", async () => {
       vi.spyOn(authRepository, "getUserIdAndEmailByCpf").mockResolvedValue({
         data: {
           id: DRIVER_ID,
@@ -372,7 +370,7 @@ describe("Suíte de Testes Avançados - Pre-Passageiro, Subscription SaaS e Auth
       vi.spyOn(authRepository, "invalidateRecoveryCodes").mockResolvedValue({ data: null, error: null } as never);
       vi.spyOn(authRepository, "insertRecoveryCode").mockResolvedValue({ data: null, error: null } as never);
 
-      const result = await authService.solicitarRecuperacaoWhatsapp("12345678901");
+      const result = await authService.solicitarRecuperacao("12345678901");
       expect(result.telefoneMascarado).toBe("(XX) XXXXX-4444");
 
       vi.spyOn(authRepository, "getLatestActiveRecoveryCode").mockResolvedValue({
@@ -380,12 +378,12 @@ describe("Suíte de Testes Avançados - Pre-Passageiro, Subscription SaaS e Auth
         error: null,
       });
 
-      await expect(authService.solicitarRecuperacaoWhatsapp("12345678901")).rejects.toThrow(
+      await expect(authService.solicitarRecuperacao("12345678901")).rejects.toThrow(
         "Aguarde pelo menos 1 minuto para solicitar um novo código."
       );
     });
 
-    it("Deve validar código de recuperação do WhatsApp marcando como usado e rejeitar reutilização", async () => {
+    it("Deve validar código de recuperação do telefone marcando como usado e rejeitar reutilização", async () => {
       vi.spyOn(authRepository, "getUserIdAndEmailByCpf").mockResolvedValue({
         data: { id: DRIVER_ID, email: "carlos@test.com" } as never,
         error: null,
@@ -398,7 +396,7 @@ describe("Suíte de Testes Avançados - Pre-Passageiro, Subscription SaaS e Auth
 
       const markUsedSpy = vi.spyOn(authRepository, "markRecoveryCodeUsed").mockResolvedValue({ data: null, error: null } as never);
 
-      const valResult = await authService.validarCodigoWhatsApp("12345678901", "123456");
+      const valResult = await authService.validarCodigo("12345678901", "123456");
       expect(valResult.recoveryId).toBe(RECOVERY_ID);
       expect(markUsedSpy).toHaveBeenCalledWith(RECOVERY_ID);
 
@@ -407,7 +405,7 @@ describe("Suíte de Testes Avançados - Pre-Passageiro, Subscription SaaS e Auth
         error: null,
       });
 
-      await expect(authService.validarCodigoWhatsApp("12345678901", "123456")).rejects.toThrow(
+      await expect(authService.validarCodigo("12345678901", "123456")).rejects.toThrow(
         "Código inválido ou expirado."
       );
     });
@@ -472,7 +470,7 @@ describe("Suíte de Testes Avançados - Pre-Passageiro, Subscription SaaS e Auth
           indicador_telefone: "11988887777",
           termos_aceitos: true,
         })
-      ).rejects.toThrow("Você não pode utilizar seu próprio WhatsApp como indicação.");
+      ).rejects.toThrow("Você não pode utilizar seu próprio telefone como indicação.");
     });
 
     it("Deve auditar tentativas de login com sucesso e falha via loginAttemptsRepository", async () => {

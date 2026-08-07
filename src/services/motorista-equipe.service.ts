@@ -91,7 +91,7 @@ export const motoristaEquipeService = {
 
       if (profileError) {
         logger.error({ profileError, dto }, "Erro ao inserir perfil do membro da equipe na tabela usuarios");
-        
+
         // Rollback Auth user if profile creation failed
         try {
           await authProvider.deleteUser(userId);
@@ -116,7 +116,7 @@ export const motoristaEquipeService = {
         throw new AppError(profileError.message || "Erro ao criar perfil da equipe no banco de dados", 400);
       }
 
-      // Disparar notificação via WhatsApp (em segundo plano)
+      // Disparar notificação (em segundo plano)
       if (dto.telefone) {
         notificationService.notifyDriver(
           dto.telefone,
@@ -127,14 +127,14 @@ export const motoristaEquipeService = {
             senhaTemporaria: dto.senha,
           },
           { usuarioId: gestorId }
-        ).catch((err) => logger.warn({ err, userId }, "[MotoristaEquipeService] Falha ao enviar WhatsApp de boas-vindas"));
+        ).catch((err) => logger.warn({ err, userId }, "[MotoristaEquipeService] Falha ao enviar mensagem de boas-vindas"));
       }
 
       return profile;
     } catch (err: any) {
       try {
         await authProvider.deleteUser(userId);
-      } catch {}
+      } catch { }
       throw err;
     }
   },
@@ -188,7 +188,7 @@ export const motoristaEquipeService = {
           senhaTemporaria: novaSenha,
         },
         { usuarioId: gestorId }
-      ).catch((err) => logger.warn({ err, id }, "[MotoristaEquipeService] Falha ao enviar WhatsApp de redefinição de senha"));
+      ).catch((err) => logger.warn({ err, id }, "[MotoristaEquipeService] Falha ao enviar mensagem de redefinição de senha"));
     }
 
     return { message: "Senha redefinida com sucesso!" };
@@ -209,7 +209,7 @@ export const motoristaEquipeService = {
           isEngaged: data.ativo !== false,
         },
         { usuarioId: gestorId }
-      ).catch((err) => logger.warn({ err, id }, "[MotoristaEquipeService] Falha ao enviar WhatsApp de status alterado"));
+      ).catch((err) => logger.warn({ err, id }, "[MotoristaEquipeService] Falha ao enviar mensagem de status alterado"));
     }
 
     return data;

@@ -45,7 +45,7 @@ export const webhookEvolutionHandler = {
 
         if (!state) return true;
 
-logger.info({ instanceName, state }, "[Webhook] Status da conexão alterado");
+        logger.info({ instanceName, state }, "[Webhook] Status da conexão alterado");
 
         const offlineStates = [EvolutionConnectionStatus.CLOSE, EvolutionConnectionStatus.DISCONNECTED, EvolutionConnectionStatus.REFUSED, "connecting", "refused"];
         const isOffline = offlineStates.includes(state as EvolutionConnectionStatus) || offlineStates.includes(state);
@@ -83,7 +83,7 @@ logger.info({ instanceName, state }, "[Webhook] Status da conexão alterado");
                 jobId: `admin-alerta-desconexao-${instanceName}-${Date.now()}` // Timestamp garante que o BullMQ não deduplique indevidamente
             });
         } else {
-            logger.debug({ instanceName, state }, "[Webhook] Status do WhatsApp alterado");
+            logger.debug({ instanceName, state }, "[Webhook] Status da instancia Evolution alterado");
         }
 
         return true;

@@ -1,16 +1,16 @@
 import { describe, it, expect } from "vitest";
 import { PassengerTemplates, PassengerContext } from "../src/services/notifications/templates/passenger.template.js";
 import { RouteTemplates, RouteContext } from "../src/services/notifications/templates/route.template.js";
-import { formatWhatsAppNumber } from "../src/utils/string.utils.js";
-import { WhatsappMediaType, EvolutionEvent, EvolutionIntegration } from "../src/types/enums.js";
+import { formatEvolutionNumber } from "../src/utils/string.utils.js";
+import { EvolutionMediaType, EvolutionEvent, EvolutionIntegration } from "../src/types/enums.js";
 
-describe("Suíte de Testes - Evolution WhatsApp e Templates de Mensagens", () => {
+describe("Suíte de Testes - Evolution Instancias e Templates de Mensagens", () => {
   describe("1. Formatação de Número para Evolution API", () => {
-    it("Deve formatar o número do WhatsApp acrescentando o código de país 55 quando necessário", () => {
-      expect(formatWhatsAppNumber("11999998888")).toBe("5511999998888");
-      expect(formatWhatsAppNumber("5511999998888")).toBe("5511999998888");
-      expect(formatWhatsAppNumber("(11) 99999-8888")).toBe("5511999998888");
-      expect(formatWhatsAppNumber("+55 11 99999-8888")).toBe("5511999998888");
+    it("Deve formatar o número do telefone acrescentando o código de país 55 quando necessário", () => {
+      expect(formatEvolutionNumber("11999998888")).toBe("5511999998888");
+      expect(formatEvolutionNumber("5511999998888")).toBe("5511999998888");
+      expect(formatEvolutionNumber("(11) 99999-8888")).toBe("5511999998888");
+      expect(formatEvolutionNumber("+55 11 99999-8888")).toBe("5511999998888");
     });
   });
 
@@ -134,7 +134,7 @@ describe("Suíte de Testes - Evolution WhatsApp e Templates de Mensagens", () =>
     it("Deve gerar payload correto para envio de mensagem de texto (sendText)", () => {
       const number = "11999998888";
       const text = "Olá, tudo bem?";
-      const formattedNumber = formatWhatsAppNumber(number);
+      const formattedNumber = formatEvolutionNumber(number);
 
       const payload = {
         number: formattedNumber,
@@ -158,9 +158,9 @@ describe("Suíte de Testes - Evolution WhatsApp e Templates de Mensagens", () =>
       const caption = "Comprovante enviado";
 
       const payload = {
-        number: formatWhatsAppNumber(number),
+        number: formatEvolutionNumber(number),
         media: cleanBase64,
-        mediatype: WhatsappMediaType.IMAGE,
+        mediatype: EvolutionMediaType.IMAGE,
         caption
       };
 
