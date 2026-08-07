@@ -192,7 +192,7 @@ class NotificationService {
         to: string,
         type: DriverEventType,
         ctx: DriverContext & { nomePagador?: string, nomePassageiro?: string, diasAtraso?: number, reciboUrl?: string, trialDays?: number },
-        options: NotificationOptions = { channels: ["WHATSAPP"] }
+        options: NotificationOptions = { channels: [NotificationChannelEnum.EVOLUTION] }
     ): Promise<boolean> {
 
         let parts: CompositeMessagePart[] = [];
@@ -235,7 +235,7 @@ class NotificationService {
     async notifyAdmin(
         type: AdminEventType,
         ctx: AdminRegistrationContext | AdminSubscriptionContext | AdminPaymentFailedContext | AdminSystemAlertContext,
-        options: NotificationOptions = { channels: ["WHATSAPP"] }
+        options: NotificationOptions = { channels: [NotificationChannelEnum.EVOLUTION] }
     ): Promise<boolean> {
 
         let parts: CompositeMessagePart[] = [];
@@ -269,7 +269,7 @@ class NotificationService {
         to: string,
         parts: CompositeMessagePart[],
         eventType: string,
-        options: NotificationOptions = { channels: ["WHATSAPP"] }
+        options: NotificationOptions = { channels: [NotificationChannelEnum.EVOLUTION] }
     ): Promise<boolean> {
         if (!parts || parts.length === 0) return false;
 

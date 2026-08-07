@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
 import { registrarUsuario, login as loginService, logout as logoutService, refreshToken as refreshTokenService, updatePassword as updatePasswordService, solicitarRecuperacao, validarCodigo, resetarSenhaComCodigo } from "../services/auth.service.js";
-import { RegistrarUsuarioBodyDTO } from "../types/dtos/auth.dto.js";
+import { RegistrarUsuarioBodyDTO, LoginBodyDTO, UpdatePasswordBodyDTO, ConfirmarResetBodyDTO, ValidarCodigoBodyDTO, RefreshTokenBodyDTO, SolicitarRecuperacaoBodyDTO, } from "../types/dtos/auth.dto.js";
 
 
 export const AuthController = {
