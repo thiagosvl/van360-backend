@@ -39,6 +39,7 @@ Quando a migração para a API Oficial for iniciada, as seguintes regras de neg�
 A Meta não permite que um número WABA (API) seja simultaneamente utilizado no aplicativo físico do WhatsApp Business.
 - **Número 1 (O Robô):** "Van360 Notificações" -> Número exclusivo para WABA. Envia as automações transacionais para os pais.
   - *Estratégia de Confiança (Anti-Spam):* Como este número envia mensagens para o Brasil todo (DDD 51, DDD 31, etc), usar um DDD 11 pode gerar desconfiança de fraude. A Meta permite registrar um **Número 0800** no WABA. Um 0800 corporativo, com foto da marca e descrição profissional, elimina a fricção regional e passa extrema credibilidade.
+  - *Como adquirir um 0800 para o WhatsApp?* Não se compra um "chip físico" de 0800. Você contrata um Número Virtual (VoIP) em operadoras como Zenvia, Twilio ou locadoras locais (custo médio de R$ 40 a R$ 100/mês). No momento de cadastrar o número na Meta Business Manager, a Meta pergunta se quer verificar por SMS ou Ligação. Você escolhe "Ligação". O robô da Meta liga para o seu 0800 (que redireciona para o seu celular ou painel web) e dita um PIN de 6 dígitos. Você digita o PIN na Meta e pronto: o 0800 vira o seu WhatsApp Oficial.
 - **Número 2 (Atendimento Humano):** Número de suporte tradicional do Thiago para tirar dúvidas dos motoristas via App/WhatsApp Web.
 
 ### 3.2. Respostas dos Usuários (Auto-Responder)
