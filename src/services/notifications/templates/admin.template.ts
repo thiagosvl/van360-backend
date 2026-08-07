@@ -1,4 +1,4 @@
-import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
+import { CompositeMessagePart } from "../../../types/dtos/evolution.dto.js";
 import { maskCpf, maskCnpj, maskPhone } from "../../../utils/format.js";
 import { extractErrorMessage } from "../../../utils/string.utils.js";
 

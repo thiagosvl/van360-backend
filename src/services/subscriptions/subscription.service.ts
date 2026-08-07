@@ -1,3 +1,4 @@
+import { NotificationChannelEnum } from '../../types/enums.js';
 import { logger } from "../../config/logger.js";
 import { getConfig } from "../configuracao.service.js";
 import {
@@ -188,7 +189,7 @@ export const subscriptionService = {
                     dataVencimento: new Date(sub.current_period_end!).toLocaleDateString("pt-BR"),
                     usuarioId: userId
                 }, {
-                    channels: ['TELEGRAM'],
+                    channels: [NotificationChannelEnum.TELEGRAM],
                     jobId: `admin-assinatura-cancelada-${userId}-${sub.id}`
                 });
             }
@@ -266,7 +267,7 @@ export const subscriptionService = {
                 dataVencimento: res.new_expiry!,
                 planoNome: res.plano_nome,
                 isFirstSubscription
-            }, { channels: ['WHATSAPP'] }).catch(err => logger.error({ err }, "[SubscriptionService] Falha ao notificar pagamento confirmado"));
+            }, { channels: [NotificationChannelEnum.EVOLUTION] }).catch(err => logger.error({ err }, "[SubscriptionService] Falha ao notificar pagamento confirmado"));
         }
 
         // Notificação para o Admin (Telegram)
@@ -279,7 +280,7 @@ export const subscriptionService = {
             dataVencimento: new Date(res.new_expiry!).toLocaleDateString('pt-BR'),
             usuarioId: res.usuario_id!
         }, {
-            channels: ['TELEGRAM'],
+            channels: [NotificationChannelEnum.TELEGRAM],
             jobId: `admin-nova-assinatura-${res.usuario_id}-${res.fatura_id}`
         }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "[SubscriptionService] Falha ao notificar admin sobre assinatura paga"));
     }

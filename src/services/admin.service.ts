@@ -1,3 +1,4 @@
+import { NotificationChannelEnum } from '../types/enums.js';
 import { logger } from "../config/logger.js";
 import { adminRepository } from "../repositories/admin.repository.js";
 import { userRepository } from "../repositories/user.repository.js";
@@ -170,14 +171,14 @@ export const adminService = {
       }
     }
 
-    let whatsappStatus = "UNKNOWN";
+    let evolutionStatus = "UNKNOWN";
     try {
-      const { GLOBAL_WHATSAPP_INSTANCE } = await import("../config/constants.js");
-      const { whatsappService } = await import("./whatsapp.service.js");
-      const status = await whatsappService.getInstanceStatus(GLOBAL_WHATSAPP_INSTANCE);
-      whatsappStatus = status.state;
+      const { EVOLUTION_GLOBAL_INSTANCE } = await import("../config/constants.js");
+      const { evolutionService } = await import("./evolution.service.js");
+      const status = await evolutionService.getInstanceStatus(EVOLUTION_GLOBAL_INSTANCE);
+      evolutionStatus = status.state;
     } catch (err) {
-      logger.error({ err }, "[AdminService] Erro ao buscar status do WhatsApp");
+      logger.error({ err }, "[AdminService] Erro ao buscar status da Evolution");
     }
 
     let totalIndicacoes = 0;
@@ -238,7 +239,7 @@ export const adminService = {
       recentUsers: recentUsersRes.data || [],
       canaisAquisicao,
       dispositivosCadastro,
-      whatsappStatus,
+      evolutionStatus,
     };
   },
 
@@ -640,7 +641,7 @@ export const adminService = {
         nomeMotorista: data.nome,
         cpfLogin: maskedCpf,
         senhaTemporaria: data.senha
-      }, { channels: ['WHATSAPP'] }).catch(err => logger.error({ err, userId }, "[AdminService] Falha ao enviar WhatsApp de boas-vindas."));
+      }, { channels: [NotificationChannelEnum.EVOLUTION] }).catch(err => logger.error({ err, userId }, "[AdminService] Falha ao enviar Evolution de boas-vindas."));
     }
 
     return { id: userId, email: emailClean };
@@ -670,7 +671,7 @@ export const adminService = {
         nomeMotorista: user.nome,
         cpfLogin: maskedCpf,
         senhaTemporaria: newPassword
-      }, { channels: ['WHATSAPP'] }).catch(err => logger.error({ err, userId }, "[AdminService] Falha ao enviar WhatsApp de reset de senha."));
+      }, { channels: [NotificationChannelEnum.EVOLUTION] }).catch(err => logger.error({ err, userId }, "[AdminService] Falha ao enviar Evolution de reset de senha."));
     }
 
     return { success: true, senha: newPassword };
@@ -693,18 +694,18 @@ export const adminService = {
     return { success: true };
   },
 
-  async getWhatsappInstances() {
-    const { data, error } = await adminRepository.getWhatsappInstances();
+  async getEvolutionInstances() {
+    const { data, error } = await adminRepository.getEvolutionInstances();
     if (error) {
-      logger.error({ error }, "[AdminService] Erro ao buscar instâncias do WhatsApp no DB.");
+      logger.error({ error }, "[AdminService] Erro ao buscar instâncias da Evolution no DB.");
       throw error;
     }
 
     // Opcional: Buscar o status em tempo real da Evolution API para cada instância
-    const { whatsappService } = await import("./whatsapp.service.js");
+    const { evolutionService } = await import("./evolution.service.js");
     const enhancedData = await Promise.all((data || []).map(async (instance: any) => {
       try {
-        const status = await whatsappService.getInstanceStatus(instance.instance_name);
+        const status = await evolutionService.getInstanceStatus(instance.instance_name);
         return {
           ...instance,
           evolution_status: status.state,

@@ -1,3 +1,4 @@
+import { NotificationChannelEnum } from '../types/enums.js';
 import crypto from "node:crypto";
 import { cobrancaRepository } from "../repositories/cobranca.repository.js";
 import { passageiroRepository } from "../repositories/passageiro.repository.js";
@@ -112,12 +113,12 @@ export const cobrancaService = {
                   reciboUrl: inserted.recibo_url,
                   usuarioId: inserted.usuario_id
                 },
-                { channels: ["WHATSAPP"] }
+                { channels: [NotificationChannelEnum.EVOLUTION] }
               );
             }
           } catch (notifErr: unknown) {
             const msg = notifErr instanceof Error ? notifErr.message : String(notifErr);
-            logger.error({ error: msg, cobrancaId: inserted.id }, "Erro ao enviar recibo por WhatsApp pós-criação da cobrança já paga");
+            logger.error({ error: msg, cobrancaId: inserted.id }, "Erro ao enviar recibo pós-criação da cobrança já paga");
           }
         }
       } catch (e: unknown) {
@@ -429,28 +430,22 @@ export const cobrancaService = {
 
         let eventType:
           | typeof EVENTO_PASSAGEIRO_VENCIMENTO_HOJE
-          | typeof EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO
           | typeof EVENTO_PASSAGEIRO_ATRASADO
           | null = null;
         let shouldSend = false;
 
-        if (dataVencimentoStr === todayStr) {
-          eventType = EVENTO_PASSAGEIRO_VENCIMENTO_HOJE;
-          if (lastNotifDateStr !== todayStr) {
+        const daysSinceDue = dataVencimentoStr <= todayStr ? diffInDays(dataVencimentoStr, todayStr) : -1;
+
+        if (daysSinceDue >= 0 && daysSinceDue <= 2) {
+          if (!lastNotifDateStr || lastNotifDateStr < dataVencimentoStr) {
+            eventType = EVENTO_PASSAGEIRO_VENCIMENTO_HOJE;
             shouldSend = true;
           }
-        } else if (dataVencimentoStr > todayStr && dataVencimentoStr <= thresholdDateStr) {
-          eventType = EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO;
-          if (!ultimaNotifStr) {
+        } else if (daysSinceDue >= 3 && daysSinceDue <= 9) {
+          const diasAtrasoNaUltimaNotificacao = lastNotifDateStr ? diffInDays(dataVencimentoStr, lastNotifDateStr) : -1;
+          if (diasAtrasoNaUltimaNotificacao < 3) {
+            eventType = EVENTO_PASSAGEIRO_ATRASADO;
             shouldSend = true;
-          }
-        } else if (dataVencimentoStr < todayStr) {
-          eventType = EVENTO_PASSAGEIRO_ATRASADO;
-          const daysSinceDue = diffInDays(dataVencimentoStr, now);
-          if (daysSinceDue === 3 || daysSinceDue === 5 || daysSinceDue === 7) {
-            if (lastNotifDateStr !== todayStr) {
-              shouldSend = true;
-            }
           }
         }
 
@@ -464,8 +459,8 @@ export const cobrancaService = {
               telefoneMotorista: motorista.telefone,
               valor: Number(c.valor),
               dataVencimento: dataVencimentoStr,
-              diasAntecedencia: eventType === EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO ? diffInDays(now, dataVencimentoStr) : undefined,
-              diasAtraso: eventType === EVENTO_PASSAGEIRO_ATRASADO ? diffInDays(dataVencimentoStr, now) : undefined,
+              diasAntecedencia: undefined,
+              diasAtraso: eventType === EVENTO_PASSAGEIRO_ATRASADO ? diffInDays(dataVencimentoStr, todayStr) : undefined,
               usuarioId: c.usuario_id,
               chavePix: motorista.chave_pix,
               tipoChavePix: motorista.tipo_chave_pix,
@@ -478,12 +473,13 @@ export const cobrancaService = {
               passageiro.telefone_responsavel,
               eventType,
               context,
-              { channels: ['WHATSAPP'] }
+              {
+                channels: [NotificationChannelEnum.EVOLUTION],
+                metadata: { cobrancaId: c.id }
+              }
             );
 
             if (success) {
-              updatedCobrancaIds.push(c.id);
-
               sentCount++;
             }
           } catch (err: unknown) {
@@ -491,10 +487,6 @@ export const cobrancaService = {
             logger.error({ err: msg, cobrancaId: c.id }, "[CobrancaService] Falha ao enviar notificação de cobrança individual");
           }
         }
-      }
-
-      if (updatedCobrancaIds.length > 0) {
-        await cobrancaRepository.updateBulkUltimaNotificacao(updatedCobrancaIds, toPersistenceString(now));
       }
 
       logger.info({ sentCount }, "[CobrancaService] Envio diário de notificações de cobrança concluído.");
@@ -640,7 +632,7 @@ export const cobrancaService = {
               totalAtrasado,
               totalProximos
             },
-            { channels: ["WHATSAPP"] }
+            { channels: [NotificationChannelEnum.EVOLUTION] }
           );
           sentCount++;
         } catch (notifErr: unknown) {

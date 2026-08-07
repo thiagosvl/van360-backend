@@ -6,6 +6,7 @@ import { passageiroService } from '../services/passageiro.service.js';
 import { notificationService } from '../services/notifications/notification.service.js';
 import { EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA } from '../config/constants.js';
 import { formatarPlacaExibicao } from '../utils/placa.utils.js';
+import { NotificationChannelEnum } from '../types/enums.js';
 
 export const birthdayWorker = new Worker<BirthdayJobData>(
     QUEUE_NAME_BIRTHDAY,
@@ -37,7 +38,7 @@ export const birthdayWorker = new Worker<BirthdayJobData>(
                     mes: mesAtual
                 })),
                 passageirosSemData
-            }, { channels: ['WHATSAPP'] });
+            }, { channels: [NotificationChannelEnum.EVOLUTION] });
 
             logger.info({ motoristaId, celular: telefone }, "[Worker] Lembrete enviado com sucesso.");
             return { sent: true };

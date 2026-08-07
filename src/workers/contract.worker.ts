@@ -1,3 +1,4 @@
+import { NotificationChannelEnum } from '../types/enums.js';
 import { Job, Worker } from 'bullmq';
 import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
@@ -38,7 +39,6 @@ export const contractWorker = new Worker<ContractJobData>(
 
             logger.info({ jobId: job.id, contratoId }, "[Worker] Contrato atualizado com minuta URL.");
 
-            // 4. Enviar para a fila de WhatsApp se houver telefone
             // 4. Notificar Responsável via NotificationService
             if (passageiro.telefone_responsavel) {
                 const linkAssinatura = providerName === ContratoProvider.INHOUSE
@@ -65,7 +65,7 @@ export const contractWorker = new Worker<ContractJobData>(
                         linkAssinatura,
                         usuarioId: usuarioId
                     },
-                    { channels: ['WHATSAPP'] }
+                    { channels: [NotificationChannelEnum.EVOLUTION] }
                 );
 
                 logger.info({ jobId: job.id, phone: passageiro.telefone_responsavel }, "[Worker] Notificação de contrato processada via NotificationService.");

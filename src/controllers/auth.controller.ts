@@ -1,7 +1,8 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
-import { registrarUsuario, login as loginService, logout as logoutService, refreshToken as refreshTokenService, updatePassword as updatePasswordService, solicitarRecuperacaoWhatsapp, validarCodigoWhatsApp, resetarSenhaComCodigo } from "../services/auth.service.js";
-import { RegistrarUsuarioBodyDTO, LoginBodyDTO, UpdatePasswordBodyDTO, RefreshTokenBodyDTO, SolicitarRecuperacaoBodyDTO, ValidarCodigoBodyDTO, ConfirmarResetBodyDTO } from "../types/dtos/auth.dto.js";
+import { registrarUsuario, login as loginService, logout as logoutService, refreshToken as refreshTokenService, updatePassword as updatePasswordService, solicitarRecuperacao, validarCodigo, resetarSenhaComCodigo } from "../services/auth.service.js";
+import { RegistrarUsuarioBodyDTO } from "../types/dtos/auth.dto.js";
+
 
 export const AuthController = {
 
@@ -126,10 +127,10 @@ export const AuthController = {
         if (!doc) return reply.status(400).send({ error: "CPF/CNPJ é obrigatório." });
 
         try {
-            const result = await solicitarRecuperacaoWhatsapp(doc);
-            return reply.status(200).send({ 
-                success: true, 
-                message: "Código enviado ao seu WhatsApp.",
+            const result = await solicitarRecuperacao(doc);
+            return reply.status(200).send({
+                success: true,
+                message: "Código enviado.",
                 telefoneMascarado: result.telefoneMascarado
             });
         } catch (err: any) {
@@ -144,7 +145,7 @@ export const AuthController = {
         if (!doc || !codigo) return reply.status(400).send({ error: "CPF/CNPJ e Código são obrigatórios." });
 
         try {
-            const result = await validarCodigoWhatsApp(doc, codigo);
+            const result = await validarCodigo(doc, codigo);
             return reply.status(200).send(result);
         } catch (err: any) {
             const status = err.statusCode || 401;
@@ -158,10 +159,10 @@ export const AuthController = {
 
         try {
             const session = await resetarSenhaComCodigo(recoveryId, password);
-            return reply.status(200).send({ 
-                success: true, 
+            return reply.status(200).send({
+                success: true,
                 message: "Senha alterada com sucesso.",
-                session 
+                session
             });
         } catch (err: any) {
             const status = err.statusCode || 400;

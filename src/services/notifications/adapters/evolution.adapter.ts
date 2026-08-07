@@ -1,5 +1,5 @@
-import { 
-    GLOBAL_WHATSAPP_INSTANCE,
+import {
+    EVOLUTION_GLOBAL_INSTANCE,
     EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
     EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
     EVENTO_PASSAGEIRO_ATRASADO,
@@ -18,9 +18,9 @@ import {
     EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA
 } from "../../../config/constants.js";
 import { logger } from "../../../config/logger.js";
-import { addToWhatsappQueue } from "../../../queues/whatsapp.queue.js";
-import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
-import { WhatsappPurpose } from "../../../types/enums.js";
+import { addToQueue } from "../../../queues/evolution.queue.js";
+import { CompositeMessagePart } from "../../../types/dtos/evolution.dto.js";
+import { EvolutionPurpose } from "../../../types/enums.js";
 import { NotificationProviderAdapter } from "../ports/notification-provider.port.js";
 
 const BULK_EVENTS = [
@@ -42,9 +42,9 @@ const BULK_EVENTS = [
 ];
 
 /**
- * Adapter para WhatsApp usando a fila (BullMQ) + Evolution API
+ * Adapter para Evolution usando a fila (BullMQ) + Evolution API
  */
-export class EvolutionWhatsappQueueAdapter implements NotificationProviderAdapter {
+export class EvolutionQueueAdapter implements NotificationProviderAdapter {
     getProviderId(): string {
         return "EVOLUTION_WHATSAPP_QUEUE";
     }
@@ -54,28 +54,28 @@ export class EvolutionWhatsappQueueAdapter implements NotificationProviderAdapte
             const validParts = parts.filter(p => !((p.type === 'image') && !p.mediaBase64));
             if (validParts.length === 0) return false;
 
-            const instanceName = options?.instanceName || GLOBAL_WHATSAPP_INSTANCE;
+            const instanceName = options?.instanceName || EVOLUTION_GLOBAL_INSTANCE;
             const eventType = options?.eventType || "UNKNOWN";
-            const jobId = options?.jobId || (eventType !== "UNKNOWN" ? `whatsapp-${to}-${eventType}-${Date.now()}` : undefined);
+            const jobId = options?.jobId || (eventType !== "UNKNOWN" ? `evolution-${to}-${eventType}-${Date.now()}` : undefined);
 
             let purpose = options?.purpose;
             if (!purpose) {
                 // Infer purpose based on explicit event constants
                 const isBulkEvent = BULK_EVENTS.includes(eventType as any);
-                purpose = isBulkEvent ? WhatsappPurpose.BULK : WhatsappPurpose.TRANSACTIONAL;
+                purpose = isBulkEvent ? EvolutionPurpose.BULK : EvolutionPurpose.TRANSACTIONAL;
             }
 
-            await addToWhatsappQueue({
+            await addToQueue({
                 phone: to,
                 compositeMessage: validParts,
                 context: eventType,
                 purpose: purpose,
-                options: { instanceName }
+                options: { instanceName, metadata: options?.metadata }
             }, jobId);
 
             return true;
         } catch (error) {
-            logger.error({ error, to }, "Erro no EvolutionWhatsappQueueAdapter");
+            logger.error({ error, to }, "Erro no EvolutionQueueAdapter");
             return false;
         }
     }

@@ -4,7 +4,7 @@ import { adminLogController } from "../controllers/admin/admin-log.controller.js
 import { adminLoginAttemptsController } from "../controllers/admin/admin-login-attempts.controller.js";
 import { adminConfigController } from "../controllers/admin/admin-config.controller.js";
 import { adminPlanController } from "../controllers/admin/admin-plan.controller.js";
-import { adminWhatsappController } from "../controllers/admin/admin-whatsapp.controller.js";
+import { adminEvolutionController } from "../controllers/admin/admin-evolution.controller.js";
 import { adminBlogController } from "../controllers/blog.controller.js";
 import { verifySupabaseJWT } from "../middleware/auth.js";
 import { verifyAdmin } from "../middleware/admin.js";
@@ -34,8 +34,8 @@ const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get("/plans", adminPlanController.getPlans);
   app.patch("/plans/:id", adminPlanController.updatePlan);
 
-  // WhatsApp Instâncias
-  app.get("/whatsapp-instances", adminWhatsappController.getWhatsappInstances);
+  // Evolution Instâncias
+  app.get("/evolution-instances", adminEvolutionController.getEvolutionInstances);
 
   // Blog Admin
   app.get("/blog/posts", adminBlogController.list);

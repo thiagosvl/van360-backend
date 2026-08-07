@@ -1,3 +1,4 @@
+import { NotificationChannelEnum } from '../../types/enums.js';
 import { logger } from "../../config/logger.js";
 import {
     SubscriptionStatus,
@@ -69,7 +70,7 @@ export const subscriptionReferralService = {
                         nomeMotorista: indicador.nome,
                         trialDays: bonusDays
                     },
-                    { channels: ['WHATSAPP'] }
+                    { channels: [NotificationChannelEnum.EVOLUTION] }
                 ).catch(err => {
                     logger.error({ err, indicadorId }, "[SubscriptionReferralService] Erro ao notificar novo cadastro por indicação.");
                 });
@@ -110,7 +111,7 @@ export const subscriptionReferralService = {
 
             logger.info({ indicadorId: indicacao.indicador_id, dias: bonusDays }, "[SubscriptionReferralService] Bônus de indicação aplicado.");
 
-            // Enviar notificação via WhatsApp
+            // Enviar notificação
             const { data: indicador } = await userRepository.getById(indicacao.indicador_id);
             if (indicador?.telefone) {
                 await notificationService.notifyDriver(
@@ -121,7 +122,7 @@ export const subscriptionReferralService = {
                         trialDays: bonusDays,
                         dataVencimento: newExpiryStr
                     },
-                    { channels: ['WHATSAPP'] }
+                    { channels: [NotificationChannelEnum.EVOLUTION] }
                 ).catch(err => {
                     logger.error({ err, indicadorId: indicador.id }, "[SubscriptionReferralService] Erro ao notificar bônus de indicação");
                 });

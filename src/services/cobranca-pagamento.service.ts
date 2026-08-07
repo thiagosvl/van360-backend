@@ -1,3 +1,4 @@
+import { NotificationChannelEnum } from '../types/enums.js';
 import { logger } from "../config/logger.js";
 import { cobrancaRepository } from "../repositories/cobranca.repository.js";
 import { AppError } from "../errors/AppError.js";
@@ -97,12 +98,12 @@ export const cobrancaPagamentoService = {
               reciboUrl: updated.recibo_url,
               usuarioId: updated.usuario_id
             },
-            { channels: ["WHATSAPP"] }
+            { channels: [NotificationChannelEnum.EVOLUTION] }
           );
         }
       } catch (notifErr: unknown) {
         const msg = notifErr instanceof Error ? notifErr.message : String(notifErr);
-        logger.error({ error: msg, cobrancaId }, "Erro ao enviar recibo por WhatsApp pós-pagamento manual");
+        logger.error({ error: msg, cobrancaId }, "Erro ao enviar recibo pós-pagamento manual");
       }
     }
 

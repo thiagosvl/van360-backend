@@ -1,5 +1,5 @@
 import { NotificationProviderAdapter } from "../ports/notification-provider.port.js";
-import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
+import { CompositeMessagePart } from "../../../types/dtos/evolution.dto.js";
 import { addToTelegramQueue } from "../../../queues/telegram.queue.js";
 
 export class TelegramAdapter implements NotificationProviderAdapter {

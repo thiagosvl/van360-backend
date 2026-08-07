@@ -1,4 +1,5 @@
-import { CompositeMessagePart } from "../../types/dtos/whatsapp.dto.js";
+import { NotificationChannelEnum } from "../../types/enums.js";
+import { CompositeMessagePart } from "../../types/dtos/evolution.dto.js";
 import { logger } from "../../config/logger.js";
 
 import {
@@ -43,13 +44,13 @@ import {
     EVENTO_ADMIN_ASSINATURA_CANCELADA,
     EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO,
     EVENTO_ADMIN_SISTEMA_ALERTA,
-    GLOBAL_WHATSAPP_INSTANCE
+    EVOLUTION_GLOBAL_INSTANCE
 } from "../../config/constants.js";
 import { DriverContext, DriverTemplates } from "./templates/driver.template.js";
 import { PassengerContext, PassengerTemplates } from "./templates/passenger.template.js";
 import { RouteContext, RouteTemplates } from "./templates/route.template.js";
 import { NotificationProviderAdapter } from "./ports/notification-provider.port.js";
-import { EvolutionWhatsappQueueAdapter } from "./adapters/evolution.adapter.js";
+import { EvolutionQueueAdapter } from "./adapters/evolution.adapter.js";
 import { MockSmsAdapter } from "./adapters/mock-sms.adapter.js";
 import { MockEmailAdapter } from "./adapters/mock-email.adapter.js";
 import { TelegramAdapter } from "./adapters/telegram.adapter.js";
@@ -61,15 +62,16 @@ import {
     AdminTemplates
 } from "./templates/admin.template.js";
 
-export type NotificationChannel = "WHATSAPP" | "SMS" | "EMAIL" | "TELEGRAM";
+export type NotificationChannel = "EVOLUTION" | "SMS" | "EMAIL" | "TELEGRAM";
 
 export interface NotificationOptions {
-    channels?: NotificationChannel[];
-    whatsapp?: {
+    channels?: NotificationChannelEnum[];
+    evolution?: {
         instanceName?: string;
     };
     jobId?: string;
     usuarioId?: string;
+    metadata?: Record<string, any>;
 }
 
 type PassengerEventType =
@@ -123,14 +125,15 @@ export type AdminEventType =
 
 class NotificationService {
     // Registro dos Adapters que farão o disparo real (ou envio para a fila)
-    private adapters: Record<NotificationChannel, NotificationProviderAdapter>;
+    private adapters: Record<NotificationChannelEnum, NotificationProviderAdapter>;
 
     constructor() {
         this.adapters = {
-            "WHATSAPP": new EvolutionWhatsappQueueAdapter(),
-            "SMS": new MockSmsAdapter(),
-            "EMAIL": new MockEmailAdapter(),
-            "TELEGRAM": new TelegramAdapter()
+            [NotificationChannelEnum.EVOLUTION]: new EvolutionQueueAdapter(),
+            [NotificationChannelEnum.WABA]: new EvolutionQueueAdapter(), // TODO: Replace with Meta adapter
+            [NotificationChannelEnum.SMS]: new MockSmsAdapter(),
+            [NotificationChannelEnum.EMAIL]: new MockEmailAdapter(),
+            [NotificationChannelEnum.TELEGRAM]: new TelegramAdapter()
         };
     }
 
@@ -167,7 +170,7 @@ class NotificationService {
         to: string,
         type: RouteEventType,
         ctx: RouteContext,
-        options: NotificationOptions = { channels: ["WHATSAPP"] }
+        options: NotificationOptions = { channels: [NotificationChannelEnum.EVOLUTION] }
     ): Promise<boolean> {
         let parts: CompositeMessagePart[] = [];
 
@@ -280,7 +283,7 @@ class NotificationService {
             }
         }
 
-        const { channels = ["WHATSAPP"], whatsapp: whatsappOptions } = options || {};
+        const { channels = [NotificationChannelEnum.EVOLUTION], evolution: evolutionOptions } = options || {};
 
         try {
             const results: Promise<boolean>[] = [];
@@ -290,8 +293,9 @@ class NotificationService {
                 if (adapter) {
                     const providerOptions = {
                         eventType,
-                        instanceName: channel === "WHATSAPP" ? (whatsappOptions?.instanceName || GLOBAL_WHATSAPP_INSTANCE) : undefined,
-                        jobId: options?.jobId
+                        instanceName: channel === NotificationChannelEnum.EVOLUTION ? (evolutionOptions?.instanceName || EVOLUTION_GLOBAL_INSTANCE) : undefined,
+                        jobId: options?.jobId,
+                        metadata: options?.metadata
                     };
                     results.push(adapter.sendComposite(to, parts, providerOptions));
                 }

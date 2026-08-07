@@ -1,3 +1,4 @@
+import { NotificationChannelEnum } from '../types/enums.js';
 import {
   EVENTO_MOTORISTA_TESTE_BOAS_VINDAS,
   EVENTO_ADMIN_NOVO_CADASTRO
@@ -127,22 +128,22 @@ export async function criarUsuario(data: UsuarioPayload & { tipo?: UserType, id:
   const { id, nome, razao_social, apelido, email, cpfcnpj, telefone, ativo = false, tipo, termos_aceitos, data_nascimento, dispositivo_cadastro, metadados_cadastro } = data;
 
   const { data: usuario, error } = await userRepository.insert({
-      id,
-      nome: cleanString(nome, true),
-      razao_social: razao_social ? cleanString(razao_social, true) : null,
-      apelido: apelido ? cleanString(apelido, true) : null,
-      email: cleanString(email).toLowerCase(),
-      cpfcnpj: onlyDigits(cpfcnpj),
-      telefone: onlyDigits(telefone),
-      ativo,
-      tipo: tipo || UserType.MOTORISTA,
-      termos_aceitos_em: termos_aceitos ? getNowBR().toISOString() : null,
-      termos_versao: termos_aceitos ? TERMOS_VERSAO_ATUAL : null,
-      created_at: getNowBR().toISOString(),
-      data_nascimento: parseBrazilianDateToISO(data_nascimento),
-      dispositivo_cadastro: dispositivo_cadastro || null,
-      metadados_cadastro: metadados_cadastro || {},
-    });
+    id,
+    nome: cleanString(nome, true),
+    razao_social: razao_social ? cleanString(razao_social, true) : null,
+    apelido: apelido ? cleanString(apelido, true) : null,
+    email: cleanString(email).toLowerCase(),
+    cpfcnpj: onlyDigits(cpfcnpj),
+    telefone: onlyDigits(telefone),
+    ativo,
+    tipo: tipo || UserType.MOTORISTA,
+    termos_aceitos_em: termos_aceitos ? getNowBR().toISOString() : null,
+    termos_versao: termos_aceitos ? TERMOS_VERSAO_ATUAL : null,
+    created_at: getNowBR().toISOString(),
+    data_nascimento: parseBrazilianDateToISO(data_nascimento),
+    dispositivo_cadastro: dispositivo_cadastro || null,
+    metadados_cadastro: metadados_cadastro || {},
+  });
 
   if (error) {
     logger.error({ error: error.message }, "Falha ao criar usuário no DB.");
@@ -241,12 +242,12 @@ export async function registrarUsuario(
       const cleanRefPhone = rawReferralPhone.replace(/\D/g, "");
       if (cleanRefPhone) {
         if (cleanRefPhone === telefone) {
-          throw new AppError("Você não pode utilizar seu próprio WhatsApp como indicação.", 400, true, "indicador_telefone");
+          throw new AppError("Você não pode utilizar seu próprio telefone como indicação.", 400, true, "indicador_telefone");
         }
         const { userRepository } = await import("../repositories/user.repository.js");
         const { data: indicador } = await userRepository.getByPhone(cleanRefPhone);
         if (!indicador) {
-          throw new AppError("Não encontramos esse motorista. Verifique se o WhatsApp está correto.", 400, true, "indicador_telefone");
+          throw new AppError("Não encontramos esse motorista. Verifique se o telefone está correto.", 400, true, "indicador_telefone");
         }
         resolvedIndicadorId = indicador.id;
       }
@@ -263,7 +264,7 @@ export async function registrarUsuario(
     // --- SETUP SAAS SUBSCRIPTION ---
     const { subscriptionService } = await import("./subscriptions/subscription.service.js");
     const { subscriptionReferralService } = await import("./subscriptions/subscription-referral.service.js");
-    
+
     // 1. Iniciar Trial de 15 dias
     const subscription = await subscriptionService.getOrCreateSubscription(usuarioId);
 
@@ -286,7 +287,7 @@ export async function registrarUsuario(
         nomeMotorista: payload.nome,
         dataVencimento: subscription?.trial_ends_at ?? undefined,
       }, {
-        channels: ['WHATSAPP'],
+        channels: [NotificationChannelEnum.EVOLUTION],
         jobId: `driver-welcome-${usuarioId}`
       })
         .catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar boas vindas"));
@@ -301,7 +302,7 @@ export async function registrarUsuario(
       dataRegistro: getNowBR().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }),
       usuarioId: usuarioId as string
     }, {
-      channels: ['TELEGRAM'],
+      channels: [NotificationChannelEnum.TELEGRAM],
       jobId: `admin-cadastro-${usuarioId}`
     }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao notificar admin sobre cadastro"));
 
@@ -315,7 +316,7 @@ export async function registrarUsuario(
 }
 
 export async function login(
-  identifier: string, 
+  identifier: string,
   password: string,
   meta: { ip: string | null; userAgent: string | null; dispositivo: string | null } = { ip: null, userAgent: null, dispositivo: null }
 ): Promise<AuthSession> {
@@ -413,11 +414,11 @@ export async function updatePassword(token: string, newPassword: string, oldPass
     if (profile.telefone) {
       notificationService.notifyDriver(profile.telefone, EVENTO_AUTH_SENHA_ALTERADA, {
         nomeMotorista: profile.nome
-      }, { channels: ['WHATSAPP'] }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar notificação de senha alterada"));
+      }, { channels: [NotificationChannelEnum.EVOLUTION] }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar notificação de senha alterada"));
     }
   }
 }
-export async function solicitarRecuperacaoWhatsapp(documento: string): Promise<{ telefoneMascarado: string }> {
+export async function solicitarRecuperacao(documento: string): Promise<{ telefoneMascarado: string }> {
   const documentoClean = onlyDigits(documento);
   const isCnpj = documentoClean.length > 11;
   const tipoDoc = isCnpj ? "CNPJ" : "CPF";
@@ -432,7 +433,7 @@ export async function solicitarRecuperacaoWhatsapp(documento: string): Promise<{
 
   // Rate Limiting / Cooldown: Previne spam (1 minuto de cooldown)
   const { data: latestCode } = await authRepository.getLatestActiveRecoveryCode(user.id);
-  
+
   if (latestCode) {
     const diffSeconds = (getNowBR().getTime() - parseLocalDate(latestCode.created_at).getTime()) / 1000;
     if (diffSeconds < 60) {
@@ -453,26 +454,26 @@ export async function solicitarRecuperacaoWhatsapp(documento: string): Promise<{
   const sent = await notificationService.notifyDriver(user.telefone, EVENTO_AUTH_RECUPERACAO_SENHA, {
     nomeMotorista: user.nome,
     otpCode: otp
-  }, { channels: ['WHATSAPP'] });
+  }, { channels: [NotificationChannelEnum.EVOLUTION] });
 
   if (!sent) {
-    logger.error({ userId: user.id }, "[AuthService] Falha ao entregar código OTP via WhatsApp");
-    throw new AppError("Falha ao entregar o código por WhatsApp. Verifique se o número está correto e tente novamente.", 500);
+    logger.error({ userId: user.id }, "[AuthService] Falha ao entregar código OTP");
+    throw new AppError("Falha ao entregar o código. Verifique se o número está correto e tente novamente.", 500);
   }
-  
+
   historicoService.log({
     usuario_id: user.id,
     entidade_tipo: AtividadeEntidadeTipo.USUARIO,
     entidade_id: user.id,
     acao: AtividadeAcao.RECUPERACAO_SENHA,
-    descricao: `Solicitação de recuperação de senha via WhatsApp enviada.`
+    descricao: `Solicitação de recuperação de senha enviada.`
   });
 
   const finalTelefone = user.telefone.slice(-4);
   return { telefoneMascarado: `(XX) XXXXX-${finalTelefone}` };
 }
 
-export async function validarCodigoWhatsApp(documento: string, codigo: string): Promise<{ recoveryId: string }> {
+export async function validarCodigo(documento: string, codigo: string): Promise<{ recoveryId: string }> {
   const documentoClean = onlyDigits(documento);
   const isCnpj = documentoClean.length > 11;
   const tipoDoc = isCnpj ? "CNPJ" : "CPF";
@@ -498,7 +499,7 @@ export async function resetarSenhaComCodigo(recoveryId: string, novaSenha: strin
 
   if (error || !recData) throw new AppError("Sessão de recuperação inválida.", 401);
   const rec = recData as unknown as RecoverySessionQueryResult;
-  
+
   const diffMinutes = (getNowBR().getTime() - parseLocalDate(rec.created_at).getTime()) / 60000;
   if (isNaN(diffMinutes) || diffMinutes > 60) throw new AppError("Tempo de recuperação excedido. Solicite novamente.", 401);
 
@@ -513,7 +514,7 @@ export async function resetarSenhaComCodigo(recoveryId: string, novaSenha: strin
 
   // Realizar login automático logo após o reset
   if (!rec.usuarios) throw new AppError("Perfil de usuário não encontrado para auto-login.", 500);
-  
+
   const email = rec.usuarios.email;
   const { data: sessionData, error: sessionError } = await authProvider.signInWithPassword({
     email,
@@ -530,14 +531,14 @@ export async function resetarSenhaComCodigo(recoveryId: string, novaSenha: strin
     entidade_tipo: AtividadeEntidadeTipo.USUARIO,
     entidade_id: rec.usuario_id,
     acao: AtividadeAcao.SENHA_ALTERADA,
-    descricao: `Senha redefinida com sucesso via WhatsApp com login automático.`
+    descricao: `Senha redefinida com sucesso com login automático.`
   });
 
   const userProfile = rec.usuarios;
   if (userProfile?.telefone) {
     notificationService.notifyDriver(userProfile.telefone, EVENTO_AUTH_SENHA_ALTERADA, {
       nomeMotorista: userProfile.nome
-    }, { channels: ['WHATSAPP'] }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar notificação de senha alterada (reset)"));
+    }, { channels: [NotificationChannelEnum.EVOLUTION] }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar notificação de senha alterada (reset)"));
   }
 
   return {

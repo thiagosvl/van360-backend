@@ -1,3 +1,4 @@
+import { NotificationChannelEnum } from '../types/enums.js';
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
 import { cobrancaPagamentoService } from "../services/cobranca-pagamento.service.js";
@@ -75,12 +76,12 @@ export const cobrancaController = {
     const historico = await historicoService.listByEntidade(AtividadeEntidadeTipo.COBRANCA, cobrancaId);
 
     const notificacoesOldFormat = historico
-      .filter(h => h.acao === AtividadeAcao.NOTIFICACAO_WHATSAPP)
+      .filter(h => h.acao === AtividadeAcao.NOTIFICACAO_EVOLUTION)
       .map(h => ({
         id: h.id,
         cobranca_id: h.entidade_id,
         tipo_evento: (h.meta as Record<string, unknown> | undefined)?.tipo_evento || 'MANUAL',
-        canal: (h.meta as Record<string, unknown> | undefined)?.canal || 'WHATSAPP',
+        canal: (h.meta as Record<string, unknown> | undefined)?.canal || NotificationChannelEnum.EVOLUTION,
         data_envio: h.created_at,
         tipo_origem: (h.meta as Record<string, unknown> | undefined)?.tipo_origem || 'manual'
       }));

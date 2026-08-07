@@ -1,4 +1,4 @@
-import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
+import { CompositeMessagePart } from "../../../types/dtos/evolution.dto.js";
 import { getFirstName } from "../../../utils/format.js";
 
 export interface RouteContext {

@@ -8,7 +8,7 @@ export const onlyDigits = (value: string | null | undefined): string => {
   return String(value).replace(/\D/g, "");
 };
 
-export const formatWhatsAppNumber = (phoneNumber: string): string => {
+export const formatEvolutionNumber = (phoneNumber: string): string => {
   if (!phoneNumber) return "";
   const cleanNumber = onlyDigits(phoneNumber);
   return cleanNumber.length <= 11 ? `55${cleanNumber}` : cleanNumber;

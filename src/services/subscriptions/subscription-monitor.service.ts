@@ -1,3 +1,4 @@
+import { NotificationChannelEnum } from '../../types/enums.js';
 import { logger } from "../../config/logger.js";
 import { SubscriptionStatus, ConfigKey, CheckoutPaymentMethod } from "../../types/enums.js";
 import { subscriptionService } from "./subscription.service.js";
@@ -160,7 +161,7 @@ export const subscriptionMonitorService = {
         nomeMotorista: user.nome,
         trialDays: daysLeft,
         dataVencimento: sub.trial_ends_at,
-      }, { channels: ['WHATSAPP'] });
+      }, { channels: [NotificationChannelEnum.EVOLUTION] });
       logsToSave.push({
         usuarioId: sub.usuario_id,
         tipo,
@@ -202,7 +203,7 @@ export const subscriptionMonitorService = {
       if (user?.telefone) {
         await notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_TESTE_ENCERRADO, {
           nomeMotorista: user.nome,
-        }, { channels: ['WHATSAPP'] });
+        }, { channels: [NotificationChannelEnum.EVOLUTION] });
         await this.logNotification(sub.usuario_id, EVENTO_MOTORISTA_TESTE_ENCERRADO, this.toCicloRef(sub.trial_ends_at || new Date()));
       }
     }
@@ -258,7 +259,7 @@ export const subscriptionMonitorService = {
         await notificationService.notifyDriver(user.telefone, step.tipo, {
           nomeMotorista: user.nome,
           valorPromocional: step.tipo === EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2 ? valorPromocional : undefined,
-        }, { channels: ['WHATSAPP'] });
+        }, { channels: [NotificationChannelEnum.EVOLUTION] });
         logsToSave.push({ usuarioId: sub.usuario_id, tipo: step.tipo, cicloRef });
         break; // Um step por execução por usuário
       }
@@ -292,7 +293,7 @@ export const subscriptionMonitorService = {
           await notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_ASSINATURA_VENCEU, {
             nomeMotorista: user.nome,
             planoNome: (sub as any).planos?.nome,
-          }, { channels: ['WHATSAPP'] });
+          }, { channels: [NotificationChannelEnum.EVOLUTION] });
           await this.logNotification(sub.usuario_id, EVENTO_MOTORISTA_ASSINATURA_VENCEU, this.toCicloRef(sub.data_vencimento || new Date()));
         }
       }
@@ -314,7 +315,7 @@ export const subscriptionMonitorService = {
             planoNome: (sub as any).planos?.nome,
             valor: (sub as any).planos?.valor ? Number((sub as any).planos.valor) : undefined,
             metodoCobranca: (sub as any).metodo_pagamento ?? undefined,
-          }, { channels: ['WHATSAPP'] });
+          }, { channels: [NotificationChannelEnum.EVOLUTION] });
           await this.logNotification(sub.usuario_id, EVENTO_MOTORISTA_ASSINATURA_ATRASADA, this.toCicloRef(sub.data_vencimento || new Date()));
         }
       }
@@ -370,7 +371,7 @@ export const subscriptionMonitorService = {
           pixCopiaECola: fatura?.pix_copy_paste ?? undefined,
           metodoCobranca: sub.metodo_pagamento ?? undefined,
           planoNome: (sub as any).planos?.nome,
-        }, { channels: ['WHATSAPP'] });
+        }, { channels: [NotificationChannelEnum.EVOLUTION] });
         logsToSave.push({
           usuarioId: sub.usuario_id,
           tipo: step.tipo,
@@ -427,7 +428,7 @@ export const subscriptionMonitorService = {
 
         await notificationService.notifyDriver(user.telefone, step.tipo, {
           nomeMotorista: user.nome,
-        }, { channels: ['WHATSAPP'] });
+        }, { channels: [NotificationChannelEnum.EVOLUTION] });
         logsToSave.push({
           usuarioId: sub.usuario_id,
           tipo: step.tipo,
@@ -498,7 +499,7 @@ export const subscriptionMonitorService = {
               await notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO, {
                 nomeMotorista: user.nome,
                 erro: "Número máximo de tentativas atingido.",
-              }, { channels: ['WHATSAPP'] });
+              }, { channels: [NotificationChannelEnum.EVOLUTION] });
               await notificationService.notifyAdmin(EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO, {
                 nomeMotorista: user.nome,
                 telefone: user.telefone,
@@ -507,7 +508,7 @@ export const subscriptionMonitorService = {
                 planoNome: (sub as any).planos?.nome,
                 origem: "AUTOMATICO"
               }, {
-                channels: ['TELEGRAM'],
+                channels: [NotificationChannelEnum.TELEGRAM],
                 jobId: `admin-falha-pagamento-${sub.usuario_id}-max-retries-${cicloRef}`
               });
               logsToSave.push({
@@ -541,7 +542,7 @@ export const subscriptionMonitorService = {
               pixCopiaECola: fatura.pix_copy_paste,
               valor: fatura.valor,
               planoNome: (sub as any).planos?.nome,
-            }, { channels: ['WHATSAPP'] });
+            }, { channels: [NotificationChannelEnum.EVOLUTION] });
             logsToSave.push({
               usuarioId: sub.usuario_id,
               tipo: EVENTO_MOTORISTA_ASSINATURA_VENCENDO,
@@ -560,7 +561,7 @@ export const subscriptionMonitorService = {
           await notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO, {
             nomeMotorista: user.nome,
             erro: e.message || "Cartão recusado",
-          }, { channels: ['WHATSAPP'] });
+          }, { channels: [NotificationChannelEnum.EVOLUTION] });
           await notificationService.notifyAdmin(EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO, {
             nomeMotorista: user.nome,
             telefone: user.telefone,
@@ -569,7 +570,7 @@ export const subscriptionMonitorService = {
             planoNome: (sub as any).planos?.nome,
             origem: "AUTOMATICO"
           }, {
-            channels: ['TELEGRAM'],
+            channels: [NotificationChannelEnum.TELEGRAM],
             jobId: `admin-falha-pagamento-${sub.usuario_id}-recusado-${this.toCicloRef(sub.data_vencimento || new Date())}`
           });
           const cicloRef = this.toCicloRef(sub.data_vencimento || new Date());

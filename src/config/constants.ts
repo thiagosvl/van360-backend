@@ -60,8 +60,8 @@ export const JOB_ORIGIN_FORCE = "manual";
 export const JOB_ORIGIN_DAILY = "automatica";
 export const JOB_ORIGIN_MANUAL = "manual";
 
-// WhatsApp Connection Status
-export const WHATSAPP_STATUS = {
+// Evolution Connection Status
+export const EVOLUTION_STATUS = {
     CONNECTED: "CONNECTED",
     DISCONNECTED: "DISCONNECTED",
     CONNECTING: "CONNECTING",
@@ -71,4 +71,4 @@ export const WHATSAPP_STATUS = {
     NOT_FOUND: "NOT_FOUND"
 } as const;
 
-export const GLOBAL_WHATSAPP_INSTANCE = "Van360";
+export const EVOLUTION_GLOBAL_INSTANCE = "Van360";

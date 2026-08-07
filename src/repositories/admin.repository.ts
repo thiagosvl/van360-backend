@@ -238,7 +238,7 @@ export const adminRepository = {
             .eq("id", id);
     },
 
-    async getWhatsappInstances() {
+    async getEvolutionInstances() {
         return supabaseAdmin
             .from("whatsapp_instances")
             .select("*")

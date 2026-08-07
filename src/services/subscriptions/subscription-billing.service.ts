@@ -1,13 +1,11 @@
 import { logger } from "../../config/logger.js";
-import {
-    SubscriptionInvoiceStatus,
+import { SubscriptionInvoiceStatus,
     CheckoutPaymentMethod,
     ConfigKey,
     AtividadeAcao,
     AtividadeEntidadeTipo,
     PaymentProvider,
-    SubscriptionIdentifer
-} from "../../types/enums.js";
+    SubscriptionIdentifer, NotificationChannelEnum } from '../../types/enums.js';
 import { getConfig, getConfigNumber } from "../configuracao.service.js";
 import { historicoService } from "../historico.service.js";
 import { getNowBR, toPersistenceString, addDays } from "../../utils/date.utils.js";
@@ -238,7 +236,7 @@ export const subscriptionBillingService = {
                         planoNome: plano.nome,
                         origem: "MANUAL"
                     }, {
-                        channels: ['TELEGRAM'],
+                        channels: [NotificationChannelEnum.TELEGRAM],
                         jobId: `admin-falha-pagamento-${userId}-manual-${Date.now()}`
                     }).catch(err => logger.error({ err }, "[SubscriptionBillingService] Falha ao notificar admin sobre recusa manual de cartão"));
                 }
@@ -293,7 +291,7 @@ export const subscriptionBillingService = {
                         planoNome: plano.nome,
                         origem: "MANUAL"
                     }, {
-                        channels: ['TELEGRAM'],
+                        channels: [NotificationChannelEnum.TELEGRAM],
                         jobId: `admin-falha-pagamento-${userId}-manual-${Date.now()}`
                     }).catch(err => logger.error({ err }, "[SubscriptionBillingService] Falha ao notificar admin sobre recusa manual de cartão"));
                 }

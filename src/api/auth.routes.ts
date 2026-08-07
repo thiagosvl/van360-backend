@@ -6,7 +6,7 @@ export default async function authRoutes(app: FastifyInstance) {
     app.post("/login", AuthController.login);
 
 
-    // Recuperação via WhatsApp
+    // Recuperação de senha
     app.post("/recuperacao/solicitar", AuthController.solicitarRecuperacao);
     app.post("/recuperacao/validar", AuthController.validarCodigo);
     app.post("/recuperacao/resetar", AuthController.confirmarReset);
