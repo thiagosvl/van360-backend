@@ -1,6 +1,6 @@
 import { logger } from "../config/logger.js";
 import { createQueue } from "./index.js";
-import { WhatsappPurpose } from "../types/enums.js";
+import { EvolutionPurpose } from "../types/enums.js";
 
 export const QUEUE_NAME_WHATSAPP_TRANSACTIONAL = 'whatsapp-transactional-queue';
 export const QUEUE_NAME_WHATSAPP_BULK = 'whatsapp-bulk-queue';
@@ -16,7 +16,7 @@ export interface WhatsappJobData {
     // Metadata para log
     context?: string; 
     userId?: string;
-    purpose?: WhatsappPurpose;
+    purpose?: EvolutionPurpose;
 }
 
 /**
@@ -25,8 +25,8 @@ export interface WhatsappJobData {
  */
 export const addToWhatsappQueue = async (data: WhatsappJobData, jobId?: string) => {
     try {
-        const queue = data.purpose === WhatsappPurpose.BULK ? whatsappBulkQueue : whatsappTransactionalQueue;
-        const queueName = data.purpose === WhatsappPurpose.BULK ? QUEUE_NAME_WHATSAPP_BULK : QUEUE_NAME_WHATSAPP_TRANSACTIONAL;
+        const queue = data.purpose === EvolutionPurpose.BULK ? whatsappBulkQueue : whatsappTransactionalQueue;
+        const queueName = data.purpose === EvolutionPurpose.BULK ? QUEUE_NAME_WHATSAPP_BULK : QUEUE_NAME_WHATSAPP_TRANSACTIONAL;
 
         await queue.add('send-message', data, {
             jobId: jobId, 

@@ -1,3 +1,4 @@
+import { NotificationChannelEnum } from '../types/enums.js';
 import crypto from "node:crypto";
 import { cobrancaRepository } from "../repositories/cobranca.repository.js";
 import { passageiroRepository } from "../repositories/passageiro.repository.js";
@@ -109,7 +110,7 @@ export const cobrancaService = {
                   reciboUrl: inserted.recibo_url,
                   usuarioId: inserted.usuario_id
                 },
-                { channels: ["WHATSAPP"] }
+                { channels: [NotificationChannelEnum.EVOLUTION] }
               );
             }
           } catch (notifErr: unknown) {
@@ -470,7 +471,7 @@ export const cobrancaService = {
               eventType,
               context,
               { 
-                channels: ['WHATSAPP'],
+                channels: [NotificationChannelEnum.EVOLUTION],
                 metadata: { cobrancaId: c.id } 
               }
             );
@@ -628,7 +629,7 @@ export const cobrancaService = {
               totalAtrasado,
               totalProximos
             },
-            { channels: ["WHATSAPP"] }
+            { channels: [NotificationChannelEnum.EVOLUTION] }
           );
           sentCount++;
         } catch (notifErr: unknown) {

@@ -4,7 +4,7 @@ import { FastifyAdapter } from '@bull-board/fastify';
 import { FastifyInstance } from 'fastify';
 import { contractQueue } from './contract.queue.js';
 
-import { whatsappTransactionalQueue, whatsappBulkQueue } from './whatsapp.queue.js';
+import { whatsappTransactionalQueue, whatsappBulkQueue } from './evolution.queue.js';
 import { telegramQueue } from './telegram.queue.js';
 import { generationQueue } from './generation.queue.js';
 

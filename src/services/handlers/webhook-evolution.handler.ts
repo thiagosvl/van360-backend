@@ -1,6 +1,6 @@
 import { logger } from "../../config/logger.js";
-import { EvolutionEvent } from "../../types/enums.js";
-import { WhatsappStatus } from "../../types/enums.js";
+import { EvolutionEvent, NotificationChannelEnum } from '../../types/enums.js';
+import { EvolutionConnectionStatus } from "../../types/enums.js";
 
 interface EvolutionWebhookPayload {
     event: EvolutionEvent;
@@ -47,8 +47,8 @@ export const webhookEvolutionHandler = {
 
         logger.info({ instanceName, state }, "[Webhook] Status do WhatsApp alterado");
 
-        const offlineStates = [WhatsappStatus.CLOSE, WhatsappStatus.DISCONNECTED, WhatsappStatus.REFUSED, "connecting", "refused"];
-        const isOffline = offlineStates.includes(state as WhatsappStatus) || offlineStates.includes(state);
+        const offlineStates = [EvolutionConnectionStatus.CLOSE, EvolutionConnectionStatus.DISCONNECTED, EvolutionConnectionStatus.REFUSED, "connecting", "refused"];
+        const isOffline = offlineStates.includes(state as EvolutionConnectionStatus) || offlineStates.includes(state);
 
         if (isOffline) {
             const { redisConfig } = await import("../../config/redis.js");
@@ -78,7 +78,7 @@ export const webhookEvolutionHandler = {
                     "Status": state
                 }
             }, {
-                channels: ['TELEGRAM'],
+                channels: [NotificationChannelEnum.TELEGRAM],
                 jobId: `admin-alerta-desconexao-${instanceName}-${Date.now()}` // Timestamp garante que o BullMQ não deduplique indevidamente
             });
         }

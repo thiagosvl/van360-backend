@@ -1,3 +1,4 @@
+import { NotificationChannelEnum } from '../types/enums.js';
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
 import { cobrancaPagamentoService } from "../services/cobranca-pagamento.service.js";
@@ -67,12 +68,12 @@ export const cobrancaController = {
 
     // Mapeia para o formato esperado pelo frontend.
     const notificacoesOldFormat = historico
-      .filter(h => h.acao === AtividadeAcao.NOTIFICACAO_WHATSAPP)
+      .filter(h => h.acao === AtividadeAcao.NOTIFICACAO_EVOLUTION)
       .map(h => ({
         id: h.id,
         cobranca_id: h.entidade_id,
         tipo_evento: h.meta?.tipo_evento || 'MANUAL',
-        canal: h.meta?.canal || 'WHATSAPP',
+        canal: h.meta?.canal || NotificationChannelEnum.EVOLUTION,
         data_envio: h.created_at,
         tipo_origem: h.meta?.tipo_origem || 'manual'
       }));

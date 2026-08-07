@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../../config/logger.js";
-import { adminWhatsappService } from "../../services/admin/admin-whatsapp.service.js";
+import { adminWhatsappService } from "../../services/admin/admin-evolution.service.js";
 
 export const adminWhatsappController = {
   async getWhatsappInstances(_request: FastifyRequest, reply: FastifyReply) {

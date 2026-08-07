@@ -1,5 +1,5 @@
 import { 
-    GLOBAL_WHATSAPP_INSTANCE,
+    EVOLUTION_GLOBAL_INSTANCE,
     EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
     EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
     EVENTO_PASSAGEIRO_ATRASADO,
@@ -18,9 +18,9 @@ import {
     EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA
 } from "../../../config/constants.js";
 import { logger } from "../../../config/logger.js";
-import { addToWhatsappQueue } from "../../../queues/whatsapp.queue.js";
+import { addToWhatsappQueue } from "../../../queues/evolution.queue.js";
 import { CompositeMessagePart } from "../../../types/dtos/whatsapp.dto.js";
-import { WhatsappPurpose } from "../../../types/enums.js";
+import { EvolutionPurpose } from "../../../types/enums.js";
 import { NotificationProviderAdapter } from "../ports/notification-provider.port.js";
 
 const BULK_EVENTS = [
@@ -54,7 +54,7 @@ export class EvolutionWhatsappQueueAdapter implements NotificationProviderAdapte
             const validParts = parts.filter(p => !((p.type === 'image') && !p.mediaBase64));
             if (validParts.length === 0) return false;
 
-            const instanceName = options?.instanceName || GLOBAL_WHATSAPP_INSTANCE;
+            const instanceName = options?.instanceName || EVOLUTION_GLOBAL_INSTANCE;
             const eventType = options?.eventType || "UNKNOWN";
             const jobId = options?.jobId || (eventType !== "UNKNOWN" ? `whatsapp-${to}-${eventType}-${Date.now()}` : undefined);
 
@@ -62,7 +62,7 @@ export class EvolutionWhatsappQueueAdapter implements NotificationProviderAdapte
             if (!purpose) {
                 // Infer purpose based on explicit event constants
                 const isBulkEvent = BULK_EVENTS.includes(eventType as any);
-                purpose = isBulkEvent ? WhatsappPurpose.BULK : WhatsappPurpose.TRANSACTIONAL;
+                purpose = isBulkEvent ? EvolutionPurpose.BULK : EvolutionPurpose.TRANSACTIONAL;
             }
 
             await addToWhatsappQueue({

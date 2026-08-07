@@ -1,16 +1,16 @@
 import { Job, Worker } from 'bullmq';
-import { GLOBAL_WHATSAPP_INSTANCE } from '../config/constants.js';
+import { EVOLUTION_GLOBAL_INSTANCE } from '../config/constants.js';
 import { logger } from '../config/logger.js';
 import { redisConfig } from '../config/redis.js';
-import { QUEUE_NAME_WHATSAPP_TRANSACTIONAL, QUEUE_NAME_WHATSAPP_BULK, WhatsappJobData } from '../queues/whatsapp.queue.js';
-import { whatsappService } from '../services/whatsapp.service.js';
-import { WhatsappStatus } from '../types/enums.js';
+import { QUEUE_NAME_WHATSAPP_TRANSACTIONAL, QUEUE_NAME_WHATSAPP_BULK, WhatsappJobData } from '../queues/evolution.queue.js';
+import { whatsappService } from '../services/evolution.service.js';
+import { EvolutionConnectionStatus } from '../types/enums.js';
 import { cobrancaRepository } from '../repositories/cobranca.repository.js';
 import { toPersistenceString } from '../utils/date.utils.js';
 
 const createWhatsappProcessor = (isBulk: boolean) => async (job: Job<WhatsappJobData>) => {
     const { phone, message, compositeMessage, context, options } = job.data;
-    let targetInstance = options?.instanceName || GLOBAL_WHATSAPP_INSTANCE;
+    let targetInstance = options?.instanceName || EVOLUTION_GLOBAL_INSTANCE;
 
     try {
         if (isBulk) {
@@ -24,8 +24,8 @@ const createWhatsappProcessor = (isBulk: boolean) => async (job: Job<WhatsappJob
         let instanceStatus = await whatsappService.getInstanceStatus(targetInstance);
         const state = instanceStatus.state;
         
-        const isConnected = state === WhatsappStatus.CONNECTED || state === WhatsappStatus.OPEN;
-        const isConnecting = state === WhatsappStatus.CONNECTING;
+        const isConnected = state === EvolutionConnectionStatus.CONNECTED || state === EvolutionConnectionStatus.OPEN;
+        const isConnecting = state === EvolutionConnectionStatus.CONNECTING;
 
         const ERROR_WAITING_CONNECTION = "AGUARDANDO_CONEXAO_WHATSAPP";
 
@@ -64,12 +64,12 @@ const createWhatsappProcessor = (isBulk: boolean) => async (job: Job<WhatsappJob
             success = false;
         }
 
-        if (!success && targetInstance !== GLOBAL_WHATSAPP_INSTANCE) {
+        if (!success && targetInstance !== EVOLUTION_GLOBAL_INSTANCE) {
             logger.warn({ phone, jobId: job.id }, "[WhatsappWorker] Fallback para instância GLOBAL...");
             
-            targetInstance = GLOBAL_WHATSAPP_INSTANCE;
-            const globalStatus = await whatsappService.getInstanceStatus(GLOBAL_WHATSAPP_INSTANCE);
-            const globalConnected = globalStatus.state === WhatsappStatus.CONNECTED || globalStatus.state === WhatsappStatus.OPEN;
+            targetInstance = EVOLUTION_GLOBAL_INSTANCE;
+            const globalStatus = await whatsappService.getInstanceStatus(EVOLUTION_GLOBAL_INSTANCE);
+            const globalConnected = globalStatus.state === EvolutionConnectionStatus.CONNECTED || globalStatus.state === EvolutionConnectionStatus.OPEN;
 
             if (!globalConnected) {
                 throw new Error("Instância GLOBAL offline.");
@@ -149,12 +149,12 @@ const startGlobalHealthCheck = () => {
 
     const check = async () => {
         try {
-            const status = await whatsappService.getInstanceStatus(GLOBAL_WHATSAPP_INSTANCE);
-            const isConnected = status.state === WhatsappStatus.CONNECTED || status.state === WhatsappStatus.OPEN;
-            const isConnecting = status.state === WhatsappStatus.CONNECTING;
+            const status = await whatsappService.getInstanceStatus(EVOLUTION_GLOBAL_INSTANCE);
+            const isConnected = status.state === EvolutionConnectionStatus.CONNECTED || status.state === EvolutionConnectionStatus.OPEN;
+            const isConnecting = status.state === EvolutionConnectionStatus.CONNECTING;
 
             if (!isConnected && !isConnecting) {
-                await whatsappService.connectInstance(GLOBAL_WHATSAPP_INSTANCE);
+                await whatsappService.connectInstance(EVOLUTION_GLOBAL_INSTANCE);
             }
         } catch (error: unknown) {}
     };

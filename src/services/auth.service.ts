@@ -1,3 +1,4 @@
+import { NotificationChannelEnum } from '../types/enums.js';
 import {
   EVENTO_MOTORISTA_TESTE_BOAS_VINDAS,
   EVENTO_ADMIN_NOVO_CADASTRO
@@ -286,7 +287,7 @@ export async function registrarUsuario(
         nomeMotorista: payload.nome,
         dataVencimento: subscription?.trial_ends_at ?? undefined,
       }, {
-        channels: ['WHATSAPP'],
+        channels: [NotificationChannelEnum.EVOLUTION],
         jobId: `driver-welcome-${usuarioId}`
       })
         .catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar boas vindas"));
@@ -301,7 +302,7 @@ export async function registrarUsuario(
       dataRegistro: getNowBR().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }),
       usuarioId: usuarioId as string
     }, {
-      channels: ['TELEGRAM'],
+      channels: [NotificationChannelEnum.TELEGRAM],
       jobId: `admin-cadastro-${usuarioId}`
     }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao notificar admin sobre cadastro"));
 
@@ -413,7 +414,7 @@ export async function updatePassword(token: string, newPassword: string, oldPass
     if (profile.telefone) {
       notificationService.notifyDriver(profile.telefone, EVENTO_AUTH_SENHA_ALTERADA, {
         nomeMotorista: profile.nome
-      }, { channels: ['WHATSAPP'] }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar notificação de senha alterada"));
+      }, { channels: [NotificationChannelEnum.EVOLUTION] }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar notificação de senha alterada"));
     }
   }
 }
@@ -453,7 +454,7 @@ export async function solicitarRecuperacaoWhatsapp(documento: string): Promise<{
   const sent = await notificationService.notifyDriver(user.telefone, EVENTO_AUTH_RECUPERACAO_SENHA, {
     nomeMotorista: user.nome,
     otpCode: otp
-  }, { channels: ['WHATSAPP'] });
+  }, { channels: [NotificationChannelEnum.EVOLUTION] });
 
   if (!sent) {
     logger.error({ userId: user.id }, "[AuthService] Falha ao entregar código OTP via WhatsApp");
@@ -537,7 +538,7 @@ export async function resetarSenhaComCodigo(recoveryId: string, novaSenha: strin
   if (userProfile?.telefone) {
     notificationService.notifyDriver(userProfile.telefone, EVENTO_AUTH_SENHA_ALTERADA, {
       nomeMotorista: userProfile.nome
-    }, { channels: ['WHATSAPP'] }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar notificação de senha alterada (reset)"));
+    }, { channels: [NotificationChannelEnum.EVOLUTION] }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar notificação de senha alterada (reset)"));
   }
 
   return {

@@ -4,7 +4,7 @@ import { adminLogController } from "../controllers/admin/admin-log.controller.js
 import { adminLoginAttemptsController } from "../controllers/admin/admin-login-attempts.controller.js";
 import { adminConfigController } from "../controllers/admin/admin-config.controller.js";
 import { adminPlanController } from "../controllers/admin/admin-plan.controller.js";
-import { adminWhatsappController } from "../controllers/admin/admin-whatsapp.controller.js";
+import { adminWhatsappController } from "../controllers/admin/admin-evolution.controller.js";
 import { adminBlogController } from "../controllers/blog.controller.js";
 import { verifySupabaseJWT } from "../middleware/auth.js";
 import { verifyAdmin } from "../middleware/admin.js";

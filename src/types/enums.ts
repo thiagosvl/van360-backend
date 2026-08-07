@@ -1,3 +1,4 @@
+
 export enum CobrancaStatus {
   PAGO = "pago",
   PENDENTE = "pendente"
@@ -22,7 +23,15 @@ export enum UserType {
   MOTORISTA = "motorista",
 }
 
-export enum WhatsappStatus {
+export enum NotificationChannelEnum {
+  WABA = "WABA",
+  EVOLUTION = "EVOLUTION",
+  SMS = "SMS",
+  EMAIL = "EMAIL",
+  TELEGRAM = "TELEGRAM"
+}
+
+export enum EvolutionConnectionStatus {
   // Estados Legados/Gerais
   CONNECTED = "CONNECTED",
   DISCONNECTED = "DISCONNECTED",
@@ -38,7 +47,7 @@ export enum WhatsappStatus {
   NOT_FOUND = "NOT_FOUND"
 }
 
-export enum WhatsappPurpose {
+export enum EvolutionPurpose {
   TRANSACTIONAL = "TRANSACTIONAL",
   BULK = "BULK"
 }
@@ -213,7 +222,8 @@ export enum AtividadeAcao {
   COBRANCA_EXCLUIDA = "COBRANCA_EXCLUIDA",
   PAGAMENTO_MANUAL = "PAGAMENTO_MANUAL",
   PAGAMENTO_REVERTIDO = "PAGAMENTO_REVERTIDO",
-  NOTIFICACAO_WHATSAPP = "NOTIFICACAO_WHATSAPP",
+  NOTIFICACAO_EVOLUTION = "NOTIFICACAO_EVOLUTION",
+  NOTIFICACAO_WABA = "NOTIFICACAO_WABA",
   CONFIG_LEMBRETE = "CONFIG_LEMBRETE",
 
   // Passageiro
@@ -233,7 +243,7 @@ export enum AtividadeAcao {
   CONTRATO_ASSINADO = "CONTRATO_ASSINADO",
   CONTRATO_EXCLUIDO = "CONTRATO_EXCLUIDO",
   USUARIO_SUSPENSO = "USUARIO_SUSPENSO",
-  WHATSAPP_STATUS_ALTERADO = "WHATSAPP_STATUS_ALTERADO",
+  EVOLUTION_STATUS_ALTERADO = "EVOLUTION_STATUS_ALTERADO",
   LOGIN = "LOGIN",
   LOGOUT = "LOGOUT",
   SENHA_ALTERADA = "SENHA_ALTERADA",

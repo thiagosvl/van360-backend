@@ -1,3 +1,4 @@
+import { NotificationChannelEnum } from '../types/enums.js';
 import { v4 as uuidv4 } from 'uuid';
 import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
@@ -263,7 +264,7 @@ class ContractService {
           contratoUrl: response.documentoFinalUrl,
           usuarioId: usuario.id
         },
-        { channels: ['WHATSAPP'] }
+        { channels: [NotificationChannelEnum.EVOLUTION] }
       ).catch(err => logger.error({ err }, 'Erro ao notificar responsável sobre assinatura'));
     }
 
@@ -277,7 +278,7 @@ class ContractService {
           nomeResponsavel: passageiro.nome_responsavel,
           contratoUrl: response.documentoFinalUrl
         },
-        { channels: ['WHATSAPP'] }
+        { channels: [NotificationChannelEnum.EVOLUTION] }
       ).catch(err => logger.error({ err }, 'Erro ao notificar motorista sobre assinatura'));
     }
 

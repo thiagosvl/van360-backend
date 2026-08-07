@@ -1,7 +1,7 @@
 import { logger } from "../config/logger.js";
 import { contractWorker } from "../workers/contract.worker.js";
 import { generationWorker } from "../workers/generation.worker.js";
-import { whatsappTransactionalWorker, whatsappBulkWorker } from "../workers/whatsapp.worker.js";
+import { whatsappTransactionalWorker, whatsappBulkWorker } from "../workers/evolution.worker.js";
 import { telegramWorker } from "../workers/telegram.worker.js";
 import { cronWorker } from "../workers/cron.worker.js";
 import { birthdayWorker } from "../workers/birthday.worker.js";

@@ -8,7 +8,7 @@ import {
     CompositeMessagePart,
     EvolutionInstanceFallback
 } from "../types/dtos/whatsapp.dto.js";
-import { EvolutionEvent, EvolutionIntegration, WhatsappMediaType, WhatsappStatus } from "../types/enums.js";
+import { EvolutionEvent, EvolutionIntegration, WhatsappMediaType, EvolutionConnectionStatus } from "../types/enums.js";
 import { formatWhatsAppNumber } from "../utils/string.utils.js";
 
 const EVO_URL = env.EVOLUTION_API_URL;
@@ -25,7 +25,7 @@ export class WhatsappService {
             const rawState = data?.instance?.state || data?.state;
             
             return {
-                state: (rawState as WhatsappStatus) || WhatsappStatus.UNKNOWN,
+                state: (rawState as EvolutionConnectionStatus) || EvolutionConnectionStatus.UNKNOWN,
                 status: data?.instance?.status || data?.status,
                 statusReason: data?.instance?.statusReason || data?.statusReason
             };
@@ -40,7 +40,7 @@ export class WhatsappService {
 
                 if (instance) {
                     return {
-                        state: (instance.state || instance.status) as WhatsappStatus,
+                        state: (instance.state || instance.status) as EvolutionConnectionStatus,
                         status: instance.status
                     };
                 }
@@ -50,11 +50,11 @@ export class WhatsappService {
             }
 
             if (err.response?.status === 404) {
-                return { state: WhatsappStatus.NOT_FOUND };
+                return { state: EvolutionConnectionStatus.NOT_FOUND };
             }
             
             logger.error({ err: err.message, instanceName }, "[WhatsappService] Erro ao consultar status");
-            return { state: WhatsappStatus.UNKNOWN };
+            return { state: EvolutionConnectionStatus.UNKNOWN };
         }
     }
 
@@ -232,15 +232,15 @@ export class WhatsappService {
             logger.info({ instanceName, mode: phoneNumber ? "PairingCode" : "QRCode" }, "[WhatsappService] Iniciando fluxo de conexão");
 
             const status = await this.getInstanceStatus(instanceName);
-            const exists = status.state !== WhatsappStatus.UNKNOWN;
-            const isWorking = status.state === WhatsappStatus.CONNECTED || status.state === WhatsappStatus.OPEN;
+            const exists = status.state !== EvolutionConnectionStatus.UNKNOWN;
+            const isWorking = status.state === EvolutionConnectionStatus.CONNECTED || status.state === EvolutionConnectionStatus.OPEN;
 
             // 1. Se já está funcionando, apenas garante que as configurações estão corretas (silenciosamente)
             if (isWorking) {
                 logger.info({ instanceName }, "[WhatsappService] Instância já conectada. Sincronizando presets...");
                 await this.setWebhook(instanceName, WEBHOOK_URL);
                 await this.updateSettings(instanceName);
-                return { instance: { state: WhatsappStatus.OPEN } };
+                return { instance: { state: EvolutionConnectionStatus.OPEN } };
             }
 
             // 2. Se a instância NÃO existe, cria do zero
@@ -295,7 +295,7 @@ export class WhatsappService {
             }
 
             // Se for bem sucedido em conectar sem QR (sessão recuperada)
-            return { instance: { state: (data.instance?.state || status.state) as WhatsappStatus } };
+            return { instance: { state: (data.instance?.state || status.state) as EvolutionConnectionStatus } };
 
         } catch (error) {
             const err = error as AxiosError;

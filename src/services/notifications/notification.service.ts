@@ -1,3 +1,4 @@
+import { NotificationChannelEnum } from "../../types/enums.js";
 import { CompositeMessagePart } from "../../types/dtos/whatsapp.dto.js";
 import { logger } from "../../config/logger.js";
 
@@ -40,7 +41,7 @@ import {
     EVENTO_ADMIN_ASSINATURA_CANCELADA,
     EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO,
     EVENTO_ADMIN_SISTEMA_ALERTA,
-    GLOBAL_WHATSAPP_INSTANCE
+    EVOLUTION_GLOBAL_INSTANCE
 } from "../../config/constants.js";
 import { DriverContext, DriverTemplates } from "./templates/driver.template.js";
 import { PassengerContext, PassengerTemplates } from "./templates/passenger.template.js";
@@ -61,7 +62,7 @@ import {
 export type NotificationChannel = "WHATSAPP" | "SMS" | "EMAIL" | "TELEGRAM";
 
 export interface NotificationOptions {
-    channels: NotificationChannel[];
+    channels: NotificationChannelEnum[];
     whatsapp?: {
         instanceName?: string;
     };
@@ -117,14 +118,15 @@ export type AdminEventType =
 
 class NotificationService {
     // Registro dos Adapters que farão o disparo real (ou envio para a fila)
-    private adapters: Record<NotificationChannel, NotificationProviderAdapter>;
+    private adapters: Record<NotificationChannelEnum, NotificationProviderAdapter>;
 
     constructor() {
         this.adapters = {
-            "WHATSAPP": new EvolutionWhatsappQueueAdapter(),
-            "SMS": new MockSmsAdapter(),
-            "EMAIL": new MockEmailAdapter(),
-            "TELEGRAM": new TelegramAdapter()
+            [NotificationChannelEnum.EVOLUTION]: new EvolutionWhatsappQueueAdapter(),
+            [NotificationChannelEnum.WABA]: new EvolutionWhatsappQueueAdapter(), // TODO: Replace with Meta adapter
+            [NotificationChannelEnum.SMS]: new MockSmsAdapter(),
+            [NotificationChannelEnum.EMAIL]: new MockEmailAdapter(),
+            [NotificationChannelEnum.TELEGRAM]: new TelegramAdapter()
         };
     }
 
@@ -161,7 +163,7 @@ class NotificationService {
         to: string,
         type: RouteEventType,
         ctx: RouteContext,
-        options: NotificationOptions = { channels: ["WHATSAPP"] }
+        options: NotificationOptions = { channels: [NotificationChannelEnum.EVOLUTION] }
     ): Promise<boolean> {
         let parts: CompositeMessagePart[] = [];
 
@@ -281,7 +283,7 @@ class NotificationService {
                 if (adapter) {
                     const providerOptions = {
                         eventType,
-                        instanceName: channel === "WHATSAPP" ? (whatsappOptions?.instanceName || GLOBAL_WHATSAPP_INSTANCE) : undefined,
+                        instanceName: channel === NotificationChannelEnum.EVOLUTION ? (whatsappOptions?.instanceName || EVOLUTION_GLOBAL_INSTANCE) : undefined,
                         jobId: options?.jobId,
                         metadata: options?.metadata
                     };
