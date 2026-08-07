@@ -35,9 +35,10 @@ Toda notificação enviada para a Fila (Redis/BullMQ) deve carregar um ID de ras
 
 Quando a migração para a API Oficial for iniciada, as seguintes regras de negócios são obrigatórias:
 
-### 3.1. Dois Números de Telefone Separados
+### 3.1. Dois Números de Telefone Separados (E a Estratégia do 0800)
 A Meta não permite que um número WABA (API) seja simultaneamente utilizado no aplicativo físico do WhatsApp Business.
 - **Número 1 (O Robô):** "Van360 Notificações" -> Número exclusivo para WABA. Envia as automações transacionais para os pais.
+  - *Estratégia de Confiança (Anti-Spam):* Como este número envia mensagens para o Brasil todo (DDD 51, DDD 31, etc), usar um DDD 11 pode gerar desconfiança de fraude. A Meta permite registrar um **Número 0800** no WABA. Um 0800 corporativo, com foto da marca e descrição profissional, elimina a fricção regional e passa extrema credibilidade.
 - **Número 2 (Atendimento Humano):** Número de suporte tradicional do Thiago para tirar dúvidas dos motoristas via App/WhatsApp Web.
 
 ### 3.2. Respostas dos Usuários (Auto-Responder)
