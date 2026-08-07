@@ -348,3 +348,18 @@ export enum DispositivoCadastro {
   WEB_DESKTOP = "WEB_DESKTOP",
 }
 
+export enum RouteBroadcastEvent {
+  ROUTE_EXECUTION_CHANGED = "route_execution_changed",
+  ROUTE_DEFINITION_CHANGED = "route_definition_changed",
+  STOP_STATUS_CHANGED = "stop_status_changed",
+  ABSENCE_CHANGED = "absence_changed"
+}
+
+export enum RoutePermission {
+  VISUALIZAR = "rotas.visualizar",
+  CRIAR_EDITAR = "rotas.criar_editar",
+  EXCLUIR = "rotas.excluir",
+  INICIAR_ENCERRAR = "rotas.iniciar_encerrar",
+  EXECUTAR_PARADAS = "rotas.executar_paradas"
+}
+

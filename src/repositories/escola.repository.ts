@@ -1,8 +1,9 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { ListEscolasFiltersDTO } from "../types/dtos/escola.dto.js";
+import { isValidFilterValue } from "../utils/filter.utils.js";
 
 export const escolaRepository = {
-    async insert(data: any) {
+    async insert(data: Record<string, unknown>) {
         return supabaseAdmin
             .from("escolas")
             .insert([data])
@@ -10,7 +11,7 @@ export const escolaRepository = {
             .single();
     },
 
-    async update(id: string, data: any) {
+    async update(id: string, data: Record<string, unknown>) {
         return supabaseAdmin
             .from("escolas")
             .update(data)
@@ -42,22 +43,24 @@ export const escolaRepository = {
             .eq("usuario_id", usuarioId)
             .order("nome", { ascending: true });
 
-        if (filtros?.search) {
+        if (isValidFilterValue(filtros?.search)) {
             query = query.or(
                 `nome.ilike.%${filtros.search}%,cidade.ilike.%${filtros.search}%,estado.ilike.%${filtros.search}%`
             );
         }
 
-        if (filtros?.nome) query = query.eq("nome", filtros.nome);
-        if (filtros?.cidade) query = query.eq("cidade", filtros.cidade);
-        if (filtros?.estado) query = query.eq("estado", filtros.estado);
+        if (isValidFilterValue(filtros?.nome)) query = query.eq("nome", filtros.nome);
+        if (isValidFilterValue(filtros?.cidade)) query = query.eq("cidade", filtros.cidade);
+        if (isValidFilterValue(filtros?.estado)) query = query.eq("estado", filtros.estado);
 
-        if (filtros?.ativo !== undefined && filtros?.includeId) {
-            query = query.or(`ativo.eq.${filtros.ativo === "true"},id.eq.${filtros.includeId}`);
-        } else if (filtros?.ativo !== undefined) {
-            query = query.eq("ativo", filtros.ativo === "true");
-        } else if (filtros?.includeId) {
-            query = query.eq("id", filtros.includeId);
+        const hasValidIncludeId = isValidFilterValue(filtros?.includeId);
+        const hasValidAtivo = isValidFilterValue(filtros?.ativo);
+        if (hasValidAtivo && hasValidIncludeId) {
+            query = query.or(`ativo.eq.${filtros?.ativo === "true"},id.eq.${filtros?.includeId}`);
+        } else if (hasValidAtivo) {
+            query = query.eq("ativo", filtros?.ativo === "true");
+        } else if (hasValidIncludeId) {
+            query = query.eq("id", filtros?.includeId);
         }
 
         return query;
@@ -71,22 +74,24 @@ export const escolaRepository = {
             .eq("passageiros.ativo", true)
             .order("nome", { ascending: true });
 
-        if (filtros?.search) {
+        if (isValidFilterValue(filtros?.search)) {
             query = query.or(
                 `nome.ilike.%${filtros.search}%,cidade.ilike.%${filtros.search}%,estado.ilike.%${filtros.search}%`
             );
         }
 
-        if (filtros?.nome) query = query.eq("nome", filtros.nome);
-        if (filtros?.cidade) query = query.eq("cidade", filtros.cidade);
-        if (filtros?.estado) query = query.eq("estado", filtros.estado);
+        if (isValidFilterValue(filtros?.nome)) query = query.eq("nome", filtros.nome);
+        if (isValidFilterValue(filtros?.cidade)) query = query.eq("cidade", filtros.cidade);
+        if (isValidFilterValue(filtros?.estado)) query = query.eq("estado", filtros.estado);
 
-        if (filtros?.ativo !== undefined && filtros?.includeId) {
-            query = query.or(`ativo.eq.${filtros.ativo === "true"},id.eq.${filtros.includeId}`);
-        } else if (filtros?.ativo !== undefined) {
-            query = query.eq("ativo", filtros.ativo === "true");
-        } else if (filtros?.includeId) {
-            query = query.eq("id", filtros.includeId);
+        const hasValidIncludeId = isValidFilterValue(filtros?.includeId);
+        const hasValidAtivo = isValidFilterValue(filtros?.ativo);
+        if (hasValidAtivo && hasValidIncludeId) {
+            query = query.or(`ativo.eq.${filtros?.ativo === "true"},id.eq.${filtros?.includeId}`);
+        } else if (hasValidAtivo) {
+            query = query.eq("ativo", filtros?.ativo === "true");
+        } else if (hasValidIncludeId) {
+            query = query.eq("id", filtros?.includeId);
         }
 
         return query;

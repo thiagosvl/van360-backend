@@ -57,11 +57,16 @@ export async function createApp(): Promise<FastifyInstance> {
     // Segurança Defensiva: Proteção de Cabeçalhos HTTP (Helmet)
     await app.register(fastifyHelmet, { global: true });
 
-    // Segurança Defensiva: Limite de Requisições (Rate Limiting)
+    // Segurança Defensiva: Limite de Requisições (Rate Limiting por Usuário/IP)
     await app.register(fastifyRateLimit, {
-      max: 100, // Limite de 100 requisições...
-      timeWindow: "1 minute", // ...por 1 minuto
-      // request.ip é usado por padrão, alinhado com o trustProxy
+      max: 300,
+      timeWindow: "1 minute",
+      keyGenerator: (req) => (req as any).user?.id || req.ip,
+      errorResponseBuilder: (req, context) => ({
+        statusCode: 429,
+        error: "Too Many Requests",
+        message: `Limite de requisições excedido. Por favor, aguarde ${Math.ceil(context.ttl / 1000)} segundos.`
+      })
     });
 
     // Configuração de CORS

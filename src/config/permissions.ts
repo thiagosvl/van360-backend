@@ -75,6 +75,7 @@ export const ROLE_PERMISSIONS: Record<UserType, PermissionKey[]> = {
     "rotas.excluir",
     "rotas.iniciar_encerrar",
     "rotas.executar_paradas",
+    "escolas.visualizar",
     "aniversarios.visualizar",
   ],
 
@@ -83,6 +84,7 @@ export const ROLE_PERMISSIONS: Record<UserType, PermissionKey[]> = {
     "passageiros.presenca_marcar",
     "rotas.visualizar",
     "rotas.executar_paradas",
+    "escolas.visualizar",
     "aniversarios.visualizar",
   ],
 

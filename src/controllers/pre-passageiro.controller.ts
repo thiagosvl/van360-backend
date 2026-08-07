@@ -7,8 +7,7 @@ export const prePassageiroController = {
   async listByUsuario(request: FastifyRequest, reply: FastifyReply) {
     const { usuarioId } = request.params as { usuarioId: string };
     const { search } = request.query as { search?: string };
-    const reqAny = request as any;
-    const targetOwnerId = reqAny.data_owner_id || usuarioId;
+    const targetOwnerId = request.data_owner_id || usuarioId;
 
     try {
       const prePassageiros = await prePassageiroService.listPrePassageiros(targetOwnerId, search);

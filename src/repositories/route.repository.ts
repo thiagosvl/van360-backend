@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { RouteExecutionStatus, RouteStopStatus } from "../types/enums.js";
+import { isValidFilterValue } from "../utils/filter.utils.js";
 
 export const routeRepository = {
   async insert(usuarioId: string, nome: string, veiculoId: string | null) {
@@ -14,13 +15,13 @@ export const routeRepository = {
       .single();
   },
 
-  async insertPassageiros(records: any[]) {
+  async insertPassageiros(records: Record<string, unknown>[]) {
     return supabaseAdmin
       .from("rota_passageiros")
       .insert(records);
   },
 
-  async update(id: string, data: any) {
+  async update(id: string, data: Record<string, unknown>) {
     return supabaseAdmin
       .from("rotas")
       .update(data)
@@ -121,7 +122,7 @@ export const routeRepository = {
       `)
       .eq("usuario_id", usuarioId);
 
-    if (veiculoId) {
+    if (isValidFilterValue(veiculoId)) {
       query = query.eq("veiculo_id", veiculoId);
     }
 
@@ -134,7 +135,7 @@ export const routeRepository = {
       .select("*")
       .eq("usuario_id", usuarioId);
 
-    if (veiculoId) {
+    if (isValidFilterValue(veiculoId)) {
       query = query.eq("veiculo_id", veiculoId);
     }
 
@@ -146,15 +147,22 @@ export const routeRepository = {
       .from("execucoes_rota")
       .select(`
         *,
-        rota:rotas (
+        rota:rotas!inner (
           id,
           nome,
-          veiculo_id
+          veiculo_id,
+          usuario_id,
+          veiculo:veiculos (
+            id,
+            placa,
+            modelo,
+            marca
+          )
         )
       `)
-      .eq("usuario_id", usuarioId);
+      .or(`usuario_id.eq.${usuarioId},rota.usuario_id.eq.${usuarioId}`);
 
-    if (veiculoId) {
+    if (isValidFilterValue(veiculoId)) {
       query = query.eq("rota.veiculo_id", veiculoId);
     }
 
@@ -164,8 +172,22 @@ export const routeRepository = {
   async listExecucoesByUsuarioFallback(usuarioId: string) {
     return supabaseAdmin
       .from("execucoes_rota")
-      .select("*")
-      .eq("usuario_id", usuarioId)
+      .select(`
+        *,
+        rota:rotas!inner (
+          id,
+          nome,
+          veiculo_id,
+          usuario_id,
+          veiculo:veiculos (
+            id,
+            placa,
+            modelo,
+            marca
+          )
+        )
+      `)
+      .eq("rota.usuario_id", usuarioId)
       .order("iniciada_em", { ascending: false });
   },
 
@@ -238,6 +260,24 @@ export const routeRepository = {
       .maybeSingle();
   },
 
+  async getExecucaoAtivaByRotaId(rotaId: string) {
+    return supabaseAdmin
+      .from("execucoes_rota")
+      .select("id, rota_id, status, rota:rotas(nome)")
+      .eq("rota_id", rotaId)
+      .eq("status", RouteExecutionStatus.INICIADA)
+      .maybeSingle();
+  },
+
+  async getExecucaoAtivaByVeiculoId(veiculoId: string) {
+    return supabaseAdmin
+      .from("execucoes_rota")
+      .select("id, rota_id, status, rota:rotas!inner(nome, veiculo_id)")
+      .eq("rota.veiculo_id", veiculoId)
+      .eq("status", RouteExecutionStatus.INICIADA)
+      .maybeSingle();
+  },
+
   async insertExecucao(rotaId: string, usuarioId: string) {
     return supabaseAdmin
       .from("execucoes_rota")
@@ -250,7 +290,7 @@ export const routeRepository = {
       .single();
   },
 
-  async insertExecucaoParadas(records: any[]) {
+  async insertExecucaoParadas(records: Record<string, unknown>[]) {
     return supabaseAdmin
       .from("execucoes_rota_passageiros")
       .insert(records);
@@ -309,7 +349,7 @@ export const routeRepository = {
       .from("execucoes_rota_passageiros")
       .select("id")
       .eq("execucao_rota_id", execucaoId)
-      .or(`status.eq.pendente,and(status.eq.embarcado,visitado_em.is.null)`);
+      .eq("status", RouteStopStatus.PENDENTE);
   },
 
   async updateExecucaoStatus(execucaoId: string, status: RouteExecutionStatus, finalizadaEm: string | null) {
@@ -328,6 +368,17 @@ export const routeRepository = {
       .update({ ordem })
       .eq("id", paradaId)
       .eq("execucao_rota_id", execucaoId);
+  },
+
+  async updateParadasOrdemBatch(execucaoId: string, paradas: Array<{ id: string; ordem: number }>) {
+    const payload = paradas.map((p) => ({
+      id: p.id,
+      execucao_rota_id: execucaoId,
+      ordem: p.ordem,
+    }));
+    return supabaseAdmin
+      .from("execucoes_rota_passageiros")
+      .upsert(payload, { onConflict: "id" });
   },
 
   async getAusenciasByRotaEData(rotaId: string, dataAusencia: string) {
@@ -361,7 +412,7 @@ export const routeRepository = {
       .eq("data_ausencia", dataAusencia);
   },
 
-  async insertAusencia(record: any) {
+  async insertAusencia(record: Record<string, unknown>) {
     return supabaseAdmin
       .from("rota_ausencias")
       .insert([record])

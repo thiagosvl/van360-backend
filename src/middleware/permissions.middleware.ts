@@ -4,8 +4,8 @@ import { UserType } from "../types/enums.js";
 
 export function requirePermission(...permissions: PermissionKey[]) {
   return async (request: FastifyRequest, reply: FastifyReply) => {
-    const user = (request as any).user;
-    const profile = (request as any).profile;
+    const user = request.user;
+    const profile = request.profile;
     const role = (user?.app_metadata?.role || profile?.tipo || UserType.MOTORISTA) as UserType;
 
     const allowed = permissions.some((p) => hasPermission(role, p));

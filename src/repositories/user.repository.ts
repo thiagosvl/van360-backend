@@ -35,7 +35,7 @@ export const userRepository = {
             .single();
     },
 
-    async update(id: string, updates: any) {
+    async update(id: string, updates: Record<string, unknown>) {
         return supabaseAdmin
             .from("usuarios")
             .update(updates)
@@ -141,7 +141,7 @@ export const userRepository = {
             .maybeSingle();
     },
 
-    async insert(data: any) {
+    async insert(data: Record<string, unknown>) {
         return supabaseAdmin
             .from("usuarios")
             .insert([data]);

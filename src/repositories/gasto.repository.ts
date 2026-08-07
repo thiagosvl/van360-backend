@@ -1,8 +1,9 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { ListGastosFiltersDTO } from "../types/dtos/gasto.dto.js";
+import { isValidFilterValue } from "../utils/filter.utils.js";
 
 export const gastoRepository = {
-    async insert(data: any) {
+    async insert(data: Record<string, unknown>) {
         return supabaseAdmin
             .from("gastos")
             .insert([data])
@@ -10,7 +11,7 @@ export const gastoRepository = {
             .single();
     },
 
-    async update(id: string, data: any) {
+    async update(id: string, data: Record<string, unknown>) {
         return supabaseAdmin
             .from("gastos")
             .update(data)
@@ -55,20 +56,18 @@ export const gastoRepository = {
             .order("data", { ascending: false })
             .order("categoria", { ascending: false });
 
-        if (filtros && filtros.categoria) {
+        if (isValidFilterValue(filtros?.categoria)) {
             query = query.eq('categoria', filtros.categoria);
         }
 
-        if (filtros && filtros.veiculo_id && filtros.veiculo_id !== 'all' && filtros.veiculo_id !== 'TODOS') {
-            if (filtros.veiculo_id === 'unspecified') {
-                 query = query.is('veiculo_id', null);
-            } else {
-                 query = query.eq('veiculo_id', filtros.veiculo_id);
-            }
+        if (filtros?.veiculo_id === 'unspecified') {
+            query = query.is('veiculo_id', null);
+        } else if (isValidFilterValue(filtros?.veiculo_id)) {
+            query = query.eq('veiculo_id', filtros.veiculo_id);
         }
 
-        if (filtros?.data_inicio) query = query.gte("data", filtros.data_inicio);
-        if (filtros?.data_fim) query = query.lte("data", filtros.data_fim);
+        if (isValidFilterValue(filtros?.data_inicio)) query = query.gte("data", filtros.data_inicio);
+        if (isValidFilterValue(filtros?.data_fim)) query = query.lte("data", filtros.data_fim);
 
         // Pagination
         if (filtros?.limit) query = query.limit(filtros.limit);
@@ -85,7 +84,7 @@ export const gastoRepository = {
             .gte("data", start)
             .lte("data", end);
             
-        if (veiculoId) {
+        if (isValidFilterValue(veiculoId)) {
             query = query.eq("veiculo_id", veiculoId);
         }
 

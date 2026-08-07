@@ -16,15 +16,15 @@ export const escolaController = {
     logger.info("EscolaController.create - Starting");
     try {
         const data = createEscolaSchema.parse(request.body);
-        const reqAny = request as any;
-        if (reqAny.data_owner_id) {
-            data.usuario_id = reqAny.data_owner_id;
+        if (request.data_owner_id) {
+            data.usuario_id = request.data_owner_id;
         }
 
         const result = await escolaService.createEscola(data);
         return reply.status(201).send(result);
-    } catch (error: any) {
-        if (error.code === '23505') {
+    } catch (error: unknown) {
+        const err = error as { code?: string };
+        if (err.code === '23505') {
             throw new AppError("Já existe uma escola cadastrada com este nome.", 409);
         }
         throw error;
@@ -34,14 +34,14 @@ export const escolaController = {
   update: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     logger.info({ escolaId: id }, "EscolaController.update - Starting");
-    
 
     try {
         const data = updateEscolaSchema.parse(request.body);
         await escolaService.updateEscola(id, data);
         return reply.status(200).send({ success: true });
-    } catch (error: any) {
-        if (error.code === '23505') {
+    } catch (error: unknown) {
+        const err = error as { code?: string };
+        if (err.code === '23505') {
             throw new AppError("Já existe uma escola cadastrada com este nome.", 409);
         }
         throw error;
@@ -51,7 +51,6 @@ export const escolaController = {
   delete: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     logger.info({ escolaId: id }, "EscolaController.delete - Starting");
-
 
     await escolaService.deleteEscola(id);
     return reply.status(200).send({ success: true });
@@ -65,8 +64,7 @@ export const escolaController = {
 
   listByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {
     const { usuarioId } = request.params as { usuarioId: string };
-    const reqAny = request as any;
-    const targetOwnerId = reqAny.data_owner_id || usuarioId;
+    const targetOwnerId = request.data_owner_id || usuarioId;
     const filtros = listEscolasFiltersSchema.parse(request.query);
     const escolas = await escolaService.listEscolas(targetOwnerId, filtros);
     return reply.status(200).send(escolas);
@@ -74,8 +72,7 @@ export const escolaController = {
 
   listWithContagem: async (request: FastifyRequest, reply: FastifyReply) => {
     const { usuarioId } = request.params as { usuarioId: string };
-    const reqAny = request as any;
-    const targetOwnerId = reqAny.data_owner_id || usuarioId;
+    const targetOwnerId = request.data_owner_id || usuarioId;
     const filtros = listEscolasFiltersSchema.parse(request.query);
     const escolas = await escolaService.listEscolasComContagemAtivos(targetOwnerId, filtros);
     return reply.status(200).send(escolas);
@@ -83,8 +80,7 @@ export const escolaController = {
 
   countByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {
     const { usuarioId } = request.params as { usuarioId: string };
-    const reqAny = request as any;
-    const targetOwnerId = reqAny.data_owner_id || usuarioId;
+    const targetOwnerId = request.data_owner_id || usuarioId;
     const count = await escolaService.countListEscolasByUsuario(targetOwnerId);
     return reply.status(200).send({ count });
   },

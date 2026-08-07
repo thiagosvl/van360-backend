@@ -95,10 +95,10 @@ describe("Suíte Completa de Testes de Rota por Papel (Fastify In-Memory)", () =
       }
     });
 
-    it("Auxiliar DEVE SER BLOQUEADO (403 Forbidden) em Equipe, Escolas, Criação de Passageiros, Cobranças, Contratos, Gestão de Veículos, Relatórios e Assinatura", async () => {
+    it("Auxiliar DEVE SER BLOQUEADO (403 Forbidden) em Equipe, Gestão de Escolas, Criação de Passageiros, Cobranças, Contratos, Gestão de Veículos, Relatórios e Assinatura", async () => {
       const blockedRoutes = [
         { method: "GET", url: "/api/motoristas-equipe" },
-        { method: "GET", url: `/api/escolas/usuario/${TEST_UUID}` },
+        { method: "POST", url: "/api/escolas" },
         { method: "POST", url: "/api/passageiros" },
         { method: "GET", url: "/api/cobrancas" },
         { method: "GET", url: "/api/contratos" },
@@ -120,11 +120,12 @@ describe("Suíte Completa de Testes de Rota por Papel (Fastify In-Memory)", () =
   });
 
   describe("3. Monitor (MONITOR)", () => {
-    it("Monitor DEVE ter acesso a Rotas, Passageiros e Listagem de Veículos (leitura da van)", async () => {
+    it("Monitor DEVE ter acesso a Rotas, Passageiros, Escolas (leitura) e Listagem de Veículos (leitura da van)", async () => {
       const allowedRoutes = [
         { method: "GET", url: `/api/routes/usuario/${TEST_UUID}` },
         { method: "GET", url: `/api/veiculos/usuario/${TEST_UUID}` },
         { method: "GET", url: `/api/passageiros/usuario/${TEST_UUID}` },
+        { method: "GET", url: `/api/escolas/usuario/${TEST_UUID}` },
       ];
 
       for (const r of allowedRoutes) {
@@ -137,10 +138,10 @@ describe("Suíte Completa de Testes de Rota por Papel (Fastify In-Memory)", () =
       }
     });
 
-    it("Monitor DEVE SER BLOQUEADO (403 Forbidden) em Criação de Passageiros, Escolas, Gastos, Cobranças, Contratos, Gestão de Veículos, Relatórios e Equipe", async () => {
+    it("Monitor DEVE SER BLOQUEADO (403 Forbidden) em Criação de Passageiros, Gestão de Escolas, Gastos, Cobranças, Contratos, Gestão de Veículos, Relatórios e Equipe", async () => {
       const blockedRoutes = [
         { method: "POST", url: "/api/passageiros" },
-        { method: "GET", url: `/api/escolas/usuario/${TEST_UUID}` },
+        { method: "POST", url: "/api/escolas" },
         { method: "GET", url: `/api/gastos/usuario/${TEST_UUID}` },
         { method: "GET", url: "/api/cobrancas" },
         { method: "GET", url: "/api/contratos" },

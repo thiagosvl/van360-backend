@@ -38,7 +38,8 @@ describe("Suíte de Testes RBAC & Controle de Acesso Multi-Usuário", () => {
 
       // Bloqueios de Segurança
       expect(hasPermission(UserType.MOTORISTA_AUXILIAR, "equipe.gerenciar_monitores")).toBe(false);
-      expect(hasPermission(UserType.MOTORISTA_AUXILIAR, "escolas.visualizar")).toBe(false);
+      expect(hasPermission(UserType.MOTORISTA_AUXILIAR, "escolas.visualizar")).toBe(true);
+      expect(hasPermission(UserType.MOTORISTA_AUXILIAR, "escolas.gerenciar")).toBe(false);
       expect(hasPermission(UserType.MOTORISTA_AUXILIAR, "cobrancas.gerenciar")).toBe(false);
       expect(hasPermission(UserType.MOTORISTA_AUXILIAR, "contratos.gerenciar")).toBe(false);
       expect(hasPermission(UserType.MOTORISTA_AUXILIAR, "veiculos.gerenciar")).toBe(false);
@@ -52,7 +53,8 @@ describe("Suíte de Testes RBAC & Controle de Acesso Multi-Usuário", () => {
 
       expect(hasPermission(UserType.MONITOR, "passageiros.visualizar")).toBe(true);
       expect(hasPermission(UserType.MONITOR, "passageiros.gerenciar")).toBe(false);
-      expect(hasPermission(UserType.MONITOR, "escolas.visualizar")).toBe(false);
+      expect(hasPermission(UserType.MONITOR, "escolas.visualizar")).toBe(true);
+      expect(hasPermission(UserType.MONITOR, "escolas.gerenciar")).toBe(false);
       expect(hasPermission(UserType.MONITOR, "gastos.visualizar")).toBe(false);
       expect(hasPermission(UserType.MONITOR, "gastos.criar")).toBe(false);
       expect(hasPermission(UserType.MONITOR, "cobrancas.gerenciar")).toBe(false);

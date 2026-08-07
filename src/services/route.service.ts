@@ -1,18 +1,56 @@
 import { AppError } from "../errors/AppError.js";
 import { CreateRouteDTO, UpdateRouteDTO, StepRouteExecutionDTO, ReorderExecucaoDTO, CreateAusenciaDTO, DELETE_AUSENCIA_BY_QUERY_PARAM } from "../types/dtos/route.dto.js";
-import { RouteExecutionStatus, RouteStopStatus, RouteNodeType, RouteSentido, AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
+import { RouteExecutionStatus, RouteStopStatus, RouteNodeType, RouteSentido, AtividadeAcao, AtividadeEntidadeTipo, UserType, RouteBroadcastEvent } from "../types/enums.js";
 import { routeRepository } from "../repositories/route.repository.js";
+import { userRepository } from "../repositories/user.repository.js";
 import { historicoService } from "./historico.service.js";
 import { logger } from "../config/logger.js";
 import { getNowBR, toPersistenceString } from "../utils/date.utils.js";
 
+import { supabaseAdmin } from "../config/supabase.js";
+
+const resolveDataOwnerId = async (usuarioId: string): Promise<{ dataOwnerId: string; veiculoId?: string; tipo?: UserType; contaPaiId?: string }> => {
+  if (!usuarioId) return { dataOwnerId: usuarioId };
+  try {
+    const { data: userProfile } = await userRepository.getProfileData(usuarioId);
+    let dataOwnerId = userProfile?.conta_pai_id || usuarioId;
+    const veiculoId = userProfile?.veiculo_id || undefined;
+    const tipo = userProfile?.tipo || undefined;
+    const contaPaiId = userProfile?.conta_pai_id || undefined;
+
+    if (!userProfile?.conta_pai_id && veiculoId) {
+      const { data: veiculo } = await supabaseAdmin
+        .from("veiculos")
+        .select("usuario_id")
+        .eq("id", veiculoId)
+        .maybeSingle();
+      if (veiculo?.usuario_id) {
+        dataOwnerId = veiculo.usuario_id;
+      }
+    }
+
+    return { dataOwnerId, veiculoId, tipo, contaPaiId };
+  } catch (e) {
+    return { dataOwnerId: usuarioId };
+  }
+};
+
+const notifyFleetRealtime = async (event: string, payload: Record<string, unknown>) => {
+  try {
+    const channel = supabaseAdmin.channel("van360-fleet-sync");
+    await channel.send({
+      type: "broadcast",
+      event: event,
+      payload: payload
+    });
+    supabaseAdmin.removeChannel(channel);
+  } catch (err) {
+    logger.warn({ error: err }, "[RouteService] Falha ao emitir broadcast Realtime");
+  }
+};
+
 const createRoute = async (data: CreateRouteDTO): Promise<any> => {
   if (!data.usuario_id) throw new AppError("Usuário obrigatório", 400);
-  const inicio = (data as any).horario_inicio || (data as any).hora_inicio || (data as any).horario_saida;
-  const fim = (data as any).horario_fim || (data as any).horario_termino || (data as any).hora_fim || (data as any).horario_chegada;
-  if (inicio && fim && fim < inicio) {
-    throw new AppError("Horário de término não pode ser anterior ao horário de início", 400);
-  }
 
   const { data: inserted, error } = await routeRepository.insert(
     data.usuario_id,
@@ -43,6 +81,8 @@ const createRoute = async (data: CreateRouteDTO): Promise<any> => {
 
   const createdRoute = await getRoute(inserted.id);
 
+  notifyFleetRealtime("route_definition_changed", { action: "create", rotaId: inserted.id, veiculoId: inserted.veiculo_id });
+
   // --- LOG DE AUDITORIA ---
   historicoService.log({
     usuario_id: data.usuario_id,
@@ -58,6 +98,8 @@ const createRoute = async (data: CreateRouteDTO): Promise<any> => {
 
 const updateRoute = async (id: string, data: UpdateRouteDTO): Promise<any> => {
   if (!id) throw new AppError("ID da rota é obrigatório", 400);
+
+  const oldRouteData = await routeRepository.getById(id).then(res => res.data);
 
   const updatePayload: any = {};
   if (data.nome !== undefined) updatePayload.nome = data.nome;
@@ -109,16 +151,30 @@ const updateRoute = async (id: string, data: UpdateRouteDTO): Promise<any> => {
     });
   }
 
+  notifyFleetRealtime("route_definition_changed", {
+    action: "update",
+    rotaId: id,
+    veiculoId: updatedRoute?.veiculo_id,
+    previousVeiculoId: oldRouteData?.veiculo_id
+  });
+
   return updatedRoute;
 };
 
 const deleteRoute = async (id: string): Promise<void> => {
   if (!id) throw new AppError("ID da rota é obrigatório", 400);
 
+  const { data: activeExec } = await routeRepository.getExecucaoAtivaByRotaId(id);
+  if (activeExec) {
+    throw new AppError("Não é possível excluir esta rota pois ela possui uma execução ativa em andamento.", 400);
+  }
+
   const oldRoute = await routeRepository.getById(id).then(res => res.data);
 
   const { error } = await routeRepository.delete(id);
   if (error) throw error;
+
+  notifyFleetRealtime("route_definition_changed", { action: "delete", rotaId: id, veiculoId: oldRoute?.veiculo_id });
 
   // --- LOG DE AUDITORIA ---
   if (oldRoute?.usuario_id) {
@@ -183,11 +239,15 @@ const getRoute = async (id: string, dataAusencia?: string): Promise<any> => {
 const listRoutesByUsuario = async (usuarioId: string, veiculoId?: string): Promise<any[]> => {
   if (!usuarioId) throw new AppError("ID do usuário é obrigatório", 400);
 
+  const { dataOwnerId, veiculoId: userVeiculoId, contaPaiId } = await resolveDataOwnerId(usuarioId);
+  const isGestor = !contaPaiId;
+  const targetVeiculoId = veiculoId || (isGestor ? undefined : userVeiculoId);
+
   try {
-    const { data: routes, error } = await routeRepository.listByUsuario(usuarioId, veiculoId);
+    const { data: routes, error } = await routeRepository.listByUsuario(dataOwnerId, targetVeiculoId);
 
     if (error) {
-      const { data: fallbackRoutes, error: fbError } = await routeRepository.listByUsuarioFallback(usuarioId, veiculoId);
+      const { data: fallbackRoutes, error: fbError } = await routeRepository.listByUsuarioFallback(dataOwnerId, targetVeiculoId);
 
       if (fbError) throw new AppError(`Erro ao buscar rotas: ${fbError.message}`, 500);
       return (fallbackRoutes || []).map(r => ({ ...r, numero_passageiros: 0 }));
@@ -211,11 +271,15 @@ const listRoutesByUsuario = async (usuarioId: string, veiculoId?: string): Promi
 const listExecucoesByUsuario = async (usuarioId: string, veiculoId?: string): Promise<any[]> => {
   if (!usuarioId) throw new AppError("ID do usuário é obrigatório", 400);
 
+  const { dataOwnerId, veiculoId: userVeiculoId, contaPaiId } = await resolveDataOwnerId(usuarioId);
+  const isGestor = !contaPaiId;
+  const targetVeiculoId = veiculoId || (isGestor ? undefined : userVeiculoId);
+
   try {
-    const { data: execs, error } = await routeRepository.listExecucoesByUsuario(usuarioId, veiculoId);
+    const { data: execs, error } = await routeRepository.listExecucoesByUsuario(dataOwnerId, targetVeiculoId);
 
     if (error) {
-      const { data: fallbackExecs, error: fbError } = await routeRepository.listExecucoesByUsuarioFallback(usuarioId);
+      const { data: fallbackExecs, error: fbError } = await routeRepository.listExecucoesByUsuarioFallback(dataOwnerId);
       if (fbError) throw new AppError(`Erro ao buscar execuções: ${fbError.message}`, 500);
       return fallbackExecs || [];
     }
@@ -228,7 +292,15 @@ const listExecucoesByUsuario = async (usuarioId: string, veiculoId?: string): Pr
 };
 
 const getExecucaoDetail = async (id: string): Promise<any> => {
-  const { data: exec, error } = await routeRepository.getExecucaoDetail(id);
+  let { data: exec, error } = await routeRepository.getExecucaoDetail(id);
+
+  if (!exec && !error) {
+    const { data: activeByRota } = await routeRepository.getExecucaoAtivaByRotaId(id);
+    if (activeByRota) {
+      const { data: fullExec } = await routeRepository.getExecucaoDetail(activeByRota.id);
+      exec = fullExec;
+    }
+  }
 
   if (error) throw error;
   if (!exec) {
@@ -264,18 +336,27 @@ const iniciarRota = async (rotaId: string, usuarioId: string): Promise<any> => {
   if (!rotaId) throw new AppError("ID da rota é obrigatório", 400);
   if (!usuarioId) throw new AppError("ID do usuário é obrigatório", 400);
 
-  const { data: activeExec, error: checkError } = await routeRepository.getExecucaoAtiva(usuarioId);
+  // Verifica se esta rota específica já possui uma execução ativa em andamento
+  const { data: activeExec, error: checkError } = await routeRepository.getExecucaoAtivaByRotaId(rotaId);
 
   if (checkError) throw checkError;
   if (activeExec) {
-    if ((activeExec as any).rota_id === rotaId) {
-      return getExecucaoDetail(activeExec.id);
-    }
-    throw new AppError("Você já possui uma rota em andamento. Finalize-a antes de iniciar outra.", 400);
+    // Se esta rota já tiver uma execução em andamento, retorna os detalhes da execução existente
+    return getExecucaoDetail(activeExec.id);
   }
 
   const route = await getRoute(rotaId);
   if (!route) throw new AppError("Rota não encontrada", 404);
+
+  // Se a rota possui um veículo associado, verifica se esse veículo JÁ TEM outra corrida em andamento!
+  if (route.veiculo_id) {
+    const { data: vehicleActiveExec } = await routeRepository.getExecucaoAtivaByVeiculoId(route.veiculo_id);
+    if (vehicleActiveExec && vehicleActiveExec.rota_id !== rotaId) {
+      const nomeRotaEmAndamento = (vehicleActiveExec.rota as any)?.nome || "outra rota";
+      throw new AppError(`Este veículo já possui uma rota em andamento ("${nomeRotaEmAndamento}"). Encerre a corrida atual para iniciar outra.`, 400);
+    }
+  }
+
   if (!route.passageiros || route.passageiros.length === 0) {
     throw new AppError("A rota selecionada não possui paradas cadastradas.", 400);
   }
@@ -322,7 +403,18 @@ const iniciarRota = async (rotaId: string, usuarioId: string): Promise<any> => {
 
   if (paradasError) throw paradasError;
 
+  await checkEFinalizarSeTodasParadasConcluidas(exec.id);
+
   const result = await getExecucaoDetail(exec.id);
+
+  notifyFleetRealtime(RouteBroadcastEvent.ROUTE_EXECUTION_CHANGED, {
+    action: "iniciar",
+    execucaoId: exec.id,
+    rotaId: rotaId,
+    veiculoId: route?.veiculo_id,
+    status: RouteExecutionStatus.INICIADA
+  });
+
   return {
     ...result,
     alertaInativos: inativosContador > 0 ? `${inativosContador} passageiro(s) inativo(s) foram desconsiderados nesta corrida.` : null
@@ -332,20 +424,25 @@ const iniciarRota = async (rotaId: string, usuarioId: string): Promise<any> => {
 const atualizarParadaStatus = async (
   execucaoId: string,
   paradaId: string,
-  novoStatus: RouteStopStatus.EMBARCADO | RouteStopStatus.AUSENTE | RouteStopStatus.PENDENTE
+  novoStatus: RouteStopStatus
 ): Promise<any> => {
   if (!execucaoId) throw new AppError("ID da execução é obrigatório", 400);
   if (!paradaId) throw new AppError("ID da parada é obrigatório", 400);
 
-  const { data: exec, error: execError } = await routeRepository.getExecucaoResumida(execucaoId);
+  const [
+    { data: exec, error: execError },
+    { data: paradaObj },
+    { data: paradaAtualObj }
+  ] = await Promise.all([
+    routeRepository.getExecucaoResumida(execucaoId),
+    routeRepository.getParadaById(paradaId),
+    routeRepository.getParadaAtualPendente(execucaoId)
+  ]);
 
   if (execError) throw execError;
-  if (exec.status !== RouteExecutionStatus.INICIADA) {
+  if (!exec || exec.status !== RouteExecutionStatus.INICIADA) {
     throw new AppError("Esta rota não está ativa.", 400);
   }
-
-  const { data: paradaObj } = await routeRepository.getParadaById(paradaId);
-  const { data: paradaAtualObj } = await routeRepository.getParadaAtualPendente(execucaoId);
 
   const isEmbarqueEscola = paradaObj?.tipo_no === RouteNodeType.PASSAGEIRO &&
     paradaAtualObj && paradaAtualObj.length > 0 &&
@@ -397,14 +494,18 @@ const atualizarParadaStatus = async (
     if (updateError) throw updateError;
   }
 
+  notifyFleetRealtime("stop_status_changed", { execucaoId, paradaId, status: novoStatus });
+
+  await checkEFinalizarSeTodasParadasConcluidas(execucaoId);
+
   return await getExecucaoDetail(execucaoId);
 };
 
 const reordenarExecucao = async (execucaoId: string, data: ReorderExecucaoDTO): Promise<any> => {
   if (!execucaoId) throw new AppError("ID da execução é obrigatório", 400);
 
-  for (const item of data.paradas) {
-    await routeRepository.updateParadaOrdem(item.id, execucaoId, item.ordem);
+  if (data.paradas && data.paradas.length > 0) {
+    await routeRepository.updateParadasOrdemBatch(execucaoId, data.paradas);
   }
 
   return await getExecucaoDetail(execucaoId);
@@ -420,11 +521,23 @@ const cancelarExecucao = async (execucaoId: string): Promise<any> => {
   );
 
   if (error) throw error;
+
+  notifyFleetRealtime("route_execution_changed", {
+    action: "cancelar",
+    execucaoId: execucaoId,
+    status: RouteExecutionStatus.CANCELADA
+  });
+
   return await getExecucaoDetail(execucaoId);
 };
 
 const finalizarExecucao = async (execucaoId: string): Promise<any> => {
   if (!execucaoId) throw new AppError("ID da execução é obrigatório", 400);
+
+  const currentExec = await getExecucaoDetail(execucaoId);
+  if (currentExec?.status === RouteExecutionStatus.CONCLUIDA) {
+    return currentExec;
+  }
 
   const { error } = await routeRepository.updateExecucaoStatus(
     execucaoId,
@@ -433,6 +546,12 @@ const finalizarExecucao = async (execucaoId: string): Promise<any> => {
   );
 
   if (error) throw error;
+
+  notifyFleetRealtime("route_execution_changed", {
+    action: "finalizar",
+    execucaoId: execucaoId,
+    status: RouteExecutionStatus.CONCLUIDA
+  });
 
   const execDetail = await getExecucaoDetail(execucaoId);
 
@@ -449,6 +568,15 @@ const finalizarExecucao = async (execucaoId: string): Promise<any> => {
   }
 
   return execDetail;
+};
+
+const checkEFinalizarSeTodasParadasConcluidas = async (execucaoId: string): Promise<boolean> => {
+  const { data: pendentes } = await routeRepository.getPendentes(execucaoId);
+  if (!pendentes || pendentes.length === 0) {
+    await finalizarExecucao(execucaoId);
+    return true;
+  }
+  return false;
 };
 
 const registrarAusenciaAntecipada = async (data: CreateAusenciaDTO & { registrado_por?: string }): Promise<any> => {
@@ -485,6 +613,27 @@ const registrarAusenciaAntecipada = async (data: CreateAusenciaDTO & { registrad
     });
   }
 
+  // Se a rota já estiver em EXECUÇÃO ATIVA, sincroniza o status da parada em execucoes_rota_passageiros
+  const { data: execAtiva } = await routeRepository.getExecucaoAtivaByRotaId(data.rota_id);
+  if (execAtiva?.id) {
+    await routeRepository.updateTodasParadasDoPassageiroStatus(
+      data.passageiro_id,
+      execAtiva.id,
+      RouteStopStatus.AUSENTE,
+      new Date().toISOString()
+    );
+    notifyFleetRealtime("stop_status_changed", {
+      execucaoId: execAtiva.id,
+      passageiroId: data.passageiro_id,
+      status: RouteStopStatus.AUSENTE
+    });
+
+    // Se a marcação de ausência completou todas as paradas da corrida ativa, finaliza automaticamente a rota
+    await checkEFinalizarSeTodasParadasConcluidas(execAtiva.id);
+  }
+
+  notifyFleetRealtime("absence_changed", { rotaId: data.rota_id, passageiroId: data.passageiro_id });
+
   return inserted;
 };
 
@@ -510,6 +659,26 @@ const removerAusenciaAntecipada = async (id: string, passageiroId?: string, rota
     const { error } = await routeRepository.deleteAusencia(id);
     if (error) throw error;
   }
+
+  // Se a rota já estiver em EXECUÇÃO ATIVA, restaura o status da parada para PENDENTE em execucoes_rota_passageiros
+  if (targetRotaId && targetPid) {
+    const { data: execAtiva } = await routeRepository.getExecucaoAtivaByRotaId(targetRotaId);
+    if (execAtiva?.id) {
+      await routeRepository.updateTodasParadasDoPassageiroStatus(
+        targetPid,
+        execAtiva.id,
+        RouteStopStatus.PENDENTE,
+        null
+      );
+      notifyFleetRealtime("stop_status_changed", {
+        execucaoId: execAtiva.id,
+        passageiroId: targetPid,
+        status: RouteStopStatus.PENDENTE
+      });
+    }
+  }
+
+  notifyFleetRealtime("absence_changed", { rotaId: targetRotaId, passageiroId: targetPid });
 };
 
 const listAusenciasByRota = async (rotaId: string, dataAusencia?: string): Promise<any[]> => {

@@ -7,14 +7,12 @@ import { GastoEscopoAcao } from "../types/enums.js";
 export const gastoController = {
     async create(request: FastifyRequest, reply: FastifyReply) {
         const data = createGastoSchema.parse(request.body);
-        const reqAny = request as any;
 
-        // Se for sub-conta, garante o vínculo correto de empresa e van
-        if (reqAny.data_owner_id) {
-            data.usuario_id = reqAny.data_owner_id;
+        if (request.data_owner_id) {
+            data.usuario_id = request.data_owner_id;
         }
-        if (reqAny.assigned_veiculo_id && !data.veiculo_id) {
-            data.veiculo_id = reqAny.assigned_veiculo_id;
+        if (request.assigned_veiculo_id && !data.veiculo_id) {
+            data.veiculo_id = request.assigned_veiculo_id;
         }
 
         const result = await gastoService.createGasto(data);
@@ -44,11 +42,10 @@ export const gastoController = {
     async listByUsuario(request: FastifyRequest, reply: FastifyReply) {
         const { usuarioId } = z.object({ usuarioId: z.string().uuid() }).parse(request.params);
         const filtros = listGastosFiltersSchema.parse(request.query);
-        const reqAny = request as any;
 
-        const targetOwnerId = reqAny.data_owner_id || usuarioId;
-        if (reqAny.assigned_veiculo_id && !filtros.veiculo_id) {
-            filtros.veiculo_id = reqAny.assigned_veiculo_id;
+        const targetOwnerId = request.data_owner_id || usuarioId;
+        if (request.assigned_veiculo_id) {
+            filtros.veiculo_id = request.assigned_veiculo_id;
         }
 
         const gastos = await gastoService.listGastos(targetOwnerId, filtros);

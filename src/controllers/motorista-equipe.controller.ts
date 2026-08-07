@@ -11,8 +11,8 @@ import {
 
 export const motoristaEquipeController = {
   list: async (request: FastifyRequest, reply: FastifyReply) => {
-    const gestorId = (request as any).data_owner_id;
-    const assignedVeiculoId = (request as any).assigned_veiculo_id;
+    const gestorId = request.data_owner_id;
+    const assignedVeiculoId = request.assigned_veiculo_id;
 
     const querySchema = z.object({
       veiculo_id: z.string().optional(),
@@ -21,26 +21,33 @@ export const motoristaEquipeController = {
     const { veiculo_id } = querySchema.parse(request.query);
     const effectiveVeiculoId = assignedVeiculoId || veiculo_id;
 
+    if (!gestorId) {
+      throw new AppError("Não autorizado", 401);
+    }
+
     const membros = await motoristaEquipeService.listMembros(gestorId, effectiveVeiculoId);
 
     return reply.send({ membros });
   },
 
   create: async (request: FastifyRequest, reply: FastifyReply) => {
-    const gestorId = (request as any).data_owner_id;
-    const callerTipo = (request as any).profile?.tipo;
-    const assignedVeiculoId = (request as any).assigned_veiculo_id;
+    const gestorId = request.data_owner_id;
+    const callerTipo = request.profile?.tipo as UserType | undefined;
+    const assignedVeiculoId = request.assigned_veiculo_id;
+
+    if (!gestorId) {
+      throw new AppError("Não autorizado", 401);
+    }
 
     let body = createMembroEquipeSchema.parse(request.body);
 
-    // Regra de Negócio: Motorista Auxiliar só pode cadastrar Monitores na sua própria van
     if (callerTipo === UserType.MOTORISTA_AUXILIAR) {
       if (!assignedVeiculoId) {
         throw new AppError("Motorista auxiliar sem veículo atribuído", 400);
       }
       body = {
         ...body,
-        tipo: UserType.MONITOR as any,
+        tipo: UserType.MONITOR,
         veiculo_id: assignedVeiculoId,
       };
     }
@@ -51,9 +58,13 @@ export const motoristaEquipeController = {
   },
 
   update: async (request: FastifyRequest, reply: FastifyReply) => {
-    const gestorId = (request as any).data_owner_id;
-    const callerTipo = (request as any).profile?.tipo;
-    const assignedVeiculoId = (request as any).assigned_veiculo_id;
+    const gestorId = request.data_owner_id;
+    const callerTipo = request.profile?.tipo as UserType | undefined;
+    const assignedVeiculoId = request.assigned_veiculo_id;
+
+    if (!gestorId) {
+      throw new AppError("Não autorizado", 401);
+    }
 
     const paramsSchema = z.object({ id: z.string().uuid() });
     const { id } = paramsSchema.parse(request.params);
@@ -63,8 +74,8 @@ export const motoristaEquipeController = {
     if (callerTipo === UserType.MOTORISTA_AUXILIAR) {
       body = {
         ...body,
-        tipo: UserType.MONITOR as any,
-        veiculo_id: assignedVeiculoId,
+        tipo: UserType.MONITOR,
+        veiculo_id: assignedVeiculoId || undefined,
       };
     }
 
@@ -74,7 +85,9 @@ export const motoristaEquipeController = {
   },
 
   redefinirSenha: async (request: FastifyRequest, reply: FastifyReply) => {
-    const gestorId = (request as any).data_owner_id;
+    const gestorId = request.data_owner_id;
+    if (!gestorId) throw new AppError("Não autorizado", 401);
+
     const paramsSchema = z.object({ id: z.string().uuid() });
     const { id } = paramsSchema.parse(request.params);
 
@@ -85,7 +98,9 @@ export const motoristaEquipeController = {
   },
 
   desativar: async (request: FastifyRequest, reply: FastifyReply) => {
-    const gestorId = (request as any).data_owner_id;
+    const gestorId = request.data_owner_id;
+    if (!gestorId) throw new AppError("Não autorizado", 401);
+
     const paramsSchema = z.object({ id: z.string().uuid() });
     const { id } = paramsSchema.parse(request.params);
 
@@ -95,7 +110,9 @@ export const motoristaEquipeController = {
   },
 
   delete: async (request: FastifyRequest, reply: FastifyReply) => {
-    const gestorId = (request as any).data_owner_id;
+    const gestorId = request.data_owner_id;
+    if (!gestorId) throw new AppError("Não autorizado", 401);
+
     const paramsSchema = z.object({ id: z.string().uuid() });
     const { id } = paramsSchema.parse(request.params);
 

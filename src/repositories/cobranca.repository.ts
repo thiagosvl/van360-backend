@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { CobrancaStatus, STATUS_ASSINATURA_LIBERADA } from "../types/enums.js";
 import { getLastDayOfMonth } from "../utils/date.utils.js";
+import { isValidFilterValue } from "../utils/filter.utils.js";
 
 export const cobrancaRepository = {
     async countByPassageiro(passageiroId: string) {
@@ -10,7 +11,7 @@ export const cobrancaRepository = {
             .eq("passageiro_id", passageiroId);
     },
 
-    async insert(data: any) {
+    async insert(data: Record<string, unknown>) {
         return supabaseAdmin
             .from("cobrancas")
             .insert([data])
@@ -18,7 +19,7 @@ export const cobrancaRepository = {
             .single();
     },
 
-    async update(id: string, data: any) {
+    async update(id: string, data: Record<string, unknown>) {
         return supabaseAdmin
             .from("cobrancas")
             .update(data)
@@ -59,18 +60,18 @@ export const cobrancaRepository = {
             .single();
     },
 
-    async listWithFilters(filtros: any) {
+    async listWithFilters(filtros: { usuarioId?: string; veiculoId?: string; passageiroId?: string; status?: string; dataInicio?: string; dataFim?: string; mes?: number | string; ano?: number | string; search?: string }) {
         let query = supabaseAdmin
             .from("cobrancas")
             .select("*, passageiro:passageiros!inner(nome, nome_responsavel, telefone_responsavel)")
             .order("data_vencimento", { ascending: false });
 
-        if (filtros.usuarioId) query = query.eq("usuario_id", filtros.usuarioId);
-        if (filtros.veiculoId) query = query.eq("passageiros.veiculo_id", filtros.veiculoId);
-        if (filtros.passageiroId) query = query.eq("passageiro_id", filtros.passageiroId);
-        if (filtros.status) query = query.eq("status", filtros.status);
-        if (filtros.dataInicio) query = query.gte("data_vencimento", filtros.dataInicio);
-        if (filtros.dataFim) query = query.lte("data_vencimento", filtros.dataFim);
+        if (isValidFilterValue(filtros.usuarioId)) query = query.eq("usuario_id", filtros.usuarioId);
+        if (isValidFilterValue(filtros.veiculoId)) query = query.eq("passageiros.veiculo_id", filtros.veiculoId);
+        if (isValidFilterValue(filtros.passageiroId)) query = query.eq("passageiro_id", filtros.passageiroId);
+        if (isValidFilterValue(filtros.status)) query = query.eq("status", filtros.status);
+        if (isValidFilterValue(filtros.dataInicio)) query = query.gte("data_vencimento", filtros.dataInicio);
+        if (isValidFilterValue(filtros.dataFim)) query = query.lte("data_vencimento", filtros.dataFim);
 
         if (filtros.mes && filtros.ano) {
             const startStr = `${filtros.ano}-${String(filtros.mes).padStart(2, '0')}-01`;
@@ -81,7 +82,7 @@ export const cobrancaRepository = {
             query = query.lte("data_vencimento", endStr);
         }
 
-        if (filtros.search) {
+        if (isValidFilterValue(filtros.search)) {
             query = query.or(`nome.ilike.%${filtros.search}%,nome_responsavel.ilike.%${filtros.search}%`, { foreignTable: 'passageiro' });
         }
 
@@ -95,7 +96,7 @@ export const cobrancaRepository = {
             .eq("passageiro_id", passageiroId)
             .order("data_vencimento", { ascending: false });
 
-        if (ano) {
+        if (isValidFilterValue(ano)) {
             query = query.eq("ano", parseInt(ano));
         }
 
@@ -163,7 +164,7 @@ export const cobrancaRepository = {
             .in("id", ids);
     },
 
-    async registrarPagamentoManual(id: string, data: any) {
+    async registrarPagamentoManual(id: string, data: Record<string, unknown>) {
         return supabaseAdmin
             .from("cobrancas")
             .update(data)
@@ -189,13 +190,14 @@ export const cobrancaRepository = {
     },
 
     async getForPeriodForDashboard(usuarioId: string, start: string, end: string, veiculoId?: string) {
+        const hasVeiculo = isValidFilterValue(veiculoId);
         let query = supabaseAdmin
             .from("cobrancas")
-            .select(veiculoId ? "*, passageiro:passageiros!inner(veiculo_id)" : "*")
+            .select(hasVeiculo ? "*, passageiro:passageiros!inner(veiculo_id)" : "*")
             .eq("usuario_id", usuarioId)
             .gte("data_vencimento", start)
             .lte("data_vencimento", end);
-        if (veiculoId) {
+        if (hasVeiculo) {
             query = query.eq("passageiros.veiculo_id", veiculoId);
         }
 

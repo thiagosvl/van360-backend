@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "../config/supabase.js";
+import { isValidFilterValue } from "../utils/filter.utils.js";
 
 export const prePassageiroRepository = {
   async listPrePassageiros(usuarioId: string, search?: string) {
@@ -8,7 +9,7 @@ export const prePassageiroRepository = {
       .eq("usuario_id", usuarioId)
       .order("created_at");
 
-    if (search?.trim().length) {
+    if (isValidFilterValue(search)) {
       query = query.or(
         `nome.ilike.%${search}%,nome_responsavel.ilike.%${search}%`
       );
@@ -20,7 +21,7 @@ export const prePassageiroRepository = {
     return data || [];
   },
 
-    async insert(data: Record<string, any>) {
+    async insert(data: Record<string, unknown>) {
         const { data: result, error } = await supabaseAdmin
             .from("pre_passageiros")
             .insert([data])

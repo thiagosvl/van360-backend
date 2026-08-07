@@ -15,15 +15,15 @@ export async function verifySupabaseJWT(
     }
 
     const token = authHeader.split(" ")[1];
-    
+
     const { data: { user }, error: authError } = await authProvider.getUser(token);
 
     if (authError || !user) {
       const isUserNotFound = authError?.message?.toLowerCase().includes("user not found");
-      
-      return reply.status(401).send({ 
-        error: isUserNotFound ? "Usuário não encontrado no sistema de autenticação" : "Sessão inválida ou expirada", 
-        code: isUserNotFound ? "AUTH_USER_NOT_FOUND" : "AUTH_JWT_INVALID" 
+
+      return reply.status(401).send({
+        error: isUserNotFound ? "Usuário não encontrado no sistema de autenticação" : "Sessão inválida ou expirada",
+        code: isUserNotFound ? "AUTH_USER_NOT_FOUND" : "AUTH_JWT_INVALID"
       });
     }
 
@@ -37,48 +37,48 @@ export async function verifySupabaseJWT(
     }
 
     if (!profile) {
-      return reply.status(401).send({ 
-        error: "Perfil não registrado no sistema", 
-        code: "AUTH_PROFILE_NOT_FOUND" 
+      return reply.status(401).send({
+        error: "Perfil não registrado no sistema",
+        code: "AUTH_PROFILE_NOT_FOUND"
       });
     }
 
     if (profile.ativo === false) {
-      return reply.status(403).send({ 
-        error: "Esta conta está desativada", 
-        code: "AUTH_USER_INACTIVE" 
+      return reply.status(403).send({
+        error: "Esta conta está desativada",
+        code: "AUTH_USER_INACTIVE"
       });
     }
 
     const isSubAccount = !!profile.conta_pai_id || profile.tipo === UserType.MOTORISTA_AUXILIAR || profile.tipo === UserType.MONITOR;
 
-    (request as any).user = {
+    request.user = {
       ...user,
       app_metadata: {
         ...user.app_metadata,
         role: profile.tipo,
       },
     };
-    (request as any).profile = profile;
-    (request as any).usuario_id = profile.id;
-    (request as any).data_owner_id = profile.conta_pai_id || profile.id;
-    (request as any).assigned_veiculo_id = isSubAccount ? (profile.veiculo_id || null) : null;
+    request.profile = profile;
+    request.usuario_id = profile.id;
+    request.data_owner_id = profile.conta_pai_id || profile.id;
+    request.assigned_veiculo_id = isSubAccount ? (profile.veiculo_id || null) : null;
 
     if (isSubAccount && profile.conta_pai_id) {
-      const bodyContaPai = (request.body as any)?.conta_pai_id;
-      const queryContaPai = (request.query as any)?.conta_pai_id;
-      const paramContaPai = (request.params as any)?.conta_pai_id;
+      const bodyContaPai = (request.body as Record<string, unknown> | undefined)?.conta_pai_id;
+      const queryContaPai = (request.query as Record<string, unknown> | undefined)?.conta_pai_id;
+      const paramContaPai = (request.params as Record<string, unknown> | undefined)?.conta_pai_id;
       const attemptedContaPai = bodyContaPai || queryContaPai || paramContaPai;
 
       if (attemptedContaPai && attemptedContaPai !== profile.conta_pai_id) {
         return reply.status(403).send({
-          error: "Operação negada: sub-conta não pode manipular dados de outro gestor",
+          error: "Operação negada: sub-conta não pode manipular dados de outro usuario",
           code: "FORBIDDEN_CONTA_PAI_MISMATCH"
         });
       }
     }
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     return reply.status(401).send({ error: "Falha na autenticação", code: "AUTH_UNEXPECTED_ERROR" });
   }
 }

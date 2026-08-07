@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { TipoChavePix, AtividadeAcao } from "../src/types/enums.js";
+import { TipoChavePix, AtividadeAcao, UserType } from "../src/types/enums.js";
 import { isValidPixKey, isValidCPF, isValidCNPJ } from "../src/utils/validators.js";
 import { atualizarPixUsuario } from "../src/services/usuario.service.js";
 import { userRepository } from "../src/repositories/user.repository.js";
@@ -11,8 +11,8 @@ const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
 
 vi.mock("../src/middleware/auth.js", () => ({
   authenticate: async (request: any) => {
-    request.user = { id: TEST_USER_ID, app_metadata: { role: "MOTORISTA" } };
-    request.profile = { id: TEST_USER_ID, tipo: "MOTORISTA" };
+    request.user = { id: TEST_USER_ID, app_metadata: { role: UserType.MOTORISTA } };
+    request.profile = { id: TEST_USER_ID, tipo: UserType.MOTORISTA };
     request.usuario_id = TEST_USER_ID;
   },
   verifySupabaseJWT: async (request: any, reply: any) => {
@@ -20,7 +20,9 @@ vi.mock("../src/middleware/auth.js", () => ({
     if (!authHeader) {
       return reply.status(401).send({ error: "Token não fornecido." });
     }
-    request.user = { id: TEST_USER_ID };
+    request.user = { id: TEST_USER_ID, app_metadata: { role: UserType.MOTORISTA } };
+    request.profile = { id: TEST_USER_ID, tipo: UserType.MOTORISTA };
+    request.usuario_id = TEST_USER_ID;
   },
 }));
 

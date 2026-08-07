@@ -3,6 +3,7 @@ import { AuthController } from "../controllers/auth.controller.js";
 import { usuarioResumoController } from "../controllers/usuario-resumo.controller.js";
 import { UsuarioController } from "../controllers/usuario.controller.js";
 import { verifySupabaseJWT } from "../middleware/auth.js";
+import { requirePermission } from "../middleware/permissions.middleware.js";
 
 export default async function usuarioRoute(app: FastifyInstance) {
 
@@ -10,9 +11,10 @@ export default async function usuarioRoute(app: FastifyInstance) {
     app.post("/registrar", AuthController.registrar);
 
     // --- Rotas de Usuário ---
-    app.patch("/:id", { onRequest: [verifySupabaseJWT] }, UsuarioController.atualizarUsuario);
-    app.patch("/:id/pix", { onRequest: [verifySupabaseJWT] }, UsuarioController.atualizarPixUsuario);
-    app.patch("/:id/canal-aquisicao", { onRequest: [verifySupabaseJWT] }, UsuarioController.atualizarCanalAquisicao);
-    app.get("/:usuarioId/resumo", { onRequest: [verifySupabaseJWT] }, usuarioResumoController.getResumo);
+    app.patch("/:id", { onRequest: [verifySupabaseJWT], preHandler: [requirePermission("financeiro.visualizar")] }, UsuarioController.atualizarUsuario);
+    app.patch("/:id/pix", { onRequest: [verifySupabaseJWT], preHandler: [requirePermission("financeiro.visualizar")] }, UsuarioController.atualizarPixUsuario);
+    app.patch("/:id/canal-aquisicao", { onRequest: [verifySupabaseJWT], preHandler: [requirePermission("financeiro.visualizar")] }, UsuarioController.atualizarCanalAquisicao);
+    app.get("/:usuarioId/resumo", { onRequest: [verifySupabaseJWT], preHandler: [requirePermission("relatorios.visualizar")] }, usuarioResumoController.getResumo);
 
 }
+

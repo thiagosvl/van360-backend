@@ -7,17 +7,17 @@ export const historicoController = {
   listByEntidade: async (request: FastifyRequest, reply: FastifyReply) => {
     const { entidadeTipo, entidadeId } = request.params as { entidadeTipo: string; entidadeId: string };
 
-    if (!Object.values(AtividadeEntidadeTipo).includes(entidadeTipo as any)) {
+    if (!Object.values(AtividadeEntidadeTipo).includes(entidadeTipo as AtividadeEntidadeTipo)) {
       throw new AppError("Tipo de entidade inválido", 400);
     }
 
-    const atividades = await historicoService.listByEntidade(entidadeTipo as any, entidadeId);
+    const atividades = await historicoService.listByEntidade(entidadeTipo as AtividadeEntidadeTipo, entidadeId);
     return reply.status(200).send(atividades);
   },
 
   listByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {
     const { usuarioId } = request.params as { usuarioId: string };
-    const targetOwnerId = (request as any).data_owner_id || usuarioId;
+    const targetOwnerId = request.data_owner_id || usuarioId;
     const atividades = await historicoService.listByUsuario(targetOwnerId);
     return reply.status(200).send(atividades);
   }

@@ -1,8 +1,9 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { ListVeiculosFiltersDTO } from "../types/dtos/veiculo.dto.js";
+import { isValidFilterValue } from "../utils/filter.utils.js";
 
 export const veiculoRepository = {
-    async insert(data: any) {
+    async insert(data: Record<string, unknown>) {
         return supabaseAdmin
             .from("veiculos")
             .insert([data])
@@ -10,7 +11,7 @@ export const veiculoRepository = {
             .single();
     },
 
-    async update(id: string, data: any) {
+    async update(id: string, data: Record<string, unknown>) {
         return supabaseAdmin
             .from("veiculos")
             .update(data)
@@ -42,22 +43,24 @@ export const veiculoRepository = {
             .eq("usuario_id", usuarioId)
             .order("placa", { ascending: true });
 
-        if (filtros?.search) {
+        if (isValidFilterValue(filtros?.search)) {
             query = query.or(
                 `placa.ilike.%${filtros.search}%,marca.ilike.%${filtros.search}%,modelo.ilike.%${filtros.search}%`
             );
         }
 
-        if (filtros?.placa) query = query.eq("placa", filtros.placa);
-        if (filtros?.marca) query = query.eq("marca", filtros.marca);
-        if (filtros?.modelo) query = query.eq("modelo", filtros.modelo);
+        if (isValidFilterValue(filtros?.placa)) query = query.eq("placa", filtros.placa);
+        if (isValidFilterValue(filtros?.marca)) query = query.eq("marca", filtros.marca);
+        if (isValidFilterValue(filtros?.modelo)) query = query.eq("modelo", filtros.modelo);
 
-        if (filtros?.ativo !== undefined && filtros?.includeId) {
-            query = query.or(`ativo.eq.${filtros.ativo === "true"},id.eq.${filtros.includeId}`);
-        } else if (filtros?.ativo !== undefined) {
-            query = query.eq("ativo", filtros.ativo === "true");
-        } else if (filtros?.includeId) {
-            query = query.eq("id", filtros.includeId);
+        const hasValidIncludeId = isValidFilterValue(filtros?.includeId);
+        const hasValidAtivo = isValidFilterValue(filtros?.ativo);
+        if (hasValidAtivo && hasValidIncludeId) {
+            query = query.or(`ativo.eq.${filtros?.ativo === "true"},id.eq.${filtros?.includeId}`);
+        } else if (hasValidAtivo) {
+            query = query.eq("ativo", filtros?.ativo === "true");
+        } else if (hasValidIncludeId) {
+            query = query.eq("id", filtros?.includeId);
         }
 
         return query;
@@ -71,22 +74,24 @@ export const veiculoRepository = {
             .eq("passageiros.ativo", true)
             .order("placa", { ascending: true });
 
-        if (filtros?.search) {
+        if (isValidFilterValue(filtros?.search)) {
             query = query.or(
                 `placa.ilike.%${filtros.search}%,marca.ilike.%${filtros.search}%,modelo.ilike.%${filtros.search}%`
             );
         }
 
-        if (filtros?.placa) query = query.eq("placa", filtros.placa);
-        if (filtros?.marca) query = query.eq("marca", filtros.marca);
-        if (filtros?.modelo) query = query.eq("modelo", filtros.modelo);
+        if (isValidFilterValue(filtros?.placa)) query = query.eq("placa", filtros.placa);
+        if (isValidFilterValue(filtros?.marca)) query = query.eq("marca", filtros.marca);
+        if (isValidFilterValue(filtros?.modelo)) query = query.eq("modelo", filtros.modelo);
 
-        if (filtros?.ativo !== undefined && filtros?.includeId) {
-            query = query.or(`ativo.eq.${filtros.ativo === "true"},id.eq.${filtros.includeId}`);
-        } else if (filtros?.ativo !== undefined) {
-            query = query.eq("ativo", filtros.ativo === "true");
-        } else if (filtros?.includeId) {
-            query = query.eq("id", filtros.includeId);
+        const hasValidIncludeId = isValidFilterValue(filtros?.includeId);
+        const hasValidAtivo = isValidFilterValue(filtros?.ativo);
+        if (hasValidAtivo && hasValidIncludeId) {
+            query = query.or(`ativo.eq.${filtros?.ativo === "true"},id.eq.${filtros?.includeId}`);
+        } else if (hasValidAtivo) {
+            query = query.eq("ativo", filtros?.ativo === "true");
+        } else if (hasValidIncludeId) {
+            query = query.eq("id", filtros?.includeId);
         }
 
         return query;

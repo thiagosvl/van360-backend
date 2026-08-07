@@ -5,7 +5,7 @@ import { createGastoCategoriaSchema, updateGastoCategoriaSchema } from "../types
 
 export const gastoCategoriaController = {
     async list(request: FastifyRequest, reply: FastifyReply) {
-        const usuarioId = (request as any).data_owner_id || (request as any).usuario_id;
+        const usuarioId = request.data_owner_id || request.usuario_id;
         if (!usuarioId) {
             return reply.status(401).send({ error: "Usuário não autenticado." });
         }
@@ -14,7 +14,7 @@ export const gastoCategoriaController = {
     },
 
     async create(request: FastifyRequest, reply: FastifyReply) {
-        const usuarioId = (request as any).data_owner_id || (request as any).usuario_id;
+        const usuarioId = request.data_owner_id || request.usuario_id;
         if (!usuarioId) {
             return reply.status(401).send({ error: "Usuário não autenticado." });
         }
@@ -24,7 +24,7 @@ export const gastoCategoriaController = {
     },
 
     async update(request: FastifyRequest, reply: FastifyReply) {
-        const usuarioId = (request as any).data_owner_id || (request as any).usuario_id;
+        const usuarioId = request.data_owner_id || request.usuario_id;
         if (!usuarioId) {
             return reply.status(401).send({ error: "Usuário não autenticado." });
         }
@@ -35,7 +35,7 @@ export const gastoCategoriaController = {
     },
 
     async delete(request: FastifyRequest, reply: FastifyReply) {
-        const usuarioId = (request as any).data_owner_id || (request as any).usuario_id;
+        const usuarioId = request.data_owner_id || request.usuario_id;
         if (!usuarioId) {
             return reply.status(401).send({ error: "Usuário não autenticado." });
         }

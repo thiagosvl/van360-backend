@@ -21,6 +21,7 @@ declare module "fastify" {
       [key: string]: unknown;
     };
     data_owner_id?: string;
+    assigned_veiculo_id?: string | null;
     usuario_id?: string;
     requestContext?: {
       get<T = unknown>(key: string): T | undefined;

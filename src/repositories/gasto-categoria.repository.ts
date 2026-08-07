@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "../config/supabase.js";
 
 export const gastoCategoriaRepository = {
-    async insert(data: any) {
+    async insert(data: Record<string, unknown>) {
         return supabaseAdmin
             .from("gasto_categorias")
             .insert([data])
@@ -9,7 +9,7 @@ export const gastoCategoriaRepository = {
             .single();
     },
 
-    async update(id: string, data: any) {
+    async update(id: string, data: Record<string, unknown>) {
         return supabaseAdmin
             .from("gasto_categorias")
             .update(data)

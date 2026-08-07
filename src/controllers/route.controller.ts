@@ -2,6 +2,7 @@ import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
 import { AppError } from "../errors/AppError.js";
 import { routeService } from "../services/route.service.js";
+import { RouteStopStatus } from "../types/enums.js";
 
 import {
   createRouteSchema,
@@ -15,13 +16,12 @@ export const routeController = {
   create: async (request: FastifyRequest, reply: FastifyReply) => {
     logger.info("RouteController.create - Starting");
     const data = createRouteSchema.parse(request.body);
-    const reqAny = request as any;
 
-    if (reqAny.data_owner_id) {
-      data.usuario_id = reqAny.data_owner_id;
+    if (request.data_owner_id) {
+      data.usuario_id = request.data_owner_id;
     }
-    if (reqAny.assigned_veiculo_id && !data.veiculo_id) {
-      data.veiculo_id = reqAny.assigned_veiculo_id;
+    if (request.assigned_veiculo_id && !data.veiculo_id) {
+      data.veiculo_id = request.assigned_veiculo_id;
     }
 
     const result = await routeService.createRoute(data);
@@ -52,23 +52,21 @@ export const routeController = {
 
   listByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {
     const { usuarioId } = request.params as { usuarioId: string };
-    const reqAny = request as any;
-    const targetOwnerId = reqAny.data_owner_id || usuarioId;
-    const assignedVeiculoId = reqAny.assigned_veiculo_id;
+    const targetOwnerId = request.data_owner_id || usuarioId;
+    const assignedVeiculoId = request.assigned_veiculo_id;
 
     logger.info({ usuarioId, targetOwnerId, assignedVeiculoId }, "RouteController.listByUsuario");
-    const routes = await routeService.listRoutesByUsuario(targetOwnerId, assignedVeiculoId);
+    const routes = await routeService.listRoutesByUsuario(targetOwnerId, assignedVeiculoId || undefined);
     return reply.status(200).send(routes);
   },
 
   listExecucoesByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {
     const { usuarioId } = request.params as { usuarioId: string };
-    const reqAny = request as any;
-    const targetOwnerId = reqAny.data_owner_id || usuarioId;
-    const assignedVeiculoId = reqAny.assigned_veiculo_id;
+    const targetOwnerId = request.data_owner_id || usuarioId;
+    const assignedVeiculoId = request.assigned_veiculo_id;
 
     logger.info({ usuarioId, targetOwnerId, assignedVeiculoId }, "RouteController.listExecucoesByUsuario");
-    const execs = await routeService.listExecucoesByUsuario(targetOwnerId, assignedVeiculoId);
+    const execs = await routeService.listExecucoesByUsuario(targetOwnerId, assignedVeiculoId || undefined);
     return reply.status(200).send(execs);
   },
 
@@ -83,7 +81,7 @@ export const routeController = {
     const { id } = request.params as { id: string };
     logger.info({ routeId: id }, "RouteController.iniciarRota - Starting");
 
-    const authUid = (request as any).user?.id;
+    const authUid = request.user?.id;
     if (!authUid) {
       throw new AppError("Não autorizado", 401);
     }
@@ -94,7 +92,11 @@ export const routeController = {
 
   atualizarParadaStatus: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
-    const { parada_id, status } = request.body as { parada_id: string; status: any };
+    const { parada_id: bodyParadaId, status } = stepRouteExecutionSchema.parse(request.body);
+    const parada_id = bodyParadaId || (request.body as { parada_id?: string }).parada_id;
+    if (!parada_id) {
+      throw new AppError("ID da parada é obrigatório", 400);
+    }
     const startTime = Date.now();
     logger.info({ execucaoId: id, parada_id, status }, "RouteController.atualizarParadaStatus - Starting");
     const result = await routeService.atualizarParadaStatus(id, parada_id, status);
@@ -127,7 +129,7 @@ export const routeController = {
   createAusencia: async (request: FastifyRequest, reply: FastifyReply) => {
     logger.info("RouteController.createAusencia - Starting");
     const data = createAusenciaSchema.parse(request.body);
-    const authUid = (request as any).user?.id;
+    const authUid = request.user?.id;
     const result = await routeService.registrarAusenciaAntecipada({
       ...data,
       registrado_por: authUid

@@ -132,11 +132,9 @@ export class WhatsappService {
                     url: url,
                     enabled: true,
                     byEvents: false,
-                    base64: true,
+                    base64: false,
                     events: [
                         EvolutionEvent._CONNECTION_UPDATE,
-                        EvolutionEvent._MESSAGES_UPSERT,
-                        EvolutionEvent._MESSAGES_UPDATE,
                         EvolutionEvent._QRCODE_UPDATED
                     ]
                 }
@@ -193,10 +191,9 @@ export class WhatsappService {
                         url: WEBHOOK_URL,
                         enabled: true,
                         byEvents: false,
+                        base64: false,
                         events: [
                             EvolutionEvent._CONNECTION_UPDATE,
-                            EvolutionEvent._MESSAGES_UPSERT,
-                            EvolutionEvent._MESSAGES_UPDATE,
                             EvolutionEvent._QRCODE_UPDATED
                         ]
                     }

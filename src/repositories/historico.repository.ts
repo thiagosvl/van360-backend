@@ -2,13 +2,13 @@ import { supabaseAdmin } from "../config/supabase.js";
 import { AtividadeEntidadeTipo } from "../types/enums.js";
 
 export const historicoRepository = {
-    async insert(data: any) {
+    async insert(data: Record<string, unknown>) {
         return supabaseAdmin
             .from('historico_atividades')
             .insert([data]);
     },
 
-    async insertBulk(dataArray: any[]) {
+    async insertBulk(dataArray: Record<string, unknown>[]) {
         if (dataArray.length === 0) return { data: null, error: null };
         return supabaseAdmin
             .from('historico_atividades')

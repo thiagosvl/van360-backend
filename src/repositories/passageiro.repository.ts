@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "../config/supabase.js";
+import { isValidFilterValue } from "../utils/filter.utils.js";
 
 export const passageiroRepository = {
   /**
@@ -27,7 +28,7 @@ export const passageiroRepository = {
     return data;
   },
 
-  async insert(data: any) {
+  async insert(data: Record<string, unknown>) {
     return supabaseAdmin
         .from("passageiros")
         .insert([data])
@@ -35,7 +36,7 @@ export const passageiroRepository = {
         .single();
   },
 
-  async update(id: string, data: any) {
+  async update(id: string, data: Record<string, unknown>) {
     return supabaseAdmin
         .from("passageiros")
         .update(data)
@@ -50,7 +51,7 @@ export const passageiroRepository = {
 
   async getSummaryForDashboard(usuarioId: string, veiculoId?: string) {
     let query = supabaseAdmin.from("passageiros").select("id, ativo, valor_cobranca, data_inicio_cobranca, data_fim_cobranca, created_at").eq("usuario_id", usuarioId);
-    if (veiculoId) {
+    if (isValidFilterValue(veiculoId)) {
       query = query.eq("veiculo_id", veiculoId);
     }
     return query;
@@ -72,7 +73,7 @@ export const passageiroRepository = {
         .single();
   },
 
-  async list(usuarioId: string, filtros?: any) {
+  async list(usuarioId: string, filtros?: { search?: string; escola?: string; veiculo?: string; periodo?: string; ativo?: string }) {
     let query = supabaseAdmin
         .from("passageiros")
         .select(`
@@ -85,16 +86,16 @@ export const passageiroRepository = {
         .eq("usuario_id", usuarioId)
         .order("nome", { ascending: true });
 
-    if (filtros?.search) {
+    if (isValidFilterValue(filtros?.search)) {
         query = query.or(
             `nome.ilike.%${filtros.search}%,nome_responsavel.ilike.%${filtros.search}%`
         );
     }
 
-    if (filtros?.escola && filtros.escola !== "all" && filtros.escola !== "TODAS") query = query.eq("escola_id", filtros.escola);
-    if (filtros?.veiculo && filtros.veiculo !== "all" && filtros.veiculo !== "TODOS") query = query.eq("veiculo_id", filtros.veiculo);
-    if (filtros?.periodo && filtros.periodo !== "all" && filtros.periodo !== "TODOS") query = query.eq("periodo", filtros.periodo.toLowerCase());
-    if (filtros?.ativo !== undefined) query = query.eq("ativo", filtros.ativo === "true");
+    if (isValidFilterValue(filtros?.escola)) query = query.eq("escola_id", filtros.escola);
+    if (isValidFilterValue(filtros?.veiculo)) query = query.eq("veiculo_id", filtros.veiculo);
+    if (isValidFilterValue(filtros?.periodo)) query = query.eq("periodo", filtros.periodo.toLowerCase());
+    if (isValidFilterValue(filtros?.ativo)) query = query.eq("ativo", filtros.ativo === "true");
 
     return query;
   },
@@ -114,14 +115,14 @@ export const passageiroRepository = {
         .single();
   },
 
-  async countByUsuario(usuarioId: string, filtros?: any) {
+  async countByUsuario(usuarioId: string, filtros?: { ativo?: string; veiculo?: string }) {
     let query = supabaseAdmin
         .from("passageiros")
         .select("id", { count: "exact", head: true })
         .eq("usuario_id", usuarioId);
 
-    if (filtros?.ativo !== undefined) query = query.eq("ativo", filtros.ativo === "true");
-    if (filtros?.veiculo && filtros.veiculo !== "all" && filtros.veiculo !== "TODOS") query = query.eq("veiculo_id", filtros.veiculo);
+    if (isValidFilterValue(filtros?.ativo)) query = query.eq("ativo", filtros.ativo === "true");
+    if (isValidFilterValue(filtros?.veiculo)) query = query.eq("veiculo_id", filtros.veiculo);
 
     return query;
   },
@@ -173,7 +174,7 @@ export const passageiroRepository = {
       .eq("usuario_id", usuarioId)
       .eq("ativo", true);
 
-    if (veiculoId) {
+    if (isValidFilterValue(veiculoId)) {
       query = query.eq("veiculo_id", veiculoId);
     }
 

@@ -95,7 +95,7 @@ export const contractRepository = {
     return count || 0;
   },
 
-  async insert(data: any) {
+  async insert(data: Record<string, unknown>) {
     const { data: result, error } = await supabaseAdmin
       .from("contratos")
       .insert([data])
@@ -106,7 +106,7 @@ export const contractRepository = {
     return result;
   },
 
-  async updateStatus(id: string, data: Partial<any>) {
+  async updateStatus(id: string, data: Record<string, unknown>) {
     const { error } = await supabaseAdmin
       .from("contratos")
       .update(data)

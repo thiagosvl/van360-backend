@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { CreateMembroEquipeDTO, UpdateMembroEquipeDTO } from "../types/dtos/motorista-equipe.dto.js";
+import { isValidFilterValue } from "../utils/filter.utils.js";
 
 export const motoristaEquipeRepository = {
   async listByGestor(gestorId: string, veiculoIdFilter?: string) {
@@ -9,7 +10,7 @@ export const motoristaEquipeRepository = {
       .eq("conta_pai_id", gestorId)
       .order("created_at", { ascending: false });
 
-    if (veiculoIdFilter) {
+    if (isValidFilterValue(veiculoIdFilter)) {
       query = query.eq("veiculo_id", veiculoIdFilter);
     }
 
@@ -59,7 +60,7 @@ export const motoristaEquipeRepository = {
   },
 
   async updateProfile(id: string, gestorId: string, data: UpdateMembroEquipeDTO) {
-    const payload: Record<string, any> = {};
+    const payload: Record<string, unknown> = {};
     if (data.nome !== undefined) payload.nome = data.nome;
     if (data.apelido !== undefined) payload.apelido = data.apelido;
     if (data.razao_social !== undefined) payload.razao_social = data.razao_social;

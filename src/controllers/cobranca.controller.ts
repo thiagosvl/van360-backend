@@ -16,9 +16,8 @@ export const cobrancaController = {
   create: async (request: FastifyRequest, reply: FastifyReply) => {
     logger.info("CobrancaController.create - Starting");
     const data = createCobrancaSchema.parse(request.body);
-    const reqAny = request as any;
-    if (reqAny.data_owner_id) {
-      data.usuario_id = reqAny.data_owner_id;
+    if (request.data_owner_id) {
+      data.usuario_id = request.data_owner_id;
     }
     const cobranca = await cobrancaService.createCobranca(data);
     return reply.status(201).send(cobranca);
@@ -47,12 +46,11 @@ export const cobrancaController = {
 
   listWithFilters: async (request: FastifyRequest, reply: FastifyReply) => {
     const filtros = listCobrancasFiltersSchema.parse(request.query);
-    const reqAny = request as any;
-    if (reqAny.data_owner_id) {
-      filtros.usuarioId = reqAny.data_owner_id;
+    if (request.data_owner_id) {
+      filtros.usuarioId = request.data_owner_id;
     }
-    if (reqAny.assigned_veiculo_id && !filtros.veiculoId) {
-      filtros.veiculoId = reqAny.assigned_veiculo_id;
+    if (request.assigned_veiculo_id) {
+      filtros.veiculoId = request.assigned_veiculo_id;
     }
     const cobrancas = await cobrancaService.listCobrancasWithFilters(filtros);
     return reply.status(200).send(cobrancas);
@@ -76,16 +74,15 @@ export const cobrancaController = {
     const { cobrancaId } = request.params as { cobrancaId: string };
     const historico = await historicoService.listByEntidade(AtividadeEntidadeTipo.COBRANCA, cobrancaId);
 
-    // Mapeia para o formato esperado pelo frontend.
     const notificacoesOldFormat = historico
       .filter(h => h.acao === AtividadeAcao.NOTIFICACAO_WHATSAPP)
       .map(h => ({
         id: h.id,
         cobranca_id: h.entidade_id,
-        tipo_evento: h.meta?.tipo_evento || 'MANUAL',
-        canal: h.meta?.canal || 'WHATSAPP',
+        tipo_evento: (h.meta as Record<string, unknown> | undefined)?.tipo_evento || 'MANUAL',
+        canal: (h.meta as Record<string, unknown> | undefined)?.canal || 'WHATSAPP',
         data_envio: h.created_at,
-        tipo_origem: h.meta?.tipo_origem || 'manual'
+        tipo_origem: (h.meta as Record<string, unknown> | undefined)?.tipo_origem || 'manual'
       }));
 
     return reply.status(200).send(notificacoesOldFormat);
@@ -97,8 +94,9 @@ export const cobrancaController = {
       const { novoStatus } = toggleNotificacoesSchema.parse(request.body);
       await cobrancaService.toggleNotificacoes(id, novoStatus);
       return reply.status(200).send({ ativo: novoStatus });
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message, details: err.issues });
+    } catch (err: unknown) {
+      const error = err as Error & { issues?: unknown };
+      return reply.status(400).send({ error: error.message, details: error.issues });
     }
   },
 

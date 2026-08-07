@@ -20,9 +20,8 @@ export const passageiroController = {
   create: async (request: FastifyRequest, reply: FastifyReply) => {
     logger.info("PassageiroController.create - Starting");
     const data = createPassageiroSchema.parse(request.body);
-    const reqAny = request as any;
-    if (reqAny.data_owner_id) {
-      data.usuario_id = reqAny.data_owner_id;
+    if (request.data_owner_id) {
+      data.usuario_id = request.data_owner_id;
     }
 
     const result = await passageiroService.createPassageiro(data);
@@ -32,8 +31,6 @@ export const passageiroController = {
   update: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     logger.info({ passageiroId: id }, "PassageiroController.update - Starting");
-    
-
 
     const data = updatePassageiroSchema.parse(request.body);
     
@@ -45,8 +42,6 @@ export const passageiroController = {
   delete: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     logger.info({ passageiroId: id }, "PassageiroController.delete - Starting");
-
-
 
     await passageiroService.deletePassageiro(id);
     return reply.status(200).send({ success: true });
@@ -61,11 +56,10 @@ export const passageiroController = {
   listByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {
     const { usuarioId } = request.params as { usuarioId: string };
     const filtros = listPassageirosFiltersSchema.parse(request.query);
-    const reqAny = request as any;
 
-    const targetOwnerId = reqAny.data_owner_id || usuarioId;
-    if (reqAny.assigned_veiculo_id && !filtros.veiculo) {
-      filtros.veiculo = reqAny.assigned_veiculo_id;
+    const targetOwnerId = request.data_owner_id || usuarioId;
+    if (request.assigned_veiculo_id) {
+      filtros.veiculo = request.assigned_veiculo_id;
     }
 
     logger.info({ usuarioId, targetOwnerId, filtros }, "PassageiroController.listByUsuario");
@@ -80,9 +74,10 @@ export const passageiroController = {
     try {
         await passageiroService.toggleAtivo(id, novoStatus);
         return reply.status(200).send({ ativo: novoStatus });
-    } catch (err: any) {
-         if (err.message.includes("LIMIT_EXCEEDED")) {
-            throw new AppError(err.message, 403);
+    } catch (err: unknown) {
+         const error = err as Error;
+         if (error.message.includes("LIMIT_EXCEEDED")) {
+            throw new AppError(error.message, 403);
          }
          throw err;
     }
@@ -96,15 +91,14 @@ export const passageiroController = {
 
   countByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {
     const { usuarioId } = request.params as { usuarioId: string };
-    const filtros: any = request.query || {}; 
-    const reqAny = request as any;
+    const filtros = listPassageirosFiltersSchema.parse(request.query || {});
 
-    const targetOwnerId = reqAny.data_owner_id || usuarioId;
-    if (reqAny.assigned_veiculo_id && !filtros.veiculo) {
-      filtros.veiculo = reqAny.assigned_veiculo_id;
+    const targetOwnerId = request.data_owner_id || usuarioId;
+    if (request.assigned_veiculo_id) {
+      filtros.veiculo = request.assigned_veiculo_id;
     }
 
-    const count = await passageiroService.countListPassageirosByUsuario(targetOwnerId, filtros as any);
+    const count = await passageiroService.countListPassageirosByUsuario(targetOwnerId, filtros);
     return reply.status(200).send({ count });
   },
 
@@ -117,27 +111,27 @@ export const passageiroController = {
 
   lookupResponsavel: async (request: FastifyRequest, reply: FastifyReply) => {
     const { cpf } = request.query as { cpf: string };
-    const authUid = (request as any).user?.id;
+    const authUid = request.user?.id;
 
     if (!authUid) {
         throw new AppError("Não autorizado", 401);
     }
     
-    const data = await passageiroService.lookupResponsavelByCpf(authUid, cpf);
+    const targetOwnerId = request.data_owner_id || authUid;
+    const data = await passageiroService.lookupResponsavelByCpf(targetOwnerId, cpf);
 
     return reply.status(200).send(data); 
   },
 
   getAniversariantesDoMes: async (request: FastifyRequest, reply: FastifyReply) => {
-    const reqAny = request as any;
-    const targetOwnerId = reqAny.data_owner_id || reqAny.user?.id;
-    const assignedVeiculoId = reqAny.assigned_veiculo_id;
+    const targetOwnerId = request.data_owner_id || request.user?.id;
+    const assignedVeiculoId = request.assigned_veiculo_id;
 
     if (!targetOwnerId) throw new AppError("Não autorizado", 401);
 
     const { mes } = getAniversariantesQuerySchema.parse(request.query);
 
-    const data = await passageiroService.listarAniversariantesDoMes(targetOwnerId, mes, assignedVeiculoId);
+    const data = await passageiroService.listarAniversariantesDoMes(targetOwnerId, mes, assignedVeiculoId || undefined);
     
     return reply.status(200).send(data);
   },

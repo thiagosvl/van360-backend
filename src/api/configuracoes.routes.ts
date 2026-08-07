@@ -1,23 +1,27 @@
 import { FastifyInstance } from "fastify";
 import { ConfiguracoesController } from "../controllers/configuracoes.controller.js";
-import { verifySupabaseJWT } from "../middleware/auth.js";
+import { authenticate } from "../middleware/auth.js";
+import { requirePermission } from "../middleware/permissions.middleware.js";
 
 export default async function configuracoesRoutes(app: FastifyInstance) {
+  app.addHook("onRequest", authenticate);
+
   app.get(
     "/usuarios/configuracoes",
-    { onRequest: [verifySupabaseJWT] },
+    { preHandler: [requirePermission("financeiro.visualizar")] },
     ConfiguracoesController.obterConfiguracoes
   );
 
   app.put(
     "/usuarios/configuracoes",
-    { onRequest: [verifySupabaseJWT] },
+    { preHandler: [requirePermission("cobrancas.gerenciar")] },
     ConfiguracoesController.atualizarConfiguracoes
   );
 
   app.patch(
     "/usuarios/configuracoes",
-    { onRequest: [verifySupabaseJWT] },
+    { preHandler: [requirePermission("cobrancas.gerenciar")] },
     ConfiguracoesController.atualizarConfiguracoes
   );
 }
+
