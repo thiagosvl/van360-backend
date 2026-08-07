@@ -47,7 +47,7 @@ import { DriverContext, DriverTemplates } from "./templates/driver.template.js";
 import { PassengerContext, PassengerTemplates } from "./templates/passenger.template.js";
 import { RouteContext, RouteTemplates } from "./templates/route.template.js";
 import { NotificationProviderAdapter } from "./ports/notification-provider.port.js";
-import { EvolutionWhatsappQueueAdapter } from "./adapters/evolution.adapter.js";
+import { EvolutionQueueAdapter } from "./adapters/evolution.adapter.js";
 import { MockSmsAdapter } from "./adapters/mock-sms.adapter.js";
 import { MockEmailAdapter } from "./adapters/mock-email.adapter.js";
 import { TelegramAdapter } from "./adapters/telegram.adapter.js";
@@ -122,8 +122,8 @@ class NotificationService {
 
     constructor() {
         this.adapters = {
-            [NotificationChannelEnum.EVOLUTION]: new EvolutionWhatsappQueueAdapter(),
-            [NotificationChannelEnum.WABA]: new EvolutionWhatsappQueueAdapter(), // TODO: Replace with Meta adapter
+            [NotificationChannelEnum.EVOLUTION]: new EvolutionQueueAdapter(),
+            [NotificationChannelEnum.WABA]: new EvolutionQueueAdapter(), // TODO: Replace with Meta adapter
             [NotificationChannelEnum.SMS]: new MockSmsAdapter(),
             [NotificationChannelEnum.EMAIL]: new MockEmailAdapter(),
             [NotificationChannelEnum.TELEGRAM]: new TelegramAdapter()
@@ -273,7 +273,7 @@ class NotificationService {
             }
         }
 
-        const { channels, whatsapp: whatsappOptions } = options;
+        const { channels, whatsapp: evolutionOptions } = options;
 
         try {
             const results: Promise<boolean>[] = [];
@@ -283,7 +283,7 @@ class NotificationService {
                 if (adapter) {
                     const providerOptions = {
                         eventType,
-                        instanceName: channel === NotificationChannelEnum.EVOLUTION ? (whatsappOptions?.instanceName || EVOLUTION_GLOBAL_INSTANCE) : undefined,
+                        instanceName: channel === NotificationChannelEnum.EVOLUTION ? (evolutionOptions?.instanceName || EVOLUTION_GLOBAL_INSTANCE) : undefined,
                         jobId: options?.jobId,
                         metadata: options?.metadata
                     };

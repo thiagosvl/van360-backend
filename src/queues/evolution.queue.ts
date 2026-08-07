@@ -2,13 +2,13 @@ import { logger } from "../config/logger.js";
 import { createQueue } from "./index.js";
 import { EvolutionPurpose } from "../types/enums.js";
 
-export const QUEUE_NAME_WHATSAPP_TRANSACTIONAL = 'whatsapp-transactional-queue';
-export const QUEUE_NAME_WHATSAPP_BULK = 'whatsapp-bulk-queue';
+export const QUEUE_NAME_EVOLUTION_TRANSACTIONAL = 'whatsapp-transactional-queue';
+export const QUEUE_NAME_EVOLUTION_BULK = 'whatsapp-bulk-queue';
 
-export const whatsappTransactionalQueue = createQueue(QUEUE_NAME_WHATSAPP_TRANSACTIONAL);
-export const whatsappBulkQueue = createQueue(QUEUE_NAME_WHATSAPP_BULK);
+export const evolutionTransactionalQueue = createQueue(QUEUE_NAME_EVOLUTION_TRANSACTIONAL);
+export const evolutionBulkQueue = createQueue(QUEUE_NAME_EVOLUTION_BULK);
 
-export interface WhatsappJobData {
+export interface EvolutionJobData {
     phone: string;
     message?: string;
     compositeMessage?: any[]; // Suporte para novo formato
@@ -23,10 +23,10 @@ export interface WhatsappJobData {
  * Adiciona um job de envio de WhatsApp na fila correspondente.
  * @param jobId Opcional. ID único para idempotência (evita duplicidade).
  */
-export const addToWhatsappQueue = async (data: WhatsappJobData, jobId?: string) => {
+export const addToWhatsappQueue = async (data: EvolutionJobData, jobId?: string) => {
     try {
-        const queue = data.purpose === EvolutionPurpose.BULK ? whatsappBulkQueue : whatsappTransactionalQueue;
-        const queueName = data.purpose === EvolutionPurpose.BULK ? QUEUE_NAME_WHATSAPP_BULK : QUEUE_NAME_WHATSAPP_TRANSACTIONAL;
+        const queue = data.purpose === EvolutionPurpose.BULK ? evolutionBulkQueue : evolutionTransactionalQueue;
+        const queueName = data.purpose === EvolutionPurpose.BULK ? QUEUE_NAME_EVOLUTION_BULK : QUEUE_NAME_EVOLUTION_TRANSACTIONAL;
 
         await queue.add('send-message', data, {
             jobId: jobId, 

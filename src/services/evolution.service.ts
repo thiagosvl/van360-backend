@@ -16,7 +16,7 @@ const EVO_KEY = env.EVOLUTION_API_KEY;
 const EVO_HEADERS = { "apikey": EVO_KEY };
 const WEBHOOK_URL = `${env.BACKEND_URL}/api/evolution/webhook`;
 
-export class WhatsappService {
+export class EvolutionService {
     async getInstanceStatus(instanceName: string): Promise<EvolutionInstance> {
         try {
             const url = `${EVO_URL}/instance/connectionState/${instanceName}`;
@@ -46,14 +46,14 @@ export class WhatsappService {
                 }
             } catch (fallbackErr) {
                 const errFallback = fallbackErr as AxiosError;
-                logger.warn({ err: errFallback.message, instanceName }, "[WhatsappService] Fallback status falhou");
+                logger.warn({ err: errFallback.message, instanceName }, "[EvolutionService] Fallback status falhou");
             }
 
             if (err.response?.status === 404) {
                 return { state: EvolutionConnectionStatus.NOT_FOUND };
             }
             
-            logger.error({ err: err.message, instanceName }, "[WhatsappService] Erro ao consultar status");
+            logger.error({ err: err.message, instanceName }, "[EvolutionService] Erro ao consultar status");
             return { state: EvolutionConnectionStatus.UNKNOWN };
         }
     }
@@ -73,7 +73,7 @@ export class WhatsappService {
             return true;
         } catch (error) {
             const err = error as AxiosError;
-            logger.error({ err: err.response?.data || err.message, instanceName }, "[WhatsappService] Erro ao enviar texto");
+            logger.error({ err: err.response?.data || err.message, instanceName }, "[EvolutionService] Erro ao enviar texto");
             return false;
         }
     }
@@ -96,7 +96,7 @@ export class WhatsappService {
             return true;
         } catch (error) {
             const err = error as AxiosError;
-            logger.error({ err: err.response?.data || err.message, instanceName }, "[WhatsappService] Erro ao enviar imagem");
+            logger.error({ err: err.response?.data || err.message, instanceName }, "[EvolutionService] Erro ao enviar imagem");
             return false;
         }
     }
@@ -150,7 +150,7 @@ export class WhatsappService {
                 err: err.response?.data, 
                 instanceName,
                 statusCode: err.response?.status 
-            }, "[WhatsappService] Falha ao configurar webhook");
+            }, "[EvolutionService] Falha ao configurar webhook");
             return false;
         }
     }
@@ -173,14 +173,14 @@ export class WhatsappService {
             return true;
         } catch (error) {
             const err = error as AxiosError;
-            logger.error({ err: err.response?.data, instanceName }, "[WhatsappService] Falha ao atualizar settings");
+            logger.error({ err: err.response?.data, instanceName }, "[EvolutionService] Falha ao atualizar settings");
             return false;
         }
     }
 
     async createInstance(instanceName: string, enableQrcode: boolean = false): Promise<boolean> {
         try {
-            logger.info({ instanceName, enableQrcode }, "[WhatsappService] Iniciando criação de instância...");
+            logger.info({ instanceName, enableQrcode }, "[EvolutionService] Iniciando criação de instância...");
             const url = `${EVO_URL}/instance/create`;
             
             try {
@@ -209,7 +209,7 @@ export class WhatsappService {
                 const err = createError as AxiosError;
                 
                 if (err.response?.status === 403) {
-                    logger.warn({ instanceName }, "[WhatsappService] Instância já existe. Reconfigurando...");
+                    logger.warn({ instanceName }, "[EvolutionService] Instância já existe. Reconfigurando...");
                     
                     await this.setWebhook(instanceName, WEBHOOK_URL);
                     await this.updateSettings(instanceName);
@@ -222,14 +222,14 @@ export class WhatsappService {
             logger.error({ 
                 err: err.response?.data || err.message, 
                 instanceName 
-            }, "[WhatsappService] Falha crítica ao criar/verificar instância");
+            }, "[EvolutionService] Falha crítica ao criar/verificar instância");
             return false;
         }
     }
 
     async connectInstance(instanceName: string, phoneNumber?: string): Promise<ConnectInstanceResponse> {
         try {
-            logger.info({ instanceName, mode: phoneNumber ? "PairingCode" : "QRCode" }, "[WhatsappService] Iniciando fluxo de conexão");
+            logger.info({ instanceName, mode: phoneNumber ? "PairingCode" : "QRCode" }, "[EvolutionService] Iniciando fluxo de conexão");
 
             const status = await this.getInstanceStatus(instanceName);
             const exists = status.state !== EvolutionConnectionStatus.UNKNOWN;
@@ -237,7 +237,7 @@ export class WhatsappService {
 
             // 1. Se já está funcionando, apenas garante que as configurações estão corretas (silenciosamente)
             if (isWorking) {
-                logger.info({ instanceName }, "[WhatsappService] Instância já conectada. Sincronizando presets...");
+                logger.info({ instanceName }, "[EvolutionService] Instância já conectada. Sincronizando presets...");
                 await this.setWebhook(instanceName, WEBHOOK_URL);
                 await this.updateSettings(instanceName);
                 return { instance: { state: EvolutionConnectionStatus.OPEN } };
@@ -245,12 +245,12 @@ export class WhatsappService {
 
             // 2. Se a instância NÃO existe, cria do zero
             if (!exists) {
-                logger.info({ instanceName }, "[WhatsappService] Instância inexistente. Criando...");
+                logger.info({ instanceName }, "[EvolutionService] Instância inexistente. Criando...");
                 await this.createInstance(instanceName, !phoneNumber);
                 await new Promise(r => setTimeout(r, 2000));
             } else {
                 // 3. Se EXISTE mas não está funcional, APENAS reconfigura (sem POST /create que derruba a sessão)
-                logger.info({ instanceName, state: status.state }, "[WhatsappService] Instância existe mas requer atenção. Sincronizando...");
+                logger.info({ instanceName, state: status.state }, "[EvolutionService] Instância existe mas requer atenção. Sincronizando...");
                 await this.setWebhook(instanceName, WEBHOOK_URL);
                 await this.updateSettings(instanceName);
             }
@@ -271,7 +271,7 @@ export class WhatsappService {
                         }
                     } catch (e) {
                         const errCode = e as AxiosError;
-                        logger.warn({ err: errCode.message, attempt }, "[WhatsappService] Falha ao tentar parear, tentando novamente...");
+                        logger.warn({ err: errCode.message, attempt }, "[EvolutionService] Falha ao tentar parear, tentando novamente...");
                     }
                     await new Promise(r => setTimeout(r, 2000));
                 }
@@ -299,7 +299,7 @@ export class WhatsappService {
 
         } catch (error) {
             const err = error as AxiosError;
-            logger.error({ err: err.response?.data || err.message, instanceName }, "[WhatsappService] Falha ao conectar");
+            logger.error({ err: err.response?.data || err.message, instanceName }, "[EvolutionService] Falha ao conectar");
             throw new Error("Falha ao configurar conexão do WhatsApp.");
         }
     }
@@ -325,5 +325,5 @@ export class WhatsappService {
     }
 }
 
-export const whatsappService = new WhatsappService();
+export const evolutionService = new EvolutionService();
 

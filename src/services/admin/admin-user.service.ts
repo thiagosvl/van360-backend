@@ -226,8 +226,8 @@ export const adminUserService = {
     let whatsappStatus: string = EvolutionConnectionStatus.UNKNOWN;
     try {
       const { EVOLUTION_GLOBAL_INSTANCE } = await import("../../config/constants.js");
-      const { whatsappService } = await import("../evolution.service.js");
-      const status = await whatsappService.getInstanceStatus(EVOLUTION_GLOBAL_INSTANCE);
+      const { evolutionService } = await import("../evolution.service.js");
+      const status = await evolutionService.getInstanceStatus(EVOLUTION_GLOBAL_INSTANCE);
       whatsappStatus = status.state;
     } catch (err) {
       logger.error({ err }, "[AdminUserService] Erro ao buscar status do WhatsApp");

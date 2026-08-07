@@ -174,8 +174,8 @@ export const adminService = {
     let whatsappStatus = "UNKNOWN";
     try {
       const { EVOLUTION_GLOBAL_INSTANCE } = await import("../config/constants.js");
-      const { whatsappService } = await import("./evolution.service.js");
-      const status = await whatsappService.getInstanceStatus(EVOLUTION_GLOBAL_INSTANCE);
+      const { evolutionService } = await import("./evolution.service.js");
+      const status = await evolutionService.getInstanceStatus(EVOLUTION_GLOBAL_INSTANCE);
       whatsappStatus = status.state;
     } catch (err) {
       logger.error({ err }, "[AdminService] Erro ao buscar status do WhatsApp");
@@ -702,10 +702,10 @@ export const adminService = {
     }
 
     // Opcional: Buscar o status em tempo real da Evolution API para cada instância
-    const { whatsappService } = await import("./evolution.service.js");
+    const { evolutionService } = await import("./evolution.service.js");
     const enhancedData = await Promise.all((data || []).map(async (instance: any) => {
       try {
-        const status = await whatsappService.getInstanceStatus(instance.instance_name);
+        const status = await evolutionService.getInstanceStatus(instance.instance_name);
         return {
           ...instance,
           evolution_status: status.state,

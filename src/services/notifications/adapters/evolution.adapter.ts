@@ -44,7 +44,7 @@ const BULK_EVENTS = [
 /**
  * Adapter para WhatsApp usando a fila (BullMQ) + Evolution API
  */
-export class EvolutionWhatsappQueueAdapter implements NotificationProviderAdapter {
+export class EvolutionQueueAdapter implements NotificationProviderAdapter {
     getProviderId(): string {
         return "EVOLUTION_WHATSAPP_QUEUE";
     }
@@ -75,7 +75,7 @@ export class EvolutionWhatsappQueueAdapter implements NotificationProviderAdapte
 
             return true;
         } catch (error) {
-            logger.error({ error, to }, "Erro no EvolutionWhatsappQueueAdapter");
+            logger.error({ error, to }, "Erro no EvolutionQueueAdapter");
             return false;
         }
     }
