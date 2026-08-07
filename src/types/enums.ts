@@ -31,6 +31,7 @@ export enum WhatsappStatus {
   // Estados Oficiais Evolution v2
   OPEN = "open",
   CLOSE = "close",
+  REFUSED = "refused",
 
   // Estados Internos do Sistema
   UNKNOWN = "UNKNOWN",

@@ -5,6 +5,8 @@ import { redisConfig } from '../config/redis.js';
 import { QUEUE_NAME_WHATSAPP_TRANSACTIONAL, QUEUE_NAME_WHATSAPP_BULK, WhatsappJobData } from '../queues/whatsapp.queue.js';
 import { whatsappService } from '../services/whatsapp.service.js';
 import { WhatsappStatus } from '../types/enums.js';
+import { cobrancaRepository } from '../repositories/cobranca.repository.js';
+import { toPersistenceString } from '../utils/date.utils.js';
 
 const createWhatsappProcessor = (isBulk: boolean) => async (job: Job<WhatsappJobData>) => {
     const { phone, message, compositeMessage, context, options } = job.data;
@@ -87,6 +89,18 @@ const createWhatsappProcessor = (isBulk: boolean) => async (job: Job<WhatsappJob
 
         if (!success) {
             throw new Error(`Falha total no envio para ${phone}`);
+        }
+
+        // --- INTEGRAÇÃO DB: Desacoplamento da Fila ---
+        // Se a mensagem foi entregue e tivermos o cobrancaId nos metadados, atualiza o DB.
+        if (success && options?.metadata?.cobrancaId) {
+            try {
+                const now = new Date();
+                await cobrancaRepository.updateBulkUltimaNotificacao([options.metadata.cobrancaId], toPersistenceString(now));
+                logger.info({ cobrancaId: options.metadata.cobrancaId }, "[WhatsappWorker] Data de ultima notificacao atualizada com sucesso no banco de dados.");
+            } catch (dbError: any) {
+                logger.error({ error: dbError.message, cobrancaId: options.metadata.cobrancaId }, "[WhatsappWorker] Falha ao atualizar banco de dados apos envio com sucesso.");
+            }
         }
 
     } catch (error: unknown) {

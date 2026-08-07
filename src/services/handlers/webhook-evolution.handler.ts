@@ -47,20 +47,39 @@ export const webhookEvolutionHandler = {
 
         logger.info({ instanceName, state }, "[Webhook] Status do WhatsApp alterado");
 
-        if (state === WhatsappStatus.CLOSE || state === WhatsappStatus.DISCONNECTED) {
+        const offlineStates = [WhatsappStatus.CLOSE, WhatsappStatus.DISCONNECTED, WhatsappStatus.REFUSED, "connecting", "refused"];
+        const isOffline = offlineStates.includes(state as WhatsappStatus) || offlineStates.includes(state);
+
+        if (isOffline) {
+            const { redisConfig } = await import("../../config/redis.js");
+            const { Redis } = await import("ioredis");
+            const redisClient = new Redis(redisConfig as any);
+            const throttleKey = `alert:evolution:${instanceName}`;
+            
+            const isThrottled = await redisClient.get(throttleKey);
+            if (isThrottled) {
+                logger.info({ instanceName, state }, "[Webhook] Alerta do Telegram silenciado pelo Throttle do Redis (Cooldown).");
+                redisClient.disconnect();
+                return true;
+            }
+
+            // Define o silence period (2 horas = 7200 segundos)
+            await redisClient.setex(throttleKey, 7200, "1");
+            redisClient.disconnect();
+
             const { notificationService } = await import("../notifications/notification.service.js");
             const { EVENTO_ADMIN_SISTEMA_ALERTA } = await import("../../config/constants.js");
             
             await notificationService.notifyAdmin(EVENTO_ADMIN_SISTEMA_ALERTA, {
-                titulo: "ALERTA DE DESCONEXÃO",
-                mensagem: `A conexão do WhatsApp (Instância: ${instanceName}) foi perdida.`,
+                titulo: "ALERTA DE INSTABILIDADE (WHATSAPP)",
+                mensagem: `O WhatsApp (Instância: ${instanceName}) reportou instabilidade ou queda.`,
                 detalhes: {
                     "Instância": instanceName,
                     "Status": state
                 }
             }, {
                 channels: ['TELEGRAM'],
-                jobId: `admin-alerta-desconexao-${instanceName}-${state}`
+                jobId: `admin-alerta-desconexao-${instanceName}-${Date.now()}` // Timestamp garante que o BullMQ não deduplique indevidamente
             });
         }
 

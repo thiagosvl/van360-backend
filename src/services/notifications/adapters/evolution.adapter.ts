@@ -70,7 +70,7 @@ export class EvolutionWhatsappQueueAdapter implements NotificationProviderAdapte
                 compositeMessage: validParts,
                 context: eventType,
                 purpose: purpose,
-                options: { instanceName }
+                options: { instanceName, metadata: options?.metadata }
             }, jobId);
 
             return true;
