@@ -7,29 +7,29 @@ export type PermissionKey =
   | "contratos.gerenciar"
   | "relatorios.visualizar"
   | "assinatura.gerenciar"
-  
+
   // Frota & Equipe
   | "veiculos.gerenciar"
   | "equipe.gerenciar_todos"
   | "equipe.gerenciar_monitores"
-  
+
   // Passageiros
   | "passageiros.visualizar"
   | "passageiros.gerenciar"
-  | "passageiros.mensalidade_visualizar"
+  | "passageiros.cobranca_visualizar"
   | "passageiros.presenca_marcar"
-  
+
   // Gastos
   | "gastos.visualizar"
   | "gastos.criar"
-  
+
   // Rotas
   | "rotas.visualizar"
   | "rotas.criar_editar"
   | "rotas.excluir"
   | "rotas.iniciar_encerrar"
   | "rotas.executar_paradas"
-  
+
   // Escolas & Aniversários
   | "escolas.visualizar"
   | "escolas.gerenciar"
@@ -46,7 +46,7 @@ export const ALL_PERMISSIONS: PermissionKey[] = [
   "equipe.gerenciar_monitores",
   "passageiros.visualizar",
   "passageiros.gerenciar",
-  "passageiros.mensalidade_visualizar",
+  "passageiros.cobranca_visualizar",
   "passageiros.presenca_marcar",
   "gastos.visualizar",
   "gastos.criar",
@@ -75,16 +75,16 @@ export const ROLE_PERMISSIONS: Record<UserType, PermissionKey[]> = {
     "rotas.excluir",
     "rotas.iniciar_encerrar",
     "rotas.executar_paradas",
-    "escolas.visualizar",
     "aniversarios.visualizar",
+    "equipe.gerenciar_monitores",
   ],
 
   [UserType.MONITOR]: [
     "passageiros.visualizar",
     "passageiros.presenca_marcar",
     "rotas.visualizar",
+    "rotas.iniciar_encerrar",
     "rotas.executar_paradas",
-    "escolas.visualizar",
     "aniversarios.visualizar",
   ],
 

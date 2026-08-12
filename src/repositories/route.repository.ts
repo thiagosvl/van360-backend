@@ -49,8 +49,8 @@ export const routeRepository = {
       .eq("rota_id", rotaId);
   },
 
-  async getById(id: string) {
-    return supabaseAdmin
+  async getById(id: string, usuarioId?: string) {
+    let query = supabaseAdmin
       .from("rotas")
       .select(`
         *,
@@ -98,8 +98,13 @@ export const routeRepository = {
           )
         )
       `)
-      .eq("id", id)
-      .maybeSingle();
+      .eq("id", id);
+
+    if (isValidFilterValue(usuarioId)) {
+      query = query.eq("usuario_id", usuarioId);
+    }
+
+    return query.maybeSingle();
   },
 
   async listByUsuario(usuarioId: string, veiculoId?: string) {
@@ -142,7 +147,7 @@ export const routeRepository = {
     return query.order("created_at", { ascending: false });
   },
 
-  async listExecucoesByUsuario(usuarioId: string, veiculoId?: string) {
+  async listExecucoesByUsuario(usuarioId: string, veiculoId?: string, limit?: number, page: number = 1) {
     let query = supabaseAdmin
       .from("execucoes_rota")
       .select(`
@@ -160,17 +165,24 @@ export const routeRepository = {
           )
         )
       `)
-      .or(`usuario_id.eq.${usuarioId},rota.usuario_id.eq.${usuarioId}`);
+      .eq("rota.usuario_id", usuarioId);
 
     if (isValidFilterValue(veiculoId)) {
       query = query.eq("rota.veiculo_id", veiculoId);
     }
 
-    return query.order("iniciada_em", { ascending: false });
+    query = query.order("iniciada_em", { ascending: false });
+
+    if (limit && limit > 0) {
+      const offset = (page - 1) * limit;
+      query = query.range(offset, offset + limit - 1);
+    }
+
+    return query;
   },
 
-  async listExecucoesByUsuarioFallback(usuarioId: string) {
-    return supabaseAdmin
+  async listExecucoesByUsuarioFallback(usuarioId: string, limit?: number, page: number = 1) {
+    let query = supabaseAdmin
       .from("execucoes_rota")
       .select(`
         *,
@@ -189,6 +201,13 @@ export const routeRepository = {
       `)
       .eq("rota.usuario_id", usuarioId)
       .order("iniciada_em", { ascending: false });
+
+    if (limit && limit > 0) {
+      const offset = (page - 1) * limit;
+      query = query.range(offset, offset + limit - 1);
+    }
+
+    return query;
   },
 
   async getExecucaoDetail(id: string) {
@@ -396,7 +415,7 @@ export const routeRepository = {
   },
 
   async getAusenciasByUsuarioEData(usuarioId: string, dataAusencia: string) {
-    return supabaseAdmin
+    let query = supabaseAdmin
       .from("rota_ausencias")
       .select(`
         *,
@@ -404,12 +423,19 @@ export const routeRepository = {
           id,
           nome
         ),
-        rota:rotas (
+        rota:rotas!inner (
           id,
-          nome
+          nome,
+          usuario_id
         )
       `)
       .eq("data_ausencia", dataAusencia);
+
+    if (isValidFilterValue(usuarioId)) {
+      query = query.or(`registrado_por.eq.${usuarioId},rota.usuario_id.eq.${usuarioId}`);
+    }
+
+    return query;
   },
 
   async insertAusencia(record: Record<string, unknown>) {

@@ -57,7 +57,9 @@ export const veiculoController = {
 
   get: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
-    const veiculo = await veiculoService.getVeiculo(id);
+    const targetOwnerId = request.data_owner_id || request.user?.id;
+    const assignedVeiculoId = request.assigned_veiculo_id || (request.profile?.veiculo_id as string | undefined);
+    const veiculo = await veiculoService.getVeiculo(id, targetOwnerId, assignedVeiculoId);
     return reply.status(200).send(veiculo);
   },
 

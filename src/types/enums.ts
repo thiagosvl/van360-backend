@@ -26,12 +26,55 @@ export enum UserType {
   RESPONSAVEL = "responsavel",
 }
 
+export enum PushNotificationAction {
+  OPEN_HOME = "OPEN_HOME",
+  OPEN_SUBSCRIPTION = "OPEN_SUBSCRIPTION",
+  OPEN_CONTRACTS = "OPEN_CONTRACTS",
+  OPEN_ROUTE = "OPEN_ROUTE",
+  OPEN_TEAM = "OPEN_TEAM",
+  OPEN_BILLING = "OPEN_BILLING",
+  OPEN_PASSENGERS = "OPEN_PASSENGERS",
+  OPEN_SCHOOLS = "OPEN_SCHOOLS",
+  OPEN_VEHICLES = "OPEN_VEHICLES",
+  OPEN_EXPENSES = "OPEN_EXPENSES",
+  OPEN_REPORTS = "OPEN_REPORTS",
+  OPEN_SETTINGS = "OPEN_SETTINGS",
+  OPEN_BIRTHDAYS = "OPEN_BIRTHDAYS",
+  OPEN_PASSENGER_REQUESTS = "OPEN_PASSENGER_REQUESTS"
+}
+
 export enum NotificationChannelEnum {
   WABA = "WABA",
+  FIREBASE = "FIREBASE",
   EVOLUTION = "EVOLUTION",
   SMS = "SMS",
-  EMAIL = "EMAIL",
+  RESEND = "RESEND",
   TELEGRAM = "TELEGRAM"
+}
+
+export enum NotificationQueueStatus {
+  PENDING = "PENDING",
+  PROCESSING = "PROCESSING",
+  SENT = "SENT",
+  RETRY_PENDING = "RETRY_PENDING",
+  FAILED = "FAILED",
+  CANCELLED = "CANCELLED"
+}
+
+export enum WabaTemplateNameEnum {
+  PAIS_VENCIMENTO_PROXIMO = "van360_pais_vencimento_proximo",
+  PAIS_VENCIMENTO_PROXIMO_PIX = "van360_pais_vencimento_proximo_pix",
+  PAIS_VENCIMENTO_PROXIMO_SEM_PIX = "van360_pais_vencimento_proximo_sem_pix",
+  PAIS_VENCIMENTO_HOJE = "van360_pais_vencimento_hoje",
+  PAIS_VENCIMENTO_HOJE_PIX = "van360_pais_vencimento_hoje_pix",
+  PAIS_VENCIMENTO_HOJE_SEM_PIX = "van360_pais_vencimento_hoje_sem_pix",
+  PAIS_ATRASADO = "van360_pais_atrasado",
+  PAIS_ATRASADO_PIX = "van360_pais_atrasado_pix",
+  PAIS_ATRASADO_SEM_PIX = "van360_pais_atrasado_sem_pix",
+  PAIS_RECIBO = "van360_pais_recibo",
+  PAIS_CONTRATO = "van360_pais_contrato",
+  MOTORISTA_RENOVACAO_PIX = "van360_motorista_renovacao_pix",
+  MOTORISTA_FALHA_CARTAO = "van360_motorista_falha_cartao",
 }
 
 export enum EvolutionConnectionStatus {
@@ -268,7 +311,9 @@ export enum AtividadeAcao {
   ROTA_CRIADA = "ROTA_CRIADA",
   ROTA_EDITADA = "ROTA_EDITADA",
   ROTA_EXCLUIDA = "ROTA_EXCLUIDA",
+  ROTA_INICIADA = "ROTA_INICIADA",
   ROTA_CONCLUIDA = "ROTA_CONCLUIDA",
+  ROTA_CANCELADA = "ROTA_CANCELADA",
 
   // SaaS / Assinaturas
   SAAS_ASSINATURA_ATIVA = "SAAS_ASSINATURA_ATIVA",
@@ -297,6 +342,7 @@ export enum CronJob {
   DAILY_CHARGE_MONITOR = "daily-charge-monitor",
   BIRTHDAY_REMINDER = "birthday-reminder",
   WEEKLY_DRIVER_CHARGE_SUMMARY = "weekly-driver-charge-summary",
+  NOTIFICATION_RETRY = "notification-retry",
 }
 
 export enum RouteExecutionStatus {

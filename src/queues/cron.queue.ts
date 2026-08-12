@@ -40,4 +40,9 @@ export const setupCronJobs = async () => {
     await cronQueue.add(CronJob.WEEKLY_DRIVER_CHARGE_SUMMARY, {}, {
         repeat: { pattern: '0 13 * * 1' }
     });
+
+    // Worker de Retentativas da Fila de Notificações - A cada 2 minutos (120.000 ms)
+    await cronQueue.add(CronJob.NOTIFICATION_RETRY, {}, {
+        repeat: { every: 2 * 60 * 1000 }
+    });
 };

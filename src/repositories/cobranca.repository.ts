@@ -32,32 +32,47 @@ export const cobrancaRepository = {
         return supabaseAdmin.from("cobrancas").delete().eq("id", id);
     },
 
-    async getById(id: string) {
-        return supabaseAdmin
+    async getById(id: string, usuarioId?: string) {
+        let query = supabaseAdmin
             .from("cobrancas")
             .select("*, passageiro:passageiros(*, escola:escolas(nome), veiculo:veiculos(placa))")
-            .eq("id", id)
-            .single();
+            .eq("id", id);
+
+        if (isValidFilterValue(usuarioId)) {
+            query = query.eq("usuario_id", usuarioId);
+        }
+
+        return query.single();
     },
 
-    async getByIdBasic(id: string) {
-        return supabaseAdmin
+    async getByIdBasic(id: string, usuarioId?: string) {
+        let query = supabaseAdmin
             .from("cobrancas")
             .select("*, passageiros(nome)")
-            .eq("id", id)
-            .single();
+            .eq("id", id);
+
+        if (isValidFilterValue(usuarioId)) {
+            query = query.eq("usuario_id", usuarioId);
+        }
+
+        return query.single();
     },
 
-    async getByIdWithPassageiroAndMotorista(id: string) {
-        return supabaseAdmin
+    async getByIdWithPassageiroAndMotorista(id: string, usuarioId?: string) {
+        let query = supabaseAdmin
             .from("cobrancas")
             .select(`
                 *,
                 passageiro:passageiros (nome, nome_responsavel, cpf_responsavel, telefone_responsavel),
                 motorista:usuarios (nome, apelido, razao_social, cpfcnpj)
             `)
-            .eq("id", id)
-            .single();
+            .eq("id", id);
+
+        if (isValidFilterValue(usuarioId)) {
+            query = query.eq("usuario_id", usuarioId);
+        }
+
+        return query.single();
     },
 
     async listWithFilters(filtros: { usuarioId?: string; veiculoId?: string; passageiroId?: string; status?: string; dataInicio?: string; dataFim?: string; mes?: number | string; ano?: number | string; search?: string }) {
@@ -143,7 +158,6 @@ export const cobrancaRepository = {
                 )
             `)
             .eq("status", CobrancaStatus.PENDENTE)
-            .eq("desativar_lembretes", false)
             .in("motorista.assinaturas.status", STATUS_ASSINATURA_LIBERADA)
             .eq("motorista.usuario_configuracoes.notificar_pais_cobrancas", true)
             .in("data_vencimento", datasVencimento);

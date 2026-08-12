@@ -252,19 +252,20 @@ class ContractService {
       meta: { contrato_id: contrato.id, documento_final: response.documentoFinalUrl }
     });
 
-    if (passageiro.telefone_responsavel) {
+    if (passageiro.telefone_responsavel || passageiro.email_responsavel) {
       notificationService.notifyPassenger(
-        passageiro.telefone_responsavel,
+        passageiro.telefone_responsavel || "",
         EVENTO_PASSAGEIRO_CONTRATO_ASSINADO,
         {
           nomeResponsavel: passageiro.nome_responsavel,
           nomePassageiro: passageiro.nome,
+          email: passageiro.email_responsavel,
           nomeMotorista: usuario.nome,
           apelidoMotorista: usuario.apelido,
           contratoUrl: response.documentoFinalUrl,
           usuarioId: usuario.id
         },
-        { channels: [NotificationChannelEnum.EVOLUTION] }
+        { channels: [NotificationChannelEnum.RESEND], email: passageiro.email_responsavel, usuarioId: usuario.id }
       ).catch(err => logger.error({ err }, 'Erro ao notificar responsável sobre assinatura'));
     }
 
@@ -276,9 +277,10 @@ class ContractService {
           nomeMotorista: usuario.nome,
           nomePassageiro: passageiro.nome,
           nomeResponsavel: passageiro.nome_responsavel,
-          contratoUrl: response.documentoFinalUrl
+          contratoUrl: response.documentoFinalUrl,
+          usuarioId: usuario.id
         },
-        { channels: [NotificationChannelEnum.EVOLUTION] }
+        { channels: [NotificationChannelEnum.FIREBASE], usuarioId: usuario.id, email: usuario.email }
       ).catch(err => logger.error({ err }, 'Erro ao notificar motorista sobre assinatura'));
     }
 

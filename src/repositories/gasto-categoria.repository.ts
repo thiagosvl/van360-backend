@@ -57,5 +57,13 @@ export const gastoCategoriaRepository = {
             .eq("nome", nome)
             .eq("usuario_id", usuarioId)
             .maybeSingle();
+    },
+
+    async cascadeUpdateSlug(antigoSlug: string, novoSlug: string, usuarioId: string) {
+        return supabaseAdmin
+            .from("gastos")
+            .update({ categoria: novoSlug })
+            .eq("categoria", antigoSlug)
+            .eq("usuario_id", usuarioId);
     }
 };

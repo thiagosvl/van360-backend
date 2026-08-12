@@ -3,6 +3,7 @@ import { CreateRouteDTO, UpdateRouteDTO, StepRouteExecutionDTO, ReorderExecucaoD
 import { RouteExecutionStatus, RouteStopStatus, RouteNodeType, RouteSentido, AtividadeAcao, AtividadeEntidadeTipo, UserType, RouteBroadcastEvent } from "../types/enums.js";
 import { routeRepository } from "../repositories/route.repository.js";
 import { userRepository } from "../repositories/user.repository.js";
+import { veiculoRepository } from "../repositories/veiculo.repository.js";
 import { historicoService } from "./historico.service.js";
 import { logger } from "../config/logger.js";
 import { getNowBR, toPersistenceString } from "../utils/date.utils.js";
@@ -19,11 +20,7 @@ const resolveDataOwnerId = async (usuarioId: string): Promise<{ dataOwnerId: str
     const contaPaiId = userProfile?.conta_pai_id || undefined;
 
     if (!userProfile?.conta_pai_id && veiculoId) {
-      const { data: veiculo } = await supabaseAdmin
-        .from("veiculos")
-        .select("usuario_id")
-        .eq("id", veiculoId)
-        .maybeSingle();
+      const { data: veiculo } = await veiculoRepository.getUsuarioIdAndPlaca(veiculoId);
       if (veiculo?.usuario_id) {
         dataOwnerId = veiculo.usuario_id;
       }
@@ -60,8 +57,10 @@ const createRoute = async (data: CreateRouteDTO): Promise<any> => {
 
   if (error) throw error;
 
-  if (data.passageiros && data.passageiros.length > 0) {
-    const records = data.passageiros.map((p, idx) => ({
+  const stops = data.paradas;
+
+  if (stops && stops.length > 0) {
+    const records = stops.map((p, idx) => ({
       rota_id: inserted.id,
       tipo_no: p.tipo_no || (p.escola_id ? RouteNodeType.ESCOLA : RouteNodeType.PASSAGEIRO),
       passageiro_id: p.passageiro_id || null,
@@ -90,7 +89,7 @@ const createRoute = async (data: CreateRouteDTO): Promise<any> => {
     entidade_id: inserted.id,
     acao: AtividadeAcao.ROTA_CRIADA,
     descricao: `Nova rota "${createdRoute?.nome || data.nome}" cadastrada.`,
-    meta: { nome: createdRoute?.nome || data.nome, total_paradas: createdRoute?.passageiros?.length || 0 }
+    meta: { nome: createdRoute?.nome || data.nome, total_paradas: createdRoute?.paradas?.length || 0 }
   });
 
   return createdRoute;
@@ -110,13 +109,13 @@ const updateRoute = async (id: string, data: UpdateRouteDTO): Promise<any> => {
     if (error) throw error;
   }
 
-  if (data.passageiros !== undefined) {
+  if (data.paradas !== undefined) {
     const { data: oldPassengers } = await routeRepository.getPassageirosByRotaId(id);
 
     await routeRepository.deletePassageiros(id);
 
-    if (data.passageiros && data.passageiros.length > 0) {
-      const records = data.passageiros.map((p, idx) => ({
+    if (data.paradas && data.paradas.length > 0) {
+      const records = data.paradas.map((p, idx) => ({
         rota_id: id,
         tipo_no: p.tipo_no || (p.escola_id ? RouteNodeType.ESCOLA : RouteNodeType.PASSAGEIRO),
         passageiro_id: p.passageiro_id || null,
@@ -127,29 +126,19 @@ const updateRoute = async (id: string, data: UpdateRouteDTO): Promise<any> => {
 
       try {
         const { error: insertError } = await routeRepository.insertPassageiros(records);
-        if (insertError) throw insertError;
-      } catch (insertError) {
-        if (oldPassengers && oldPassengers.length > 0) {
-          await routeRepository.insertPassageiros(oldPassengers);
+        if (insertError) {
+          if (oldPassengers && oldPassengers.length > 0) {
+            await routeRepository.insertPassageiros(oldPassengers);
+          }
+          throw insertError;
         }
-        throw insertError;
+      } catch (err) {
+        throw err;
       }
     }
   }
 
   const updatedRoute = await getRoute(id);
-
-  // --- LOG DE AUDITORIA ---
-  if (updatedRoute?.usuario_id) {
-    historicoService.log({
-      usuario_id: updatedRoute.usuario_id,
-      entidade_tipo: AtividadeEntidadeTipo.ROTA,
-      entidade_id: id,
-      acao: AtividadeAcao.ROTA_EDITADA,
-      descricao: `Configuração da rota "${updatedRoute.nome}" atualizada.`,
-      meta: { nome: updatedRoute.nome, total_paradas: updatedRoute.passageiros?.length || 0 }
-    });
-  }
 
   notifyFleetRealtime("route_definition_changed", {
     action: "update",
@@ -193,7 +182,7 @@ const getTodayLocalDateStr = (): string => {
   return toPersistenceString(getNowBR());
 };
 
-const getRoute = async (id: string, dataAusencia?: string): Promise<any> => {
+const getRoute = async (id: string, dataAusencia?: string, targetOwnerId?: string, assignedVeiculoId?: string): Promise<any> => {
   const { data: route, error } = await routeRepository.getById(id);
 
   if (error) throw error;
@@ -201,12 +190,20 @@ const getRoute = async (id: string, dataAusencia?: string): Promise<any> => {
     throw new AppError("Rota não encontrada", 404);
   }
 
+  if (targetOwnerId && route.usuario_id !== targetOwnerId) {
+    throw new AppError("Acesso negado", 403);
+  }
+
+  if (assignedVeiculoId && route.veiculo_id && route.veiculo_id !== assignedVeiculoId) {
+    throw new AppError("Acesso negado para este veículo", 403);
+  }
+
   const targetDate = dataAusencia || getTodayLocalDateStr();
   const { data: ausencias } = await routeRepository.getAusenciasByRotaEData(id, targetDate);
   const ausentesMap = new Map((ausencias || []).map((a: any) => [a.passageiro_id, a]));
 
   if (route.rota_passageiros) {
-    route.passageiros = route.rota_passageiros
+    const paradasList = route.rota_passageiros
       .map((rp: any) => {
         const isAusente = rp.passageiro_id && ausentesMap.has(rp.passageiro_id);
         const ausObj = isAusente ? ausentesMap.get(rp.passageiro_id) : null;
@@ -227,9 +224,10 @@ const getRoute = async (id: string, dataAusencia?: string): Promise<any> => {
       })
       .sort((a: any, b: any) => a.ordem - b.ordem);
 
+    route.paradas = paradasList;
     delete route.rota_passageiros;
   } else {
-    route.passageiros = [];
+    route.paradas = [];
   }
 
   route.ausencias = ausencias || [];
@@ -268,7 +266,7 @@ const listRoutesByUsuario = async (usuarioId: string, veiculoId?: string): Promi
   }
 };
 
-const listExecucoesByUsuario = async (usuarioId: string, veiculoId?: string): Promise<any[]> => {
+const listExecucoesByUsuario = async (usuarioId: string, veiculoId?: string, limit?: number, page: number = 1): Promise<any[]> => {
   if (!usuarioId) throw new AppError("ID do usuário é obrigatório", 400);
 
   const { dataOwnerId, veiculoId: userVeiculoId, contaPaiId } = await resolveDataOwnerId(usuarioId);
@@ -276,10 +274,10 @@ const listExecucoesByUsuario = async (usuarioId: string, veiculoId?: string): Pr
   const targetVeiculoId = veiculoId || (isGestor ? undefined : userVeiculoId);
 
   try {
-    const { data: execs, error } = await routeRepository.listExecucoesByUsuario(dataOwnerId, targetVeiculoId);
+    const { data: execs, error } = await routeRepository.listExecucoesByUsuario(dataOwnerId, targetVeiculoId, limit, page);
 
     if (error) {
-      const { data: fallbackExecs, error: fbError } = await routeRepository.listExecucoesByUsuarioFallback(dataOwnerId);
+      const { data: fallbackExecs, error: fbError } = await routeRepository.listExecucoesByUsuarioFallback(dataOwnerId, limit, page);
       if (fbError) throw new AppError(`Erro ao buscar execuções: ${fbError.message}`, 500);
       return fallbackExecs || [];
     }
@@ -291,7 +289,7 @@ const listExecucoesByUsuario = async (usuarioId: string, veiculoId?: string): Pr
   }
 };
 
-const getExecucaoDetail = async (id: string): Promise<any> => {
+const getExecucaoDetail = async (id: string, targetOwnerId?: string, assignedVeiculoId?: string): Promise<any> => {
   let { data: exec, error } = await routeRepository.getExecucaoDetail(id);
 
   if (!exec && !error) {
@@ -305,6 +303,14 @@ const getExecucaoDetail = async (id: string): Promise<any> => {
   if (error) throw error;
   if (!exec) {
     throw new AppError("Execução de rota não encontrada", 404);
+  }
+
+  if (targetOwnerId && exec.rota?.usuario_id && exec.rota.usuario_id !== targetOwnerId) {
+    throw new AppError("Acesso negado", 403);
+  }
+
+  if (assignedVeiculoId && exec.rota?.veiculo_id && exec.rota.veiculo_id !== assignedVeiculoId) {
+    throw new AppError("Acesso negado para este veículo", 403);
   }
 
   if (exec.execucoes_rota_passageiros) {
@@ -357,12 +363,12 @@ const iniciarRota = async (rotaId: string, usuarioId: string): Promise<any> => {
     }
   }
 
-  if (!route.passageiros || route.passageiros.length === 0) {
+  if (!route.paradas || route.paradas.length === 0) {
     throw new AppError("A rota selecionada não possui paradas cadastradas.", 400);
   }
 
   let inativosContador = 0;
-  const paradasValidas = route.passageiros.filter((p: any) => {
+  const paradasValidas = route.paradas.filter((p: any) => {
     if (p.tipo_no === RouteNodeType.PASSAGEIRO && p.passageiro) {
       if (p.passageiro.ativo === false) {
         inativosContador++;
@@ -406,6 +412,18 @@ const iniciarRota = async (rotaId: string, usuarioId: string): Promise<any> => {
   await checkEFinalizarSeTodasParadasConcluidas(exec.id);
 
   const result = await getExecucaoDetail(exec.id);
+
+  // --- LOG DE AUDITORIA ---
+  if (usuarioId) {
+    historicoService.log({
+      usuario_id: usuarioId,
+      entidade_tipo: AtividadeEntidadeTipo.ROTA,
+      entidade_id: rotaId,
+      acao: AtividadeAcao.ROTA_INICIADA,
+      descricao: `Execução da rota "${route.nome || 'Rota'}" foi iniciada.`,
+      meta: { execucao_id: exec.id, total_paradas: paradasValidas.length }
+    });
+  }
 
   notifyFleetRealtime(RouteBroadcastEvent.ROUTE_EXECUTION_CHANGED, {
     action: "iniciar",
@@ -522,13 +540,27 @@ const cancelarExecucao = async (execucaoId: string): Promise<any> => {
 
   if (error) throw error;
 
+  const execDetail = await getExecucaoDetail(execucaoId);
+
+  // --- LOG DE AUDITORIA ---
+  if (execDetail?.usuario_id) {
+    historicoService.log({
+      usuario_id: execDetail.usuario_id,
+      entidade_tipo: AtividadeEntidadeTipo.ROTA,
+      entidade_id: execDetail.rota_id || execucaoId,
+      acao: AtividadeAcao.ROTA_CANCELADA,
+      descricao: `Execução da rota "${execDetail.rota?.nome || 'Rota'}" foi cancelada.`,
+      meta: { execucao_id: execucaoId }
+    });
+  }
+
   notifyFleetRealtime("route_execution_changed", {
     action: "cancelar",
     execucaoId: execucaoId,
     status: RouteExecutionStatus.CANCELADA
   });
 
-  return await getExecucaoDetail(execucaoId);
+  return execDetail;
 };
 
 const finalizarExecucao = async (execucaoId: string): Promise<any> => {
@@ -709,6 +741,13 @@ const listRotasByPassageiro = async (passageiroId: string): Promise<any[]> => {
   return (data || []).map((item: any) => item.rota).filter(Boolean);
 };
 
+const getExecucaoAtivaByVeiculoId = async (veiculoId: string): Promise<any> => {
+  if (!veiculoId) return null;
+  const { data, error } = await routeRepository.getExecucaoAtivaByVeiculoId(veiculoId);
+  if (error) return null;
+  return data || null;
+};
+
 export const routeService = {
   createRoute,
   updateRoute,
@@ -716,6 +755,7 @@ export const routeService = {
   getRoute,
   listRoutesByUsuario,
   listExecucoesByUsuario,
+  getExecucaoAtivaByVeiculoId,
   getExecucaoDetail,
   iniciarRota,
   atualizarParadaStatus,

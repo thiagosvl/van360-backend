@@ -12,7 +12,7 @@ import {
   EVENTO_PASSAGEIRO_ATRASADO
 } from "../config/constants.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
-import { getNowBR, getLastDayOfMonth, toPersistenceString, diffInDays, formatToBrazilianDate, getMonthNameBR, getShortWeekDayBR, parseLocalDate } from "../utils/date.utils.js";
+import { getNowBR, getLastDayOfMonth, getSafeDueDateString, toPersistenceString, diffInDays, formatToBrazilianDate, getMonthNameBR, getShortWeekDayBR, parseLocalDate } from "../utils/date.utils.js";
 import { getDriverDisplayName } from "../utils/format.js";
 
 import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
@@ -39,6 +39,7 @@ export const cobrancaService = {
     const { data: passageiro, error: passError } = await passageiroRepository.getResponsavelInfo(data.passageiro_id);
 
     if (passError || !passageiro) throw new AppError("Passageiro não encontrado para gerar cobrança.", 404);
+    if ((passageiro as any).isento === true) throw new AppError("Passageiro é isento de pagamento e não possui cobranças.", 400);
 
     const cobrancaId = crypto.randomUUID();
     const valorNumerico = typeof data.valor === "string" ? moneyToNumber(data.valor) : data.valor;
@@ -113,7 +114,11 @@ export const cobrancaService = {
                   reciboUrl: inserted.recibo_url,
                   usuarioId: inserted.usuario_id
                 },
-                { channels: [NotificationChannelEnum.EVOLUTION] }
+                {
+                  channels: [NotificationChannelEnum.WABA],
+                  usuarioId: inserted.usuario_id,
+                  email: passageiroInfo?.email_responsavel
+                }
               );
             }
           } catch (notifErr: unknown) {
@@ -286,6 +291,12 @@ export const cobrancaService = {
 
     // 2. Iterar por Passageiro e Gerar Cobrança
     for (const passageiro of passageiros) {
+      // Ignorar se for passageiro isento
+      if (passageiro.isento === true) {
+        skipped++;
+        continue;
+      }
+
       // Verificar se já existe cobrança para este mês/ano/passageiro
       if (passageirosComCobranca.has(passageiro.id)) {
         skipped++;
@@ -342,10 +353,7 @@ export const cobrancaService = {
       }
 
       // Calcular Vencimento
-      const diaVencimento = passageiro.dia_vencimento;
-      const lastDayOfMonth = getLastDayOfMonth(targetYear, targetMonth);
-      const diaFinal = Math.min(diaVencimento, lastDayOfMonth);
-      const dataVencimentoStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(diaFinal).padStart(2, '0')}`;
+      const dataVencimentoStr = getSafeDueDateString(passageiro.dia_vencimento, targetMonth, targetYear);
 
       const valorFinal = Number(passageiro.valor_cobranca);
 
@@ -474,13 +482,16 @@ export const cobrancaService = {
               eventType,
               context,
               {
-                channels: [NotificationChannelEnum.EVOLUTION],
+                channels: [NotificationChannelEnum.WABA],
+                usuarioId: c.usuario_id,
+                email: passageiro.email_responsavel,
                 metadata: { cobrancaId: c.id }
               }
             );
 
             if (success) {
               sentCount++;
+              await cobrancaRepository.updateBulkUltimaNotificacao([c.id], todayStr);
             }
           } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
@@ -632,7 +643,7 @@ export const cobrancaService = {
               totalAtrasado,
               totalProximos
             },
-            { channels: [NotificationChannelEnum.EVOLUTION] }
+            { channels: [NotificationChannelEnum.FIREBASE], usuarioId: m.id, email: (m as Record<string, unknown>).email as string | undefined }
           );
           sentCount++;
         } catch (notifErr: unknown) {

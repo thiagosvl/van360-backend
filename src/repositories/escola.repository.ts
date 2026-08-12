@@ -28,12 +28,17 @@ export const escolaRepository = {
         return supabaseAdmin.from("escolas").select("id, ativo").eq("usuario_id", usuarioId);
     },
 
-    async getById(id: string) {
-        return supabaseAdmin
+    async getById(id: string, usuarioId?: string) {
+        let query = supabaseAdmin
             .from("escolas")
             .select("*")
-            .eq("id", id)
-            .single();
+            .eq("id", id);
+
+        if (isValidFilterValue(usuarioId)) {
+            query = query.eq("usuario_id", usuarioId);
+        }
+
+        return query.single();
     },
 
     async list(usuarioId: string, filtros?: ListEscolasFiltersDTO) {

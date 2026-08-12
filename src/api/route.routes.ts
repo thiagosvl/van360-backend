@@ -16,10 +16,11 @@ const routeRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // Execuções Diárias de Rotas
   app.get("/execucoes/usuario/:usuarioId", { preHandler: [requirePermission(RoutePermission.VISUALIZAR)] }, routeController.listExecucoesByUsuario);
+  app.get("/execucoes/ativa-veiculo/:veiculoId", { preHandler: [requirePermission(RoutePermission.VISUALIZAR)] }, routeController.getExecucaoAtivaByVeiculo);
   app.get("/execucoes/:id", { preHandler: [requirePermission(RoutePermission.VISUALIZAR)] }, routeController.getExecucaoDetail);
   app.post("/:id/iniciar", { preHandler: [requirePermission(RoutePermission.INICIAR_ENCERRAR)] }, routeController.iniciarRota);
   app.post("/execucoes/:id/parada", { preHandler: [requirePermission(RoutePermission.EXECUTAR_PARADAS)] }, routeController.atualizarParadaStatus);
-  app.post("/execucoes/:id/reordenar", { preHandler: [requirePermission(RoutePermission.CRIAR_EDITAR)] }, routeController.reordenarExecucao);
+  app.post("/execucoes/:id/reordenar", { preHandler: [requirePermission(RoutePermission.EXECUTAR_PARADAS, RoutePermission.INICIAR_ENCERRAR, RoutePermission.CRIAR_EDITAR)] }, routeController.reordenarExecucao);
   app.post("/execucoes/:id/cancelar", { preHandler: [requirePermission(RoutePermission.INICIAR_ENCERRAR)] }, routeController.cancelarExecucao);
   app.post("/execucoes/:id/finalizar", { preHandler: [requirePermission(RoutePermission.EXECUTAR_PARADAS)] }, routeController.finalizarExecucao);
 

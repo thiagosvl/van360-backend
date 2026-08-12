@@ -46,6 +46,12 @@ export const cronWorker = new Worker(
                     await cobrancaService.enviarResumoSemanalMotoristas();
                     break;
 
+                case CronJob.NOTIFICATION_RETRY: {
+                    const { notificationRetryWorker } = await import('../services/notifications/notification-retry.worker.js');
+                    await notificationRetryWorker.processPendingRetries();
+                    break;
+                }
+
                 default:
                     logger.warn({ jobName: job.name }, "[CronWorker] Job DESATIVADO ou desconhecido recebido.");
             }

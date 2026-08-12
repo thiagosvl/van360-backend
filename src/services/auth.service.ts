@@ -13,9 +13,11 @@ import { AtividadeAcao, AtividadeEntidadeTipo, UserType, DispositivoCadastro } f
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
 import { getNowBR, addMinutes, isBeforeNowBR, parseLocalDate, parseBrazilianDateToISO } from "../utils/date.utils.js";
+import { maskEmail, maskPhone } from "../utils/maskUtils.js";
 import { notificationService } from "./notifications/notification.service.js";
 import { EVENTO_AUTH_RECUPERACAO_SENHA, EVENTO_AUTH_SENHA_ALTERADA } from "../config/constants.js";
 import { loginAttemptsRepository } from "../repositories/login-attempts.repository.js";
+import { usuarioPushTokenRepository } from "../repositories/usuario-push-token.repository.js";
 
 // ... (interfaces remain unchanged)
 
@@ -76,6 +78,8 @@ export interface RegistroPayload {
   data_nascimento?: string;
   dispositivo_cadastro?: DispositivoCadastro;
   metadados_cadastro?: Record<string, unknown>;
+  push_token?: string;
+  platform?: string;
 }
 
 export interface RegistroManualResult {
@@ -265,7 +269,7 @@ export async function registrarUsuario(
     const { subscriptionService } = await import("./subscriptions/subscription.service.js");
     const { subscriptionReferralService } = await import("./subscriptions/subscription-referral.service.js");
 
-    // 1. Iniciar Trial de 15 dias
+    // 1. Iniciar Trial
     const subscription = await subscriptionService.getOrCreateSubscription(usuarioId);
 
     // 2. Inicializar Configurações Padrão de Notificação do Motorista
@@ -281,19 +285,23 @@ export async function registrarUsuario(
       }
     }
 
-    // Notificação de Boas Vindas
-    if (payload.telefone) {
-      notificationService.notifyDriver(payload.telefone, EVENTO_MOTORISTA_TESTE_BOAS_VINDAS, {
+    // 4. Notificação de Boas-Vindas para o Motorista (E-mail e Push)
+    notificationService.notifyDriver(
+      payload.telefone || "",
+      EVENTO_MOTORISTA_TESTE_BOAS_VINDAS,
+      {
         nomeMotorista: payload.nome,
-        dataVencimento: subscription?.trial_ends_at ?? undefined,
-      }, {
-        channels: [NotificationChannelEnum.EVOLUTION],
-        jobId: `driver-welcome-${usuarioId}`
-      })
-        .catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar boas vindas"));
-    }
+        email: payload.email,
+        usuarioId: usuarioId as string
+      },
+      {
+        channels: [NotificationChannelEnum.RESEND, NotificationChannelEnum.FIREBASE],
+        usuarioId: usuarioId as string,
+        email: payload.email
+      }
+    ).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar notificação de boas-vindas ao motorista"));
 
-    // Notificação para o Admin (Telegram)
+    // 5. Notificação para o Admin (Telegram)
     notificationService.notifyAdmin(EVENTO_ADMIN_NOVO_CADASTRO, {
       nome: payload.nome,
       email: payload.email,
@@ -303,7 +311,9 @@ export async function registrarUsuario(
       usuarioId: usuarioId as string
     }, {
       channels: [NotificationChannelEnum.TELEGRAM],
-      jobId: `admin-cadastro-${usuarioId}`
+      jobId: `admin-cadastro-${usuarioId}`,
+      usuarioId: usuarioId as string,
+      email: payload.email
     }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao notificar admin sobre cadastro"));
 
     return { success: true, session };
@@ -411,14 +421,16 @@ export async function updatePassword(token: string, newPassword: string, oldPass
       descricao: `Senha alterada pelo usuário.`
     });
 
-    if (profile.telefone) {
-      notificationService.notifyDriver(profile.telefone, EVENTO_AUTH_SENHA_ALTERADA, {
-        nomeMotorista: profile.nome
-      }, { channels: [NotificationChannelEnum.EVOLUTION] }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar notificação de senha alterada"));
+    if (profile.email) {
+      notificationService.notifyDriver(profile.email, EVENTO_AUTH_SENHA_ALTERADA, {
+        nomeMotorista: profile.nome,
+        nome: profile.nome,
+        email: profile.email
+      }, { channels: [NotificationChannelEnum.RESEND], usuarioId: profile.id, email: profile.email }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar notificação de senha alterada"));
     }
   }
 }
-export async function solicitarRecuperacao(documento: string): Promise<{ telefoneMascarado: string }> {
+export async function solicitarRecuperacao(documento: string): Promise<{ emailMascarado: string }> {
   const documentoClean = onlyDigits(documento);
   const isCnpj = documentoClean.length > 11;
   const tipoDoc = isCnpj ? "CNPJ" : "CPF";
@@ -426,7 +438,7 @@ export async function solicitarRecuperacao(documento: string): Promise<{ telefon
   const { data: user, error } = await authRepository.getUserIdAndEmailByCpf(documentoClean);
 
   if (error || !user) throw new AppError(`Usuário não encontrado com este ${tipoDoc}.`, 404);
-  if (!user.telefone) throw new AppError("O usuário não possui telefone cadastrado para recuperação.", 400);
+  if (!user.email) throw new AppError("O usuário não possui e-mail cadastrado para recuperação.", 400);
 
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   const expiraEm = addMinutes(getNowBR(), 15).toISOString();
@@ -451,14 +463,17 @@ export async function solicitarRecuperacao(documento: string): Promise<{ telefon
     throw new AppError("Erro ao processar solicitação de recuperação.", 500);
   }
 
-  const sent = await notificationService.notifyDriver(user.telefone, EVENTO_AUTH_RECUPERACAO_SENHA, {
+  const sent = await notificationService.notifyDriver(user.email, EVENTO_AUTH_RECUPERACAO_SENHA, {
     nomeMotorista: user.nome,
+    nome: user.nome,
+    email: user.email,
+    codigoOtp: otp,
     otpCode: otp
-  }, { channels: [NotificationChannelEnum.EVOLUTION] });
+  }, { channels: [NotificationChannelEnum.RESEND], usuarioId: user.id, email: user.email });
 
   if (!sent) {
-    logger.error({ userId: user.id }, "[AuthService] Falha ao entregar código OTP");
-    throw new AppError("Falha ao entregar o código. Verifique se o número está correto e tente novamente.", 500);
+    logger.error({ userId: user.id }, "[AuthService] Falha ao entregar e-mail com código OTP");
+    throw new AppError("Falha ao enviar o e-mail de recuperação. Tente novamente em instantes.", 500);
   }
 
   historicoService.log({
@@ -469,8 +484,9 @@ export async function solicitarRecuperacao(documento: string): Promise<{ telefon
     descricao: `Solicitação de recuperação de senha enviada.`
   });
 
-  const finalTelefone = user.telefone.slice(-4);
-  return { telefoneMascarado: `(XX) XXXXX-${finalTelefone}` };
+  return {
+    emailMascarado: maskEmail(user.email)
+  };
 }
 
 export async function validarCodigo(documento: string, codigo: string): Promise<{ recoveryId: string }> {
@@ -535,10 +551,12 @@ export async function resetarSenhaComCodigo(recoveryId: string, novaSenha: strin
   });
 
   const userProfile = rec.usuarios;
-  if (userProfile?.telefone) {
-    notificationService.notifyDriver(userProfile.telefone, EVENTO_AUTH_SENHA_ALTERADA, {
-      nomeMotorista: userProfile.nome
-    }, { channels: [NotificationChannelEnum.EVOLUTION] }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar notificação de senha alterada (reset)"));
+  if (userProfile?.email) {
+    notificationService.notifyDriver(userProfile.email, EVENTO_AUTH_SENHA_ALTERADA, {
+      nomeMotorista: userProfile.nome,
+      nome: userProfile.nome,
+      email: userProfile.email
+    }, { channels: [NotificationChannelEnum.RESEND], usuarioId: rec.usuario_id, email: userProfile.email }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar notificação de senha alterada (reset)"));
   }
 
   return {

@@ -1,8 +1,9 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { BlogPostStatus } from "../types/enums.js";
+import { isValidFilterValue } from "../utils/filter.utils.js";
 
 export const blogRepository = {
-    async insert(data: any) {
+    async insert(data: Record<string, unknown>) {
         return supabaseAdmin
             .from("blog_posts")
             .insert([data])
@@ -10,7 +11,7 @@ export const blogRepository = {
             .single();
     },
 
-    async update(id: string, data: any) {
+    async update(id: string, data: Record<string, unknown>) {
         return supabaseAdmin
             .from("blog_posts")
             .update(data)
@@ -60,7 +61,7 @@ export const blogRepository = {
             .select("*", { count: "exact" })
             .order("created_at", { ascending: false });
 
-        if (status) {
+        if (isValidFilterValue(status)) {
             query = query.eq("status", status);
         }
 

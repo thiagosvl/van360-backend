@@ -28,6 +28,8 @@ export interface RegistrarUsuarioBodyDTO {
   indicador_id?: string;
   dispositivo_cadastro?: DispositivoCadastro;
   metadados_cadastro?: MetadadosCadastroDTO;
+  push_token?: string;
+  platform?: string;
 }
 
 export interface LoginBodyDTO {

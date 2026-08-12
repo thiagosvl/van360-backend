@@ -5,7 +5,7 @@ import { subscriptionService } from "./subscription.service.js";
 import { subscriptionBillingService } from "./subscription-billing.service.js";
 import { monitorRepository } from "../../repositories/monitor.repository.js";
 import { notificationRepository } from "../../repositories/notification.repository.js";
-import { notificationService, DriverEventType } from "../notifications/notification.service.js";
+import { notificationService } from "../notifications/notification.service.js";
 import { getConfigNumber, getConfig } from "../configuracao.service.js";
 import { getNowBR, getEndOfDayBR, addDays, diffInDays, toPersistenceString } from "../../utils/date.utils.js";
 import {
@@ -152,16 +152,18 @@ export const subscriptionMonitorService = {
 
       if (daysLeft !== 1) continue; // Avisamos APENAS faltando 1 dia exato
 
-      const tipo: DriverEventType = EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO;
+      const tipo: string = EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO;
       const cicloRef = this.toCicloRef(sub.trial_ends_at);
 
       if (notifiedSet.has(`${sub.usuario_id}:${tipo}:${cicloRef}`)) continue;
 
-      await notificationService.notifyDriver(user.telefone, tipo, {
-        nomeMotorista: user.nome,
+      await notificationService.notifyDriver(user?.telefone || "", tipo, {
+        nomeMotorista: user?.nome,
+        email: user?.email,
         trialDays: daysLeft,
         dataVencimento: sub.trial_ends_at,
-      }, { channels: [NotificationChannelEnum.EVOLUTION] });
+        usuarioId: sub.usuario_id,
+      }, { channels: [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND], email: user?.email, usuarioId: sub.usuario_id });
       logsToSave.push({
         usuarioId: sub.usuario_id,
         tipo,
@@ -201,9 +203,11 @@ export const subscriptionMonitorService = {
 
       const user = this.getUserObject((sub as any).usuarios);
       if (user?.telefone) {
-        await notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_TESTE_ENCERRADO, {
+        await notificationService.notifyDriver(user.telefone || "", EVENTO_MOTORISTA_TESTE_ENCERRADO, {
           nomeMotorista: user.nome,
-        }, { channels: [NotificationChannelEnum.EVOLUTION] });
+          email: user?.email,
+          usuarioId: sub.usuario_id,
+        }, { channels: [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND], email: user?.email, usuarioId: sub.usuario_id });
         await this.logNotification(sub.usuario_id, EVENTO_MOTORISTA_TESTE_ENCERRADO, this.toCicloRef(sub.trial_ends_at || new Date()));
       }
     }
@@ -256,10 +260,12 @@ export const subscriptionMonitorService = {
         if (!inWindow) continue;
         if (notifiedSet.has(`${sub.usuario_id}:${step.tipo}:${cicloRef}`)) continue;
 
-        await notificationService.notifyDriver(user.telefone, step.tipo, {
+        await notificationService.notifyDriver(user.telefone || "", step.tipo, {
           nomeMotorista: user.nome,
+          email: user?.email,
           valorPromocional: step.tipo === EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2 ? valorPromocional : undefined,
-        }, { channels: [NotificationChannelEnum.EVOLUTION] });
+          usuarioId: sub.usuario_id,
+        }, { channels: [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND], email: user?.email, usuarioId: sub.usuario_id });
         logsToSave.push({ usuarioId: sub.usuario_id, tipo: step.tipo, cicloRef });
         break; // Um step por execução por usuário
       }
@@ -290,10 +296,12 @@ export const subscriptionMonitorService = {
         const daysSinceExpiry = sub.data_vencimento ? diffInDays(sub.data_vencimento, now) : 0;
 
         if (user?.telefone && daysSinceExpiry === 0) {
-          await notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_ASSINATURA_VENCEU, {
+          await notificationService.notifyDriver(user.telefone || "", EVENTO_MOTORISTA_ASSINATURA_VENCEU, {
             nomeMotorista: user.nome,
+            email: user?.email,
             planoNome: (sub as any).planos?.nome,
-          }, { channels: [NotificationChannelEnum.EVOLUTION] });
+            usuarioId: sub.usuario_id,
+          }, { channels: [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND], email: user?.email, usuarioId: sub.usuario_id });
           await this.logNotification(sub.usuario_id, EVENTO_MOTORISTA_ASSINATURA_VENCEU, this.toCicloRef(sub.data_vencimento || new Date()));
         }
       }
@@ -309,13 +317,15 @@ export const subscriptionMonitorService = {
 
         const user = this.getUserObject((sub as any).usuarios);
         if (user?.telefone) {
-          await notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_ASSINATURA_ATRASADA, {
+          await notificationService.notifyDriver(user.telefone || "", EVENTO_MOTORISTA_ASSINATURA_ATRASADA, {
             nomeMotorista: user.nome,
+            email: user?.email,
             diasAtraso: gracePeriod,
             planoNome: (sub as any).planos?.nome,
             valor: (sub as any).planos?.valor ? Number((sub as any).planos.valor) : undefined,
             metodoCobranca: (sub as any).metodo_pagamento ?? undefined,
-          }, { channels: [NotificationChannelEnum.EVOLUTION] });
+            usuarioId: sub.usuario_id,
+          }, { channels: [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND], email: user?.email, usuarioId: sub.usuario_id });
           await this.logNotification(sub.usuario_id, EVENTO_MOTORISTA_ASSINATURA_ATRASADA, this.toCicloRef(sub.data_vencimento || new Date()));
         }
       }
@@ -329,7 +339,7 @@ export const subscriptionMonitorService = {
   async notifyOverdueReminders(): Promise<void> {
     const now = getNowBR();
 
-    const reminderSteps: { daysAgo: number, tipo: DriverEventType }[] = [
+    const reminderSteps: Array<{ daysAgo: number; tipo: string }> = [
       { daysAgo: 1, tipo: EVENTO_MOTORISTA_RENOVACAO_LEMBRETE },
       { daysAgo: 2, tipo: EVENTO_MOTORISTA_RENOVACAO_URGENCIA },
     ];
@@ -365,13 +375,15 @@ export const subscriptionMonitorService = {
         // Inclui PIX se existir fatura pendente
         const fatura = pendingUsersMap.get(sub.usuario_id);
 
-        await notificationService.notifyDriver(user.telefone, step.tipo, {
+        await notificationService.notifyDriver(user.telefone || "", step.tipo, {
           nomeMotorista: user.nome,
+          email: user?.email,
           valor: fatura?.valor ? Number(fatura.valor) : undefined,
           pixCopiaECola: fatura?.pix_copy_paste ?? undefined,
           metodoCobranca: sub.metodo_pagamento ?? undefined,
           planoNome: (sub as any).planos?.nome,
-        }, { channels: [NotificationChannelEnum.EVOLUTION] });
+          usuarioId: sub.usuario_id,
+        }, { channels: [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND], email: user?.email, usuarioId: sub.usuario_id });
         logsToSave.push({
           usuarioId: sub.usuario_id,
           tipo: step.tipo,
@@ -426,9 +438,11 @@ export const subscriptionMonitorService = {
         if (!inWindow) continue;
         if (notifiedSet.has(`${sub.usuario_id}:${step.tipo}:${cicloRef}`)) continue;
 
-        await notificationService.notifyDriver(user.telefone, step.tipo, {
+        await notificationService.notifyDriver(user.telefone || "", step.tipo, {
           nomeMotorista: user.nome,
-        }, { channels: [NotificationChannelEnum.EVOLUTION] });
+          email: user?.email,
+          usuarioId: sub.usuario_id,
+        }, { channels: [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND], email: user?.email, usuarioId: sub.usuario_id });
         logsToSave.push({
           usuarioId: sub.usuario_id,
           tipo: step.tipo,
@@ -496,10 +510,12 @@ export const subscriptionMonitorService = {
           logger.warn({ subId: sub.id, failedCount, cicloRef }, "[SubscriptionMonitor] Limite de tentativas de cartão atingido para o ciclo. Pulando.");
           if (user?.telefone) {
             if (!notifiedSet.has(`${sub.usuario_id}:${EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO}:${cicloRef}`)) {
-              await notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO, {
+              await notificationService.notifyDriver(user.telefone || "", EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO, {
                 nomeMotorista: user.nome,
+                email: user?.email,
                 erro: "Número máximo de tentativas atingido.",
-              }, { channels: [NotificationChannelEnum.EVOLUTION] });
+                usuarioId: sub.usuario_id,
+              }, { channels: [NotificationChannelEnum.WABA, NotificationChannelEnum.RESEND], email: user?.email, usuarioId: sub.usuario_id });
               await notificationService.notifyAdmin(EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO, {
                 nomeMotorista: user.nome,
                 telefone: user.telefone,
@@ -509,7 +525,9 @@ export const subscriptionMonitorService = {
                 origem: "AUTOMATICO"
               }, {
                 channels: [NotificationChannelEnum.TELEGRAM],
-                jobId: `admin-falha-pagamento-${sub.usuario_id}-max-retries-${cicloRef}`
+                jobId: `admin-falha-pagamento-${sub.usuario_id}-max-retries-${cicloRef}`,
+                usuarioId: sub.usuario_id,
+                email: user?.email
               });
               logsToSave.push({
                 usuarioId: sub.usuario_id,
@@ -536,13 +554,15 @@ export const subscriptionMonitorService = {
         if (!isCard && user?.telefone && fatura.pix_copy_paste) {
           const cicloRef = this.toCicloRef(sub.data_vencimento || new Date());
           if (!notifiedSet.has(`${sub.usuario_id}:${EVENTO_MOTORISTA_ASSINATURA_VENCENDO}:${cicloRef}`)) {
-            await notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_ASSINATURA_VENCENDO, {
+            await notificationService.notifyDriver(user.telefone || "", EVENTO_MOTORISTA_ASSINATURA_VENCENDO, {
               nomeMotorista: user.nome,
+              email: user?.email,
               dataVencimento: sub.data_vencimento,
               pixCopiaECola: fatura.pix_copy_paste,
               valor: fatura.valor,
               planoNome: (sub as any).planos?.nome,
-            }, { channels: [NotificationChannelEnum.EVOLUTION] });
+              usuarioId: sub.usuario_id,
+            }, { channels: [NotificationChannelEnum.WABA, NotificationChannelEnum.RESEND], email: user?.email, usuarioId: sub.usuario_id });
             logsToSave.push({
               usuarioId: sub.usuario_id,
               tipo: EVENTO_MOTORISTA_ASSINATURA_VENCENDO,
@@ -558,10 +578,12 @@ export const subscriptionMonitorService = {
         logger.error({ subId: sub.id, error: e.message }, "[SubscriptionMonitor] Falha ao gerar fatura/cobrança automática");
 
         if (isCard && user?.telefone) {
-          await notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO, {
+          await notificationService.notifyDriver(user.telefone || "", EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO, {
             nomeMotorista: user.nome,
+            email: user?.email,
             erro: e.message || "Cartão recusado",
-          }, { channels: [NotificationChannelEnum.EVOLUTION] });
+            usuarioId: sub.usuario_id,
+          }, { channels: [NotificationChannelEnum.WABA, NotificationChannelEnum.RESEND], email: user?.email, usuarioId: sub.usuario_id });
           await notificationService.notifyAdmin(EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO, {
             nomeMotorista: user.nome,
             telefone: user.telefone,
@@ -571,7 +593,9 @@ export const subscriptionMonitorService = {
             origem: "AUTOMATICO"
           }, {
             channels: [NotificationChannelEnum.TELEGRAM],
-            jobId: `admin-falha-pagamento-${sub.usuario_id}-recusado-${this.toCicloRef(sub.data_vencimento || new Date())}`
+            jobId: `admin-falha-pagamento-${sub.usuario_id}-recusado-${this.toCicloRef(sub.data_vencimento || new Date())}`,
+            usuarioId: sub.usuario_id,
+            email: user?.email
           });
           const cicloRef = this.toCicloRef(sub.data_vencimento || new Date());
           if (!notifiedSet.has(`${sub.usuario_id}:${EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO}:${cicloRef}`)) {

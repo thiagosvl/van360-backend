@@ -130,8 +130,8 @@ export const AuthController = {
             const result = await solicitarRecuperacao(doc);
             return reply.status(200).send({
                 success: true,
-                message: "Código enviado.",
-                telefoneMascarado: result.telefoneMascarado
+                message: "Código enviado por e-mail.",
+                emailMascarado: result.emailMascarado
             });
         } catch (err: any) {
             const status = err.statusCode || 500;

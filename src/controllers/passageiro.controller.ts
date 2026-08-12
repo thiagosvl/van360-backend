@@ -30,26 +30,32 @@ export const passageiroController = {
 
   update: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
+    const targetOwnerId = request.data_owner_id || request.user?.id;
+    const assignedVeiculoId = request.assigned_veiculo_id || undefined;
     logger.info({ passageiroId: id }, "PassageiroController.update - Starting");
 
     const data = updatePassageiroSchema.parse(request.body);
     
-    await passageiroService.updatePassageiro(id, data);
+    await passageiroService.updatePassageiro(id, data, targetOwnerId, assignedVeiculoId);
     
     return reply.status(200).send({ success: true });
   },
 
   delete: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
+    const targetOwnerId = request.data_owner_id || request.user?.id;
+    const assignedVeiculoId = request.assigned_veiculo_id || undefined;
     logger.info({ passageiroId: id }, "PassageiroController.delete - Starting");
 
-    await passageiroService.deletePassageiro(id);
+    await passageiroService.deletePassageiro(id, targetOwnerId, assignedVeiculoId);
     return reply.status(200).send({ success: true });
   },
 
   get: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
-    const passageiro = await passageiroService.getPassageiro(id);
+    const targetOwnerId = request.data_owner_id || request.user?.id;
+    const assignedVeiculoId = request.assigned_veiculo_id || undefined;
+    const passageiro = await passageiroService.getPassageiro(id, targetOwnerId, assignedVeiculoId);
     return reply.status(200).send(passageiro);
   },
 
@@ -70,9 +76,11 @@ export const passageiroController = {
   toggleAtivo: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     const { novoStatus } = toggleAtivoSchema.parse(request.body);
+    const targetOwnerId = request.data_owner_id || request.user?.id;
+    const assignedVeiculoId = request.assigned_veiculo_id || undefined;
     
     try {
-        await passageiroService.toggleAtivo(id, novoStatus);
+        await passageiroService.toggleAtivo(id, novoStatus, targetOwnerId, assignedVeiculoId);
         return reply.status(200).send({ ativo: novoStatus });
     } catch (err: unknown) {
          const error = err as Error;
@@ -81,12 +89,6 @@ export const passageiroController = {
          }
          throw err;
     }
-  },
-
-  countCobrancas: async (request: FastifyRequest, reply: FastifyReply) => {
-    const { id } = request.params as { id: string };
-    const count = await cobrancaService.countByPassageiro(id);
-    return reply.status(200).send({ numeroCobrancas: count });
   },
 
   countByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {

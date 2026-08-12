@@ -76,11 +76,11 @@ const createEvolutionProcessor = (isBulk: boolean) => async (job: Job<EvolutionJ
             }
 
             if (compositeMessage) {
-                const fallbackComposite = compositeMessage.map((p: any) => ({
+                const fallbackComposite = compositeMessage.map((p: Record<string, unknown>) => ({
                     ...p,
                     content: p.content ? `${p.content}\n\n_(Mensagem enviada pelo sistema Van360)_` : undefined
                 }));
-                success = await evolutionService.sendCompositeMessage(phone, fallbackComposite, targetInstance);
+                success = await evolutionService.sendCompositeMessage(phone, fallbackComposite as any, targetInstance);
             } else if (message) {
                 const fallbackMessage = `${message}\n\n_(Mensagem enviada pelo sistema Van360)_`;
                 success = await evolutionService.sendText(phone, fallbackMessage, targetInstance);
@@ -93,13 +93,15 @@ const createEvolutionProcessor = (isBulk: boolean) => async (job: Job<EvolutionJ
 
         // --- INTEGRAÇÃO DB: Desacoplamento da Fila ---
         // Se a mensagem foi entregue e tivermos o cobrancaId nos metadados, atualiza o DB.
-        if (success && options?.metadata?.cobrancaId) {
+        const cobrancaId = options?.metadata?.cobrancaId as string | undefined;
+        if (success && cobrancaId) {
             try {
                 const now = new Date();
-                await cobrancaRepository.updateBulkUltimaNotificacao([options.metadata.cobrancaId], toPersistenceString(now));
-                logger.info({ cobrancaId: options.metadata.cobrancaId }, "[EvolutionWorker] Data de ultima notificacao atualizada com sucesso no banco de dados.");
-            } catch (dbError: any) {
-                logger.error({ error: dbError.message, cobrancaId: options.metadata.cobrancaId }, "[EvolutionWorker] Falha ao atualizar banco de dados apos envio com sucesso.");
+                await cobrancaRepository.updateBulkUltimaNotificacao([cobrancaId], toPersistenceString(now));
+                logger.info({ cobrancaId }, "[EvolutionWorker] Data de ultima notificacao atualizada com sucesso no banco de dados.");
+            } catch (dbError: unknown) {
+                const msg = dbError instanceof Error ? dbError.message : String(dbError);
+                logger.error({ error: msg, cobrancaId }, "[EvolutionWorker] Falha ao atualizar banco de dados apos envio com sucesso.");
             }
         }
 
@@ -163,4 +165,5 @@ const startGlobalHealthCheck = () => {
     setInterval(check, checkInterval);
 };
 
-startGlobalHealthCheck();
+// Health check desativado (nao utilizamos mais a Evolution API ativa em segundo plano)
+// startGlobalHealthCheck();

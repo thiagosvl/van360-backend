@@ -98,7 +98,11 @@ export const cobrancaPagamentoService = {
               reciboUrl: updated.recibo_url,
               usuarioId: updated.usuario_id
             },
-            { channels: [NotificationChannelEnum.EVOLUTION] }
+            {
+              channels: [NotificationChannelEnum.WABA],
+              usuarioId: updated.usuario_id,
+              email: passageiroInfo?.email_responsavel
+            }
           );
         }
       } catch (notifErr: unknown) {

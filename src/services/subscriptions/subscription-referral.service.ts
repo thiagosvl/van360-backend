@@ -70,7 +70,7 @@ export const subscriptionReferralService = {
                         nomeMotorista: indicador.nome,
                         trialDays: bonusDays
                     },
-                    { channels: [NotificationChannelEnum.EVOLUTION] }
+                    { channels: [NotificationChannelEnum.FIREBASE], usuarioId: indicadorId, email: indicador.email }
                 ).catch(err => {
                     logger.error({ err, indicadorId }, "[SubscriptionReferralService] Erro ao notificar novo cadastro por indicação.");
                 });
@@ -78,6 +78,8 @@ export const subscriptionReferralService = {
         } catch (notifyErr) {
             logger.error({ notifyErr, indicadorId, indicadoId }, "[SubscriptionReferralService] Erro ao buscar indicador para notificação.");
         }
+        
+        return;
     },
 
     async completeReferral(indicadoId: string, faturaId: string) {
@@ -122,7 +124,7 @@ export const subscriptionReferralService = {
                         trialDays: bonusDays,
                         dataVencimento: newExpiryStr
                     },
-                    { channels: [NotificationChannelEnum.EVOLUTION] }
+                    { channels: [NotificationChannelEnum.FIREBASE], usuarioId: indicador.id, email: indicador.email }
                 ).catch(err => {
                     logger.error({ err, indicadorId: indicador.id }, "[SubscriptionReferralService] Erro ao notificar bônus de indicação");
                 });

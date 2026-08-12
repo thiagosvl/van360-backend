@@ -65,6 +65,29 @@ export const prePassageiroService = {
 
     const inserted = await prePassageiroRepository.insert(prePassageiroData);
 
+    // --- NOTIFICAÇÃO PUSH (FIREBASE SOMENTE) AO MOTORISTA ---
+    const { notificationService } = await import("./notifications/notification.service.js");
+    const { EVENTO_MOTORISTA_NOVO_PRE_CADASTRO } = await import("../config/constants.js");
+    const { NotificationChannelEnum } = await import("../types/enums.js");
+    const { logger } = await import("../config/logger.js");
+
+    notificationService.notifyDriver(
+      targetOwnerId,
+      EVENTO_MOTORISTA_NOVO_PRE_CADASTRO,
+      {
+        nomeResponsavel: inserted.nome_responsavel,
+        nomePassageiro: inserted.nome,
+        passageiroId: inserted.id,
+      },
+      {
+        channels: [NotificationChannelEnum.FIREBASE],
+        usuarioId: targetOwnerId,
+      }
+    ).catch((err: unknown) => {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      logger.error({ error: errorMessage, targetOwnerId, prePassageiroId: inserted.id }, "[prePassageiroService] Falha ao disparar Push de novo pré-cadastro ao motorista");
+    });
+
     // --- LOG DE AUDITORIA ---
     const { historicoService } = await import("./historico.service.js");
     const { AtividadeAcao, AtividadeEntidadeTipo } = await import("../types/enums.js");

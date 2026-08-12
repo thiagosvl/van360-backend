@@ -1,3 +1,5 @@
+import { supabaseAdmin } from "../config/supabase.js";
+import { motoristaEquipeRepository } from "../repositories/motorista-equipe.repository.js";
 import { NotificationChannelEnum } from '../types/enums.js';
 import { logger } from "../config/logger.js";
 import { adminRepository } from "../repositories/admin.repository.js";
@@ -248,8 +250,8 @@ export const adminService = {
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
-    let digits = null;
-    let searchClean = null;
+    let digits: string | undefined = undefined;
+    let searchClean: string | undefined = undefined;
     let isId = false;
 
     if (search) {
@@ -262,7 +264,7 @@ export const adminService = {
       }
     }
 
-    const { data, error, count } = await adminRepository.listUsers({ from, to, searchClean, digits, isId });
+    const { data, error, count } = await adminRepository.listUsers({ from, to, searchClean: searchClean || undefined, digits: digits || undefined, isId });
     if (error) {
       logger.error({ error }, "[AdminService] Erro ao listar usuários.");
       throw error;
@@ -635,15 +637,6 @@ export const adminService = {
       logger.error({ trialError, userId }, "[AdminService] Erro não-bloqueante ao criar Trial inicial.");
     }
 
-    if (data.telefone) {
-      const maskedCpf = maskCpfCnpjHidden(cpfcnpjClean);
-      notificationService.notifyDriver(data.telefone, EVENTO_MOTORISTA_CADASTRO_ADMIN, {
-        nomeMotorista: data.nome,
-        cpfLogin: maskedCpf,
-        senhaTemporaria: data.senha
-      }, { channels: [NotificationChannelEnum.EVOLUTION] }).catch(err => logger.error({ err, userId }, "[AdminService] Falha ao enviar Evolution de boas-vindas."));
-    }
-
     return { id: userId, email: emailClean };
   },
 
@@ -665,15 +658,6 @@ export const adminService = {
       throw authError;
     }
 
-    if (user.telefone) {
-      const maskedCpf = maskCpfCnpjHidden(user.cpfcnpj || "");
-      notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_RESET_SENHA_ADMIN, {
-        nomeMotorista: user.nome,
-        cpfLogin: maskedCpf,
-        senhaTemporaria: newPassword
-      }, { channels: [NotificationChannelEnum.EVOLUTION] }).catch(err => logger.error({ err, userId }, "[AdminService] Falha ao enviar Evolution de reset de senha."));
-    }
-
     return { success: true, senha: newPassword };
   },
 
@@ -684,12 +668,26 @@ export const adminService = {
       throw new Error("Usuário não encontrado.");
     }
 
+    const { data: subContas } = await motoristaEquipeRepository.listByGestor(userId);
+    if (subContas && subContas.length > 0) {
+      for (const sub of subContas) {
+        if (sub.id) {
+          await authProvider.deleteUser(sub.id).catch((err: unknown) => {
+            logger.warn({ err, subId: sub.id }, "[AdminService] Falha ao expurgar sub-conta no Auth");
+          });
+          await supabaseAdmin.from("usuarios").delete().eq("id", sub.id);
+        }
+      }
+    }
+
     const { error: authError } = await authProvider.deleteUser(userId);
 
     if (authError) {
       logger.error({ authError, userId }, "[AdminService] Erro ao deletar usuário no Supabase Auth.");
       throw authError;
     }
+
+    await supabaseAdmin.from("usuarios").delete().eq("id", userId);
 
     return { success: true };
   },

@@ -1,6 +1,5 @@
 import { gastoCategoriaRepository } from "../repositories/gasto-categoria.repository.js";
 import { CreateGastoCategoriaDTO, UpdateGastoCategoriaDTO } from "../types/dtos/gasto-categoria.dto.js";
-import { supabaseAdmin } from "../config/supabase.js";
 
 function generateSlug(str: string): string {
     return str
@@ -136,11 +135,7 @@ export const gastoCategoriaService = {
 
         // Se o slug mudou, atualiza os gastos antigos em cascata
         if (novoSlug && antigoSlug && novoSlug !== antigoSlug) {
-            const { error: cascadeError } = await supabaseAdmin
-                .from("gastos")
-                .update({ categoria: novoSlug })
-                .eq("categoria", antigoSlug)
-                .eq("usuario_id", usuarioId);
+            const { error: cascadeError } = await gastoCategoriaRepository.cascadeUpdateSlug(antigoSlug, novoSlug, usuarioId);
 
             if (cascadeError) {
                 console.error("[Category Update Cascade Error]:", cascadeError.message);

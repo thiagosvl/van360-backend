@@ -1,16 +1,5 @@
-import { CompositeMessagePart } from "../../../types/dtos/evolution.dto.js";
+import { NotificationOptions } from "../notification.service.js";
 
-/**
- * Interface que todo provedor de notificação (Evolution, SMS, E-mail) deve implementar
- */
-export interface NotificationProviderAdapter {
-    /**
-     * Envia uma mensagem composta (texto, imagem, áudio, etc)
-     */
-    sendComposite(to: string, parts: CompositeMessagePart[], options?: Record<string, any>): Promise<boolean>;
-
-    /**
-     * Identificador do provedor (ex: "EVOLUTION_WHATSAPP", "TWILIO_SMS", "RESEND_EMAIL")
-     */
-    getProviderId(): string;
+export interface NotificationProviderPort {
+    send(eventName: string, contextData: Record<string, unknown>, options?: NotificationOptions): Promise<boolean>;
 }

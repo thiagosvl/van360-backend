@@ -15,7 +15,6 @@ const passageiroRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     // Listagens e Contagens (Visualizar = Gestor, Auxiliar e Monitor)
     app.get("/usuario/:usuarioId", { preHandler: [requirePermission("passageiros.visualizar")] }, passageiroController.listByUsuario);
     app.get("/usuario/:usuarioId/contagem", { preHandler: [requirePermission("passageiros.visualizar")] }, passageiroController.countByUsuario);
-    app.get("/:id/numero-cobrancas", { preHandler: [requirePermission("passageiros.visualizar")] }, passageiroController.countCobrancas);
     app.get("/responsavel/lookup", { preHandler: [requirePermission("passageiros.visualizar")] }, passageiroController.lookupResponsavel);
 
     // Ações Específicas

@@ -5,7 +5,7 @@ import { prePassageiroRepository } from "../repositories/pre-passageiro.reposito
 import { cobrancaRepository } from "../repositories/cobranca.repository.js";
 import { gastoRepository } from "../repositories/gasto.repository.js";
 import { CobrancaStatus, GastoCategoria } from "../types/enums.js";
-import { getNowBR, toLocalDateString, getLastDayOfMonth } from "../utils/date.utils.js";
+import { getNowBR, toLocalDateString, getLastDayOfMonth, getSafeDueDateString } from "../utils/date.utils.js";
 import { getUsuarioData } from "./usuario.service.js";
 
 interface SystemSummary {
@@ -138,7 +138,7 @@ export const usuarioResumoService = {
       };
 
       passageirosList.forEach((p: Record<string, any>) => {
-        if (!p.ativo || passageirosComCobranca.has(p.id) || !p.valor_cobranca || Number(p.valor_cobranca) <= 0) {
+        if (!p.ativo || p.isento || passageirosComCobranca.has(p.id) || !p.valor_cobranca || Number(p.valor_cobranca) <= 0) {
           return;
         }
 
@@ -161,9 +161,7 @@ export const usuarioResumoService = {
 
         receitaProjetada += Number(p.valor_cobranca);
 
-        const diaVenc = p.dia_vencimento ? String(p.dia_vencimento).padStart(2, "0") : "10";
-        const mesStr = String(targetMes).padStart(2, "0");
-        const dataVencProj = `${targetAno}-${mesStr}-${diaVenc}`;
+        const dataVencProj = getSafeDueDateString(p.dia_vencimento, targetMes, targetAno);
 
         if (dataVencProj < hoje) {
           atrasosProjetadosValor += Number(p.valor_cobranca);

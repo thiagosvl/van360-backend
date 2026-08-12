@@ -7,3 +7,5 @@ certificates
 supabase/.temp
 ideias
 documentacoes
+# Firebase credentials
+firebase-service-account.json

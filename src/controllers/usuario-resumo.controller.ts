@@ -23,7 +23,7 @@ export const usuarioResumoController = {
     const anoNum = ano ? parseInt(ano) : undefined;
 
     const targetOwnerId = request.data_owner_id || usuarioId;
-    const targetVeiculoId = veiculo_id || request.assigned_veiculo_id || undefined;
+    const targetVeiculoId = request.assigned_veiculo_id || veiculo_id || undefined;
 
     const resumo = await usuarioResumoService.getResumo(targetOwnerId, mesNum, anoNum, targetVeiculoId);
 

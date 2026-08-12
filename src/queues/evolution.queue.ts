@@ -12,7 +12,7 @@ export interface EvolutionJobData {
     phone: string;
     message?: string;
     compositeMessage?: any[]; // Suporte para novo formato
-    options?: any;
+    options?: Record<string, any>;
     // Metadata para log
     context?: string;
     userId?: string;

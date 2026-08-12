@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { gastoRepository } from "../repositories/gasto.repository.js";
 import { gastoCategoriaRepository } from "../repositories/gasto-categoria.repository.js";
 import { CreateGastoDTO, ListGastosFiltersDTO, UpdateGastoDTO } from "../types/dtos/gasto.dto.js";
@@ -7,7 +8,6 @@ import { cleanString } from "../utils/string.utils.js";
 import { AppError } from "../errors/AppError.js";
 import { historicoService } from "./historico.service.js";
 import { toPersistenceString, parseLocalDate } from "../utils/date.utils.js";
-import { supabaseAdmin } from "../config/supabase.js";
 
 const _validarObterSlugCategoria = async (categoria: string, usuarioId: string): Promise<string> => {
     const catsRes = await gastoCategoriaRepository.list(usuarioId);
@@ -168,12 +168,7 @@ export const gastoService = {
     async _recalcularTotalParcelas(parcelamentoId: string): Promise<void> {
         if (!parcelamentoId) return;
 
-        const { data: parcelas, error } = await supabaseAdmin
-            .from("gastos")
-            .select("*")
-            .eq("parcelamento_id", parcelamentoId)
-            .order("data", { ascending: true })
-            .order("created_at", { ascending: true });
+        const { data: parcelas, error } = await gastoRepository.getParcelasByParcelamentoId(parcelamentoId);
 
         if (error || !parcelas || parcelas.length === 0) return;
 
@@ -206,11 +201,11 @@ export const gastoService = {
         }
     },
 
-    async updateGasto(id: string, data: UpdateGastoDTO, escopo: GastoEscopoAcao = GastoEscopoAcao.UNICA): Promise<any> {
+    async updateGasto(id: string, data: UpdateGastoDTO, escopo: GastoEscopoAcao = GastoEscopoAcao.UNICA, targetOwnerId?: string, assignedVeiculoId?: string): Promise<any> {
         if (!id) throw new Error("ID do gasto é obrigatório");
 
-        const gastoExistente = await this.getGasto(id);
-        if (!gastoExistente) throw new Error("Gasto não encontrado");
+        const gastoExistente = await this.getGasto(id, targetOwnerId, assignedVeiculoId);
+        if (!gastoExistente) throw new AppError("Gasto não encontrado", 404);
 
         if (data.categoria !== undefined) {
             data.categoria = await _validarObterSlugCategoria(data.categoria, gastoExistente.usuario_id);
@@ -242,16 +237,7 @@ export const gastoService = {
         const baseNumero = escopo === GastoEscopoAcao.FUTURAS ? (gastoExistente.numero_parcela || 1) : 1;
 
         // Buscar todas as parcelas afetadas pelo escopo de alteracao em lote
-        let queryAfetadas = supabaseAdmin
-            .from("gastos")
-            .select("*")
-            .eq("parcelamento_id", gastoExistente.parcelamento_id);
-
-        if (minNumero !== undefined) {
-            queryAfetadas = queryAfetadas.gte("numero_parcela", minNumero);
-        }
-
-        const { data: parcelasAfetadas, error: errorAfetadas } = await queryAfetadas;
+        const { data: parcelasAfetadas, error: errorAfetadas } = await gastoRepository.getParcelasAfetadas(gastoExistente.parcelamento_id, minNumero);
         if (errorAfetadas) throw errorAfetadas;
 
         const baseDateStr = gastoData.data ? (gastoData.data as string) : null;
@@ -288,10 +274,10 @@ export const gastoService = {
         return updatedMain || gastoExistente;
     },
 
-    async deleteGasto(id: string, escopo: GastoEscopoAcao = GastoEscopoAcao.UNICA): Promise<void> {
+    async deleteGasto(id: string, escopo: GastoEscopoAcao = GastoEscopoAcao.UNICA, targetOwnerId?: string, assignedVeiculoId?: string): Promise<void> {
         if (!id) throw new Error("ID do gasto é obrigatório");
 
-        const gasto = await this.getGasto(id);
+        const gasto = await this.getGasto(id, targetOwnerId, assignedVeiculoId);
 
         if (gasto?.id) {
             const parcelamentoId = gasto.parcelamento_id;
@@ -322,9 +308,21 @@ export const gastoService = {
         }
     },
 
-    async getGasto(id: string): Promise<any> {
+    async getGasto(id: string, targetOwnerId?: string, assignedVeiculoId?: string): Promise<any> {
         const { data, error } = await gastoRepository.getById(id);
         if (error) throw error;
+        if (!data) throw new AppError("Gasto não encontrado", 404);
+
+        if (targetOwnerId && data.usuario_id !== targetOwnerId) {
+            throw new AppError("Acesso negado", 403);
+        }
+
+        if (assignedVeiculoId) {
+            if (!data.veiculo_id || data.veiculo_id !== assignedVeiculoId) {
+                throw new AppError("Acesso negado para este veículo", 403);
+            }
+        }
+
         return data;
     },
 

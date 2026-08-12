@@ -19,7 +19,7 @@ export const passageiroRepository = {
       `)
       .eq("id", id);
 
-    if (usuarioId) {
+    if (isValidFilterValue(usuarioId)) {
       query = query.eq("usuario_id", usuarioId);
     }
 
@@ -30,19 +30,19 @@ export const passageiroRepository = {
 
   async insert(data: Record<string, unknown>) {
     return supabaseAdmin
-        .from("passageiros")
-        .insert([data])
-        .select()
-        .single();
+      .from("passageiros")
+      .insert([data])
+      .select()
+      .single();
   },
 
   async update(id: string, data: Record<string, unknown>) {
     return supabaseAdmin
-        .from("passageiros")
-        .update(data)
-        .eq("id", id)
-        .select()
-        .single();
+      .from("passageiros")
+      .update(data)
+      .eq("id", id)
+      .select()
+      .single();
   },
 
   async delete(id: string) {
@@ -50,46 +50,52 @@ export const passageiroRepository = {
   },
 
   async getSummaryForDashboard(usuarioId: string, veiculoId?: string) {
-    let query = supabaseAdmin.from("passageiros").select("id, ativo, valor_cobranca, data_inicio_cobranca, data_fim_cobranca, created_at").eq("usuario_id", usuarioId);
+    let query = supabaseAdmin.from("passageiros").select("id, ativo, isento, valor_cobranca, dia_vencimento, data_inicio_cobranca, data_fim_cobranca, created_at").eq("usuario_id", usuarioId);
     if (isValidFilterValue(veiculoId)) {
       query = query.eq("veiculo_id", veiculoId);
     }
     return query;
   },
 
-  async getById(id: string) {
-    return supabaseAdmin
-        .from("passageiros")
-        .select(`
+  async getById(id: string, usuarioId?: string) {
+    let query = supabaseAdmin
+      .from("passageiros")
+      .select(`
             *,
             escola:escolas(id, nome),
             veiculo:veiculos(id, placa, modelo),
             contratos(id, status, created_at, minuta_url, contrato_final_url, token_acesso),
             responsaveis:passageiro_responsaveis_adicionais(*)
         `)
-        .eq("id", id)
-        .order('created_at', { foreignTable: 'contratos', ascending: false })
-        .limit(1, { foreignTable: 'contratos' })
-        .single();
+      .eq("id", id);
+
+    if (isValidFilterValue(usuarioId)) {
+      query = query.eq("usuario_id", usuarioId);
+    }
+
+    return query
+      .order('created_at', { foreignTable: 'contratos', ascending: false })
+      .limit(1, { foreignTable: 'contratos' })
+      .single();
   },
 
   async list(usuarioId: string, filtros?: { search?: string; escola?: string; veiculo?: string; periodo?: string; ativo?: string }) {
     let query = supabaseAdmin
-        .from("passageiros")
-        .select(`
+      .from("passageiros")
+      .select(`
             *,
             escola:escolas(id, nome),
             veiculo:veiculos(id, placa),
             contratos(id, status, created_at, minuta_url, contrato_final_url, token_acesso),
             responsaveis:passageiro_responsaveis_adicionais(*)
         `)
-        .eq("usuario_id", usuarioId)
-        .order("nome", { ascending: true });
+      .eq("usuario_id", usuarioId)
+      .order("nome", { ascending: true });
 
     if (isValidFilterValue(filtros?.search)) {
-        query = query.or(
-            `nome.ilike.%${filtros.search}%,nome_responsavel.ilike.%${filtros.search}%`
-        );
+      query = query.or(
+        `nome.ilike.%${filtros.search}%,nome_responsavel.ilike.%${filtros.search}%`
+      );
     }
 
     if (isValidFilterValue(filtros?.escola)) query = query.eq("escola_id", filtros.escola);
@@ -102,24 +108,24 @@ export const passageiroRepository = {
 
   async updateAtivo(id: string, ativo: boolean) {
     return supabaseAdmin
-        .from("passageiros")
-        .update({ ativo })
-        .eq("id", id);
+      .from("passageiros")
+      .update({ ativo })
+      .eq("id", id);
   },
 
   async getUsuarioIdAndNome(id: string) {
     return supabaseAdmin
-        .from("passageiros")
-        .select("usuario_id, nome")
-        .eq("id", id)
-        .single();
+      .from("passageiros")
+      .select("usuario_id, nome")
+      .eq("id", id)
+      .single();
   },
 
   async countByUsuario(usuarioId: string, filtros?: { ativo?: string; veiculo?: string }) {
     let query = supabaseAdmin
-        .from("passageiros")
-        .select("id", { count: "exact", head: true })
-        .eq("usuario_id", usuarioId);
+      .from("passageiros")
+      .select("id", { count: "exact", head: true })
+      .eq("usuario_id", usuarioId);
 
     if (isValidFilterValue(filtros?.ativo)) query = query.eq("ativo", filtros.ativo === "true");
     if (isValidFilterValue(filtros?.veiculo)) query = query.eq("veiculo_id", filtros.veiculo);
@@ -127,27 +133,20 @@ export const passageiroRepository = {
     return query;
   },
 
-  async countCobrancas(passageiroId: string) {
-    return supabaseAdmin
-        .from("cobrancas")
-        .select("id", { count: "exact", head: true })
-        .eq("passageiro_id", passageiroId);
-  },
-
   async lookupResponsavel(usuarioId: string, cpfLimpo: string) {
     return supabaseAdmin
-        .from("passageiros")
-        .select("nome_responsavel, telefone_responsavel")
-        .eq("usuario_id", usuarioId)
-        .eq("cpf_responsavel", cpfLimpo)
-        .limit(1)
-        .maybeSingle();
+      .from("passageiros")
+      .select("nome_responsavel, telefone_responsavel")
+      .eq("usuario_id", usuarioId)
+      .eq("cpf_responsavel", cpfLimpo)
+      .limit(1)
+      .maybeSingle();
   },
 
   async getResponsavelInfo(id: string) {
     return supabaseAdmin
       .from("passageiros")
-      .select("cpf_responsavel, nome_responsavel")
+      .select("cpf_responsavel, nome_responsavel, isento, nome")
       .eq("id", id)
       .single();
   },
@@ -155,10 +154,11 @@ export const passageiroRepository = {
   async listParaCobrancaAutomatica(usuarioId: string) {
     return supabaseAdmin
       .from("passageiros")
-      .select("id, nome, valor_cobranca, dia_vencimento, cpf_responsavel, nome_responsavel, created_at, data_inicio_cobranca, data_fim_cobranca")
+      .select("id, nome, valor_cobranca, dia_vencimento, cpf_responsavel, nome_responsavel, created_at, data_inicio_cobranca, data_fim_cobranca, isento")
       .eq("usuario_id", usuarioId)
       .eq("ativo", true)
-      .eq("enviar_notificacoes", true);
+      .eq("enviar_notificacoes", true)
+      .or("isento.eq.false,isento.is.null");
   },
 
   async listAniversariantesInfo(usuarioId: string, veiculoId?: string) {
@@ -179,5 +179,37 @@ export const passageiroRepository = {
     }
 
     return query.order("nome", { ascending: true });
+  },
+
+  async insertResponsavelAdicional(data: Record<string, unknown>) {
+    return supabaseAdmin
+      .from("passageiro_responsaveis_adicionais")
+      .insert([data])
+      .select()
+      .single();
+  },
+
+  async updateResponsavelAdicional(id: string, data: Record<string, unknown>) {
+    return supabaseAdmin
+      .from("passageiro_responsaveis_adicionais")
+      .update(data)
+      .eq("id", id)
+      .select()
+      .single();
+  },
+
+  async deleteResponsavelAdicional(id: string) {
+    return supabaseAdmin
+      .from("passageiro_responsaveis_adicionais")
+      .delete()
+      .eq("id", id);
+  },
+
+  async getResponsavelAdicionalById(id: string) {
+    return supabaseAdmin
+      .from("passageiro_responsaveis_adicionais")
+      .select("*")
+      .eq("id", id)
+      .single();
   }
 };

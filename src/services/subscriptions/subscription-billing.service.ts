@@ -237,7 +237,9 @@ export const subscriptionBillingService = {
                         origem: "MANUAL"
                     }, {
                         channels: [NotificationChannelEnum.TELEGRAM],
-                        jobId: `admin-falha-pagamento-${userId}-manual-${Date.now()}`
+                        jobId: `admin-falha-pagamento-${userId}-manual-${Date.now()}`,
+                        usuarioId: userId,
+                        email: user.email
                     }).catch(err => logger.error({ err }, "[SubscriptionBillingService] Falha ao notificar admin sobre recusa manual de cartão"));
                 }
             } catch (dbError) {
@@ -292,7 +294,9 @@ export const subscriptionBillingService = {
                         origem: "MANUAL"
                     }, {
                         channels: [NotificationChannelEnum.TELEGRAM],
-                        jobId: `admin-falha-pagamento-${userId}-manual-${Date.now()}`
+                        jobId: `admin-falha-pagamento-${userId}-manual-${Date.now()}`,
+                        usuarioId: userId,
+                        email: user.email
                     }).catch(err => logger.error({ err }, "[SubscriptionBillingService] Falha ao notificar admin sobre recusa manual de cartão"));
                 }
             } catch (dbError) {

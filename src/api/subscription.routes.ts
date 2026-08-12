@@ -4,7 +4,6 @@ import { authenticate } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/permissions.middleware.js";
 
 export default async function subscriptionRoutes(app: FastifyInstance) {
-  // Todas as rotas de assinatura exigem autenticação
   app.addHook("preHandler", authenticate);
 
   /**

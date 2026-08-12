@@ -83,19 +83,22 @@ export const escolaService = {
 
             // --- LOG DE AUDITORIA ---
             historicoService.log({
-                usuario_id: escola.usuario_id,
+                usuario_id: (escola.usuario_id as string) || '',
                 entidade_tipo: AtividadeEntidadeTipo.ESCOLA,
                 entidade_id: id,
                 acao: AtividadeAcao.ESCOLA_EXCLUIDA,
-                descricao: `Escola ${escola.nome} excluída do cadastro.`,
+                descricao: `Escola ${(escola.nome as string) || ''} excluída do cadastro.`,
                 meta: { backup: escola }
             });
         }
     },
 
-    async getEscola(id: string): Promise<any> {
+    async getEscola(id: string, targetOwnerId?: string): Promise<Record<string, unknown> | null> {
         const { data, error } = await escolaRepository.getById(id);
         if (error) throw error;
+        if (targetOwnerId && data && data.usuario_id !== targetOwnerId) {
+            throw new AppError("Escola não encontrada", 404);
+        }
         return data;
     },
 

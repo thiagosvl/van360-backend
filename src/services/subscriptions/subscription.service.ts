@@ -12,7 +12,7 @@ import {
 import { historicoService } from "../historico.service.js";
 import { getNowBR, getEndOfDayBR, addDays, parseLocalDate } from "../../utils/date.utils.js";
 import { notificationService } from "../notifications/notification.service.js";
-import { EVENTO_MOTORISTA_ASSINATURA_PAGO, EVENTO_ADMIN_NOVA_ASSINATURA, EVENTO_ADMIN_ASSINATURA_CANCELADA } from "../../config/constants.js";
+import { EVENTO_MOTORISTA_ASSINATURA_PAGO, EVENTO_ADMIN_NOVA_ASSINATURA, EVENTO_ADMIN_ASSINATURA_CANCELADA, TRIAL_DURATION_DAYS } from "../../config/constants.js";
 import { subscriptionRepository } from "../../repositories/subscription.repository.js";
 import { planRepository } from "../../repositories/plan.repository.js";
 import { invoiceRepository } from "../../repositories/invoice.repository.js";
@@ -40,7 +40,7 @@ export const subscriptionService = {
     },
 
     /**
-     * Cria um Trial de 15 dias para novos usuários.
+     * Cria um Trial para novos usuários.
      */
     async createTrial(userId: string) {
         const [{ data: planoMensal }, { data: planoAnual }] = await Promise.all([
@@ -53,7 +53,7 @@ export const subscriptionService = {
             throw new Error(`Planos '${SubscriptionIdentifer.MONTHLY}' ou '${SubscriptionIdentifer.YEARLY}' não encontrados.`);
         }
 
-        const trialEndsAtIso = getEndOfDayBR(addDays(getNowBR(), 15)).toISOString();
+        const trialEndsAtIso = getEndOfDayBR(addDays(getNowBR(), TRIAL_DURATION_DAYS)).toISOString();
 
         const isPromotionActive = await getConfig(ConfigKey.SAAS_PROMOCAO_ATIVA, "false").then(v => v === "true");
         let valorPromocionalMensal = undefined;
@@ -88,7 +88,7 @@ export const subscriptionService = {
             entidade_tipo: AtividadeEntidadeTipo.SAAS_ASSINATURA,
             entidade_id: data.id,
             acao: AtividadeAcao.SAAS_ASSINATURA_ATIVA,
-            descricao: "Trial de 15 dias iniciado para novo usuário."
+            descricao: `Trial de ${TRIAL_DURATION_DAYS} dias iniciado para novo usuário.`
         });
 
         return data;
@@ -190,7 +190,9 @@ export const subscriptionService = {
                     usuarioId: userId
                 }, {
                     channels: [NotificationChannelEnum.TELEGRAM],
-                    jobId: `admin-assinatura-cancelada-${userId}-${sub.id}`
+                    jobId: `admin-assinatura-cancelada-${userId}-${sub.id}`,
+                    usuarioId: userId,
+                    email: user.email
                 });
             }
         } catch (err) {
@@ -267,7 +269,7 @@ export const subscriptionService = {
                 dataVencimento: res.new_expiry!,
                 planoNome: res.plano_nome,
                 isFirstSubscription
-            }, { channels: [NotificationChannelEnum.EVOLUTION] }).catch(err => logger.error({ err }, "[SubscriptionService] Falha ao notificar pagamento confirmado"));
+            }, { channels: [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND], usuarioId: res.usuario_id! }).catch(err => logger.error({ err }, "[SubscriptionService] Falha ao notificar pagamento confirmado"));
         }
 
         // Notificação para o Admin (Telegram)
@@ -281,7 +283,8 @@ export const subscriptionService = {
             usuarioId: res.usuario_id!
         }, {
             channels: [NotificationChannelEnum.TELEGRAM],
-            jobId: `admin-nova-assinatura-${res.usuario_id}-${res.fatura_id}`
+            jobId: `admin-nova-assinatura-${res.usuario_id}-${res.fatura_id}`,
+            usuarioId: res.usuario_id!
         }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "[SubscriptionService] Falha ao notificar admin sobre assinatura paga"));
     }
 };

@@ -70,25 +70,6 @@ export const cobrancaController = {
     return reply.status(200).send({ count });
   },
 
-
-  listNotificacoes: async (request: FastifyRequest, reply: FastifyReply) => {
-    const { cobrancaId } = request.params as { cobrancaId: string };
-    const historico = await historicoService.listByEntidade(AtividadeEntidadeTipo.COBRANCA, cobrancaId);
-
-    const notificacoesOldFormat = historico
-      .filter(h => h.acao === AtividadeAcao.NOTIFICACAO_EVOLUTION)
-      .map(h => ({
-        id: h.id,
-        cobranca_id: h.entidade_id,
-        tipo_evento: (h.meta as Record<string, unknown> | undefined)?.tipo_evento || 'MANUAL',
-        canal: (h.meta as Record<string, unknown> | undefined)?.canal || NotificationChannelEnum.EVOLUTION,
-        data_envio: h.created_at,
-        tipo_origem: (h.meta as Record<string, unknown> | undefined)?.tipo_origem || 'manual'
-      }));
-
-    return reply.status(200).send(notificacoesOldFormat);
-  },
-
   toggleNotificacoes: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     try {

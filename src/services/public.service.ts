@@ -22,33 +22,3 @@ export async function listEscolasPublic(motoristaId: string): Promise<any[]> {
 
     return data || [];
 }
-
-export async function getCarteirinhaPublica(passageiroId: string) {
-    if (!passageiroId) {
-        throw new AppError("ID da carteirinha é obrigatório.", 400);
-    }
-
-    const { data, error } = await passageiroRepository.getById(passageiroId).catch(() => ({ data: null, error: true }));
-
-    if (error || !data) {
-        throw new AppError("Carteirinha pública do passageiro não encontrada.", 404);
-    }
-
-    if (!data.ativo) {
-        throw new AppError("Carteirinha inativa ou cancelada.", 403);
-    }
-
-    return {
-        id: data.id,
-        nome: data.nome,
-        foto_url: data.foto_url || null,
-        periodo: data.periodo,
-        modalidade: data.modalidade,
-        nome_responsavel: data.nome_responsavel,
-        telefone_responsavel: data.telefone_responsavel,
-        escola: data.escola ? { id: data.escola.id, nome: data.escola.nome } : null,
-        veiculo: data.veiculo ? { id: data.veiculo.id, placa: data.veiculo.placa, modelo: data.veiculo.modelo } : null,
-        codigo_validacao: `CARD-${data.id.substring(0, 8).toUpperCase()}`,
-        status: "VALIDA"
-    };
-}

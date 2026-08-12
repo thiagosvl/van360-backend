@@ -58,7 +58,8 @@ export const escolaController = {
 
   get: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
-    const escola = await escolaService.getEscola(id);
+    const targetOwnerId = request.data_owner_id || request.user?.id;
+    const escola = await escolaService.getEscola(id, targetOwnerId);
     return reply.status(200).send(escola);
   },
 

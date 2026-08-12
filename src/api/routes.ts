@@ -23,6 +23,7 @@ import configuracoesRoutes from "./configuracoes.routes.js";
 import motoristaEquipeRoutes from "./motorista-equipe.routes.js";
 import { checkSubscriptionAccess } from "../middleware/subscription.js";
 import { WebhookController } from "./webhook.controller.js";
+import notificationRoutes from "./notification.routes.js";
 
 const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
   // Middleware Global para Bloqueio de Escrita por Assinatura Expirada
@@ -60,6 +61,9 @@ const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // Histórico de Atividades
   app.register(historicoRoute, { prefix: "/api/historico" });
+
+  // Notificações Push
+  app.register(notificationRoutes, { prefix: "/api/notifications" });
 
   // Webhook unificado da Efí Pay (PIX e Cartão)
   app.post("/api/webhooks/efi", { config: { rateLimit: false } }, WebhookController.handleEfipay);

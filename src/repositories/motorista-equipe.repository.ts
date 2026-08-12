@@ -112,8 +112,8 @@ export const motoristaEquipeRepository = {
     // 4. Transferir Rota Ausências
     await supabaseAdmin
       .from("rota_ausencias")
-      .update({ criado_por: gestorId })
-      .eq("criado_por", memberId);
+      .update({ registrado_por: gestorId })
+      .eq("registrado_por", memberId);
   },
 
   async hardDeleteProfile(id: string, gestorId: string) {

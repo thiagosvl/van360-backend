@@ -11,6 +11,7 @@ import { logger } from "./config/logger.js";
 import { env } from "./config/env.js";
 import { globalErrorHandler } from "./errors/errorHandler.js";
 import { setupBullBoard } from "./queues/bull-board.js";
+import { initializeFirebase } from "./config/firebase.js";
 
 export { };
 declare module "@fastify/request-context" {
@@ -53,6 +54,9 @@ export async function createApp(): Promise<FastifyInstance> {
     
     // Global Error Handler
     app.setErrorHandler(globalErrorHandler);
+
+    // Inicializar Firebase Admin SDK (para Push Notifications)
+    initializeFirebase();
 
     // Segurança Defensiva: Proteção de Cabeçalhos HTTP (Helmet)
     await app.register(fastifyHelmet, { global: true });

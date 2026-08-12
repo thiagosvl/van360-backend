@@ -40,7 +40,8 @@ export const contractWorker = new Worker<ContractJobData>(
             logger.info({ jobId: job.id, contratoId }, "[Worker] Contrato atualizado com minuta URL.");
 
             // 4. Notificar Responsável via NotificationService
-            if (passageiro.telefone_responsavel) {
+            const emailResponsavel = (passageiro as Record<string, unknown>).email_responsavel as string | undefined;
+            if (passageiro.telefone_responsavel || emailResponsavel) {
                 const linkAssinatura = providerName === ContratoProvider.INHOUSE
                     ? `${env.FRONTEND_URL}/assinar/${tokenAcesso}`
                     : response.providerSignatureLink;
@@ -63,9 +64,10 @@ export const contractWorker = new Worker<ContractJobData>(
                         }),
                         apelidoMotorista: dadosContrato.apelidoCondutor,
                         linkAssinatura,
+                        email: (passageiro as Record<string, unknown>).email_responsavel as string | undefined,
                         usuarioId: usuarioId
                     },
-                    { channels: [NotificationChannelEnum.EVOLUTION] }
+                    { channels: [NotificationChannelEnum.WABA, NotificationChannelEnum.RESEND, NotificationChannelEnum.FIREBASE], usuarioId: usuarioId, email: (passageiro as Record<string, unknown>).email_responsavel as string | undefined }
                 );
 
                 logger.info({ jobId: job.id, phone: passageiro.telefone_responsavel }, "[Worker] Notificação de contrato processada via NotificationService.");

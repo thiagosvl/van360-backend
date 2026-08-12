@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "../../config/supabase.js";
+import { isValidFilterValue } from "../../utils/filter.utils.js";
 
 export const adminLogRepository = {
   async getUserLogs(
@@ -12,19 +13,19 @@ export const adminLogRepository = {
       .select("*", { count: "exact" })
       .eq("usuario_id", userId);
 
-    if (filters?.dataInicio) {
-      const inicio = filters.dataInicio.length === 10 ? `${filters.dataInicio}T00:00:00.000-03:00` : filters.dataInicio;
+    if (isValidFilterValue(filters?.dataInicio)) {
+      const inicio = filters!.dataInicio.length === 10 ? `${filters!.dataInicio}T00:00:00.000-03:00` : filters!.dataInicio;
       query = query.gte("created_at", inicio);
     }
-    if (filters?.dataFim) {
-      const fim = filters.dataFim.length === 10 ? `${filters.dataFim}T23:59:59.999-03:00` : filters.dataFim;
+    if (isValidFilterValue(filters?.dataFim)) {
+      const fim = filters!.dataFim.length === 10 ? `${filters!.dataFim}T23:59:59.999-03:00` : filters!.dataFim;
       query = query.lte("created_at", fim);
     }
-    if (filters?.acao) {
-      query = query.eq("acao", filters.acao);
+    if (isValidFilterValue(filters?.acao)) {
+      query = query.eq("acao", filters!.acao);
     }
-    if (filters?.entidade) {
-      query = query.eq("entidade_tipo", filters.entidade);
+    if (isValidFilterValue(filters?.entidade)) {
+      query = query.eq("entidade_tipo", filters!.entidade);
     }
 
     return query
@@ -41,8 +42,8 @@ export const adminLogRepository = {
       .from("historico_atividades")
       .select("*, usuarios(nome, telefone)", { count: "exact" });
 
-    if (filters?.search_cpf) {
-      const cleanSearch = filters.search_cpf.trim();
+    if (isValidFilterValue(filters?.search_cpf)) {
+      const cleanSearch = filters!.search_cpf.trim();
       const digits = cleanSearch.replace(/\D/g, "");
       const isId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanSearch);
 
@@ -64,19 +65,19 @@ export const adminLogRepository = {
       }
     }
 
-    if (filters?.dataInicio) {
-      const inicio = filters.dataInicio.length === 10 ? `${filters.dataInicio}T00:00:00.000-03:00` : filters.dataInicio;
+    if (isValidFilterValue(filters?.dataInicio)) {
+      const inicio = filters!.dataInicio.length === 10 ? `${filters!.dataInicio}T00:00:00.000-03:00` : filters!.dataInicio;
       query = query.gte("created_at", inicio);
     }
-    if (filters?.dataFim) {
-      const fim = filters.dataFim.length === 10 ? `${filters.dataFim}T23:59:59.999-03:00` : filters.dataFim;
+    if (isValidFilterValue(filters?.dataFim)) {
+      const fim = filters!.dataFim.length === 10 ? `${filters!.dataFim}T23:59:59.999-03:00` : filters!.dataFim;
       query = query.lte("created_at", fim);
     }
-    if (filters?.acao) {
-      query = query.eq("acao", filters.acao);
+    if (isValidFilterValue(filters?.acao)) {
+      query = query.eq("acao", filters!.acao);
     }
-    if (filters?.entidade) {
-      query = query.eq("entidade_tipo", filters.entidade);
+    if (isValidFilterValue(filters?.entidade)) {
+      query = query.eq("entidade_tipo", filters!.entidade);
     }
 
     return query

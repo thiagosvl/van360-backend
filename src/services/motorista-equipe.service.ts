@@ -4,6 +4,7 @@ import { veiculoRepository } from "../repositories/veiculo.repository.js";
 import { authRepository } from "../repositories/auth.repository.js";
 import { CreateMembroEquipeDTO, UpdateMembroEquipeDTO } from "../types/dtos/motorista-equipe.dto.js";
 import { AppError } from "../errors/AppError.js";
+import { NotificationChannelEnum } from "../types/enums.js";
 import { logger } from "../config/logger.js";
 import { notificationService } from "./notifications/notification.service.js";
 import {
@@ -117,16 +118,17 @@ export const motoristaEquipeService = {
       }
 
       // Disparar notificação (em segundo plano)
-      if (dto.telefone) {
+      if (dto.email || dto.telefone) {
         notificationService.notifyDriver(
-          dto.telefone,
+          dto.telefone || "",
           EVENTO_MOTORISTA_EQUIPE_CADASTRO,
           {
             nomeMotorista: dto.nome,
             cpfLogin: dto.cpf,
             senhaTemporaria: dto.senha,
+            email: dto.email,
           },
-          { usuarioId: gestorId }
+          { channels: [NotificationChannelEnum.RESEND], email: dto.email, usuarioId: userId }
         ).catch((err) => logger.warn({ err, userId }, "[MotoristaEquipeService] Falha ao enviar mensagem de boas-vindas"));
       }
 
@@ -187,7 +189,7 @@ export const motoristaEquipeService = {
           nomeMotorista: membro.data.nome,
           senhaTemporaria: novaSenha,
         },
-        { usuarioId: gestorId }
+        { channels: [NotificationChannelEnum.RESEND], usuarioId: gestorId, email: membro.data.email }
       ).catch((err) => logger.warn({ err, id }, "[MotoristaEquipeService] Falha ao enviar mensagem de redefinição de senha"));
     }
 
@@ -195,20 +197,30 @@ export const motoristaEquipeService = {
   },
 
   async desativarMembro(id: string, gestorId: string) {
-    const { data, error } = await motoristaEquipeRepository.softDelete(id, gestorId);
-    if (error || !data) {
+    const membro = await motoristaEquipeRepository.getById(id, gestorId);
+    if (membro.error || !membro.data) {
       throw new AppError("Membro da equipe não encontrado", 404);
     }
 
-    if (data.telefone) {
+    const novoStatus = !membro.data.ativo;
+    const { data, error } = await motoristaEquipeRepository.updateProfile(id, gestorId, { ativo: novoStatus });
+    if (error || !data) {
+      throw new AppError("Falha ao atualizar status do membro da equipe", 500);
+    }
+
+    const recipientPhone = data.telefone || membro.data.telefone;
+    const recipientEmail = data.email || membro.data.email;
+
+    if (recipientPhone || recipientEmail) {
       notificationService.notifyDriver(
-        data.telefone,
+        recipientPhone || "",
         EVENTO_MOTORISTA_EQUIPE_STATUS_ALTERADO,
         {
           nomeMotorista: data.nome,
-          isEngaged: data.ativo !== false,
+          isEngaged: novoStatus,
+          email: recipientEmail,
         },
-        { usuarioId: gestorId }
+        { channels: [NotificationChannelEnum.RESEND], email: recipientEmail, usuarioId: id }
       ).catch((err) => logger.warn({ err, id }, "[MotoristaEquipeService] Falha ao enviar mensagem de status alterado"));
     }
 

@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { ContratoStatus } from "../types/enums.js";
+import { isValidFilterValue } from "../utils/filter.utils.js";
 
 export const contractRepository = {
   async getByToken(tokenAcesso: string) {
@@ -153,7 +154,7 @@ export const contractRepository = {
       .eq("passageiros.ativo", true)
       .order("created_at", { ascending: false });
 
-    if (status) {
+    if (isValidFilterValue(status)) {
       query = query.eq("status", status);
     }
     return query;

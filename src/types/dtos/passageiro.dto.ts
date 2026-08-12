@@ -40,11 +40,18 @@ export const createPassageiroSchema = z.object({
   longitude: z.union([z.number(), z.string().transform(v => v === "" ? undefined : Number(v))]).optional().nullable(),
 
   // Financeiro
-  dia_vencimento: optionalNumber,
-  valor_cobranca: z.union([z.number(), z.string()]).transform(val => val === "" ? undefined : (typeof val === 'string' ? moneyToNumber(val) : val)).optional(),
+  dia_vencimento: z.union([z.number(), z.string(), z.null(), z.undefined()]).transform(val => {
+    if (val === "" || val === null || val === undefined) return undefined;
+    return typeof val === 'string' ? Number(val) : val;
+  }).optional(),
+  valor_cobranca: z.union([z.number(), z.string(), z.null(), z.undefined()]).transform(val => {
+    if (val === "" || val === null || val === undefined) return undefined;
+    return typeof val === 'string' ? moneyToNumber(val) : val;
+  }).optional(),
 
   // Controle
   ativo: z.boolean().optional(),
+  isento: z.boolean().optional(),
   enviar_notificacoes: z.boolean().optional(),
 
   periodo: z.union([z.string(), z.null(), z.undefined()]).transform(v => {

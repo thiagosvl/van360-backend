@@ -1,68 +1,17 @@
+import { EVENTO_MOTORISTA_TESTE_BOAS_VINDAS } from "../../config/constants.js";
 import { NotificationChannelEnum } from "../../types/enums.js";
-import { CompositeMessagePart } from "../../types/dtos/evolution.dto.js";
 import { logger } from "../../config/logger.js";
+import { usuarioPushTokenRepository } from "../../repositories/usuario-push-token.repository.js";
 
-import {
-    EVENTO_MOTORISTA_ASSINATURA_PAGO,
-    EVENTO_MOTORISTA_ASSINATURA_VENCENDO,
-    EVENTO_MOTORISTA_ASSINATURA_VENCEU,
-    EVENTO_MOTORISTA_ASSINATURA_ATRASADA,
-    EVENTO_MOTORISTA_TESTE_BOAS_VINDAS,
-    EVENTO_MOTORISTA_TESTE_ENCERRADO,
-    EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO,
-    EVENTO_MOTORISTA_CONTRATO_ASSINADO,
-    EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO,
-    EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1,
-    EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2,
-    EVENTO_MOTORISTA_RENOVACAO_LEMBRETE,
-    EVENTO_MOTORISTA_RENOVACAO_URGENCIA,
-    EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_1,
-    EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_FINAL,
-    EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
-    EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
-    EVENTO_PASSAGEIRO_ATRASADO,
-    EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL,
-    EVENTO_PASSAGEIRO_CONTRATO_ASSINADO,
-    EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO,
-    EVENTO_ROTA_A_CAMINHO_IDA,
-    EVENTO_ROTA_EMBARCOU_IDA,
-    EVENTO_ROTA_A_CAMINHO_VOLTA,
-    EVENTO_ROTA_DESEMBARCOU_VOLTA,
-    EVENTO_AUTH_RECUPERACAO_SENHA,
-    EVENTO_AUTH_SENHA_ALTERADA,
-    EVENTO_MOTORISTA_CADASTRO_ADMIN,
-    EVENTO_MOTORISTA_RESET_SENHA_ADMIN,
-    EVENTO_MOTORISTA_INDICACAO_BONUS,
-    EVENTO_MOTORISTA_INDICACAO_CADASTRO,
-    EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA,
-    EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS,
-    EVENTO_MOTORISTA_EQUIPE_CADASTRO,
-    EVENTO_MOTORISTA_EQUIPE_RESET_SENHA,
-    EVENTO_MOTORISTA_EQUIPE_STATUS_ALTERADO,
-    EVENTO_ADMIN_NOVO_CADASTRO,
-    EVENTO_ADMIN_NOVA_ASSINATURA,
-    EVENTO_ADMIN_ASSINATURA_CANCELADA,
-    EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO,
-    EVENTO_ADMIN_SISTEMA_ALERTA,
-    EVOLUTION_GLOBAL_INSTANCE
-} from "../../config/constants.js";
-import { DriverContext, DriverTemplates } from "./templates/driver.template.js";
-import { PassengerContext, PassengerTemplates } from "./templates/passenger.template.js";
-import { RouteContext, RouteTemplates } from "./templates/route.template.js";
-import { NotificationProviderAdapter } from "./ports/notification-provider.port.js";
-import { EvolutionQueueAdapter } from "./adapters/evolution.adapter.js";
-import { MockSmsAdapter } from "./adapters/mock-sms.adapter.js";
-import { MockEmailAdapter } from "./adapters/mock-email.adapter.js";
-import { TelegramAdapter } from "./adapters/telegram.adapter.js";
-import {
-    AdminRegistrationContext,
-    AdminSubscriptionContext,
-    AdminPaymentFailedContext,
-    AdminSystemAlertContext,
-    AdminTemplates
-} from "./templates/admin.template.js";
+import { NotificationProviderPort } from "./ports/notification-provider.port.js";
+import { EvolutionQueueAdapter } from "./adapters/evolution/evolution.adapter.js";
+import { SmsAdapter } from "./adapters/sms/sms.adapter.js";
+import { WabaAdapter } from "./adapters/waba/waba.adapter.js";
+import { ResendAdapter } from "./adapters/resend/resend.adapter.js";
+import { TelegramAdapter } from "./adapters/telegram/telegram.adapter.js";
+import { FirebasePushAdapter } from "./adapters/firebase/firebase.adapter.js";
 
-export type NotificationChannel = "EVOLUTION" | "SMS" | "EMAIL" | "TELEGRAM";
+export type NotificationChannel = "EVOLUTION" | "SMS" | "EMAIL" | "RESEND" | "TELEGRAM" | "FIREBASE" | "WABA";
 
 export interface NotificationOptions {
     channels?: NotificationChannelEnum[];
@@ -71,242 +20,177 @@ export interface NotificationOptions {
     };
     jobId?: string;
     usuarioId?: string;
-    metadata?: Record<string, any>;
+    email?: string;
+    metadata?: Record<string, unknown>;
 }
 
-type PassengerEventType =
-    | typeof EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO
-    | typeof EVENTO_PASSAGEIRO_VENCIMENTO_HOJE
-    | typeof EVENTO_PASSAGEIRO_ATRASADO
-    | typeof EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL
-    | typeof EVENTO_PASSAGEIRO_CONTRATO_ASSINADO
-    | typeof EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO;
-
-export type RouteEventType =
-    | typeof EVENTO_ROTA_A_CAMINHO_IDA
-    | typeof EVENTO_ROTA_EMBARCOU_IDA
-    | typeof EVENTO_ROTA_A_CAMINHO_VOLTA
-    | typeof EVENTO_ROTA_DESEMBARCOU_VOLTA;
-
-export type DriverEventType =
-    | typeof EVENTO_MOTORISTA_TESTE_BOAS_VINDAS
-    | typeof EVENTO_MOTORISTA_TESTE_ENCERRADO
-    | typeof EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO
-    | typeof EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1
-    | typeof EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2
-    | typeof EVENTO_MOTORISTA_ASSINATURA_VENCENDO
-    | typeof EVENTO_MOTORISTA_ASSINATURA_VENCEU
-    | typeof EVENTO_MOTORISTA_ASSINATURA_ATRASADA
-    | typeof EVENTO_MOTORISTA_ASSINATURA_PAGO
-    | typeof EVENTO_MOTORISTA_RENOVACAO_LEMBRETE
-    | typeof EVENTO_MOTORISTA_RENOVACAO_URGENCIA
-    | typeof EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_1
-    | typeof EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_FINAL
-    | typeof EVENTO_MOTORISTA_CONTRATO_ASSINADO
-    | typeof EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO
-    | typeof EVENTO_AUTH_RECUPERACAO_SENHA
-    | typeof EVENTO_AUTH_SENHA_ALTERADA
-    | typeof EVENTO_MOTORISTA_CADASTRO_ADMIN
-    | typeof EVENTO_MOTORISTA_RESET_SENHA_ADMIN
-    | typeof EVENTO_MOTORISTA_INDICACAO_BONUS
-    | typeof EVENTO_MOTORISTA_INDICACAO_CADASTRO
-    | typeof EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA
-    | typeof EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS
-    | typeof EVENTO_MOTORISTA_EQUIPE_CADASTRO
-    | typeof EVENTO_MOTORISTA_EQUIPE_RESET_SENHA
-    | typeof EVENTO_MOTORISTA_EQUIPE_STATUS_ALTERADO;
-
-export type AdminEventType =
-    | typeof EVENTO_ADMIN_NOVO_CADASTRO
-    | typeof EVENTO_ADMIN_NOVA_ASSINATURA
-    | typeof EVENTO_ADMIN_ASSINATURA_CANCELADA
-    | typeof EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO
-    | typeof EVENTO_ADMIN_SISTEMA_ALERTA;
-
 class NotificationService {
-    // Registro dos Adapters que farão o disparo real (ou envio para a fila)
-    private adapters: Record<NotificationChannelEnum, NotificationProviderAdapter>;
+    private adapters: Record<NotificationChannelEnum, NotificationProviderPort>;
 
     constructor() {
         this.adapters = {
             [NotificationChannelEnum.EVOLUTION]: new EvolutionQueueAdapter(),
-            [NotificationChannelEnum.WABA]: new EvolutionQueueAdapter(), // TODO: Replace with Meta adapter
-            [NotificationChannelEnum.SMS]: new MockSmsAdapter(),
-            [NotificationChannelEnum.EMAIL]: new MockEmailAdapter(),
-            [NotificationChannelEnum.TELEGRAM]: new TelegramAdapter()
+            [NotificationChannelEnum.WABA]: new WabaAdapter(),
+            [NotificationChannelEnum.SMS]: new SmsAdapter(),
+            [NotificationChannelEnum.RESEND]: new ResendAdapter(),
+            [NotificationChannelEnum.TELEGRAM]: new TelegramAdapter(),
+            [NotificationChannelEnum.FIREBASE]: new FirebasePushAdapter()
         };
     }
 
-    /**
-     * Envia notificação para Passageiro/Responsável
-     * @param to Destinatário (Telefone para WA/SMS, Email para Email)
-     */
+    async sendDirect(
+        channel: NotificationChannelEnum,
+        eventName: string,
+        contextData: Record<string, unknown>,
+        options?: NotificationOptions
+    ): Promise<boolean> {
+        const adapter = this.adapters[channel];
+        if (!adapter) {
+            logger.warn({ channel, eventName }, "[NotificationService] Adapter não encontrado para o canal.");
+            return false;
+        }
+
+        const usuarioId = options?.usuarioId || (contextData?.usuarioId as string);
+        const enrichedOptions = { ...options, usuarioId };
+        const enrichedContext = { ...contextData, usuarioId };
+
+        return await adapter.send(eventName, enrichedContext, enrichedOptions);
+    }
+
     async notifyPassenger(
         to: string,
-        type: PassengerEventType,
-        ctx: PassengerContext & { reciboUrl?: string },
+        eventName: string,
+        ctx: Record<string, unknown>,
         options: NotificationOptions
     ): Promise<boolean> {
-
-        let parts: CompositeMessagePart[] = [];
-
-        switch (type) {
-            case EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO: parts = PassengerTemplates.dueSoon(ctx); break;
-            case EVENTO_PASSAGEIRO_VENCIMENTO_HOJE: parts = PassengerTemplates.dueToday(ctx); break;
-            case EVENTO_PASSAGEIRO_ATRASADO: parts = PassengerTemplates.overdue(ctx); break;
-            case EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL: parts = PassengerTemplates.contractAvailable(ctx); break;
-            case EVENTO_PASSAGEIRO_CONTRATO_ASSINADO: parts = PassengerTemplates.contractSignedBySelf(ctx); break;
-            case EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO: parts = PassengerTemplates.paymentReceipt(ctx); break;
-        }
-
-        return await this._processAndEnqueue(to, parts, type as string, options);
+        return await this._process(to, eventName, ctx, options);
     }
 
-    /**
-     * Envia notificação relacionada a rotas (Ida, Volta, Embarcou, Desembarcou)
-     * @param to Destinatário (Telefone do Responsável)
-     */
     async notifyRoute(
         to: string,
-        type: RouteEventType,
-        ctx: RouteContext,
-        options: NotificationOptions = { channels: [NotificationChannelEnum.EVOLUTION] }
+        eventName: string,
+        ctx: Record<string, unknown>,
+        options: NotificationOptions
     ): Promise<boolean> {
-        let parts: CompositeMessagePart[] = [];
-
-        switch (type) {
-            case EVENTO_ROTA_A_CAMINHO_IDA: parts = RouteTemplates.enRouteIda(ctx); break;
-            case EVENTO_ROTA_EMBARCOU_IDA: parts = RouteTemplates.boardedIda(ctx); break;
-            case EVENTO_ROTA_A_CAMINHO_VOLTA: parts = RouteTemplates.enRouteVolta(ctx); break;
-            case EVENTO_ROTA_DESEMBARCOU_VOLTA: parts = RouteTemplates.deliveredVolta(ctx); break;
-        }
-
-        return await this._processAndEnqueue(to, parts, type as string, options);
+        return await this._process(to, eventName, ctx, options);
     }
 
-    /**
-     * Envia notificação para Motorista/Assinante
-     * @param to Destinatário (Telefone para WA/SMS, Email para Email)
-     */
     async notifyDriver(
         to: string,
-        type: DriverEventType,
-        ctx: DriverContext & { nomePagador?: string, nomePassageiro?: string, diasAtraso?: number, reciboUrl?: string, trialDays?: number },
-        options: NotificationOptions = { channels: [NotificationChannelEnum.EVOLUTION] }
+        eventName: string,
+        ctx: Record<string, unknown>,
+        options: NotificationOptions
     ): Promise<boolean> {
-
-        let parts: CompositeMessagePart[] = [];
-
-        switch (type) {
-            case EVENTO_MOTORISTA_TESTE_BOAS_VINDAS: parts = DriverTemplates.welcomeTrial(ctx); break;
-            case EVENTO_MOTORISTA_TESTE_ENCERRADO: parts = DriverTemplates.trialEnded(ctx); break;
-            case EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO: parts = DriverTemplates.trialLastCall(ctx); break;
-            case EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1: parts = DriverTemplates.trialRecovery1(ctx); break;
-            case EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2: parts = DriverTemplates.trialRecovery2(ctx); break;
-            case EVENTO_MOTORISTA_ASSINATURA_PAGO: parts = DriverTemplates.paymentConfirmed(ctx); break;
-            case EVENTO_MOTORISTA_ASSINATURA_VENCENDO: parts = DriverTemplates.dueSoon(ctx); break;
-            case EVENTO_MOTORISTA_ASSINATURA_VENCEU: parts = DriverTemplates.dueToday(ctx); break;
-            case EVENTO_MOTORISTA_ASSINATURA_ATRASADA: parts = DriverTemplates.overdue(ctx); break;
-            case EVENTO_MOTORISTA_RENOVACAO_LEMBRETE: parts = DriverTemplates.renewalLembrete(ctx); break;
-            case EVENTO_MOTORISTA_RENOVACAO_URGENCIA: parts = DriverTemplates.renewalUrgencia(ctx); break;
-            case EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_1: parts = DriverTemplates.renewalRecovery1(ctx); break;
-            case EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_FINAL: parts = DriverTemplates.renewalRecoveryFinal(ctx); break;
-            case EVENTO_MOTORISTA_CONTRATO_ASSINADO: parts = DriverTemplates.contractSigned(ctx); break;
-            case EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO: parts = DriverTemplates.failedCC(ctx); break;
-            case EVENTO_AUTH_RECUPERACAO_SENHA: parts = DriverTemplates.authRecovery(ctx); break;
-            case EVENTO_AUTH_SENHA_ALTERADA: parts = DriverTemplates.passwordChanged(ctx); break;
-            case EVENTO_MOTORISTA_CADASTRO_ADMIN: parts = DriverTemplates.welcomeAdminCreated(ctx); break;
-            case EVENTO_MOTORISTA_RESET_SENHA_ADMIN: parts = DriverTemplates.adminResetPassword(ctx); break;
-            case EVENTO_MOTORISTA_INDICACAO_BONUS: parts = DriverTemplates.referralBonusReceived(ctx); break;
-            case EVENTO_MOTORISTA_INDICACAO_CADASTRO: parts = DriverTemplates.referralRegistered(ctx); break;
-            case EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA: parts = DriverTemplates.birthdayReminderWeekly(ctx); break;
-            case EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS: parts = DriverTemplates.chargeSummaryWeekly(ctx); break;
-            case EVENTO_MOTORISTA_EQUIPE_CADASTRO: parts = DriverTemplates.teamMemberCreated(ctx); break;
-            case EVENTO_MOTORISTA_EQUIPE_RESET_SENHA: parts = DriverTemplates.teamMemberResetPassword(ctx); break;
-            case EVENTO_MOTORISTA_EQUIPE_STATUS_ALTERADO: parts = DriverTemplates.teamMemberStatusChanged(ctx); break;
-        }
-
-        return await this._processAndEnqueue(to, parts, type as string, options);
+        return await this._process(to, eventName, ctx, options);
     }
 
-    /**
-     * Envia notificação para Administrador
-     */
     async notifyAdmin(
-        type: AdminEventType,
-        ctx: AdminRegistrationContext | AdminSubscriptionContext | AdminPaymentFailedContext | AdminSystemAlertContext,
-        options: NotificationOptions = { channels: [NotificationChannelEnum.EVOLUTION] }
+        eventName: string,
+        ctx: Record<string, unknown>,
+        options: NotificationOptions
     ): Promise<boolean> {
-
-        let parts: CompositeMessagePart[] = [];
-
-        switch (type) {
-            case EVENTO_ADMIN_NOVO_CADASTRO:
-                parts = AdminTemplates.newRegistration(ctx as AdminRegistrationContext);
-                break;
-            case EVENTO_ADMIN_NOVA_ASSINATURA:
-                parts = AdminTemplates.newSubscription(ctx as AdminSubscriptionContext);
-                break;
-            case EVENTO_ADMIN_ASSINATURA_CANCELADA:
-                parts = AdminTemplates.subscriptionCanceled(ctx as AdminSubscriptionContext);
-                break;
-            case EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO:
-                parts = AdminTemplates.paymentFailed(ctx as AdminPaymentFailedContext);
-                break;
-            case EVENTO_ADMIN_SISTEMA_ALERTA:
-                parts = AdminTemplates.systemAlert(ctx as AdminSystemAlertContext);
-                break;
-        }
-
-        // Para Admin, o 'to' não importa porque o chatId está no .env, passamos vazio
-        return await this._processAndEnqueue("", parts, type as string, options);
+        return await this._process("TELEGRAM_ADMIN", eventName, ctx, options);
     }
 
-    /**
-     * Central Dispatcher - Distribui a mensagem entre os canais selecionados delegando aos Adapters
-     */
-    private async _processAndEnqueue(
+    private async _process(
         to: string,
-        parts: CompositeMessagePart[],
-        eventType: string,
-        options: NotificationOptions = { channels: [NotificationChannelEnum.EVOLUTION] }
+        eventName: string,
+        contextData: Record<string, unknown>,
+        options: NotificationOptions
     ): Promise<boolean> {
-        if (!parts || parts.length === 0) return false;
+        const channels = options?.channels;
 
-        if (process.env.NODE_ENV !== "production") {
-            const devFlag = "\n\n*[AMBIENTE DEV]*";
-            const lastPartWithText = [...parts].reverse().find(p => p.type === "text" || p.content !== undefined);
-            if (lastPartWithText) {
-                lastPartWithText.content = (lastPartWithText.content || "") + devFlag;
-            } else {
-                parts.push({ type: "text", content: devFlag });
-            }
+        if (!channels || !Array.isArray(channels) || channels.length === 0) {
+            logger.error(
+                { eventName, to },
+                "[NotificationService] ERRO CRÍTICO: Nenhum canal de notificação (channels) foi especificado nas opções. O disparo foi abortado."
+            );
+            return false;
         }
+        const usuarioId = options?.usuarioId || (contextData?.usuarioId as string);
 
-        const { channels = [NotificationChannelEnum.EVOLUTION], evolution: evolutionOptions } = options || {};
+        const enrichedOptions = { ...options, usuarioId };
+        const enrichedContext = { ...contextData, to, usuarioId };
 
         try {
+            const { notificationQueueService } = await import("./notification-queue.service.js");
             const results: Promise<boolean>[] = [];
 
             for (const channel of channels) {
-                const adapter = this.adapters[channel];
-                if (adapter) {
-                    const providerOptions = {
-                        eventType,
-                        instanceName: channel === NotificationChannelEnum.EVOLUTION ? (evolutionOptions?.instanceName || EVOLUTION_GLOBAL_INSTANCE) : undefined,
-                        jobId: options?.jobId,
-                        metadata: options?.metadata
-                    };
-                    results.push(adapter.sendComposite(to, parts, providerOptions));
-                }
+                const targetAddress = channel === NotificationChannelEnum.TELEGRAM
+                    ? (process.env.TELEGRAM_CHAT_ID || "TELEGRAM_ADMIN")
+                    : (channel === NotificationChannelEnum.RESEND
+                        ? (options?.email || (contextData?.email as string) || to)
+                        : (to || (options?.email as string) || (contextData?.email as string) || ""));
+
+                results.push(
+                    notificationQueueService.enqueueAndProcess({
+                        canal: channel,
+                        evento: eventName,
+                        destinatario: targetAddress,
+                        payload: enrichedContext,
+                        options: enrichedOptions,
+                        usuarioId
+                    })
+                );
             }
 
-            const statuses = await Promise.all(results);
-            return statuses.some(s => s); // true se pelo menos um canal teve sucesso
-        } catch (error) {
-            logger.error({ error, eventType, to }, "[NotificationService] Erro ao processar/enfileirar notificação");
+            const outcomes = await Promise.allSettled(results);
+            return outcomes.every(o => o.status === "fulfilled" && o.value === true);
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : String(error);
+            logger.error({ error: msg, eventName }, "[NotificationService] Erro ao orquestrar notificações.");
             return false;
         }
+    }
+
+    /**
+     * Registra ou atualiza um push token (FCM) para o usuário atual
+     */
+    async registerPushToken(userId: string, token: string, platform: string): Promise<void> {
+        logger.info({ userId, tokenSnippet: token ? token.substring(0, 15) + "..." : null, platform }, "[NotificationService.registerPushToken] Iniciando registro de token FCM");
+
+        const existingToken = await usuarioPushTokenRepository.findByToken(token);
+
+        if (existingToken) {
+            if (existingToken.user_id !== userId) {
+                logger.info({ oldUserId: existingToken.user_id, newUserId: userId }, "[NotificationService.registerPushToken] Token pertence a outro usuário, reatribuindo.");
+                await usuarioPushTokenRepository.deleteByToken(token);
+            } else {
+                logger.info({ userId }, "[NotificationService.registerPushToken] Token já está associado a este usuário. Atualizando timestamp.");
+                await usuarioPushTokenRepository.updateTokenPlatformAndTimestamp(token, platform);
+                return;
+            }
+        }
+
+        const userTokenCount = await usuarioPushTokenRepository.countTokensByUsuarioId(userId);
+        const isFirstToken = userTokenCount === 0;
+
+        await usuarioPushTokenRepository.insertToken(userId, token, platform);
+        logger.info({ userId, isFirstToken, count: userTokenCount + 1 }, "[NotificationService.registerPushToken] Token salvo com sucesso na tabela usuario_push_tokens");
+
+        if (isFirstToken) {
+            const usuario = await usuarioPushTokenRepository.findUsuarioById(userId);
+
+            if (usuario) {
+                logger.info({ userId, nome: usuario.nome, telefone: usuario.telefone }, "[NotificationService.registerPushToken] 🎉 Primeiro token do usuário registrado! Disparando Notificação Push de Boas-Vindas");
+
+                this.notifyDriver(usuario.telefone || '', EVENTO_MOTORISTA_TESTE_BOAS_VINDAS, {
+                    nomeMotorista: usuario.nome || 'Motorista',
+                    usuarioId: userId,
+                }, {
+                    channels: [NotificationChannelEnum.FIREBASE],
+                    usuarioId: userId,
+                }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "[NotificationService.registerPushToken] Erro ao enviar boas-vindas push"));
+            }
+        }
+    }
+
+    /**
+     * Desregistra um push token
+     */
+    async unregisterPushToken(token: string): Promise<void> {
+        await usuarioPushTokenRepository.deleteByToken(token);
     }
 }
 

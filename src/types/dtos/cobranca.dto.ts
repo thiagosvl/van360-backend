@@ -29,10 +29,16 @@ export const createCobrancaSchema = z.object({
 
 export type CreateCobrancaDTO = z.infer<typeof createCobrancaSchema>;
 
-export const updateCobrancaSchema = z.object({
-    data: createCobrancaSchema.partial(),
-    cobrancaOriginal: z.any().optional()
-});
+export const updateCobrancaSchema = z.union([
+    z.object({
+        data: createCobrancaSchema.partial(),
+        cobrancaOriginal: z.record(z.string(), z.any()).optional()
+    }),
+    createCobrancaSchema.partial().transform(parsed => ({
+        data: parsed,
+        cobrancaOriginal: undefined as Record<string, any> | undefined
+    }))
+]);
 
 export type UpdateCobrancaDTO = z.infer<typeof updateCobrancaSchema>;
 

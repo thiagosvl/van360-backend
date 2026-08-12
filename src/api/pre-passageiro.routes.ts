@@ -10,7 +10,7 @@ const prePassageiroRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
   // Rotas gerenciais do motorista/equipe (requerem autenticação e permissão)
   app.get(
     "/usuario/:usuarioId",
-    { preHandler: [authenticate, requirePermission("passageiros.visualizar")] },
+    { preHandler: [authenticate, requirePermission("passageiros.gerenciar")] },
     prePassageiroController.listByUsuario
   );
 

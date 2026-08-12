@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { UserType } from "../types/enums.js";
+import { isValidFilterValue } from "../utils/filter.utils.js";
 
 export const adminRepository = {
     async getDashboardStats() {
@@ -42,7 +43,7 @@ export const adminRepository = {
         ]);
     },
 
-    async listUsers(query: any) {
+    async listUsers(query: { from: number; to: number; searchClean?: string; isId?: boolean; digits?: string }) {
         let q = supabaseAdmin
             .from("usuarios")
             .select("id, nome, apelido, email, cpfcnpj, telefone, ativo, tipo, created_at, data_nascimento, assinaturas(id, status, plano_id, data_vencimento, trial_ends_at, planos(id, nome, identificador))", { count: "exact" })
@@ -50,9 +51,9 @@ export const adminRepository = {
             .order("created_at", { ascending: false })
             .range(query.from, query.to);
 
-        if (query.isId) {
+        if (query.isId && isValidFilterValue(query.searchClean)) {
             q = q.eq("id", query.searchClean);
-        } else if (query.searchClean) {
+        } else if (isValidFilterValue(query.searchClean)) {
             if (query.digits && query.digits.length >= 3) {
                 q = q.or(`nome.ilike.%${query.searchClean}%,telefone.ilike.%${query.digits}%`);
             } else {
@@ -73,19 +74,19 @@ export const adminRepository = {
             .select("*", { count: "exact" })
             .eq("usuario_id", userId);
 
-        if (filters?.dataInicio) {
-            const inicio = filters.dataInicio.length === 10 ? `${filters.dataInicio}T00:00:00.000-03:00` : filters.dataInicio;
+        if (isValidFilterValue(filters?.dataInicio)) {
+            const inicio = filters!.dataInicio.length === 10 ? `${filters!.dataInicio}T00:00:00.000-03:00` : filters!.dataInicio;
             query = query.gte("created_at", inicio);
         }
-        if (filters?.dataFim) {
-            const fim = filters.dataFim.length === 10 ? `${filters.dataFim}T23:59:59.999-03:00` : filters.dataFim;
+        if (isValidFilterValue(filters?.dataFim)) {
+            const fim = filters!.dataFim.length === 10 ? `${filters!.dataFim}T23:59:59.999-03:00` : filters!.dataFim;
             query = query.lte("created_at", fim);
         }
-        if (filters?.acao) {
-            query = query.eq("acao", filters.acao);
+        if (isValidFilterValue(filters?.acao)) {
+            query = query.eq("acao", filters!.acao);
         }
-        if (filters?.entidade) {
-            query = query.eq("entidade_tipo", filters.entidade);
+        if (isValidFilterValue(filters?.entidade)) {
+            query = query.eq("entidade_tipo", filters!.entidade);
         }
 
         return query
@@ -102,8 +103,8 @@ export const adminRepository = {
             .from("historico_atividades")
             .select("*, usuarios(nome, telefone)", { count: "exact" });
 
-        if (filters?.search_cpf) {
-            const cleanSearch = filters.search_cpf.trim();
+        if (isValidFilterValue(filters?.search_cpf)) {
+            const cleanSearch = filters!.search_cpf.trim();
             const digits = cleanSearch.replace(/\D/g, "");
             const isId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanSearch);
 
@@ -118,26 +119,26 @@ export const adminRepository = {
                 }
                 const { data: uData } = await userQuery;
                 if (uData && uData.length > 0) {
-                    query = query.in("usuario_id", uData.map((u: any) => u.id));
+                    query = query.in("usuario_id", uData.map((u: { id: string }) => u.id));
                 } else {
                     return { data: [], count: 0, error: null };
                 }
             }
         }
 
-        if (filters?.dataInicio) {
-            const inicio = filters.dataInicio.length === 10 ? `${filters.dataInicio}T00:00:00.000-03:00` : filters.dataInicio;
+        if (isValidFilterValue(filters?.dataInicio)) {
+            const inicio = filters!.dataInicio.length === 10 ? `${filters!.dataInicio}T00:00:00.000-03:00` : filters!.dataInicio;
             query = query.gte("created_at", inicio);
         }
-        if (filters?.dataFim) {
-            const fim = filters.dataFim.length === 10 ? `${filters.dataFim}T23:59:59.999-03:00` : filters.dataFim;
+        if (isValidFilterValue(filters?.dataFim)) {
+            const fim = filters!.dataFim.length === 10 ? `${filters!.dataFim}T23:59:59.999-03:00` : filters!.dataFim;
             query = query.lte("created_at", fim);
         }
-        if (filters?.acao) {
-            query = query.eq("acao", filters.acao);
+        if (isValidFilterValue(filters?.acao)) {
+            query = query.eq("acao", filters!.acao);
         }
-        if (filters?.entidade) {
-            query = query.eq("entidade_tipo", filters.entidade);
+        if (isValidFilterValue(filters?.entidade)) {
+            query = query.eq("entidade_tipo", filters!.entidade);
         }
 
         return query
@@ -188,7 +189,7 @@ export const adminRepository = {
                 .eq("usuario_id", userId),
             supabaseAdmin
                 .from("contratos")
-                .select("*, passageiros(id, nome, cpf, responsavel_nome, responsavel_telefone)")
+                .select("*, passageiros(id, nome, cpf_responsavel, nome_responsavel, telefone_responsavel)")
                 .eq("usuario_id", userId)
                 .order("created_at", { ascending: false }),
         ]);
@@ -214,7 +215,7 @@ export const adminRepository = {
             .order("valor", { ascending: true });
     },
 
-    async updatePlano(id: string, data: any) {
+    async updatePlano(id: string, data: Record<string, unknown>) {
         return supabaseAdmin
             .from("planos")
             .update(data)
@@ -231,7 +232,7 @@ export const adminRepository = {
             .maybeSingle();
     },
 
-    async updateSubscription(id: string, data: any) {
+    async updateSubscription(id: string, data: Record<string, unknown>) {
         return supabaseAdmin
             .from("assinaturas")
             .update(data)

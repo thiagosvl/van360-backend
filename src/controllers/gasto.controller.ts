@@ -11,7 +11,7 @@ export const gastoController = {
         if (request.data_owner_id) {
             data.usuario_id = request.data_owner_id;
         }
-        if (request.assigned_veiculo_id && !data.veiculo_id) {
+        if (request.assigned_veiculo_id) {
             data.veiculo_id = request.assigned_veiculo_id;
         }
 
@@ -22,20 +22,26 @@ export const gastoController = {
     async update(request: FastifyRequest, reply: FastifyReply) {
         const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
         const data = updateGastoSchema.parse(request.body);
-        await gastoService.updateGasto(id, data, data.escopo);
+        const targetOwnerId = request.data_owner_id || request.user?.id;
+        const assignedVeiculoId = request.assigned_veiculo_id || undefined;
+        await gastoService.updateGasto(id, data, data.escopo, targetOwnerId, assignedVeiculoId);
         return reply.status(200).send({ success: true });
     },
 
     async delete(request: FastifyRequest, reply: FastifyReply) {
         const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
         const { escopo } = z.object({ escopo: z.nativeEnum(GastoEscopoAcao).optional() }).parse(request.query);
-        await gastoService.deleteGasto(id, escopo);
+        const targetOwnerId = request.data_owner_id || request.user?.id;
+        const assignedVeiculoId = request.assigned_veiculo_id || undefined;
+        await gastoService.deleteGasto(id, escopo, targetOwnerId, assignedVeiculoId);
         return reply.status(200).send({ success: true });
     },
 
     async get(request: FastifyRequest, reply: FastifyReply) {
         const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
-        const gasto = await gastoService.getGasto(id);
+        const targetOwnerId = request.data_owner_id || request.user?.id;
+        const assignedVeiculoId = request.assigned_veiculo_id || undefined;
+        const gasto = await gastoService.getGasto(id, targetOwnerId, assignedVeiculoId);
         return reply.status(200).send(gasto);
     },
 

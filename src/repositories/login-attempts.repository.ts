@@ -1,5 +1,7 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { logger } from "../config/logger.js";
+import { isValidFilterValue } from "../utils/filter.utils.js";
+import { PostgrestError } from "@supabase/supabase-js";
 
 export interface LoginAttemptPayload {
   login_tentado: string;
@@ -22,8 +24,9 @@ class LoginAttemptsRepository {
       if (error) {
         logger.error({ error: error.message }, "Erro ao registrar tentativa de login no banco.");
       }
-    } catch (err: any) {
-      logger.error({ error: err.message }, "Falha inesperada ao registrar tentativa de login.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error({ error: msg }, "Falha inesperada ao registrar tentativa de login.");
     }
   }
 
@@ -31,24 +34,24 @@ class LoginAttemptsRepository {
     data_inicio?: string;
     data_fim?: string;
     search_cpf?: string;
-  }, from?: number, to?: number): Promise<{ data: LoginAttempt[] | null; count: number | null; error: any }> {
+  }, from?: number, to?: number): Promise<{ data: LoginAttempt[] | null; count: number | null; error: PostgrestError | null }> {
     let query = supabaseAdmin
       .from("tentativas_login")
       .select("*", { count: "exact" })
       .order("created_at", { ascending: false });
 
-    if (filters?.data_inicio) {
-      const inicio = filters.data_inicio.length === 10 ? `${filters.data_inicio}T00:00:00.000-03:00` : filters.data_inicio;
+    if (isValidFilterValue(filters?.data_inicio)) {
+      const inicio = filters!.data_inicio.length === 10 ? `${filters!.data_inicio}T00:00:00.000-03:00` : filters!.data_inicio;
       query = query.gte("created_at", inicio);
     }
     
-    if (filters?.data_fim) {
-      const fim = filters.data_fim.length === 10 ? `${filters.data_fim}T23:59:59.999-03:00` : filters.data_fim;
+    if (isValidFilterValue(filters?.data_fim)) {
+      const fim = filters!.data_fim.length === 10 ? `${filters!.data_fim}T23:59:59.999-03:00` : filters!.data_fim;
       query = query.lte("created_at", fim);
     }
     
-    if (filters?.search_cpf) {
-      const cleanSearch = filters.search_cpf.trim();
+    if (isValidFilterValue(filters?.search_cpf)) {
+      const cleanSearch = filters!.search_cpf.trim();
       const digits = cleanSearch.replace(/\D/g, "");
       const isId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanSearch);
 
@@ -73,7 +76,7 @@ class LoginAttemptsRepository {
       if (doUserQuery) {
           const { data: uData } = await userQuery.limit(50);
           if (uData && uData.length > 0) {
-              uData.forEach((u: any) => {
+              uData.forEach((u: { cpfcnpj?: string | null; email?: string | null }) => {
                   if (u.cpfcnpj) loginTerms.push(u.cpfcnpj);
                   if (u.email) loginTerms.push(u.email);
               });

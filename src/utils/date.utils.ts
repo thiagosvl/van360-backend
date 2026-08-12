@@ -130,6 +130,19 @@ export const getLastDayOfMonth = (year: number, month: number): number => {
   return new Date(year, month, 0).getDate();
 };
 
+/**
+ * Retorna uma string YYYY-MM-DD segura para o vencimento projetado de um mês/ano,
+ * ajustando o dia para o último dia do mês caso o mês seja menor (ex: dia 31 em Fev -> 28).
+ */
+export const getSafeDueDateString = (diaVencimento: number | null | undefined, month: number, year: number): string => {
+  const lastDay = getLastDayOfMonth(year, month);
+  const rawDia = Number(diaVencimento || 10);
+  const diaFinal = Math.min(rawDia, lastDay);
+  const mesStr = String(month).padStart(2, "0");
+  const diaStr = String(diaFinal).padStart(2, "0");
+  return `${year}-${mesStr}-${diaStr}`;
+};
+
 export const addDays = (date: Date | string, days: number): Date => {
   const d = typeof date === 'string' ? parseLocalDate(date) : new Date(date);
   d.setDate(d.getDate() + days);

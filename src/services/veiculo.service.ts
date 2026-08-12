@@ -88,9 +88,19 @@ export const veiculoService = {
         }
     },
 
-    async getVeiculo(id: string): Promise<Veiculo | null> {
+    async getVeiculo(id: string, targetOwnerId?: string, assignedVeiculoId?: string): Promise<Veiculo | null> {
         const { data, error } = await veiculoRepository.getById(id);
         if (error) throw error;
+        if (!data) throw new AppError("Veículo não encontrado", 404);
+
+        if (targetOwnerId && data.usuario_id !== targetOwnerId) {
+            throw new AppError("Acesso negado", 403);
+        }
+
+        if (assignedVeiculoId && data.id !== assignedVeiculoId) {
+            throw new AppError("Acesso negado para este veículo", 403);
+        }
+
         return data as Veiculo;
     },
 

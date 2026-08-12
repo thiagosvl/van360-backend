@@ -1,3 +1,5 @@
+import { supabaseAdmin } from "../../config/supabase.js";
+import { motoristaEquipeRepository } from "../../repositories/motorista-equipe.repository.js";
 import { NotificationChannelEnum } from '../../types/enums.js';
 import { logger } from "../../config/logger.js";
 import { adminUserRepository } from "../../repositories/admin/admin-user.repository.js";
@@ -546,15 +548,6 @@ export const adminUserService = {
       logger.error({ trialError, userId }, "[AdminUserService] Erro não-bloqueante ao criar Trial inicial.");
     }
 
-    if (data.telefone) {
-      const maskedCpf = maskCpfCnpjHidden(cpfcnpjClean);
-      notificationService.notifyDriver(data.telefone, EVENTO_MOTORISTA_CADASTRO_ADMIN, {
-        nomeMotorista: data.nome,
-        cpfLogin: maskedCpf,
-        senhaTemporaria: data.senha
-      }, { channels: [NotificationChannelEnum.EVOLUTION] }).catch(err => logger.error({ err, userId }, "[AdminUserService] Falha ao enviar mensagem de boas-vindas."));
-    }
-
     return { id: userId, email: emailClean };
   },
 
@@ -576,15 +569,6 @@ export const adminUserService = {
       throw authError;
     }
 
-    if (user.telefone) {
-      const maskedCpf = maskCpfCnpjHidden(user.cpfcnpj || "");
-      notificationService.notifyDriver(user.telefone, EVENTO_MOTORISTA_RESET_SENHA_ADMIN, {
-        nomeMotorista: user.nome,
-        cpfLogin: maskedCpf,
-        senhaTemporaria: newPassword
-      }, { channels: [NotificationChannelEnum.EVOLUTION] }).catch(err => logger.error({ err, userId }, "[AdminUserService] Falha ao enviar mensagem de reset de senha."));
-    }
-
     return { success: true, senha: newPassword };
   },
 
@@ -595,12 +579,26 @@ export const adminUserService = {
       throw new Error("Usuário não encontrado.");
     }
 
+    const { data: subContas } = await motoristaEquipeRepository.listByGestor(userId);
+    if (subContas && subContas.length > 0) {
+      for (const sub of subContas) {
+        if (sub.id) {
+          await authProvider.deleteUser(sub.id).catch((err: unknown) => {
+            logger.warn({ err, subId: sub.id }, "[AdminUserService] Falha ao expurgar sub-conta no Auth");
+          });
+          await supabaseAdmin.from("usuarios").delete().eq("id", sub.id);
+        }
+      }
+    }
+
     const { error: authError } = await authProvider.deleteUser(userId);
 
     if (authError) {
       logger.error({ authError, userId }, "[AdminUserService] Erro ao deletar usuário no Supabase Auth.");
       throw authError;
     }
+
+    await supabaseAdmin.from("usuarios").delete().eq("id", userId);
 
     return { success: true };
   },

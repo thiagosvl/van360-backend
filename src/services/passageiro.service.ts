@@ -1,5 +1,4 @@
 import axios from "axios";
-import { supabaseAdmin } from "../config/supabase.js";
 import { passageiroRepository } from "../repositories/passageiro.repository.js";
 import { prePassageiroRepository } from "../repositories/pre-passageiro.repository.js";
 import { AppError } from "../errors/AppError.js";
@@ -11,36 +10,36 @@ import { historicoService } from "./historico.service.js";
 import { parseLocalDate, toPersistenceString, getNowBR } from "../utils/date.utils.js";
 
 // Métodos privados auxiliares
-const geocodeAddress = async (enderecoParts: { logradouro?: string, numero?: string, cidade?: string, estado?: string }): Promise<{lat: number, lon: number} | null> => {
+const geocodeAddress = async (enderecoParts: { logradouro?: string, numero?: string, cidade?: string, estado?: string }): Promise<{ lat: number, lon: number } | null> => {
     const partes = [];
     if (enderecoParts.logradouro) partes.push(enderecoParts.logradouro);
     if (enderecoParts.numero) partes.push(enderecoParts.numero);
     if (enderecoParts.cidade) partes.push(enderecoParts.cidade);
     if (enderecoParts.estado) partes.push(enderecoParts.estado);
-    
+
     if (partes.length === 0) return null;
-    
+
     const endereco = partes.join(', ');
     const apiKey = process.env.GOOGLE_MAPS_API_KEY;
 
     if (!apiKey) {
-      return null;
+        return null;
     }
 
     try {
-      const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(endereco)}&key=${apiKey}`;
-      const response = await axios.get(url);
-      
-      if (response.data && response.data.status === "OK" && response.data.results.length > 0) {
-        const location = response.data.results[0].geometry.location;
-        return {
-          lat: location.lat,
-          lon: location.lng
-        };
-      }
-      return null;
+        const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(endereco)}&key=${apiKey}`;
+        const response = await axios.get(url);
+
+        if (response.data && response.data.status === "OK" && response.data.results.length > 0) {
+            const location = response.data.results[0].geometry.location;
+            return {
+                lat: location.lat,
+                lon: location.lng
+            };
+        }
+        return null;
     } catch (error) {
-      return null;
+        return null;
     }
 };
 
@@ -89,12 +88,12 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO>, usuarioId?: 
     if (data.turma !== undefined) prepared.turma = data.turma ? cleanString(data.turma, true) : null;
     if (data.nome_professor !== undefined) prepared.nome_professor = data.nome_professor ? cleanString(data.nome_professor, true) : null;
     if (data.data_nascimento !== undefined && data.data_nascimento) {
-      if (data.data_nascimento.getTime() > getNowBR().getTime()) {
-        throw new AppError("Data de nascimento não pode ser no futuro", 400);
-      }
-      prepared.data_nascimento = toPersistenceString(data.data_nascimento);
+        if (data.data_nascimento.getTime() > getNowBR().getTime()) {
+            throw new AppError("Data de nascimento não pode ser no futuro", 400);
+        }
+        prepared.data_nascimento = toPersistenceString(data.data_nascimento);
     } else if (data.data_nascimento === null) {
-      prepared.data_nascimento = null;
+        prepared.data_nascimento = null;
     }
     if (data.parentesco_responsavel !== undefined) prepared.parentesco_responsavel = data.parentesco_responsavel;
     if (data.data_inicio_transporte !== undefined) prepared.data_inicio_transporte = data.data_inicio_transporte ? toPersistenceString(data.data_inicio_transporte) : null;
@@ -105,6 +104,15 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO>, usuarioId?: 
 
     // Controle
     if (data.ativo !== undefined) prepared.ativo = data.ativo;
+    if (data.isento !== undefined) prepared.isento = data.isento;
+
+    // Regra de Negócio: Se o passageiro for isento, zera/anula todos os campos de cobrança
+    if (prepared.isento === true) {
+        prepared.valor_cobranca = null;
+        prepared.dia_vencimento = null;
+        prepared.data_inicio_cobranca = null;
+        prepared.data_fim_cobranca = null;
+    }
 
     return prepared;
 };
@@ -112,7 +120,6 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO>, usuarioId?: 
 const createPassageiro = async (data: CreatePassageiroDTO, isPreCadastro: boolean = false): Promise<any> => {
     if (!data.usuario_id) throw new Error("Usuário obrigatório");
     if (!data.nome) throw new Error("Nome do passageiro é obrigatório");
-
 
     const passageiroData = _preparePassageiroData(data, data.usuario_id, false);
 
@@ -152,11 +159,11 @@ const createPassageiro = async (data: CreatePassageiroDTO, isPreCadastro: boolea
     return inserted;
 };
 
-const updatePassageiro = async (id: string, data: UpdatePassageiroDTO): Promise<any> => {
+const updatePassageiro = async (id: string, data: UpdatePassageiroDTO, targetOwnerId?: string, assignedVeiculoId?: string): Promise<any> => {
     if (!id) throw new Error("ID do passageiro é obrigatório");
 
     // 1. Buscar estado ATUAL (antes do update) para comparações
-    const estadoAnterior = await getPassageiro(id);
+    const estadoAnterior = await getPassageiro(id, targetOwnerId, assignedVeiculoId);
     if (!estadoAnterior) throw new AppError("Passageiro não encontrado", 404);
 
     const passageiroData = _preparePassageiroData(data, undefined, true);
@@ -164,7 +171,7 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO): Promise<
     const flexDataUpdate = data as Record<string, any>;
     const flexAnterior = estadoAnterior as Record<string, any>;
 
-    const addressChanged = 
+    const addressChanged =
         (data.logradouro !== undefined && data.logradouro !== estadoAnterior.logradouro) ||
         (flexDataUpdate.numero !== undefined && flexDataUpdate.numero !== flexAnterior.numero) ||
         (data.cidade !== undefined && data.cidade !== estadoAnterior.cidade) ||
@@ -231,10 +238,10 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO): Promise<
     return updated;
 };
 
-const deletePassageiro = async (id: string): Promise<void> => {
+const deletePassageiro = async (id: string, targetOwnerId?: string, assignedVeiculoId?: string): Promise<void> => {
     if (!id) throw new Error("ID do passageiro é obrigatório");
 
-    const passageiro = await getPassageiro(id);
+    const passageiro = await getPassageiro(id, targetOwnerId, assignedVeiculoId);
 
     if (passageiro?.id) {
         const { error } = await passageiroRepository.delete(id);
@@ -254,18 +261,23 @@ const deletePassageiro = async (id: string): Promise<void> => {
     }
 }
 
-const getPassageiro = async (id: string): Promise<any> => {
+const getPassageiro = async (id: string, targetOwnerId?: string, assignedVeiculoId?: string): Promise<any> => {
     const { data, error } = await passageiroRepository.getById(id);
 
     if (error) throw error;
+    if (!data) throw new AppError("Passageiro não encontrado", 404);
 
-    // Transform to flat property for convenience/security? 
-    // Or just return the array.
-    // Let's attach a 'status_contrato_atual' field computed.
+    if (targetOwnerId && data.usuario_id !== targetOwnerId) {
+        throw new AppError("Acesso negado", 403);
+    }
+
+    if (assignedVeiculoId && data.veiculo_id && data.veiculo_id !== assignedVeiculoId) {
+        throw new AppError("Acesso negado para este veículo", 403);
+    }
+
     const ultimoContrato = data.contratos?.[0];
     const statusContrato = ultimoContrato ? ultimoContrato.status : null;
     const contratoId = ultimoContrato ? ultimoContrato.id : null;
-    // Preferencia para contrato final assinado, senao minuta
     const contratoUrl = ultimoContrato ? (ultimoContrato.contrato_final_url || ultimoContrato.minuta_url) : null;
 
     return {
@@ -316,14 +328,13 @@ const listPassageiros = async (
     return passageiros;
 };
 
-const toggleAtivo = async (passageiroId: string, novoStatus: boolean): Promise<boolean> => {
-
+const toggleAtivo = async (passageiroId: string, novoStatus: boolean, targetOwnerId?: string, assignedVeiculoId?: string): Promise<boolean> => {
+    const pass = await getPassageiro(passageiroId, targetOwnerId, assignedVeiculoId);
     const { error } = await passageiroRepository.updateAtivo(passageiroId, novoStatus);
 
     if (error) throw new Error(`Falha ao alterar status do passageiro: ${error.message}`);
 
     // --- LOG DE AUDITORIA ---
-    const { data: pass } = await passageiroRepository.getUsuarioIdAndNome(passageiroId);
     if (pass) {
         historicoService.log({
             usuario_id: pass.usuario_id,
@@ -480,25 +491,21 @@ const listarAniversariantesDoMes = async (usuarioId: string, mes: number, veicul
 };
 
 const addResponsavelAdicional = async (passageiroId: string, data: CreateResponsavelAdicionalDTO) => {
-    const { data: inserted, error } = await supabaseAdmin
-        .from("passageiro_responsaveis_adicionais")
-        .insert([{
-            passageiro_id: passageiroId,
-            nome: cleanString(data.nome, true),
-            telefone: onlyDigits(data.telefone),
-            cpf: onlyDigits(data.cpf),
-            parentesco: data.parentesco,
-            logradouro: data.logradouro ? cleanString(data.logradouro, true) : null,
-            numero: data.numero ? cleanString(data.numero, true) : null,
-            bairro: data.bairro ? cleanString(data.bairro, true) : null,
-            cidade: data.cidade ? cleanString(data.cidade, true) : null,
-            estado: data.estado ? cleanString(data.estado, true) : null,
-            cep: data.cep ? onlyDigits(data.cep) : null,
-            referencia: data.referencia ? cleanString(data.referencia, true) : null,
-            complemento: data.complemento ? cleanString(data.complemento, true) : null,
-        }])
-        .select()
-        .single();
+    const { data: inserted, error } = await passageiroRepository.insertResponsavelAdicional({
+        passageiro_id: passageiroId,
+        nome: cleanString(data.nome, true),
+        telefone: onlyDigits(data.telefone),
+        cpf: onlyDigits(data.cpf),
+        parentesco: data.parentesco,
+        logradouro: data.logradouro ? cleanString(data.logradouro, true) : null,
+        numero: data.numero ? cleanString(data.numero, true) : null,
+        bairro: data.bairro ? cleanString(data.bairro, true) : null,
+        cidade: data.cidade ? cleanString(data.cidade, true) : null,
+        estado: data.estado ? cleanString(data.estado, true) : null,
+        cep: data.cep ? onlyDigits(data.cep) : null,
+        referencia: data.referencia ? cleanString(data.referencia, true) : null,
+        complemento: data.complemento ? cleanString(data.complemento, true) : null,
+    });
 
     if (error) throw error;
     return inserted;
@@ -519,81 +526,59 @@ const updateResponsavelAdicional = async (responsavelId: string, data: UpdateRes
     if (data.referencia !== undefined) prepared.referencia = data.referencia ? cleanString(data.referencia, true) : null;
     if (data.complemento !== undefined) prepared.complemento = data.complemento ? cleanString(data.complemento, true) : null;
 
-    const { data: updated, error } = await supabaseAdmin
-        .from("passageiro_responsaveis_adicionais")
-        .update(prepared)
-        .eq("id", responsavelId)
-        .select()
-        .single();
+    const { data: updated, error } = await passageiroRepository.updateResponsavelAdicional(responsavelId, prepared);
 
     if (error) throw error;
     return updated;
 };
 
 const deleteResponsavelAdicional = async (responsavelId: string) => {
-    const { error } = await supabaseAdmin
-        .from("passageiro_responsaveis_adicionais")
-        .delete()
-        .eq("id", responsavelId);
+    const { error } = await passageiroRepository.deleteResponsavelAdicional(responsavelId);
 
     if (error) throw error;
     return { success: true };
 };
 
 const setPrincipalResponsavel = async (passageiroId: string, responsavelId: string) => {
-    const { data: passageiro, error: passErr } = await supabaseAdmin
-        .from("passageiros")
-        .select("*")
-        .eq("id", passageiroId)
-        .single();
+    const { data: passageiro, error: passErr } = await passageiroRepository.getById(passageiroId);
 
     if (passErr || !passageiro) throw passErr || new Error("Passageiro não encontrado");
 
-    const { data: adicional, error: adErr } = await supabaseAdmin
-        .from("passageiro_responsaveis_adicionais")
-        .select("*")
-        .eq("id", responsavelId)
-        .single();
+    const { data: adicional, error: adErr } = await passageiroRepository.getResponsavelAdicionalById(responsavelId);
 
     if (adErr || !adicional) throw adErr || new Error("Responsável adicional não encontrado");
 
-    const { error: updAdError } = await supabaseAdmin
-        .from("passageiro_responsaveis_adicionais")
-        .update({
-            nome: passageiro.nome_responsavel,
-            telefone: passageiro.telefone_responsavel,
-            cpf: passageiro.cpf_responsavel || adicional.cpf,
-            parentesco: passageiro.parentesco_responsavel || ParentescoResponsavel.OUTRO,
-            logradouro: passageiro.logradouro,
-            numero: passageiro.numero,
-            bairro: passageiro.bairro,
-            cidade: passageiro.cidade,
-            estado: passageiro.estado,
-            cep: passageiro.cep,
-            referencia: passageiro.referencia,
-            complemento: passageiro.complemento,
-        })
-        .eq("id", responsavelId);
+    const { error: updAdError } = await passageiroRepository.updateResponsavelAdicional(responsavelId, {
+        nome: passageiro.nome_responsavel,
+        telefone: passageiro.telefone_responsavel,
+        cpf: passageiro.cpf_responsavel || adicional.cpf,
+        parentesco: passageiro.parentesco_responsavel || ParentescoResponsavel.OUTRO,
+        logradouro: passageiro.logradouro,
+        numero: passageiro.numero,
+        bairro: passageiro.bairro,
+        cidade: passageiro.cidade,
+        estado: passageiro.estado,
+        cep: passageiro.cep,
+        referencia: passageiro.referencia,
+        complemento: passageiro.complemento,
+    });
 
     if (updAdError) throw updAdError;
 
-    const { error: updPassError } = await supabaseAdmin
-        .from("passageiros")
-        .update({
-            nome_responsavel: adicional.nome,
-            telefone_responsavel: adicional.telefone,
-            cpf_responsavel: adicional.cpf,
-            parentesco_responsavel: adicional.parentesco,
-            logradouro: adicional.logradouro,
-            numero: adicional.numero,
-            bairro: adicional.bairro,
-            cidade: adicional.cidade,
-            estado: adicional.estado,
-            cep: adicional.cep,
-            referencia: adicional.referencia,
-            complemento: adicional.complemento,
-        })
-        .eq("id", passageiroId);
+    const { error: updPassError } = await passageiroRepository.update(passageiroId, {
+        nome_responsavel: adicional.nome,
+        telefone_responsavel: adicional.telefone,
+        cpf_responsavel: adicional.cpf,
+        parentesco_responsavel: adicional.parentesco,
+        logradouro: adicional.logradouro,
+        numero: adicional.numero,
+        bairro: adicional.bairro,
+        cidade: adicional.cidade,
+        estado: adicional.estado,
+        cep: adicional.cep,
+        referencia: adicional.referencia,
+        complemento: adicional.complemento,
+    });
 
     if (updPassError) throw updPassError;
 

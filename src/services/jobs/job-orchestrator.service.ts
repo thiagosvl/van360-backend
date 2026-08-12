@@ -40,6 +40,10 @@ export const jobOrchestratorService = {
       expurgarCodigosRecuperacaoExpirados().catch((err: Error) => {
         logger.error({ err }, "[JobOrchestrator] Erro ao expurgar códigos OTP expirados");
         throw err;
+      }),
+      import("../system-cleanup.service.js").then(({ systemCleanupService }) => systemCleanupService.runHousekeepingPurge()).catch((err: Error) => {
+        logger.error({ err }, "[JobOrchestrator] Erro ao executar faxina periódica do banco de dados");
+        throw err;
       })
     ];
 

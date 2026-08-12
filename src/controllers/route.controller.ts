@@ -20,7 +20,7 @@ export const routeController = {
     if (request.data_owner_id) {
       data.usuario_id = request.data_owner_id;
     }
-    if (request.assigned_veiculo_id && !data.veiculo_id) {
+    if (request.assigned_veiculo_id) {
       data.veiculo_id = request.assigned_veiculo_id;
     }
 
@@ -45,8 +45,10 @@ export const routeController = {
 
   get: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
-    logger.info({ routeId: id }, "RouteController.get - Starting");
-    const route = await routeService.getRoute(id);
+    const targetOwnerId = request.data_owner_id || request.user?.id;
+    const assignedVeiculoId = request.assigned_veiculo_id || undefined;
+    logger.info({ routeId: id, targetOwnerId, assignedVeiculoId }, "RouteController.get - Starting");
+    const route = await routeService.getRoute(id, undefined, targetOwnerId, assignedVeiculoId);
     return reply.status(200).send(route);
   },
 
@@ -62,18 +64,30 @@ export const routeController = {
 
   listExecucoesByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {
     const { usuarioId } = request.params as { usuarioId: string };
+    const { limit, page } = request.query as { limit?: string; page?: string };
     const targetOwnerId = request.data_owner_id || usuarioId;
     const assignedVeiculoId = request.assigned_veiculo_id;
 
-    logger.info({ usuarioId, targetOwnerId, assignedVeiculoId }, "RouteController.listExecucoesByUsuario");
-    const execs = await routeService.listExecucoesByUsuario(targetOwnerId, assignedVeiculoId || undefined);
+    const parsedLimit = limit ? parseInt(limit, 10) : undefined;
+    const parsedPage = page ? parseInt(page, 10) : 1;
+
+    logger.info({ usuarioId, targetOwnerId, assignedVeiculoId, limit: parsedLimit, page: parsedPage }, "RouteController.listExecucoesByUsuario");
+    const execs = await routeService.listExecucoesByUsuario(targetOwnerId, assignedVeiculoId || undefined, parsedLimit, parsedPage);
     return reply.status(200).send(execs);
+  },
+
+  getExecucaoAtivaByVeiculo: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { veiculoId } = request.params as { veiculoId: string };
+    const exec = await routeService.getExecucaoAtivaByVeiculoId(veiculoId);
+    return reply.status(200).send(exec || null);
   },
 
   getExecucaoDetail: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
-    logger.info({ execucaoId: id }, "RouteController.getExecucaoDetail - Starting");
-    const exec = await routeService.getExecucaoDetail(id);
+    const targetOwnerId = request.data_owner_id || request.user?.id;
+    const assignedVeiculoId = request.assigned_veiculo_id || undefined;
+    logger.info({ execucaoId: id, targetOwnerId, assignedVeiculoId }, "RouteController.getExecucaoDetail - Starting");
+    const exec = await routeService.getExecucaoDetail(id, targetOwnerId, assignedVeiculoId);
     return reply.status(200).send(exec);
   },
 

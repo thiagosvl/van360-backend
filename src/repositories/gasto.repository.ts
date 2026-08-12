@@ -40,12 +40,17 @@ export const gastoRepository = {
         return query.select();
     },
 
-    async getById(id: string) {
-        return supabaseAdmin
+    async getById(id: string, usuarioId?: string) {
+        let query = supabaseAdmin
             .from("gastos")
             .select("*")
-            .eq("id", id)
-            .single();
+            .eq("id", id);
+
+        if (isValidFilterValue(usuarioId)) {
+            query = query.eq("usuario_id", usuarioId);
+        }
+
+        return query.single();
     },
 
     async list(usuarioId: string, filtros?: ListGastosFiltersDTO) {
@@ -86,6 +91,28 @@ export const gastoRepository = {
             
         if (isValidFilterValue(veiculoId)) {
             query = query.eq("veiculo_id", veiculoId);
+        }
+
+        return query;
+    },
+
+    async getParcelasByParcelamentoId(parcelamentoId: string) {
+        return supabaseAdmin
+            .from("gastos")
+            .select("*")
+            .eq("parcelamento_id", parcelamentoId)
+            .order("data", { ascending: true })
+            .order("created_at", { ascending: true });
+    },
+
+    async getParcelasAfetadas(parcelamentoId: string, minNumeroParcela?: number) {
+        let query = supabaseAdmin
+            .from("gastos")
+            .select("*")
+            .eq("parcelamento_id", parcelamentoId);
+
+        if (minNumeroParcela !== undefined) {
+            query = query.gte("numero_parcela", minNumeroParcela);
         }
 
         return query;
