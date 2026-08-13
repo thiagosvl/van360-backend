@@ -30,6 +30,7 @@
     "@supabase/supabase-js": "^2.79.0",
     "@types/qrcode": "^1.5.6",
     "axios": "^1.13.2",
+    "bcryptjs": "^3.0.3",
     "bullmq": "^5.66.4",
     "dotenv": "^17.2.3",
     "fastify": "^5.6.1",
@@ -37,6 +38,7 @@
     "firebase-admin": "^13.10.0",
     "gn-api-sdk-typescript": "^2.0.1",
     "ioredis": "^5.9.1",
+    "jsonwebtoken": "^9.0.3",
     "pdf-lib": "^1.17.1",
     "pino": "^10.1.0",
     "qrcode": "^1.5.4",
@@ -46,8 +48,11 @@
     "zod": "^4.3.5"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24.10.0",
     "pino-pretty": "^13.1.2",
+    "ssh2": "^1.17.0",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3"
   }

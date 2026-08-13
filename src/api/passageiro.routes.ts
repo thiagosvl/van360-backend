@@ -3,6 +3,8 @@ import { passageiroController } from "../controllers/passageiro.controller.js";
 import { authenticate } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/permissions.middleware.js";
 
+import { responsavelController } from "../controllers/responsavel.controller.js";
+
 const passageiroRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     app.addHook("onRequest", authenticate);
 
@@ -20,6 +22,7 @@ const passageiroRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     // Ações Específicas
     app.patch("/:id/toggle-ativo", { preHandler: [requirePermission("passageiros.gerenciar")] }, passageiroController.toggleAtivo);
     app.post("/finalizar-pre-cadastro/:prePassageiroId", { preHandler: [requirePermission("passageiros.gerenciar")] }, passageiroController.finalizePreCadastro);
+    app.post("/:id/reset-pin", { preHandler: [requirePermission("passageiros.gerenciar")] }, responsavelController.resetPinByDriver);
 
     // Responsáveis Adicionais
     app.post("/:id/responsaveis", { preHandler: [requirePermission("passageiros.gerenciar")] }, passageiroController.addResponsavelAdicional);
