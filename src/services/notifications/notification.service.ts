@@ -3,7 +3,7 @@ import { NotificationChannelEnum } from "../../types/enums.js";
 import { logger } from "../../config/logger.js";
 import { usuarioPushTokenRepository } from "../../repositories/usuario-push-token.repository.js";
 
-import { NotificationProviderPort } from "./ports/notification-provider.port.js";
+import { NotificationProviderPort, NotificationSendResult } from "./ports/notification-provider.port.js";
 import { EvolutionQueueAdapter } from "./adapters/evolution/evolution.adapter.js";
 import { SmsAdapter } from "./adapters/sms/sms.adapter.js";
 import { WabaAdapter } from "./adapters/waba/waba.adapter.js";
@@ -43,18 +43,24 @@ class NotificationService {
         eventName: string,
         contextData: Record<string, unknown>,
         options?: NotificationOptions
-    ): Promise<boolean> {
+    ): Promise<NotificationSendResult> {
         const adapter = this.adapters[channel];
         if (!adapter) {
-            logger.warn({ channel, eventName }, "[NotificationService] Adapter não encontrado para o canal.");
-            return false;
+            const errStr = `[NotificationService] Adapter não encontrado para o canal ${channel}.`;
+            logger.warn({ channel, eventName }, errStr);
+            return { success: false, error: errStr };
         }
 
         const usuarioId = options?.usuarioId || (contextData?.usuarioId as string);
         const enrichedOptions = { ...options, usuarioId };
         const enrichedContext = { ...contextData, usuarioId };
 
-        return await adapter.send(eventName, enrichedContext, enrichedOptions);
+        try {
+            return await adapter.send(eventName, enrichedContext, enrichedOptions);
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : String(error);
+            return { success: false, error: msg };
+        }
     }
 
     async notifyPassenger(

@@ -39,4 +39,10 @@ export const env = {
   EFI_WEBHOOK_TOKEN: process.env.EFI_WEBHOOK_TOKEN || "",
 
   PAYMENT_PROVIDER: process.env.PAYMENT_PROVIDER || "efipay",
+
+  // WABA (WhatsApp Cloud API)
+  WABA_API_URL: process.env.WABA_API_URL || "https://graph.facebook.com/v21.0",
+  WABA_PHONE_NUMBER_ID: process.env.WABA_PHONE_NUMBER_ID || "",
+  WABA_ACCESS_TOKEN: process.env.WABA_ACCESS_TOKEN || "",
+  WABA_WEBHOOK_VERIFY_TOKEN: process.env.WABA_WEBHOOK_VERIFY_TOKEN || "",
 };

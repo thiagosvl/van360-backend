@@ -8,6 +8,7 @@ export const createPrePassageiroSchema = z.object({
 
   cpf_responsavel: z.string().optional().or(z.literal('')),
   telefone_responsavel: z.string().optional().or(z.literal('')),
+  email_responsavel: z.string().email("E-mail inválido").optional().nullable().or(z.literal('')),
   escola_id: z.string().uuid().optional().nullable().or(z.literal('')),
   periodo: z.nativeEnum(PeriodoEnum).optional().nullable().or(z.literal('')),
   valor_cobranca: z.union([z.string(), z.number()]).optional().nullable(),

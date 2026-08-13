@@ -26,6 +26,11 @@ export enum UserType {
   RESPONSAVEL = "responsavel",
 }
 
+export enum TipoResponsavel {
+  PRINCIPAL = "principal",
+  ADICIONAL = "adicional",
+}
+
 export enum PushNotificationAction {
   OPEN_HOME = "OPEN_HOME",
   OPEN_SUBSCRIPTION = "OPEN_SUBSCRIPTION",

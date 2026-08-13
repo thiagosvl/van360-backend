@@ -68,15 +68,12 @@ export const ROLE_PERMISSIONS: Record<UserType, PermissionKey[]> = {
   [UserType.MOTORISTA_AUXILIAR]: [
     "passageiros.visualizar",
     "passageiros.presenca_marcar",
-    "gastos.visualizar",
-    "gastos.criar",
     "rotas.visualizar",
     "rotas.criar_editar",
     "rotas.excluir",
     "rotas.iniciar_encerrar",
     "rotas.executar_paradas",
     "aniversarios.visualizar",
-    "equipe.gerenciar_monitores",
   ],
 
   [UserType.MONITOR]: [

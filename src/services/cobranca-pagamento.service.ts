@@ -100,8 +100,7 @@ export const cobrancaPagamentoService = {
             },
             {
               channels: [NotificationChannelEnum.WABA],
-              usuarioId: updated.usuario_id,
-              email: passageiroInfo?.email_responsavel
+              usuarioId: updated.usuario_id
             }
           );
         }

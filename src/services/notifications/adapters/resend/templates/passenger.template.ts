@@ -57,4 +57,31 @@ export class ResendPassengerTemplates {
         const html = EmailComponents.layout({ subject, preheader, contentHtml });
         return { subject, html, text };
     }
+
+    /**
+     * 3. Redefinição de PIN do Responsável
+     */
+    static responsavelPinReset(ctx: ResendTemplateContext): ResendTemplatePayload {
+        const respFirstName = NotificationContextFormatter.getFirstName(ctx.nomeResponsavel, "Responsável");
+        const pinCode = (ctx.codigo || ctx.pinCode || ctx.token) as string || "123456";
+
+        const subject = formatSubject("Redefinição de PIN de Acesso - Van360");
+        const preheader = "Recebemos uma solicitação para redefinir seu PIN de acesso no Van360.";
+        const text = `Olá, ${respFirstName}!\n\nRecebemos uma solicitação para redefinir o seu PIN de 4 dígitos no aplicativo Van360.\n\nSeu código de verificação é: ${pinCode}\n\nEste código expira em 15 minutos.\n\nAtenciosamente,\nEquipe Van360`;
+
+        const contentHtml = `
+            ${EmailComponents.greeting(respFirstName)}
+            ${EmailComponents.paragraph("Recebemos uma solicitação para redefinir o seu PIN de 4 dígitos para acesso à carteirinha digital no <strong>Van360</strong>.")}
+            ${EmailComponents.paragraph("Insira o código de verificação abaixo no aplicativo para redefinir sua senha:")}
+
+            <div style="background-color: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 12px; padding: 18px; color: #1a3a5c; font-size: 28px; font-weight: 900; text-align: center; letter-spacing: 6px; margin: 24px 0;">
+                ${pinCode}
+            </div>
+
+            ${EmailComponents.paragraph("<small style='color: #64748b;'>Este código é válido por 15 minutos. Se você não solicitou esta redefinição, por favor desconsidere este e-mail.</small>")}
+        `;
+
+        const html = EmailComponents.layout({ subject, preheader, contentHtml });
+        return { subject, html, text };
+    }
 }

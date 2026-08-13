@@ -41,6 +41,7 @@ export const prePassageiroService = {
 
       cpf_responsavel: payload.cpf_responsavel ? onlyDigits(payload.cpf_responsavel) : null,
       telefone_responsavel: payload.telefone_responsavel ? onlyDigits(payload.telefone_responsavel) : null,
+      email_responsavel: payload.email_responsavel ? payload.email_responsavel.trim().toLowerCase() : null,
       escola_id: payload.escola_id || null,
       periodo: payload.periodo || null,
       valor_cobranca: valorCobranca,

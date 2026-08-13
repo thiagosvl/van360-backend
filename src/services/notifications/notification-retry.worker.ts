@@ -37,19 +37,20 @@ export class NotificationRetryWorker {
                     }
 
                     // 3. Tenta disparar a notificação diretamente no canal
-                    const success = await notificationService.sendDirect(
+                    const sendResult = await notificationService.sendDirect(
                         item.canal,
                         item.evento,
                         { ...item.payload, to: item.destinatario },
                         { usuarioId: item.usuario_id || undefined }
                     );
 
-                    if (success) {
-                        await notificationQueueRepository.markAsSent(item.id);
+                    if (sendResult.success) {
+                        await notificationQueueRepository.markAsSent(item.id, sendResult.providerMessageId);
                         processedCount++;
                         logger.info({ id: item.id, canal: item.canal, tentativas: currentAttempts }, "[NotificationRetryWorker] Retentativa enviada com sucesso!");
                     } else {
-                        await this.handleFailedAttempt(item, currentAttempts, maxAttempts, "Erro ao disparar via provedor");
+                        const errorMsg = sendResult.error || "Erro ao disparar via provedor";
+                        await this.handleFailedAttempt(item, currentAttempts, maxAttempts, errorMsg);
                     }
                 } catch (error: unknown) {
                     const errorMsg = error instanceof Error ? error.message : String(error);

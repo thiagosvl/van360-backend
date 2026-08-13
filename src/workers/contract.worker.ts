@@ -41,7 +41,13 @@ export const contractWorker = new Worker<ContractJobData>(
 
             // 4. Notificar Responsável via NotificationService
             const emailResponsavel = (passageiro as Record<string, unknown>).email_responsavel as string | undefined;
-            if (passageiro.telefone_responsavel || emailResponsavel) {
+            const hasValidEmail = typeof emailResponsavel === "string" && emailResponsavel.includes("@");
+            const channels: NotificationChannelEnum[] = [NotificationChannelEnum.WABA];
+            if (hasValidEmail) {
+                channels.push(NotificationChannelEnum.RESEND);
+            }
+
+            if (passageiro.telefone_responsavel || hasValidEmail) {
                 const linkAssinatura = providerName === ContratoProvider.INHOUSE
                     ? `${env.FRONTEND_URL}/assinar/${tokenAcesso}`
                     : response.providerSignatureLink;
@@ -51,7 +57,7 @@ export const contractWorker = new Worker<ContractJobData>(
                 const { getDriverDisplayName } = await import('../utils/format.js');
 
                 await notificationService.notifyPassenger(
-                    passageiro.telefone_responsavel,
+                    passageiro.telefone_responsavel || "",
                     EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL,
                     {
                         nomeResponsavel: passageiro.nome_responsavel,
@@ -64,15 +70,15 @@ export const contractWorker = new Worker<ContractJobData>(
                         }),
                         apelidoMotorista: dadosContrato.apelidoCondutor,
                         linkAssinatura,
-                        email: (passageiro as Record<string, unknown>).email_responsavel as string | undefined
+                        email: hasValidEmail ? emailResponsavel : undefined
                     },
                     {
-                        channels: [NotificationChannelEnum.WABA, NotificationChannelEnum.RESEND],
-                        email: (passageiro as Record<string, unknown>).email_responsavel as string | undefined
+                        channels,
+                        email: hasValidEmail ? emailResponsavel : undefined
                     }
                 );
 
-                logger.info({ jobId: job.id, phone: passageiro.telefone_responsavel }, "[Worker] Notificação de contrato processada via NotificationService.");
+                logger.info({ jobId: job.id, phone: passageiro.telefone_responsavel, hasValidEmail }, "[Worker] Notificação de contrato processada via NotificationService.");
             }
 
             return { success: true, documentUrl: response.documentUrl };

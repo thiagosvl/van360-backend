@@ -83,27 +83,30 @@ export class NotificationQueueService {
         }
 
         // Fast Path: Tenta disparo imediato no provedor
+        let lastErrorMsg = "Falha no Fast Path";
         try {
-            const success = await notificationService.sendDirect(
+            const sendResult = await notificationService.sendDirect(
                 params.canal,
                 params.evento,
                 { ...params.payload, to: cleanDest },
                 params.options
             );
 
-            if (success && queueItem.id) {
-                await notificationQueueRepository.markAsSent(queueItem.id);
+            if (sendResult.success && queueItem.id) {
+                await notificationQueueRepository.markAsSent(queueItem.id, sendResult.providerMessageId);
                 return true;
+            } else if (sendResult.error) {
+                lastErrorMsg = sendResult.error;
             }
         } catch (sendError: unknown) {
-            const errorMessage = sendError instanceof Error ? sendError.message : String(sendError);
-            logger.warn({ error: errorMessage, id: queueItem.id, canal: params.canal }, "[NotificationQueueService] Fast Path falhou. Agendando retentativa.");
+            lastErrorMsg = sendError instanceof Error ? sendError.message : String(sendError);
+            logger.warn({ error: lastErrorMsg, id: queueItem.id, canal: params.canal }, "[NotificationQueueService] Fast Path falhou. Agendando retentativa.");
         }
 
         // Se o Fast Path falhar, atualiza para RETRY_PENDING (1ª tentativa)
         if (queueItem.id) {
             const nextRetryDate = NotificationQueueService.calculateNextRetryDate(1);
-            const errLog = `Falha no Fast Path (Tentativa 1/3)`;
+            const errLog = `${lastErrorMsg} (Tentativa 1/3)`;
             await notificationQueueRepository.markAsRetryPending(queueItem.id, 1, nextRetryDate, errLog);
         }
 

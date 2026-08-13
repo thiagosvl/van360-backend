@@ -25,6 +25,7 @@ import { responsavelPublicRoutes } from "./responsavel.routes.js";
 import { checkSubscriptionAccess } from "../middleware/subscription.js";
 import { WebhookController } from "./webhook.controller.js";
 import notificationRoutes from "./notification.routes.js";
+import { wabaWebhookController } from "../controllers/waba-webhook.controller.js";
 
 const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
   // Middleware Global para Bloqueio de Escrita por Assinatura Expirada
@@ -71,6 +72,9 @@ const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post("/api/webhooks/efi", { config: { rateLimit: false } }, WebhookController.handleEfipay);
   app.post("/api/webhooks/efi/*", { config: { rateLimit: false } }, WebhookController.handleEfipay);
 
+  // Webhook da Meta WABA (WhatsApp Cloud API)
+  app.get("/api/webhooks/waba", { config: { rateLimit: false } }, wabaWebhookController.verify);
+  app.post("/api/webhooks/waba", { config: { rateLimit: false } }, wabaWebhookController.handle);
 };
 
 export default routes;

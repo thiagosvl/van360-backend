@@ -4,6 +4,7 @@ import {
     EVENTO_AUTH_SENHA_ALTERADA,
     EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL,
     EVENTO_PASSAGEIRO_CONTRATO_ASSINADO,
+    EVENTO_PASSAGEIRO_PIN_RESET,
     EVENTO_MOTORISTA_EQUIPE_CADASTRO,
     EVENTO_MOTORISTA_EQUIPE_RESET_SENHA,
     EVENTO_MOTORISTA_EQUIPE_STATUS_ALTERADO,
@@ -52,6 +53,9 @@ export class ResendMapper {
 
                 case EVENTO_PASSAGEIRO_CONTRATO_ASSINADO:
                     return ResendPassengerTemplates.contractSigned(contextData);
+
+                case EVENTO_PASSAGEIRO_PIN_RESET:
+                    return ResendPassengerTemplates.responsavelPinReset(contextData);
 
                 // 🚌 EQUIPE E AJUDANTES
                 case EVENTO_MOTORISTA_EQUIPE_CADASTRO:

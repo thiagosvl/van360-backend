@@ -13,6 +13,7 @@ export interface NotificationQueueItemPayload {
     proxima_tentativa_em?: string;
     payload: Record<string, unknown>;
     erro_mensagem?: string | null;
+    provider_message_id?: string | null;
     created_at?: string;
     updated_at?: string;
 }
@@ -31,7 +32,8 @@ export const notificationQueueRepository = {
                 max_tentativas: item.max_tentativas || 3,
                 proxima_tentativa_em: item.proxima_tentativa_em || new Date().toISOString(),
                 payload: item.payload,
-                erro_mensagem: item.erro_mensagem || null
+                erro_mensagem: item.erro_mensagem || null,
+                provider_message_id: item.provider_message_id || null
             })
             .select()
             .single();
@@ -53,7 +55,8 @@ export const notificationQueueRepository = {
             max_tentativas: item.max_tentativas || 3,
             proxima_tentativa_em: item.proxima_tentativa_em || new Date().toISOString(),
             payload: item.payload,
-            erro_mensagem: item.erro_mensagem || null
+            erro_mensagem: item.erro_mensagem || null,
+            provider_message_id: item.provider_message_id || null
         }));
 
         const { error } = await supabaseAdmin
@@ -92,15 +95,60 @@ export const notificationQueueRepository = {
         return true;
     },
 
-    async markAsSent(id: string): Promise<void> {
+    async markAsSent(id: string, providerMessageId?: string): Promise<void> {
+        const updatePayload: Record<string, unknown> = {
+            status: NotificationQueueStatus.SENT,
+            erro_mensagem: null,
+            updated_at: new Date().toISOString()
+        };
+
+        if (providerMessageId) {
+            updatePayload.provider_message_id = providerMessageId;
+        }
+
         await supabaseAdmin
             .from("fila_notificacoes")
+            .update(updatePayload)
+            .eq("id", id);
+    },
+
+    async findByProviderMessageId(providerMessageId: string): Promise<NotificationQueueItemPayload | null> {
+        const { data, error } = await supabaseAdmin
+            .from("fila_notificacoes")
+            .select("*")
+            .eq("provider_message_id", providerMessageId)
+            .maybeSingle();
+
+        if (error) return null;
+        return data as NotificationQueueItemPayload | null;
+    },
+
+    async markAsWebhookFailed(providerMessageId: string, erroMensagem: string): Promise<boolean> {
+        const { data, error } = await supabaseAdmin
+            .from("fila_notificacoes")
             .update({
-                status: NotificationQueueStatus.SENT,
-                erro_mensagem: null,
+                status: NotificationQueueStatus.FAILED,
+                erro_mensagem: erroMensagem,
                 updated_at: new Date().toISOString()
             })
-            .eq("id", id);
+            .eq("provider_message_id", providerMessageId)
+            .select("id");
+
+        if (error || !data || data.length === 0) return false;
+        return true;
+    },
+
+    async touchUpdatedTimestampByProviderMessageId(providerMessageId: string): Promise<boolean> {
+        const { data, error } = await supabaseAdmin
+            .from("fila_notificacoes")
+            .update({
+                updated_at: new Date().toISOString()
+            })
+            .eq("provider_message_id", providerMessageId)
+            .select("id");
+
+        if (error || !data || data.length === 0) return false;
+        return true;
     },
 
     async markAsRetryPending(id: string, tentativas: number, proximaTentativaEm: string, erroMensagem: string): Promise<void> {

@@ -8,6 +8,30 @@ export const onlyDigits = (value: string | null | undefined): string => {
   return String(value).replace(/\D/g, "");
 };
 
+export function maskEmail(email: string): string {
+  if (!email || !email.includes("@")) return email;
+  const [name, domain] = email.split("@");
+  if (!name || !domain) return email;
+
+  const len = name.length;
+  let maskedName = "";
+
+  if (len <= 2) {
+    maskedName = `${name.substring(0, 1)}*`;
+  } else if (len === 3) {
+    maskedName = `${name.substring(0, 1)}*${name.substring(len - 1)}`;
+  } else if (len === 4) {
+    maskedName = `${name.substring(0, 1)}**${name.substring(len - 1)}`;
+  } else {
+    const firstTwo = name.substring(0, 2);
+    const lastTwo = name.substring(len - 2);
+    const asteriskCount = Math.min(6, len - 4);
+    maskedName = `${firstTwo}${"*".repeat(asteriskCount)}${lastTwo}`;
+  }
+
+  return `${maskedName}@${domain}`;
+}
+
 export const formatEvolutionNumber = (phoneNumber: string): string => {
   if (!phoneNumber) return "";
   const cleanNumber = onlyDigits(phoneNumber);

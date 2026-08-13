@@ -3,21 +3,21 @@ import { EvolutionConnectionStatus, NotificationChannelEnum, EvolutionPurpose } 
 import { CompositeMessagePart } from "../../../../types/dtos/evolution.dto.js";
 import { logger } from "../../../../config/logger.js";
 import { evolutionService } from "../../../evolution.service.js";
-import { NotificationProviderPort } from "../../ports/notification-provider.port.js";
+import { NotificationProviderPort, NotificationSendResult } from "../../ports/notification-provider.port.js";
+import { NotificationOptions } from "../../notification.service.js";
 import { EvolutionMapper } from "./evolution.mapper.js";
 import { env } from "../../../../config/env.js";
 
-import { NotificationOptions } from "../../notification.service.js";
-
 export class EvolutionQueueAdapter implements NotificationProviderPort {
 
-    async send(eventName: string, contextData: Record<string, unknown>, options?: NotificationOptions): Promise<boolean> {
+    async send(eventName: string, contextData: Record<string, unknown>, options?: NotificationOptions): Promise<NotificationSendResult> {
         const to = contextData.to || "";
         const parts = EvolutionMapper.getTemplate(eventName, contextData);
 
         if (!parts || parts.length === 0) {
-            logger.debug({ eventName }, "[EvolutionQueueAdapter] Nenhum template gerado, ignorando envio.");
-            return false;
+            const err = `[EvolutionQueueAdapter] Nenhum template gerado para o evento '${eventName}'.`;
+            logger.debug({ eventName }, err);
+            return { success: false, error: err };
         }
 
         if (env.NODE_ENV !== 'production') {
@@ -30,13 +30,14 @@ export class EvolutionQueueAdapter implements NotificationProviderPort {
 
         const targetPhone = (to || (contextData?.to as string) || "") as string;
 
-        // Simula o comportamento do sendComposite
-        return await this.sendComposite(targetPhone, parts, {
+        const compositeSuccess = await this.sendComposite(targetPhone, parts, {
             eventType: eventName,
             instanceName: options?.evolution?.instanceName,
             jobId: options?.jobId,
             metadata: options?.metadata
         });
+
+        return compositeSuccess ? { success: true } : { success: false, error: "[EvolutionQueueAdapter] Falha ao enfileirar mensagem Evolution" };
     }
 
     async sendComposite(to: string, parts: CompositeMessagePart[], options?: { eventType?: string, instanceName?: string, jobId?: string, metadata?: Record<string, unknown> }): Promise<boolean> {
@@ -76,8 +77,9 @@ export class EvolutionQueueAdapter implements NotificationProviderPort {
             }
 
             return true;
-        } catch (error: any) {
-            logger.error({ error: error.message, to, instanceName }, "[EvolutionQueueAdapter] Falha ao enfileirar");
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : String(error);
+            logger.error({ error: msg, to, instanceName }, "[EvolutionQueueAdapter] Falha ao enfileirar");
             return false;
         }
     }

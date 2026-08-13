@@ -1,9 +1,10 @@
 import { Resend } from "resend";
 import { logger } from "../../../../config/logger.js";
-import { NotificationProviderPort } from "../../ports/notification-provider.port.js";
+import { NotificationProviderPort, NotificationSendResult } from "../../ports/notification-provider.port.js";
 import { usuarioPushTokenRepository } from "../../../../repositories/usuario-push-token.repository.js";
 import { ResendMapper } from "./resend.mapper.js";
 import { ResendTemplatePayload, ResendTemplateContext } from "./resend.template.js";
+import { NotificationOptions } from "../../notification.service.js";
 
 export class ResendAdapter implements NotificationProviderPort {
     private resendClient: Resend | null = null;
@@ -20,17 +21,18 @@ export class ResendAdapter implements NotificationProviderPort {
         }
     }
 
-    async send(eventName: string, contextData: Record<string, unknown>, options?: Record<string, unknown>): Promise<boolean> {
+    async send(eventName: string, contextData: Record<string, unknown>, options?: NotificationOptions): Promise<NotificationSendResult> {
         try {
             if (!this.resendClient) {
-                logger.error({ eventName }, "[ResendAdapter] Impossível enviar e-mail: RESEND_API_KEY não está configurada.");
-                return false;
+                const err = "[ResendAdapter] Impossível enviar e-mail: RESEND_API_KEY não está configurada.";
+                logger.error({ eventName }, err);
+                return { success: false, error: err };
             }
 
             const recipientEmail = await this.resolveRecipient(contextData, options);
             if (!recipientEmail) {
-                logger.warn({ eventName, to: contextData.to, usuarioId: contextData.usuarioId }, "[ResendAdapter] E-mail de destino válido não encontrado para o usuário.");
-                return false;
+                logger.info({ eventName, to: contextData.to, usuarioId: contextData.usuarioId }, "[ResendAdapter] E-mail de destino não cadastrado. Disparo de e-mail ignorado com sucesso.");
+                return { success: true };
             }
 
             // Resolve o e-mail real do usuário (para Magic Link correto mesmo com OVERRIDE_EMAIL ativo em DEV)
@@ -50,21 +52,22 @@ export class ResendAdapter implements NotificationProviderPort {
                 email: realUserEmail,
             } as ResendTemplateContext);
             if (!template) {
-                return false;
+                const err = `[ResendAdapter] Template não encontrado para evento '${eventName}'`;
+                return { success: false, error: err };
             }
 
             return await this.executeResendSend(recipientEmail, eventName, template);
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             logger.error({ error: errorMessage, eventName }, "[ResendAdapter] Falha de exceção ao disparar e-mail");
-            return false;
+            return { success: false, error: errorMessage };
         }
     }
 
     /**
      * Resolução resiliente do e-mail de destino com suporte a override em DEV
      */
-    private async resolveRecipient(ctx: Record<string, unknown>, opts?: Record<string, unknown>): Promise<string | null> {
+    private async resolveRecipient(ctx: Record<string, unknown>, opts?: NotificationOptions): Promise<string | null> {
         const overrideEmail = process.env.RESEND_OVERRIDE_EMAIL;
         if (overrideEmail && overrideEmail.trim().includes("@")) {
             return overrideEmail.trim();
@@ -96,8 +99,8 @@ export class ResendAdapter implements NotificationProviderPort {
     /**
      * Disparo real via Resend API
      */
-    private async executeResendSend(to: string, eventName: string, template: ResendTemplatePayload): Promise<boolean> {
-        if (!this.resendClient) return false;
+    private async executeResendSend(to: string, eventName: string, template: ResendTemplatePayload): Promise<NotificationSendResult> {
+        if (!this.resendClient) return { success: false, error: "[ResendAdapter] Cliente Resend não inicializado" };
 
         const response = await this.resendClient.emails.send({
             from: this.fromEmail,
@@ -108,13 +111,14 @@ export class ResendAdapter implements NotificationProviderPort {
         });
 
         if (response.error) {
+            const errStr = response.error.message || JSON.stringify(response.error);
             logger.error({
                 error: response.error,
                 from: this.fromEmail,
                 to,
                 eventName
             }, "[ResendAdapter] Erro ao enviar e-mail via Resend API");
-            return false;
+            return { success: false, error: `Resend API Error: ${errStr}` };
         }
 
         logger.info({
@@ -123,6 +127,6 @@ export class ResendAdapter implements NotificationProviderPort {
             to,
             eventName
         }, "[ResendAdapter] E-mail enviado com sucesso via Resend");
-        return true;
+        return { success: true };
     }
 }

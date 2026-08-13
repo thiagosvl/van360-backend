@@ -1,4 +1,4 @@
-import { NotificationProviderPort } from "../../ports/notification-provider.port.js";
+import { NotificationProviderPort, NotificationSendResult } from "../../ports/notification-provider.port.js";
 import { addToTelegramQueue } from "../../../../queues/telegram.queue.js";
 import { TelegramMapper } from "./telegram.mapper.js";
 import { env } from "../../../../config/env.js";
@@ -10,11 +10,17 @@ export class TelegramAdapter implements NotificationProviderPort {
         return "TELEGRAM_HTTP";
     }
 
-    async send(eventName: string, contextData: Record<string, unknown>, options?: NotificationOptions): Promise<boolean> {
-        if (!process.env.TELEGRAM_BOT_TOKEN) {return false;}
+    async send(eventName: string, contextData: Record<string, unknown>, options?: NotificationOptions): Promise<NotificationSendResult> {
+        if (!process.env.TELEGRAM_BOT_TOKEN) {
+            const err = "[TelegramAdapter] TELEGRAM_BOT_TOKEN não configurado no .env";
+            return { success: false, error: err };
+        }
         
         const parts = TelegramMapper.getTemplate(eventName, contextData);
-        if (!parts || parts.length === 0) return false;
+        if (!parts || parts.length === 0) {
+            const err = `[TelegramAdapter] Template não encontrado para o evento '${eventName}'`;
+            return { success: false, error: err };
+        }
 
         // Concatena as partes de texto para o Telegram
         let fullMessage = parts
@@ -22,7 +28,9 @@ export class TelegramAdapter implements NotificationProviderPort {
             .map(p => p.content)
             .join("\n\n");
 
-        if (!fullMessage) return false;
+        if (!fullMessage) {
+            return { success: false, error: "[TelegramAdapter] Conteúdo da mensagem está vazio" };
+        }
 
         if (env.NODE_ENV !== 'production') {
             fullMessage = `[DEV]\n${fullMessage}`;
@@ -33,11 +41,11 @@ export class TelegramAdapter implements NotificationProviderPort {
                 message: fullMessage,
                 context: (options?.metadata?.eventType as string) || ""
             }, options?.jobId);
-            return true;
+            return { success: true };
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             logger.error({ error: errorMessage, eventName }, "[TelegramAdapter] Erro ao enfileirar mensagem do Telegram");
-            return false;
+            return { success: false, error: errorMessage };
         }
     }
 }
