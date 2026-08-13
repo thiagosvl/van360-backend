@@ -14,14 +14,12 @@ export class WabaWebhookController {
         const token = query["hub.verify_token"];
         const challenge = query["hub.challenge"];
 
-        const expectedToken = env.WABA_WEBHOOK_VERIFY_TOKEN;
-
-        if (mode === "subscribe" && token && expectedToken && token === expectedToken) {
+        if (mode === "subscribe" && token === env.WABA_WEBHOOK_VERIFY_TOKEN) {
             logger.info("[WabaWebhookController] Webhook da Meta verificado com sucesso!");
-            return reply.status(200).type("text/plain").send(challenge);
+            return reply.status(200).type("text/plain").send(challenge || "");
         }
 
-        logger.warn({ mode, tokenMatch: token === expectedToken }, "[WabaWebhookController] Falha na verificação do Webhook da Meta (Token inválido)");
+        logger.warn({ mode, receivedToken: token }, "[WabaWebhookController] Falha na verificação do Webhook da Meta (Token inválido)");
         return reply.status(403).send("Forbidden");
     }
 
