@@ -12,15 +12,25 @@ function loadServiceAccount(): admin.ServiceAccount | null {
     try {
       return JSON.parse(envCredentials) as admin.ServiceAccount;
     } catch {
-      const decoded = Buffer.from(envCredentials, 'base64').toString('utf-8');
-      return JSON.parse(decoded) as admin.ServiceAccount;
+      try {
+        const decoded = Buffer.from(envCredentials, 'base64').toString('utf-8');
+        return JSON.parse(decoded) as admin.ServiceAccount;
+      } catch {
+        if (logger) logger.warn('FIREBASE_SERVICE_ACCOUNT informada e invalida. Notificacoes push desativadas.');
+        return null;
+      }
     }
   }
 
   const serviceAccountPath = path.resolve(process.cwd(), 'firebase-service-account.json');
   if (fs.existsSync(serviceAccountPath)) {
-    const fileContent = fs.readFileSync(serviceAccountPath, 'utf-8');
-    return JSON.parse(fileContent) as admin.ServiceAccount;
+    try {
+      const fileContent = fs.readFileSync(serviceAccountPath, 'utf-8');
+      return JSON.parse(fileContent) as admin.ServiceAccount;
+    } catch {
+      if (logger) logger.warn('firebase-service-account.json invalido. Notificacoes push desativadas.');
+      return null;
+    }
   }
 
   return null;
