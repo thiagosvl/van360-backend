@@ -82,6 +82,42 @@ export enum WabaTemplateNameEnum {
   MOTORISTA_FALHA_CARTAO = "van360_motorista_falha_cartao",
 }
 
+export enum WabaComponentTypeEnum {
+  HEADER = "header",
+  BODY = "body",
+  BUTTON = "button"
+}
+
+export enum WabaButtonSubTypeEnum {
+  URL = "url",
+  QUICK_REPLY = "quick_reply",
+  PAYMENT = "payment",
+  PAYMENT_REQUEST = "payment_request",
+  COPY_CODE = "copy_code"
+}
+
+export enum WabaParameterTypeEnum {
+  TEXT = "text",
+  CURRENCY = "currency",
+  DATE_TIME = "date_time",
+  DOCUMENT = "document",
+  IMAGE = "image",
+  ACTION = "action"
+}
+
+export enum WabaPaymentTypeEnum {
+  PIX_DYNAMIC_CODE = "pix_dynamic_code",
+  PIX_STATIC_CODE = "pix_static_code"
+}
+
+export enum WabaPixKeyTypeEnum {
+  CPF = "CPF",
+  CNPJ = "CNPJ",
+  EMAIL = "EMAIL",
+  PHONE = "PHONE",
+  EVP = "EVP"
+}
+
 export enum EvolutionConnectionStatus {
   // Estados Legados/Gerais
   CONNECTED = "CONNECTED",
