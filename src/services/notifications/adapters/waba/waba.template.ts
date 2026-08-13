@@ -37,33 +37,13 @@ export class WabaTemplates {
         if (!rawPixKey || !rawPixKey.trim()) return null;
 
         const pixStr = rawPixKey.trim();
-        const isDynamic = pixStr.startsWith("000201");
 
-        let paymentSetting: Record<string, unknown>;
-
-        if (isDynamic) {
-            paymentSetting = {
-                type: WabaPaymentTypeEnum.PIX_DYNAMIC_CODE,
-                pix_dynamic_code: {
-                    code: pixStr
-                }
-            };
-        } else {
-            const rawType = String(ctx.tipoChavePix || WabaPixKeyTypeEnum.CPF).toUpperCase();
-            let keyType: WabaPixKeyTypeEnum = WabaPixKeyTypeEnum.CPF;
-            if (rawType === WabaPixKeyTypeEnum.CNPJ) keyType = WabaPixKeyTypeEnum.CNPJ;
-            else if (rawType === "EMAIL" || rawType === "E-MAIL") keyType = WabaPixKeyTypeEnum.EMAIL;
-            else if (rawType === "TELEFONE" || rawType === "PHONE") keyType = WabaPixKeyTypeEnum.PHONE;
-            else if (rawType === "EVP" || rawType === "RANDOM" || rawType === "ALEATORIA") keyType = WabaPixKeyTypeEnum.EVP;
-
-            paymentSetting = {
-                type: WabaPaymentTypeEnum.PIX_STATIC_CODE,
-                pix_static_code: {
-                    key: pixStr,
-                    key_type: keyType
-                }
-            };
-        }
+        const paymentSetting: Record<string, unknown> = {
+            type: WabaPaymentTypeEnum.PIX_DYNAMIC_CODE,
+            pix_dynamic_code: {
+                code: pixStr
+            }
+        };
 
         return {
             type: WabaComponentTypeEnum.BUTTON,
