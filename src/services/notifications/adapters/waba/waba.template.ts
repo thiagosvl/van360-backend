@@ -39,11 +39,11 @@ export class WabaTemplates {
         const pixStr = rawPixKey.trim();
         const isDynamic = pixStr.startsWith("000201");
 
-        let actionPayload: Record<string, unknown>;
+        let paymentSetting: Record<string, unknown>;
 
         if (isDynamic) {
-            actionPayload = {
-                payment_type: WabaPaymentTypeEnum.PIX_DYNAMIC_CODE,
+            paymentSetting = {
+                type: WabaPaymentTypeEnum.PIX_DYNAMIC_CODE,
                 pix_dynamic_code: {
                     code: pixStr
                 }
@@ -56,8 +56,8 @@ export class WabaTemplates {
             else if (rawType === "TELEFONE" || rawType === "PHONE") keyType = WabaPixKeyTypeEnum.PHONE;
             else if (rawType === "EVP" || rawType === "RANDOM" || rawType === "ALEATORIA") keyType = WabaPixKeyTypeEnum.EVP;
 
-            actionPayload = {
-                payment_type: WabaPaymentTypeEnum.PIX_STATIC_CODE,
+            paymentSetting = {
+                type: WabaPaymentTypeEnum.PIX_STATIC_CODE,
                 pix_static_code: {
                     key: pixStr,
                     key_type: keyType
@@ -67,12 +67,16 @@ export class WabaTemplates {
 
         return {
             type: WabaComponentTypeEnum.BUTTON,
-            sub_type: WabaButtonSubTypeEnum.PAYMENT,
+            sub_type: WabaButtonSubTypeEnum.PAYMENT_REQUEST,
             index: "0",
             parameters: [
                 {
                     type: WabaParameterTypeEnum.ACTION,
-                    action: actionPayload
+                    action: {
+                        payment_request: {
+                            payment_setting: paymentSetting
+                        }
+                    }
                 }
             ]
         };
