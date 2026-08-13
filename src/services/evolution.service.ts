@@ -32,6 +32,12 @@ export class EvolutionService {
         } catch (error) {
             const err = error as AxiosError;
 
+            // Se o container da Evolution API estiver desligado/desativado (502 ou ECONNREFUSED)
+            const isOffline = err.code === 'ECONNREFUSED' || err.response?.status === 502 || err.code === 'ENOTFOUND';
+            if (isOffline) {
+                return { state: EvolutionConnectionStatus.NOT_FOUND };
+            }
+
             try {
                 const fallbackUrl = `${EVO_URL}/instance/fetchInstances?instanceName=${instanceName}`;
                 const { data } = await axios.get(fallbackUrl, { headers: EVO_HEADERS });
@@ -46,14 +52,14 @@ export class EvolutionService {
                 }
             } catch (fallbackErr) {
                 const errFallback = fallbackErr as AxiosError;
-                logger.warn({ err: errFallback.message, instanceName }, "[EvolutionService] Fallback status falhou");
+                logger.debug({ err: errFallback.message, instanceName }, "[EvolutionService] Fallback status falhou (API offline ou inacessível)");
             }
 
             if (err.response?.status === 404) {
                 return { state: EvolutionConnectionStatus.NOT_FOUND };
             }
 
-            logger.error({ err: err.message, instanceName }, "[EvolutionService] Erro ao consultar status");
+            logger.debug({ err: err.message, instanceName }, "[EvolutionService] Status da instância não disponível");
             return { state: EvolutionConnectionStatus.UNKNOWN };
         }
     }

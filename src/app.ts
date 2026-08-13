@@ -30,6 +30,41 @@ export async function createApp(): Promise<FastifyInstance> {
       bodyLimit: 10485760, // 10MB para permitir uploads de imagens de capa maiores
     }) as FastifyInstance;
 
+    // --- CORS PLUGIN (Registrado em primeiro lugar para responder preflights de imediato) ---
+    const envOrigins = process.env.ALLOWED_ORIGINS
+      ? process.env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim())
+      : [];
+
+    const defaultOrigins = [
+      "http://localhost:8080",
+      "https://localhost",
+      "capacitor://localhost",
+      "http://localhost",
+      "https://app.van360.com.br",
+      "https://van360.com.br",
+      "https://www.van360.com.br"
+    ];
+    
+    const allowedOrigins = Array.from(new Set([...envOrigins, ...defaultOrigins, env.FRONTEND_URL].filter(Boolean)));
+
+    await app.register(fastifyCors, {
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+
+        if (allowedOrigins.includes(origin) || origin.endsWith(".van360.com.br") || origin === "https://van360.com.br") {
+          callback(null, true);
+        } else {
+          if (process.env.NODE_ENV === "production") {
+            callback(null, false);
+          } else {
+            callback(null, true);
+          }
+        }
+      },
+      credentials: true,
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    });
+
     app.addHook("onResponse", (request, reply, done) => {
       if (request.method === "OPTIONS") return done();
       request.log.info(`${request.method} ${request.url} - ${reply.statusCode}`);
@@ -71,44 +106,6 @@ export async function createApp(): Promise<FastifyInstance> {
         error: "Too Many Requests",
         message: `Limite de requisições excedido. Por favor, aguarde ${Math.ceil(context.ttl / 1000)} segundos.`
       })
-    });
-
-    // Configuração de CORS
-    const envOrigins = process.env.ALLOWED_ORIGINS
-      ? process.env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim())
-      : [];
-
-    const defaultOrigins = [
-      "http://localhost:8080",
-      "https://localhost", // Android Capacitor fallback
-      "capacitor://localhost", // iOS Capacitor fallback
-      "http://localhost" // Web/General
-    ];
-    
-    // Merge unique origins
-    const allowedOrigins = Array.from(new Set([...envOrigins, ...defaultOrigins, env.FRONTEND_URL]));
-
-    await app.register(fastifyCors, {
-      origin: (origin, callback) => {
-        // Permitir requisições sem origin (mobile apps, Postman, etc)
-        if (!origin) return callback(null, true);
-
-        // Verificar se a origin está na lista de permitidas
-        if (allowedOrigins.includes(origin)) {
-          callback(null, true);
-        } else {
-          // Em produção, rejeitar origens não permitidas
-          if (process.env.NODE_ENV === "production") {
-            callback(new Error("Not allowed by CORS"), false);
-          } else {
-            // Em desenvolvimento, permitir qualquer origem
-            callback(null, true);
-          }
-        }
-      },
-      credentials: true,
-      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization"],
     });
 
     // Parser para application/x-www-form-urlencoded (usado pela EfiPay no webhook de cartão)
