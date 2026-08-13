@@ -64,10 +64,12 @@ export const contractWorker = new Worker<ContractJobData>(
                         }),
                         apelidoMotorista: dadosContrato.apelidoCondutor,
                         linkAssinatura,
-                        email: (passageiro as Record<string, unknown>).email_responsavel as string | undefined,
-                        usuarioId: usuarioId
+                        email: (passageiro as Record<string, unknown>).email_responsavel as string | undefined
                     },
-                    { channels: [NotificationChannelEnum.WABA, NotificationChannelEnum.RESEND, NotificationChannelEnum.FIREBASE], usuarioId: usuarioId, email: (passageiro as Record<string, unknown>).email_responsavel as string | undefined }
+                    {
+                        channels: [NotificationChannelEnum.WABA, NotificationChannelEnum.RESEND],
+                        email: (passageiro as Record<string, unknown>).email_responsavel as string | undefined
+                    }
                 );
 
                 logger.info({ jobId: job.id, phone: passageiro.telefone_responsavel }, "[Worker] Notificação de contrato processada via NotificationService.");
