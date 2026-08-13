@@ -73,35 +73,32 @@ export async function createApp(): Promise<FastifyInstance> {
       })
     });
 
-    // Configuração de CORS
     const envOrigins = process.env.ALLOWED_ORIGINS
       ? process.env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim())
       : [];
 
     const defaultOrigins = [
       "http://localhost:8080",
-      "https://localhost", // Android Capacitor fallback
-      "capacitor://localhost", // iOS Capacitor fallback
-      "http://localhost" // Web/General
+      "https://localhost",
+      "capacitor://localhost",
+      "http://localhost",
+      "https://app.van360.com.br",
+      "https://van360.com.br",
+      "https://www.van360.com.br"
     ];
     
-    // Merge unique origins
-    const allowedOrigins = Array.from(new Set([...envOrigins, ...defaultOrigins, env.FRONTEND_URL]));
+    const allowedOrigins = Array.from(new Set([...envOrigins, ...defaultOrigins, env.FRONTEND_URL].filter(Boolean)));
 
     await app.register(fastifyCors, {
       origin: (origin, callback) => {
-        // Permitir requisições sem origin (mobile apps, Postman, etc)
         if (!origin) return callback(null, true);
 
-        // Verificar se a origin está na lista de permitidas
         if (allowedOrigins.includes(origin)) {
           callback(null, true);
         } else {
-          // Em produção, rejeitar origens não permitidas
           if (process.env.NODE_ENV === "production") {
-            callback(new Error("Not allowed by CORS"), false);
+            callback(null, false);
           } else {
-            // Em desenvolvimento, permitir qualquer origem
             callback(null, true);
           }
         }
