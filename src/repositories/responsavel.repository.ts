@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { TipoResponsavel, RouteSentido } from "../types/enums.js";
 import { AppError } from "../errors/AppError.js";
+import { toPersistenceString, getNowBR } from "../utils/date.utils.js";
 
 export interface ResponsavelPassageiroRecord {
   id: string; // passageiro_id
@@ -184,11 +185,13 @@ export const responsavelRepository = {
       .order("ano", { ascending: false })
       .order("mes", { ascending: false });
 
+    const todayStr = toPersistenceString(getNowBR());
     const { data: ausencias } = await supabaseAdmin
       .from("rota_ausencias")
       .select("id, rota_id, data_ausencia, sentido, created_at, rota:rotas(id, nome)")
       .eq("passageiro_id", passageiroId)
-      .order("data_ausencia", { ascending: false });
+      .gte("data_ausencia", todayStr)
+      .order("data_ausencia", { ascending: true });
 
     const ausenciasMapeadas = (ausencias || []).map((a: any) => {
       const r = Array.isArray(a.rota) ? a.rota[0] : a.rota;

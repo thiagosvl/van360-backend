@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { RouteExecutionStatus, RouteStopStatus } from "../types/enums.js";
 import { isValidFilterValue } from "../utils/filter.utils.js";
+import { toPersistenceString, getNowBR } from "../utils/date.utils.js";
 
 export const routeRepository = {
   async insert(usuarioId: string, nome: string, veiculoId: string | null) {
@@ -502,6 +503,7 @@ export const routeRepository = {
   },
 
   async getAusenciasByPassageiro(passageiroId: string) {
+    const todayStr = toPersistenceString(getNowBR());
     return supabaseAdmin
       .from("rota_ausencias")
       .select(`
@@ -516,7 +518,8 @@ export const routeRepository = {
         )
       `)
       .eq("passageiro_id", passageiroId)
-      .order("data_ausencia", { ascending: false });
+      .gte("data_ausencia", todayStr)
+      .order("data_ausencia", { ascending: true });
   },
 
   async getRotasByPassageiro(passageiroId: string) {
