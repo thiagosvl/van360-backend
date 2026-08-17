@@ -1,4 +1,5 @@
 import { Resvg } from "@resvg/resvg-js";
+import { TipoResponsavel } from "../types/enums.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -248,6 +249,11 @@ class ReceiptService {
 
             const motoristaInfo = (cobranca as Record<string, any>).motorista;
             const passageiroInfo = cobranca.passageiro as Record<string, any> | undefined;
+            const respLink = Array.isArray(passageiroInfo?.responsaveis) ? (passageiroInfo.responsaveis.find((r: any) => r.tipo === TipoResponsavel.PRINCIPAL) || passageiroInfo.responsaveis[0]) : null;
+            const rawRespObj = passageiroInfo?.responsavel_principal || (respLink ? (Array.isArray(respLink.responsavel) ? respLink.responsavel[0] : respLink.responsavel) : null);
+            const respObj = Array.isArray(rawRespObj) ? rawRespObj[0] : rawRespObj;
+            const respNome = respObj?.nome || "";
+            const respCpf = respObj?.cpf || "";
 
             const receiptData: ReceiptData = {
                 id: cobranca.id,
@@ -255,11 +261,11 @@ class ReceiptService {
                 subtitulo: getDriverDisplayName(motoristaInfo) || "Transporte Escolar",
                 valor: cobranca.valor_pago || cobranca.valor,
                 data: cobranca.data_pagamento ? formatToBrazilianDate(cobranca.data_pagamento) : formatToBrazilianDate(getNowBR()),
-                pagadorNome: passageiroInfo?.nome_responsavel || passageiroInfo?.nome,
+                pagadorNome: respNome,
                 passageiroNome: passageiroInfo?.nome,
                 mes: cobranca.mes,
                 ano: cobranca.ano,
-                pagadorDocumento: passageiroInfo?.cpf_responsavel,
+                pagadorDocumento: respCpf,
                 descricao: cobranca.mes ? "Parcela" : "Cobrança Avulsa",
                 metodoPagamento: cobranca.tipo_pagamento,
                 tipo: 'PASSAGEIRO'

@@ -1,9 +1,10 @@
 import axios from "axios";
 import { passageiroRepository } from "../repositories/passageiro.repository.js";
+import { responsavelRepository, cleanupOrphanedResponsaveis } from "../repositories/responsavel.repository.js";
 import { prePassageiroRepository } from "../repositories/pre-passageiro.repository.js";
 import { AppError } from "../errors/AppError.js";
 import { CreatePassageiroDTO, ListPassageirosFiltersDTO, UpdatePassageiroDTO, CreateResponsavelAdicionalDTO, UpdateResponsavelAdicionalDTO } from "../types/dtos/passageiro.dto.js";
-import { AtividadeAcao, AtividadeEntidadeTipo, ParentescoResponsavel } from "../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, ParentescoResponsavel, TipoResponsavel } from "../types/enums.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
@@ -43,6 +44,69 @@ const geocodeAddress = async (enderecoParts: { logradouro?: string, numero?: str
     }
 };
 
+const _enrichPassageiroWithResponsavel = (p: Record<string, any>, isListMode: boolean = false) => {
+    if (!p) return p;
+    const links = (p.responsaveis as any[]) || [];
+    const principalLink = links.find((l: any) => l.tipo === TipoResponsavel.PRINCIPAL) || links[0];
+    const rawResp = principalLink?.responsavel;
+    const resp = Array.isArray(rawResp) ? rawResp[0] : rawResp;
+    
+    const enriched: Record<string, any> = {
+        ...p,
+        responsavel_principal: principalLink && resp ? {
+            id: resp.id,
+            nome: resp.nome || null,
+            telefone: resp.telefone || null,
+            cpf: resp.cpf || null,
+            email: resp.email || null,
+            parentesco: principalLink.parentesco || null,
+            logradouro: resp.logradouro || null,
+            numero: resp.numero || null,
+            bairro: resp.bairro || null,
+            cidade: resp.cidade || null,
+            estado: resp.estado || null,
+            cep: resp.cep || null,
+            referencia: resp.referencia || null,
+            complemento: resp.complemento || null
+        } : null
+    };
+
+    if (!isListMode) {
+        const sortedLinks = [...links].sort((a: any, b: any) => {
+            if (a.tipo === TipoResponsavel.PRINCIPAL) return -1;
+            if (b.tipo === TipoResponsavel.PRINCIPAL) return 1;
+            return 0;
+        });
+        enriched.responsaveis = sortedLinks.map((l: any) => {
+            const rawLResp = l.responsavel;
+            const lResp = Array.isArray(rawLResp) ? rawLResp[0] : rawLResp;
+            return {
+                id: lResp?.id || l.id,
+                passageiro_id: p.id,
+                nome: lResp?.nome || null,
+                telefone: lResp?.telefone || null,
+                cpf: lResp?.cpf || null,
+                email: lResp?.email || null,
+                parentesco: l.parentesco || null,
+                tipo: l.tipo,
+                created_at: l.created_at,
+                logradouro: lResp?.logradouro || null,
+                numero: lResp?.numero || null,
+                bairro: lResp?.bairro || null,
+                cidade: lResp?.cidade || null,
+                estado: lResp?.estado || null,
+                cep: lResp?.cep || null,
+                referencia: lResp?.referencia || null,
+                complemento: lResp?.complemento || null
+            };
+        });
+    } else {
+        delete enriched.responsaveis;
+    }
+
+    return enriched;
+};
+
 const _preparePassageiroData = (data: Partial<CreatePassageiroDTO>, usuarioId?: string, isUpdate: boolean = false): Record<string, unknown> => {
     const prepared: Record<string, unknown> = {};
 
@@ -57,26 +121,7 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO>, usuarioId?: 
     if (data.escola_id !== undefined) prepared.escola_id = (data.escola_id === "none" || data.escola_id === "") ? null : data.escola_id;
     if (data.veiculo_id !== undefined) prepared.veiculo_id = (data.veiculo_id === "none" || data.veiculo_id === "") ? null : data.veiculo_id;
 
-    // Campos Opcionais
-    if (data.nome_responsavel !== undefined) prepared.nome_responsavel = data.nome_responsavel ? cleanString(data.nome_responsavel, true) : null;
-    if (data.cpf_responsavel !== undefined) prepared.cpf_responsavel = data.cpf_responsavel ? onlyDigits(data.cpf_responsavel) : null;
-    if (data.telefone_responsavel !== undefined) prepared.telefone_responsavel = data.telefone_responsavel ? onlyDigits(data.telefone_responsavel) : null;
-    if (data.email_responsavel !== undefined) prepared.email_responsavel = data.email_responsavel ? cleanString(data.email_responsavel.trim().toLowerCase()) : null;
-
-
-    // Endereço (Algumas chaves podem vir no passthrough)
-    const flexData = data as Record<string, any>;
-    if (data.logradouro !== undefined) prepared.logradouro = data.logradouro ? cleanString(data.logradouro, true) : null;
-    if (flexData.numero !== undefined) prepared.numero = flexData.numero ? cleanString(flexData.numero, true) : null;
-    if (data.bairro !== undefined) prepared.bairro = data.bairro ? cleanString(data.bairro, true) : null;
-    if (data.cidade !== undefined) prepared.cidade = data.cidade ? cleanString(data.cidade, true) : null;
-    if (flexData.estado !== undefined) prepared.estado = flexData.estado ? cleanString(flexData.estado, true) : null;
-    if (flexData.cep !== undefined) prepared.cep = flexData.cep ? onlyDigits(flexData.cep) : null;
-    if (data.referencia !== undefined) prepared.referencia = data.referencia ? cleanString(data.referencia, true) : null;
-    if (data.complemento !== undefined) prepared.complemento = data.complemento ? cleanString(data.complemento, true) : null;
     if (data.observacoes !== undefined) prepared.observacoes = data.observacoes ? cleanString(data.observacoes, true) : null;
-    if (data.latitude !== undefined) prepared.latitude = data.latitude !== null ? Number(data.latitude) : null;
-    if (data.longitude !== undefined) prepared.longitude = data.longitude !== null ? Number(data.longitude) : null;
 
     // Detalhes
     if (data.periodo !== undefined) prepared.periodo = data.periodo ? cleanString(data.periodo.toLocaleLowerCase()) : null;
@@ -96,7 +141,6 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO>, usuarioId?: 
     } else if (data.data_nascimento === null) {
         prepared.data_nascimento = null;
     }
-    if (data.parentesco_responsavel !== undefined) prepared.parentesco_responsavel = data.parentesco_responsavel;
     if (data.data_inicio_transporte !== undefined) prepared.data_inicio_transporte = data.data_inicio_transporte ? toPersistenceString(data.data_inicio_transporte) : null;
     if (data.data_fim_transporte !== undefined) prepared.data_fim_transporte = data.data_fim_transporte ? toPersistenceString(data.data_fim_transporte) : null;
     if (data.data_inicio_cobranca !== undefined) prepared.data_inicio_cobranca = data.data_inicio_cobranca ? toPersistenceString(data.data_inicio_cobranca) : null;
@@ -118,30 +162,73 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO>, usuarioId?: 
     return prepared;
 };
 
+const _syncResponsavelPrincipal = async (
+    passageiroId: string,
+    respData: Record<string, any>,
+    currentResp?: Record<string, any> | null
+) => {
+    const rawPhone = respData.telefone || currentResp?.telefone;
+    if (!rawPhone) return null;
+
+    const targetPhone = onlyDigits(String(rawPhone));
+    if (!targetPhone) return null;
+
+    const respObj = await passageiroRepository.upsertResponsavel({
+        telefone: targetPhone,
+        nome: cleanString(respData.nome || currentResp?.nome || "Responsável", true),
+        cpf: respData.cpf !== undefined ? (respData.cpf ? onlyDigits(String(respData.cpf)) : null) : (currentResp?.cpf || null),
+        email: respData.email !== undefined ? (respData.email ? cleanString(String(respData.email).trim().toLowerCase()) : null) : (currentResp?.email || null),
+        logradouro: respData.logradouro !== undefined ? (respData.logradouro ? cleanString(String(respData.logradouro), true) : null) : (currentResp?.logradouro || null),
+        numero: respData.numero !== undefined ? (respData.numero ? String(respData.numero) : null) : (currentResp?.numero || null),
+        bairro: respData.bairro !== undefined ? (respData.bairro ? cleanString(String(respData.bairro), true) : null) : (currentResp?.bairro || null),
+        cidade: respData.cidade !== undefined ? (respData.cidade ? cleanString(String(respData.cidade), true) : null) : (currentResp?.cidade || null),
+        estado: respData.estado !== undefined ? (respData.estado ? String(respData.estado).toUpperCase() : null) : (currentResp?.estado || null),
+        cep: respData.cep !== undefined ? (respData.cep ? onlyDigits(String(respData.cep)) : null) : (currentResp?.cep || null),
+        referencia: respData.referencia !== undefined ? (respData.referencia ? cleanString(String(respData.referencia), true) : null) : (currentResp?.referencia || null),
+        complemento: respData.complemento !== undefined ? (respData.complemento ? cleanString(String(respData.complemento), true) : null) : (currentResp?.complemento || null),
+    });
+
+    const parentesco = respData.parentesco !== undefined ? respData.parentesco : (currentResp?.parentesco || null);
+
+    await passageiroRepository.linkPassageiroResponsavel(
+        passageiroId,
+        respObj.id,
+        TipoResponsavel.PRINCIPAL,
+        parentesco
+    );
+
+    return respObj;
+};
+
 const createPassageiro = async (data: CreatePassageiroDTO, isPreCadastro: boolean = false): Promise<any> => {
     if (!data.usuario_id) throw new Error("Usuário obrigatório");
     if (!data.nome) throw new Error("Nome do passageiro é obrigatório");
 
     const passageiroData = _preparePassageiroData(data, data.usuario_id, false);
 
-    const flexData = data as Record<string, any>;
-    const coords = await geocodeAddress({
-        logradouro: data.logradouro ? String(data.logradouro) : undefined,
-        numero: flexData.numero ? String(flexData.numero) : undefined,
-        cidade: data.cidade ? String(data.cidade) : undefined,
-        estado: flexData.estado ? String(flexData.estado) : undefined
-    });
+    if (data.responsavel_principal) {
+        const coords = await geocodeAddress({
+            logradouro: data.responsavel_principal.logradouro ? String(data.responsavel_principal.logradouro) : undefined,
+            numero: data.responsavel_principal.numero ? String(data.responsavel_principal.numero) : undefined,
+            cidade: data.responsavel_principal.cidade ? String(data.responsavel_principal.cidade) : undefined,
+            estado: data.responsavel_principal.estado ? String(data.responsavel_principal.estado) : undefined
+        });
 
-    if (coords) {
-        passageiroData.latitude = coords.lat;
-        passageiroData.longitude = coords.lon;
+        if (coords) {
+            passageiroData.latitude = coords.lat;
+            passageiroData.longitude = coords.lon;
+        }
     }
 
     const { data: inserted, error } = await passageiroRepository.insert(passageiroData);
 
     if (error) throw error;
 
-    // --- LOG DE AUDITORIA ---
+    const respPrincipalData = data.responsavel_principal;
+    if (respPrincipalData) {
+        await _syncResponsavelPrincipal(inserted.id, respPrincipalData);
+    }
+
     if (!isPreCadastro) {
         historicoService.log({
             usuario_id: inserted.usuario_id,
@@ -151,39 +238,40 @@ const createPassageiro = async (data: CreatePassageiroDTO, isPreCadastro: boolea
             descricao: `Novo passageiro ${inserted.nome} cadastrado.`,
             meta: {
                 nome: inserted.nome,
-                responsavel: inserted.nome_responsavel,
+                responsavel: respPrincipalData?.nome || null,
                 valor_cobranca: inserted.valor_cobranca
             }
         });
     }
 
-    return inserted;
+    const fullPassageiro = await passageiroRepository.getByIdCompleto(inserted.id);
+    return _enrichPassageiroWithResponsavel(fullPassageiro);
 };
 
 const updatePassageiro = async (id: string, data: UpdatePassageiroDTO, targetOwnerId?: string, assignedVeiculoId?: string): Promise<any> => {
     if (!id) throw new Error("ID do passageiro é obrigatório");
 
-    // 1. Buscar estado ATUAL (antes do update) para comparações
     const estadoAnterior = await getPassageiro(id, targetOwnerId, assignedVeiculoId);
     if (!estadoAnterior) throw new AppError("Passageiro não encontrado", 404);
 
     const passageiroData = _preparePassageiroData(data, undefined, true);
 
-    const flexDataUpdate = data as Record<string, any>;
-    const flexAnterior = estadoAnterior as Record<string, any>;
+    const targetAddr = data.responsavel_principal;
+    const prevAddr = estadoAnterior.responsavel_principal;
 
-    const addressChanged =
-        (data.logradouro !== undefined && data.logradouro !== estadoAnterior.logradouro) ||
-        (flexDataUpdate.numero !== undefined && flexDataUpdate.numero !== flexAnterior.numero) ||
-        (data.cidade !== undefined && data.cidade !== estadoAnterior.cidade) ||
-        (flexDataUpdate.estado !== undefined && flexDataUpdate.estado !== flexAnterior.estado);
+    const addressChanged = targetAddr && (
+        (targetAddr.logradouro !== undefined && targetAddr.logradouro !== prevAddr?.logradouro) ||
+        (targetAddr.numero !== undefined && targetAddr.numero !== prevAddr?.numero) ||
+        (targetAddr.cidade !== undefined && targetAddr.cidade !== prevAddr?.cidade) ||
+        (targetAddr.estado !== undefined && targetAddr.estado !== prevAddr?.estado)
+    );
 
-    if (addressChanged) {
+    if (addressChanged && targetAddr) {
         const coords = await geocodeAddress({
-            logradouro: data.logradouro !== undefined ? (data.logradouro ? String(data.logradouro) : undefined) : (estadoAnterior.logradouro ? String(estadoAnterior.logradouro) : undefined),
-            numero: flexDataUpdate.numero !== undefined ? (flexDataUpdate.numero ? String(flexDataUpdate.numero) : undefined) : (flexAnterior.numero ? String(flexAnterior.numero) : undefined),
-            cidade: data.cidade !== undefined ? (data.cidade ? String(data.cidade) : undefined) : (estadoAnterior.cidade ? String(estadoAnterior.cidade) : undefined),
-            estado: flexDataUpdate.estado !== undefined ? (flexDataUpdate.estado ? String(flexDataUpdate.estado) : undefined) : (flexAnterior.estado ? String(flexAnterior.estado) : undefined)
+            logradouro: targetAddr.logradouro || prevAddr?.logradouro || undefined,
+            numero: targetAddr.numero || prevAddr?.numero || undefined,
+            cidade: targetAddr.cidade || prevAddr?.cidade || undefined,
+            estado: targetAddr.estado || prevAddr?.estado || undefined,
         });
 
         if (coords) {
@@ -196,47 +284,12 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO, targetOwn
 
     if (error) throw error;
 
-    // 2. Lógica de Substituição de Contrato
-    // Helper simples para valor do DTO
-    const getValorNumerico = (v: any) => typeof v === 'string' ? moneyToNumber(v) : v;
-    const flexData = data as Record<string, any>;
+    if (data.responsavel_principal) {
+        await _syncResponsavelPrincipal(id, data.responsavel_principal, estadoAnterior.responsavel_principal);
+    }
 
-    const houveMudancaContratual =
-        (data.valor_cobranca !== undefined && Math.abs(getValorNumerico(data.valor_cobranca) - Number(estadoAnterior.valor_cobranca)) > 0.01) ||
-        (data.dia_vencimento !== undefined && Number(data.dia_vencimento) !== Number(estadoAnterior.dia_vencimento)) ||
-        (data.nome ? cleanString(data.nome, true) !== estadoAnterior.nome : false) ||
-        (data.nome_responsavel ? cleanString(data.nome_responsavel, true) !== estadoAnterior.nome_responsavel : false) ||
-        (data.parentesco_responsavel !== undefined && data.parentesco_responsavel !== estadoAnterior.parentesco_responsavel) ||
-        (data.cpf_responsavel !== undefined && data.cpf_responsavel !== estadoAnterior.cpf_responsavel) ||
-        (data.escola_id !== undefined && data.escola_id !== estadoAnterior.escola_id) ||
-        (data.periodo !== undefined && data.periodo !== estadoAnterior.periodo) ||
-        (data.modalidade !== undefined && data.modalidade !== estadoAnterior.modalidade) ||
-        (data.turma !== undefined && cleanString(data.turma || '', true) !== cleanString(estadoAnterior.turma || '', true)) ||
-        (data.data_inicio_transporte !== undefined && data.data_inicio_transporte !== estadoAnterior.data_inicio_transporte) ||
-        (data.data_fim_transporte !== undefined && data.data_fim_transporte !== estadoAnterior.data_fim_transporte) ||
-        (data.data_inicio_cobranca !== undefined && data.data_inicio_cobranca !== estadoAnterior.data_inicio_cobranca) ||
-        (data.data_fim_cobranca !== undefined && data.data_fim_cobranca !== estadoAnterior.data_fim_cobranca) ||
-        (data.logradouro !== undefined && data.logradouro !== estadoAnterior.logradouro) ||
-        (flexData.numero !== undefined && flexData.numero !== estadoAnterior.numero) ||
-        (data.bairro !== undefined && data.bairro !== estadoAnterior.bairro) ||
-        (data.cidade !== undefined && data.cidade !== estadoAnterior.cidade) ||
-        (flexData.estado !== undefined && flexData.estado !== estadoAnterior.estado) ||
-        (flexData.cep !== undefined && flexData.cep !== estadoAnterior.cep);
-
-    // 2. LOG DE AUDITORIA (Qualquer edição)
-    historicoService.log({
-        usuario_id: updated.usuario_id,
-        entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
-        entidade_id: id,
-        acao: AtividadeAcao.PASSAGEIRO_EDITADO,
-        descricao: `Cadastro de ${updated.nome} atualizado.`,
-        meta: {
-            houve_mudanca_contratual: houveMudancaContratual,
-            campos_enviados: Object.keys(data)
-        }
-    });
-
-    return updated;
+    const fullPassageiro = await passageiroRepository.getByIdCompleto(id);
+    return _enrichPassageiroWithResponsavel(fullPassageiro);
 };
 
 const deletePassageiro = async (id: string, targetOwnerId?: string, assignedVeiculoId?: string): Promise<void> => {
@@ -245,10 +298,17 @@ const deletePassageiro = async (id: string, targetOwnerId?: string, assignedVeic
     const passageiro = await getPassageiro(id, targetOwnerId, assignedVeiculoId);
 
     if (passageiro?.id) {
+        const responsavelIds: string[] = (passageiro.responsaveis || [])
+            .map((r: Record<string, unknown>) => r.id as string)
+            .filter(Boolean);
+
         const { error } = await passageiroRepository.delete(id);
         if (error) throw error;
 
-        // --- LOG DE AUDITORIA ---
+        if (responsavelIds.length > 0) {
+            await cleanupOrphanedResponsaveis(responsavelIds);
+        }
+
         historicoService.log({
             usuario_id: passageiro.usuario_id,
             entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
@@ -276,13 +336,15 @@ const getPassageiro = async (id: string, targetOwnerId?: string, assignedVeiculo
         throw new AppError("Acesso negado para este veículo", 403);
     }
 
+    const enriched = _enrichPassageiroWithResponsavel(data);
+
     const ultimoContrato = data.contratos?.[0];
     const statusContrato = ultimoContrato ? ultimoContrato.status : null;
     const contratoId = ultimoContrato ? ultimoContrato.id : null;
     const contratoUrl = ultimoContrato ? (ultimoContrato.contrato_final_url || ultimoContrato.minuta_url) : null;
 
     return {
-        ...data,
+        ...enriched,
         status_contrato: statusContrato,
         contrato_id: contratoId,
         contrato_url: contratoUrl,
@@ -295,38 +357,42 @@ const getPassageiro = async (id: string, targetOwnerId?: string, assignedVeiculo
 const listPassageiros = async (
     usuarioId: string,
     filtros?: ListPassageirosFiltersDTO
-): Promise<any[]> => {
+): Promise<{ list: any[]; total: number; page?: number; limit?: number; totalPages?: number }> => {
     if (!usuarioId) throw new Error("Usuário obrigatório");
 
-    const { data, error } = await passageiroRepository.list(usuarioId, filtros);
+    const { data, count, error } = await passageiroRepository.list(usuarioId, filtros);
     if (error) throw error;
 
-    // Map contract status to flat properties
-    const passageiros = (data || []).map((p: Record<string, any>) => {
-        // Find latest contract if multiple returned (though simpler to just take array logic if supabase returns array)
-        if (p.contratos && p.contratos.length > 0) {
-            // Sort just in case supabase didn't (though we can't easily sort in foreign table select without specific query)
-            // Ideally we should use a view or a separate query, but for now let's sort in JS
-            const contratosOnPassageiro = p.contratos.sort((a: Record<string, any>, b: Record<string, any>) =>
-                parseLocalDate(b.created_at).getTime() - parseLocalDate(a.created_at).getTime()
-            );
-            const ultimo = contratosOnPassageiro[0];
-            return {
-                ...p,
-                status_contrato: ultimo.status,
-                contrato_id: ultimo.id,
-                contrato_status: ultimo.status,
-                contrato_url: ultimo.contrato_final_url || ultimo.minuta_url,
-                minuta_url: ultimo.minuta_url,
-                contrato_final_url: ultimo.contrato_final_url,
-                token_acesso: ultimo.token_acesso,
-                contratos: undefined
-            };
-        }
-        return p;
+    const listData = data || [];
+    const total = count !== null && count !== undefined ? count : listData.length;
+
+    const passageiros = listData.map((p: Record<string, any>) => {
+        const enriched = _enrichPassageiroWithResponsavel(p, true);
+        const ultimo = p.contratos?.[0];
+        const enrichedClean = { ...enriched };
+        delete enrichedClean.contratos;
+
+        return {
+            ...enrichedClean,
+            status_contrato: ultimo?.status ?? null,
+            contrato_id: ultimo?.id ?? null,
+            contrato_status: ultimo?.status ?? null,
+            token_acesso: ultimo?.token_acesso ?? null,
+        };
     });
 
-    return passageiros;
+    const isPaginated = Boolean((filtros?.page && filtros.page > 0) || (filtros?.limit && filtros.limit > 0));
+    const page = isPaginated ? (filtros?.page && filtros.page > 0 ? Number(filtros.page) : 1) : undefined;
+    const limit = isPaginated ? (filtros?.limit && filtros.limit > 0 ? Number(filtros.limit) : 50) : undefined;
+    const totalPages = limit ? Math.ceil(total / limit) : undefined;
+
+    return {
+        list: passageiros,
+        total,
+        page,
+        limit,
+        totalPages
+    };
 };
 
 const toggleAtivo = async (passageiroId: string, novoStatus: boolean, targetOwnerId?: string, assignedVeiculoId?: string): Promise<boolean> => {
@@ -372,11 +438,28 @@ const finalizePreCadastro = async (
 
     if (error || !pre) throw new AppError("Pré-cadastro não encontrado.", 404);
 
+    const responsavelPrincipal = data.responsavel_principal || {
+        nome: pre.nome_responsavel || "",
+        telefone: pre.telefone_responsavel || "",
+        cpf: pre.cpf_responsavel || null,
+        email: pre.email_responsavel || null,
+        parentesco: pre.parentesco_responsavel || null,
+        logradouro: pre.logradouro || null,
+        numero: pre.numero || null,
+        bairro: pre.bairro || null,
+        cidade: pre.cidade || null,
+        estado: pre.estado || null,
+        cep: pre.cep || null,
+        referencia: pre.referencia || null,
+        complemento: pre.complemento || null,
+    };
+
     // 2. Mesclar dados (Data sobrescreve Pre)
     const payload: CreatePassageiroDTO = {
         ...pre,
         ...data,
         usuario_id: usuarioId,
+        responsavel_principal: responsavelPrincipal,
         // Garantir que valor_cobranca e dia_vencimento do pre sejam mantidos se não vierem no data
         valor_cobranca: data.valor_cobranca !== undefined ? data.valor_cobranca : pre.valor_cobranca,
         dia_vencimento: data.dia_vencimento !== undefined ? data.dia_vencimento : pre.dia_vencimento,
@@ -409,13 +492,13 @@ const finalizePreCadastro = async (
     return novoPassageiro;
 }
 
-const lookupResponsavelByCpf = async (usuarioId: string, cpf: string): Promise<any> => {
+const lookupResponsavelByCpf = async (usuarioId: string, searchVal: string): Promise<any> => {
     if (!usuarioId) throw new AppError("Usuário não identificado", 401);
-    if (!cpf) throw new AppError("CPF obrigatório", 400);
+    if (!searchVal) throw new AppError("Termo de busca obrigatório", 400);
 
-    const cpfClean = onlyDigits(cpf);
+    const termClean = onlyDigits(searchVal);
 
-    const { data, error } = await passageiroRepository.lookupResponsavel(usuarioId, cpfClean);
+    const { data, error } = await passageiroRepository.lookupResponsavel(usuarioId, termClean);
 
     if (error) {
         throw new AppError("Erro ao buscar responsável.", 500);
@@ -492,97 +575,49 @@ const listarAniversariantesDoMes = async (usuarioId: string, mes: number, veicul
 };
 
 const addResponsavelAdicional = async (passageiroId: string, data: CreateResponsavelAdicionalDTO) => {
-    const { data: inserted, error } = await passageiroRepository.insertResponsavelAdicional({
-        passageiro_id: passageiroId,
+    return responsavelRepository.addResponsavelAdicional(passageiroId, {
         nome: cleanString(data.nome, true),
         telefone: onlyDigits(data.telefone),
-        cpf: onlyDigits(data.cpf),
+        cpf: data.cpf ? onlyDigits(data.cpf) : null,
+        email: data.email ? cleanString(data.email.trim().toLowerCase()) : null,
         parentesco: data.parentesco,
         logradouro: data.logradouro ? cleanString(data.logradouro, true) : null,
-        numero: data.numero ? cleanString(data.numero, true) : null,
+        numero: data.numero ? String(data.numero) : null,
         bairro: data.bairro ? cleanString(data.bairro, true) : null,
         cidade: data.cidade ? cleanString(data.cidade, true) : null,
-        estado: data.estado ? cleanString(data.estado, true) : null,
+        estado: data.estado ? String(data.estado).toUpperCase() : null,
         cep: data.cep ? onlyDigits(data.cep) : null,
         referencia: data.referencia ? cleanString(data.referencia, true) : null,
         complemento: data.complemento ? cleanString(data.complemento, true) : null,
     });
-
-    if (error) throw error;
-    return inserted;
 };
 
-const updateResponsavelAdicional = async (responsavelId: string, data: UpdateResponsavelAdicionalDTO) => {
-    const prepared: Record<string, any> = {};
+const updateResponsavelAdicional = async (responsavelId: string, data: UpdateResponsavelAdicionalDTO, passageiroId?: string) => {
+    const prepared: Record<string, unknown> = {};
     if (data.nome !== undefined) prepared.nome = data.nome ? cleanString(data.nome, true) : null;
     if (data.telefone !== undefined) prepared.telefone = data.telefone ? onlyDigits(data.telefone) : null;
     if (data.cpf !== undefined) prepared.cpf = data.cpf ? onlyDigits(data.cpf) : null;
+    if (data.email !== undefined) prepared.email = data.email ? cleanString(data.email.trim().toLowerCase()) : null;
     if (data.parentesco !== undefined) prepared.parentesco = data.parentesco;
     if (data.logradouro !== undefined) prepared.logradouro = data.logradouro ? cleanString(data.logradouro, true) : null;
-    if (data.numero !== undefined) prepared.numero = data.numero ? cleanString(data.numero, true) : null;
+    if (data.numero !== undefined) prepared.numero = data.numero ? String(data.numero) : null;
     if (data.bairro !== undefined) prepared.bairro = data.bairro ? cleanString(data.bairro, true) : null;
     if (data.cidade !== undefined) prepared.cidade = data.cidade ? cleanString(data.cidade, true) : null;
-    if (data.estado !== undefined) prepared.estado = data.estado ? cleanString(data.estado, true) : null;
+    if (data.estado !== undefined) prepared.estado = data.estado ? String(data.estado).toUpperCase() : null;
     if (data.cep !== undefined) prepared.cep = data.cep ? onlyDigits(data.cep) : null;
     if (data.referencia !== undefined) prepared.referencia = data.referencia ? cleanString(data.referencia, true) : null;
     if (data.complemento !== undefined) prepared.complemento = data.complemento ? cleanString(data.complemento, true) : null;
 
-    const { data: updated, error } = await passageiroRepository.updateResponsavelAdicional(responsavelId, prepared);
-
-    if (error) throw error;
-    return updated;
+    return responsavelRepository.updateResponsavelAdicional(responsavelId, prepared, passageiroId);
 };
 
 const deleteResponsavelAdicional = async (responsavelId: string) => {
-    const { error } = await passageiroRepository.deleteResponsavelAdicional(responsavelId);
-
-    if (error) throw error;
+    await responsavelRepository.deleteResponsavelAdicional(responsavelId);
     return { success: true };
 };
 
 const setPrincipalResponsavel = async (passageiroId: string, responsavelId: string) => {
-    const { data: passageiro, error: passErr } = await passageiroRepository.getById(passageiroId);
-
-    if (passErr || !passageiro) throw passErr || new Error("Passageiro não encontrado");
-
-    const { data: adicional, error: adErr } = await passageiroRepository.getResponsavelAdicionalById(responsavelId);
-
-    if (adErr || !adicional) throw adErr || new Error("Responsável adicional não encontrado");
-
-    const { error: updAdError } = await passageiroRepository.updateResponsavelAdicional(responsavelId, {
-        nome: passageiro.nome_responsavel,
-        telefone: passageiro.telefone_responsavel,
-        cpf: passageiro.cpf_responsavel || adicional.cpf,
-        parentesco: passageiro.parentesco_responsavel || ParentescoResponsavel.OUTRO,
-        logradouro: passageiro.logradouro,
-        numero: passageiro.numero,
-        bairro: passageiro.bairro,
-        cidade: passageiro.cidade,
-        estado: passageiro.estado,
-        cep: passageiro.cep,
-        referencia: passageiro.referencia,
-        complemento: passageiro.complemento,
-    });
-
-    if (updAdError) throw updAdError;
-
-    const { error: updPassError } = await passageiroRepository.update(passageiroId, {
-        nome_responsavel: adicional.nome,
-        telefone_responsavel: adicional.telefone,
-        cpf_responsavel: adicional.cpf,
-        parentesco_responsavel: adicional.parentesco,
-        logradouro: adicional.logradouro,
-        numero: adicional.numero,
-        bairro: adicional.bairro,
-        cidade: adicional.cidade,
-        estado: adicional.estado,
-        cep: adicional.cep,
-        referencia: adicional.referencia,
-        complemento: adicional.complemento,
-    });
-
-    if (updPassError) throw updPassError;
-
+    await responsavelRepository.setPrincipalResponsavel(passageiroId, responsavelId);
     return { success: true };
 };
 

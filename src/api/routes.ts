@@ -21,7 +21,7 @@ import veiculoRoutes from "./veiculo.routes.js";
 
 import configuracoesRoutes from "./configuracoes.routes.js";
 import motoristaEquipeRoutes from "./motorista-equipe.routes.js";
-import { responsavelPublicRoutes } from "./responsavel.routes.js";
+import { portalResponsavelPublicRoutes } from "./portal-responsavel.routes.js";
 import { checkSubscriptionAccess } from "../middleware/subscription.js";
 import { WebhookController } from "./webhook.controller.js";
 import notificationRoutes from "./notification.routes.js";
@@ -38,7 +38,7 @@ const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.register(configuracoesRoutes, { prefix: "/api" });
   app.register(appRoutes, { prefix: "/api/app" });
   app.register(publicRoutes, { prefix: "/api/public" });
-  app.register(responsavelPublicRoutes, { prefix: "/api/public/responsavel" });
+  app.register(portalResponsavelPublicRoutes, { prefix: "/api/public/portal-responsavel" });
   app.register(usuarioRoute, { prefix: "/api/usuarios" });
   app.register(motoristaEquipeRoutes, { prefix: "/api/motoristas-equipe" });
 

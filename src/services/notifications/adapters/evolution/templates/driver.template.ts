@@ -176,7 +176,7 @@ export const DriverTemplates = {
 
 
     teamMemberCreated: (ctx: DriverContext): CompositeMessagePart[] => {
-        const appUrl = env.FRONTEND_URL || "https://app.van360.com.br";
+        const appUrl = env.FRONTEND_URL;
         const loginStr = ctx.cpfLogin ? formatCpfCnpj(ctx.cpfLogin) : "";
         return textPart(
             `🚐 *Acesso Van360*\n\n` +

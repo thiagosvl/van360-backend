@@ -91,7 +91,7 @@ export class WabaAdapter implements NotificationProviderPort {
     }
 
     private async resolveRecipientPhone(ctx: Record<string, unknown>, opts?: NotificationOptions): Promise<string | null> {
-        const directPhone = (ctx.to || ctx.telefone || ctx.telefone_responsavel || (opts?.metadata?.telefone as string)) as string | undefined;
+        const directPhone = (ctx.to || ctx.telefone || (opts?.metadata?.telefone as string)) as string | undefined;
         if (directPhone && String(directPhone).replace(/\D/g, "").length >= 8) {
             return String(directPhone);
         }

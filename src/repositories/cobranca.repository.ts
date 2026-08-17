@@ -3,6 +3,14 @@ import { CobrancaStatus, STATUS_ASSINATURA_LIBERADA } from "../types/enums.js";
 import { getLastDayOfMonth } from "../utils/date.utils.js";
 import { isValidFilterValue } from "../utils/filter.utils.js";
 
+const COBRANCA_PASSAGEIRO_SELECT = `
+    nome, enviar_notificacoes,
+    responsaveis:passageiro_responsaveis(
+        tipo, parentesco,
+        responsavel:responsaveis(id, nome, telefone, cpf, email)
+    )
+`;
+
 export const cobrancaRepository = {
     async countByPassageiro(passageiroId: string) {
         return supabaseAdmin
@@ -35,7 +43,10 @@ export const cobrancaRepository = {
     async getById(id: string, usuarioId?: string) {
         let query = supabaseAdmin
             .from("cobrancas")
-            .select("*, passageiro:passageiros(*, escola:escolas(nome), veiculo:veiculos(placa))")
+            .select(`
+                *,
+                passageiro:passageiros (${COBRANCA_PASSAGEIRO_SELECT})
+            `)
             .eq("id", id);
 
         if (isValidFilterValue(usuarioId)) {
@@ -63,7 +74,7 @@ export const cobrancaRepository = {
             .from("cobrancas")
             .select(`
                 *,
-                passageiro:passageiros (nome, nome_responsavel, cpf_responsavel, telefone_responsavel),
+                passageiro:passageiros (${COBRANCA_PASSAGEIRO_SELECT}),
                 motorista:usuarios (nome, apelido, razao_social, cpfcnpj)
             `)
             .eq("id", id);
@@ -78,7 +89,7 @@ export const cobrancaRepository = {
     async listWithFilters(filtros: { usuarioId?: string; veiculoId?: string; passageiroId?: string; status?: string; dataInicio?: string; dataFim?: string; mes?: number | string; ano?: number | string; search?: string }) {
         let query = supabaseAdmin
             .from("cobrancas")
-            .select("*, passageiro:passageiros!inner(nome, nome_responsavel, telefone_responsavel)")
+            .select(`*, passageiro:passageiros!inner(${COBRANCA_PASSAGEIRO_SELECT})`)
             .order("data_vencimento", { ascending: false });
 
         if (isValidFilterValue(filtros.usuarioId)) query = query.eq("usuario_id", filtros.usuarioId);
@@ -98,7 +109,7 @@ export const cobrancaRepository = {
         }
 
         if (isValidFilterValue(filtros.search)) {
-            query = query.or(`nome.ilike.%${filtros.search}%,nome_responsavel.ilike.%${filtros.search}%`, { foreignTable: 'passageiro' });
+            query = query.or(`nome.ilike.%${filtros.search}%`, { foreignTable: 'passageiro' });
         }
 
         return query;
@@ -107,7 +118,7 @@ export const cobrancaRepository = {
     async listByPassageiro(passageiroId: string, ano?: string) {
         let query = supabaseAdmin
             .from("cobrancas")
-            .select("*, passageiro:passageiros!inner(nome, nome_responsavel, telefone_responsavel)")
+            .select(`*, passageiro:passageiros!inner(${COBRANCA_PASSAGEIRO_SELECT})`)
             .eq("passageiro_id", passageiroId)
             .order("data_vencimento", { ascending: false });
 
@@ -150,7 +161,7 @@ export const cobrancaRepository = {
             .from("cobrancas")
             .select(`
                 *,
-                passageiro:passageiros(nome, nome_responsavel, telefone_responsavel, enviar_notificacoes),
+                passageiro:passageiros(${COBRANCA_PASSAGEIRO_SELECT}),
                 motorista:usuarios!cobrancas_usuario_id_fkey!inner(
                     nome, apelido, telefone, chave_pix, tipo_chave_pix,
                     assinaturas!inner(status),
@@ -223,7 +234,7 @@ export const cobrancaRepository = {
             .from("cobrancas")
             .select(`
                 *,
-                passageiro:passageiros(nome, nome_responsavel, telefone_responsavel)
+                passageiro:passageiros(${COBRANCA_PASSAGEIRO_SELECT})
             `)
             .eq("usuario_id", usuarioId)
             .eq("status", CobrancaStatus.PENDENTE)

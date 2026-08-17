@@ -212,7 +212,7 @@ export class FirebaseDriverTemplates {
     static referralRegistered(ctx: Record<string, unknown>): FirebaseMessagePayload {
         return {
             title: "Novo Indicado! 🤝",
-            body: "Seu amigo se cadastrou pelo seu link! Acompanhe o status.",
+            body: "Seu amigo se cadastrou pelo seu link!",
             data: {
                 action: PushNotificationAction.OPEN_SUBSCRIPTION,
                 userId: (ctx.usuarioId || ctx.userId || "") as string
@@ -268,6 +268,46 @@ export class FirebaseDriverTemplates {
                 action: PushNotificationAction.OPEN_PASSENGER_REQUESTS,
                 targetUrl: requestsUrl,
                 passageiroId: (ctx.passageiroId || ctx.id || "") as string
+            }
+        };
+    }
+
+    /**
+     * Notificação Push enviada ao motorista quando um responsável informa uma ausência
+     */
+    static absenceRegisteredByParent(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        const studentName = (ctx.nomePassageiro || ctx.nomeAluno || "O aluno") as string;
+        const routeName = (ctx.nomeRota || ctx.rota || "rota") as string;
+        const formattedDate = (ctx.dataFormatada || ctx.data || "") as string;
+
+        return {
+            title: "Notificação de Ausência 🚫",
+            body: `O responsável informou que ${studentName} estará ausente na ${routeName} no dia ${formattedDate}.`,
+            data: {
+                action: PushNotificationAction.OPEN_ROUTE,
+                passageiroId: (ctx.passageiroId || "") as string,
+                rotaId: (ctx.rotaId || "") as string,
+                dataAusencia: (ctx.dataAusencia || "") as string
+            }
+        };
+    }
+
+    /**
+     * Notificação Push enviada ao motorista quando um responsável cancela/remove uma ausência agendada
+     */
+    static absenceRemovedByParent(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        const studentName = (ctx.nomePassageiro || ctx.nomeAluno || "O aluno") as string;
+        const routeName = (ctx.nomeRota || ctx.rota || "rota") as string;
+        const formattedDate = (ctx.dataFormatada || ctx.data || "") as string;
+
+        return {
+            title: "Ausência Cancelada! 🚌",
+            body: `O responsável cancelou a ausência de ${studentName} na ${routeName} do dia ${formattedDate}.`,
+            data: {
+                action: PushNotificationAction.OPEN_ROUTE,
+                passageiroId: (ctx.passageiroId || "") as string,
+                rotaId: (ctx.rotaId || "") as string,
+                dataAusencia: (ctx.dataAusencia || "") as string
             }
         };
     }

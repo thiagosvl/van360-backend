@@ -9,7 +9,8 @@ import {
   updateRouteSchema,
   stepRouteExecutionSchema,
   reorderExecucaoSchema,
-  createAusenciaSchema
+  createAusenciaSchema,
+  chamadaEscolaSchema
 } from "../types/dtos/route.dto.js";
 
 export const routeController = {
@@ -93,14 +94,17 @@ export const routeController = {
 
   iniciarRota: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
-    logger.info({ routeId: id }, "RouteController.iniciarRota - Starting");
+    const body = (request.body || {}) as { notificar_pais?: boolean; notificarPais?: boolean };
+    const notificarPais = body.notificar_pais !== undefined ? body.notificar_pais : (body.notificarPais !== undefined ? body.notificarPais : true);
+
+    logger.info({ routeId: id, notificarPais }, "RouteController.iniciarRota - Starting");
 
     const authUid = request.user?.id;
     if (!authUid) {
       throw new AppError("Não autorizado", 401);
     }
 
-    const result = await routeService.iniciarRota(id, authUid);
+    const result = await routeService.iniciarRota(id, authUid, notificarPais);
     return reply.status(201).send(result);
   },
 
@@ -116,6 +120,17 @@ export const routeController = {
     const result = await routeService.atualizarParadaStatus(id, parada_id, status);
     const duration = Date.now() - startTime;
     logger.info({ execucaoId: id, parada_id, durationMs: duration }, "RouteController.atualizarParadaStatus - Completed");
+    return reply.status(200).send(result);
+  },
+
+  processarChamadaEscola: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const data = chamadaEscolaSchema.parse(request.body);
+    const startTime = Date.now();
+    logger.info({ execucaoId: id, totalAlunos: data.chamada.length }, "RouteController.processarChamadaEscola - Starting");
+    const result = await routeService.processarChamadaEscola(id, data);
+    const duration = Date.now() - startTime;
+    logger.info({ execucaoId: id, durationMs: duration }, "RouteController.processarChamadaEscola - Completed");
     return reply.status(200).send(result);
   },
 

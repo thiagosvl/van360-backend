@@ -21,7 +21,8 @@ import {
     EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1,
     EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2,
     EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_1,
-    EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_FINAL
+    EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_FINAL,
+    EVENTO_MOTORISTA_INDICACAO_BONUS
 } from "../../../../config/constants.js";
 import {
     ResendPassengerTemplates,
@@ -99,6 +100,9 @@ export class ResendMapper {
                 case EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_1:
                 case EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_FINAL:
                     return await ResendDriverTemplates.trialRecovery(contextData);
+
+                case EVENTO_MOTORISTA_INDICACAO_BONUS:
+                    return ResendDriverTemplates.referralBonus(contextData);
 
                 default:
                     logger.warn({ eventName }, "[ResendMapper] Template não encontrado para o evento.");

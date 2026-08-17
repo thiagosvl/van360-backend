@@ -57,4 +57,14 @@ export const createAusenciaSchema = z.object({
   sentido: z.nativeEnum(RouteSentido).optional().nullable()
 });
 
+export const chamadaEscolaSchema = z.object({
+  escola_parada_id: z.string().uuid().optional().nullable(),
+  chamada: z.array(
+    z.object({
+      parada_id: z.string().uuid(),
+      status: z.nativeEnum(RouteStopStatus)
+    })
+  )
+});
+
 export const DELETE_AUSENCIA_BY_QUERY_PARAM = "by-query";

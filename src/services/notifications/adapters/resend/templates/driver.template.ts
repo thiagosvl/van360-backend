@@ -310,4 +310,32 @@ export class ResendDriverTemplates {
         const html = EmailComponents.layout({ subject, preheader, contentHtml });
         return { subject, html, text };
     }
+
+    /**
+     * 12. Bônus de Indicação Concluída
+     */
+    static referralBonus(ctx: ResendTemplateContext): ResendTemplatePayload {
+        const nome = NotificationContextFormatter.getFirstName(ctx.nomeMotorista || ctx.nome, "Motorista");
+        const bonusDays = (ctx.trialDays || 30) as number;
+
+        const subject = formatSubject("Você ganhou 1 mês grátis no Van360! 🎁");
+        const preheader = `Seu indicado concluiu a assinatura do Van360. Adicionamos +${bonusDays} dias de acesso gratuito na sua conta.`;
+        const text = `Olá, ${nome}!\n\nÓtimas notícias! O motorista que você indicou concluiu a assinatura do Van360.\n\nComo recompensa por indicar a nossa plataforma, adicionamos +${bonusDays} dias de acesso gratuito à sua conta!\n\nObrigado por ajudar a comunidade do Van360 a crescer.\n\nAtenciosamente,\nEquipe Van360`;
+
+        const contentHtml = `
+            ${EmailComponents.greeting(nome)}
+            ${EmailComponents.paragraph("Ótimas notícias! O motorista que você indicou concluiu a assinatura do <strong>Van360</strong>.")}
+            ${EmailComponents.paragraph(`Como recompensa pela sua indicação, adicionamos <strong>+${bonusDays} dias de acesso gratuito</strong> à sua conta!`)}
+            
+            <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 18px 20px; margin: 24px 0;">
+                <div style="font-size: 15px; font-weight: 700; color: #166534; margin-bottom: 4px;">🎉 Bônus Aplicado com Sucesso</div>
+                <div style="font-size: 13.5px; color: #15803d; line-height: 1.45;">Seu prazo de vencimento foi automaticamente estendido. Continue aproveitando todas as ferramentas do Van360 sem custos adicionais neste período.</div>
+            </div>
+
+            ${EmailComponents.paragraph("Obrigado por confiar no Van360 e fazer a nossa comunidade de transporte escolar crescer!")}
+        `;
+
+        const html = EmailComponents.layout({ subject, preheader, contentHtml });
+        return { subject, html, text };
+    }
 }

@@ -4,6 +4,7 @@ import { usuarioPushTokenRepository } from "../../../../repositories/usuario-pus
 import { NotificationProviderPort, NotificationSendResult } from "../../ports/notification-provider.port.js";
 import { FirebaseMapper } from "./firebase.mapper.js";
 import { env } from "../../../../config/env.js";
+import { onlyDigits } from "../../../../utils/string.utils.js";
 
 import { NotificationOptions } from "../../notification.service.js";
 
@@ -11,19 +12,31 @@ export class FirebasePushAdapter implements NotificationProviderPort {
     async send(eventName: string, contextData: Record<string, unknown>, options?: NotificationOptions): Promise<NotificationSendResult> {
         try {
             const to = (contextData.to as string) || "";
-            const usuarioId = (contextData.usuarioId as string) || options?.usuarioId;
+            const isPassengerEvent = eventName.startsWith("PASSAGEIRO_") || eventName.startsWith("ROTA_");
 
-            let targetUserId = usuarioId;
+            let targetUserId: string | undefined = undefined;
 
-            const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(to);
-            if (!targetUserId && isUUID) {
-                targetUserId = to;
-            } else if (!targetUserId && to) {
-                const user = await usuarioPushTokenRepository.findUsuarioByTelefone(to);
-                if (user) {
-                    targetUserId = user.id;
+            if (isPassengerEvent && to) {
+                const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(to);
+                if (isUUID) {
+                    targetUserId = to;
+                } else {
+                    const user = await usuarioPushTokenRepository.findUsuarioByTelefoneOrEmail(to);
+                    targetUserId = user ? user.id : onlyDigits(to);
+                }
+            } else {
+                targetUserId = (contextData.usuarioId as string) || options?.usuarioId;
+                if (!targetUserId && to) {
+                    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(to);
+                    if (isUUID) {
+                        targetUserId = to;
+                    } else {
+                        const user = await usuarioPushTokenRepository.findUsuarioByTelefoneOrEmail(to);
+                        targetUserId = user ? user.id : onlyDigits(to);
+                    }
                 }
             }
+
 
             if (!targetUserId) {
                 const err = "[FirebasePushAdapter] Não foi possível resolver o usuario_id para enviar o push.";

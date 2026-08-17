@@ -27,7 +27,9 @@ export const listEscolasFiltersSchema = z.object({
   cidade: z.string().optional(),
   estado: z.string().optional(),
   ativo: z.string().optional(), // 'true' | 'false' query param
-  includeId: z.string().optional()
+  includeId: z.string().optional(),
+  comContagem: z.string().optional(),
+  slim: z.string().optional(),
 });
 
 export type ListEscolasFiltersDTO = z.infer<typeof listEscolasFiltersSchema>;

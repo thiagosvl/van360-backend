@@ -42,42 +42,24 @@ export const escolaRepository = {
     },
 
     async list(usuarioId: string, filtros?: ListEscolasFiltersDTO) {
+        const isComContagem = filtros?.comContagem === "true";
+        const isSlim = filtros?.slim === "true";
+
+        const selectStr = isSlim
+            ? "id, usuario_id, nome, ativo"
+            : isComContagem
+            ? "*, passageiros(count)"
+            : "*";
+
         let query = supabaseAdmin
             .from("escolas")
-            .select("*")
+            .select(selectStr)
             .eq("usuario_id", usuarioId)
             .order("nome", { ascending: true });
 
-        if (isValidFilterValue(filtros?.search)) {
-            query = query.or(
-                `nome.ilike.%${filtros.search}%,cidade.ilike.%${filtros.search}%,estado.ilike.%${filtros.search}%`
-            );
+        if (isComContagem) {
+            query = query.eq("passageiros.ativo", true);
         }
-
-        if (isValidFilterValue(filtros?.nome)) query = query.eq("nome", filtros.nome);
-        if (isValidFilterValue(filtros?.cidade)) query = query.eq("cidade", filtros.cidade);
-        if (isValidFilterValue(filtros?.estado)) query = query.eq("estado", filtros.estado);
-
-        const hasValidIncludeId = isValidFilterValue(filtros?.includeId);
-        const hasValidAtivo = isValidFilterValue(filtros?.ativo);
-        if (hasValidAtivo && hasValidIncludeId) {
-            query = query.or(`ativo.eq.${filtros?.ativo === "true"},id.eq.${filtros?.includeId}`);
-        } else if (hasValidAtivo) {
-            query = query.eq("ativo", filtros?.ativo === "true");
-        } else if (hasValidIncludeId) {
-            query = query.eq("id", filtros?.includeId);
-        }
-
-        return query;
-    },
-
-    async listComContagemAtivos(usuarioId: string, filtros?: ListEscolasFiltersDTO) {
-        let query = supabaseAdmin
-            .from("escolas")
-            .select(`*, passageiros(count)`)
-            .eq("usuario_id", usuarioId)
-            .eq("passageiros.ativo", true)
-            .order("nome", { ascending: true });
 
         if (isValidFilterValue(filtros?.search)) {
             query = query.or(

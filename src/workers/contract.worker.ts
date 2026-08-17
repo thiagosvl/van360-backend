@@ -5,8 +5,7 @@ import { logger } from '../config/logger.js';
 import { redisConfig } from '../config/redis.js';
 import { contractRepository } from '../repositories/contract.repository.js';
 import { ContractJobData, QUEUE_NAME_CONTRACT } from '../queues/contract.queue.js';
-import { historicoService } from '../services/historico.service.js';
-import { AtividadeAcao, AtividadeEntidadeTipo, ContratoProvider } from '../types/enums.js';
+import { ContratoProvider, TipoResponsavel } from '../types/enums.js';
 
 /**
  * Worker responsável por processar a geração de PDFs de contrato.
@@ -14,7 +13,7 @@ import { AtividadeAcao, AtividadeEntidadeTipo, ContratoProvider } from '../types
 export const contractWorker = new Worker<ContractJobData>(
     QUEUE_NAME_CONTRACT,
     async (job: Job<ContractJobData>) => {
-        const { contratoId, usuarioId, providerName, dadosContrato, passageiro, tokenAcesso } = job.data;
+        const { contratoId, providerName, dadosContrato, passageiro, tokenAcesso } = job.data;
 
         logger.info({ jobId: job.id, contratoId }, "[Worker] Iniciando processamento de contrato...");
 
@@ -40,14 +39,18 @@ export const contractWorker = new Worker<ContractJobData>(
             logger.info({ jobId: job.id, contratoId }, "[Worker] Contrato atualizado com minuta URL.");
 
             // 4. Notificar Responsável via NotificationService
-            const emailResponsavel = (passageiro as Record<string, unknown>).email_responsavel as string | undefined;
+            const respLink = Array.isArray(passageiro.responsaveis) ? (passageiro.responsaveis.find((r: any) => r.tipo === TipoResponsavel.PRINCIPAL) || passageiro.responsaveis[0]) : null;
+            const rawRespPrincipal = passageiro.responsavel_principal || (respLink ? (Array.isArray(respLink.responsavel) ? respLink.responsavel[0] : respLink.responsavel) : null);
+            const respPrincipal = Array.isArray(rawRespPrincipal) ? rawRespPrincipal[0] : rawRespPrincipal;
+            const emailResponsavel = respPrincipal?.email;
+            const telefoneResponsavel = respPrincipal?.telefone;
             const hasValidEmail = typeof emailResponsavel === "string" && emailResponsavel.includes("@");
             const channels: NotificationChannelEnum[] = [NotificationChannelEnum.WABA];
             if (hasValidEmail) {
                 channels.push(NotificationChannelEnum.RESEND);
             }
 
-            if (passageiro.telefone_responsavel || hasValidEmail) {
+            if (telefoneResponsavel || hasValidEmail) {
                 const linkAssinatura = providerName === ContratoProvider.INHOUSE
                     ? `${env.FRONTEND_URL}/assinar/${tokenAcesso}`
                     : response.providerSignatureLink;
@@ -57,10 +60,10 @@ export const contractWorker = new Worker<ContractJobData>(
                 const { getDriverDisplayName } = await import('../utils/format.js');
 
                 await notificationService.notifyPassenger(
-                    passageiro.telefone_responsavel || "",
+                    telefoneResponsavel || "",
                     EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL,
                     {
-                        nomeResponsavel: passageiro.nome_responsavel,
+                        nomeResponsavel: respPrincipal?.nome,
                         nomePassageiro: passageiro.nome,
                         nomeMotorista: getDriverDisplayName({
                             cpfcnpj: dadosContrato.cpfCnpjCondutor,
@@ -78,7 +81,7 @@ export const contractWorker = new Worker<ContractJobData>(
                     }
                 );
 
-                logger.info({ jobId: job.id, phone: passageiro.telefone_responsavel, hasValidEmail }, "[Worker] Notificação de contrato processada via NotificationService.");
+                logger.info({ jobId: job.id, phone: telefoneResponsavel, hasValidEmail }, "[Worker] Notificação de contrato processada via NotificationService.");
             }
 
             return { success: true, documentUrl: response.documentUrl };

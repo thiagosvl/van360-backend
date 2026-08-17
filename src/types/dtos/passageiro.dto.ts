@@ -10,34 +10,32 @@ const optionalString = z.union([z.string(), z.null(), z.undefined()]).transform(
 });
 const optionalNumber = z.union([z.number(), z.string().length(0).transform(() => undefined), z.string().min(1).transform(val => Number(val))]).optional();
 
+export const responsavelPrincipalInputSchema = z.object({
+  nome: z.string().min(1, "Nome do responsável é obrigatório"),
+  telefone: z.string().min(8, "Telefone do responsável é obrigatório"),
+  cpf: optionalString,
+  email: z.string().email().optional().or(z.literal("")).transform(v => v === "" ? undefined : v),
+  parentesco: z.union([z.nativeEnum(ParentescoResponsavel), z.string(), z.null(), z.undefined()]).optional().nullable(),
+  logradouro: optionalString,
+  numero: optionalString,
+  bairro: optionalString,
+  cidade: optionalString,
+  estado: optionalString,
+  cep: optionalString,
+  referencia: optionalString,
+  complemento: optionalString,
+});
+
 export const createPassageiroSchema = z.object({
   nome: z.string().min(1, "Nome é obrigatório"),
   usuario_id: z.string().uuid("ID do usuário inválido"),
   escola_id: z.string().uuid().optional().nullable().or(z.literal("")).transform(v => (v === "" || v === "none") ? null : v),
   veiculo_id: z.string().uuid().optional().nullable().or(z.literal("")).transform(v => (v === "" || v === "none") ? null : v),
-  // Campos do App antigo / Flexíveis
-  nome_responsavel: optionalString,
-  responsavel_nome: optionalString, // Alias comum
-  cpf_responsavel: optionalString,
-  responsavel_cpf: optionalString, // Alias comum
-  telefone_responsavel: optionalString,
-  responsavel_telefone: optionalString, // Alias comum
-  email_responsavel: z.string().email().optional().or(z.literal("")).transform(v => v === "" ? undefined : v),
+  responsavel_principal: responsavelPrincipalInputSchema.optional().nullable(),
 
 
-  // Endereço
-  logradouro: optionalString,
-  endereco_logradouro: optionalString,
-  bairro: optionalString,
-  endereco_bairro: optionalString,
-  cidade: optionalString,
-  endereco_cidade: optionalString,
-  cep: optionalString,
-  referencia: optionalString,
-  complemento: optionalString,
+  // Observações
   observacoes: optionalString,
-  latitude: z.union([z.number(), z.string().transform(v => v === "" ? undefined : Number(v))]).optional().nullable(),
-  longitude: z.union([z.number(), z.string().transform(v => v === "" ? undefined : Number(v))]).optional().nullable(),
 
   // Financeiro
   dia_vencimento: z.union([z.number(), z.string(), z.null(), z.undefined()]).transform(val => {
@@ -75,7 +73,6 @@ export const createPassageiroSchema = z.object({
     if (!v) return true;
     return v.getTime() <= getNowBR().getTime();
   }, { message: "Data de nascimento não pode ser no futuro" }),
-  parentesco_responsavel: optionalString,
   turma: optionalString,
   nome_professor: optionalString,
   data_inicio_transporte: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
@@ -113,6 +110,8 @@ export const listPassageirosFiltersSchema = z.object({
   status: z.string().optional(),
   periodo: z.string().optional(),
   ativo: z.string().optional(), // Query params vêm como string
+  page: z.union([z.number(), z.string().transform(v => Number(v))]).optional(),
+  limit: z.union([z.number(), z.string().transform(v => Number(v))]).optional(),
 });
 
 export type ListPassageirosFiltersDTO = z.infer<typeof listPassageirosFiltersSchema>;
@@ -138,16 +137,18 @@ export const getAniversariantesQuerySchema = z.object({
 export const createResponsavelAdicionalSchema = z.object({
   nome: z.string().min(2, "Nome é obrigatório"),
   telefone: z.string().min(8, "Telefone é obrigatório"),
-  cpf: z.string().min(11, "CPF inválido"),
+  cpf: optionalString,
+  email: optionalString,
   parentesco: z.nativeEnum(ParentescoResponsavel, { message: "Parentesco é obrigatório" }),
-  logradouro: z.string().min(1, "Logradouro é obrigatório"),
-  numero: z.string().min(1, "Número é obrigatório"),
-  bairro: z.string().min(1, "Bairro é obrigatório"),
-  cidade: z.string().min(1, "Cidade é obrigatório"),
-  estado: z.string().min(2, "Estado é obrigatório"),
-  cep: z.string().min(8, "CEP é obrigatório"),
+  logradouro: optionalString,
+  numero: optionalString,
+  bairro: optionalString,
+  cidade: optionalString,
+  estado: optionalString,
+  cep: optionalString,
   referencia: optionalString,
   complemento: optionalString,
+  passageiroId: optionalString,
 });
 
 export type CreateResponsavelAdicionalDTO = z.infer<typeof createResponsavelAdicionalSchema>;

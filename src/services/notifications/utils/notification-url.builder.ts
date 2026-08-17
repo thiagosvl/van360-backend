@@ -73,7 +73,7 @@ export class NotificationUrlBuilder {
     static getExternalCheckoutBridgeUrl(options?: { autoOpen?: boolean; token?: string }): string {
         const baseUrl = this.getBaseAppUrl();
         const autoOpen = options?.autoOpen ?? false;
-        
+
         if (autoOpen) {
             return `${baseUrl}/checkout-externo?auto_open=true`;
         }

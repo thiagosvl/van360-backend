@@ -6,7 +6,7 @@ import { AppError } from '../errors/AppError.js';
 import { addToContractQueue } from '../queues/contract.queue.js';
 import { ContractProvider, DadosContrato, SignatureMetadata } from '../types/contract.js';
 import { CreateContractDTO, ListContractsDTO } from '../types/dtos/contract.dto.js';
-import { AtividadeAcao, AtividadeEntidadeTipo, ContractMultaTipo, ContratoProvider, ContratoStatus, PassageiroModalidade, PeriodoEnum } from '../types/enums.js';
+import { AtividadeAcao, AtividadeEntidadeTipo, ContractMultaTipo, ContratoProvider, ContratoStatus, PassageiroModalidade, PeriodoEnum, TipoResponsavel } from '../types/enums.js';
 import { getNowBR, toLocalDateString, parseLocalDate, addMonths } from '../utils/date.utils.js';
 import { formatAddress, getDriverDisplayName } from '../utils/format.js';
 import { historicoService } from './historico.service.js';
@@ -18,6 +18,54 @@ import { formatarPlacaExibicao } from '../utils/placa.utils.js';
 import { contractRepository } from '../repositories/contract.repository.js';
 import { passageiroRepository } from '../repositories/passageiro.repository.js';
 import { userRepository } from '../repositories/user.repository.js';
+
+interface ResponsavelLinkJoin {
+  id?: string;
+  tipo?: string;
+  parentesco?: string | null;
+  responsavel?: {
+    id?: string;
+    nome?: string;
+    telefone?: string;
+    cpf?: string;
+    email?: string;
+  } | {
+    id?: string;
+    nome?: string;
+    telefone?: string;
+    cpf?: string;
+    email?: string;
+  }[];
+}
+
+interface PassageiroWithResponsaveis {
+  responsaveis?: ResponsavelLinkJoin[];
+  responsavel_principal?: {
+    id?: string;
+    nome?: string;
+    telefone?: string;
+    cpf?: string;
+    email?: string;
+    parentesco?: string;
+  };
+}
+
+const _getResponsavelInfoFromPassageiro = (p?: PassageiroWithResponsaveis | null) => {
+  if (!p) return { id: '', nome: '', telefone: '', cpf: '', email: '', parentesco: '' };
+  const respLink = Array.isArray(p.responsaveis)
+    ? (p.responsaveis.find((r) => r.tipo === TipoResponsavel.PRINCIPAL) || p.responsaveis[0])
+    : null;
+  const rawResp = p.responsavel_principal || (respLink ? (Array.isArray(respLink.responsavel) ? respLink.responsavel[0] : respLink.responsavel) : null);
+  const resp = Array.isArray(rawResp) ? rawResp[0] : rawResp;
+  return {
+    id: resp?.id || '',
+    nome: resp?.nome || '',
+    telefone: resp?.telefone || '',
+    cpf: resp?.cpf || '',
+    email: resp?.email || '',
+    parentesco: p.responsavel_principal?.parentesco || respLink?.parentesco || ''
+  };
+};
 
 class ContractService {
   private providers: Map<string, ContractProvider> = new Map();
@@ -61,16 +109,18 @@ class ContractService {
       throw new AppError('Passageiro não encontrado', 404);
     });
 
+    const respInfo = _getResponsavelInfoFromPassageiro(passageiro);
+
     // 3. Validações e Cálculos dinâmicos
-    const nomeRespNormalized = passageiro.nome_responsavel
-      ? passageiro.nome_responsavel.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    const nomeRespNormalized = respInfo.nome
+      ? respInfo.nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
       : "";
       
-    if (!passageiro.nome_responsavel || nomeRespNormalized.includes("responsavel nao info") || nomeRespNormalized.includes("responsavel teste")) {
+    if (!respInfo.nome || nomeRespNormalized.includes("responsavel nao info") || nomeRespNormalized.includes("responsavel teste")) {
       throw new AppError("O nome real do responsável é obrigatório para gerar o contrato. Edite o passageiro para continuar.", 400);
     }
 
-    if (!passageiro.cpf_responsavel) {
+    if (!respInfo.cpf) {
       throw new AppError("CPF do responsável é obrigatório para gerar o contrato", 400);
     }
 
@@ -103,11 +153,11 @@ class ContractService {
     // 4. Preparar dados do contrato
     const dadosContrato: DadosContrato = {
       nomePassageiro: passageiro.nome,
-      nomeResponsavel: passageiro.nome_responsavel,
-      cpfResponsavel: passageiro.cpf_responsavel,
-      telefoneResponsavel: passageiro.telefone_responsavel,
+      nomeResponsavel: respInfo.nome,
+      cpfResponsavel: respInfo.cpf,
+      telefoneResponsavel: respInfo.telefone,
 
-      parentescoResponsavel: passageiro.parentesco_responsavel,
+      parentescoResponsavel: respInfo.parentesco,
       enderecoCompleto: formatAddress(passageiro),
       nomeEscola: passageiro.escola?.nome || '',
       enderecoEscola: passageiro.escola ? formatAddress(passageiro.escola) : '',
@@ -175,8 +225,11 @@ class ContractService {
       passageiro: {
         id: passageiro.id,
         nome: passageiro.nome,
-        nome_responsavel: passageiro.nome_responsavel,
-        telefone_responsavel: passageiro.telefone_responsavel
+        responsavel_principal: {
+          nome: respInfo.nome,
+          telefone: respInfo.telefone,
+          email: respInfo.email
+        }
       },
       tokenAcesso
     }, `contract-generate-${contrato.id}`);
@@ -241,6 +294,7 @@ class ContractService {
 
     // 4. Notificações
     const { usuario, passageiro } = contrato;
+    const respInfo = _getResponsavelInfoFromPassageiro(passageiro);
 
     // --- LOG DE AUDITORIA ---
     historicoService.log({
@@ -252,20 +306,20 @@ class ContractService {
       meta: { contrato_id: contrato.id, documento_final: response.documentoFinalUrl }
     });
 
-    if (passageiro.telefone_responsavel || passageiro.email_responsavel) {
+    if (respInfo.telefone || respInfo.email) {
       notificationService.notifyPassenger(
-        passageiro.telefone_responsavel || "",
+        respInfo.telefone || "",
         EVENTO_PASSAGEIRO_CONTRATO_ASSINADO,
         {
-          nomeResponsavel: passageiro.nome_responsavel,
+          nomeResponsavel: respInfo.nome,
           nomePassageiro: passageiro.nome,
-          email: passageiro.email_responsavel,
+          email: respInfo.email,
           nomeMotorista: usuario.nome,
           apelidoMotorista: usuario.apelido,
           contratoUrl: response.documentoFinalUrl,
           usuarioId: usuario.id
         },
-        { channels: [NotificationChannelEnum.RESEND], email: passageiro.email_responsavel, usuarioId: usuario.id }
+        { channels: [NotificationChannelEnum.RESEND], email: respInfo.email, usuarioId: usuario.id }
       ).catch(err => logger.error({ err }, 'Erro ao notificar responsável sobre assinatura'));
     }
 
@@ -276,7 +330,7 @@ class ContractService {
         {
           nomeMotorista: usuario.nome,
           nomePassageiro: passageiro.nome,
-          nomeResponsavel: passageiro.nome_responsavel,
+          nomeResponsavel: respInfo.nome,
           contratoUrl: response.documentoFinalUrl,
           usuarioId: usuario.id
         },
@@ -311,7 +365,7 @@ class ContractService {
       let query = contractRepository.buildSemContratoQuery(usuarioId, idsIgnorar);
 
       if (search) {
-        query = query.or(`nome.ilike.%${search}%,nome_responsavel.ilike.%${search}%`);
+        query = query.or(`nome.ilike.%${search}%`);
       }
 
       const { data, error, count } = await query.range(from, to).order('nome');
@@ -319,20 +373,30 @@ class ContractService {
       if (error) throw error;
 
       return {
-        data: data.map((p: Record<string, any>) => ({
-          id: p.id,
-          tipo: 'passageiro',
-          passageiro: {
-            nome: p.nome,
-            nome_responsavel: p.nome_responsavel,
-            telefone_responsavel: p.telefone_responsavel,
-            ativo: p.ativo
-          },
-          dados_contrato: {
-            valorMensal: Number(p.valor_cobranca),
-            diaVencimento: p.dia_vencimento
-          }
-        })),
+        data: data.map((p: Record<string, any>) => {
+          const respInfo = _getResponsavelInfoFromPassageiro(p);
+          return {
+            id: p.id,
+            tipo: 'passageiro',
+            passageiro: {
+              id: p.id,
+              nome: p.nome,
+              responsavel_principal: respInfo.nome ? {
+                id: respInfo.id,
+                nome: respInfo.nome,
+                telefone: respInfo.telefone,
+                cpf: respInfo.cpf,
+                email: respInfo.email,
+                parentesco: respInfo.parentesco
+              } : null,
+              ativo: p.ativo
+            },
+            dados_contrato: {
+              valorMensal: Number(p.valor_cobranca),
+              diaVencimento: p.dia_vencimento
+            }
+          };
+        }),
         pagination: {
           page,
           limit,
@@ -349,7 +413,7 @@ class ContractService {
     let query = contractRepository.buildListContratosQuery(usuarioId, statusQuery);
 
     if (search) {
-      query = query.or(`nome.ilike.%${search}%,nome_responsavel.ilike.%${search}%`, { foreignTable: 'passageiro' });
+      query = query.or(`nome.ilike.%${search}%`, { foreignTable: 'passageiro' });
     }
 
     const { data, error, count } = await query.range(from, to);
@@ -357,7 +421,24 @@ class ContractService {
     if (error) throw error;
 
     return {
-      data: data.map((c: Record<string, any>) => ({ ...c, tipo: 'contrato' })),
+      data: data.map((c: Record<string, any>) => {
+        const respInfo = _getResponsavelInfoFromPassageiro(c.passageiro);
+        return { 
+          ...c, 
+          tipo: 'contrato',
+          passageiro: c.passageiro ? {
+            ...c.passageiro,
+            responsavel_principal: respInfo.nome ? {
+              id: respInfo.id,
+              nome: respInfo.nome,
+              telefone: respInfo.telefone,
+              cpf: respInfo.cpf,
+              email: respInfo.email,
+              parentesco: respInfo.parentesco
+            } : null
+          } : null
+        };
+      }),
       pagination: {
         page,
         limit,
@@ -443,7 +524,8 @@ class ContractService {
 
     const passageiro = contrato.passageiro;
 
-    if (!passageiro.telefone_responsavel) throw new AppError('Passageiro sem telefone do responsável', 400);
+    const respInfo = _getResponsavelInfoFromPassageiro(passageiro);
+    if (!respInfo.telefone) throw new AppError('Passageiro sem telefone do responsável', 400);
 
     // Enfileirar novamente
     await addToContractQueue({
@@ -454,8 +536,11 @@ class ContractService {
       passageiro: {
         id: passageiro.id,
         nome: passageiro.nome,
-        nome_responsavel: passageiro.nome_responsavel,
-        telefone_responsavel: passageiro.telefone_responsavel
+        responsavel_principal: {
+          nome: respInfo.nome,
+          telefone: respInfo.telefone,
+          email: respInfo.email
+        }
       },
       tokenAcesso: contrato.token_acesso
     }, `contract-resend-${contrato.id}-${Date.now()}`);
@@ -505,7 +590,7 @@ class ContractService {
 
     const dadosContrato: DadosContrato = {
       nomePassageiro: "Passageiro Exemplo da Silva",
-      nomeResponsavel: "Responsável Fictício de Souza",
+      nomeResponsavel: "Responsável Exemplo da Silva",
       cpfResponsavel: "000.000.000-00",
       telefoneResponsavel: "(11) 99999-9999",
 

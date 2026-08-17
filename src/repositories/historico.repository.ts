@@ -27,7 +27,7 @@ export const historicoRepository = {
     async listByUsuario(usuarioId: string, limit: number) {
         return supabaseAdmin
             .from('historico_atividades')
-            .select('*')
+            .select('id, usuario_id, entidade_tipo, entidade_id, acao, descricao, created_at')
             .eq('usuario_id', usuarioId)
             .order('created_at', { ascending: true })
             .limit(limit);

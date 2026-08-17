@@ -107,23 +107,19 @@ export const veiculoService = {
     async listVeiculos(
         usuarioId: string,
         filtros?: ListVeiculosFiltersDTO
-    ): Promise<Veiculo[]> {
+    ): Promise<any[]> {
         const { data, error } = await veiculoRepository.list(usuarioId, filtros);
         if (error) throw error;
 
-        return (data || []) as Veiculo[];
-    },
+        const list = data || [];
+        if (filtros?.comContagem === "true") {
+            return list.map((veiculo: Record<string, any>) => ({
+                ...veiculo,
+                passageiros_ativos_count: veiculo.passageiros?.[0]?.count || 0,
+            }));
+        }
 
-    async listVeiculosComContagemAtivos(usuarioId: string, filtros?: ListVeiculosFiltersDTO): Promise<VeiculoComContagem[]> {
-        if (!usuarioId) throw new Error("Usuário obrigatório");
-
-        const { data, error } = await veiculoRepository.listComContagemAtivos(usuarioId, filtros);
-        if (error) throw error;
-
-        return (data || []).map((veiculo: Record<string, any>) => ({
-            ...veiculo,
-            passageiros_ativos_count: veiculo.passageiros?.[0]?.count || 0,
-        })) as VeiculoComContagem[];
+        return list;
     },
 
     async toggleAtivo(veiculoId: string, novoStatus: boolean): Promise<boolean> {
@@ -147,12 +143,5 @@ export const veiculoService = {
         }
 
         return novoStatus;
-    },
-
-    async countListVeiculosByUsuario(usuarioId: string): Promise<number> {
-        const { count, error } = await veiculoRepository.countByUsuario(usuarioId);
-
-        if (error) throw new Error(error.message || "Erro ao contar veículos");
-        return count || 0;
     },
 };

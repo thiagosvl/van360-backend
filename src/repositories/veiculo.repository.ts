@@ -42,42 +42,24 @@ export const veiculoRepository = {
     },
 
     async list(usuarioId: string, filtros?: ListVeiculosFiltersDTO) {
+        const isComContagem = filtros?.comContagem === "true";
+        const isSlim = filtros?.slim === "true";
+
+        const selectStr = isSlim
+            ? "id, usuario_id, placa, marca, modelo, ativo"
+            : isComContagem
+            ? "*, passageiros(count)"
+            : "*";
+
         let query = supabaseAdmin
             .from("veiculos")
-            .select("*")
+            .select(selectStr)
             .eq("usuario_id", usuarioId)
             .order("placa", { ascending: true });
 
-        if (isValidFilterValue(filtros?.search)) {
-            query = query.or(
-                `placa.ilike.%${filtros.search}%,marca.ilike.%${filtros.search}%,modelo.ilike.%${filtros.search}%`
-            );
+        if (isComContagem) {
+            query = query.eq("passageiros.ativo", true);
         }
-
-        if (isValidFilterValue(filtros?.placa)) query = query.eq("placa", filtros.placa);
-        if (isValidFilterValue(filtros?.marca)) query = query.eq("marca", filtros.marca);
-        if (isValidFilterValue(filtros?.modelo)) query = query.eq("modelo", filtros.modelo);
-
-        const hasValidIncludeId = isValidFilterValue(filtros?.includeId);
-        const hasValidAtivo = isValidFilterValue(filtros?.ativo);
-        if (hasValidAtivo && hasValidIncludeId) {
-            query = query.or(`ativo.eq.${filtros?.ativo === "true"},id.eq.${filtros?.includeId}`);
-        } else if (hasValidAtivo) {
-            query = query.eq("ativo", filtros?.ativo === "true");
-        } else if (hasValidIncludeId) {
-            query = query.eq("id", filtros?.includeId);
-        }
-
-        return query;
-    },
-
-    async listComContagemAtivos(usuarioId: string, filtros?: ListVeiculosFiltersDTO) {
-        let query = supabaseAdmin
-            .from("veiculos")
-            .select(`*, passageiros(count)`)
-            .eq("usuario_id", usuarioId)
-            .eq("passageiros.ativo", true)
-            .order("placa", { ascending: true });
 
         if (isValidFilterValue(filtros?.search)) {
             query = query.or(

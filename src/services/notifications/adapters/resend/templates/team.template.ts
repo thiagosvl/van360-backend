@@ -24,7 +24,7 @@ export class ResendTeamTemplates {
             
             ${EmailComponents.credentialsCard([
             { label: "CPF (Login)", value: cpf, isMonospace: true },
-            { label: "Senha de Acesso", value: senha, isMonospace: true }
+            { label: "Senha", value: senha, isMonospace: true }
         ])}
 
             ${EmailComponents.warningCard("💡 <strong>Aviso de Segurança:</strong> Por motivos de segurança, altere sua senha temporária no primeiro acesso em <strong>Configurações > Meu Perfil</strong>.")}

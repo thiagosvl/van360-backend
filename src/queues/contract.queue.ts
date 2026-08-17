@@ -13,8 +13,13 @@ export interface ContractJobData {
     passageiro: {
         id: string;
         nome: string;
-        nome_responsavel: string;
-        telefone_responsavel: string;
+        responsavel_principal?: {
+            id?: string;
+            nome?: string;
+            telefone?: string;
+            email?: string | null;
+        } | null;
+        responsaveis?: any[];
     };
     tokenAcesso: string;
 }

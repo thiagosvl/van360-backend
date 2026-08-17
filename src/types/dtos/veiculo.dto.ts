@@ -22,7 +22,9 @@ export const listVeiculosFiltersSchema = z.object({
     marca: z.string().optional(),
     modelo: z.string().optional(),
     ativo: z.string().optional(), // 'true' | 'false' vem da query string
-    includeId: z.string().optional()
+    includeId: z.string().optional(),
+    comContagem: z.string().optional(),
+    slim: z.string().optional(),
 });
 
 export type ListVeiculosFiltersDTO = z.infer<typeof listVeiculosFiltersSchema>;

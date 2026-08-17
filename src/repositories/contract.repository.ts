@@ -2,11 +2,19 @@ import { supabaseAdmin } from "../config/supabase.js";
 import { ContratoStatus } from "../types/enums.js";
 import { isValidFilterValue } from "../utils/filter.utils.js";
 
+const CONTRACT_PASSAGEIRO_SELECT = `
+  id, nome, ativo, valor_cobranca, dia_vencimento,
+  responsaveis:passageiro_responsaveis(
+    tipo, parentesco,
+    responsavel:responsaveis(id, nome, cpf, email, telefone)
+  )
+`;
+
 export const contractRepository = {
   async getByToken(tokenAcesso: string) {
     const { data, error } = await supabaseAdmin
       .from("contratos")
-      .select("*, usuario:usuarios(*), passageiro:passageiros(*)")
+      .select(`*, usuario:usuarios(*), passageiro:passageiros(${CONTRACT_PASSAGEIRO_SELECT})`)
       .eq("token_acesso", tokenAcesso)
       .single();
 
@@ -17,7 +25,7 @@ export const contractRepository = {
   async getById(id: string, usuarioId: string) {
     const { data, error } = await supabaseAdmin
       .from("contratos")
-      .select("*, passageiro:passageiros(*)")
+      .select(`*, passageiro:passageiros(${CONTRACT_PASSAGEIRO_SELECT})`)
       .eq("id", id)
       .eq("usuario_id", usuarioId)
       .single();
@@ -147,7 +155,7 @@ export const contractRepository = {
     let query = supabaseAdmin
       .from("contratos")
       .select(
-        "*, passageiro:passageiros!inner(nome, nome_responsavel, telefone_responsavel, ativo)",
+        `*, passageiro:passageiros!inner(${CONTRACT_PASSAGEIRO_SELECT})`,
         { count: "exact" }
       )
       .eq("usuario_id", usuarioId)
@@ -164,15 +172,7 @@ export const contractRepository = {
     let query = supabaseAdmin
       .from("passageiros")
       .select(
-        `
-        id, 
-        nome,
-        ativo, 
-        nome_responsavel, 
-        telefone_responsavel,
-        valor_cobranca,
-        dia_vencimento
-      `,
+        CONTRACT_PASSAGEIRO_SELECT,
         { count: "exact" }
       )
       .eq("usuario_id", usuarioId)
@@ -185,3 +185,4 @@ export const contractRepository = {
     return query;
   },
 };
+

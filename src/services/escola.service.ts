@@ -111,19 +111,15 @@ export const escolaService = {
         const { data, error } = await escolaRepository.list(usuarioId, filtros);
         if (error) throw error;
 
-        return data || [];
-    },
+        const list = data || [];
+        if (filtros?.comContagem === "true") {
+            return list.map((escola: Record<string, any>) => ({
+                ...escola,
+                passageiros_ativos_count: escola.passageiros?.[0]?.count || 0,
+            }));
+        }
 
-    async listEscolasComContagemAtivos(usuarioId: string, filtros?: ListEscolasFiltersDTO): Promise<any[]> {
-        if (!usuarioId) throw new Error("Usuário obrigatório");
-
-        const { data, error } = await escolaRepository.listComContagemAtivos(usuarioId, filtros);
-        if (error) throw error;
-
-        return (data || []).map((escola: Record<string, any>) => ({
-            ...escola,
-            passageiros_ativos_count: escola.passageiros?.[0]?.count || 0,
-        }));
+        return list;
     },
 
     async toggleAtivo(escolaId: string, novoStatus: boolean): Promise<boolean> {
@@ -145,12 +141,5 @@ export const escolaService = {
         }
 
         return novoStatus;
-    },
-
-    async countListEscolasByUsuario(usuarioId: string): Promise<number> {
-        const { count, error } = await escolaRepository.countByUsuario(usuarioId);
-
-        if (error) throw new Error(error.message || "Erro ao contar escolas");
-        return count || 0;
     },
 };

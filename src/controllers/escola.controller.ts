@@ -71,21 +71,6 @@ export const escolaController = {
     return reply.status(200).send(escolas);
   },
 
-  listWithContagem: async (request: FastifyRequest, reply: FastifyReply) => {
-    const { usuarioId } = request.params as { usuarioId: string };
-    const targetOwnerId = request.data_owner_id || usuarioId;
-    const filtros = listEscolasFiltersSchema.parse(request.query);
-    const escolas = await escolaService.listEscolasComContagemAtivos(targetOwnerId, filtros);
-    return reply.status(200).send(escolas);
-  },
-
-  countByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {
-    const { usuarioId } = request.params as { usuarioId: string };
-    const targetOwnerId = request.data_owner_id || usuarioId;
-    const count = await escolaService.countListEscolasByUsuario(targetOwnerId);
-    return reply.status(200).send({ count });
-  },
-
   toggleAtivo: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     const { novoStatus } = toggleEscolaAtivoSchema.parse(request.body);

@@ -149,38 +149,81 @@ async function seedPassageiros(usuarioId: string, escolasInseridas: any[], veicu
             genero: generos[randomNumber(0, generos.length - 1)],
             turma: `${randomNumber(1, 9)}º ano`,
 
-            nome_responsavel: generateName(),
-            cpf_responsavel: generateCPF(),
-            telefone_responsavel: "11951186951",
-            parentesco_responsavel: parentescos[randomNumber(0, parentescos.length - 1)],
+        const endereco = generateAddress();
+        const respParentesco = parentescos[randomNumber(0, parentescos.length - 1)];
 
-            logradouro: endereco ? endereco.logradouro : null,
-            numero: endereco ? endereco.numero : null,
-            bairro: endereco ? endereco.bairro : null,
-            cidade: endereco ? endereco.cidade : null,
-            estado: endereco ? endereco.estado : null,
-            cep: endereco ? endereco.cep : null,
-            referencia: endereco ? endereco.referencia : null,
+        return {
+            passengerData: {
+                usuario_id: usuarioId,
+                escola_id: escola.id,
+                veiculo_id: veiculo.id,
+                nome: generateName(),
+                ativo: true,
+                periodo: periodos[randomNumber(0, periodos.length - 1)],
+                modalidade: modalidades[randomNumber(0, modalidades.length - 1)],
+                genero: generos[randomNumber(0, generos.length - 1)],
+                turma: `${randomNumber(1, 9)}º ano`,
 
-            dia_vencimento: [5, 10, 15, 20][randomNumber(0, 3)],
-            valor_cobranca: generateValorCobranca(),
-            data_inicio_cobranca: new Date().toISOString().split("T")[0],
-            data_fim_cobranca: "2028-12-31",
-            data_inicio_transporte: new Date().toISOString().split("T")[0],
-            data_fim_transporte: "2028-12-31",
-            data_nascimento,
+                logradouro: endereco ? endereco.logradouro : null,
+                numero: endereco ? endereco.numero : null,
+                bairro: endereco ? endereco.bairro : null,
+                cidade: endereco ? endereco.cidade : null,
+                estado: endereco ? endereco.estado : null,
+                cep: endereco ? endereco.cep : null,
+                referencia: endereco ? endereco.referencia : null,
 
-            enviar_notificacoes: true,
+                dia_vencimento: [5, 10, 15, 20][randomNumber(0, 3)],
+                valor_cobranca: generateValorCobranca(),
+                data_inicio_cobranca: new Date().toISOString().split("T")[0],
+                data_fim_cobranca: "2028-12-31",
+                data_inicio_transporte: new Date().toISOString().split("T")[0],
+                data_fim_transporte: "2028-12-31",
+                data_nascimento,
+
+                enviar_notificacoes: true,
+            },
+            responsavelData: {
+                nome: generateName(),
+                cpf: generateCPF(),
+                telefone: "11951186951",
+                parentesco: respParentesco,
+            }
         };
     });
 
-    const { data, error } = await supabaseAdmin
-        .from("passageiros")
-        .insert(passageirosToInsert)
-        .select();
+    const insertedPassengers = [];
+    for (const item of passageirosToInsert) {
+        const { data: pData, error: pError } = await supabaseAdmin
+            .from("passageiros")
+            .insert(item.passengerData)
+            .select()
+            .single();
 
-    if (error) throw error;
-    return data;
+        if (pError) throw pError;
+
+        const { data: rData, error: rError } = await supabaseAdmin
+            .from("responsaveis")
+            .insert({
+                nome: item.responsavelData.nome,
+                cpf: item.responsavelData.cpf,
+                telefone: item.responsavelData.telefone,
+            })
+            .select()
+            .single();
+
+        if (rError) throw rError;
+
+        await supabaseAdmin.from("passageiro_responsaveis").insert({
+            passageiro_id: pData.id,
+            responsavel_id: rData.id,
+            tipo: "principal",
+            parentesco: item.responsavelData.parentesco,
+        });
+
+        insertedPassengers.push(pData);
+    }
+
+    return insertedPassengers;
 }
 
 async function seedGastos(usuarioId: string, veiculosInseridos: any[], config: ScenarioConfig) {

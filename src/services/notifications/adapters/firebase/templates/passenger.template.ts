@@ -4,21 +4,6 @@ import { NotificationUrlBuilder } from "../../../utils/notification-url.builder.
 import { FirebaseMessagePayload } from "../firebase.template.js";
 
 export class FirebasePassengerTemplates {
-    static contractAvailableParent(ctx: Record<string, unknown>): FirebaseMessagePayload {
-        const passName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro as string, "Passageiro");
-        const rawTokenOrLink = (ctx.linkAssinatura || ctx.linkContrato || ctx.contratoUrl || ctx.tokenAssinatura || ctx.token || "") as string;
-        const contractUrl = NotificationUrlBuilder.getContractSignatureUrl(rawTokenOrLink);
-
-        return {
-            title: "Contrato Disponível 📄",
-            body: `O contrato de transporte do passageiro ${passName} está pronto para assinatura digital.`,
-            data: {
-                action: PushNotificationAction.OPEN_CONTRACTS,
-                contractUrl
-            }
-        };
-    }
-
     static routeEnRouteIda(ctx: Record<string, unknown>): FirebaseMessagePayload {
         const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Passageiro");
         return {
@@ -66,4 +51,118 @@ export class FirebasePassengerTemplates {
             }
         };
     }
+
+    static routeReordered(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        return {
+            title: "Rota Atualizada 📍",
+            body: "O motorista ajustou a ordem das paradas. Avisaremos assim que a van estiver a caminho novamente.",
+            data: {
+                action: PushNotificationAction.OPEN_ROUTE,
+                passageiroId: (ctx.passageiroId || "") as string
+            }
+        };
+    }
+
+    static dueSoonParent(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        const passName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro as string, "Passageiro");
+        const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
+        const dataStr = NotificationContextFormatter.formatDate(ctx.dataVencimento as string);
+        const diasAntecedencia = ctx.diasAntecedencia as number | undefined;
+
+        let body = `A mensalidade de ${passName} (R$ ${valorStr}) vence em ${dataStr}.`;
+        if (diasAntecedencia && diasAntecedencia > 0) {
+            const rotuloDias = diasAntecedencia === 1 ? "daqui a 1 dia" : `daqui a ${diasAntecedencia} dias`;
+            body = `Lembrete: A mensalidade de ${passName} (R$ ${valorStr}) vence ${rotuloDias} (${dataStr}).`;
+        }
+
+        return {
+            title: "Vencimento Próximo 🔔",
+            body,
+            data: {
+                action: PushNotificationAction.OPEN_HOME,
+                cobrancaId: (ctx.cobrancaId || "") as string,
+                passageiroId: (ctx.passageiroId || "") as string,
+                tab: "parcelas"
+            }
+        };
+    }
+
+    static dueTodayParent(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        const passName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro as string, "Passageiro");
+        const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
+
+        return {
+            title: "Mensalidade Vence Hoje ⚠️",
+            body: `Hoje é o dia do vencimento da mensalidade de ${passName} (R$ ${valorStr}).`,
+            data: {
+                action: PushNotificationAction.OPEN_HOME,
+                cobrancaId: (ctx.cobrancaId || "") as string,
+                passageiroId: (ctx.passageiroId || "") as string,
+                tab: "parcelas"
+            }
+        };
+    }
+
+    static overdueParent(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        const passName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro as string, "Passageiro");
+        const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
+        const diasAtraso = ctx.diasAtraso as number | undefined;
+
+        let body = `A mensalidade de ${passName} (R$ ${valorStr}) está em atraso.`;
+        if (diasAtraso && diasAtraso > 0) {
+            const rotuloDias = diasAtraso === 1 ? "1 dia" : `${diasAtraso} dias`;
+            body = `A mensalidade de ${passName} (R$ ${valorStr}) está em atraso há ${rotuloDias}.`;
+        }
+
+        return {
+            title: "Mensalidade Em Atraso 🔴",
+            body,
+            data: {
+                action: PushNotificationAction.OPEN_HOME,
+                cobrancaId: (ctx.cobrancaId || "") as string,
+                passageiroId: (ctx.passageiroId || "") as string,
+                tab: "parcelas"
+            }
+        };
+    }
+
+    static paymentReceiptParent(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        const passName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro as string, "Passageiro");
+        const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
+        const mes = ctx.mes as number | undefined;
+        const ano = ctx.ano as number | undefined;
+
+        let mesAnoStr = "";
+        if (mes && ano) {
+            mesAnoStr = ` referente a ${String(mes).padStart(2, '0')}/${ano}`;
+        }
+
+        return {
+            title: "Recibo de Pagamento 🧾",
+            body: `O recibo do pagamento de ${passName} (R$ ${valorStr})${mesAnoStr} já está disponível no aplicativo.`,
+            data: {
+                action: PushNotificationAction.OPEN_HOME,
+                reciboUrl: (ctx.reciboUrl || "") as string,
+                cobrancaId: (ctx.cobrancaId || "") as string,
+                tab: "parcelas",
+                autoOpenRecibo: "true"
+            }
+        };
+    }
+
+    static contractSignedParent(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        const passName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro as string, "Passageiro");
+        const rawTokenOrLink = (ctx.linkAssinatura || ctx.linkContrato || ctx.contratoUrl || ctx.tokenAssinatura || ctx.token || "") as string;
+        const contractUrl = NotificationUrlBuilder.getContractSignatureUrl(rawTokenOrLink);
+
+        return {
+            title: "Contrato Assinado com Sucesso! 📝",
+            body: `Sua cópia do contrato de transporte de ${passName} já está disponível.`,
+            data: {
+                action: PushNotificationAction.OPEN_CONTRACTS,
+                contractUrl
+            }
+        };
+    }
 }
+

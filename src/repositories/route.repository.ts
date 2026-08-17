@@ -64,28 +64,31 @@ export const routeRepository = {
           passageiro:passageiros (
             id,
             nome,
-            nome_responsavel,
-            parentesco_responsavel,
-            telefone_responsavel,
             turma,
-            logradouro,
-            numero,
-            bairro,
-            cidade,
             ativo,
             escola:escolas (
               id,
               nome
             ),
-            responsaveis:passageiro_responsaveis_adicionais!passageiro_id (
+            responsaveis:passageiro_responsaveis!passageiro_id (
               id,
-              nome,
-              telefone,
+              tipo,
               parentesco,
-              logradouro,
-              numero,
-              bairro,
-              cidade
+              responsavel:responsaveis (
+                id,
+                nome,
+                telefone,
+                cpf,
+                email,
+                logradouro,
+                numero,
+                bairro,
+                cidade,
+                estado,
+                cep,
+                referencia,
+                complemento
+              )
             )
           ),
           escola:escolas (
@@ -232,28 +235,31 @@ export const routeRepository = {
           passageiro:passageiros (
             id,
             nome,
-            nome_responsavel,
-            parentesco_responsavel,
-            telefone_responsavel,
             turma,
-            logradouro,
-            numero,
-            bairro,
-            cidade,
             ativo,
             escola:escolas (
               id,
               nome
             ),
-            responsaveis:passageiro_responsaveis_adicionais!passageiro_id (
+            responsaveis:passageiro_responsaveis!passageiro_id (
               id,
-              nome,
-              telefone,
+              tipo,
               parentesco,
-              logradouro,
-              numero,
-              bairro,
-              cidade
+              responsavel:responsaveis (
+                id,
+                nome,
+                telefone,
+                cpf,
+                email,
+                logradouro,
+                numero,
+                bairro,
+                cidade,
+                estado,
+                cep,
+                referencia,
+                complemento
+              )
             )
           ),
           escola:escolas (
@@ -297,13 +303,14 @@ export const routeRepository = {
       .maybeSingle();
   },
 
-  async insertExecucao(rotaId: string, usuarioId: string) {
+  async insertExecucao(rotaId: string, usuarioId: string, notificarPais: boolean = true) {
     return supabaseAdmin
       .from("execucoes_rota")
       .insert([{
         rota_id: rotaId,
         usuario_id: usuarioId,
-        status: RouteExecutionStatus.INICIADA
+        status: RouteExecutionStatus.INICIADA,
+        notificar_pais: notificarPais
       }])
       .select()
       .single();
@@ -318,7 +325,7 @@ export const routeRepository = {
   async getExecucaoResumida(execucaoId: string) {
     return supabaseAdmin
       .from("execucoes_rota")
-      .select("id, rota_id, status, usuario_id")
+      .select("id, rota_id, status, usuario_id, notificar_pais")
       .eq("id", execucaoId)
       .single();
   },
@@ -326,9 +333,23 @@ export const routeRepository = {
   async getParadaById(paradaId: string) {
     return supabaseAdmin
       .from("execucoes_rota_passageiros")
-      .select("tipo_no, passageiro_id")
+      .select("id, execucao_rota_id, tipo_no, passageiro_id, ordem, status, notificacao_a_caminho_enviada, notificacao_concluido_enviada")
       .eq("id", paradaId)
       .single();
+  },
+
+  async updateNotificacaoACaminhoEnviada(paradaId: string, enviada: boolean) {
+    return supabaseAdmin
+      .from("execucoes_rota_passageiros")
+      .update({ notificacao_a_caminho_enviada: enviada })
+      .eq("id", paradaId);
+  },
+
+  async updateNotificacaoConcluidoEnviada(paradaId: string, enviada: boolean) {
+    return supabaseAdmin
+      .from("execucoes_rota_passageiros")
+      .update({ notificacao_concluido_enviada: enviada })
+      .eq("id", paradaId);
   },
 
   async getParadaAtualPendente(execucaoId: string) {
@@ -505,5 +526,21 @@ export const routeRepository = {
         rota:rotas (*)
       `)
       .eq("passageiro_id", passageiroId);
+  },
+
+  async getRotaNomeById(rotaId: string) {
+    return supabaseAdmin
+      .from("rotas")
+      .select("nome")
+      .eq("id", rotaId)
+      .single();
+  },
+
+  async getAusenciaExistenteById(ausenciaId: string) {
+    return supabaseAdmin
+      .from("rota_ausencias")
+      .select("id, rota_id, data_ausencia, rota:rotas(nome)")
+      .eq("id", ausenciaId)
+      .single();
   }
 };

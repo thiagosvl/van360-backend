@@ -3,7 +3,7 @@ import { logger } from "../config/logger.js";
 import { cobrancaRepository } from "../repositories/cobranca.repository.js";
 import { AppError } from "../errors/AppError.js";
 import { RegistrarPagamentoManualDTO } from "../types/dtos/cobranca.dto.js";
-import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaStatus, CobrancaTipoPagamento } from "../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaStatus, CobrancaTipoPagamento, TipoResponsavel } from "../types/enums.js";
 import { getNowBR, toPersistenceString } from "../utils/date.utils.js";
 import { historicoService } from "./historico.service.js";
 import { receiptService } from "./receipt.service.js";
@@ -78,17 +78,22 @@ export const cobrancaPagamentoService = {
         const { data: cobrancaCompleta } = await cobrancaRepository.getByIdWithPassageiroAndMotorista(cobrancaId);
         const passageiroInfo = cobrancaCompleta?.passageiro as Record<string, any> | undefined;
         const motoristaInfo = cobrancaCompleta?.motorista as Record<string, any> | undefined;
+        const links = (passageiroInfo?.responsaveis as any[]) || [];
+        const respLink = links.find((r: any) => r.tipo === TipoResponsavel.PRINCIPAL) || links[0];
+        const respObj = Array.isArray(respLink?.responsavel) ? respLink.responsavel[0] : (respLink?.responsavel || {});
+        const phoneResp = respObj?.telefone;
+        const nameResp = respObj?.nome || passageiroInfo?.nome || "";
 
-        if (passageiroInfo?.telefone_responsavel) {
+        if (phoneResp) {
           const { notificationService } = await import("./notifications/notification.service.js");
           const { EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO } = await import("../config/constants.js");
           const { getDriverDisplayName } = await import("../utils/format.js");
           await notificationService.notifyPassenger(
-            passageiroInfo.telefone_responsavel,
+            phoneResp,
             EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO,
             {
-              nomeResponsavel: passageiroInfo.nome_responsavel || passageiroInfo.nome || "",
-              nomePassageiro: passageiroInfo.nome || "",
+              nomeResponsavel: nameResp,
+              nomePassageiro: passageiroInfo?.nome || "",
               nomeMotorista: getDriverDisplayName(motoristaInfo),
               apelidoMotorista: motoristaInfo?.apelido,
               valor: Number(updated.valor_pago || updated.valor),
@@ -99,7 +104,7 @@ export const cobrancaPagamentoService = {
               usuarioId: updated.usuario_id
             },
             {
-              channels: [NotificationChannelEnum.WABA],
+              channels: [NotificationChannelEnum.FIREBASE],
               usuarioId: updated.usuario_id
             }
           );

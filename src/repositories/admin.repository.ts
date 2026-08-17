@@ -189,7 +189,7 @@ export const adminRepository = {
                 .eq("usuario_id", userId),
             supabaseAdmin
                 .from("contratos")
-                .select("*, passageiros(id, nome, cpf_responsavel, nome_responsavel, telefone_responsavel)")
+                .select("*, passageiros(id, nome, responsaveis:passageiro_responsaveis(tipo, parentesco, responsavel:responsaveis(id, nome, cpf, telefone, email)))")
                 .eq("usuario_id", userId)
                 .order("created_at", { ascending: false }),
         ]);

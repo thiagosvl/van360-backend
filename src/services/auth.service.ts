@@ -72,6 +72,7 @@ export interface RegistroPayload {
   cpfcnpj: string;
   telefone: string;
   ativo?: boolean;
+  tipo?: UserType;
   termos_aceitos: boolean;
   indicador_id?: string;
   indicador_telefone?: string;
@@ -286,20 +287,23 @@ export async function registrarUsuario(
     }
 
     // 4. Notificação de Boas-Vindas para o Motorista (E-mail e Push)
-    notificationService.notifyDriver(
-      payload.telefone || "",
-      EVENTO_MOTORISTA_TESTE_BOAS_VINDAS,
-      {
-        nomeMotorista: payload.nome,
-        email: payload.email,
-        usuarioId: usuarioId as string
-      },
-      {
-        channels: [NotificationChannelEnum.RESEND, NotificationChannelEnum.FIREBASE],
-        usuarioId: usuarioId as string,
-        email: payload.email
-      }
-    ).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar notificação de boas-vindas ao motorista"));
+    const userTipo = payload.tipo || UserType.MOTORISTA;
+    if (userTipo === UserType.MOTORISTA) {
+      notificationService.notifyDriver(
+        payload.telefone || "",
+        EVENTO_MOTORISTA_TESTE_BOAS_VINDAS,
+        {
+          nomeMotorista: payload.nome,
+          email: payload.email,
+          usuarioId: usuarioId as string
+        },
+        {
+          channels: [NotificationChannelEnum.RESEND, NotificationChannelEnum.FIREBASE],
+          usuarioId: usuarioId as string,
+          email: payload.email
+        }
+      ).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar notificação de boas-vindas ao motorista"));
+    }
 
     // 5. Notificação para o Admin (Telegram)
     notificationService.notifyAdmin(EVENTO_ADMIN_NOVO_CADASTRO, {

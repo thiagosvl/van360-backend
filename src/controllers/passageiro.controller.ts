@@ -91,18 +91,7 @@ export const passageiroController = {
     }
   },
 
-  countByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {
-    const { usuarioId } = request.params as { usuarioId: string };
-    const filtros = listPassageirosFiltersSchema.parse(request.query || {});
 
-    const targetOwnerId = request.data_owner_id || usuarioId;
-    if (request.assigned_veiculo_id) {
-      filtros.veiculo = request.assigned_veiculo_id;
-    }
-
-    const count = await passageiroService.countListPassageirosByUsuario(targetOwnerId, filtros);
-    return reply.status(200).send({ count });
-  },
 
   finalizePreCadastro: async (request: FastifyRequest, reply: FastifyReply) => {
     const { prePassageiroId } = request.params as { prePassageiroId: string };
@@ -112,7 +101,7 @@ export const passageiroController = {
   },
 
   lookupResponsavel: async (request: FastifyRequest, reply: FastifyReply) => {
-    const { cpf } = request.query as { cpf: string };
+    const { cpf, telefone, term } = request.query as { cpf?: string; telefone?: string; term?: string };
     const authUid = request.user?.id;
 
     if (!authUid) {
@@ -120,7 +109,8 @@ export const passageiroController = {
     }
     
     const targetOwnerId = request.data_owner_id || authUid;
-    const data = await passageiroService.lookupResponsavelByCpf(targetOwnerId, cpf);
+    const searchTerm = cpf || telefone || term || "";
+    const data = await passageiroService.lookupResponsavelByCpf(targetOwnerId, searchTerm);
 
     return reply.status(200).send(data); 
   },
@@ -148,7 +138,7 @@ export const passageiroController = {
   updateResponsavelAdicional: async (request: FastifyRequest, reply: FastifyReply) => {
     const { responsavelId } = request.params as { responsavelId: string };
     const data = updateResponsavelAdicionalSchema.parse(request.body);
-    const result = await passageiroService.updateResponsavelAdicional(responsavelId, data);
+    const result = await passageiroService.updateResponsavelAdicional(responsavelId, data, data.passageiroId || undefined);
     return reply.status(200).send(result);
   },
 

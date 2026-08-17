@@ -1,5 +1,5 @@
 import { EVENTO_MOTORISTA_TESTE_BOAS_VINDAS } from "../../config/constants.js";
-import { NotificationChannelEnum } from "../../types/enums.js";
+import { NotificationChannelEnum, UserType } from "../../types/enums.js";
 import { logger } from "../../config/logger.js";
 import { usuarioPushTokenRepository } from "../../repositories/usuario-push-token.repository.js";
 
@@ -11,7 +11,7 @@ import { ResendAdapter } from "./adapters/resend/resend.adapter.js";
 import { TelegramAdapter } from "./adapters/telegram/telegram.adapter.js";
 import { FirebasePushAdapter } from "./adapters/firebase/firebase.adapter.js";
 
-export type NotificationChannel = "EVOLUTION" | "SMS" | "EMAIL" | "RESEND" | "TELEGRAM" | "FIREBASE" | "WABA";
+export type NotificationChannel = "EVOLUTION" | "SMS" | "RESEND" | "TELEGRAM" | "FIREBASE" | "WABA";
 
 export interface NotificationOptions {
     channels?: NotificationChannelEnum[];
@@ -150,6 +150,31 @@ class NotificationService {
         }
     }
 
+    private async dispatchWelcomeNotification(usuario: { id: string; nome: string; telefone: string; email?: string; tipo?: UserType | string }): Promise<void> {
+        const userType = usuario.tipo || UserType.MOTORISTA;
+
+        switch (userType) {
+            case UserType.MOTORISTA:
+                logger.info({ userId: usuario.id, nome: usuario.nome, telefone: usuario.telefone }, "[NotificationService] Primeiro token de motorista registrado! Disparando Push de Boas-Vindas");
+                await this.notifyDriver(usuario.telefone || '', EVENTO_MOTORISTA_TESTE_BOAS_VINDAS, {
+                    nomeMotorista: usuario.nome || 'Motorista',
+                    usuarioId: usuario.id,
+                }, {
+                    channels: [NotificationChannelEnum.FIREBASE],
+                    usuarioId: usuario.id,
+                });
+                break;
+
+            case UserType.MOTORISTA_AUXILIAR:
+            case UserType.MONITOR:
+            case UserType.RESPONSAVEL:
+            case UserType.ADMIN:
+            default:
+                logger.info({ userId: usuario.id, userType }, "[NotificationService] Primeiro token de dispositivo registrado para perfil sem disparo de boas-vindas.");
+                break;
+        }
+    }
+
     /**
      * Registra ou atualiza um push token (FCM) para o usuário atual
      */
@@ -179,15 +204,7 @@ class NotificationService {
             const usuario = await usuarioPushTokenRepository.findUsuarioById(userId);
 
             if (usuario) {
-                logger.info({ userId, nome: usuario.nome, telefone: usuario.telefone }, "[NotificationService.registerPushToken] 🎉 Primeiro token do usuário registrado! Disparando Notificação Push de Boas-Vindas");
-
-                this.notifyDriver(usuario.telefone || '', EVENTO_MOTORISTA_TESTE_BOAS_VINDAS, {
-                    nomeMotorista: usuario.nome || 'Motorista',
-                    usuarioId: userId,
-                }, {
-                    channels: [NotificationChannelEnum.FIREBASE],
-                    usuarioId: userId,
-                }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "[NotificationService.registerPushToken] Erro ao enviar boas-vindas push"));
+                await this.dispatchWelcomeNotification(usuario).catch((err: unknown) => logger.error({ err: err instanceof Error ? err.message : String(err) }, "[NotificationService.registerPushToken] Erro ao enviar boas-vindas push"));
             }
         }
     }

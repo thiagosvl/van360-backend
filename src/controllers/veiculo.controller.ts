@@ -76,30 +76,6 @@ export const veiculoController = {
     return reply.status(200).send(veiculos);
   },
 
-  listWithContagem: async (request: FastifyRequest, reply: FastifyReply) => {
-    const { usuarioId } = request.params as { usuarioId: string };
-    const targetOwnerId = request.data_owner_id || usuarioId;
-    const assignedVeiculoId = request.assigned_veiculo_id || (request.profile?.veiculo_id as string | undefined);
-    const filtros = listVeiculosFiltersSchema.parse(request.query);
-
-    let veiculos = await veiculoService.listVeiculosComContagemAtivos(targetOwnerId, filtros);
-    if (assignedVeiculoId) {
-      veiculos = veiculos.filter((v: { id: string }) => v.id === assignedVeiculoId);
-    }
-    return reply.status(200).send(veiculos);
-  },
-
-  countByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {
-    const { usuarioId } = request.params as { usuarioId: string };
-    const targetOwnerId = request.data_owner_id || usuarioId;
-    const assignedVeiculoId = request.assigned_veiculo_id || (request.profile?.veiculo_id as string | undefined);
-    if (assignedVeiculoId) {
-      return reply.status(200).send({ count: 1 });
-    }
-    const count = await veiculoService.countListVeiculosByUsuario(targetOwnerId);
-    return reply.status(200).send({ count });
-  },
-
   toggleAtivo: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     const { novoStatus } = toggleVeiculoAtivoSchema.parse(request.body);

@@ -2,10 +2,14 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { AppError } from "../errors/AppError.js";
 import { responsavelRepository } from "../repositories/responsavel.repository.js";
+import { routeRepository } from "../repositories/route.repository.js";
+import { usuarioPushTokenRepository } from "../repositories/usuario-push-token.repository.js";
 import { maskEmail, onlyDigits } from "../utils/string.utils.js";
 import { notificationService } from "./notifications/notification.service.js";
+import { routeService } from "./route.service.js";
 import { NotificationChannelEnum, TipoResponsavel } from "../types/enums.js";
-import { EVENTO_PASSAGEIRO_PIN_RESET } from "../config/constants.js";
+import { EVENTO_PASSAGEIRO_PIN_RESET, EVENTO_MOTORISTA_AUSENCIA_REGISTRADA, EVENTO_MOTORISTA_AUSENCIA_REMOVIDA } from "../config/constants.js";
+import { CreateResponsavelAusenciaDTO } from "../types/dtos/responsavel-ausencia.dto.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "van360_responsavel_secret_key_2026";
 const TOKEN_EXPIRATION = "30d";
@@ -24,7 +28,7 @@ interface OtpStoreItem {
 
 const otpStore = new Map<string, OtpStoreItem>();
 
-export const responsavelService = {
+export const portalResponsavelService = {
   async checkPhone(phoneRaw: string) {
     const phoneDigits = onlyDigits(phoneRaw);
     if (!phoneDigits || phoneDigits.length < 8) {
@@ -54,14 +58,7 @@ export const responsavelService = {
     }
 
     const pinHash = await bcrypt.hash(pin, 10);
-
-    for (const p of passageiros) {
-      if (p.tipo_responsavel === TipoResponsavel.PRINCIPAL) {
-        await responsavelRepository.updatePinPrincipal(p.id, pinHash);
-      } else {
-        await responsavelRepository.updatePinAdicional(p.responsavel_id, pinHash);
-      }
-    }
+    await responsavelRepository.updatePinByPhone(phoneDigits, pinHash);
 
     const passageiroIds = passageiros.map(p => p.id);
     const token = jwt.sign(
@@ -182,6 +179,171 @@ export const responsavelService = {
     return { success: true };
   },
 
+  async registrarAusencia(token: string, passageiroId: string, data: CreateResponsavelAusenciaDTO) {
+    const payload = await this.verifyResponsavelToken(token);
+
+    if (!payload.passageiro_ids.includes(passageiroId)) {
+      throw new AppError("Acesso não autorizado para este passageiro.", 403);
+    }
+
+    const passageiros = await responsavelRepository.findPassageirosByPhone(payload.phone);
+    const target = passageiros.find(p => p.id === passageiroId);
+
+    if (!target) {
+      throw new AppError("Passageiro não encontrado.", 404);
+    }
+
+    let rotaId = data.rota_id;
+
+    if (!rotaId) {
+      const { data: rotasVinculadas } = await routeRepository.getRotasByPassageiro(passageiroId);
+
+      const rotasDisponiveis = (rotasVinculadas || [])
+        .map((r: any) => (Array.isArray(r.rota) ? r.rota[0] : r.rota))
+        .filter((r: any) => r && r.id);
+
+      if (rotasDisponiveis.length === 1) {
+        rotaId = rotasDisponiveis[0].id;
+      } else if (rotasDisponiveis.length === 0) {
+        throw new AppError("O passageiro não está vinculado a nenhuma rota para registrar ausência.", 400);
+      } else {
+        throw new AppError("Selecione a qual rota a ausência se refere.", 400);
+      }
+    }
+
+    const ausencia = await routeService.registrarAusenciaAntecipada({
+      passageiro_id: passageiroId,
+      rota_id: rotaId!,
+      data_ausencia: data.data_ausencia,
+      sentido: data.sentido,
+      registrado_por: target.motorista_id
+    });
+
+    try {
+      const { data: rotaData } = await routeRepository.getRotaNomeById(rotaId!);
+
+      const [ano, mes, dia] = data.data_ausencia.split("-");
+      const dataFormatada = `${dia}/${mes}/${ano}`;
+
+      notificationService.sendDirect(
+        NotificationChannelEnum.FIREBASE,
+        EVENTO_MOTORISTA_AUSENCIA_REGISTRADA,
+        {
+          nomePassageiro: target.nome,
+          nomeRota: rotaData?.nome || "rota",
+          dataAusencia: data.data_ausencia,
+          dataFormatada,
+          passageiroId,
+          rotaId: rotaId!,
+          usuarioId: target.motorista_id
+        },
+        { usuarioId: target.motorista_id }
+      ).catch(() => {});
+    } catch {}
+
+    return ausencia;
+  },
+
+  async removerAusencia(token: string, passageiroId: string, ausenciaId: string) {
+    const payload = await this.verifyResponsavelToken(token);
+
+    if (!payload.passageiro_ids.includes(passageiroId)) {
+      throw new AppError("Acesso não autorizado para este passageiro.", 403);
+    }
+
+    const passageiros = await responsavelRepository.findPassageirosByPhone(payload.phone);
+    const target = passageiros.find(p => p.id === passageiroId);
+
+    const { data: ausenciaExistente } = await routeRepository.getAusenciaExistenteById(ausenciaId);
+
+    await routeService.removerAusenciaAntecipada(
+      ausenciaId,
+      passageiroId,
+      ausenciaExistente?.rota_id,
+      ausenciaExistente?.data_ausencia
+    );
+
+    if (target && ausenciaExistente) {
+      try {
+        const r = Array.isArray(ausenciaExistente.rota) ? ausenciaExistente.rota[0] : ausenciaExistente.rota;
+        const [ano, mes, dia] = (ausenciaExistente.data_ausencia || "").split("-");
+        const dataFormatada = dia && mes && ano ? `${dia}/${mes}/${ano}` : ausenciaExistente.data_ausencia;
+
+        notificationService.sendDirect(
+          NotificationChannelEnum.FIREBASE,
+          EVENTO_MOTORISTA_AUSENCIA_REMOVIDA,
+          {
+            nomePassageiro: target.nome,
+            nomeRota: r?.nome || "rota",
+            dataAusencia: ausenciaExistente.data_ausencia,
+            dataFormatada,
+            passageiroId,
+            rotaId: ausenciaExistente.rota_id,
+            usuarioId: target.motorista_id
+          },
+          { usuarioId: target.motorista_id }
+        ).catch(() => {});
+      } catch {}
+    }
+
+    return { success: true };
+  },
+
+  async updateObservacoes(token: string, passageiroId: string, observacoes: string) {
+    const payload = await this.verifyResponsavelToken(token);
+
+    if (!payload.passageiro_ids.includes(passageiroId)) {
+      throw new AppError("Acesso não autorizado para este passageiro.", 403);
+    }
+
+    await responsavelRepository.updateObservacoes(passageiroId, observacoes);
+    return { success: true };
+  },
+
+  async addResponsavel(token: string, passageiroId: string, data: Record<string, unknown>) {
+    const payload = await this.verifyResponsavelToken(token);
+
+    if (!payload.passageiro_ids.includes(passageiroId)) {
+      throw new AppError("Acesso não autorizado para este passageiro.", 403);
+    }
+
+    const inserted = await responsavelRepository.addResponsavelAdicional(passageiroId, data);
+    return inserted;
+  },
+
+  async updateResponsavel(token: string, passageiroId: string, responsavelId: string, data: Record<string, unknown>) {
+    const payload = await this.verifyResponsavelToken(token);
+
+    if (!payload.passageiro_ids.includes(passageiroId)) {
+      throw new AppError("Acesso não autorizado para este passageiro.", 403);
+    }
+
+    const updated = await responsavelRepository.updateResponsavelAdicional(responsavelId, data, passageiroId);
+    return updated;
+  },
+
+  async deleteResponsavel(token: string, passageiroId: string, responsavelId: string) {
+    const payload = await this.verifyResponsavelToken(token);
+
+    if (!payload.passageiro_ids.includes(passageiroId)) {
+      throw new AppError("Acesso não autorizado para este passageiro.", 403);
+    }
+
+    await responsavelRepository.deleteResponsavelAdicional(responsavelId);
+    return { success: true };
+  },
+
+  async setPrincipalResponsavel(token: string, passageiroId: string, responsavelId: string) {
+    const payload = await this.verifyResponsavelToken(token);
+
+    if (!payload.passageiro_ids.includes(passageiroId)) {
+      throw new AppError("Acesso não autorizado para este passageiro.", 403);
+    }
+
+    await responsavelRepository.setPrincipalResponsavel(passageiroId, responsavelId);
+    return { success: true };
+  },
+
   async checkResetEmails(phoneRaw: string) {
     const phoneDigits = onlyDigits(phoneRaw);
     if (!phoneDigits || phoneDigits.length < 8) {
@@ -214,7 +376,7 @@ export const responsavelService = {
     const emailTarget = emails[selectedIndex];
 
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = Date.now() + 15 * 60 * 1000; // 15 min
+    const expiresAt = Date.now() + 15 * 60 * 1000;
 
     otpStore.set(phoneDigits, {
       phone: phoneDigits,
@@ -277,14 +439,7 @@ export const responsavelService = {
       }
 
       const pinHash = await bcrypt.hash(newPin, 10);
-
-      for (const p of passageiros) {
-        if (p.tipo_responsavel === TipoResponsavel.PRINCIPAL) {
-          await responsavelRepository.updatePinPrincipal(p.id, pinHash);
-        } else {
-          await responsavelRepository.updatePinAdicional(p.responsavel_id, pinHash);
-        }
-      }
+      await responsavelRepository.updatePinByPhone(phoneDigits, pinHash);
 
       otpStore.delete(phoneDigits);
 
@@ -300,6 +455,24 @@ export const responsavelService = {
     } else {
       await responsavelRepository.resetPinPrincipal(passageiroId);
     }
+    return { success: true };
+  },
+
+  async registerPushToken(phoneRaw: string, pushToken: string, platform: string) {
+    const phoneDigits = onlyDigits(phoneRaw);
+    if (!phoneDigits) throw new AppError("Telefone inválido para registro de token.", 400);
+
+    const user = await usuarioPushTokenRepository.findUsuarioByTelefone(phoneDigits);
+    let targetUserId = user?.id;
+
+    if (!targetUserId) {
+      const phoneWithout55 = phoneDigits.startsWith('55') && phoneDigits.length > 11 ? phoneDigits.substring(2) : phoneDigits;
+      const phoneWith55 = `55${phoneWithout55}`;
+      const resp = await responsavelRepository.findByTelefoneVariants([phoneDigits, phoneWithout55, phoneWith55]);
+      targetUserId = resp?.id || phoneDigits;
+    }
+
+    await notificationService.registerPushToken(targetUserId || phoneDigits, pushToken, platform);
     return { success: true };
   }
 };

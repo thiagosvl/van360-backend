@@ -20,6 +20,7 @@ const routeRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get("/execucoes/:id", { preHandler: [requirePermission(RoutePermission.VISUALIZAR)] }, routeController.getExecucaoDetail);
   app.post("/:id/iniciar", { preHandler: [requirePermission(RoutePermission.INICIAR_ENCERRAR)] }, routeController.iniciarRota);
   app.post("/execucoes/:id/parada", { preHandler: [requirePermission(RoutePermission.EXECUTAR_PARADAS)] }, routeController.atualizarParadaStatus);
+  app.post("/execucoes/:id/chamada-escola", { preHandler: [requirePermission(RoutePermission.EXECUTAR_PARADAS)] }, routeController.processarChamadaEscola);
   app.post("/execucoes/:id/reordenar", { preHandler: [requirePermission(RoutePermission.EXECUTAR_PARADAS, RoutePermission.INICIAR_ENCERRAR, RoutePermission.CRIAR_EDITAR)] }, routeController.reordenarExecucao);
   app.post("/execucoes/:id/cancelar", { preHandler: [requirePermission(RoutePermission.INICIAR_ENCERRAR)] }, routeController.cancelarExecucao);
   app.post("/execucoes/:id/finalizar", { preHandler: [requirePermission(RoutePermission.EXECUTAR_PARADAS)] }, routeController.finalizarExecucao);

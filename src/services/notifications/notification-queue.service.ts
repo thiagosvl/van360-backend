@@ -3,7 +3,8 @@ import { notificationQueueRepository, NotificationQueueItemPayload } from "../..
 import { cobrancaRepository } from "../../repositories/cobranca.repository.js";
 import { NotificationChannelEnum, NotificationQueueStatus, CobrancaStatus } from "../../types/enums.js";
 import { notificationService, NotificationOptions } from "./notification.service.js";
-import { EVENTO_PASSAGEIRO_VENCIMENTO_HOJE, EVENTO_PASSAGEIRO_ATRASADO } from "../../config/constants.js";
+import { EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO, EVENTO_PASSAGEIRO_VENCIMENTO_HOJE, EVENTO_PASSAGEIRO_ATRASADO, EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO } from "../../config/constants.js";
+
 
 export interface EnqueueNotificationParams {
     canal: NotificationChannelEnum;
@@ -40,17 +41,55 @@ export class NotificationQueueService {
         return new Date(now + delayMinutes * 60 * 1000).toISOString();
     }
 
+    private async validateCobrancaEligibility(cobrancaId: string, evento: string): Promise<{ eligible: boolean; cancelReason?: string }> {
+        const { data: cobranca } = await cobrancaRepository.getByIdBasic(cobrancaId);
+
+        if (!cobranca) {
+            return { eligible: false, cancelReason: "Cobrança foi excluída." };
+        }
+
+        if ((cobranca as any).desativar_lembretes) {
+            return { eligible: false, cancelReason: "Lembretes desativados para esta cobrança." };
+        }
+
+        if (evento === EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO || evento === EVENTO_PASSAGEIRO_VENCIMENTO_HOJE || evento === EVENTO_PASSAGEIRO_ATRASADO) {
+            if (cobranca.status === CobrancaStatus.PAGO) {
+                return { eligible: false, cancelReason: "Cobrança já foi paga pelo responsável." };
+            }
+        }
+
+        if (evento === EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO) {
+            if (cobranca.status !== CobrancaStatus.PAGO) {
+                return { eligible: false, cancelReason: "Pagamento da cobrança não está mais confirmado." };
+            }
+        }
+
+        return { eligible: true };
+    }
+
+    private validateRouteEventTTL(evento: string, createdAtStr?: string): { eligible: boolean; cancelReason?: string } {
+        if (!evento.startsWith("ROTA_")) return { eligible: true };
+
+        const createdAt = new Date(createdAtStr || Date.now()).getTime();
+        const ageMinutes = (Date.now() - createdAt) / (1000 * 60);
+        if (ageMinutes > 30) {
+            return { eligible: false, cancelReason: "Notificação operacional de rota expirada (mais de 30 minutos)." };
+        }
+
+        return { eligible: true };
+    }
+
     async checkEligibility(item: NotificationQueueItemPayload): Promise<{ eligible: boolean; cancelReason?: string }> {
         const payload = item.payload || {};
         const cobrancaId = (payload.cobrancaId || (payload.metadata as Record<string, unknown> | undefined)?.cobrancaId) as string | undefined;
 
-        if (cobrancaId && (item.evento === EVENTO_PASSAGEIRO_VENCIMENTO_HOJE || item.evento === EVENTO_PASSAGEIRO_ATRASADO)) {
-            const { data: cobranca } = await cobrancaRepository.getByIdBasic(cobrancaId);
-
-            if (cobranca && cobranca.status === CobrancaStatus.PAGO) {
-                return { eligible: false, cancelReason: "Cobrança já foi paga pelo responsável." };
-            }
+        if (cobrancaId) {
+            const cobrancaCheck = await this.validateCobrancaEligibility(cobrancaId, item.evento);
+            if (!cobrancaCheck.eligible) return cobrancaCheck;
         }
+
+        const routeCheck = this.validateRouteEventTTL(item.evento, item.created_at);
+        if (!routeCheck.eligible) return routeCheck;
 
         return { eligible: true };
     }
