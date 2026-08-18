@@ -23,29 +23,5 @@ export const appRepository = {
     }
 
     return (data || []) as AppUpdateRecord[];
-  },
-
-  async registerPushToken(usuarioId: string, pushToken: string, platform?: string) {
-    return supabaseAdmin
-      .from("dispositivos_usuario")
-      .upsert({
-        usuario_id: usuarioId,
-        push_token: pushToken,
-        platform: platform || "unknown",
-        updated_at: new Date().toISOString()
-      });
-  },
-
-  async registerDevice(usuarioId: string, deviceData: { device_id: string; platform: string; model?: string; app_version?: string }) {
-    return supabaseAdmin
-      .from("dispositivos_usuario")
-      .upsert({
-        usuario_id: usuarioId,
-        device_id: deviceData.device_id,
-        platform: deviceData.platform,
-        model: deviceData.model,
-        app_version: deviceData.app_version,
-        updated_at: new Date().toISOString()
-      });
   }
 };

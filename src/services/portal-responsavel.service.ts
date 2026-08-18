@@ -329,7 +329,7 @@ export const portalResponsavelService = {
       throw new AppError("Acesso não autorizado para este passageiro.", 403);
     }
 
-    await responsavelRepository.deleteResponsavelAdicional(responsavelId);
+    await responsavelRepository.deleteResponsavelAdicional(responsavelId, passageiroId);
     return { success: true };
   },
 

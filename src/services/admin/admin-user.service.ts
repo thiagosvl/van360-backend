@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "../../config/supabase.js";
+import { usuarioPushTokenRepository } from "../../repositories/usuario-push-token.repository.js";
 import { motoristaEquipeRepository } from "../../repositories/motorista-equipe.repository.js";
 import { NotificationChannelEnum } from '../../types/enums.js';
 import { logger } from "../../config/logger.js";
@@ -586,6 +587,7 @@ export const adminUserService = {
           await authProvider.deleteUser(sub.id).catch((err: unknown) => {
             logger.warn({ err, subId: sub.id }, "[AdminUserService] Falha ao expurgar sub-conta no Auth");
           });
+          await usuarioPushTokenRepository.deleteTokensByUsuarioId(sub.id);
           await supabaseAdmin.from("usuarios").delete().eq("id", sub.id);
         }
       }
@@ -598,6 +600,7 @@ export const adminUserService = {
       throw authError;
     }
 
+    await usuarioPushTokenRepository.deleteTokensByUsuarioId(userId);
     await supabaseAdmin.from("usuarios").delete().eq("id", userId);
 
     return { success: true };

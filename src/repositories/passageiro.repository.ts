@@ -427,14 +427,9 @@ export const passageiroRepository = {
     return { data: updated, error };
   },
 
-  async deleteResponsavelAdicional(id: string) {
-    const { error } = await supabaseAdmin
-      .from("passageiro_responsaveis")
-      .delete()
-      .eq("responsavel_id", id);
-    if (error) throw error;
-    const { cleanupOrphanedResponsaveis: cleanup } = await import("./responsavel.repository.js");
-    await cleanup([id]);
+  async deleteResponsavelAdicional(id: string, passageiroId?: string) {
+    const { responsavelRepository } = await import("./responsavel.repository.js");
+    await responsavelRepository.deleteResponsavelAdicional(id, passageiroId);
     return { error: null };
   },
 

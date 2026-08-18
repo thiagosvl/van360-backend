@@ -2,6 +2,8 @@ import { supabaseAdmin } from "../config/supabase.js";
 import { TipoResponsavel, RouteSentido } from "../types/enums.js";
 import { AppError } from "../errors/AppError.js";
 import { toPersistenceString, getNowBR } from "../utils/date.utils.js";
+import { usuarioPushTokenRepository } from "./usuario-push-token.repository.js";
+import { onlyDigits, getPhoneVariants } from "../utils/string.utils.js";
 
 export interface ResponsavelPassageiroRecord {
   id: string; // passageiro_id
@@ -27,7 +29,10 @@ export const responsavelRepository = {
     return data;
   },
   async findPassageirosByPhone(phoneDigits: string): Promise<ResponsavelPassageiroRecord[]> {
-    const { data: responsavel, error: errResp } = await supabaseAdmin
+    const variants = getPhoneVariants(phoneDigits);
+    if (variants.length === 0) return [];
+
+    const { data: responsaveis, error: errResp } = await supabaseAdmin
       .from("responsaveis")
       .select(`
         id,
@@ -45,32 +50,34 @@ export const responsavelRepository = {
           )
         )
       `)
-      .eq("telefone", phoneDigits)
-      .maybeSingle();
+      .in("telefone", variants);
 
     if (errResp) throw errResp;
-    if (!responsavel || !responsavel.passageiro_links) return [];
+    if (!responsaveis || responsaveis.length === 0) return [];
 
     const result: ResponsavelPassageiroRecord[] = [];
     const seenPassageiroIds = new Set<string>();
 
-    for (const link of responsavel.passageiro_links as any[]) {
-      const pass = Array.isArray(link.passageiro) ? link.passageiro[0] : link.passageiro;
-      if (pass && pass.ativo && !seenPassageiroIds.has(pass.id)) {
-        seenPassageiroIds.add(pass.id);
-        const usr = Array.isArray(pass.usuario) ? pass.usuario[0] : pass.usuario;
-        const motoristaNome = usr?.apelido?.trim() || usr?.nome?.trim() || "";
+    for (const responsavel of responsaveis) {
+      if (!responsavel.passageiro_links) continue;
+      for (const link of responsavel.passageiro_links as any[]) {
+        const pass = Array.isArray(link.passageiro) ? link.passageiro[0] : link.passageiro;
+        if (pass && pass.ativo && !seenPassageiroIds.has(pass.id)) {
+          seenPassageiroIds.add(pass.id);
+          const usr = Array.isArray(pass.usuario) ? pass.usuario[0] : pass.usuario;
+          const motoristaNome = usr?.apelido?.trim() || usr?.nome?.trim() || "";
 
-        result.push({
-          id: pass.id,
-          nome: pass.nome,
-          ativo: pass.ativo,
-          pin_acesso: responsavel.pin_acesso,
-          motorista_nome: motoristaNome,
-          motorista_id: pass.usuario_id,
-          tipo_responsavel: link.tipo === TipoResponsavel.ADICIONAL ? TipoResponsavel.ADICIONAL : TipoResponsavel.PRINCIPAL,
-          responsavel_id: responsavel.id
-        });
+          result.push({
+            id: pass.id,
+            nome: pass.nome,
+            ativo: pass.ativo,
+            pin_acesso: responsavel.pin_acesso,
+            motorista_nome: motoristaNome,
+            motorista_id: pass.usuario_id,
+            tipo_responsavel: link.tipo === TipoResponsavel.ADICIONAL ? TipoResponsavel.ADICIONAL : TipoResponsavel.PRINCIPAL,
+            responsavel_id: responsavel.id
+          });
+        }
       }
     }
 
@@ -78,10 +85,12 @@ export const responsavelRepository = {
   },
 
   async updatePinByPhone(phoneDigits: string, pinHash: string) {
+    const variants = getPhoneVariants(phoneDigits);
+    if (variants.length === 0) return;
     return supabaseAdmin
       .from("responsaveis")
       .update({ pin_acesso: pinHash, updated_at: new Date().toISOString() })
-      .eq("telefone", phoneDigits);
+      .in("telefone", variants);
   },
 
   async updatePinById(responsavelId: string, pinHash: string) {
@@ -92,10 +101,12 @@ export const responsavelRepository = {
   },
 
   async resetPinByPhone(phoneDigits: string) {
+    const variants = getPhoneVariants(phoneDigits);
+    if (variants.length === 0) return;
     return supabaseAdmin
       .from("responsaveis")
       .update({ pin_acesso: null, updated_at: new Date().toISOString() })
-      .eq("telefone", phoneDigits);
+      .in("telefone", variants);
   },
 
   async resetPinById(responsavelId: string) {
@@ -352,10 +363,12 @@ export const responsavelRepository = {
   },
 
   async findEmailsByPhone(phoneDigits: string): Promise<string[]> {
+    const variants = getPhoneVariants(phoneDigits);
+    if (variants.length === 0) return [];
     const { data } = await supabaseAdmin
       .from("responsaveis")
       .select("email")
-      .eq("telefone", phoneDigits);
+      .in("telefone", variants);
 
     if (!data) return [];
     return data
@@ -514,11 +527,17 @@ export const responsavelRepository = {
     return updated;
   },
 
-  async deleteResponsavelAdicional(responsavelId: string) {
-    const { error } = await supabaseAdmin
+  async deleteResponsavelAdicional(responsavelId: string, passageiroId?: string) {
+    let query = supabaseAdmin
       .from("passageiro_responsaveis")
       .delete()
       .eq("responsavel_id", responsavelId);
+
+    if (passageiroId) {
+      query = query.eq("passageiro_id", passageiroId);
+    }
+
+    const { error } = await query;
 
     if (error) throw error;
     await cleanupOrphanedResponsaveis([responsavelId]);
@@ -555,6 +574,8 @@ export async function cleanupOrphanedResponsaveis(responsavelIds: string[]) {
       .eq("responsavel_id", respId);
 
     if (!error && count === 0) {
+      await usuarioPushTokenRepository.deleteTokensByUsuarioId(respId);
+
       await supabaseAdmin
         .from("responsaveis")
         .delete()

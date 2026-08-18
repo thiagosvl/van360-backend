@@ -38,6 +38,15 @@ export const formatEvolutionNumber = (phoneNumber: string): string => {
   return cleanNumber.length <= 11 ? `55${cleanNumber}` : cleanNumber;
 };
 
+export function getPhoneVariants(phoneNumber: string | null | undefined): string[] {
+  if (!phoneNumber) return [];
+  const digits = onlyDigits(phoneNumber);
+  if (!digits) return [];
+  const phoneWithout55 = digits.startsWith('55') && digits.length > 11 ? digits.substring(2) : digits;
+  const phoneWith55 = `55${phoneWithout55}`;
+  return Array.from(new Set([digits, phoneWithout55, phoneWith55].filter(Boolean)));
+}
+
 export function extractErrorMessage(error: unknown, fallback = "Erro desconhecido"): string {
   if (!error) return fallback;
   if (typeof error === "string") {

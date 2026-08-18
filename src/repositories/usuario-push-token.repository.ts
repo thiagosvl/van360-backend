@@ -1,6 +1,6 @@
 import { supabaseAdmin as supabase } from "../config/supabase.js";
 import { UserType } from "../types/enums.js";
-import { onlyDigits } from "../utils/string.utils.js";
+import { onlyDigits, getPhoneVariants } from "../utils/string.utils.js";
 
 export interface UsuarioPushToken {
   id: string;
@@ -23,15 +23,19 @@ export const usuarioPushTokenRepository = {
   },
 
   async countTokensByUsuarioId(userId: string): Promise<number> {
+    const candidateIds = await this.resolveCandidateUserIds(userId);
+    if (candidateIds.length === 0) return 0;
+
     const { count } = await supabase
       .from('usuario_push_tokens')
       .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId);
+      .in('user_id', candidateIds);
 
     return count ?? 0;
   },
 
-  async findTokensByUsuarioId(userId: string): Promise<string[]> {
+  async resolveCandidateUserIds(userId: string): Promise<string[]> {
+    if (!userId) return [];
     const candidateIds: string[] = [userId];
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
 
@@ -44,28 +48,21 @@ export const usuarioPushTokenRepository = {
           .maybeSingle();
 
         if (resp?.telefone) {
-          const digits = onlyDigits(resp.telefone);
-          if (digits) {
-            const phoneWithout55 = digits.startsWith('55') && digits.length > 11 ? digits.substring(2) : digits;
-            const phoneWith55 = `55${phoneWithout55}`;
-            candidateIds.push(digits, phoneWithout55, phoneWith55);
-          }
+          candidateIds.push(...getPhoneVariants(resp.telefone));
         }
       } catch {
-        // Ignora caso a tabela ainda não esteja acessível
+        // Ignora erro
       }
     } else {
-      const phoneDigits = onlyDigits(userId);
-      if (phoneDigits) {
-        const phoneWithout55 = phoneDigits.startsWith('55') && phoneDigits.length > 11 ? phoneDigits.substring(2) : phoneDigits;
-        const phoneWith55 = `55${phoneWithout55}`;
-        candidateIds.push(phoneDigits, phoneWithout55, phoneWith55);
+      const variants = getPhoneVariants(userId);
+      if (variants.length > 0) {
+        candidateIds.push(...variants);
 
         try {
           const { data: respList } = await supabase
             .from('responsaveis')
             .select('id')
-            .in('telefone', [phoneDigits, phoneWithout55, phoneWith55]);
+            .in('telefone', variants);
 
           if (respList && respList.length > 0) {
             for (const r of respList) {
@@ -73,12 +70,17 @@ export const usuarioPushTokenRepository = {
             }
           }
         } catch {
-          // Ignora caso erro
+          // Ignora erro
         }
       }
     }
 
-    const uniqueIds = Array.from(new Set(candidateIds));
+    return Array.from(new Set(candidateIds.filter(Boolean)));
+  },
+
+  async findTokensByUsuarioId(userId: string): Promise<string[]> {
+    const uniqueIds = await this.resolveCandidateUserIds(userId);
+    if (uniqueIds.length === 0) return [];
 
     const { data } = await supabase
       .from('usuario_push_tokens')
@@ -87,6 +89,16 @@ export const usuarioPushTokenRepository = {
 
     if (!data) return [];
     return data.map((t: { token: string }) => t.token);
+  },
+
+  async deleteTokensByUsuarioId(userId: string): Promise<void> {
+    const candidateIds = await this.resolveCandidateUserIds(userId);
+    if (candidateIds.length === 0) return;
+
+    await supabase
+      .from('usuario_push_tokens')
+      .delete()
+      .in('user_id', candidateIds);
   },
 
   async findUsuarioByTelefoneOrEmail(identifier: string): Promise<{ id: string; email?: string; tipo?: UserType | string } | null> {

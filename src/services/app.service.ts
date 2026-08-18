@@ -56,29 +56,3 @@ export async function checkAppUpdates(platform: string, currentVersion?: string)
 }
 
 export const checkAppVersion = checkAppUpdates;
-
-export async function registerPushToken(usuarioId: string, pushToken: string, platform?: string) {
-  if (!usuarioId || !pushToken) {
-    throw new AppError("ID do usuário e token de notificação são obrigatórios.", 400);
-  }
-
-  const { error } = await appRepository.registerPushToken(usuarioId, pushToken, platform);
-  if (error) {
-    throw new AppError(`Erro ao registrar token de notificação push: ${error.message}`, 500);
-  }
-
-  return { success: true };
-}
-
-export async function registerDevice(usuarioId: string, deviceData: { device_id: string; platform: string; model?: string; app_version?: string }) {
-  if (!usuarioId || !deviceData || !deviceData.device_id || !deviceData.platform) {
-    throw new AppError("ID do usuário, ID do dispositivo e plataforma são obrigatórios.", 400);
-  }
-
-  const { error } = await appRepository.registerDevice(usuarioId, deviceData);
-  if (error) {
-    throw new AppError(`Erro ao registrar dispositivo móvel: ${error.message}`, 500);
-  }
-
-  return { success: true };
-}

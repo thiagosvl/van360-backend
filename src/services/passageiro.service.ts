@@ -611,8 +611,8 @@ const updateResponsavelAdicional = async (responsavelId: string, data: UpdateRes
     return responsavelRepository.updateResponsavelAdicional(responsavelId, prepared, passageiroId);
 };
 
-const deleteResponsavelAdicional = async (responsavelId: string) => {
-    await responsavelRepository.deleteResponsavelAdicional(responsavelId);
+const deleteResponsavelAdicional = async (responsavelId: string, passageiroId?: string) => {
+    await responsavelRepository.deleteResponsavelAdicional(responsavelId, passageiroId);
     return { success: true };
 };
 

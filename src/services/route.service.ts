@@ -1,6 +1,6 @@
 import { AppError } from "../errors/AppError.js";
 import { CreateRouteDTO, UpdateRouteDTO, StepRouteExecutionDTO, ReorderExecucaoDTO, CreateAusenciaDTO, ChamadaEscolaDTO, DELETE_AUSENCIA_BY_QUERY_PARAM } from "../types/dtos/route.dto.js";
-import { RouteExecutionStatus, RouteStopStatus, RouteNodeType, RouteSentido, AtividadeAcao, AtividadeEntidadeTipo, UserType, RouteBroadcastEvent, NotificationChannelEnum } from "../types/enums.js";
+import { RouteExecutionStatus, RouteStopStatus, RouteNodeType, RouteSentido, AtividadeAcao, AtividadeEntidadeTipo, UserType, RouteBroadcastEvent, NotificationChannelEnum, TipoResponsavel } from "../types/enums.js";
 import { EVENTO_ROTA_A_CAMINHO_IDA, EVENTO_ROTA_EMBARCOU_IDA, EVENTO_ROTA_A_CAMINHO_VOLTA, EVENTO_ROTA_DESEMBARCOU_VOLTA, EVENTO_ROTA_REORDENADA } from "../config/constants.js";
 import { routeRepository } from "../repositories/route.repository.js";
 import { userRepository } from "../repositories/user.repository.js";
@@ -185,6 +185,67 @@ const getTodayLocalDateStr = (): string => {
   return toPersistenceString(getNowBR());
 };
 
+const _enrichPassageiroNaParada = (pass: any) => {
+  if (!pass) return pass;
+  const rawLinks = pass.responsaveis;
+  if (rawLinks && Array.isArray(rawLinks)) {
+    const links = [...rawLinks].sort((a: any, b: any) => {
+      if (a.tipo === TipoResponsavel.PRINCIPAL) return -1;
+      if (b.tipo === TipoResponsavel.PRINCIPAL) return 1;
+      return 0;
+    });
+
+    const principalLink = links.find((l: any) => l.tipo === TipoResponsavel.PRINCIPAL) || links[0];
+    const resp = principalLink?.responsavel;
+    const respObj = Array.isArray(resp) ? resp[0] : resp;
+
+    if (respObj) {
+      pass.responsavel_principal = {
+        id: respObj.id,
+        nome: respObj.nome,
+        telefone: respObj.telefone,
+        cpf: respObj.cpf,
+        email: respObj.email,
+        parentesco: principalLink?.parentesco || null,
+        logradouro: respObj.logradouro || null,
+        numero: respObj.numero || null,
+        bairro: respObj.bairro || null,
+        cidade: respObj.cidade || null,
+        estado: respObj.estado || null,
+        cep: respObj.cep || null,
+        referencia: respObj.referencia || null,
+        complemento: respObj.complemento || null,
+      };
+    }
+
+    pass.responsaveis = links
+      .map((l: any) => {
+        const rObj = Array.isArray(l.responsavel) ? l.responsavel[0] : l.responsavel;
+        if (!rObj) return null;
+        return {
+          id: rObj.id || l.id,
+          responsavel_id: rObj.id,
+          tipo: l.tipo,
+          parentesco: l.parentesco,
+          nome: rObj.nome,
+          telefone: rObj.telefone,
+          cpf: rObj.cpf,
+          email: rObj.email,
+          logradouro: rObj.logradouro || null,
+          numero: rObj.numero || null,
+          bairro: rObj.bairro || null,
+          cidade: rObj.cidade || null,
+          estado: rObj.estado || null,
+          cep: rObj.cep || null,
+          referencia: rObj.referencia || null,
+          complemento: rObj.complemento || null,
+        };
+      })
+      .filter(Boolean);
+  }
+  return pass;
+};
+
 const getRoute = async (id: string, dataAusencia?: string, targetOwnerId?: string, assignedVeiculoId?: string): Promise<any> => {
   const { data: route, error } = await routeRepository.getById(id);
 
@@ -210,6 +271,7 @@ const getRoute = async (id: string, dataAusencia?: string, targetOwnerId?: strin
       .map((rp: any) => {
         const isAusente = rp.passageiro_id && ausentesMap.has(rp.passageiro_id);
         const ausObj = isAusente ? ausentesMap.get(rp.passageiro_id) : null;
+        const pass = _enrichPassageiroNaParada(rp.passageiro);
 
         return {
           id: rp.id,
@@ -218,7 +280,7 @@ const getRoute = async (id: string, dataAusencia?: string, targetOwnerId?: strin
           passageiro_id: rp.passageiro_id,
           escola_id: rp.escola_id,
           sentido: rp.sentido || null,
-          passageiro: rp.passageiro,
+          passageiro: pass,
           escola: rp.escola,
           status: isAusente ? RouteStopStatus.AUSENTE : RouteStopStatus.PENDENTE,
           is_ausente: isAusente,
@@ -328,7 +390,7 @@ const getExecucaoDetail = async (id: string, targetOwnerId?: string, assignedVei
         passageiro_id: erp.passageiro_id,
         escola_id: erp.escola_id,
         sentido: erp.sentido,
-        passageiro: erp.passageiro,
+        passageiro: _enrichPassageiroNaParada(erp.passageiro),
         escola: erp.escola
       }))
       .sort((a: any, b: any) => a.ordem - b.ordem);

@@ -144,7 +144,8 @@ export const passageiroController = {
 
   deleteResponsavelAdicional: async (request: FastifyRequest, reply: FastifyReply) => {
     const { responsavelId } = request.params as { responsavelId: string };
-    const result = await passageiroService.deleteResponsavelAdicional(responsavelId);
+    const { passageiroId } = request.query as { passageiroId?: string };
+    const result = await passageiroService.deleteResponsavelAdicional(responsavelId, passageiroId);
     return reply.status(200).send(result);
   },
 
