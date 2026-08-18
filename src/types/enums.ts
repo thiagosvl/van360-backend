@@ -221,7 +221,8 @@ export enum ParentescoResponsavel {
 export enum ContratoProvider {
   INHOUSE = "inhouse",
   ASSINAFY = "assinafy",
-  DOCUSIGN = "docusign"
+  DOCUSIGN = "docusign",
+  IMPORTADO = "importado"
 }
 
 export enum SubscriptionStatus {
@@ -329,6 +330,7 @@ export enum AtividadeAcao {
   CONTRATO_CONFIG_EDITADA = "CONTRATO_CONFIG_EDITADA",
   CONTRATO_GERADO = "CONTRATO_GERADO",
   CONTRATO_ASSINADO = "CONTRATO_ASSINADO",
+  CONTRATO_IMPORTADO = "CONTRATO_IMPORTADO",
   CONTRATO_EXCLUIDO = "CONTRATO_EXCLUIDO",
   USUARIO_SUSPENSO = "USUARIO_SUSPENSO",
   EVOLUTION_STATUS_ALTERADO = "EVOLUTION_STATUS_ALTERADO",

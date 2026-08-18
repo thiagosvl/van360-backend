@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { contractService } from '../services/contract.service.js';
-import { createContractSchema, listContractsSchema, signContractSchema } from '../types/dtos/contract.dto.js';
+import { createContractSchema, importContractSchema, listContractsSchema, signContractSchema } from '../types/dtos/contract.dto.js';
 
 export const contractController = {
   create: async (req: FastifyRequest, reply: FastifyReply) => {
@@ -8,6 +8,14 @@ export const contractController = {
     const usuarioId = (req.data_owner_id || req.user?.id)!;
 
     const contrato = await contractService.criarContrato(usuarioId, data);
+    return reply.status(201).send(contrato);
+  },
+
+  importar: async (req: FastifyRequest, reply: FastifyReply) => {
+    const data = importContractSchema.parse(req.body);
+    const usuarioId = (req.data_owner_id || req.user?.id)!;
+
+    const contrato = await contractService.importarContrato(usuarioId, data);
     return reply.status(201).send(contrato);
   },
 

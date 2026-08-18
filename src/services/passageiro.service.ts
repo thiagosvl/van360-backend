@@ -348,6 +348,7 @@ const getPassageiro = async (id: string, targetOwnerId?: string, assignedVeiculo
         status_contrato: statusContrato,
         contrato_id: contratoId,
         contrato_url: contratoUrl,
+        contrato_provider: ultimoContrato?.provider ?? null,
         minuta_url: ultimoContrato?.minuta_url,
         contrato_final_url: ultimoContrato?.contrato_final_url,
         token_acesso: ultimoContrato?.token_acesso
@@ -377,6 +378,7 @@ const listPassageiros = async (
             status_contrato: ultimo?.status ?? null,
             contrato_id: ultimo?.id ?? null,
             contrato_status: ultimo?.status ?? null,
+            contrato_provider: ultimo?.provider ?? null,
             token_acesso: ultimo?.token_acesso ?? null,
         };
     });

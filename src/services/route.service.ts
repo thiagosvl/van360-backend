@@ -35,7 +35,7 @@ const resolveDataOwnerId = async (usuarioId: string): Promise<{ dataOwnerId: str
   }
 };
 
-const notifyFleetRealtime = async (event: string, payload: Record<string, unknown>) => {
+const notifyFleetRealtime = async (event: RouteBroadcastEvent | string, payload: Record<string, unknown>) => {
   try {
     const channel = supabaseAdmin.channel("van360-fleet-sync");
     await channel.send({
@@ -83,7 +83,7 @@ const createRoute = async (data: CreateRouteDTO): Promise<any> => {
 
   const createdRoute = await getRoute(inserted.id);
 
-  notifyFleetRealtime("route_definition_changed", { action: "create", rotaId: inserted.id, veiculoId: inserted.veiculo_id });
+  notifyFleetRealtime(RouteBroadcastEvent.ROUTE_DEFINITION_CHANGED, { action: "create", rotaId: inserted.id, veiculoId: inserted.veiculo_id });
 
   // --- LOG DE AUDITORIA ---
   historicoService.log({
@@ -143,7 +143,7 @@ const updateRoute = async (id: string, data: UpdateRouteDTO): Promise<any> => {
 
   const updatedRoute = await getRoute(id);
 
-  notifyFleetRealtime("route_definition_changed", {
+  notifyFleetRealtime(RouteBroadcastEvent.ROUTE_DEFINITION_CHANGED, {
     action: "update",
     rotaId: id,
     veiculoId: updatedRoute?.veiculo_id,
@@ -166,7 +166,7 @@ const deleteRoute = async (id: string): Promise<void> => {
   const { error } = await routeRepository.delete(id);
   if (error) throw error;
 
-  notifyFleetRealtime("route_definition_changed", { action: "delete", rotaId: id, veiculoId: oldRoute?.veiculo_id });
+  notifyFleetRealtime(RouteBroadcastEvent.ROUTE_DEFINITION_CHANGED, { action: "delete", rotaId: id, veiculoId: oldRoute?.veiculo_id });
 
   // --- LOG DE AUDITORIA ---
   if (oldRoute?.usuario_id) {
@@ -475,7 +475,9 @@ const iniciarRota = async (rotaId: string, usuarioId: string, notificarPais: boo
   if (paradasError) throw paradasError;
 
   if (notificarPais) {
-    await notifyNextPendingPassengerStop(exec.id);
+    notifyNextPendingPassengerStop(exec.id).catch((err) =>
+      logger.error({ err, execId: exec.id }, "Erro ao notificar próximo passageiro na inicialização da rota")
+    );
   }
 
   await checkEFinalizarSeTodasParadasConcluidas(exec.id);
@@ -518,12 +520,10 @@ const atualizarParadaStatus = async (
 
   const [
     { data: exec, error: execError },
-    { data: paradaObj },
-    { data: paradaAtualObj }
+    { data: paradasLeves }
   ] = await Promise.all([
     routeRepository.getExecucaoResumida(execucaoId),
-    routeRepository.getParadaById(paradaId),
-    routeRepository.getParadaAtualPendente(execucaoId)
+    routeRepository.getParadasLevesByExecucao(execucaoId)
   ]);
 
   if (execError) throw execError;
@@ -531,9 +531,11 @@ const atualizarParadaStatus = async (
     throw new AppError("Esta rota não está ativa.", 400);
   }
 
+  const paradaObj = paradasLeves?.find((p: any) => p.id === paradaId);
+  const paradaAtualObj = paradasLeves?.find((p: any) => p.status === RouteStopStatus.PENDENTE);
+
   const isEmbarqueEscola = paradaObj?.tipo_no === RouteNodeType.PASSAGEIRO &&
-    paradaAtualObj && paradaAtualObj.length > 0 &&
-    paradaAtualObj[0].tipo_no === RouteNodeType.ESCOLA &&
+    paradaAtualObj?.tipo_no === RouteNodeType.ESCOLA &&
     novoStatus === RouteStopStatus.EMBARCADO;
 
   if (novoStatus === RouteStopStatus.AUSENTE && paradaObj?.passageiro_id) {
@@ -581,28 +583,34 @@ const atualizarParadaStatus = async (
     if (updateError) throw updateError;
   }
 
-  notifyFleetRealtime("stop_status_changed", { execucaoId, paradaId, status: novoStatus });
+  notifyFleetRealtime(RouteBroadcastEvent.STOP_STATUS_CHANGED, { execucaoId, paradaId, status: novoStatus });
 
   const shouldNotify = (exec as any)?.notificar_pais !== false;
 
-  if (shouldNotify && paradaObj?.passageiro_id) {
-    let routeEvent: string | null = null;
-    const sentido = (paradaObj as any)?.sentido;
-
-    if (novoStatus === RouteStopStatus.EMBARCADO) {
-      routeEvent = sentido === RouteSentido.VOLTANDO ? EVENTO_ROTA_A_CAMINHO_VOLTA : EVENTO_ROTA_EMBARCOU_IDA;
-    } else if (novoStatus === RouteStopStatus.DESEMBARCADO) {
-      routeEvent = sentido === RouteSentido.VOLTANDO ? EVENTO_ROTA_DESEMBARCOU_VOLTA : EVENTO_ROTA_A_CAMINHO_IDA;
-    }
-
-    if (routeEvent && !paradaObj.notificacao_concluido_enviada) {
-      await notifyParentRouteEvent(paradaObj.passageiro_id, routeEvent, exec);
-      await routeRepository.updateNotificacaoConcluidoEnviada(paradaId, true);
-    }
-  }
-
   if (shouldNotify) {
-    await notifyNextPendingPassengerStop(execucaoId);
+    (async () => {
+      try {
+        if (paradaObj?.passageiro_id) {
+          let routeEvent: string | null = null;
+          const sentido = (paradaObj as any)?.sentido;
+
+          if (novoStatus === RouteStopStatus.EMBARCADO) {
+            routeEvent = sentido === RouteSentido.VOLTANDO ? EVENTO_ROTA_A_CAMINHO_VOLTA : EVENTO_ROTA_EMBARCOU_IDA;
+          } else if (novoStatus === RouteStopStatus.DESEMBARCADO) {
+            routeEvent = sentido === RouteSentido.VOLTANDO ? EVENTO_ROTA_DESEMBARCOU_VOLTA : EVENTO_ROTA_A_CAMINHO_IDA;
+          }
+
+          if (routeEvent && !paradaObj.notificacao_concluido_enviada) {
+            await routeRepository.updateNotificacaoConcluidoEnviada(paradaId, true);
+            await notifyParentRouteEvent(paradaObj.passageiro_id, routeEvent, exec);
+          }
+        }
+
+        await notifyNextPendingPassengerStop(execucaoId);
+      } catch (bgError) {
+        logger.error({ bgError, execucaoId, paradaId }, "[routeService] Erro em background ao processar notificações da parada");
+      }
+    })();
   }
 
   await checkEFinalizarSeTodasParadasConcluidas(execucaoId);
@@ -615,11 +623,10 @@ const notifyNextPendingPassengerStop = async (execucaoId: string) => {
     const { data: exec } = await routeRepository.getExecucaoResumida(execucaoId);
     if (!exec || (exec as any).notificar_pais === false) return;
 
-    const execDetail = await getExecucaoDetail(execucaoId);
-    if (!execDetail || !Array.isArray(execDetail.paradas)) return;
+    const { data: paradasLeves } = await routeRepository.getParadasLevesByExecucao(execucaoId);
+    if (!paradasLeves || paradasLeves.length === 0) return;
 
-    const sortedStops = [...execDetail.paradas].sort((a: any, b: any) => a.ordem - b.ordem);
-    const nextStop = sortedStops.find(
+    const nextStop = paradasLeves.find(
       (p: any) => p.status === RouteStopStatus.PENDENTE && p.tipo_no === RouteNodeType.PASSAGEIRO && p.passageiro_id
     );
 
@@ -628,8 +635,8 @@ const notifyNextPendingPassengerStop = async (execucaoId: string) => {
         ? EVENTO_ROTA_A_CAMINHO_VOLTA
         : EVENTO_ROTA_A_CAMINHO_IDA;
 
-      await notifyParentRouteEvent(nextStop.passageiro_id, eventType, exec);
       await routeRepository.updateNotificacaoACaminhoEnviada(nextStop.id, true);
+      await notifyParentRouteEvent(nextStop.passageiro_id, eventType, exec);
     }
   } catch (err) {
     logger.error({ err, execucaoId }, "[routeService] Erro ao notificar próxima parada pendente");
@@ -669,14 +676,12 @@ const processarChamadaEscola = async (execucaoId: string, data: ChamadaEscolaDTO
 
   const todayStr = getTodayLocalDateStr();
 
-  // Processar apenas alunos indicados como AUSENTE na chamada
   const ausentes = data.chamada.filter((item) => item.status === RouteStopStatus.AUSENTE);
 
   for (const item of ausentes) {
     const { data: paradaObj } = await routeRepository.getParadaById(item.parada_id);
     if (!paradaObj || !paradaObj.passageiro_id) continue;
 
-    // Atualizar todas as paradas do passageiro nesta execução para AUSENTE
     await routeRepository.updateTodasParadasDoPassageiroStatus(
       paradaObj.passageiro_id,
       execucaoId,
@@ -684,7 +689,6 @@ const processarChamadaEscola = async (execucaoId: string, data: ChamadaEscolaDTO
       new Date().toISOString()
     );
 
-    // Registrar ausência na tabela rota_ausencias para o dia de hoje
     if (exec.rota_id) {
       const { data: ausenciasExistentes } = await routeRepository.getAusenciasByRotaEData(exec.rota_id, todayStr);
       const jaExiste = ausenciasExistentes?.some((a: any) => a.passageiro_id === paradaObj.passageiro_id);
@@ -702,11 +706,12 @@ const processarChamadaEscola = async (execucaoId: string, data: ChamadaEscolaDTO
     }
   }
 
-  // Notificar frotas via WebSocket/Realtime sem concluir o nó da escola e sem finalizar a rota
-  notifyFleetRealtime("stop_status_changed", { execucaoId });
+  notifyFleetRealtime(RouteBroadcastEvent.STOP_STATUS_CHANGED, { execucaoId });
 
   if ((exec as any)?.notificar_pais !== false) {
-    await notifyNextPendingPassengerStop(execucaoId);
+    notifyNextPendingPassengerStop(execucaoId).catch((bgErr) =>
+      logger.error({ bgErr, execucaoId }, "[routeService] Erro ao notificar próximo após chamada escola")
+    );
   }
 
   return await getExecucaoDetail(execucaoId);
@@ -721,32 +726,37 @@ const reordenarExecucao = async (execucaoId: string, data: ReorderExecucaoDTO): 
 
   const { data: exec } = await routeRepository.getExecucaoResumida(execucaoId);
   if (exec && (exec as any).notificar_pais !== false) {
-    const execDetail = await getExecucaoDetail(execucaoId);
-    if (execDetail && Array.isArray(execDetail.paradas)) {
-      const sortedStops = [...execDetail.paradas].sort((a: any, b: any) => a.ordem - b.ordem);
-      const pendingPassengerStops = sortedStops.filter(
-        (p: any) => p.status === RouteStopStatus.PENDENTE && p.tipo_no === RouteNodeType.PASSAGEIRO && p.passageiro_id
-      );
+    (async () => {
+      try {
+        const { data: paradasLeves } = await routeRepository.getParadasLevesByExecucao(execucaoId);
+        if (paradasLeves && paradasLeves.length > 0) {
+          const pendingPassengerStops = paradasLeves.filter(
+            (p: any) => p.status === RouteStopStatus.PENDENTE && p.tipo_no === RouteNodeType.PASSAGEIRO && p.passageiro_id
+          );
 
-      if (pendingPassengerStops.length > 0) {
-        const newFirstPending = pendingPassengerStops[0];
-        if (!newFirstPending.notificacao_a_caminho_enviada) {
-          const eventType = newFirstPending.sentido === RouteSentido.VOLTANDO
-            ? EVENTO_ROTA_A_CAMINHO_VOLTA
-            : EVENTO_ROTA_A_CAMINHO_IDA;
-          await notifyParentRouteEvent(newFirstPending.passageiro_id, eventType, exec);
-          await routeRepository.updateNotificacaoACaminhoEnviada(newFirstPending.id, true);
-        }
+          if (pendingPassengerStops.length > 0) {
+            const newFirstPending = pendingPassengerStops[0];
+            if (!newFirstPending.notificacao_a_caminho_enviada) {
+              const eventType = newFirstPending.sentido === RouteSentido.VOLTANDO
+                ? EVENTO_ROTA_A_CAMINHO_VOLTA
+                : EVENTO_ROTA_A_CAMINHO_IDA;
+              await routeRepository.updateNotificacaoACaminhoEnviada(newFirstPending.id, true);
+              await notifyParentRouteEvent(newFirstPending.passageiro_id, eventType, exec);
+            }
 
-        for (let i = 1; i < pendingPassengerStops.length; i++) {
-          const p = pendingPassengerStops[i];
-          if (p.notificacao_a_caminho_enviada) {
-            await notifyParentRouteEvent(p.passageiro_id, EVENTO_ROTA_REORDENADA, exec);
-            await routeRepository.updateNotificacaoACaminhoEnviada(p.id, false);
+            for (let i = 1; i < pendingPassengerStops.length; i++) {
+              const p = pendingPassengerStops[i];
+              if (p.notificacao_a_caminho_enviada) {
+                await routeRepository.updateNotificacaoACaminhoEnviada(p.id, false);
+                await notifyParentRouteEvent(p.passageiro_id, EVENTO_ROTA_REORDENADA, exec);
+              }
+            }
           }
         }
+      } catch (bgErr) {
+        logger.error({ bgErr, execucaoId }, "[routeService] Erro ao processar notificações após reordenação");
       }
-    }
+    })();
   }
 
   return await getExecucaoDetail(execucaoId);
@@ -777,7 +787,7 @@ const cancelarExecucao = async (execucaoId: string): Promise<any> => {
     });
   }
 
-  notifyFleetRealtime("route_execution_changed", {
+  notifyFleetRealtime(RouteBroadcastEvent.ROUTE_EXECUTION_CHANGED, {
     action: "cancelar",
     execucaoId: execucaoId,
     status: RouteExecutionStatus.CANCELADA
@@ -802,7 +812,7 @@ const finalizarExecucao = async (execucaoId: string): Promise<any> => {
 
   if (error) throw error;
 
-  notifyFleetRealtime("route_execution_changed", {
+  notifyFleetRealtime(RouteBroadcastEvent.ROUTE_EXECUTION_CHANGED, {
     action: "finalizar",
     execucaoId: execucaoId,
     status: RouteExecutionStatus.CONCLUIDA
@@ -839,7 +849,6 @@ const registrarAusenciaAntecipada = async (data: CreateAusenciaDTO & { registrad
   if (!data.rota_id) throw new AppError("Rota é obrigatória", 400);
   if (!data.data_ausencia) throw new AppError("Data da ausência é obrigatória", 400);
 
-  // Prevenção de duplicidade: se já existir ausência cadastrada para esta rota, passageiro e data, reaproveita
   const { data: ausenciasExistentes } = await routeRepository.getAusenciasByRotaEData(data.rota_id, data.data_ausencia);
   const existente = ausenciasExistentes?.find((a: any) => a.passageiro_id === data.passageiro_id);
   if (existente) {
@@ -868,7 +877,6 @@ const registrarAusenciaAntecipada = async (data: CreateAusenciaDTO & { registrad
     });
   }
 
-  // Se a rota já estiver em EXECUÇÃO ATIVA, sincroniza o status da parada em execucoes_rota_passageiros
   const { data: execAtiva } = await routeRepository.getExecucaoAtivaByRotaId(data.rota_id);
   if (execAtiva?.id) {
     await routeRepository.updateTodasParadasDoPassageiroStatus(
@@ -877,17 +885,16 @@ const registrarAusenciaAntecipada = async (data: CreateAusenciaDTO & { registrad
       RouteStopStatus.AUSENTE,
       new Date().toISOString()
     );
-    notifyFleetRealtime("stop_status_changed", {
+    notifyFleetRealtime(RouteBroadcastEvent.STOP_STATUS_CHANGED, {
       execucaoId: execAtiva.id,
       passageiroId: data.passageiro_id,
       status: RouteStopStatus.AUSENTE
     });
 
-    // Se a marcação de ausência completou todas as paradas da corrida ativa, finaliza automaticamente a rota
     await checkEFinalizarSeTodasParadasConcluidas(execAtiva.id);
   }
 
-  notifyFleetRealtime("absence_changed", { rotaId: data.rota_id, passageiroId: data.passageiro_id });
+  notifyFleetRealtime(RouteBroadcastEvent.ABSENCE_CHANGED, { rotaId: data.rota_id, passageiroId: data.passageiro_id });
 
   return inserted;
 };
@@ -915,7 +922,6 @@ const removerAusenciaAntecipada = async (id: string, passageiroId?: string, rota
     if (error) throw error;
   }
 
-  // Se a rota já estiver em EXECUÇÃO ATIVA, restaura o status da parada para PENDENTE em execucoes_rota_passageiros
   if (targetRotaId && targetPid) {
     const { data: execAtiva } = await routeRepository.getExecucaoAtivaByRotaId(targetRotaId);
     if (execAtiva?.id) {
@@ -925,7 +931,7 @@ const removerAusenciaAntecipada = async (id: string, passageiroId?: string, rota
         RouteStopStatus.PENDENTE,
         null
       );
-      notifyFleetRealtime("stop_status_changed", {
+      notifyFleetRealtime(RouteBroadcastEvent.STOP_STATUS_CHANGED, {
         execucaoId: execAtiva.id,
         passageiroId: targetPid,
         status: RouteStopStatus.PENDENTE
@@ -933,7 +939,7 @@ const removerAusenciaAntecipada = async (id: string, passageiroId?: string, rota
     }
   }
 
-  notifyFleetRealtime("absence_changed", { rotaId: targetRotaId, passageiroId: targetPid });
+  notifyFleetRealtime(RouteBroadcastEvent.ABSENCE_CHANGED, { rotaId: targetRotaId, passageiroId: targetPid });
 };
 
 const listAusenciasByRota = async (rotaId: string, dataAusencia?: string): Promise<any[]> => {

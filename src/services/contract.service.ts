@@ -5,12 +5,13 @@ import { logger } from '../config/logger.js';
 import { AppError } from '../errors/AppError.js';
 import { addToContractQueue } from '../queues/contract.queue.js';
 import { ContractProvider, DadosContrato, SignatureMetadata } from '../types/contract.js';
-import { CreateContractDTO, ListContractsDTO } from '../types/dtos/contract.dto.js';
+import { CreateContractDTO, ImportContractDTO, ListContractsDTO } from '../types/dtos/contract.dto.js';
 import { AtividadeAcao, AtividadeEntidadeTipo, ContractMultaTipo, ContratoProvider, ContratoStatus, PassageiroModalidade, PeriodoEnum, TipoResponsavel } from '../types/enums.js';
 import { getNowBR, toLocalDateString, parseLocalDate, addMonths } from '../utils/date.utils.js';
 import { formatAddress, getDriverDisplayName } from '../utils/format.js';
 import { historicoService } from './historico.service.js';
 import { InHouseContractProvider } from './providers/inhouse-contract.provider.js';
+import { storageProvider } from './providers/storage.provider.js';
 import { notificationService } from './notifications/notification.service.js';
 import { EVENTO_MOTORISTA_CONTRATO_ASSINADO, EVENTO_PASSAGEIRO_CONTRATO_ASSINADO } from '../config/constants.js';
 import { formatarPlacaExibicao } from '../utils/placa.utils.js';
@@ -258,6 +259,85 @@ class ContractService {
     };
   }
 
+  async importarContrato(authId: string, data: ImportContractDTO) {
+    const usuario = await this.getUsuarioByAuthId(authId);
+    const usuarioId = usuario.id;
+
+    logger.info({ usuarioId, passageiroId: data.passageiroId, nomeArquivo: data.nomeArquivo }, 'Importando contrato em PDF');
+
+    const { data: passageiro, error: passageiroError } = await passageiroRepository.getById(data.passageiroId, usuarioId);
+    if (passageiroError || !passageiro) {
+      throw new AppError('Passageiro não encontrado', 404);
+    }
+
+    const cleanBase64 = data.arquivoBase64
+      .replace(/^data:application\/pdf;base64,/, '')
+      .replace(/^data:.*?;base64,/, '');
+
+    const fileBuffer = Buffer.from(cleanBase64, 'base64');
+
+    const MAX_SIZE = 10 * 1024 * 1024;
+    if (fileBuffer.length > MAX_SIZE) {
+      throw new AppError('Arquivo muito grande. O tamanho máximo permitido é 10MB.', 400);
+    }
+
+    const isPdfHeader = fileBuffer.subarray(0, 4).toString('ascii').startsWith('%PDF');
+    if (!isPdfHeader) {
+      throw new AppError('Arquivo inválido. Apenas arquivos no formato PDF são permitidos.', 400);
+    }
+
+    const tokenAcesso = uuidv4();
+    const storagePath = `imported/${usuarioId}/${tokenAcesso}.pdf`;
+
+    const { error: uploadError } = await storageProvider.upload('contratos', storagePath, fileBuffer, {
+      contentType: 'application/pdf',
+      upsert: true,
+    });
+
+    if (uploadError) {
+      logger.error({ uploadError }, 'Erro ao fazer upload do contrato importado para o storage');
+      throw new AppError('Erro ao salvar arquivo PDF do contrato', 500);
+    }
+
+    const publicUrl = storageProvider.getPublicUrl('contratos', storagePath);
+
+    await contractRepository.aposentarContratosPassageiro(data.passageiroId, true);
+
+    const nowIso = new Date().toISOString();
+    const contrato = await contractRepository.insert({
+      usuario_id: usuarioId,
+      passageiro_id: data.passageiroId,
+      token_acesso: tokenAcesso,
+      provider: ContratoProvider.IMPORTADO,
+      dados_contrato: {
+        importado: true,
+        nomeArquivoOriginal: data.nomeArquivo,
+        dataImportacao: nowIso,
+        nomePassageiro: passageiro.nome,
+      },
+      status: ContratoStatus.ASSINADO,
+      contrato_final_url: publicUrl,
+      assinado_em: nowIso,
+      ano: new Date().getFullYear(),
+      valor_parcela: Number(passageiro.valor_cobranca) || null,
+      dia_vencimento: passageiro.dia_vencimento || null,
+    });
+
+    historicoService.log({
+      usuario_id: usuarioId,
+      entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
+      entidade_id: data.passageiroId,
+      acao: AtividadeAcao.CONTRATO_IMPORTADO,
+      descricao: `Contrato em PDF importado para ${passageiro.nome}.`,
+      meta: { contrato_id: contrato.id, nome_arquivo: data.nomeArquivo }
+    });
+
+    return {
+      ...contrato,
+      contrato_url: publicUrl
+    };
+  }
+
   async processarAssinatura(tokenAcesso: string, assinaturaBase64: string, metadados: SignatureMetadata) {
     logger.info({ tokenAcesso }, 'Processando assinatura');
 
@@ -493,9 +573,15 @@ class ContractService {
 
     await contractRepository.delete(contratoId, usuarioId);
 
+    if (contrato.provider === ContratoProvider.IMPORTADO || contrato.token_acesso) {
+      const storagePath = `imported/${usuarioId}/${contrato.token_acesso}.pdf`;
+      await storageProvider.remove('contratos', [storagePath]).catch((err) => {
+        logger.warn({ err, storagePath }, 'Falha não bloqueante ao remover PDF importado do storage');
+      });
+    }
+
     logger.info({ contratoId }, 'Contrato excluído');
 
-    // --- LOG DE AUDITORIA ---
     if (contrato) {
       historicoService.log({
         usuario_id: usuarioId,
@@ -527,7 +613,6 @@ class ContractService {
     const respInfo = _getResponsavelInfoFromPassageiro(passageiro);
     if (!respInfo.telefone) throw new AppError('Passageiro sem telefone do responsável', 400);
 
-    // Enfileirar novamente
     await addToContractQueue({
       contratoId: contrato.id,
       usuarioId: usuario.id,
@@ -557,6 +642,15 @@ class ContractService {
       contrato = await contractRepository.getById(contratoId, usuarioId);
     } catch (err) {
       throw new AppError('Contrato não encontrado', 404);
+    }
+
+    if (contrato.provider === ContratoProvider.IMPORTADO) {
+      const storagePath = `imported/${usuarioId}/${contrato.token_acesso}.pdf`;
+      const { data: pdfBuffer, error } = await storageProvider.download('contratos', storagePath);
+      if (error || !pdfBuffer) {
+        throw new AppError('Erro ao baixar documento do contrato importado', 500);
+      }
+      return Buffer.from(await pdfBuffer.arrayBuffer());
     }
 
     const provider = this.getProvider(contrato.provider);

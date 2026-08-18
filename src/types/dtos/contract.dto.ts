@@ -15,6 +15,14 @@ export const createContractSchema = z.object({
 
 export type CreateContractDTO = z.infer<typeof createContractSchema>;
 
+export const importContractSchema = z.object({
+  passageiroId: z.string().uuid('ID do passageiro inválido'),
+  arquivoBase64: z.string().min(1, 'Arquivo PDF é obrigatório'),
+  nomeArquivo: z.string().min(1, 'Nome do arquivo é obrigatório'),
+});
+
+export type ImportContractDTO = z.infer<typeof importContractSchema>;
+
 
 export const signContractSchema = z.object({
   assinatura: z.string().min(1, 'Assinatura é obrigatória'),

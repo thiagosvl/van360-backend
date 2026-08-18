@@ -6,6 +6,7 @@ import { requirePermission } from '../middleware/permissions.middleware.js';
 export async function contractRoutes(app: FastifyInstance) {
   // Rotas protegidas (requerem autenticação e permissão de gestão de contratos)
   app.post('/contratos', { preHandler: [authenticate, requirePermission("contratos.gerenciar")] }, contractController.create);
+  app.post('/contratos/importar', { preHandler: [authenticate, requirePermission("contratos.gerenciar")] }, contractController.importar);
   app.get('/contratos', { preHandler: [authenticate, requirePermission("contratos.gerenciar")] }, contractController.list);
   app.get('/contratos/kpis', { preHandler: [authenticate, requirePermission("contratos.gerenciar")] }, contractController.getKPIs);
   app.post('/contratos/preview', { preHandler: [authenticate, requirePermission("contratos.gerenciar")] }, contractController.preview);

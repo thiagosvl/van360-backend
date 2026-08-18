@@ -393,6 +393,14 @@ export const routeRepository = {
       .eq("status", RouteStopStatus.PENDENTE);
   },
 
+  async getParadasLevesByExecucao(execucaoId: string) {
+    return supabaseAdmin
+      .from("execucoes_rota_passageiros")
+      .select("id, tipo_no, status, ordem, passageiro_id, escola_id, sentido, notificacao_a_caminho_enviada, notificacao_concluido_enviada")
+      .eq("execucao_rota_id", execucaoId)
+      .order("ordem", { ascending: true });
+  },
+
   async updateExecucaoStatus(execucaoId: string, status: RouteExecutionStatus, finalizadaEm: string | null) {
     return supabaseAdmin
       .from("execucoes_rota")

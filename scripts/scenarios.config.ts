@@ -18,6 +18,13 @@ export interface ScenarioConfig {
     prePassageiros: {
         quantidade: number;
     };
+    rotas?: {
+        quantidade: number;
+        criarAusencias?: boolean;
+    };
+    cobrancas?: {
+        taxaInadimplencia?: number;
+    };
     resetarPix?: boolean;
 }
 
@@ -28,38 +35,107 @@ export const cenarios: Record<string, ScenarioConfig> = {
         passageiros: {
             quantidade: 25,
             percentualComAniversario: 75,
+            percentualSemEndereco: 10,
+            percentualComResponsaveisAdicionais: 40,
         },
         gastos: {
-            quantidadeTotal: 20,
-            quantidadeSemVeiculo: 5,
+            quantidadeTotal: 15,
+            quantidadeSemVeiculo: 3,
         },
         prePassageiros: {
-            quantidade: 0,
+            quantidade: 2,
+        },
+        rotas: {
+            quantidade: 2,
+            criarAusencias: true,
+        },
+        cobrancas: {
+            taxaInadimplencia: 15,
         },
     },
     "cenario-vazio": {
         escolas: { quantidade: 0 },
         veiculos: { quantidade: 0 },
-        passageiros: { quantidade: 0, percentualComAniversario: 0 },
-        gastos: { quantidadeTotal: 0, quantidadeSemVeiculo: 0 },
-        prePassageiros: { quantidade: 0 },
+        passageiros: {
+            quantidade: 0,
+            percentualComAniversario: 0,
+        },
+        gastos: {
+            quantidadeTotal: 0,
+            quantidadeSemVeiculo: 0,
+        },
+        prePassageiros: {
+            quantidade: 0,
+        },
         resetarPix: true,
     },
     "cenario-rotas": {
-        escolas: { quantidade: 2 },
+        escolas: { quantidade: 3 },
         veiculos: { quantidade: 2 },
         passageiros: {
-            quantidade: 50,
-            percentualComAniversario: 75,
+            quantidade: 35,
+            percentualComAniversario: 60,
             percentualSemEndereco: 15,
             percentualComResponsaveisAdicionais: 50,
         },
         gastos: {
-            quantidadeTotal: 20,
+            quantidadeTotal: 10,
+            quantidadeSemVeiculo: 2,
+        },
+        prePassageiros: {
+            quantidade: 3,
+        },
+        rotas: {
+            quantidade: 3,
+            criarAusencias: true,
+        },
+    },
+    "cenario-inadimplencia": {
+        escolas: { quantidade: 2 },
+        veiculos: { quantidade: 1 },
+        passageiros: {
+            quantidade: 20,
+            percentualComAniversario: 50,
+            percentualSemEndereco: 5,
+            percentualComResponsaveisAdicionais: 30,
+        },
+        gastos: {
+            quantidadeTotal: 12,
+            quantidadeSemVeiculo: 2,
+        },
+        prePassageiros: {
+            quantidade: 1,
+        },
+        rotas: {
+            quantidade: 1,
+            criarAusencias: false,
+        },
+        cobrancas: {
+            taxaInadimplencia: 60,
+        },
+    },
+    "cenario-completo": {
+        escolas: { quantidade: 4 },
+        veiculos: { quantidade: 3 },
+        passageiros: {
+            quantidade: 45,
+            percentualComAniversario: 70,
+            percentualSemEndereco: 10,
+            percentualComResponsaveisAdicionais: 50,
+        },
+        gastos: {
+            quantidadeTotal: 25,
             quantidadeSemVeiculo: 5,
         },
         prePassageiros: {
-            quantidade: 2,
+            quantidade: 5,
+        },
+        rotas: {
+            quantidade: 4,
+            criarAusencias: true,
+        },
+        cobrancas: {
+            taxaInadimplencia: 20,
         },
     }
 };

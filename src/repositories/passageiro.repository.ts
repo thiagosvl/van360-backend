@@ -48,7 +48,7 @@ export const passageiroRepository = {
       query = query.eq("usuario_id", usuarioId);
     }
 
-    const { data, error } = await query.single();
+    const { data, error } = await query.maybeSingle();
     if (error) throw error;
     return data;
   },
@@ -89,7 +89,7 @@ export const passageiroRepository = {
             *,
             escola:escolas(id, nome),
             veiculo:veiculos(id, placa, modelo),
-            contratos(id, status, created_at, minuta_url, contrato_final_url, token_acesso),
+            contratos(id, status, provider, created_at, minuta_url, contrato_final_url, token_acesso),
             ${PASSAGEIRO_RESPONSAVEIS_SELECT}
         `)
       .eq("id", id);
@@ -101,7 +101,7 @@ export const passageiroRepository = {
     return query
       .order('created_at', { foreignTable: 'contratos', ascending: false })
       .limit(1, { foreignTable: 'contratos' })
-      .single();
+      .maybeSingle();
   },
 
   async list(usuarioId: string, filtros?: ListPassageirosFiltersDTO) {
@@ -112,10 +112,10 @@ export const passageiroRepository = {
     let query = supabaseAdmin
       .from("passageiros")
       .select(`
-        id, usuario_id, nome, ativo, isento, valor_cobranca, dia_vencimento, data_inicio_cobranca, data_fim_cobranca, data_inicio_transporte, data_fim_transporte, periodo, turma, escola_id, veiculo_id, created_at,
+        id, usuario_id, nome, ativo, isento, data_nascimento, genero, modalidade, periodo, turma, nome_professor, observacoes, valor_cobranca, dia_vencimento, data_inicio_cobranca, data_fim_cobranca, data_inicio_transporte, data_fim_transporte, latitude, longitude, enviar_notificacoes, escola_id, veiculo_id, created_at, updated_at,
         escola:escolas(id, nome),
         veiculo:veiculos(id, placa, modelo),
-        contratos(id, status, token_acesso),
+        contratos(id, status, provider, token_acesso),
         responsaveis:passageiro_responsaveis(
           id, tipo, parentesco,
           responsavel:responsaveis(id, nome, telefone, cpf, email, logradouro, numero, bairro, cidade, estado, cep, referencia, complemento)

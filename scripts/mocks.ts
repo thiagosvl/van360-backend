@@ -61,7 +61,8 @@ export const ruas = [
 ];
 
 export const bairros = [
-    "Centro", "Jardins", "Vila Madalena", "Pinheiros", "Moema", "Itaim Bibi", "Brooklin", "Vila Olímpia", "Perdizes", "Pompeia"
+    "Centro", "Jardins", "Vila Madalena", "Pinheiros", "Moema", "Itaim Bibi", "Brooklin", "Vila Olímpia", "Perdizes", "Pompeia",
+    "Bela Vista", "Santana", "Tatuapé", "Mooca", "Saúde"
 ];
 
 const cidades = [
@@ -122,112 +123,42 @@ export const escolas = [
 export const veiculos = [
     {
         placa: "ABC-1234",
-        modelo: "Onix",
-        marca: "Chevrolet",
+        modelo: "Master Executiva",
+        marca: "Renault",
     },
     {
         placa: "DEF-5678",
-        modelo: "Gol",
-        marca: "Volkswagen",
+        modelo: "Sprinter 415",
+        marca: "Mercedes-Benz",
     },
     {
         placa: "GHI-9012",
-        modelo: "HB20",
-        marca: "Hyundai",
+        modelo: "Ducato Minibus",
+        marca: "Fiat",
     },
     {
         placa: "JKL-3456",
-        modelo: "Ka",
+        modelo: "Transit Van",
         marca: "Ford",
     },
     {
         placa: "MNO-7890",
-        modelo: "Uno",
-        marca: "Fiat",
+        modelo: "Kombi Escolar",
+        marca: "Volkswagen",
     },
     {
         placa: "PQR-2468",
-        modelo: "Argo",
-        marca: "Fiat",
-    },
-    {
-        placa: "STU-1357",
-        modelo: "Cronos",
-        marca: "Fiat",
-    },
-    {
-        placa: "VWX-8642",
-        modelo: "Corolla",
-        marca: "Toyota",
-    },
-    {
-        placa: "YZA-9753",
-        modelo: "Yaris",
-        marca: "Toyota",
-    },
-    {
-        placa: "BCD-4826",
-        modelo: "Civic",
-        marca: "Honda",
-    },
-    {
-        placa: "EFG-7195",
-        modelo: "Fit",
-        marca: "Honda",
-    },
-    {
-        placa: "HIJ-3061",
-        modelo: "Sandero",
-        marca: "Renault",
-    },
-    {
-        placa: "KLM-5284",
-        modelo: "Logan",
-        marca: "Renault",
-    },
-    {
-        placa: "NOP-1478",
-        modelo: "Polo",
-        marca: "Volkswagen",
-    },
-    {
-        placa: "QRS-9630",
-        modelo: "Virtus",
-        marca: "Volkswagen",
-    },
-    {
-        placa: "TUV-8521",
-        modelo: "Tracker",
-        marca: "Chevrolet",
-    },
-    {
-        placa: "WXY-6743",
-        modelo: "Creta",
-        marca: "Hyundai",
-    },
-    {
-        placa: "ZAB-2187",
-        modelo: "Compass",
-        marca: "Jeep",
-    },
-    {
-        placa: "CDE-5591",
-        modelo: "Pulse",
-        marca: "Fiat",
-    },
-    {
-        placa: "FGH-8802",
-        modelo: "Kwid",
-        marca: "Renault",
+        modelo: "Expert Minibus",
+        marca: "Peugeot",
     }
 ];
 
-export const randomNumber = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1) + min);
+export const randomNumber = (min: number, max: number): number => Math.floor(Math.random() * (max - min + 1) + min);
 
-const createCPFDigit = (cpfPartial: string) => {
+const createCPFDigit = (cpfPartial: string): number => {
     let sum = 0;
     let weight = cpfPartial.length + 1;
-    for (let i = 0; i < cpfPartial.length; i++) sum += parseInt(cpfPartial[i]) * weight--;
+    for (let i = 0; i < cpfPartial.length; i++) sum += parseInt(cpfPartial[i], 10) * weight--;
     const remainder = sum % 11;
     return remainder < 2 ? 0 : 11 - remainder;
 };
@@ -241,10 +172,26 @@ export const generateCPF = (formatted = false): string => {
     return cpf;
 };
 
+export const generatePhone = (): string => {
+    const ddd = "11";
+    const prefix = "9";
+    const rest = Array.from({ length: 8 }, () => randomNumber(0, 9)).join('');
+    return `${ddd}${prefix}${rest}`;
+};
+
+export const generateCoordinates = (baseLat = -23.55052, baseLon = -46.633308) => {
+    const latOffset = (Math.random() - 0.5) * 0.08;
+    const lonOffset = (Math.random() - 0.5) * 0.08;
+    return {
+        latitude: parseFloat((baseLat + latOffset).toFixed(6)),
+        longitude: parseFloat((baseLon + lonOffset).toFixed(6)),
+    };
+};
+
 export const generateName = (): string => `${nomes[randomNumber(0, nomes.length - 1)]} ${sobrenomes[randomNumber(0, sobrenomes.length - 1)]} ${sobrenomes[randomNumber(0, sobrenomes.length - 1)]}`;
 
 export const generateAddress = () => {
-    const cidade = cidades[randomNumber(0, cidades.length - 1)];
+    const cidade = cidades[0]; // Padrão São Paulo
     return {
         logradouro: ruas[randomNumber(0, ruas.length - 1)],
         numero: randomNumber(1, 9999).toString(),
@@ -253,7 +200,8 @@ export const generateAddress = () => {
         estado: cidade.estado,
         cep: `${randomNumber(10000, 99999)}-${randomNumber(100, 999)}`,
         referencia: "Perto do mercado",
+        complemento: randomNumber(1, 2) === 1 ? `Apto ${randomNumber(1, 150)}` : "",
     };
 };
 
-export const generateValorCobranca = (): number => [150, 180, 200, 220, 250, 300, 350][randomNumber(0, 6)];
+export const generateValorCobranca = (): number => [180, 200, 220, 250, 280, 300, 350, 400][randomNumber(0, 7)];

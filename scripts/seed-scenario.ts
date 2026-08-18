@@ -2,11 +2,14 @@ import { supabaseAdmin } from "../src/config/supabase.js";
 import { env } from "../src/config/env.js";
 import {
     randomNumber,
+    nomes,
     escolas,
     veiculos,
     generateName,
     generateCPF,
+    generatePhone,
     generateAddress,
+    generateCoordinates,
     generateValorCobranca,
     bairros,
 } from "./mocks.js";
@@ -20,6 +23,9 @@ import {
     CobrancaStatus,
     CobrancaOrigem,
     CobrancaTipoPagamento,
+    TipoResponsavel,
+    RouteSentido,
+    RouteNodeType,
 } from "../src/types/enums.js";
 
 import { cenarios, ScenarioConfig } from "./scenarios.config.js";
@@ -31,11 +37,11 @@ if (env.NODE_ENV !== "development" && !ALLOW_PROD) {
     process.exit(1);
 }
 
-const TARGET_PHONE = "11951186951";
-
-// Lê o nome do cenário passado via argumento CLI, ex: npm run seed:scenario -- cenario-1
 const args = process.argv.slice(2);
-const scenarioName = args[0] || "cenario-1";
+const phoneArg = args.find(arg => arg.startsWith("--phone="));
+const TARGET_PHONE = phoneArg ? phoneArg.replace("--phone=", "").replace(/\D/g, "") : (process.env.TARGET_PHONE || "11951186951");
+
+const scenarioName = args.find(arg => !arg.startsWith("--")) || "cenario-1";
 const config: ScenarioConfig = cenarios[scenarioName];
 
 if (!config) {
@@ -44,8 +50,73 @@ if (!config) {
     process.exit(1);
 }
 
+async function cleanupOrphanedResponsaveis(responsavelIds: string[]) {
+    if (!responsavelIds || responsavelIds.length === 0) return;
+    const uniqueIds = Array.from(new Set(responsavelIds.filter(Boolean)));
+
+    for (const respId of uniqueIds) {
+        const { count, error } = await supabaseAdmin
+            .from("passageiro_responsaveis")
+            .select("id", { count: "exact", head: true })
+            .eq("responsavel_id", respId);
+
+        if (!error && count === 0) {
+            await supabaseAdmin
+                .from("responsaveis")
+                .delete()
+                .eq("id", respId);
+        }
+    }
+}
+
 async function clearData(usuarioId: string) {
     console.log(`[SEED] Iniciando limpeza das tabelas (Cenário selecionado: ${scenarioName})...`);
+
+    const { data: passageirosUsuario } = await supabaseAdmin
+        .from("passageiros")
+        .select("id")
+        .eq("usuario_id", usuarioId);
+
+    const passageiroIds = (passageirosUsuario || []).map(p => p.id);
+    let responsavelIdsParaChecar: string[] = [];
+
+    if (passageiroIds.length > 0) {
+        const { data: links } = await supabaseAdmin
+            .from("passageiro_responsaveis")
+            .select("responsavel_id")
+            .in("passageiro_id", passageiroIds);
+        responsavelIdsParaChecar = (links || []).map(l => l.responsavel_id);
+
+        await supabaseAdmin
+            .from("rota_ausencias")
+            .delete()
+            .in("passageiro_id", passageiroIds);
+
+        await supabaseAdmin
+            .from("passageiro_ausencias")
+            .delete()
+            .in("passageiro_id", passageiroIds);
+    }
+
+    const { data: rotasUsuario } = await supabaseAdmin
+        .from("rotas")
+        .select("id")
+        .eq("usuario_id", usuarioId);
+
+    const rotaIds = (rotasUsuario || []).map(r => r.id);
+
+    if (rotaIds.length > 0) {
+        await supabaseAdmin
+            .from("execucoes_rota")
+            .delete()
+            .in("rota_id", rotaIds);
+
+        await supabaseAdmin
+            .from("rota_passageiros")
+            .delete()
+            .in("rota_id", rotaIds);
+    }
+
     const tablesToClean = [
         "historico_atividades",
         "cobrancas",
@@ -72,16 +143,26 @@ async function clearData(usuarioId: string) {
             throw error;
         }
     }
+
+    if (responsavelIdsParaChecar.length > 0) {
+        await cleanupOrphanedResponsaveis(responsavelIdsParaChecar);
+    }
+
     console.log("[SEED] Banco limpo com sucesso.");
 }
 
-async function seedEscolas(usuarioId: string, config: ScenarioConfig) {
-    if (config.escolas.quantidade === 0) return [];
-    console.log(`[SEED] Inserindo ${config.escolas.quantidade} escolas...`);
+async function seedEscolas(usuarioId: string, cfg: ScenarioConfig) {
+    if (cfg.escolas.quantidade === 0) return [];
+    console.log(`[SEED] Inserindo ${cfg.escolas.quantidade} escolas...`);
 
-    const escolasToInsert = Array.from({ length: config.escolas.quantidade }).map((_, i) => {
+    const escolasToInsert = Array.from({ length: cfg.escolas.quantidade }).map((_, i) => {
         const e = escolas[i % escolas.length];
-        return { ...e, nome: `${e.nome} ${i >= escolas.length ? `(${i + 1})` : ''}`.trim(), usuario_id: usuarioId, ativo: true };
+        return {
+            ...e,
+            nome: `${e.nome} ${i >= escolas.length ? `(${i + 1})` : ''}`.trim(),
+            usuario_id: usuarioId,
+            ativo: true,
+        };
     });
 
     const { data, error } = await supabaseAdmin
@@ -93,13 +174,18 @@ async function seedEscolas(usuarioId: string, config: ScenarioConfig) {
     return data;
 }
 
-async function seedVeiculos(usuarioId: string, config: ScenarioConfig) {
-    if (config.veiculos.quantidade === 0) return [];
-    console.log(`[SEED] Inserindo ${config.veiculos.quantidade} veículos...`);
+async function seedVeiculos(usuarioId: string, cfg: ScenarioConfig) {
+    if (cfg.veiculos.quantidade === 0) return [];
+    console.log(`[SEED] Inserindo ${cfg.veiculos.quantidade} veículos...`);
 
-    const veiculosToInsert = Array.from({ length: config.veiculos.quantidade }).map((_, i) => {
+    const veiculosToInsert = Array.from({ length: cfg.veiculos.quantidade }).map((_, i) => {
         const v = veiculos[i % veiculos.length];
-        return { ...v, placa: `TST-${(1000 + i).toString()}`, usuario_id: usuarioId, ativo: true };
+        return {
+            ...v,
+            placa: `VAN-${(1000 + i).toString()}`,
+            usuario_id: usuarioId,
+            ativo: true,
+        };
     });
 
     const { data, error } = await supabaseAdmin
@@ -111,103 +197,99 @@ async function seedVeiculos(usuarioId: string, config: ScenarioConfig) {
     return data;
 }
 
-async function seedPassageiros(usuarioId: string, escolasInseridas: any[], veiculosInseridos: any[], config: ScenarioConfig) {
-    if (config.passageiros.quantidade === 0) return [];
+async function seedPassageiros(
+    usuarioId: string,
+    escolasInseridas: any[],
+    veiculosInseridos: any[],
+    cfg: ScenarioConfig
+) {
+    if (cfg.passageiros.quantidade === 0) return [];
 
-    console.log(`[SEED] Inserindo ${config.passageiros.quantidade} passageiros...`);
+    console.log(`[SEED] Inserindo ${cfg.passageiros.quantidade} passageiros e responsáveis...`);
     const periodos = Object.values(PeriodoEnum);
     const modalidades = Object.values(PassageiroModalidade);
-    const generos = Object.values(PassageiroGenero);
+    const generos = [PassageiroGenero.MASCULINO, PassageiroGenero.FEMININO];
     const parentescos = Object.values(ParentescoResponsavel);
 
-    const passageirosToInsert = Array.from({ length: config.passageiros.quantidade }).map(() => {
+    const insertedPassengers: any[] = [];
+
+    for (let index = 0; index < cfg.passageiros.quantidade; index++) {
         const escola = escolasInseridas[randomNumber(0, escolasInseridas.length - 1)];
         const veiculo = veiculosInseridos[randomNumber(0, veiculosInseridos.length - 1)];
-        const semEndereco = config.passageiros.percentualSemEndereco
-            ? randomNumber(1, 100) <= config.passageiros.percentualSemEndereco
+        const coords = generateCoordinates();
+
+        const semEndereco = cfg.passageiros.percentualSemEndereco
+            ? randomNumber(1, 100) <= cfg.passageiros.percentualSemEndereco
             : false;
         const endereco = semEndereco ? null : generateAddress();
 
-        // Aniversariantes no mês atual baseado na porcentagem configurada
-        let data_nascimento = null;
-        if (randomNumber(1, 100) <= config.passageiros.percentualComAniversario) {
-            const hoje = new Date();
-            const ano = randomNumber(hoje.getFullYear() - 16, hoje.getFullYear() - 4); // Idade escolar
-            const mes = (hoje.getMonth() + 1).toString().padStart(2, '0');
-            const dia = randomNumber(1, 28).toString().padStart(2, '0');
-            data_nascimento = `${ano}-${mes}-${dia}`;
+        const hoje = new Date();
+        const ano = randomNumber(hoje.getFullYear() - 16, hoje.getFullYear() - 4);
+        const fazAniversarioMesAtual = randomNumber(1, 100) <= cfg.passageiros.percentualComAniversario;
+        let mesNum: number;
+        if (fazAniversarioMesAtual) {
+            mesNum = hoje.getMonth() + 1;
+        } else {
+            const outrosMeses = Array.from({ length: 12 }, (_, i) => i + 1).filter(m => m !== (hoje.getMonth() + 1));
+            mesNum = outrosMeses[randomNumber(0, outrosMeses.length - 1)];
         }
+        const mes = mesNum.toString().padStart(2, '0');
+        const dia = randomNumber(1, 28).toString().padStart(2, '0');
+        const data_nascimento = `${ano}-${mes}-${dia}`;
 
-        return {
-            usuario_id: usuarioId,
-            escola_id: escola.id,
-            veiculo_id: veiculo.id,
-            nome: generateName(),
-            ativo: true,
-            periodo: periodos[randomNumber(0, periodos.length - 1)],
-            modalidade: modalidades[randomNumber(0, modalidades.length - 1)],
-            genero: generos[randomNumber(0, generos.length - 1)],
-            turma: `${randomNumber(1, 9)}º ano`,
+        const hojeStr = new Date().toISOString().split("T")[0];
 
-        const endereco = generateAddress();
-        const respParentesco = parentescos[randomNumber(0, parentescos.length - 1)];
-
-        return {
-            passengerData: {
+        const { data: pData, error: pError } = await supabaseAdmin
+            .from("passageiros")
+            .insert({
                 usuario_id: usuarioId,
                 escola_id: escola.id,
                 veiculo_id: veiculo.id,
                 nome: generateName(),
                 ativo: true,
+                isento: false,
                 periodo: periodos[randomNumber(0, periodos.length - 1)],
                 modalidade: modalidades[randomNumber(0, modalidades.length - 1)],
                 genero: generos[randomNumber(0, generos.length - 1)],
                 turma: `${randomNumber(1, 9)}º ano`,
-
-                logradouro: endereco ? endereco.logradouro : null,
-                numero: endereco ? endereco.numero : null,
-                bairro: endereco ? endereco.bairro : null,
-                cidade: endereco ? endereco.cidade : null,
-                estado: endereco ? endereco.estado : null,
-                cep: endereco ? endereco.cep : null,
-                referencia: endereco ? endereco.referencia : null,
-
+                nome_professor: `Prof. ${nomes[randomNumber(0, nomes.length - 1)]}`,
+                data_nascimento,
                 dia_vencimento: [5, 10, 15, 20][randomNumber(0, 3)],
                 valor_cobranca: generateValorCobranca(),
-                data_inicio_cobranca: new Date().toISOString().split("T")[0],
+                data_inicio_cobranca: hojeStr,
                 data_fim_cobranca: "2028-12-31",
-                data_inicio_transporte: new Date().toISOString().split("T")[0],
+                data_inicio_transporte: hojeStr,
                 data_fim_transporte: "2028-12-31",
-                data_nascimento,
-
+                latitude: coords.latitude,
+                longitude: coords.longitude,
                 enviar_notificacoes: true,
-            },
-            responsavelData: {
-                nome: generateName(),
-                cpf: generateCPF(),
-                telefone: "11951186951",
-                parentesco: respParentesco,
-            }
-        };
-    });
-
-    const insertedPassengers = [];
-    for (const item of passageirosToInsert) {
-        const { data: pData, error: pError } = await supabaseAdmin
-            .from("passageiros")
-            .insert(item.passengerData)
+            })
             .select()
             .single();
 
         if (pError) throw pError;
 
+        const respTelefone = index === 0 ? TARGET_PHONE : generatePhone();
+        const respParentesco = parentescos[randomNumber(0, parentescos.length - 1)];
+
+        const respPayload: Record<string, any> = {
+            telefone: respTelefone,
+            nome: generateName(),
+            cpf: generateCPF(),
+            email: `responsavel${index + 1}@exemplo.com`,
+            logradouro: endereco ? endereco.logradouro : null,
+            numero: endereco ? endereco.numero : null,
+            bairro: endereco ? endereco.bairro : null,
+            cidade: endereco ? endereco.cidade : null,
+            estado: endereco ? endereco.estado : null,
+            cep: endereco ? endereco.cep : null,
+            referencia: endereco ? endereco.referencia : null,
+            complemento: endereco ? endereco.complemento : null,
+        };
+
         const { data: rData, error: rError } = await supabaseAdmin
             .from("responsaveis")
-            .insert({
-                nome: item.responsavelData.nome,
-                cpf: item.responsavelData.cpf,
-                telefone: item.responsavelData.telefone,
-            })
+            .upsert(respPayload, { onConflict: "telefone" })
             .select()
             .single();
 
@@ -216,9 +298,44 @@ async function seedPassageiros(usuarioId: string, escolasInseridas: any[], veicu
         await supabaseAdmin.from("passageiro_responsaveis").insert({
             passageiro_id: pData.id,
             responsavel_id: rData.id,
-            tipo: "principal",
-            parentesco: item.responsavelData.parentesco,
+            tipo: TipoResponsavel.PRINCIPAL,
+            parentesco: respParentesco,
         });
+
+        const deveTerAdicional = cfg.passageiros.percentualComResponsaveisAdicionais
+            ? randomNumber(1, 100) <= cfg.passageiros.percentualComResponsaveisAdicionais
+            : false;
+
+        if (deveTerAdicional) {
+            const endAdicional = generateAddress();
+            const { data: rAdicional, error: errAdicional } = await supabaseAdmin
+                .from("responsaveis")
+                .upsert({
+                    telefone: generatePhone(),
+                    nome: generateName(),
+                    cpf: generateCPF(),
+                    email: `adicional${index + 1}@exemplo.com`,
+                    logradouro: endAdicional.logradouro,
+                    numero: endAdicional.numero,
+                    bairro: endAdicional.bairro,
+                    cidade: endAdicional.cidade,
+                    estado: endAdicional.estado,
+                    cep: endAdicional.cep,
+                    referencia: endAdicional.referencia,
+                    complemento: endAdicional.complemento,
+                }, { onConflict: "telefone" })
+                .select()
+                .single();
+
+            if (!errAdicional && rAdicional) {
+                await supabaseAdmin.from("passageiro_responsaveis").insert({
+                    passageiro_id: pData.id,
+                    responsavel_id: rAdicional.id,
+                    tipo: TipoResponsavel.ADICIONAL,
+                    parentesco: parentescos[randomNumber(0, parentescos.length - 1)],
+                });
+            }
+        }
 
         insertedPassengers.push(pData);
     }
@@ -226,17 +343,132 @@ async function seedPassageiros(usuarioId: string, escolasInseridas: any[], veicu
     return insertedPassengers;
 }
 
-async function seedGastos(usuarioId: string, veiculosInseridos: any[], config: ScenarioConfig) {
-    if (config.gastos.quantidadeTotal === 0) return;
+async function seedRotas(
+    usuarioId: string,
+    veiculosInseridos: any[],
+    escolasInseridas: any[],
+    passageirosInseridos: any[],
+    cfg: ScenarioConfig
+) {
+    if (!cfg.rotas || cfg.rotas.quantidade === 0) return;
+    if (passageirosInseridos.length === 0 || escolasInseridas.length === 0) return;
 
-    console.log(`[SEED] Inserindo ${config.gastos.quantidadeTotal} gastos...`);
-    const descricoesGastos = ["Abastecimento Posto BR", "Troca de óleo", "Lavagem Completa", "Manutenção pneu furado", "Pedágio"];
+    console.log(`[SEED] Criando ${cfg.rotas.quantidade} rotas com paradas e sequenciamento...`);
+
+    const nomesRotas = [
+        "Rota Manhã - Ida",
+        "Rota Manhã - Volta",
+        "Rota Tarde - Ida",
+        "Rota Tarde - Volta",
+    ];
+
+    const passageirosPorRota = Math.ceil(passageirosInseridos.length / cfg.rotas.quantidade);
+
+    for (let rIdx = 0; rIdx < cfg.rotas.quantidade; rIdx++) {
+        const nomeRota = nomesRotas[rIdx % nomesRotas.length] || `Rota ${rIdx + 1}`;
+        const veiculo = veiculosInseridos[rIdx % veiculosInseridos.length];
+        const sentido = rIdx % 2 === 0 ? RouteSentido.INDO : RouteSentido.VOLTANDO;
+
+        const { data: rota, error: rError } = await supabaseAdmin
+            .from("rotas")
+            .insert({
+                usuario_id: usuarioId,
+                nome: nomeRota,
+                veiculo_id: veiculo ? veiculo.id : null,
+            })
+            .select()
+            .single();
+
+        if (rError || !rota) {
+            console.error("Erro ao criar rota:", rError);
+            continue;
+        }
+
+        const startIdx = rIdx * passageirosPorRota;
+        const rotaPassageirosSlice = passageirosInseridos.slice(startIdx, startIdx + passageirosPorRota);
+        const escolaPrincipal = escolasInseridas[rIdx % escolasInseridas.length];
+
+        const paradasToInsert: any[] = [];
+        let ordemAtual = 1;
+
+        if (sentido === RouteSentido.INDO) {
+            for (const pass of rotaPassageirosSlice) {
+                paradasToInsert.push({
+                    rota_id: rota.id,
+                    tipo_no: RouteNodeType.PASSAGEIRO,
+                    passageiro_id: pass.id,
+                    escola_id: null,
+                    ordem: ordemAtual++,
+                    sentido: RouteSentido.INDO,
+                });
+            }
+            paradasToInsert.push({
+                rota_id: rota.id,
+                tipo_no: RouteNodeType.ESCOLA,
+                passageiro_id: null,
+                escola_id: escolaPrincipal.id,
+                ordem: ordemAtual++,
+                sentido: RouteSentido.INDO,
+            });
+        } else {
+            paradasToInsert.push({
+                rota_id: rota.id,
+                tipo_no: RouteNodeType.ESCOLA,
+                passageiro_id: null,
+                escola_id: escolaPrincipal.id,
+                ordem: ordemAtual++,
+                sentido: RouteSentido.VOLTANDO,
+            });
+            for (const pass of rotaPassageirosSlice) {
+                paradasToInsert.push({
+                    rota_id: rota.id,
+                    tipo_no: RouteNodeType.PASSAGEIRO,
+                    passageiro_id: pass.id,
+                    escola_id: null,
+                    ordem: ordemAtual++,
+                    sentido: RouteSentido.VOLTANDO,
+                });
+            }
+        }
+
+        if (paradasToInsert.length > 0) {
+            await supabaseAdmin.from("rota_passageiros").insert(paradasToInsert);
+        }
+
+        if (cfg.rotas.criarAusencias && rotaPassageirosSlice.length > 0) {
+            const passageiroAusente = rotaPassageirosSlice[0];
+            const hoje = new Date();
+            const dataHoje = hoje.toISOString().split("T")[0];
+
+            await supabaseAdmin.from("rota_ausencias").insert({
+                rota_id: rota.id,
+                passageiro_id: passageiroAusente.id,
+                data_ausencia: dataHoje,
+                sentido,
+                registrado_por: usuarioId,
+            });
+        }
+    }
+}
+
+async function seedGastos(usuarioId: string, veiculosInseridos: any[], cfg: ScenarioConfig) {
+    if (cfg.gastos.quantidadeTotal === 0) return;
+
+    console.log(`[SEED] Inserindo ${cfg.gastos.quantidadeTotal} gastos...`);
+    const descricoesGastos = [
+        "Abastecimento Posto BR",
+        "Troca de óleo e filtro",
+        "Lavagem Completa da Van",
+        "Manutenção pneu e alinhamento",
+        "Pedágio rodovia",
+        "Seguro veicular",
+        "Revisão preventiva de freios",
+    ];
     const categoriasGastos = Object.values(GastoCategoria);
 
-    const gastosToInsert = Array.from({ length: config.gastos.quantidadeTotal }).map((_, index) => {
-        // Decide se esse gasto tem veículo com base na configuração
-        const gastosComVeiculo = config.gastos.quantidadeTotal - config.gastos.quantidadeSemVeiculo;
-        const semVeiculo = index >= gastosComVeiculo;
+    const gastosToInsert = Array.from({ length: cfg.gastos.quantidadeTotal }).map((_, index) => {
+        const gastosComVeiculo = cfg.gastos.quantidadeTotal - cfg.gastos.quantidadeSemVeiculo;
+        const semVeiculo = index >= gastosComVeiculo || veiculosInseridos.length === 0;
         const veiculo_id = semVeiculo ? null : veiculosInseridos[randomNumber(0, veiculosInseridos.length - 1)].id;
 
         const diasAtras = randomNumber(0, 45);
@@ -248,7 +480,7 @@ async function seedGastos(usuarioId: string, veiculosInseridos: any[], config: S
             veiculo_id,
             descricao: descricoesGastos[randomNumber(0, descricoesGastos.length - 1)],
             categoria: categoriasGastos[randomNumber(0, categoriasGastos.length - 1)],
-            valor: randomNumber(50, 400),
+            valor: randomNumber(60, 450),
             data: data.toISOString().split("T")[0],
         };
     });
@@ -257,34 +489,41 @@ async function seedGastos(usuarioId: string, veiculosInseridos: any[], config: S
     if (error) throw error;
 }
 
-async function seedPrePassageiros(usuarioId: string, config: ScenarioConfig) {
-    if (config.prePassageiros.quantidade === 0) return;
+async function seedPrePassageiros(usuarioId: string, cfg: ScenarioConfig) {
+    if (cfg.prePassageiros.quantidade === 0) return;
 
-    console.log(`[SEED] Inserindo ${config.prePassageiros.quantidade} pré-passageiros (leads)...`);
+    console.log(`[SEED] Inserindo ${cfg.prePassageiros.quantidade} pré-passageiros (leads)...`);
     const periodos = Object.values(PeriodoEnum);
+    const generos = [PassageiroGenero.MASCULINO, PassageiroGenero.FEMININO];
 
-    const prePassageirosToInsert = Array.from({ length: config.prePassageiros.quantidade }).map(() => ({
+    const prePassageirosToInsert = Array.from({ length: cfg.prePassageiros.quantidade }).map(() => ({
         usuario_id: usuarioId,
         nome: generateName(),
         nome_responsavel: generateName(),
-        telefone_responsavel: '11951186951',
+        telefone_responsavel: TARGET_PHONE,
         bairro: bairros[randomNumber(0, bairros.length - 1)],
         cidade: "São Paulo",
         periodo: periodos[randomNumber(0, periodos.length - 1)],
+        genero: generos[randomNumber(0, generos.length - 1)],
+        valor_cobranca: generateValorCobranca(),
+        dia_vencimento: 10,
     }));
 
     const { error } = await supabaseAdmin.from("pre_passageiros").insert(prePassageirosToInsert);
     if (error) throw error;
 }
 
-async function seedCobrancas(usuarioId: string, passageirosInseridos: any[]) {
+async function seedCobrancas(usuarioId: string, passageirosInseridos: any[], cfg: ScenarioConfig) {
     if (!passageirosInseridos || passageirosInseridos.length === 0) return;
 
     console.log("[SEED] Inserindo cobranças do mês atual e anterior...");
     const hoje = new Date();
     const cobrancasToInsert: any[] = [];
+    const taxaInadimplencia = cfg.cobrancas?.taxaInadimplencia ?? 20;
 
-    // Gerar cobranças para mês atual e mês anterior para popular os gráficos de faturamento
+    const tiposPagamentoDisponiveis = Object.values(CobrancaTipoPagamento);
+    const randomTipoPagamento = () => tiposPagamentoDisponiveis[randomNumber(0, tiposPagamentoDisponiveis.length - 1)];
+
     for (const passageiro of passageirosInseridos) {
         if (!passageiro.valor_cobranca || !passageiro.dia_vencimento) continue;
 
@@ -294,16 +533,13 @@ async function seedCobrancas(usuarioId: string, passageirosInseridos: any[]) {
 
             let status = CobrancaStatus.PENDENTE;
             let pagamento_manual = false;
-            let data_pagamento = null;
-            let valor_pago = null;
-            let tipo_pagamento = null;
-
-            const tiposPagamentoDisponiveis = Object.values(CobrancaTipoPagamento);
-            const randomTipoPagamento = () => tiposPagamentoDisponiveis[randomNumber(0, tiposPagamentoDisponiveis.length - 1)];
+            let data_pagamento: string | null = null;
+            let valor_pago: number | null = null;
+            let tipo_pagamento: string | null = null;
 
             if (i === 1) {
-                // Mês anterior: 95% de chance de estar pago
-                if (randomNumber(1, 100) <= 95) {
+                const taxaPagoMesAnterior = Math.max(10, 100 - taxaInadimplencia);
+                if (randomNumber(1, 100) <= taxaPagoMesAnterior) {
                     status = CobrancaStatus.PAGO;
                     pagamento_manual = true;
                     data_pagamento = formatVenc;
@@ -311,21 +547,17 @@ async function seedCobrancas(usuarioId: string, passageirosInseridos: any[]) {
                     tipo_pagamento = randomTipoPagamento();
                 }
             } else {
-                // Mês atual: depende do dia do vencimento
                 if (dataVenc < hoje) {
-                    // Já venceu
-                    const rnd = randomNumber(1, 10);
-                    if (rnd <= 8) { // 80% pago
+                    const taxaPagoVencido = Math.max(10, 100 - taxaInadimplencia);
+                    if (randomNumber(1, 100) <= taxaPagoVencido) {
                         status = CobrancaStatus.PAGO;
                         pagamento_manual = true;
                         data_pagamento = formatVenc;
                         valor_pago = passageiro.valor_cobranca;
                         tipo_pagamento = randomTipoPagamento();
                     }
-                    // O resto fica pendente (atrasado logicamente)
                 } else {
-                    // A vencer
-                    if (randomNumber(1, 10) <= 3) { // 30% pagou adiantado
+                    if (randomNumber(1, 100) <= 25) {
                         status = CobrancaStatus.PAGO;
                         pagamento_manual = true;
                         data_pagamento = new Date().toISOString().split("T")[0];
@@ -348,52 +580,13 @@ async function seedCobrancas(usuarioId: string, passageirosInseridos: any[]) {
                 data_pagamento,
                 valor_pago,
                 tipo_pagamento,
+                desativar_lembretes: false,
             });
         }
     }
 
     const { error } = await supabaseAdmin.from("cobrancas").insert(cobrancasToInsert);
     if (error) throw error;
-}
-
-async function seedResponsaveisAdicionais(passageirosInseridos: any[], config: ScenarioConfig) {
-    if (!config.passageiros.percentualComResponsaveisAdicionais || config.passageiros.percentualComResponsaveisAdicionais === 0) return;
-    if (!passageirosInseridos || passageirosInseridos.length === 0) return;
-
-    console.log(`[SEED] Inserindo responsáveis adicionais para passageiros...`);
-    const parentescos = Object.values(ParentescoResponsavel);
-
-    const responsaveisToInsert = [];
-
-    for (const passageiro of passageirosInseridos) {
-        const deveTerResponsavel = randomNumber(1, 100) <= config.passageiros.percentualComResponsaveisAdicionais;
-        if (deveTerResponsavel) {
-            const endereco = generateAddress();
-            responsaveisToInsert.push({
-                passageiro_id: passageiro.id,
-                nome: generateName(),
-                telefone: "11951186951",
-                cpf: generateCPF(),
-                parentesco: parentescos[randomNumber(0, parentescos.length - 1)],
-                logradouro: endereco.logradouro,
-                numero: endereco.numero,
-                bairro: endereco.bairro,
-                cidade: endereco.cidade,
-                estado: endereco.estado,
-                cep: endereco.cep,
-                referencia: endereco.referencia,
-            });
-        }
-    }
-
-    if (responsaveisToInsert.length === 0) return;
-
-    const { error } = await supabaseAdmin
-        .from("passageiro_responsaveis_adicionais")
-        .insert(responsaveisToInsert);
-
-    if (error) throw error;
-    console.log(`[SEED] Inseridos ${responsaveisToInsert.length} responsáveis adicionais.`);
 }
 
 async function main() {
@@ -405,18 +598,18 @@ async function main() {
         .single();
 
     if (userError || !usuario) {
-        console.error("Usuário não encontrado!", userError);
+        console.error(`[ERRO] Usuário com telefone '${TARGET_PHONE}' não encontrado no banco de dados.`, userError);
         return;
     }
 
     const usuarioId = usuario.id;
-    console.log(`[SEED] Usuário encontrado: ${usuarioId}. Iniciando processo com o cenário: '${scenarioName}'...`);
+    console.log(`[SEED] Usuário encontrado: ${usuarioId}. Iniciando cenário: '${scenarioName}'...`);
 
     try {
         await clearData(usuarioId);
 
         if (config.resetarPix) {
-            console.log(`[SEED] Resetando configurações de Pix do usuário...`);
+            console.log(`[SEED] Resetando chave Pix do usuário...`);
             const { error: updateError } = await supabaseAdmin
                 .from("usuarios")
                 .update({
@@ -426,7 +619,7 @@ async function main() {
                 .eq("id", usuarioId);
 
             if (updateError) {
-                console.error("[SEED] Erro ao resetar configurações de Pix:", updateError);
+                console.error("[SEED] Erro ao resetar Pix:", updateError);
             }
         }
 
@@ -434,21 +627,32 @@ async function main() {
         const veiculosInseridos = await seedVeiculos(usuarioId, config);
 
         if (escolasInseridas && veiculosInseridos) {
-            const passageirosInseridos = await seedPassageiros(usuarioId, escolasInseridas, veiculosInseridos, config);
+            const passageirosInseridos = await seedPassageiros(
+                usuarioId,
+                escolasInseridas,
+                veiculosInseridos,
+                config
+            );
 
-            await seedResponsaveisAdicionais(passageirosInseridos, config);
+            await seedRotas(
+                usuarioId,
+                veiculosInseridos,
+                escolasInseridas,
+                passageirosInseridos,
+                config
+            );
 
             await seedGastos(usuarioId, veiculosInseridos, config);
             await seedPrePassageiros(usuarioId, config);
 
-            if (passageirosInseridos && passageirosInseridos.length > 0) {
-                await seedCobrancas(usuarioId, passageirosInseridos);
+            if (passageirosInseridos.length > 0) {
+                await seedCobrancas(usuarioId, passageirosInseridos, config);
             }
         }
 
-        console.log("[SUCCESS] Seed finalizado com sucesso! Seu banco está pronto para demonstração.");
+        console.log(`\n🎉 [SUCCESS] Cenário '${scenarioName}' executado com sucesso!`);
     } catch (error) {
-        console.error("[ERRO FATAL] Ocorreu um erro durante a execução do seed:", error);
+        console.error("[ERRO FATAL] Falha ao executar o seed de cenário:", error);
     }
 }
 
