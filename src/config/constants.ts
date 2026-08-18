@@ -78,3 +78,12 @@ export const EVOLUTION_STATUS = {
 } as const;
 
 export const EVOLUTION_GLOBAL_INSTANCE = "Van360";
+
+export const FEATURE_FLAGS = {
+  ENABLE_LIVE_TRACKING: false
+} as const;
+
+export const TRACKING_REALTIME_CONFIG = {
+  CHANNEL_PREFIX: "trip-tracking:",
+  EVENT_GPS_PING: "gps_ping"
+} as const;

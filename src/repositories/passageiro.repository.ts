@@ -2,6 +2,7 @@ import { supabaseAdmin } from "../config/supabase.js";
 import { isValidFilterValue } from "../utils/filter.utils.js";
 import { TipoResponsavel } from "../types/enums.js";
 import { ListPassageirosFiltersDTO } from "../types/dtos/passageiro.dto.js";
+import { AppError } from "../errors/AppError.js";
 
 const PASSAGEIRO_RESPONSAVEIS_SELECT = `
   responsaveis:passageiro_responsaveis(
@@ -266,6 +267,27 @@ export const passageiroRepository = {
       .or("isento.eq.false,isento.is.null");
   },
 
+  async listAtivosParaProjecao(usuarioId: string, veiculoId?: string) {
+    let query = supabaseAdmin
+      .from("passageiros")
+      .select(`
+        id, nome, valor_cobranca, dia_vencimento, created_at, data_inicio_cobranca, data_fim_cobranca, isento, ativo, veiculo_id,
+        responsaveis:passageiro_responsaveis(
+          id, tipo, parentesco,
+          responsavel:responsaveis(id, nome, telefone, cpf, email)
+        )
+      `)
+      .eq("usuario_id", usuarioId)
+      .eq("ativo", true)
+      .or("isento.eq.false,isento.is.null");
+
+    if (isValidFilterValue(veiculoId)) {
+      query = query.eq("veiculo_id", veiculoId);
+    }
+
+    return query;
+  },
+
   async listAniversariantesInfo(usuarioId: string, veiculoId?: string) {
     let query = supabaseAdmin
       .from("passageiros")
@@ -311,9 +333,20 @@ export const passageiroRepository = {
       .maybeSingle();
 
     if (existing) {
+      if (existing.cpf && data.cpf && data.cpf !== existing.cpf) {
+        const cpfDigits = String(existing.cpf);
+        const cpfMasked = cpfDigits.length >= 11
+          ? `***.***.${cpfDigits.slice(6, 9)}-${cpfDigits.slice(9)}`
+          : `final ***-${cpfDigits.slice(-2)}`;
+        throw new AppError(
+          `Este telefone já está cadastrado para ${existing.nome} (CPF ${cpfMasked}). Verifique se o telefone digitado está correto.`,
+          409
+        );
+      }
+
       const updatePayload: Record<string, any> = { updated_at: new Date().toISOString() };
-      if (data.nome) updatePayload.nome = data.nome;
-      if (data.cpf !== undefined) updatePayload.cpf = data.cpf;
+      if (data.nome && (!existing.cpf || data.cpf === existing.cpf)) updatePayload.nome = data.nome;
+      if (data.cpf !== undefined && (!existing.cpf || data.cpf === existing.cpf)) updatePayload.cpf = data.cpf;
       if (data.email !== undefined) updatePayload.email = data.email;
       if (data.pin_acesso !== undefined) updatePayload.pin_acesso = data.pin_acesso;
       if (data.logradouro !== undefined) updatePayload.logradouro = data.logradouro;

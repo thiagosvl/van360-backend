@@ -66,6 +66,35 @@ const _getResponsavelFromPassageiro = (passageiroInfo?: PassageiroCobrancaInfo |
     };
 };
 
+const _enrichCobrancaWithResponsavelPrincipal = (cobranca: Record<string, any>) => {
+    if (!cobranca || !cobranca.passageiro) return cobranca;
+
+    const p = cobranca.passageiro;
+    const links = (p.responsaveis as ResponsavelLinkInfo[]) || [];
+    const principalLink = links.find((l) => l.tipo === TipoResponsavel.PRINCIPAL) || links[0];
+    const rawResp = p.responsavel_principal || principalLink?.responsavel;
+    const resp = Array.isArray(rawResp) ? rawResp[0] : rawResp;
+
+    const enrichedPassageiro = {
+        ...p,
+        responsavel_principal: (principalLink && resp) || p.responsavel_principal ? {
+            id: resp?.id || null,
+            nome: resp?.nome || null,
+            telefone: resp?.telefone || null,
+            cpf: resp?.cpf || null,
+            email: resp?.email || null,
+            parentesco: principalLink?.parentesco || (p.responsavel_principal as Record<string, any>)?.parentesco || null
+        } : null
+    };
+
+    delete enrichedPassageiro.responsaveis;
+
+    return {
+        ...cobranca,
+        passageiro: enrichedPassageiro
+    };
+};
+
 interface CreateCobrancaOptions {
   skipLog?: boolean;
 }
@@ -231,7 +260,7 @@ export const cobrancaService = {
 
     if (error) throw new AppError("Cobrança não encontrada.", 404);
 
-    return data;
+    return _enrichCobrancaWithResponsavelPrincipal(data);
   },
 
   async deleteCobranca(id: string): Promise<void> {
@@ -270,18 +299,115 @@ export const cobrancaService = {
     });
   },
 
-  async listCobrancasWithFilters(filtros: Record<string, unknown>): Promise<any[]> {
-    const { data, error } = await cobrancaRepository.listWithFilters(filtros);
+  async listCobrancasWithFilters(filtros: Record<string, any>): Promise<any[]> {
+    const { data: cobrancasReais, error } = await cobrancaRepository.listWithFilters(filtros);
     if (error) throw error;
 
-    return data;
+    const listReal = (cobrancasReais || []).map(_enrichCobrancaWithResponsavelPrincipal);
+
+    if (!filtros.mes || !filtros.ano || !filtros.usuarioId || filtros.passageiroId || (filtros.status && filtros.status !== CobrancaStatus.PENDENTE)) {
+      return listReal;
+    }
+
+    const now = getNowBR();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    const targetMonth = Number(filtros.mes);
+    const targetYear = Number(filtros.ano);
+
+    const isPastPeriod = targetYear < currentYear || (targetYear === currentYear && targetMonth < currentMonth);
+
+    if (isPastPeriod) {
+      return listReal;
+    }
+
+    const { data: passageirosAtivos, error: passError } = await passageiroRepository.listAtivosParaProjecao(
+      filtros.usuarioId,
+      filtros.veiculoId
+    );
+
+    if (passError || !passageirosAtivos) {
+      return listReal;
+    }
+
+    const passageirosComCobranca = new Set(listReal.map((c: any) => c.passageiro_id));
+
+    const parseYearMonth = (dateStr?: string | null) => {
+      if (!dateStr) return null;
+      if (typeof dateStr === "string" && dateStr.includes("-")) {
+        const parts = dateStr.split("-");
+        if (parts.length >= 2) {
+          const year = Number(parts[0]);
+          const month = Number(parts[1]);
+          if (!isNaN(year) && !isNaN(month) && month >= 1 && month <= 12) {
+            return { year, month };
+          }
+        }
+      }
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return null;
+      return { year: d.getFullYear(), month: d.getMonth() + 1 };
+    };
+
+    const projList: any[] = [];
+
+    for (const p of passageirosAtivos) {
+      if (passageirosComCobranca.has(p.id)) continue;
+      if (!p.valor_cobranca || Number(p.valor_cobranca) <= 0) continue;
+
+      const inicioStr = p.data_inicio_cobranca || p.created_at;
+      const inicio = parseYearMonth(inicioStr);
+      if (inicio) {
+        if (targetYear < inicio.year || (targetYear === inicio.year && targetMonth < inicio.month)) {
+          continue;
+        }
+      }
+
+      if (p.data_fim_cobranca) {
+        const fim = parseYearMonth(p.data_fim_cobranca);
+        if (fim) {
+          if (targetYear > fim.year || (targetYear === fim.year && targetMonth > fim.month)) {
+            continue;
+          }
+        }
+      }
+
+      const dataVenc = getSafeDueDateString(p.dia_vencimento, targetMonth, targetYear);
+      const enrichedPassageiro = _enrichCobrancaWithResponsavelPrincipal({ passageiro: p }).passageiro;
+
+      projList.push({
+        id: `proj_${p.id}_${targetMonth}_${targetYear}`,
+        passageiro_id: p.id,
+        usuario_id: filtros.usuarioId,
+        mes: targetMonth,
+        ano: targetYear,
+        valor: Number(p.valor_cobranca),
+        status: CobrancaStatus.PENDENTE,
+        data_vencimento: dataVenc,
+        origem: CobrancaOrigem.AUTOMATICA,
+        isProjection: true,
+        passageiro: enrichedPassageiro
+      });
+    }
+
+    let combined = [...listReal, ...projList];
+
+    if (filtros.search && filtros.search.trim()) {
+      const term = filtros.search.trim().toLowerCase();
+      combined = combined.filter((c: any) =>
+        c.passageiro?.nome?.toLowerCase().includes(term) ||
+        c.passageiro?.responsavel_principal?.nome?.toLowerCase().includes(term)
+      );
+    }
+
+    return combined;
   },
 
   async listCobrancasByPassageiro(passageiroId: string, ano?: string): Promise<any[]> {
     const { data, error } = await cobrancaRepository.listByPassageiro(passageiroId, ano);
     if (error) throw error;
 
-    return data;
+    return (data || []).map(_enrichCobrancaWithResponsavelPrincipal);
   },
 
 

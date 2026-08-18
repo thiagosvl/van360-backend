@@ -569,6 +569,7 @@ const atualizarParadaStatus = async (
       RouteStopStatus.PENDENTE,
       null
     );
+    await routeRepository.updateNotificacaoConcluidoEnviada(paradaId, false);
     if (exec.rota_id) {
       const todayStr = getTodayLocalDateStr();
       await routeRepository.deleteAusenciaByPassageiroERota(paradaObj.passageiro_id, exec.rota_id, todayStr);
@@ -594,10 +595,8 @@ const atualizarParadaStatus = async (
           let routeEvent: string | null = null;
           const sentido = (paradaObj as any)?.sentido;
 
-          if (novoStatus === RouteStopStatus.EMBARCADO) {
-            routeEvent = sentido === RouteSentido.VOLTANDO ? EVENTO_ROTA_A_CAMINHO_VOLTA : EVENTO_ROTA_EMBARCOU_IDA;
-          } else if (novoStatus === RouteStopStatus.DESEMBARCADO) {
-            routeEvent = sentido === RouteSentido.VOLTANDO ? EVENTO_ROTA_DESEMBARCOU_VOLTA : EVENTO_ROTA_A_CAMINHO_IDA;
+          if (novoStatus === RouteStopStatus.EMBARCADO || novoStatus === RouteStopStatus.DESEMBARCADO) {
+            routeEvent = sentido === RouteSentido.VOLTANDO ? EVENTO_ROTA_DESEMBARCOU_VOLTA : EVENTO_ROTA_EMBARCOU_IDA;
           }
 
           if (routeEvent && !paradaObj.notificacao_concluido_enviada) {

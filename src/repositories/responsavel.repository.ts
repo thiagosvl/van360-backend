@@ -480,11 +480,40 @@ export const responsavelRepository = {
   },
 
   async updateResponsavelAdicional(responsavelId: string, data: Record<string, any>, passageiroId?: string) {
+    const targetPassageiroId = passageiroId || data.passageiroId;
+    let effectivePassageiroId = targetPassageiroId;
+
+    if (!effectivePassageiroId) {
+      const { data: links } = await supabaseAdmin
+        .from("passageiro_responsaveis")
+        .select("passageiro_id")
+        .eq("responsavel_id", responsavelId);
+      if (links && links.length === 1) {
+        effectivePassageiroId = links[0].passageiro_id;
+      }
+    }
+
+    const phoneDigits = data.telefone !== undefined && data.telefone !== null
+      ? String(data.telefone).replace(/\D/g, "")
+      : undefined;
+
+    if (phoneDigits) {
+      const { data: existingResp } = await supabaseAdmin
+        .from("responsaveis")
+        .select("id")
+        .eq("telefone", phoneDigits)
+        .maybeSingle();
+
+      if (existingResp && existingResp.id !== responsavelId) {
+        throw new AppError("Já existe outro responsável cadastrado com este número de telefone.", 409);
+      }
+    }
+
     const respPayload: Record<string, any> = { updated_at: new Date().toISOString() };
     if (data.nome !== undefined && data.nome !== null) respPayload.nome = data.nome;
     if (data.cpf !== undefined) respPayload.cpf = data.cpf;
     if (data.email !== undefined) respPayload.email = data.email;
-    if (data.telefone !== undefined && data.telefone !== null) respPayload.telefone = data.telefone;
+    if (phoneDigits !== undefined) respPayload.telefone = phoneDigits;
     if (data.logradouro !== undefined) respPayload.logradouro = data.logradouro;
     if (data.numero !== undefined) respPayload.numero = data.numero;
     if (data.bairro !== undefined) respPayload.bairro = data.bairro;
@@ -502,19 +531,6 @@ export const responsavelRepository = {
       .single();
 
     if (error) throw error;
-
-    const targetPassageiroId = passageiroId || data.passageiroId;
-    let effectivePassageiroId = targetPassageiroId;
-
-    if (data.parentesco !== undefined && !effectivePassageiroId) {
-      const { data: links } = await supabaseAdmin
-        .from("passageiro_responsaveis")
-        .select("passageiro_id")
-        .eq("responsavel_id", responsavelId);
-      if (links && links.length === 1) {
-        effectivePassageiroId = links[0].passageiro_id;
-      }
-    }
 
     if (data.parentesco !== undefined && effectivePassageiroId) {
       await supabaseAdmin

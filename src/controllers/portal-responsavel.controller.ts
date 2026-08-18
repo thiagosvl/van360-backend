@@ -1,6 +1,7 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { AppError } from "../errors/AppError.js";
 import { portalResponsavelService } from "../services/portal-responsavel.service.js";
+import { portalResponsavelTrackingService } from "../services/portal-responsavel-tracking.service.js";
 import {
   checkPhoneSchema,
   loginResponsavelSchema,
@@ -181,6 +182,14 @@ export const portalResponsavelController = {
     const body = registerPushTokenSchema.parse(request.body);
 
     const result = await portalResponsavelService.registerPushToken(payload.phone, body.token, body.platform);
+    return reply.status(200).send(result);
+  },
+
+  getRastreamentoPassageiro: async (request: FastifyRequest, reply: FastifyReply) => {
+    const token = getResponsavelToken(request);
+    const { id } = request.params as { id: string };
+
+    const result = await portalResponsavelTrackingService.getRastreamentoPassageiro(token, id);
     return reply.status(200).send(result);
   }
 };

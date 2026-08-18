@@ -7,6 +7,7 @@ export async function portalResponsavelPublicRoutes(app: FastifyInstance) {
   app.post("/login", portalResponsavelController.login);
   app.get("/passageiros", portalResponsavelController.getPassageiros);
   app.get("/passageiro/:id", portalResponsavelController.getPassageiroCarteirinha);
+  app.get("/passageiro/:id/rastreamento", portalResponsavelController.getRastreamentoPassageiro);
   app.put("/passageiro/:id/dados-complementares", portalResponsavelController.updateDadosComplementares);
   app.put("/passageiro/:id/observacoes", portalResponsavelController.updateObservacoes);
   app.post("/passageiro/:id/responsaveis", portalResponsavelController.addResponsavel);
