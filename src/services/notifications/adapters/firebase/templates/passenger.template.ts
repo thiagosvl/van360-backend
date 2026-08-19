@@ -4,6 +4,29 @@ import { NotificationUrlBuilder } from "../../../utils/notification-url.builder.
 import { FirebaseMessagePayload } from "../firebase.template.js";
 
 export class FirebasePassengerTemplates {
+    static routeStartedIda(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        return {
+            title: "Rota Iniciada! 🚌",
+            body: "O tio iniciou a rota de ida para a escola. Acompanhe a van em tempo real pelo app!",
+            data: {
+                action: PushNotificationAction.OPEN_ROUTE,
+                passageiroId: (ctx.passageiroId || "") as string
+            }
+        };
+    }
+
+    static routeStartedVolta(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Passageiro");
+        return {
+            title: "Voltando para Casa! 🏡",
+            body: `A van já saiu da escola com ${passName} e iniciou o trajeto de volta!`,
+            data: {
+                action: PushNotificationAction.OPEN_ROUTE,
+                passageiroId: (ctx.passageiroId || "") as string
+            }
+        };
+    }
+
     static routeEnRouteIda(ctx: Record<string, unknown>): FirebaseMessagePayload {
         const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Passageiro");
         return {
@@ -31,8 +54,8 @@ export class FirebasePassengerTemplates {
     static routeEnRouteVolta(ctx: Record<string, unknown>): FirebaseMessagePayload {
         const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Passageiro");
         return {
-            title: "Passageiro Chegando! 🏡",
-            body: `A van está a caminho da sua residência para entregar ${passName}.`,
+            title: `${passName} Chegando! 🏡`,
+            body: "A van está a caminho da sua residência para desembarcar o passageiro.",
             data: {
                 action: PushNotificationAction.OPEN_ROUTE,
                 passageiroId: (ctx.passageiroId || "") as string
@@ -43,7 +66,7 @@ export class FirebasePassengerTemplates {
     static routeDisembarkedVolta(ctx: Record<string, unknown>): FirebaseMessagePayload {
         const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Passageiro");
         return {
-            title: "Entrega Confirmada ✅",
+            title: "Desembarque Confirmado ✅",
             body: `O passageiro ${passName} desembarcou com segurança!`,
             data: {
                 action: PushNotificationAction.OPEN_ROUTE,

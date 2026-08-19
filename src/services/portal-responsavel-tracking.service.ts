@@ -1,8 +1,8 @@
 import { AppError } from "../errors/AppError.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { portalResponsavelService } from "./portal-responsavel.service.js";
-import { RouteExecutionStatus, RouteStopStatus } from "../types/enums.js";
-import { FEATURE_FLAGS } from "../config/constants.js";
+import { RouteExecutionStatus, RouteStopStatus, TipoResponsavel, RouteSentido, RouteNodeType } from "../types/enums.js";
+import { ENABLE_LIVE_TRACKING } from "../config/constants.js";
 
 export interface TrackingResponseDTO {
   ativa: boolean;
@@ -12,23 +12,28 @@ export interface TrackingResponseDTO {
     rota_nome: string;
     iniciada_em: string;
     status: RouteExecutionStatus;
+    rastreamento_ativo: boolean;
+    rastreamento_modo: string;
+    is_liberado_gps: boolean;
     parada_aluno: {
       id: string;
       ordem: number;
       status: RouteStopStatus;
-      sentido: string | null;
+      sentido: RouteSentido | null;
       notificado_em: string | null;
       visitado_em: string | null;
     };
     destino: {
-      latitude: number | null;
-      longitude: number | null;
       endereco: string;
-      tipo: "residencia" | "escola";
+      tipo: RouteNodeType;
+    };
+    casa: {
+      endereco: string;
     };
     escola: {
       id: string;
       nome: string;
+      endereco: string;
     } | null;
     fila: {
       paradas_restantes: number;
@@ -40,7 +45,7 @@ export interface TrackingResponseDTO {
 
 export const portalResponsavelTrackingService = {
   async getRastreamentoPassageiro(token: string, passageiroId: string): Promise<TrackingResponseDTO> {
-    if (!FEATURE_FLAGS.ENABLE_LIVE_TRACKING) {
+    if (!ENABLE_LIVE_TRACKING) {
       return {
         ativa: false,
         execucao: null
@@ -68,6 +73,9 @@ export const portalResponsavelTrackingService = {
           rota_id,
           status,
           iniciada_em,
+          notificar_pais,
+          rastreamento_ativo,
+          rastreamento_modo,
           rota:rotas (
             id,
             nome
@@ -76,15 +84,22 @@ export const portalResponsavelTrackingService = {
         passageiro:passageiros (
           id,
           nome,
-          latitude,
-          longitude,
-          logradouro,
-          numero,
-          bairro,
-          cidade,
           escola:escolas (
             id,
-            nome
+            nome,
+            logradouro,
+            numero,
+            bairro,
+            cidade
+          ),
+          responsaveis_links:passageiro_responsaveis (
+            tipo,
+            responsavel:responsaveis (
+              logradouro,
+              numero,
+              bairro,
+              cidade
+            )
           )
         )
       `)
@@ -95,7 +110,7 @@ export const portalResponsavelTrackingService = {
       .maybeSingle();
 
     if (paradaError) {
-      throw new AppError(`Erro ao buscar rastreamento: ${paradaError.message}`, 500);
+      throw new AppError(`Erro ao buscar rastreamento do passageiro: ${paradaError.message}`, 500);
     }
 
     if (!paradaAtiva || !paradaAtiva.execucao) {
@@ -109,7 +124,15 @@ export const portalResponsavelTrackingService = {
       ? paradaAtiva.execucao[0]
       : paradaAtiva.execucao;
 
-    if (!execucao || execucao.status !== RouteExecutionStatus.INICIADA) {
+    const passageiro = Array.isArray(paradaAtiva.passageiro)
+      ? paradaAtiva.passageiro[0]
+      : paradaAtiva.passageiro;
+
+    if (
+      !execucao ||
+      execucao.status !== RouteExecutionStatus.INICIADA ||
+      execucao.notificar_pais === false
+    ) {
       return {
         ativa: false,
         execucao: null
@@ -117,9 +140,6 @@ export const portalResponsavelTrackingService = {
     }
 
     const rota = Array.isArray(execucao.rota) ? execucao.rota[0] : execucao.rota;
-    const passageiro = Array.isArray(paradaAtiva.passageiro)
-      ? paradaAtiva.passageiro[0]
-      : paradaAtiva.passageiro;
 
     const { data: todasParadas, error: todasParadasError } = await supabaseAdmin
       .from("execucoes_rota_passageiros")
@@ -136,7 +156,7 @@ export const portalResponsavelTrackingService = {
     const paradasConcluidas = paradas.filter(
       p =>
         p.status === RouteStopStatus.EMBARCADO ||
-        p.status === "desembarcado" ||
+        p.status === RouteStopStatus.DESEMBARCADO ||
         p.status === RouteStopStatus.AUSENTE
     ).length;
 
@@ -144,17 +164,54 @@ export const portalResponsavelTrackingService = {
       p => p.status === RouteStopStatus.PENDENTE && p.ordem < paradaAtiva.ordem
     ).length;
 
-    const enderecoFormatado = passageiro
-      ? [passageiro.logradouro, passageiro.numero, passageiro.bairro, passageiro.cidade]
+    const links = (passageiro?.responsaveis_links as Array<{ tipo: string; responsavel: { logradouro?: string; numero?: string; bairro?: string; cidade?: string } | Array<{ logradouro?: string; numero?: string; bairro?: string; cidade?: string }> }>) || [];
+    const principalLink = links.find(l => l.tipo === TipoResponsavel.PRINCIPAL) || links[0];
+    const rawResp = principalLink?.responsavel;
+    const resp = Array.isArray(rawResp) ? rawResp[0] : rawResp;
+
+    const enderecoFormatado = resp
+      ? [resp.logradouro, resp.numero, resp.bairro, resp.cidade]
           .filter(Boolean)
           .join(", ")
-      : "";
+      : "Endereço cadastrado";
 
     const escola = passageiro?.escola
       ? Array.isArray(passageiro.escola)
         ? passageiro.escola[0]
         : passageiro.escola
       : null;
+
+    const enderecoEscola = escola
+      ? [escola.logradouro, escola.numero, escola.bairro, escola.cidade]
+          .filter(Boolean)
+          .join(", ") || escola.nome || "Escola"
+      : "Escola";
+
+    const alunoJaEmbarcou =
+      paradaAtiva.status === RouteStopStatus.EMBARCADO ||
+      paradaAtiva.status === RouteStopStatus.DESEMBARCADO;
+
+    const vaiParaEscola =
+      paradaAtiva.sentido === RouteSentido.INDO && alunoJaEmbarcou;
+
+    const destEndereco = vaiParaEscola ? enderecoEscola : enderecoFormatado;
+    const destTipo = vaiParaEscola ? RouteNodeType.ESCOLA : RouteNodeType.PASSAGEIRO;
+
+    const rastreamentoAtivo = (execucao as any).rastreamento_ativo !== false;
+    const rastreamentoModo = (execucao as any).rastreamento_modo || "completo";
+
+    let isLiberadoGps = false;
+    if (rastreamentoAtivo) {
+      if (rastreamentoModo === "completo") {
+        isLiberadoGps = true;
+      } else {
+        if (paradaAtiva.status === RouteStopStatus.PENDENTE && paradasRestantes === 0) {
+          isLiberadoGps = true;
+        } else if (paradaAtiva.status === RouteStopStatus.EMBARCADO && paradaAtiva.sentido === RouteSentido.INDO) {
+          isLiberadoGps = true;
+        }
+      }
+    }
 
     return {
       ativa: true,
@@ -164,6 +221,9 @@ export const portalResponsavelTrackingService = {
         rota_nome: rota?.nome || "Rota Escolar",
         iniciada_em: execucao.iniciada_em,
         status: execucao.status as RouteExecutionStatus,
+        rastreamento_ativo: rastreamentoAtivo,
+        rastreamento_modo: rastreamentoModo,
+        is_liberado_gps: isLiberadoGps,
         parada_aluno: {
           id: paradaAtiva.id,
           ordem: paradaAtiva.ordem,
@@ -173,15 +233,17 @@ export const portalResponsavelTrackingService = {
           visitado_em: paradaAtiva.visitado_em
         },
         destino: {
-          latitude: passageiro?.latitude ? Number(passageiro.latitude) : null,
-          longitude: passageiro?.longitude ? Number(passageiro.longitude) : null,
-          endereco: enderecoFormatado || "Endereço cadastrado",
-          tipo: "residencia"
+          endereco: destEndereco || "Endereço cadastrado",
+          tipo: destTipo
+        },
+        casa: {
+          endereco: enderecoFormatado
         },
         escola: escola
           ? {
               id: escola.id,
-              nome: escola.nome
+              nome: escola.nome,
+              endereco: enderecoEscola
             }
           : null,
         fila: {

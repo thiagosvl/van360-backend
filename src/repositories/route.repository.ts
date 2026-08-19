@@ -304,14 +304,30 @@ export const routeRepository = {
       .maybeSingle();
   },
 
-  async insertExecucao(rotaId: string, usuarioId: string, notificarPais: boolean = true) {
+  async insertExecucao(
+    rotaId: string,
+    usuarioId: string,
+    notificarPais: boolean = true,
+    snapshotConfig?: {
+      notificar_inicio_rota?: boolean;
+      notificar_proxima_parada?: boolean;
+      notificar_conclusao_parada?: boolean;
+      rastreamento_ativo?: boolean;
+      rastreamento_modo?: string;
+    }
+  ) {
     return supabaseAdmin
       .from("execucoes_rota")
       .insert([{
         rota_id: rotaId,
         usuario_id: usuarioId,
         status: RouteExecutionStatus.INICIADA,
-        notificar_pais: notificarPais
+        notificar_pais: notificarPais,
+        notificar_inicio_rota: snapshotConfig?.notificar_inicio_rota ?? true,
+        notificar_proxima_parada: snapshotConfig?.notificar_proxima_parada ?? true,
+        notificar_conclusao_parada: snapshotConfig?.notificar_conclusao_parada ?? true,
+        rastreamento_ativo: snapshotConfig?.rastreamento_ativo ?? true,
+        rastreamento_modo: snapshotConfig?.rastreamento_modo ?? "completo",
       }])
       .select()
       .single();
@@ -326,7 +342,7 @@ export const routeRepository = {
   async getExecucaoResumida(execucaoId: string) {
     return supabaseAdmin
       .from("execucoes_rota")
-      .select("id, rota_id, status, usuario_id, notificar_pais")
+      .select("id, rota_id, status, usuario_id, notificar_pais, notificar_inicio_rota, notificar_proxima_parada, notificar_conclusao_parada, rastreamento_ativo, rastreamento_modo")
       .eq("id", execucaoId)
       .single();
   },
@@ -334,9 +350,24 @@ export const routeRepository = {
   async getParadaById(paradaId: string) {
     return supabaseAdmin
       .from("execucoes_rota_passageiros")
-      .select("id, execucao_rota_id, tipo_no, passageiro_id, ordem, status, notificacao_a_caminho_enviada, notificacao_concluido_enviada")
+      .select("id, execucao_rota_id, tipo_no, passageiro_id, ordem, status, notificacao_inicio_enviada, notificacao_a_caminho_enviada, notificacao_concluido_enviada")
       .eq("id", paradaId)
       .single();
+  },
+
+  async updateNotificacaoInicioEnviada(paradaId: string, enviada: boolean) {
+    return supabaseAdmin
+      .from("execucoes_rota_passageiros")
+      .update({ notificacao_inicio_enviada: enviada })
+      .eq("id", paradaId);
+  },
+
+  async updateNotificacaoInicioEnviadaBatch(paradaIds: string[], enviada: boolean) {
+    if (!paradaIds || paradaIds.length === 0) return { data: null, error: null };
+    return supabaseAdmin
+      .from("execucoes_rota_passageiros")
+      .update({ notificacao_inicio_enviada: enviada })
+      .in("id", paradaIds);
   },
 
   async updateNotificacaoACaminhoEnviada(paradaId: string, enviada: boolean) {
@@ -396,7 +427,7 @@ export const routeRepository = {
   async getParadasLevesByExecucao(execucaoId: string) {
     return supabaseAdmin
       .from("execucoes_rota_passageiros")
-      .select("id, tipo_no, status, ordem, passageiro_id, escola_id, sentido, notificacao_a_caminho_enviada, notificacao_concluido_enviada")
+      .select("id, tipo_no, status, ordem, passageiro_id, escola_id, sentido, notificacao_inicio_enviada, notificacao_a_caminho_enviada, notificacao_concluido_enviada")
       .eq("execucao_rota_id", execucaoId)
       .order("ordem", { ascending: true });
   },

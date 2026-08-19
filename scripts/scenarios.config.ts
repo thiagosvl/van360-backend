@@ -29,6 +29,30 @@ export interface ScenarioConfig {
 }
 
 export const cenarios: Record<string, ScenarioConfig> = {
+    "cenario-rota-real": {
+        escolas: { quantidade: 3 },
+        veiculos: { quantidade: 1 },
+        passageiros: {
+            quantidade: 56,
+            percentualComAniversario: 80,
+            percentualSemEndereco: 0,
+            percentualComResponsaveisAdicionais: 0,
+        },
+        gastos: {
+            quantidadeTotal: 8,
+            quantidadeSemVeiculo: 1,
+        },
+        prePassageiros: {
+            quantidade: 2,
+        },
+        rotas: {
+            quantidade: 1,
+            criarAusencias: false,
+        },
+        cobrancas: {
+            taxaInadimplencia: 10,
+        },
+    },
     "cenario-1": {
         escolas: { quantidade: 3 },
         veiculos: { quantidade: 2 },

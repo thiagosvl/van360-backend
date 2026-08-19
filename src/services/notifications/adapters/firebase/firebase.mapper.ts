@@ -1,8 +1,10 @@
 import { logger } from "../../../../config/logger.js";
 import {
     EVENTO_MOTORISTA_TESTE_BOAS_VINDAS,
+    EVENTO_ROTA_INICIADA_IDA,
     EVENTO_ROTA_A_CAMINHO_IDA,
     EVENTO_ROTA_EMBARCOU_IDA,
+    EVENTO_ROTA_INICIADA_VOLTA,
     EVENTO_ROTA_A_CAMINHO_VOLTA,
     EVENTO_ROTA_DESEMBARCOU_VOLTA,
     EVENTO_ROTA_REORDENADA,
@@ -66,9 +68,10 @@ export class FirebaseMapper {
                 case EVENTO_PASSAGEIRO_VENCIMENTO_HOJE: return FirebasePassengerTemplates.dueTodayParent(contextData);
                 case EVENTO_PASSAGEIRO_ATRASADO: return FirebasePassengerTemplates.overdueParent(contextData);
                 case EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO: return FirebasePassengerTemplates.paymentReceiptParent(contextData);
+                case EVENTO_ROTA_INICIADA_IDA: return FirebasePassengerTemplates.routeStartedIda(contextData);
                 case EVENTO_ROTA_A_CAMINHO_IDA: return FirebasePassengerTemplates.routeEnRouteIda(contextData);
-
                 case EVENTO_ROTA_EMBARCOU_IDA: return FirebasePassengerTemplates.routeBoardedIda(contextData);
+                case EVENTO_ROTA_INICIADA_VOLTA: return FirebasePassengerTemplates.routeStartedVolta(contextData);
                 case EVENTO_ROTA_A_CAMINHO_VOLTA: return FirebasePassengerTemplates.routeEnRouteVolta(contextData);
                 case EVENTO_ROTA_DESEMBARCOU_VOLTA: return FirebasePassengerTemplates.routeDisembarkedVolta(contextData);
                 case EVENTO_ROTA_REORDENADA: return FirebasePassengerTemplates.routeReordered(contextData);

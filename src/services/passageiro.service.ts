@@ -1,4 +1,3 @@
-import axios from "axios";
 import { passageiroRepository } from "../repositories/passageiro.repository.js";
 import { responsavelRepository, cleanupOrphanedResponsaveis } from "../repositories/responsavel.repository.js";
 import { prePassageiroRepository } from "../repositories/pre-passageiro.repository.js";
@@ -9,40 +8,6 @@ import { moneyToNumber } from "../utils/currency.utils.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
 import { parseLocalDate, toPersistenceString, getNowBR } from "../utils/date.utils.js";
-
-// Métodos privados auxiliares
-const geocodeAddress = async (enderecoParts: { logradouro?: string, numero?: string, cidade?: string, estado?: string }): Promise<{ lat: number, lon: number } | null> => {
-    const partes = [];
-    if (enderecoParts.logradouro) partes.push(enderecoParts.logradouro);
-    if (enderecoParts.numero) partes.push(enderecoParts.numero);
-    if (enderecoParts.cidade) partes.push(enderecoParts.cidade);
-    if (enderecoParts.estado) partes.push(enderecoParts.estado);
-
-    if (partes.length === 0) return null;
-
-    const endereco = partes.join(', ');
-    const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-
-    if (!apiKey) {
-        return null;
-    }
-
-    try {
-        const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(endereco)}&key=${apiKey}`;
-        const response = await axios.get(url);
-
-        if (response.data && response.data.status === "OK" && response.data.results.length > 0) {
-            const location = response.data.results[0].geometry.location;
-            return {
-                lat: location.lat,
-                lon: location.lng
-            };
-        }
-        return null;
-    } catch (error) {
-        return null;
-    }
-};
 
 const _enrichPassageiroWithResponsavel = (p: Record<string, any>, isListMode: boolean = false) => {
     if (!p) return p;
@@ -206,20 +171,6 @@ const createPassageiro = async (data: CreatePassageiroDTO, isPreCadastro: boolea
 
     const passageiroData = _preparePassageiroData(data, data.usuario_id, false);
 
-    if (data.responsavel_principal) {
-        const coords = await geocodeAddress({
-            logradouro: data.responsavel_principal.logradouro ? String(data.responsavel_principal.logradouro) : undefined,
-            numero: data.responsavel_principal.numero ? String(data.responsavel_principal.numero) : undefined,
-            cidade: data.responsavel_principal.cidade ? String(data.responsavel_principal.cidade) : undefined,
-            estado: data.responsavel_principal.estado ? String(data.responsavel_principal.estado) : undefined
-        });
-
-        if (coords) {
-            passageiroData.latitude = coords.lat;
-            passageiroData.longitude = coords.lon;
-        }
-    }
-
     const { data: inserted, error } = await passageiroRepository.insert(passageiroData);
 
     if (error) throw error;
@@ -255,30 +206,6 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO, targetOwn
     if (!estadoAnterior) throw new AppError("Passageiro não encontrado", 404);
 
     const passageiroData = _preparePassageiroData(data, undefined, true);
-
-    const targetAddr = data.responsavel_principal;
-    const prevAddr = estadoAnterior.responsavel_principal;
-
-    const addressChanged = targetAddr && (
-        (targetAddr.logradouro !== undefined && targetAddr.logradouro !== prevAddr?.logradouro) ||
-        (targetAddr.numero !== undefined && targetAddr.numero !== prevAddr?.numero) ||
-        (targetAddr.cidade !== undefined && targetAddr.cidade !== prevAddr?.cidade) ||
-        (targetAddr.estado !== undefined && targetAddr.estado !== prevAddr?.estado)
-    );
-
-    if (addressChanged && targetAddr) {
-        const coords = await geocodeAddress({
-            logradouro: targetAddr.logradouro || prevAddr?.logradouro || undefined,
-            numero: targetAddr.numero || prevAddr?.numero || undefined,
-            cidade: targetAddr.cidade || prevAddr?.cidade || undefined,
-            estado: targetAddr.estado || prevAddr?.estado || undefined,
-        });
-
-        if (coords) {
-            passageiroData.latitude = coords.lat;
-            passageiroData.longitude = coords.lon;
-        }
-    }
 
     const { data: updated, error } = await passageiroRepository.update(id, passageiroData);
 

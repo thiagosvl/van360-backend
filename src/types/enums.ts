@@ -464,3 +464,8 @@ export enum RoutePermission {
   EXECUTAR_PARADAS = "rotas.executar_paradas"
 }
 
+export enum RastreamentoModo {
+  COMPLETO = "completo",
+  APENAS_PROXIMO = "apenas_proximo",
+}
+

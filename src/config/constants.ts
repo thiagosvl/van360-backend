@@ -1,4 +1,6 @@
 
+export const ENABLE_LIVE_TRACKING = false;
+
 // Passenger Events
 export const EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO = "PASSAGEIRO_VENCIMENTO_PROXIMO" as const;
 export const EVENTO_PASSAGEIRO_VENCIMENTO_HOJE = "PASSAGEIRO_VENCIMENTO_HOJE" as const;
@@ -9,8 +11,10 @@ export const EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO = "PASSAGEIRO_RECIBO_PAGAMENTO" 
 export const EVENTO_PASSAGEIRO_PIN_RESET = "PASSAGEIRO_PIN_RESET" as const;
 
 // Route Events
+export const EVENTO_ROTA_INICIADA_IDA = "ROTA_INICIADA_IDA" as const;
 export const EVENTO_ROTA_A_CAMINHO_IDA = "ROTA_A_CAMINHO_IDA" as const;
 export const EVENTO_ROTA_EMBARCOU_IDA = "ROTA_EMBARCOU_IDA" as const;
+export const EVENTO_ROTA_INICIADA_VOLTA = "ROTA_INICIADA_VOLTA" as const;
 export const EVENTO_ROTA_A_CAMINHO_VOLTA = "ROTA_A_CAMINHO_VOLTA" as const;
 export const EVENTO_ROTA_DESEMBARCOU_VOLTA = "ROTA_DESEMBARCOU_VOLTA" as const;
 export const EVENTO_ROTA_REORDENADA = "ROTA_REORDENADA" as const;
@@ -78,10 +82,6 @@ export const EVOLUTION_STATUS = {
 } as const;
 
 export const EVOLUTION_GLOBAL_INSTANCE = "Van360";
-
-export const FEATURE_FLAGS = {
-  ENABLE_LIVE_TRACKING: false
-} as const;
 
 export const TRACKING_REALTIME_CONFIG = {
   CHANNEL_PREFIX: "trip-tracking:",

@@ -179,15 +179,6 @@ export const generatePhone = (): string => {
     return `${ddd}${prefix}${rest}`;
 };
 
-export const generateCoordinates = (baseLat = -23.55052, baseLon = -46.633308) => {
-    const latOffset = (Math.random() - 0.5) * 0.08;
-    const lonOffset = (Math.random() - 0.5) * 0.08;
-    return {
-        latitude: parseFloat((baseLat + latOffset).toFixed(6)),
-        longitude: parseFloat((baseLon + lonOffset).toFixed(6)),
-    };
-};
-
 export const generateName = (): string => `${nomes[randomNumber(0, nomes.length - 1)]} ${sobrenomes[randomNumber(0, sobrenomes.length - 1)]} ${sobrenomes[randomNumber(0, sobrenomes.length - 1)]}`;
 
 export const generateAddress = () => {

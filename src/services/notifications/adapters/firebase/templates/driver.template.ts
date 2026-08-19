@@ -178,10 +178,10 @@ export class FirebaseDriverTemplates {
 
     static weeklySummary(ctx: Record<string, unknown>): FirebaseMessagePayload {
         return {
-            title: "Resumo Semanal 📊",
-            body: "Confira o desempenho das suas cobranças nesta semana!",
+            title: "Lembrete de Pagamentos 💵",
+            body: "Confira os pagamentos recebidos e dê baixa nas parcelas dos seus passageiros!",
             data: {
-                action: PushNotificationAction.OPEN_REPORTS,
+                action: PushNotificationAction.OPEN_BILLING,
                 userId: (ctx.usuarioId || ctx.userId || "") as string
             }
         };
@@ -190,7 +190,7 @@ export class FirebaseDriverTemplates {
     static birthdayReminder(ctx: Record<string, unknown>): FirebaseMessagePayload {
         return {
             title: "Aniversariantes da Semana 🎂",
-            body: "Veja os passageiros que fazem aniversário nesta semana!",
+            body: "Confira quem faz aniversário esta semana e dê os parabéns aos seus passageiros!",
             data: {
                 action: PushNotificationAction.OPEN_BIRTHDAYS,
                 userId: (ctx.usuarioId || ctx.userId || "") as string

@@ -9,7 +9,6 @@ import {
     generateCPF,
     generatePhone,
     generateAddress,
-    generateCoordinates,
     generateValorCobranca,
     bairros,
 } from "./mocks.js";
@@ -29,6 +28,7 @@ import {
 } from "../src/types/enums.js";
 
 import { cenarios, ScenarioConfig } from "./scenarios.config.js";
+import { santaMariaEscolas, santaMariaStops } from "./santa-maria-data.js";
 
 const ALLOW_PROD = process.argv.includes("--allow-prod") || process.env.ALLOW_SEED_PROD === "true";
 
@@ -260,8 +260,6 @@ async function seedPassageiros(
                 data_fim_cobranca: "2028-12-31",
                 data_inicio_transporte: hojeStr,
                 data_fim_transporte: "2028-12-31",
-                latitude: coords.latitude,
-                longitude: coords.longitude,
                 enviar_notificacoes: true,
             })
             .select()
@@ -589,6 +587,141 @@ async function seedCobrancas(usuarioId: string, passageirosInseridos: any[], cfg
     if (error) throw error;
 }
 
+async function seedSantaMariaRoute(usuarioId: string, cfg: ScenarioConfig) {
+    console.log(`[SEED] Inserindo cenário de rota real Santa Maria (Brasília DF)...`);
+
+    const escolasMap = new Map<string, string>();
+    for (const esc of santaMariaEscolas) {
+        const { data, error } = await supabaseAdmin.from("escolas").insert({
+            usuario_id: usuarioId,
+            nome: esc.nome,
+            logradouro: esc.logradouro,
+            numero: esc.numero,
+            bairro: esc.bairro,
+            cidade: esc.cidade,
+            estado: esc.estado,
+            cep: esc.cep,
+        }).select("id").single();
+        if (error) throw error;
+        escolasMap.set(esc.id, data.id);
+    }
+
+    const { data: veiculo, error: vErr } = await supabaseAdmin.from("veiculos").insert({
+        usuario_id: usuarioId,
+        placa: "VAN-0360",
+        marca: "Renault",
+        modelo: "Master Executiva",
+        ativo: true,
+    }).select("id").single();
+    if (vErr) throw vErr;
+
+    const passageirosMap = new Map<string, any>();
+    const responsaveisMap = new Map<string, string>();
+    const passageirosList: any[] = [];
+    let respIndex = 0;
+
+    for (const stop of santaMariaStops) {
+        if (stop.tipo_no === "passageiro" && stop.passageiro && stop.responsavel) {
+            const passOriginalId = stop.passageiro.id;
+            if (passageirosMap.has(passOriginalId)) continue;
+
+            let respId = responsaveisMap.get(stop.responsavel.telefone);
+            if (!respId) {
+                respIndex++;
+                const isFirst = respIndex === 1;
+                const phoneToUse = isFirst ? TARGET_PHONE : generatePhone();
+
+                const { data: resp, error: respErr } = await supabaseAdmin.from("responsaveis").insert({
+                    nome: stop.responsavel.nome,
+                    telefone: phoneToUse,
+                    cpf: "39542391838",
+                    email: "thiago-svl@hotmail.com",
+                    logradouro: stop.responsavel.logradouro,
+                    numero: stop.responsavel.numero,
+                    bairro: stop.responsavel.bairro,
+                    cidade: stop.responsavel.cidade,
+                    estado: stop.responsavel.estado,
+                    cep: stop.responsavel.cep,
+                    complemento: stop.responsavel.complemento,
+                }).select("id").single();
+                if (respErr) throw respErr;
+                respId = resp.id;
+                responsaveisMap.set(stop.responsavel.telefone, respId);
+            }
+
+            const targetEscolaId = escolasMap.get(stop.passageiro.escola_id) || Array.from(escolasMap.values())[0];
+            const { data: pass, error: passErr } = await supabaseAdmin.from("passageiros").insert({
+                usuario_id: usuarioId,
+                escola_id: targetEscolaId,
+                veiculo_id: veiculo.id,
+                nome: stop.passageiro.nome,
+                data_nascimento: stop.passageiro.data_nascimento,
+                genero: stop.passageiro.genero,
+                modalidade: stop.passageiro.modalidade,
+                periodo: stop.passageiro.periodo,
+                valor_cobranca: stop.passageiro.valor_cobranca,
+                dia_vencimento: stop.passageiro.dia_vencimento,
+                ativo: true,
+            }).select("id, nome, valor_cobranca, dia_vencimento").single();
+            if (passErr) throw passErr;
+
+            await supabaseAdmin.from("passageiro_responsaveis").insert({
+                passageiro_id: pass.id,
+                responsavel_id: respId,
+                parentesco: stop.responsavel.parentesco,
+                tipo: TipoResponsavel.PRINCIPAL,
+            });
+
+            passageirosMap.set(passOriginalId, pass.id);
+            passageirosList.push(pass);
+        }
+    }
+
+    const { data: rota, error: rotaErr } = await supabaseAdmin.from("rotas").insert({
+        usuario_id: usuarioId,
+        veiculo_id: veiculo.id,
+        nome: "Meio-dia",
+    }).select("id").single();
+    if (rotaErr) throw rotaErr;
+
+    const paradasToInsert: any[] = [];
+    for (const stop of santaMariaStops) {
+        if (stop.tipo_no === "escola" && stop.escola) {
+            const escId = escolasMap.get(stop.escola.id) || Array.from(escolasMap.values())[0];
+            paradasToInsert.push({
+                rota_id: rota.id,
+                tipo_no: RouteNodeType.ESCOLA,
+                escola_id: escId,
+                passageiro_id: null,
+                ordem: stop.ordem,
+                sentido: null,
+            });
+        } else if (stop.tipo_no === "passageiro" && stop.passageiro) {
+            const passId = passageirosMap.get(stop.passageiro.id);
+            if (passId) {
+                paradasToInsert.push({
+                    rota_id: rota.id,
+                    tipo_no: RouteNodeType.PASSAGEIRO,
+                    escola_id: null,
+                    passageiro_id: passId,
+                    ordem: stop.ordem,
+                    sentido: stop.sentido === "voltando" ? RouteSentido.VOLTANDO : RouteSentido.INDO,
+                });
+            }
+        }
+    }
+
+    if (paradasToInsert.length > 0) {
+        const { error: paradasErr } = await supabaseAdmin.from("rota_passageiros").insert(paradasToInsert);
+        if (paradasErr) throw paradasErr;
+    }
+
+    console.log(`[SEED] Rota Meio-dia criada com sucesso com ${paradasToInsert.length} paradas fiéis a produção!`);
+
+    await seedCobrancas(usuarioId, passageirosList, cfg);
+    await seedGastos(usuarioId, [veiculo], cfg);
+}
+
 async function main() {
     console.log(`[SEED] Buscando usuário pelo telefone: ${TARGET_PHONE}...`);
     const { data: usuario, error: userError } = await supabaseAdmin
@@ -623,30 +756,34 @@ async function main() {
             }
         }
 
-        const escolasInseridas = await seedEscolas(usuarioId, config);
-        const veiculosInseridos = await seedVeiculos(usuarioId, config);
+        if (scenarioName === "cenario-rota-real") {
+            await seedSantaMariaRoute(usuarioId, config);
+        } else {
+            const escolasInseridas = await seedEscolas(usuarioId, config);
+            const veiculosInseridos = await seedVeiculos(usuarioId, config);
 
-        if (escolasInseridas && veiculosInseridos) {
-            const passageirosInseridos = await seedPassageiros(
-                usuarioId,
-                escolasInseridas,
-                veiculosInseridos,
-                config
-            );
+            if (escolasInseridas && veiculosInseridos) {
+                const passageirosInseridos = await seedPassageiros(
+                    usuarioId,
+                    escolasInseridas,
+                    veiculosInseridos,
+                    config
+                );
 
-            await seedRotas(
-                usuarioId,
-                veiculosInseridos,
-                escolasInseridas,
-                passageirosInseridos,
-                config
-            );
+                await seedRotas(
+                    usuarioId,
+                    veiculosInseridos,
+                    escolasInseridas,
+                    passageirosInseridos,
+                    config
+                );
 
-            await seedGastos(usuarioId, veiculosInseridos, config);
-            await seedPrePassageiros(usuarioId, config);
+                await seedGastos(usuarioId, veiculosInseridos, config);
+                await seedPrePassageiros(usuarioId, config);
 
-            if (passageirosInseridos.length > 0) {
-                await seedCobrancas(usuarioId, passageirosInseridos, config);
+                if (passageirosInseridos.length > 0) {
+                    await seedCobrancas(usuarioId, passageirosInseridos, config);
+                }
             }
         }
 

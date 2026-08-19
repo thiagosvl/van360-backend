@@ -18,6 +18,11 @@ export async function obterConfiguracoesUsuario(usuarioId: string): Promise<Conf
     notificar_pais_cobrancas: config?.notificar_pais_cobrancas ?? true,
     notificar_motorista_parcelas: config?.notificar_motorista_parcelas ?? true,
     notificar_motorista_aniversarios: config?.notificar_motorista_aniversarios ?? true,
+    notificar_inicio_rota: config?.notificar_inicio_rota ?? true,
+    notificar_proxima_parada: config?.notificar_proxima_parada ?? true,
+    notificar_conclusao_parada: config?.notificar_conclusao_parada ?? true,
+    rastreamento_ativo: config?.rastreamento_ativo ?? true,
+    rastreamento_modo: config?.rastreamento_modo ?? "completo",
     chave_pix: usuario.chave_pix ?? null,
     tipo_chave_pix: usuario.tipo_chave_pix ?? null,
   };
