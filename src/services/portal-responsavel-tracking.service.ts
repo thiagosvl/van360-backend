@@ -2,7 +2,6 @@ import { AppError } from "../errors/AppError.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { portalResponsavelService } from "./portal-responsavel.service.js";
 import { RouteExecutionStatus, RouteStopStatus, TipoResponsavel, RouteSentido, RouteNodeType } from "../types/enums.js";
-import { ENABLE_LIVE_TRACKING } from "../config/constants.js";
 
 export interface TrackingResponseDTO {
   ativa: boolean;
@@ -45,13 +44,6 @@ export interface TrackingResponseDTO {
 
 export const portalResponsavelTrackingService = {
   async getRastreamentoPassageiro(token: string, passageiroId: string): Promise<TrackingResponseDTO> {
-    if (!ENABLE_LIVE_TRACKING) {
-      return {
-        ativa: false,
-        execucao: null
-      };
-    }
-
     const payload = await portalResponsavelService.verifyResponsavelToken(token);
 
     if (!payload.passageiro_ids.includes(passageiroId)) {
