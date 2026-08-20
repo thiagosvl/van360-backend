@@ -63,12 +63,15 @@ export const passageiroRepository = {
   },
 
   async update(id: string, data: Record<string, unknown>) {
+    if (!data || Object.keys(data).length === 0) {
+      return { data: null, error: null };
+    }
     return supabaseAdmin
       .from("passageiros")
       .update(data)
       .eq("id", id)
       .select()
-      .single();
+      .maybeSingle();
   },
 
   async delete(id: string) {

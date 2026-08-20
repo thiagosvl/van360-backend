@@ -100,7 +100,9 @@ export const createPassageiroSchema = z.object({
 
 export type CreatePassageiroDTO = z.infer<typeof createPassageiroSchema>;
 
-export const updatePassageiroSchema = createPassageiroSchema.partial();
+export const updatePassageiroSchema = createPassageiroSchema.extend({
+  responsavel_principal: responsavelPrincipalInputSchema.partial().optional().nullable(),
+}).partial();
 export type UpdatePassageiroDTO = z.infer<typeof updatePassageiroSchema>;
 
 export const listPassageirosFiltersSchema = z.object({

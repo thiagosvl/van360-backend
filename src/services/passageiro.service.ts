@@ -72,7 +72,7 @@ const _enrichPassageiroWithResponsavel = (p: Record<string, any>, isListMode: bo
     return enriched;
 };
 
-const _preparePassageiroData = (data: Partial<CreatePassageiroDTO>, usuarioId?: string, isUpdate: boolean = false): Record<string, unknown> => {
+const _preparePassageiroData = (data: Partial<CreatePassageiroDTO> | UpdatePassageiroDTO, usuarioId?: string, isUpdate: boolean = false): Record<string, unknown> => {
     const prepared: Record<string, unknown> = {};
 
     if (!isUpdate && usuarioId) {
@@ -207,9 +207,10 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO, targetOwn
 
     const passageiroData = _preparePassageiroData(data, undefined, true);
 
-    const { data: updated, error } = await passageiroRepository.update(id, passageiroData);
-
-    if (error) throw error;
+    if (Object.keys(passageiroData).length > 0) {
+        const { error } = await passageiroRepository.update(id, passageiroData);
+        if (error) throw error;
+    }
 
     if (data.responsavel_principal) {
         await _syncResponsavelPrincipal(id, data.responsavel_principal, estadoAnterior.responsavel_principal);
@@ -351,7 +352,7 @@ const countListPassageirosByUsuario = async (
 
 const finalizePreCadastro = async (
     prePassageiroId: string,
-    data: Partial<CreatePassageiroDTO>,
+    data: UpdatePassageiroDTO,
     usuarioId: string
 ): Promise<any> => {
     // 1. Buscar Pré-Cadastro
@@ -359,26 +360,27 @@ const finalizePreCadastro = async (
 
     if (error || !pre) throw new AppError("Pré-cadastro não encontrado.", 404);
 
-    const responsavelPrincipal = data.responsavel_principal || {
-        nome: pre.nome_responsavel || "",
-        telefone: pre.telefone_responsavel || "",
-        cpf: pre.cpf_responsavel || null,
-        email: pre.email_responsavel || null,
-        parentesco: pre.parentesco_responsavel || null,
-        logradouro: pre.logradouro || null,
-        numero: pre.numero || null,
-        bairro: pre.bairro || null,
-        cidade: pre.cidade || null,
-        estado: pre.estado || null,
-        cep: pre.cep || null,
-        referencia: pre.referencia || null,
-        complemento: pre.complemento || null,
+    const responsavelPrincipal = {
+        nome: data.responsavel_principal?.nome || pre.nome_responsavel || "",
+        telefone: data.responsavel_principal?.telefone || pre.telefone_responsavel || "",
+        cpf: data.responsavel_principal?.cpf !== undefined ? data.responsavel_principal.cpf : (pre.cpf_responsavel || null),
+        email: data.responsavel_principal?.email !== undefined ? data.responsavel_principal.email : (pre.email_responsavel || null),
+        parentesco: data.responsavel_principal?.parentesco !== undefined ? data.responsavel_principal.parentesco : (pre.parentesco_responsavel || null),
+        logradouro: data.responsavel_principal?.logradouro !== undefined ? data.responsavel_principal.logradouro : (pre.logradouro || null),
+        numero: data.responsavel_principal?.numero !== undefined ? data.responsavel_principal.numero : (pre.numero || null),
+        bairro: data.responsavel_principal?.bairro !== undefined ? data.responsavel_principal.bairro : (pre.bairro || null),
+        cidade: data.responsavel_principal?.cidade !== undefined ? data.responsavel_principal.cidade : (pre.cidade || null),
+        estado: data.responsavel_principal?.estado !== undefined ? data.responsavel_principal.estado : (pre.estado || null),
+        cep: data.responsavel_principal?.cep !== undefined ? data.responsavel_principal.cep : (pre.cep || null),
+        referencia: data.responsavel_principal?.referencia !== undefined ? data.responsavel_principal.referencia : (pre.referencia || null),
+        complemento: data.responsavel_principal?.complemento !== undefined ? data.responsavel_principal.complemento : (pre.complemento || null),
     };
 
     // 2. Mesclar dados (Data sobrescreve Pre)
     const payload: CreatePassageiroDTO = {
         ...pre,
         ...data,
+        nome: data.nome || pre.nome_aluno || "Aluno",
         usuario_id: usuarioId,
         responsavel_principal: responsavelPrincipal,
         // Garantir que valor_cobranca e dia_vencimento do pre sejam mantidos se não vierem no data
