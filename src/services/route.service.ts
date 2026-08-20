@@ -486,7 +486,7 @@ const iniciarRota = async (rotaId: string, usuarioId: string, notificarPais: boo
   if (paradasError) throw paradasError;
 
   if (notificarPais) {
-    notifyRouteStartedIda(exec.id).catch((err) =>
+    notifyRouteStarted(exec.id).catch((err) =>
       logger.error({ err, execId: exec.id }, "Erro ao disparar notificação de rota iniciada")
     );
     notifyNextPendingPassengerStop(exec.id).catch((err) =>
@@ -634,7 +634,7 @@ const atualizarParadaStatus = async (
   return await getExecucaoDetail(execucaoId);
 };
 
-const notifyRouteStartedIda = async (execucaoId: string) => {
+const notifyRouteStarted = async (execucaoId: string) => {
   try {
     const { data: exec } = await routeRepository.getExecucaoResumida(execucaoId);
     if (!exec || (exec as ExecucaoResumidaDTO).notificar_pais === false || (exec as ExecucaoResumidaDTO).notificar_inicio_rota === false) return;
@@ -643,49 +643,31 @@ const notifyRouteStartedIda = async (execucaoId: string) => {
     if (!paradasLeves || paradasLeves.length === 0) return;
 
     const typedParadas = paradasLeves as ExecucaoParadaLeveDTO[];
-    const passageirosValidos = typedParadas.filter(
-      (p) => p.tipo_no === RouteNodeType.PASSAGEIRO && p.passageiro_id && p.status !== RouteStopStatus.AUSENTE && !p.notificacao_inicio_enviada
-    );
-
-    if (passageirosValidos.length === 0) return;
-
+    const firstPendingStop = typedParadas.find((p) => p.status === RouteStopStatus.PENDENTE);
     const shouldSkipFirst = (exec as ExecucaoResumidaDTO).notificar_proxima_parada !== false;
-    const firstPassengerStop = typedParadas.find(
-      (p) => p.tipo_no === RouteNodeType.PASSAGEIRO && p.passageiro_id && p.status !== RouteStopStatus.AUSENTE
+
+    const passageirosIda = typedParadas.filter(
+      (p) =>
+        p.tipo_no === RouteNodeType.PASSAGEIRO &&
+        p.passageiro_id &&
+        p.status !== RouteStopStatus.AUSENTE &&
+        !p.notificacao_inicio_enviada &&
+        (p.sentido === RouteSentido.INDO || !p.sentido)
     );
 
-    const passageirosIda = passageirosValidos.filter(
-      (p) => p.sentido === RouteSentido.INDO || !p.sentido
+    if (passageirosIda.length === 0) return;
+
+    await Promise.all(
+      passageirosIda.map(async (p) => {
+        if (!p.passageiro_id) return;
+        if (shouldSkipFirst && firstPendingStop && p.id === firstPendingStop.id) {
+          await routeRepository.updateNotificacaoInicioEnviada(p.id, true);
+          return;
+        }
+        await routeRepository.updateNotificacaoInicioEnviada(p.id, true);
+        await notifyParentRouteEvent(p.passageiro_id, EVENTO_ROTA_INICIADA_IDA, exec);
+      })
     );
-
-    const temAlunosIda = passageirosIda.length > 0;
-    const temEscolas = typedParadas.some((p) => p.tipo_no === RouteNodeType.ESCOLA);
-
-    if (temAlunosIda) {
-      await Promise.all(
-        passageirosIda.map(async (p) => {
-          if (!p.passageiro_id) return;
-          if (shouldSkipFirst && firstPassengerStop && p.id === firstPassengerStop.id) {
-            await routeRepository.updateNotificacaoInicioEnviada(p.id, true);
-            return;
-          }
-          await routeRepository.updateNotificacaoInicioEnviada(p.id, true);
-          await notifyParentRouteEvent(p.passageiro_id, EVENTO_ROTA_INICIADA_IDA, exec);
-        })
-      );
-    } else if (!temEscolas) {
-      await Promise.all(
-        passageirosValidos.map(async (p) => {
-          if (!p.passageiro_id) return;
-          if (shouldSkipFirst && firstPassengerStop && p.id === firstPassengerStop.id) {
-            await routeRepository.updateNotificacaoInicioEnviada(p.id, true);
-            return;
-          }
-          await routeRepository.updateNotificacaoInicioEnviada(p.id, true);
-          await notifyParentRouteEvent(p.passageiro_id, EVENTO_ROTA_INICIADA_VOLTA, exec);
-        })
-      );
-    }
   } catch (err) {
     logger.error({ err, execucaoId }, "[routeService] Erro ao disparar notificação de rota iniciada");
   }
@@ -710,7 +692,12 @@ const notifySchoolDepartureVolta = async (execucaoId: string, paradaEscolaId: st
     const proximaEscolaOrdem = proximasEscolas.length > 0 ? proximasEscolas[0].ordem : Infinity;
 
     const passageirosVoltaNaoNotificados = typedParadas.filter(
-      (p) => p.tipo_no === RouteNodeType.PASSAGEIRO && p.passageiro_id && p.status !== RouteStopStatus.AUSENTE && p.sentido === RouteSentido.VOLTANDO && !p.notificacao_inicio_enviada
+      (p) =>
+        p.tipo_no === RouteNodeType.PASSAGEIRO &&
+        p.passageiro_id &&
+        p.status !== RouteStopStatus.AUSENTE &&
+        p.sentido === RouteSentido.VOLTANDO &&
+        !p.notificacao_inicio_enviada
     );
 
     if (passageirosVoltaNaoNotificados.length === 0) return;
@@ -719,6 +706,9 @@ const notifySchoolDepartureVolta = async (execucaoId: string, paradaEscolaId: st
     const todasParadasDetail = execDetail?.execucoes_rota_passageiros || [];
     const escolaNodeDetail = todasParadasDetail.find((p: any) => p.id === paradaEscolaId);
     const nomeEscola = escolaNodeDetail?.escola?.nome || null;
+
+    const firstPendingStop = typedParadas.find((p) => p.status === RouteStopStatus.PENDENTE);
+    const shouldSkipFirst = (exec as ExecucaoResumidaDTO).notificar_proxima_parada !== false;
 
     await Promise.all(
       passageirosVoltaNaoNotificados.map(async (p) => {
@@ -730,6 +720,10 @@ const notifySchoolDepartureVolta = async (execucaoId: string, paradaEscolaId: st
         const ehTrechoSubsequente = p.ordem > escolaParada.ordem && p.ordem < proximaEscolaOrdem;
 
         if (pertenceAEstaEscola || (!alunoEscolaId && ehTrechoSubsequente)) {
+          if (shouldSkipFirst && firstPendingStop && p.id === firstPendingStop.id) {
+            await routeRepository.updateNotificacaoInicioEnviada(p.id, true);
+            return;
+          }
           await routeRepository.updateNotificacaoInicioEnviada(p.id, true);
           await notifyParentRouteEvent(p.passageiro_id, EVENTO_ROTA_INICIADA_VOLTA, exec, { nomeEscola });
         }
@@ -749,17 +743,21 @@ const notifyNextPendingPassengerStop = async (execucaoId: string) => {
     if (!paradasLeves || paradasLeves.length === 0) return;
 
     const typedParadas = paradasLeves as ExecucaoParadaLeveDTO[];
-    const nextStop = typedParadas.find(
-      (p) => p.status === RouteStopStatus.PENDENTE && p.tipo_no === RouteNodeType.PASSAGEIRO && p.passageiro_id
+    const nextImmediateStop = typedParadas.find(
+      (p) => p.status === RouteStopStatus.PENDENTE
     );
 
-    if (nextStop && !nextStop.notificacao_a_caminho_enviada && nextStop.passageiro_id) {
-      const eventType = nextStop.sentido === RouteSentido.VOLTANDO
+    if (!nextImmediateStop || nextImmediateStop.tipo_no !== RouteNodeType.PASSAGEIRO || !nextImmediateStop.passageiro_id) {
+      return;
+    }
+
+    if (!nextImmediateStop.notificacao_a_caminho_enviada) {
+      const eventType = nextImmediateStop.sentido === RouteSentido.VOLTANDO
         ? EVENTO_ROTA_A_CAMINHO_VOLTA
         : EVENTO_ROTA_A_CAMINHO_IDA;
 
-      await routeRepository.updateNotificacaoACaminhoEnviada(nextStop.id, true);
-      await notifyParentRouteEvent(nextStop.passageiro_id, eventType, exec);
+      await routeRepository.updateNotificacaoACaminhoEnviada(nextImmediateStop.id, true);
+      await notifyParentRouteEvent(nextImmediateStop.passageiro_id, eventType, exec);
     }
   } catch (err) {
     logger.error({ err, execucaoId }, "[routeService] Erro ao notificar próxima parada pendente");
@@ -859,24 +857,27 @@ const reordenarExecucao = async (execucaoId: string, data: ReorderExecucaoDTO): 
       try {
         const { data: paradasLeves } = await routeRepository.getParadasLevesByExecucao(execucaoId);
         if (paradasLeves && paradasLeves.length > 0) {
-          const pendingPassengerStops = paradasLeves.filter(
-            (p: any) => p.status === RouteStopStatus.PENDENTE && p.tipo_no === RouteNodeType.PASSAGEIRO && p.passageiro_id
+          const pendingStops = paradasLeves.filter(
+            (p: any) => p.status === RouteStopStatus.PENDENTE
           );
 
-          if (pendingPassengerStops.length > 0) {
-            const newFirstPending = pendingPassengerStops[0];
+          if (pendingStops.length > 0) {
+            const firstPending = pendingStops[0];
             const shouldNotifyNext = (exec as any).notificar_proxima_parada !== false;
-            if (shouldNotifyNext && !newFirstPending.notificacao_a_caminho_enviada) {
-              const eventType = newFirstPending.sentido === RouteSentido.VOLTANDO
-                ? EVENTO_ROTA_A_CAMINHO_VOLTA
-                : EVENTO_ROTA_A_CAMINHO_IDA;
-              await routeRepository.updateNotificacaoACaminhoEnviada(newFirstPending.id, true);
-              await notifyParentRouteEvent(newFirstPending.passageiro_id, eventType, exec);
+
+            if (firstPending.tipo_no === RouteNodeType.PASSAGEIRO && firstPending.passageiro_id) {
+              if (shouldNotifyNext && !firstPending.notificacao_a_caminho_enviada) {
+                const eventType = firstPending.sentido === RouteSentido.VOLTANDO
+                  ? EVENTO_ROTA_A_CAMINHO_VOLTA
+                  : EVENTO_ROTA_A_CAMINHO_IDA;
+                await routeRepository.updateNotificacaoACaminhoEnviada(firstPending.id, true);
+                await notifyParentRouteEvent(firstPending.passageiro_id, eventType, exec);
+              }
             }
 
-            for (let i = 1; i < pendingPassengerStops.length; i++) {
-              const p = pendingPassengerStops[i];
-              if (p.notificacao_a_caminho_enviada) {
+            for (let i = 0; i < pendingStops.length; i++) {
+              const p = pendingStops[i];
+              if (p.tipo_no === RouteNodeType.PASSAGEIRO && p.id !== firstPending.id && p.notificacao_a_caminho_enviada && p.passageiro_id) {
                 await routeRepository.updateNotificacaoACaminhoEnviada(p.id, false);
                 await notifyParentRouteEvent(p.passageiro_id, EVENTO_ROTA_REORDENADA, exec);
               }
