@@ -5,7 +5,8 @@ import { portalResponsavelTrackingService } from "../services/portal-responsavel
 import {
   checkPhoneSchema,
   loginResponsavelSchema,
-  setupPinSchema
+  setupPinSchema,
+  updateDadosComplementaresSchema
 } from "../types/dtos/responsavel.dto.js";
 import { createResponsavelAusenciaSchema } from "../types/dtos/responsavel-ausencia.dto.js";
 import { registerPushTokenSchema } from "../schemas/notification.schema.js";
@@ -60,19 +61,11 @@ export const portalResponsavelController = {
   },
 
   updateDadosComplementares: async (request: FastifyRequest, reply: FastifyReply) => {
-    const authHeader = request.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      throw new AppError("Token de autorização não fornecido.", 401);
-    }
-    const token = authHeader.replace("Bearer ", "").trim();
+    const token = getResponsavelToken(request);
     const { id } = request.params as { id: string };
-    const { cpf, email } = request.body as { cpf: string; email: string };
+    const body = updateDadosComplementaresSchema.parse(request.body);
 
-    if (!cpf || !email) {
-      throw new AppError("CPF e E-mail são obrigatórios.", 400);
-    }
-
-    const result = await portalResponsavelService.updateDadosComplementares(token, id, cpf, email);
+    const result = await portalResponsavelService.updateDadosComplementares(token, id, body);
     return reply.status(200).send(result);
   },
 

@@ -157,6 +157,7 @@ export const responsavelRepository = {
       .select(`
         id, usuario_id, nome, genero, data_nascimento, periodo, modalidade, turma, nome_professor,
         data_inicio_transporte, data_fim_transporte,
+        valor_cobranca, dia_vencimento, data_inicio_cobranca, data_fim_cobranca, created_at,
         observacoes,
         ativo, isento,
         escola_id, veiculo_id,
@@ -302,7 +303,8 @@ export const responsavelRepository = {
       ausencias: ausenciasMapeadas || [],
       contrato: contrato || null,
       responsaveis: responsaveisAdicionais || [],
-      rotas: rotas || []
+      rotas: rotas || [],
+      responsavel_logado_id: target?.responsavel_id || targetResp?.id || null
     };
   },
 
@@ -339,7 +341,7 @@ export const responsavelRepository = {
     return true;
   },
 
-  async updateDadosComplementaresPrincipal(passageiroId: string, cpf: string, email: string) {
+  async updateDadosComplementaresPrincipal(passageiroId: string, data: Record<string, unknown>) {
     const { data: link } = await supabaseAdmin
       .from("passageiro_responsaveis")
       .select("responsavel_id")
@@ -350,15 +352,15 @@ export const responsavelRepository = {
     if (link?.responsavel_id) {
       return supabaseAdmin
         .from("responsaveis")
-        .update({ cpf, email, updated_at: new Date().toISOString() })
+        .update({ ...data, updated_at: new Date().toISOString() })
         .eq("id", link.responsavel_id);
     }
   },
 
-  async updateDadosComplementaresAdicional(responsavelId: string, cpf: string, email: string) {
+  async updateDadosComplementaresAdicional(responsavelId: string, data: Record<string, unknown>) {
     return supabaseAdmin
       .from("responsaveis")
-      .update({ cpf, email, updated_at: new Date().toISOString() })
+      .update({ ...data, updated_at: new Date().toISOString() })
       .eq("id", responsavelId);
   },
 
@@ -396,6 +398,13 @@ export const responsavelRepository = {
       .select("id, nome, cpf, email, logradouro, numero, bairro, cidade, estado, cep, referencia, complemento")
       .eq("telefone", phoneDigits)
       .maybeSingle();
+
+    if (data.tornar_principal === true) {
+      const logradouroFinal = data.logradouro || existing?.logradouro;
+      if (!logradouroFinal || logradouroFinal.trim() === "") {
+        throw new AppError("Para definir este responsável como principal, é necessário cadastrar um endereço primeiro.", 400);
+      }
+    }
 
     if (existing) {
       responsavelId = existing.id;
@@ -454,6 +463,13 @@ export const responsavelRepository = {
       throw new AppError("Este responsável já está vinculado a este passageiro.", 400);
     }
 
+    if (data.tornar_principal === true) {
+      await supabaseAdmin
+        .from("passageiro_responsaveis")
+        .update({ tipo: TipoResponsavel.ADICIONAL, updated_at: new Date().toISOString() })
+        .eq("passageiro_id", passageiroId);
+    }
+
     const { data: existingPrincipal } = await supabaseAdmin
       .from("passageiro_responsaveis")
       .select("id")
@@ -461,7 +477,9 @@ export const responsavelRepository = {
       .eq("tipo", TipoResponsavel.PRINCIPAL)
       .maybeSingle();
 
-    const tipoLink = existingPrincipal ? TipoResponsavel.ADICIONAL : TipoResponsavel.PRINCIPAL;
+    const tipoLink = data.tornar_principal === true
+      ? TipoResponsavel.PRINCIPAL
+      : (existingPrincipal ? TipoResponsavel.ADICIONAL : TipoResponsavel.PRINCIPAL);
 
     const { data: link, error: errLink } = await supabaseAdmin
       .from("passageiro_responsaveis")
@@ -490,6 +508,23 @@ export const responsavelRepository = {
         .eq("responsavel_id", responsavelId);
       if (links && links.length === 1) {
         effectivePassageiroId = links[0].passageiro_id;
+      }
+    }
+
+    const { data: currentResp } = await supabaseAdmin
+      .from("responsaveis")
+      .select("id, telefone, logradouro")
+      .eq("id", responsavelId)
+      .single();
+
+    if (!currentResp) {
+      throw new AppError("Responsável não encontrado.", 404);
+    }
+
+    if (data.tornar_principal === true) {
+      const logradouroFinal = data.logradouro !== undefined ? data.logradouro : currentResp.logradouro;
+      if (!logradouroFinal || logradouroFinal.trim() === "") {
+        throw new AppError("Para definir este responsável como principal, é necessário cadastrar um endereço para ele primeiro.", 400);
       }
     }
 
@@ -532,7 +567,22 @@ export const responsavelRepository = {
 
     if (error) throw error;
 
-    if (data.parentesco !== undefined && effectivePassageiroId) {
+    if (data.tornar_principal === true && effectivePassageiroId) {
+      await supabaseAdmin
+        .from("passageiro_responsaveis")
+        .update({ tipo: TipoResponsavel.ADICIONAL, updated_at: new Date().toISOString() })
+        .eq("passageiro_id", effectivePassageiroId);
+
+      await supabaseAdmin
+        .from("passageiro_responsaveis")
+        .update({
+          tipo: TipoResponsavel.PRINCIPAL,
+          ...(data.parentesco !== undefined ? { parentesco: data.parentesco || null } : {}),
+          updated_at: new Date().toISOString()
+        })
+        .eq("passageiro_id", effectivePassageiroId)
+        .eq("responsavel_id", responsavelId);
+    } else if (data.parentesco !== undefined && effectivePassageiroId) {
       await supabaseAdmin
         .from("passageiro_responsaveis")
         .update({ parentesco: data.parentesco || null, updated_at: new Date().toISOString() })
@@ -556,11 +606,20 @@ export const responsavelRepository = {
     const { error } = await query;
 
     if (error) throw error;
-    await cleanupOrphanedResponsaveis([responsavelId]);
     return true;
   },
 
   async setPrincipalResponsavel(passageiroId: string, responsavelId: string) {
+    const { data: resp } = await supabaseAdmin
+      .from("responsaveis")
+      .select("id, logradouro")
+      .eq("id", responsavelId)
+      .single();
+
+    if (!resp?.logradouro || resp.logradouro.trim() === "") {
+      throw new AppError("Para definir este responsável como principal, é necessário cadastrar um endereço primeiro.", 400);
+    }
+
     const { error: errReset } = await supabaseAdmin
       .from("passageiro_responsaveis")
       .update({ tipo: TipoResponsavel.ADICIONAL, updated_at: new Date().toISOString() })
@@ -579,24 +638,4 @@ export const responsavelRepository = {
   }
 };
 
-export async function cleanupOrphanedResponsaveis(responsavelIds: string[]) {
-  if (!responsavelIds || responsavelIds.length === 0) return;
-  const uniqueIds = Array.from(new Set(responsavelIds.filter(Boolean)));
-
-  for (const respId of uniqueIds) {
-    const { count, error } = await supabaseAdmin
-      .from("passageiro_responsaveis")
-      .select("id", { count: "exact", head: true })
-      .eq("responsavel_id", respId);
-
-    if (!error && count === 0) {
-      await usuarioPushTokenRepository.deleteTokensByUsuarioId(respId);
-
-      await supabaseAdmin
-        .from("responsaveis")
-        .delete()
-        .eq("id", respId);
-    }
-  }
-}
 

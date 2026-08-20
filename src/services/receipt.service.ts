@@ -135,7 +135,7 @@ class ReceiptService {
                                 }
                             },
                             // Título
-                            { type: "div", props: { style: { fontSize: "28px", fontWeight: "bold", marginBottom: "4px" }, children: "Comprovante de Pagamento" } },
+                            { type: "div", props: { style: { fontSize: "28px", fontWeight: "bold", marginBottom: "4px" }, children: "Recibo de Pagamento" } },
                             { type: "div", props: { style: { fontSize: "14px", color: "#64748b", marginBottom: "40px" }, children: data.subtitulo } },
 
                             // Valor Grande
@@ -172,7 +172,7 @@ class ReceiptService {
                                 props: {
                                     style: { marginTop: "auto", borderTop: "1px solid #e2e8f0", paddingTop: "20px", display: "flex", justifyContent: "center" },
                                     children: [
-                                        { type: "div", props: { style: { fontSize: "12px", color: "#94a3b8" }, children: "Este é um comprovante digital gerado automaticamente pelo Van360." } }
+                                        { type: "div", props: { style: { fontSize: "12px", color: "#94a3b8" }, children: "Este é um recibo digital gerado automaticamente pelo Van360." } }
                                     ]
                                 }
                             }
@@ -257,7 +257,7 @@ class ReceiptService {
 
             const receiptData: ReceiptData = {
                 id: cobranca.id,
-                titulo: "Comprovante de Pagamento",
+                titulo: "Recibo de Pagamento",
                 subtitulo: getDriverDisplayName(motoristaInfo) || "Transporte Escolar",
                 valor: cobranca.valor_pago || cobranca.valor,
                 data: cobranca.data_pagamento ? formatToBrazilianDate(cobranca.data_pagamento) : formatToBrazilianDate(getNowBR()),

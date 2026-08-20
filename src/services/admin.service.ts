@@ -699,7 +699,6 @@ export const adminService = {
       throw error;
     }
 
-    // Opcional: Buscar o status em tempo real da Evolution API para cada instância
     const { evolutionService } = await import("./evolution.service.js");
     const enhancedData = await Promise.all((data || []).map(async (instance: any) => {
       try {

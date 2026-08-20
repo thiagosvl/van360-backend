@@ -3,6 +3,7 @@ import { notificationQueueRepository, NotificationQueueItemPayload } from "../..
 import { cobrancaRepository } from "../../repositories/cobranca.repository.js";
 import { NotificationChannelEnum, NotificationQueueStatus, CobrancaStatus } from "../../types/enums.js";
 import { notificationService, NotificationOptions } from "./notification.service.js";
+import { usuarioPushTokenRepository } from "../../repositories/usuario-push-token.repository.js";
 import { EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO, EVENTO_PASSAGEIRO_VENCIMENTO_HOJE, EVENTO_PASSAGEIRO_ATRASADO, EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO } from "../../config/constants.js";
 
 
@@ -30,12 +31,12 @@ export class NotificationQueueService {
 
     static calculateNextRetryDate(attemptNumber: number): string {
         const now = Date.now();
-        let delayMinutes = 2; // Tentativa 1 -> 2 min
+        let delayMinutes = 2;
 
         if (attemptNumber === 2) {
-            delayMinutes = 15; // Tentativa 2 -> 15 min
+            delayMinutes = 15;
         } else if (attemptNumber >= 3) {
-            delayMinutes = 60; // Tentativa 3 -> 1 hora
+            delayMinutes = 60;
         }
 
         return new Date(now + delayMinutes * 60 * 1000).toISOString();
@@ -90,6 +91,27 @@ export class NotificationQueueService {
 
         const routeCheck = this.validateRouteEventTTL(item.evento, item.created_at);
         if (!routeCheck.eligible) return routeCheck;
+
+        if (item.canal === NotificationChannelEnum.FIREBASE) {
+            const isPassengerEvent = item.evento.startsWith("PASSAGEIRO_") || item.evento.startsWith("ROTA_");
+            const targetId = isPassengerEvent
+                ? (item.destinatario || (payload.to as string))
+                : (item.usuario_id || (payload.usuarioId as string) || item.destinatario);
+
+            if (targetId) {
+                const tokenCount = await usuarioPushTokenRepository.countTokensByUsuarioId(targetId);
+                if (tokenCount === 0) {
+                    return { eligible: false, cancelReason: "Usuário não possui tokens de push ativos." };
+                }
+            }
+        }
+
+        if (item.canal === NotificationChannelEnum.RESEND) {
+            const email = item.destinatario || (payload.email as string);
+            if (!email || !email.includes("@")) {
+                return { eligible: false, cancelReason: "Destinatário sem e-mail válido." };
+            }
+        }
 
         return { eligible: true };
     }

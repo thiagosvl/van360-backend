@@ -31,8 +31,9 @@ export class ResendAdapter implements NotificationProviderPort {
 
             const recipientEmail = await this.resolveRecipient(contextData, options);
             if (!recipientEmail) {
-                logger.info({ eventName, to: contextData.to, usuarioId: contextData.usuarioId }, "[ResendAdapter] E-mail de destino não cadastrado. Disparo de e-mail ignorado com sucesso.");
-                return { success: true };
+                const err = "[ResendAdapter] E-mail de destino não cadastrado.";
+                logger.warn({ eventName, to: contextData.to, usuarioId: contextData.usuarioId }, err);
+                return { success: false, error: err };
             }
 
             // Resolve o e-mail real do usuário (para Magic Link correto mesmo com OVERRIDE_EMAIL ativo em DEV)

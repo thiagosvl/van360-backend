@@ -149,6 +149,7 @@ export const createResponsavelAdicionalSchema = z.object({
   referencia: optionalString,
   complemento: optionalString,
   passageiroId: optionalString,
+  tornar_principal: z.boolean().optional(),
 });
 
 export type CreateResponsavelAdicionalDTO = z.infer<typeof createResponsavelAdicionalSchema>;

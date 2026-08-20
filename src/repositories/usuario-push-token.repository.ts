@@ -112,33 +112,73 @@ export const usuarioPushTokenRepository = {
         .eq('email', cleanEmail)
         .maybeSingle();
 
-      return data;
+      if (data) return data;
+
+      const { data: resp } = await supabase
+        .from('responsaveis')
+        .select('id, email')
+        .eq('email', cleanEmail)
+        .limit(1)
+        .maybeSingle();
+
+      if (resp) {
+        return { id: resp.id, email: resp.email, tipo: UserType.RESPONSAVEL };
+      }
+
+      return null;
     }
 
-    const phoneDigits = onlyDigits(identifier);
-    if (!phoneDigits) return null;
+    const variants = getPhoneVariants(identifier);
+    if (variants.length === 0) return null;
 
     const { data } = await supabase
       .from('usuarios')
       .select('id, email, tipo')
-      .eq('telefone', phoneDigits)
+      .in('telefone', variants)
+      .limit(1)
       .maybeSingle();
 
-    return data;
+    if (data) return data;
+
+    const { data: resp } = await supabase
+      .from('responsaveis')
+      .select('id, email')
+      .in('telefone', variants)
+      .limit(1)
+      .maybeSingle();
+
+    if (resp) {
+      return { id: resp.id, email: resp.email, tipo: UserType.RESPONSAVEL };
+    }
+
+    return null;
   },
 
   async findUsuarioByTelefone(telefone: string): Promise<{ id: string; email?: string; tipo?: UserType | string } | null> {
     return this.findUsuarioByTelefoneOrEmail(telefone);
   },
 
-  async findUsuarioById(userId: string): Promise<{ id: string; nome: string; telefone: string; email?: string; tipo?: UserType | string } | null> {
+  async findUsuarioById(userId: string): Promise<{ id: string; nome?: string; telefone?: string; email?: string; tipo?: UserType | string } | null> {
+    if (!userId) return null;
     const { data } = await supabase
       .from('usuarios')
       .select('id, nome, telefone, email, tipo')
       .eq('id', userId)
       .maybeSingle();
 
-    return data;
+    if (data) return data;
+
+    const { data: resp } = await supabase
+      .from('responsaveis')
+      .select('id, nome, telefone, email')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (resp) {
+      return { id: resp.id, nome: resp.nome, telefone: resp.telefone, email: resp.email, tipo: UserType.RESPONSAVEL };
+    }
+
+    return null;
   },
 
   async insertToken(userId: string, token: string, platform: string): Promise<void> {

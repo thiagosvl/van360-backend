@@ -172,8 +172,8 @@ export const PassengerTemplates = {
     paymentReceipt: (ctx: PassengerContext): CompositeMessagePart[] => {
         const corpo = getParcelaBody(ctx.nomePassageiro, ctx.mes);
 
-        const text = `✅ *Comprovante de Pagamento — ${getFirstName(ctx.nomePassageiro)}*\n\n` +
-            `${getFirstName(ctx.nomeResponsavel)}, segue o comprovante de pagamento da ${corpo}.${getSystemFooter(ctx)}`;
+        const text = `✅ *Recibo de Pagamento — ${getFirstName(ctx.nomePassageiro)}*\n\n` +
+            `${getFirstName(ctx.nomeResponsavel)}, segue o recibo de pagamento da ${corpo}.${getSystemFooter(ctx)}`;
 
         if (ctx.reciboUrl) {
             return [{

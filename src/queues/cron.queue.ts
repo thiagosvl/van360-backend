@@ -1,48 +1,65 @@
 import { createQueue } from "./index.js";
 import { CronJob } from "../types/enums.js";
+import { logger } from "../config/logger.js";
 
 export const QUEUE_NAME_CRON = 'cron-queue';
 
 export const cronQueue = createQueue(QUEUE_NAME_CRON);
 
-export const setupCronJobs = async () => {
-    const repeatableJobs = await cronQueue.getRepeatableJobs();
-    for (const job of repeatableJobs) {
-        await cronQueue.removeRepeatableByKey(job.key);
+interface CronDefinition {
+    name: CronJob;
+    pattern?: string;
+    every?: number;
+}
+
+const CRON_DEFINITIONS: CronDefinition[] = [
+    { name: CronJob.CHARGE_GENERATOR, pattern: '10 6 * * *' },
+    { name: CronJob.SUBSCRIPTION_GENERATOR, pattern: '20 6 * * *' },
+    { name: CronJob.DAILY_SUBSCRIPTION_MONITOR, pattern: '10 13 * * *' },
+    { name: CronJob.DAILY_CHARGE_MONITOR, pattern: '30 13 * * *' },
+    { name: CronJob.BIRTHDAY_REMINDER, pattern: '0 14 * * 0' },
+    { name: CronJob.WEEKLY_DRIVER_CHARGE_SUMMARY, pattern: '0 13 * * 1' },
+    { name: CronJob.NOTIFICATION_RETRY, every: 2 * 60 * 1000 }
+];
+
+export const setupCronJobs = async (maxAttempts = 3, delayMs = 3000): Promise<void> => {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            const existingJobs = await cronQueue.getRepeatableJobs();
+            const validJobNames = new Set(CRON_DEFINITIONS.map(d => d.name));
+
+            for (const job of existingJobs) {
+                if (!validJobNames.has(job.name as CronJob)) {
+                    await cronQueue.removeRepeatableByKey(job.key);
+                }
+            }
+
+            for (const def of CRON_DEFINITIONS) {
+                if (def.pattern) {
+                    await cronQueue.add(def.name, {}, {
+                        repeat: { pattern: def.pattern }
+                    });
+                } else if (def.every) {
+                    await cronQueue.add(def.name, {}, {
+                        repeat: { every: def.every }
+                    });
+                }
+            }
+
+            const verifiedJobs = await cronQueue.getRepeatableJobs();
+            logger.info({ count: verifiedJobs.length }, "[CronQueue] Agendamentos recorrentes verificados e ativos no Redis.");
+            return;
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : String(error);
+            logger.warn({ attempt, maxAttempts, error: msg }, "[CronQueue] Falha transitória ao registrar crons no Redis. Tentando novamente...");
+
+            if (attempt === maxAttempts) {
+                logger.error({ error: msg }, "[CronQueue] Erro crítico: Não foi possível registrar crons recorrentes após múltiplas tentativas.");
+                throw error;
+            }
+
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
     }
-
-    // Geração de Cobranças Mensais de Passageiros - 06:10 AM
-    await cronQueue.add(CronJob.CHARGE_GENERATOR, {}, {
-        repeat: { pattern: '10 6 * * *' }
-    });
-
-    // Geração de Faturas de Renovação SaaS - 06:20 AM (idempotente)
-    await cronQueue.add(CronJob.SUBSCRIPTION_GENERATOR, {}, {
-        repeat: { pattern: '20 6 * * *' }
-    });
-
-    // Monitor de Assinaturas SaaS - 13:10 PM (inclui notificações WhatsApp)
-    await cronQueue.add(CronJob.DAILY_SUBSCRIPTION_MONITOR, {}, {
-        repeat: { pattern: '10 13 * * *' }
-    });
-
-    // Monitor de Cobranças (Passageiros) - 13:30 PM (notificações de vencimento)
-    await cronQueue.add(CronJob.DAILY_CHARGE_MONITOR, {}, {
-        repeat: { pattern: '30 13 * * *' }
-    });
-
-    // Lembrete de Aniversariantes da Semana - Domingo às 14:00 PM
-    await cronQueue.add(CronJob.BIRTHDAY_REMINDER, {}, {
-        repeat: { pattern: '0 14 * * 0' }
-    });
-
-    // Resumo Semanal de Cobranças para o Motorista - Segunda-feira às 10:00 AM (13:00 UTC)
-    await cronQueue.add(CronJob.WEEKLY_DRIVER_CHARGE_SUMMARY, {}, {
-        repeat: { pattern: '0 13 * * 1' }
-    });
-
-    // Worker de Retentativas da Fila de Notificações - A cada 2 minutos (120.000 ms)
-    await cronQueue.add(CronJob.NOTIFICATION_RETRY, {}, {
-        repeat: { every: 2 * 60 * 1000 }
-    });
 };
+

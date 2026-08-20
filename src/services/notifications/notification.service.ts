@@ -3,6 +3,8 @@ import { NotificationChannelEnum, UserType } from "../../types/enums.js";
 import { logger } from "../../config/logger.js";
 import { usuarioPushTokenRepository } from "../../repositories/usuario-push-token.repository.js";
 
+import { onlyDigits } from "../../utils/string.utils.js";
+
 import { NotificationProviderPort, NotificationSendResult } from "./ports/notification-provider.port.js";
 import { EvolutionQueueAdapter } from "./adapters/evolution/evolution.adapter.js";
 import { SmsAdapter } from "./adapters/sms/sms.adapter.js";
@@ -98,6 +100,94 @@ class NotificationService {
         return await this._process("TELEGRAM_ADMIN", eventName, ctx, options);
     }
 
+    private async _resolveTargetAddress(
+        channel: NotificationChannelEnum,
+        to: string,
+        contextData: Record<string, unknown>,
+        options: NotificationOptions
+    ): Promise<string> {
+        if (channel === NotificationChannelEnum.TELEGRAM) {
+            return process.env.TELEGRAM_CHAT_ID || "TELEGRAM_ADMIN";
+        }
+
+        if (channel === NotificationChannelEnum.RESEND) {
+            const directEmail = options?.email || (contextData?.email as string);
+            if (directEmail && directEmail.includes("@")) return directEmail.trim();
+            if (to && to.includes("@")) return to.trim();
+
+            const usuarioId = (contextData.usuarioId || options.usuarioId) as string | undefined;
+            if (usuarioId) {
+                const user = await usuarioPushTokenRepository.findUsuarioById(usuarioId);
+                if (user?.email && user.email.includes("@")) return user.email.trim();
+            }
+
+            if (to) {
+                const user = await usuarioPushTokenRepository.findUsuarioByTelefone(to);
+                if (user?.email && user.email.includes("@")) return user.email.trim();
+            }
+
+            return "";
+        }
+
+        return to || (options?.email as string) || (contextData?.email as string) || "";
+    }
+
+    private async _isChannelDeliverable(
+        channel: NotificationChannelEnum,
+        targetAddress: string,
+        eventName: string,
+        contextData: Record<string, unknown>,
+        options: NotificationOptions
+    ): Promise<boolean> {
+        if (channel === NotificationChannelEnum.FIREBASE) {
+            const isPassengerEvent = eventName.startsWith("PASSAGEIRO_") || eventName.startsWith("ROTA_");
+            let targetUserId: string | undefined = undefined;
+
+            if (isPassengerEvent && targetAddress) {
+                const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetAddress);
+                if (isUUID) {
+                    targetUserId = targetAddress;
+                } else {
+                    const user = await usuarioPushTokenRepository.findUsuarioByTelefoneOrEmail(targetAddress);
+                    targetUserId = user ? user.id : onlyDigits(targetAddress);
+                }
+            } else {
+                targetUserId = (contextData.usuarioId as string) || options?.usuarioId;
+                if (!targetUserId && targetAddress) {
+                    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetAddress);
+                    if (isUUID) {
+                        targetUserId = targetAddress;
+                    } else {
+                        const user = await usuarioPushTokenRepository.findUsuarioByTelefoneOrEmail(targetAddress);
+                        targetUserId = user ? user.id : onlyDigits(targetAddress);
+                    }
+                }
+            }
+
+            if (!targetUserId) return false;
+            const tokenCount = await usuarioPushTokenRepository.countTokensByUsuarioId(targetUserId);
+            return tokenCount > 0;
+        }
+
+        if (channel === NotificationChannelEnum.RESEND) {
+            if (process.env.RESEND_OVERRIDE_EMAIL && process.env.RESEND_OVERRIDE_EMAIL.trim().includes("@")) {
+                return true;
+            }
+            return !!(targetAddress && targetAddress.includes("@"));
+        }
+
+        if (channel === NotificationChannelEnum.EVOLUTION || channel === NotificationChannelEnum.WABA || channel === NotificationChannelEnum.SMS) {
+            const phone = targetAddress || (contextData.telefone as string) || (contextData.phone as string);
+            return !!(phone && phone.replace(/\D/g, "").length >= 8);
+        }
+
+        if (channel === NotificationChannelEnum.TELEGRAM) {
+            return !!(process.env.TELEGRAM_BOT_TOKEN && (targetAddress || process.env.TELEGRAM_CHAT_ID));
+        }
+
+        return true;
+    }
+
     private async _process(
         to: string,
         eventName: string,
@@ -123,11 +213,28 @@ class NotificationService {
             const results: Promise<boolean>[] = [];
 
             for (const channel of channels) {
-                const targetAddress = channel === NotificationChannelEnum.TELEGRAM
-                    ? (process.env.TELEGRAM_CHAT_ID || "TELEGRAM_ADMIN")
-                    : (channel === NotificationChannelEnum.RESEND
-                        ? (options?.email || (contextData?.email as string) || to)
-                        : (to || (options?.email as string) || (contextData?.email as string) || ""));
+                const targetAddress = await this._resolveTargetAddress(
+                    channel,
+                    to,
+                    enrichedContext,
+                    enrichedOptions
+                );
+
+                const isDeliverable = await this._isChannelDeliverable(
+                    channel,
+                    targetAddress,
+                    eventName,
+                    enrichedContext,
+                    enrichedOptions
+                );
+
+                if (!isDeliverable) {
+                    logger.debug(
+                        { channel, eventName, to },
+                        "[NotificationService] Canal ignorado por ausência de destinatário/token válido (Short-Circuit)."
+                    );
+                    continue;
+                }
 
                 results.push(
                     notificationQueueService.enqueueAndProcess({
@@ -141,6 +248,14 @@ class NotificationService {
                 );
             }
 
+            if (results.length === 0) {
+                logger.info(
+                    { eventName, to, channels },
+                    "[NotificationService] Nenhum canal elegível para envio (Short-Circuit)."
+                );
+                return false;
+            }
+
             const outcomes = await Promise.allSettled(results);
             return outcomes.some(o => o.status === "fulfilled" && o.value === true);
         } catch (error: unknown) {
@@ -150,7 +265,7 @@ class NotificationService {
         }
     }
 
-    private async dispatchWelcomeNotification(usuario: { id: string; nome: string; telefone: string; email?: string; tipo?: UserType | string }): Promise<void> {
+    private async dispatchWelcomeNotification(usuario: { id: string; nome?: string; telefone?: string; email?: string; tipo?: UserType | string }): Promise<void> {
         const userType = usuario.tipo || UserType.MOTORISTA;
 
         switch (userType) {

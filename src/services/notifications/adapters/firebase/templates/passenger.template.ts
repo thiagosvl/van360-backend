@@ -7,7 +7,7 @@ export class FirebasePassengerTemplates {
     static routeStartedIda(ctx: Record<string, unknown>): FirebaseMessagePayload {
         return {
             title: "Rota Iniciada! 🚌",
-            body: "O tio iniciou a rota de ida para a escola. Acompanhe a van em tempo real pelo app!",
+            body: "O tio já iniciou a rota de ida para a escola. Avisaremos quando estiver a caminho da sua residência!",
             data: {
                 action: PushNotificationAction.OPEN_ROUTE,
                 passageiroId: (ctx.passageiroId || "") as string
@@ -151,7 +151,6 @@ export class FirebasePassengerTemplates {
 
     static paymentReceiptParent(ctx: Record<string, unknown>): FirebaseMessagePayload {
         const passName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro as string, "Passageiro");
-        const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
         const mes = ctx.mes as number | undefined;
         const ano = ctx.ano as number | undefined;
 
@@ -162,7 +161,7 @@ export class FirebasePassengerTemplates {
 
         return {
             title: "Recibo de Pagamento 🧾",
-            body: `O recibo do pagamento de ${passName} (R$ ${valorStr})${mesAnoStr} já está disponível no aplicativo.`,
+            body: `O pagamento de ${passName}${mesAnoStr} foi registrado com sucesso.`,
             data: {
                 action: PushNotificationAction.OPEN_HOME,
                 reciboUrl: (ctx.reciboUrl || "") as string,

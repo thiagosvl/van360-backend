@@ -10,6 +10,7 @@ import { routeService } from "./route.service.js";
 import { NotificationChannelEnum, TipoResponsavel } from "../types/enums.js";
 import { EVENTO_PASSAGEIRO_PIN_RESET, EVENTO_MOTORISTA_AUSENCIA_REGISTRADA, EVENTO_MOTORISTA_AUSENCIA_REMOVIDA } from "../config/constants.js";
 import { CreateResponsavelAusenciaDTO } from "../types/dtos/responsavel-ausencia.dto.js";
+import { UpdateDadosComplementaresDTO } from "../types/dtos/responsavel.dto.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "van360_responsavel_secret_key_2026";
 const TOKEN_EXPIRATION = "30d";
@@ -136,44 +137,45 @@ export const portalResponsavelService = {
     }));
   },
 
-  async getPassageiroCarteirinha(token: string, passageiroId: string) {
-    const payload = await this.verifyResponsavelToken(token);
-
-    if (!payload.passageiro_ids.includes(passageiroId)) {
-      throw new AppError("Acesso não autorizado para este passageiro.", 403);
-    }
-
-    const passageiros = await responsavelRepository.findPassageirosByPhone(payload.phone);
+  async _authorizePassageiroAccess(phone: string, passageiroId: string) {
+    const passageiros = await responsavelRepository.findPassageirosByPhone(phone);
     const target = passageiros.find(p => p.id === passageiroId);
 
     if (!target) {
-      throw new AppError("Passageiro não encontrado.", 404);
+      throw new AppError("Acesso não autorizado para este passageiro.", 403);
     }
 
+    return target;
+  },
+
+  async getPassageiroCarteirinha(token: string, passageiroId: string) {
+    const payload = await this.verifyResponsavelToken(token);
+    const target = await this._authorizePassageiroAccess(payload.phone, passageiroId);
     return responsavelRepository.getPassageiroCarteirinha(passageiroId, target);
   },
 
-  async updateDadosComplementares(token: string, passageiroId: string, cpf: string, email: string) {
+  async updateDadosComplementares(token: string, passageiroId: string, data: UpdateDadosComplementaresDTO) {
     const payload = await this.verifyResponsavelToken(token);
+    const target = await this._authorizePassageiroAccess(payload.phone, passageiroId);
 
-    if (!payload.passageiro_ids.includes(passageiroId)) {
-      throw new AppError("Acesso não autorizado para este passageiro.", 403);
-    }
+    const updatePayload: Record<string, unknown> = {
+      cpf: onlyDigits(data.cpf),
+      email: data.email.trim().toLowerCase(),
+    };
 
-    const passageiros = await responsavelRepository.findPassageirosByPhone(payload.phone);
-    const target = passageiros.find(p => p.id === passageiroId);
-
-    if (!target) {
-      throw new AppError("Passageiro não encontrado.", 404);
-    }
-
-    const cpfLimpo = onlyDigits(cpf);
-    const emailLimpo = email.trim().toLowerCase();
+    if (data.logradouro !== undefined) updatePayload.logradouro = data.logradouro ? data.logradouro.trim() : null;
+    if (data.numero !== undefined) updatePayload.numero = data.numero ? String(data.numero).trim() : null;
+    if (data.bairro !== undefined) updatePayload.bairro = data.bairro ? data.bairro.trim() : null;
+    if (data.cidade !== undefined) updatePayload.cidade = data.cidade ? data.cidade.trim() : null;
+    if (data.estado !== undefined) updatePayload.estado = data.estado ? String(data.estado).trim().toUpperCase() : null;
+    if (data.cep !== undefined) updatePayload.cep = data.cep ? onlyDigits(data.cep) : null;
+    if (data.referencia !== undefined) updatePayload.referencia = data.referencia ? data.referencia.trim() : null;
+    if (data.complemento !== undefined) updatePayload.complemento = data.complemento ? data.complemento.trim() : null;
 
     if (target.tipo_responsavel === TipoResponsavel.PRINCIPAL) {
-      await responsavelRepository.updateDadosComplementaresPrincipal(passageiroId, cpfLimpo, emailLimpo);
+      await responsavelRepository.updateDadosComplementaresPrincipal(passageiroId, updatePayload);
     } else {
-      await responsavelRepository.updateDadosComplementaresAdicional(target.responsavel_id, cpfLimpo, emailLimpo);
+      await responsavelRepository.updateDadosComplementaresAdicional(target.responsavel_id, updatePayload);
     }
 
     return { success: true };
@@ -181,17 +183,7 @@ export const portalResponsavelService = {
 
   async registrarAusencia(token: string, passageiroId: string, data: CreateResponsavelAusenciaDTO) {
     const payload = await this.verifyResponsavelToken(token);
-
-    if (!payload.passageiro_ids.includes(passageiroId)) {
-      throw new AppError("Acesso não autorizado para este passageiro.", 403);
-    }
-
-    const passageiros = await responsavelRepository.findPassageirosByPhone(payload.phone);
-    const target = passageiros.find(p => p.id === passageiroId);
-
-    if (!target) {
-      throw new AppError("Passageiro não encontrado.", 404);
-    }
+    const target = await this._authorizePassageiroAccess(payload.phone, passageiroId);
 
     let rotaId = data.rota_id;
 
@@ -246,13 +238,7 @@ export const portalResponsavelService = {
 
   async removerAusencia(token: string, passageiroId: string, ausenciaId: string) {
     const payload = await this.verifyResponsavelToken(token);
-
-    if (!payload.passageiro_ids.includes(passageiroId)) {
-      throw new AppError("Acesso não autorizado para este passageiro.", 403);
-    }
-
-    const passageiros = await responsavelRepository.findPassageirosByPhone(payload.phone);
-    const target = passageiros.find(p => p.id === passageiroId);
+    const target = await this._authorizePassageiroAccess(payload.phone, passageiroId);
 
     const { data: ausenciaExistente } = await routeRepository.getAusenciaExistenteById(ausenciaId);
 
@@ -291,10 +277,7 @@ export const portalResponsavelService = {
 
   async updateObservacoes(token: string, passageiroId: string, observacoes: string) {
     const payload = await this.verifyResponsavelToken(token);
-
-    if (!payload.passageiro_ids.includes(passageiroId)) {
-      throw new AppError("Acesso não autorizado para este passageiro.", 403);
-    }
+    await this._authorizePassageiroAccess(payload.phone, passageiroId);
 
     await responsavelRepository.updateObservacoes(passageiroId, observacoes);
     return { success: true };
@@ -302,10 +285,7 @@ export const portalResponsavelService = {
 
   async addResponsavel(token: string, passageiroId: string, data: Record<string, unknown>) {
     const payload = await this.verifyResponsavelToken(token);
-
-    if (!payload.passageiro_ids.includes(passageiroId)) {
-      throw new AppError("Acesso não autorizado para este passageiro.", 403);
-    }
+    await this._authorizePassageiroAccess(payload.phone, passageiroId);
 
     const inserted = await responsavelRepository.addResponsavelAdicional(passageiroId, data);
     return inserted;
@@ -313,10 +293,7 @@ export const portalResponsavelService = {
 
   async updateResponsavel(token: string, passageiroId: string, responsavelId: string, data: Record<string, unknown>) {
     const payload = await this.verifyResponsavelToken(token);
-
-    if (!payload.passageiro_ids.includes(passageiroId)) {
-      throw new AppError("Acesso não autorizado para este passageiro.", 403);
-    }
+    await this._authorizePassageiroAccess(payload.phone, passageiroId);
 
     const updated = await responsavelRepository.updateResponsavelAdicional(responsavelId, data, passageiroId);
     return updated;
@@ -324,10 +301,7 @@ export const portalResponsavelService = {
 
   async deleteResponsavel(token: string, passageiroId: string, responsavelId: string) {
     const payload = await this.verifyResponsavelToken(token);
-
-    if (!payload.passageiro_ids.includes(passageiroId)) {
-      throw new AppError("Acesso não autorizado para este passageiro.", 403);
-    }
+    await this._authorizePassageiroAccess(payload.phone, passageiroId);
 
     await responsavelRepository.deleteResponsavelAdicional(responsavelId, passageiroId);
     return { success: true };
@@ -335,10 +309,7 @@ export const portalResponsavelService = {
 
   async setPrincipalResponsavel(token: string, passageiroId: string, responsavelId: string) {
     const payload = await this.verifyResponsavelToken(token);
-
-    if (!payload.passageiro_ids.includes(passageiroId)) {
-      throw new AppError("Acesso não autorizado para este passageiro.", 403);
-    }
+    await this._authorizePassageiroAccess(payload.phone, passageiroId);
 
     await responsavelRepository.setPrincipalResponsavel(passageiroId, responsavelId);
     return { success: true };

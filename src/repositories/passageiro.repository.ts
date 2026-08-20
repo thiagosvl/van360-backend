@@ -428,8 +428,6 @@ export const passageiroRepository = {
       .eq("responsavel_id", responsavelId);
 
     if (error) throw error;
-    const { cleanupOrphanedResponsaveis: cleanup } = await import("./responsavel.repository.js");
-    await cleanup([responsavelId]);
     return true;
   },
 

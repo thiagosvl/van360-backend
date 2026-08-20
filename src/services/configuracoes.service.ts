@@ -57,7 +57,11 @@ export async function atualizarConfiguracoesUsuario(
 
     return await obterConfiguracoesUsuario(usuarioId);
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const errorObj = err as { message?: string; details?: string };
+    const msg =
+      err instanceof Error
+        ? err.message
+        : errorObj?.message || errorObj?.details || JSON.stringify(err);
     throw new AppError(`Erro ao atualizar configurações: ${msg}`, 500);
   }
 }

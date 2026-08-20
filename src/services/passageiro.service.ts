@@ -1,5 +1,5 @@
 import { passageiroRepository } from "../repositories/passageiro.repository.js";
-import { responsavelRepository, cleanupOrphanedResponsaveis } from "../repositories/responsavel.repository.js";
+import { responsavelRepository } from "../repositories/responsavel.repository.js";
 import { prePassageiroRepository } from "../repositories/pre-passageiro.repository.js";
 import { AppError } from "../errors/AppError.js";
 import { CreatePassageiroDTO, ListPassageirosFiltersDTO, UpdatePassageiroDTO, CreateResponsavelAdicionalDTO, UpdateResponsavelAdicionalDTO } from "../types/dtos/passageiro.dto.js";
@@ -225,16 +225,8 @@ const deletePassageiro = async (id: string, targetOwnerId?: string, assignedVeic
     const passageiro = await getPassageiro(id, targetOwnerId, assignedVeiculoId);
 
     if (passageiro?.id) {
-        const responsavelIds: string[] = (passageiro.responsaveis || [])
-            .map((r: Record<string, unknown>) => r.id as string)
-            .filter(Boolean);
-
         const { error } = await passageiroRepository.delete(id);
         if (error) throw error;
-
-        if (responsavelIds.length > 0) {
-            await cleanupOrphanedResponsaveis(responsavelIds);
-        }
 
         historicoService.log({
             usuario_id: passageiro.usuario_id,
@@ -518,6 +510,7 @@ const addResponsavelAdicional = async (passageiroId: string, data: CreateRespons
         cep: data.cep ? onlyDigits(data.cep) : null,
         referencia: data.referencia ? cleanString(data.referencia, true) : null,
         complemento: data.complemento ? cleanString(data.complemento, true) : null,
+        tornar_principal: data.tornar_principal,
     });
 };
 
@@ -536,6 +529,7 @@ const updateResponsavelAdicional = async (responsavelId: string, data: UpdateRes
     if (data.cep !== undefined) prepared.cep = data.cep ? onlyDigits(data.cep) : null;
     if (data.referencia !== undefined) prepared.referencia = data.referencia ? cleanString(data.referencia, true) : null;
     if (data.complemento !== undefined) prepared.complemento = data.complemento ? cleanString(data.complemento, true) : null;
+    if (data.tornar_principal !== undefined) prepared.tornar_principal = data.tornar_principal;
 
     return responsavelRepository.updateResponsavelAdicional(responsavelId, prepared, passageiroId);
 };

@@ -52,8 +52,9 @@ export class FirebasePushAdapter implements NotificationProviderPort {
 
             const tokenStrings = await usuarioPushTokenRepository.findTokensByUsuarioId(targetUserId);
             if (tokenStrings.length === 0) {
-                logger.info({ targetUserId, eventName }, "[FirebasePushAdapter] Usuário não possui tokens de push registrados.");
-                return { success: true };
+                const err = "[FirebasePushAdapter] Usuário não possui tokens de push registrados.";
+                logger.warn({ targetUserId, eventName }, err);
+                return { success: false, error: err };
             }
 
             const admin = getFirebaseAdmin();
