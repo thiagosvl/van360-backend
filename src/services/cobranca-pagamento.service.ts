@@ -73,7 +73,7 @@ export const cobrancaPagamentoService = {
       throw new AppError(msg || "Erro ao gerar recibo.", 500);
     }
 
-    if (data.enviar_recibo_whatsapp !== false && updated.recibo_url) {
+    if (updated.recibo_url) {
       try {
         const { data: cobrancaCompleta } = await cobrancaRepository.getByIdWithPassageiroAndMotorista(cobrancaId);
         const passageiroInfo = cobrancaCompleta?.passageiro as Record<string, any> | undefined;

@@ -5,6 +5,9 @@ import {
     EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL,
     EVENTO_PASSAGEIRO_CONTRATO_ASSINADO,
     EVENTO_PASSAGEIRO_PIN_RESET,
+    EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
+    EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
+    EVENTO_PASSAGEIRO_ATRASADO,
     EVENTO_MOTORISTA_EQUIPE_CADASTRO,
     EVENTO_MOTORISTA_EQUIPE_RESET_SENHA,
     EVENTO_MOTORISTA_EQUIPE_STATUS_ALTERADO,
@@ -26,6 +29,7 @@ import {
 } from "../../../../config/constants.js";
 import {
     ResendPassengerTemplates,
+    ResendPassengerBillingTemplates,
     ResendDriverTemplates,
     ResendTeamTemplates,
     ResendTemplatePayload,
@@ -57,6 +61,16 @@ export class ResendMapper {
 
                 case EVENTO_PASSAGEIRO_PIN_RESET:
                     return ResendPassengerTemplates.responsavelPinReset(contextData);
+
+                // 💳 COBRANÇAS DE PASSAGEIROS
+                case EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO:
+                    return ResendPassengerBillingTemplates.dueSoon(contextData);
+
+                case EVENTO_PASSAGEIRO_VENCIMENTO_HOJE:
+                    return ResendPassengerBillingTemplates.dueToday(contextData);
+
+                case EVENTO_PASSAGEIRO_ATRASADO:
+                    return ResendPassengerBillingTemplates.overdue(contextData);
 
                 // 🚌 EQUIPE E AJUDANTES
                 case EVENTO_MOTORISTA_EQUIPE_CADASTRO:

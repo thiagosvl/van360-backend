@@ -159,7 +159,7 @@ export const cobrancaService = {
           inserted.recibo_url = reciboUrl;
         }
 
-        if (data.enviar_recibo_whatsapp !== false && inserted.recibo_url) {
+        if (inserted.recibo_url) {
           try {
             const { data: fullCobranca } = await cobrancaRepository.getByIdWithPassageiroAndMotorista(inserted.id);
             const passageiroInfo = fullCobranca?.passageiro as Record<string, any> | undefined;
@@ -551,18 +551,15 @@ export const cobrancaService = {
       const now = getNowBR();
       const todayStr = toPersistenceString(now);
 
-      const thresholdDays = await getConfigNumber(ConfigKey.PASSAGEIRO_DIAS_AVISO_VENCIMENTO, 2);
-      const thresholdDate = getNowBR();
-      thresholdDate.setDate(now.getDate() + thresholdDays);
-      const thresholdDateStr = toPersistenceString(thresholdDate);
-
+      const globalThresholdDays = await getConfigNumber(ConfigKey.PASSAGEIRO_DIAS_AVISO_VENCIMENTO, 2);
+      
       const targetDates = [todayStr];
 
-      // Aviso (Hoje + 1 até Hoje + thresholdDays)
-      for (let i = 1; i <= thresholdDays; i++) {
-        const d = getNowBR();
-        d.setDate(d.getDate() + i);
-        targetDates.push(toPersistenceString(d));
+      // Dias futuros de 1 a 5 para cobrir qualquer preferência de motorista
+      for (let adv = 1; adv <= 5; adv++) {
+        const dAdv = getNowBR();
+        dAdv.setDate(dAdv.getDate() + adv);
+        targetDates.push(toPersistenceString(dAdv));
       }
 
       // Atrasos (Hoje - 3, Hoje - 5, Hoje - 7)
@@ -588,52 +585,95 @@ export const cobrancaService = {
       logger.info({ count: cobrancas.length }, "[CobrancaService] Processando notificações para cobranças pendentes...");
 
       let sentCount = 0;
-      const updatedCobrancaIds: string[] = [];
 
-      for (const c of cobrancas) {
-        const passageiro = c.passageiro;
-        const motorista = c.motorista;
+      const BATCH_SIZE = 15;
+      for (let i = 0; i < cobrancas.length; i += BATCH_SIZE) {
+        const chunk = cobrancas.slice(i, i + BATCH_SIZE);
+        const successfulIdsInChunk: string[] = [];
 
-        const resp = _getResponsavelFromPassageiro(passageiro);
-        if (!resp.telefone) continue;
-        if (passageiro?.enviar_notificacoes === false) continue;
+        const chunkPromises = chunk.map(async (c: any) => {
+          const passageiro = c.passageiro;
+          const motorista = c.motorista;
 
-        const dataVencimentoStr = c.data_vencimento;
-        const ultimaNotifStr = c.data_envio_ultima_notificacao;
-        const lastNotifDateStr = ultimaNotifStr ? toPersistenceString(ultimaNotifStr) : null;
+          const resp = _getResponsavelFromPassageiro(passageiro);
+          if (!resp.telefone && !resp.email) return null;
+          if (passageiro?.enviar_notificacoes === false) return null;
 
-        let eventType:
-          | typeof EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO
-          | typeof EVENTO_PASSAGEIRO_VENCIMENTO_HOJE
-          | typeof EVENTO_PASSAGEIRO_ATRASADO
-          | null = null;
-        let shouldSend = false;
+          const dataVencimentoStr = c.data_vencimento;
+          const ultimaNotifStr = c.data_envio_ultima_notificacao;
+          const lastNotifDateStr = ultimaNotifStr ? toPersistenceString(ultimaNotifStr) : null;
 
-        if (dataVencimentoStr > todayStr) {
-          if (!lastNotifDateStr || lastNotifDateStr < todayStr) {
-            eventType = EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO;
-            shouldSend = true;
+          if (lastNotifDateStr && lastNotifDateStr >= todayStr) {
+            return null;
           }
-        } else {
-          const daysSinceDue = diffInDays(dataVencimentoStr, todayStr);
-          if (daysSinceDue >= 0 && daysSinceDue <= 2) {
-            if (!lastNotifDateStr || lastNotifDateStr < dataVencimentoStr) {
+
+          const motoristaConfig = Array.isArray(motorista?.usuario_configuracoes)
+            ? motorista.usuario_configuracoes[0]
+            : motorista?.usuario_configuracoes;
+
+          const avisoPrevioAtivo = motoristaConfig?.cobranca_aviso_previo_ativo ?? true;
+          const driverThresholdDays = Number(motoristaConfig?.cobranca_dias_aviso_previo) || globalThresholdDays;
+          const vencimentoHojeAtivo = motoristaConfig?.cobranca_vencimento_hoje_ativo ?? true;
+          const atraso3DiasAtivo = motoristaConfig?.cobranca_atraso_3_dias_ativo ?? true;
+          const atraso5DiasAtivo = motoristaConfig?.cobranca_atraso_5_dias_ativo ?? true;
+          const atraso7DiasAtivo = motoristaConfig?.cobranca_atraso_7_dias_ativo ?? true;
+
+          let eventType:
+            | typeof EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO
+            | typeof EVENTO_PASSAGEIRO_VENCIMENTO_HOJE
+            | typeof EVENTO_PASSAGEIRO_ATRASADO
+            | null = null;
+          let baseChannels: NotificationChannelEnum[] = [];
+          let shouldSend = false;
+
+          if (dataVencimentoStr > todayStr) {
+            if (avisoPrevioAtivo) {
+              const diasAntecedencia = diffInDays(todayStr, dataVencimentoStr);
+              if (diasAntecedencia === driverThresholdDays) {
+                eventType = EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO;
+                baseChannels = [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND];
+                shouldSend = true;
+              }
+            }
+          } else if (dataVencimentoStr === todayStr) {
+            if (vencimentoHojeAtivo) {
               eventType = EVENTO_PASSAGEIRO_VENCIMENTO_HOJE;
+              baseChannels = [NotificationChannelEnum.WABA, NotificationChannelEnum.RESEND, NotificationChannelEnum.FIREBASE];
               shouldSend = true;
             }
-          } else if (daysSinceDue >= 3 && daysSinceDue <= 9) {
-            const diasAtrasoNaUltimaNotificacao = lastNotifDateStr ? diffInDays(dataVencimentoStr, lastNotifDateStr) : -1;
-            if (diasAtrasoNaUltimaNotificacao < 3) {
+          } else {
+            const diasAtraso = diffInDays(dataVencimentoStr, todayStr);
+            if (diasAtraso === 3 && atraso3DiasAtivo) {
               eventType = EVENTO_PASSAGEIRO_ATRASADO;
+              baseChannels = [NotificationChannelEnum.WABA, NotificationChannelEnum.RESEND, NotificationChannelEnum.FIREBASE];
+              shouldSend = true;
+            } else if (diasAtraso === 5 && atraso5DiasAtivo) {
+              eventType = EVENTO_PASSAGEIRO_ATRASADO;
+              baseChannels = [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND];
+              shouldSend = true;
+            } else if (diasAtraso === 7 && atraso7DiasAtivo) {
+              eventType = EVENTO_PASSAGEIRO_ATRASADO;
+              baseChannels = [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND];
               shouldSend = true;
             }
           }
-        }
 
-        if (shouldSend && eventType) {
+          if (!shouldSend || !eventType) return null;
+
+          const activeChannels = baseChannels.filter((ch) => {
+            if (ch === NotificationChannelEnum.RESEND) {
+              return !!(resp.email && resp.email.trim());
+            }
+            if (ch === NotificationChannelEnum.WABA) {
+              return !!(resp.telefone && resp.telefone.trim());
+            }
+            return true;
+          });
+
+          if (activeChannels.length === 0) return null;
+
           try {
             const diasAntecedencia = dataVencimentoStr > todayStr ? diffInDays(todayStr, dataVencimentoStr) : undefined;
-            const resp = _getResponsavelFromPassageiro(passageiro);
             const context = {
               nomeResponsavel: resp.nome,
               nomePassageiro: passageiro.nome,
@@ -652,29 +692,40 @@ export const cobrancaService = {
               cobrancaId: c.id
             };
 
-            const channels = [NotificationChannelEnum.FIREBASE];
-
             const { notificationService } = await import("./notifications/notification.service.js");
             const success = await notificationService.notifyPassenger(
-              resp.telefone,
+              resp.telefone || resp.email || "",
               eventType,
               context,
               {
-                channels,
+                channels: activeChannels,
                 usuarioId: c.usuario_id,
-                email: resp.email,
+                email: resp.email || undefined,
                 metadata: { cobrancaId: c.id }
               }
             );
 
             if (success) {
-              sentCount++;
-              await cobrancaRepository.updateBulkUltimaNotificacao([c.id], todayStr);
+              return c.id;
             }
           } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
             logger.error({ err: msg, cobrancaId: c.id }, "[CobrancaService] Falha ao enviar notificação de cobrança individual");
           }
+
+          return null;
+        });
+
+        const chunkOutcomes = await Promise.allSettled(chunkPromises);
+        for (const outcome of chunkOutcomes) {
+          if (outcome.status === "fulfilled" && outcome.value) {
+            successfulIdsInChunk.push(outcome.value);
+          }
+        }
+
+        if (successfulIdsInChunk.length > 0) {
+          sentCount += successfulIdsInChunk.length;
+          await cobrancaRepository.updateBulkUltimaNotificacao(successfulIdsInChunk, todayStr);
         }
       }
 

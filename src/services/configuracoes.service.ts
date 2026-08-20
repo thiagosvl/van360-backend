@@ -5,6 +5,9 @@ import { historicoService } from "./historico.service.js";
 import { ConfiguracoesUsuarioDTO, UpdateConfiguracoesDTO } from "../types/dtos/configuracoes.dto.js";
 import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 
+import { getConfigNumber } from "./configuracao.service.js";
+import { ConfigKey } from "../types/enums.js";
+
 export async function obterConfiguracoesUsuario(usuarioId: string): Promise<ConfiguracoesUsuarioDTO> {
   const { data: usuario, error: userError } = await userRepository.getById(usuarioId);
 
@@ -13,9 +16,17 @@ export async function obterConfiguracoesUsuario(usuarioId: string): Promise<Conf
   }
 
   const config = await usuarioConfiguracoesRepository.getByUsuarioId(usuarioId);
+  const diasPadrao = await getConfigNumber(ConfigKey.PASSAGEIRO_DIAS_AVISO_VENCIMENTO, 2);
 
   return {
     notificar_pais_cobrancas: config?.notificar_pais_cobrancas ?? true,
+    cobranca_aviso_previo_ativo: config?.cobranca_aviso_previo_ativo ?? true,
+    cobranca_dias_aviso_previo: config?.cobranca_dias_aviso_previo ?? null,
+    cobranca_vencimento_hoje_ativo: config?.cobranca_vencimento_hoje_ativo ?? true,
+    cobranca_atraso_3_dias_ativo: config?.cobranca_atraso_3_dias_ativo ?? true,
+    cobranca_atraso_5_dias_ativo: config?.cobranca_atraso_5_dias_ativo ?? true,
+    cobranca_atraso_7_dias_ativo: config?.cobranca_atraso_7_dias_ativo ?? true,
+    dias_aviso_vencimento_padrao_sistema: diasPadrao,
     notificar_motorista_parcelas: config?.notificar_motorista_parcelas ?? true,
     notificar_motorista_aniversarios: config?.notificar_motorista_aniversarios ?? true,
     notificar_inicio_rota: config?.notificar_inicio_rota ?? true,

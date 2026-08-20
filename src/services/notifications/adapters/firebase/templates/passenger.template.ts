@@ -92,10 +92,10 @@ export class FirebasePassengerTemplates {
         const dataStr = NotificationContextFormatter.formatDate(ctx.dataVencimento as string);
         const diasAntecedencia = ctx.diasAntecedencia as number | undefined;
 
-        let body = `A mensalidade de ${passName} (R$ ${valorStr}) vence em ${dataStr}.`;
+        let body = `A parcela de ${passName} (R$ ${valorStr}) vence em ${dataStr}.`;
         if (diasAntecedencia && diasAntecedencia > 0) {
             const rotuloDias = diasAntecedencia === 1 ? "daqui a 1 dia" : `daqui a ${diasAntecedencia} dias`;
-            body = `Lembrete: A mensalidade de ${passName} (R$ ${valorStr}) vence ${rotuloDias} (${dataStr}).`;
+            body = `Lembrete: A parcela de ${passName} (R$ ${valorStr}) vence ${rotuloDias} (${dataStr}).`;
         }
 
         return {
@@ -115,8 +115,8 @@ export class FirebasePassengerTemplates {
         const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
 
         return {
-            title: "Mensalidade Vence Hoje ⚠️",
-            body: `Hoje é o dia do vencimento da mensalidade de ${passName} (R$ ${valorStr}).`,
+            title: "Parcela Vence Hoje ⚠️",
+            body: `Hoje é o dia do vencimento da parcela de ${passName} (R$ ${valorStr}).`,
             data: {
                 action: PushNotificationAction.OPEN_HOME,
                 cobrancaId: (ctx.cobrancaId || "") as string,
@@ -131,14 +131,14 @@ export class FirebasePassengerTemplates {
         const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
         const diasAtraso = ctx.diasAtraso as number | undefined;
 
-        let body = `A mensalidade de ${passName} (R$ ${valorStr}) está em atraso.`;
+        let body = `A parcela de ${passName} (R$ ${valorStr}) está em atraso.`;
         if (diasAtraso && diasAtraso > 0) {
             const rotuloDias = diasAtraso === 1 ? "1 dia" : `${diasAtraso} dias`;
-            body = `A mensalidade de ${passName} (R$ ${valorStr}) está em atraso há ${rotuloDias}.`;
+            body = `A parcela de ${passName} (R$ ${valorStr}) está em atraso há ${rotuloDias}.`;
         }
 
         return {
-            title: "Mensalidade Em Atraso 🔴",
+            title: "Parcela Em Atraso 🔴",
             body,
             data: {
                 action: PushNotificationAction.OPEN_HOME,

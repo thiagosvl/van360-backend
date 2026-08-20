@@ -180,6 +180,10 @@ export enum ConfigKey {
   SAAS_REFERRAL_BONUS_DAYS = "SAAS_REFERRAL_BONUS_DAYS",
   SAAS_REFERRAL_DISCOUNT_PCT = "SAAS_REFERRAL_DISCOUNT_PCT",
   SAAS_DIAS_ANTECEDENCIA_RENOVACAO = "SAAS_DIAS_ANTECEDENCIA_RENOVACAO",
+  APP_ANDROID_MIN_VERSION = "app_android_min_version",
+  APP_ANDROID_LATEST_VERSION = "app_android_latest_version",
+  APP_ANDROID_UPDATE_TITLE = "app_android_update_title",
+  APP_ANDROID_UPDATE_MESSAGE = "app_android_update_message",
 }
 
 export enum ContratoStatus {

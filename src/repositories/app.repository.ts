@@ -23,5 +23,22 @@ export const appRepository = {
     }
 
     return (data || []) as AppUpdateRecord[];
+  },
+
+  async getInternalConfigs(keys: string[]): Promise<Record<string, string>> {
+    const { data, error } = await supabaseAdmin
+      .from("configuracao_interna")
+      .select("chave, valor")
+      .in("chave", keys);
+
+    if (error) {
+      throw error;
+    }
+
+    const configMap: Record<string, string> = {};
+    (data || []).forEach((row: { chave: string; valor: string }) => {
+      configMap[row.chave] = row.valor;
+    });
+    return configMap;
   }
 };

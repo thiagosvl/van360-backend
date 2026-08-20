@@ -1,5 +1,6 @@
 import { appRepository, AppUpdateRecord } from "../repositories/app.repository.js";
 import { AppError } from "../errors/AppError.js";
+import { ConfigKey } from "../types/enums.js";
 
 function compareSemver(v1: string, v2: string): number {
   if (v1 === v2) return 0;
@@ -23,10 +24,64 @@ function compareSemver(v1: string, v2: string): number {
   return 0;
 }
 
-export async function checkAppUpdates(platform: string, currentVersion?: string): Promise<AppUpdateRecord | null> {
-  const rawUpdates = await appRepository.getUpdatesForPlatform(platform);
+export interface NativeAppUpdateInfo {
+  min_version: string;
+  latest_version: string;
+  title: string;
+  message: string;
+  is_mandatory: boolean;
+  has_update: boolean;
+  store_url: string;
+}
+
+export interface AppCheckUpdatesResponse extends Partial<AppUpdateRecord> {
+  native?: NativeAppUpdateInfo | null;
+}
+
+export async function checkAppUpdates(
+  platform: string,
+  currentVersion?: string,
+  nativeVersion?: string
+): Promise<AppCheckUpdatesResponse | null> {
+  const [rawUpdates, internalConfigs] = await Promise.all([
+    appRepository.getUpdatesForPlatform(platform),
+    appRepository.getInternalConfigs([
+      ConfigKey.APP_ANDROID_MIN_VERSION,
+      ConfigKey.APP_ANDROID_LATEST_VERSION,
+      ConfigKey.APP_ANDROID_UPDATE_TITLE,
+      ConfigKey.APP_ANDROID_UPDATE_MESSAGE
+    ])
+  ]);
+
+  let nativeInfo: NativeAppUpdateInfo | null = null;
+
+  if (platform === "android") {
+    const minVersion = internalConfigs[ConfigKey.APP_ANDROID_MIN_VERSION] || "1.0.0";
+    const latestVersion = internalConfigs[ConfigKey.APP_ANDROID_LATEST_VERSION] || "1.0.5";
+    const title = internalConfigs[ConfigKey.APP_ANDROID_UPDATE_TITLE] || "Atualização Disponível";
+    const message =
+      internalConfigs[ConfigKey.APP_ANDROID_UPDATE_MESSAGE] ||
+      "Uma nova versão do Van360 está disponível na Google Play com melhorias e novos recursos. Atualize para continuar aproveitando a melhor experiência.";
+    const storeUrl = "market://details?id=com.tibis.van360";
+
+    const isMandatory = nativeVersion ? compareSemver(nativeVersion, minVersion) < 0 : false;
+    const hasUpdate = nativeVersion ? compareSemver(nativeVersion, latestVersion) < 0 : false;
+
+    nativeInfo = {
+      min_version: minVersion,
+      latest_version: latestVersion,
+      title,
+      message,
+      is_mandatory: isMandatory,
+      has_update: hasUpdate,
+      store_url: storeUrl
+    };
+  }
 
   if (!rawUpdates || rawUpdates.length === 0) {
+    if (nativeInfo) {
+      return { native: nativeInfo };
+    }
     return null;
   }
 
@@ -34,7 +89,10 @@ export async function checkAppUpdates(platform: string, currentVersion?: string)
   const latestUpdate = updates[0];
 
   if (!currentVersion) {
-    return latestUpdate;
+    return {
+      ...latestUpdate,
+      native: nativeInfo
+    };
   }
 
   let effectiveForceUpdate = latestUpdate.force_update;
@@ -52,6 +110,7 @@ export async function checkAppUpdates(platform: string, currentVersion?: string)
   return {
     ...latestUpdate,
     force_update: effectiveForceUpdate,
+    native: nativeInfo
   };
 }
 

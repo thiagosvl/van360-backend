@@ -165,7 +165,15 @@ export const cobrancaRepository = {
                 motorista:usuarios!cobrancas_usuario_id_fkey!inner(
                     nome, apelido, telefone, chave_pix, tipo_chave_pix,
                     assinaturas!inner(status),
-                    usuario_configuracoes!inner(notificar_pais_cobrancas)
+                    usuario_configuracoes!inner(
+                        notificar_pais_cobrancas,
+                        cobranca_aviso_previo_ativo,
+                        cobranca_dias_aviso_previo,
+                        cobranca_vencimento_hoje_ativo,
+                        cobranca_atraso_3_dias_ativo,
+                        cobranca_atraso_5_dias_ativo,
+                        cobranca_atraso_7_dias_ativo
+                    )
                 )
             `)
             .eq("status", CobrancaStatus.PENDENTE)

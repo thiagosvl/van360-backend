@@ -142,7 +142,7 @@ class NotificationService {
             }
 
             const outcomes = await Promise.allSettled(results);
-            return outcomes.every(o => o.status === "fulfilled" && o.value === true);
+            return outcomes.some(o => o.status === "fulfilled" && o.value === true);
         } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);
             logger.error({ error: msg, eventName }, "[NotificationService] Erro ao orquestrar notificações.");
