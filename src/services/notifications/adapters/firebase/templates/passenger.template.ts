@@ -7,7 +7,7 @@ export class FirebasePassengerTemplates {
     static routeStartedIda(ctx: Record<string, unknown>): FirebaseMessagePayload {
         return {
             title: "Rota Iniciada! 🚌",
-            body: "O tio já iniciou a rota de ida para a escola. Avisaremos quando estiver a caminho da sua residência!",
+            body: "A van já iniciou a rota de ida para a escola. Avisaremos quando estiver a caminho da sua residência!",
             data: {
                 action: PushNotificationAction.OPEN_ROUTE,
                 passageiroId: (ctx.passageiroId || "") as string
