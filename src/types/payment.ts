@@ -35,6 +35,7 @@ export interface ChargeSplitEntry {
 export interface ChargeResponse {
     success: boolean;
     providerId?: string;
+    status?: string;
     pixCopyPaste?: string;
     pixQrCodeUrl?: string;
     paymentLink?: string;

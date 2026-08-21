@@ -75,11 +75,11 @@ export const subscriptionRepository = {
             .eq("metodo_pagamento_preferencial_id", paymentMethodId);
     },
 
-    async updatePaymentMethod(userId: string, paymentMethodId: string, paymentMethod: string) {
+    async updatePaymentMethod(userId: string, paymentMethodId: string | null, paymentMethod: string) {
         return supabaseAdmin
             .from("assinaturas")
             .update({
-                metodo_pagamento_preferencial_id: paymentMethodId,
+                metodo_pagamento_preferencial_id: paymentMethodId || null,
                 metodo_pagamento: paymentMethod,
                 updated_at: new Date().toISOString()
             })

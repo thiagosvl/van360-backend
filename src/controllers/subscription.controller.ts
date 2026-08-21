@@ -50,9 +50,12 @@ export const subscriptionController = {
   async myInvoices(request: FastifyRequest, reply: FastifyReply) {
     const authRequest = request as AuthenticatedRequest;
     const userId = authRequest.usuario_id;
+    const query = request.query as { page?: string; limit?: string };
+    const page = query.page ? parseInt(query.page, 10) : undefined;
+    const limit = query.limit ? parseInt(query.limit, 10) : undefined;
 
     try {
-      const invoices = await subscriptionBillingService.getInvoices(userId);
+      const invoices = await subscriptionBillingService.getInvoices(userId, page, limit);
       return reply.send(invoices);
     } catch (err) {
       const error = err as Error;

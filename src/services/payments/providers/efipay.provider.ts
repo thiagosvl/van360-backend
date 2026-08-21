@@ -84,7 +84,14 @@ export class EfipayProvider implements PaymentProviderAdapter {
                             installments: request.installments || 1,
                             payment_token: request.paymentToken,
                             customer: customerData,
-                            billing_address: request.billingAddress || {
+                            billing_address: request.billingAddress ? {
+                                street: request.billingAddress.street,
+                                number: request.billingAddress.number,
+                                neighborhood: request.billingAddress.neighborhood,
+                                zipcode: onlyDigits(request.billingAddress.zipcode),
+                                city: request.billingAddress.city,
+                                state: request.billingAddress.state.toUpperCase().substring(0, 2)
+                            } : {
                                 street: "Rua Não Informada",
                                 number: "0",
                                 neighborhood: "Centro",
@@ -112,6 +119,7 @@ export class EfipayProvider implements PaymentProviderAdapter {
                 return {
                     success: true,
                     providerId: chargeId,
+                    status: status,
                 };
 
             } else {

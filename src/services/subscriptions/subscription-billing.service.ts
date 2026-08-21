@@ -70,10 +70,18 @@ export const subscriptionBillingService = {
         return Number(valorFinal.toFixed(2));
     },
 
-    async getInvoices(userId: string) {
-        const { data: invoices, error } = await invoiceRepository.getInvoicesByUserId(userId);
+    async getInvoices(userId: string, page?: number, limit?: number) {
+        const { data: invoices, error, count } = await invoiceRepository.getInvoicesByUserId(userId, page, limit);
         if (error) throw error;
-        return invoices;
+        
+        const total = count ?? (invoices?.length || 0);
+        return {
+            list: invoices || [],
+            total,
+            page: page ?? 1,
+            limit: limit ?? total,
+            totalPages: limit ? Math.ceil(total / limit) : 1
+        };
     },
 
     async listPaymentMethods(userId: string) {
@@ -83,10 +91,26 @@ export const subscriptionBillingService = {
     },
 
     async deletePaymentMethod(userId: string, paymentMethodId: string) {
+        const { data: currentCard } = await paymentMethodRepository.getSavedCard(userId, paymentMethodId);
+        const wasDefault = currentCard?.is_default ?? false;
+
         const { error } = await paymentMethodRepository.deleteMethod(userId, paymentMethodId);
         if (error) throw error;
 
-        await subscriptionRepository.updatePreferredMethodToNull(userId, paymentMethodId);
+        const { data: remainingCards } = await paymentMethodRepository.getByUserId(userId);
+
+        if (remainingCards && remainingCards.length > 0) {
+            const hasDefault = remainingCards.some(c => c.is_default);
+            if (wasDefault || !hasDefault) {
+                const nextCard = remainingCards[0];
+                await paymentMethodRepository.clearDefaults(userId);
+                await paymentMethodRepository.setDefault(userId, nextCard.id);
+                await subscriptionRepository.updatePaymentMethod(userId, nextCard.id, CheckoutPaymentMethod.CREDIT_CARD);
+            }
+        } else {
+            await subscriptionRepository.updatePaymentMethod(userId, null, CheckoutPaymentMethod.PIX);
+        }
+
         return true;
     },
 
@@ -142,7 +166,7 @@ export const subscriptionBillingService = {
                 await subscriptionRepository.updatePaymentMethod(userId, preferredMethodId, CheckoutPaymentMethod.CREDIT_CARD);
             }
         } else {
-            await subscriptionRepository.updatePaymentMethod(userId, "", CheckoutPaymentMethod.PIX);
+            await subscriptionRepository.updatePaymentMethod(userId, null, CheckoutPaymentMethod.PIX);
         }
 
         if (street) {
@@ -353,6 +377,8 @@ export const subscriptionBillingService = {
             }
         }
 
+        const isApprovedCard = paymentMethod === CheckoutPaymentMethod.CREDIT_CARD && (chargeRes.status === "paid" || chargeRes.status === "approved");
+
         const numParcelas = installments || 1;
         const { data: fatura, error: fError } = await invoiceRepository.createInvoice({
             usuario_id: userId,
@@ -370,6 +396,15 @@ export const subscriptionBillingService = {
         });
 
         if (fError || !fatura) throw fError || new Error("Erro ao criar fatura");
+
+        if (isApprovedCard) {
+            try {
+                await subscriptionService.activateByFatura(fatura.id);
+                fatura.status = SubscriptionInvoiceStatus.PAID;
+            } catch (actErr) {
+                logger.error({ actErr, userId, faturaId: fatura.id }, "[SubscriptionBillingService] Erro ao auto-ativar fatura de cartao aprovada");
+            }
+        }
 
         try {
             await historicoService.log({

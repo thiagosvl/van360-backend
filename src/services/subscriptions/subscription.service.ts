@@ -252,6 +252,7 @@ export const subscriptionService = {
         ]);
 
         await subscriptionReferralService.completeReferral(res.usuario_id!, res.fatura_id!);
+        await invoiceRepository.cancelIncompleteInvoicesByUserId(res.usuario_id!, getNowBR().toISOString(), res.fatura_id || faturaId);
 
         let isFirstSubscription = true;
         try {

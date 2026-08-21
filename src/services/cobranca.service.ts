@@ -9,7 +9,9 @@ import { AppError } from "../errors/AppError.js";
 import {
   EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
   EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
-  EVENTO_PASSAGEIRO_ATRASADO
+  EVENTO_PASSAGEIRO_ATRASADO,
+  EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO,
+  EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS
 } from "../config/constants.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { getNowBR, getLastDayOfMonth, getSafeDueDateString, toPersistenceString, diffInDays, formatToBrazilianDate, getMonthNameBR, getShortWeekDayBR, parseLocalDate } from "../utils/date.utils.js";
@@ -20,6 +22,8 @@ import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaOrigem, CobrancaStatus, C
 import { historicoService } from "./historico.service.js";
 import { receiptService } from "./receipt.service.js";
 import { getConfigNumber } from "./configuracao.service.js";
+import { notificationService } from "./notifications/notification.service.js";
+import { addToGenerationQueue } from "../queues/generation.queue.js";
 
 interface ResponsavelLinkInfo {
   id?: string;
@@ -168,8 +172,6 @@ export const cobrancaService = {
             const respInfo = _getResponsavelFromPassageiro(passageiroInfo);
 
             if (respInfo.telefone) {
-              const { notificationService } = await import("./notifications/notification.service.js");
-              const { EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO } = await import("../config/constants.js");
               await notificationService.notifyPassenger(
                 respInfo.telefone,
                 EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO,
@@ -692,7 +694,6 @@ export const cobrancaService = {
               cobrancaId: c.id
             };
 
-            const { notificationService } = await import("./notifications/notification.service.js");
             const success = await notificationService.notifyPassenger(
               resp.telefone || resp.email || "",
               eventType,
@@ -754,8 +755,6 @@ export const cobrancaService = {
     const targetMonth = now.getDate() >= 23 ? (now.getMonth() === 11 ? 1 : now.getMonth() + 2) : (now.getMonth() + 1);
     const targetYear = (now.getDate() >= 23 && now.getMonth() === 11) ? now.getFullYear() + 1 : now.getFullYear();
 
-    const { addToGenerationQueue } = await import("../queues/generation.queue.js");
-
     for (const m of motoristas) {
       await addToGenerationQueue({
         motoristaId: m.id,
@@ -798,9 +797,6 @@ export const cobrancaService = {
         logger.info("[CobrancaService] Nenhum motorista elegível para receber o resumo de cobrança hoje.");
         return;
       }
-
-      const { notificationService } = await import("./notifications/notification.service.js");
-      const { EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS } = await import("../config/constants.js");
 
       let sentCount = 0;
 

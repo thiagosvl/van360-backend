@@ -38,12 +38,21 @@ export const invoiceRepository = {
             .maybeSingle();
     },
 
-    async getInvoicesByUserId(userId: string) {
-        return supabaseAdmin
+    async getInvoicesByUserId(userId: string, page?: number, limit?: number) {
+        let query = supabaseAdmin
             .from("assinatura_faturas")
-            .select("*, assinaturas(*), planos(*)")
+            .select("*, assinaturas(*), planos(*)", { count: "exact" })
             .eq("usuario_id", userId)
+            .neq("status", SubscriptionInvoiceStatus.CANCELED)
             .order("created_at", { ascending: false });
+
+        if (page && limit) {
+            const from = (page - 1) * limit;
+            const to = from + limit - 1;
+            query = query.range(from, to);
+        }
+
+        return query;
     },
 
     async cancelIncompleteInvoicesByUserId(userId: string, updated_at: string, excludeInvoiceId?: string) {
