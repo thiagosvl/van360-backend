@@ -32,7 +32,7 @@ export interface WabaTemplatePayload {
 
 export class WabaTemplates {
 
-    private static buildPixButtonComponent(ctx: Record<string, unknown>): WabaComponent | null {
+    private static buildPixButtonComponent(ctx: Record<string, unknown>, index: string = "0"): WabaComponent | null {
         const rawPixKey = (ctx.pixCopiaECola || ctx.chavePix) as string | undefined;
         if (!rawPixKey || !rawPixKey.trim()) return null;
 
@@ -48,7 +48,7 @@ export class WabaTemplates {
         return {
             type: WabaComponentTypeEnum.BUTTON,
             sub_type: WabaButtonSubTypeEnum.PAYMENT_REQUEST,
-            index: "0",
+            index: index,
             parameters: [
                 {
                     type: WabaParameterTypeEnum.ACTION,
@@ -263,45 +263,52 @@ export class WabaTemplates {
         const dataStr = NotificationContextFormatter.formatDate(ctx.dataVencimento as string);
         const planoStr = (ctx.planoNome as string) || "Plano Mensal";
 
-        const rawLink = NotificationUrlBuilder.getExternalCheckoutBridgeUrl({
-            autoOpen: false,
-            token: (ctx.tokenCheckout || ctx.token) as string
-        });
-        const tokenOrLink = NotificationUrlBuilder.extractWabaDynamicToken(rawLink);
+        const pixButton = this.buildPixButtonComponent(ctx, "0");
+        const dynamicSuffix = "assinatura?open_checkout=true";
+
+        const components: WabaComponent[] = [
+            {
+                type: WabaComponentTypeEnum.BODY,
+                parameters: [
+                    { type: WabaParameterTypeEnum.TEXT, text: driverName },
+                    { type: WabaParameterTypeEnum.TEXT, text: valorStr },
+                    { type: WabaParameterTypeEnum.TEXT, text: planoStr },
+                    { type: WabaParameterTypeEnum.TEXT, text: dataStr }
+                ]
+            }
+        ];
+
+        if (pixButton) {
+            components.push(pixButton);
+            components.push({
+                type: WabaComponentTypeEnum.BUTTON,
+                sub_type: WabaButtonSubTypeEnum.URL,
+                index: "1",
+                parameters: [
+                    { type: WabaParameterTypeEnum.TEXT, text: dynamicSuffix }
+                ]
+            });
+        } else {
+            components.push({
+                type: WabaComponentTypeEnum.BUTTON,
+                sub_type: WabaButtonSubTypeEnum.URL,
+                index: "0",
+                parameters: [
+                    { type: WabaParameterTypeEnum.TEXT, text: dynamicSuffix }
+                ]
+            });
+        }
 
         return {
             templateName: WabaTemplateNameEnum.MOTORISTA_RENOVACAO_PIX,
             languageCode: "pt_BR",
-            components: [
-                {
-                    type: WabaComponentTypeEnum.BODY,
-                    parameters: [
-                        { type: WabaParameterTypeEnum.TEXT, text: driverName },
-                        { type: WabaParameterTypeEnum.TEXT, text: valorStr },
-                        { type: WabaParameterTypeEnum.TEXT, text: planoStr },
-                        { type: WabaParameterTypeEnum.TEXT, text: dataStr }
-                    ]
-                },
-                {
-                    type: WabaComponentTypeEnum.BUTTON,
-                    sub_type: WabaButtonSubTypeEnum.URL,
-                    index: "0",
-                    parameters: [
-                        { type: WabaParameterTypeEnum.TEXT, text: tokenOrLink }
-                    ]
-                }
-            ]
+            components
         };
     }
 
     static subscriptionFailedCC(ctx: Record<string, unknown>): WabaTemplatePayload {
         const driverName = NotificationContextFormatter.getFirstName(ctx.nomeMotorista as string, "Motorista");
-
-        const rawLink = NotificationUrlBuilder.getExternalCheckoutBridgeUrl({
-            autoOpen: true,
-            token: (ctx.tokenCheckout || ctx.token) as string
-        });
-        const tokenOrLink = NotificationUrlBuilder.extractWabaDynamicToken(rawLink);
+        const dynamicSuffix = "assinatura?open_checkout=true";
 
         return {
             templateName: WabaTemplateNameEnum.MOTORISTA_FALHA_CARTAO,
@@ -318,7 +325,7 @@ export class WabaTemplates {
                     sub_type: WabaButtonSubTypeEnum.URL,
                     index: "0",
                     parameters: [
-                        { type: WabaParameterTypeEnum.TEXT, text: tokenOrLink }
+                        { type: WabaParameterTypeEnum.TEXT, text: dynamicSuffix }
                     ]
                 }
             ]
