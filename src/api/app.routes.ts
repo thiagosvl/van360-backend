@@ -9,6 +9,7 @@ import passageiroRoutes from "./passageiro.routes.js";
 import prePassageiroRoutes from "./pre-passageiro.routes.js";
 import profileRoutes from "./profile.routes.js";
 import publicRoutes from "./public.routes.js";
+import renovacaoRoutes from "./renovacao.routes.js";
 import veiculoRoutes from "./veiculo.routes.js";
 
 export async function appRoutes(app: FastifyInstance) {
@@ -24,6 +25,7 @@ export async function appRoutes(app: FastifyInstance) {
   // Protected routes
   app.register(async (protectedApp) => {
     protectedApp.register(passageiroRoutes, { prefix: "/passageiros" });
+    protectedApp.register(renovacaoRoutes, { prefix: "/renovacoes" });
     protectedApp.register(veiculoRoutes, { prefix: "/veiculos" });
     protectedApp.register(escolaRoutes, { prefix: "/escolas" });
     protectedApp.register(cobrancaRoutes, { prefix: "/cobrancas" });

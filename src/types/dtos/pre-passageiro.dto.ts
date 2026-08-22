@@ -30,6 +30,7 @@ export const createPrePassageiroSchema = z.object({
   data_inicio_transporte: z.string().optional().nullable().or(z.literal('')),
   data_fim_transporte: z.string().optional().nullable().or(z.literal('')),
   data_nascimento: z.string().optional().nullable().or(z.literal('')),
+  ano_letivo: z.union([z.number(), z.string().transform(v => Number(v))]).optional().default(2026),
 });
 
 export type CreatePrePassageiroDTO = z.infer<typeof createPrePassageiroSchema>;

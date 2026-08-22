@@ -30,12 +30,16 @@ export type PermissionKey =
   | "rotas.iniciar_encerrar"
   | "rotas.executar_paradas"
 
+  // Renovação Anual
+  | "renovacoes.gerenciar"
+
   // Escolas & Aniversários
   | "escolas.visualizar"
   | "escolas.gerenciar"
   | "aniversarios.visualizar";
 
 export const ALL_PERMISSIONS: PermissionKey[] = [
+  "renovacoes.gerenciar",
   "financeiro.visualizar",
   "cobrancas.gerenciar",
   "contratos.gerenciar",

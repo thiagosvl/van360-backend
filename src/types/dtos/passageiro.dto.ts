@@ -95,12 +95,12 @@ export const createPassageiroSchema = z.object({
     if (v === null || v === "") return null;
     return parseLocalDate(v);
   }),
-
-}).passthrough(); // Permite outros campos não estritos por enquanto (migração suave)
+  ano_letivo: z.union([z.number(), z.string().transform(v => Number(v))]).optional().default(2026),
+}).passthrough();
 
 export type CreatePassageiroDTO = z.infer<typeof createPassageiroSchema>;
 
-export const updatePassageiroSchema = createPassageiroSchema.extend({
+export const updatePassageiroSchema = createPassageiroSchema.omit({ ano_letivo: true }).extend({
   responsavel_principal: responsavelPrincipalInputSchema.partial().optional().nullable(),
 }).partial();
 export type UpdatePassageiroDTO = z.infer<typeof updatePassageiroSchema>;

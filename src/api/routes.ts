@@ -11,6 +11,7 @@ import gastoCategoriaRoute from "./gasto-categoria.routes.js";
 import historicoRoute from "./historico.routes.js";
 import { jobsRoute } from "./jobs.route.js";
 import passageiroRoutes from "./passageiro.routes.js";
+import renovacaoRoutes from "./renovacao.routes.js";
 import routeRoutes from "./route.routes.js";
 import prePassageiroRoutes from "./pre-passageiro.routes.js";
 import profileRoutes from "./profile.routes.js";
@@ -47,6 +48,7 @@ const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   app.register(cobrancaRoutes, { prefix: "/api/cobrancas" });
   app.register(passageiroRoutes, { prefix: "/api/passageiros" });
+  app.register(renovacaoRoutes, { prefix: "/api/renovacoes" });
   app.register(routeRoutes, { prefix: "/api/routes" });
   app.register(prePassageiroRoutes, { prefix: "/api/pre-passageiros" });
   app.register(veiculoRoutes, { prefix: "/api/veiculos" });
