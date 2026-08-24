@@ -10,7 +10,6 @@ import {
 } from "../types/dtos/renovacao.dto.js";
 import {
   NotificationChannelEnum,
-  RenovacaoMotivoRecusa,
   RenovacaoReajusteTipo,
   RenovacaoStatus,
   TipoResponsavel,
@@ -89,10 +88,10 @@ export const renovacaoService = {
         statusReserva = RenovacaoStatus.PENDENTE;
       }
 
-      if (statusReserva === RenovacaoStatus.CONFIRMADO_MANUAL || statusReserva === RenovacaoStatus.CONFIRMADO_ONLINE) {
+      if (statusReserva === RenovacaoStatus.CONFIRMADO) {
         countConfirmados++;
         faturamentoProjetado += novoValor;
-      } else if (statusReserva === RenovacaoStatus.RECUSADO_MOTORISTA || statusReserva === RenovacaoStatus.RECUSADO_PAIS) {
+      } else if (statusReserva === RenovacaoStatus.RECUSADO) {
         countSaidas++;
       } else {
         countPendentes++;
@@ -102,15 +101,21 @@ export const renovacaoService = {
       return {
         passageiro_id: pEnriched.id,
         nome: pEnriched.nome,
+        foto_url: pEnriched.foto_url || null,
         valor_cobranca_atual: valorAtual,
         dia_vencimento_atual: pEnriched.dia_vencimento,
-        escola_atual_id: pEnriched.escola_id,
-        escola_atual_nome: pEnriched.escola?.nome || null,
+        escola_id_atual: pEnriched.escola_id,
+        escola_nome_atual: pEnriched.escola?.nome || null,
         periodo_atual: pEnriched.periodo,
         modalidade_atual: pEnriched.modalidade,
         turma_atual: pEnriched.turma,
         nome_professor_atual: pEnriched.nome_professor,
+        veiculo_id_atual: pEnriched.veiculo_id || null,
         isento_atual: pEnriched.isento,
+        data_inicio_transporte_atual: pEnriched.data_inicio_transporte || null,
+        data_fim_transporte_atual: pEnriched.data_fim_transporte || null,
+        data_inicio_cobranca_atual: pEnriched.data_inicio_cobranca || null,
+        data_fim_cobranca_atual: pEnriched.data_fim_cobranca || null,
         responsavel_principal: pEnriched.responsavel_principal,
         
         reserva_id: renovacao?.id || null,
@@ -124,13 +129,13 @@ export const renovacaoService = {
         nova_modalidade: novaModalidade,
         nova_turma: novaTurma,
         novo_nome_professor: novoNomeProfessor,
-        novo_isento: novoIsento,
-        motivo_recusa: renovacao?.motivo_recusa || null,
-        justificativa_recusa: renovacao?.justificativa_recusa || null,
-        quem_recusou: renovacao?.quem_recusou || null,
+        novo_veiculo_id: renovacao?.novo_veiculo_id ?? pEnriched.veiculo_id ?? null,
+        nova_data_inicio_transporte: renovacao?.nova_data_inicio_transporte || null,
+        nova_data_fim_transporte: renovacao?.nova_data_fim_transporte || null,
+        nova_data_inicio_cobranca: renovacao?.nova_data_inicio_cobranca || null,
+        nova_data_fim_cobranca: renovacao?.nova_data_fim_cobranca || null,
         notificacao_enviada_em: notificacaoEnviadaEm,
         token_publico: tokenPublico,
-        observacoes_pais: renovacao?.observacoes_pais || null,
       };
     });
 
@@ -140,7 +145,7 @@ export const renovacaoService = {
       filtrados = filtrados.filter(item => item.status === query.status);
     }
     if (query.escola_id) {
-      filtrados = filtrados.filter(item => item.nova_escola_id === query.escola_id || item.escola_atual_id === query.escola_id);
+      filtrados = filtrados.filter(item => item.nova_escola_id === query.escola_id || item.escola_id_atual === query.escola_id);
     }
     if (query.periodo) {
       filtrados = filtrados.filter(item => item.novo_periodo === query.periodo || item.periodo_atual === query.periodo);
@@ -190,21 +195,30 @@ export const renovacaoService = {
         continue;
       }
 
-      if (passageiro.isento || renovacao?.novo_isento) {
+      const isPassageiroIsento = Boolean(passageiro.isento);
+
+      // Se for isento e o reajuste for de parcela ou cobrança, não altera nada para ele
+      const isReajusteCobrancaOuParcela = (dto.tipo || dto.tipo_reajuste || dto.data_inicio_cobranca || dto.data_fim_cobranca);
+      if (isPassageiroIsento && isReajusteCobrancaOuParcela && !dto.data_inicio_transporte && !dto.data_fim_transporte) {
         continue;
       }
 
-      const valorBase = Number(passageiro.valor_cobranca || 0);
-      let novoValor = valorBase;
+      const tipoReajuste = dto.tipo || dto.tipo_reajuste;
+      const valorReajuste = dto.valor !== undefined ? dto.valor : dto.valor_reajuste;
 
-      if (dto.tipo === RenovacaoReajusteTipo.FIXO) {
-        novoValor = valorBase + Number(dto.valor);
-      } else if (dto.tipo === RenovacaoReajusteTipo.PERCENTUAL) {
-        novoValor = valorBase * (1 + Number(dto.valor) / 100);
-      } else if (dto.tipo === RenovacaoReajusteTipo.VALOR_PADRAO) {
-        novoValor = Number(dto.valor);
-      } else if (dto.tipo === RenovacaoReajusteTipo.MANTER) {
-        novoValor = Number(renovacao?.novo_valor_cobranca ?? valorBase);
+      const valorBase = isPassageiroIsento ? 0 : Number(passageiro.valor_cobranca || 0);
+      let novoValor = isPassageiroIsento ? 0 : Number(renovacao?.novo_valor_cobranca ?? valorBase);
+
+      if (!isPassageiroIsento) {
+        if (tipoReajuste === RenovacaoReajusteTipo.FIXO && valorReajuste !== undefined) {
+          novoValor = valorBase + Number(valorReajuste);
+        } else if (tipoReajuste === RenovacaoReajusteTipo.PERCENTUAL && valorReajuste !== undefined) {
+          novoValor = valorBase * (1 + Number(valorReajuste) / 100);
+        } else if (tipoReajuste === RenovacaoReajusteTipo.VALOR_PADRAO && valorReajuste !== undefined) {
+          novoValor = Number(valorReajuste);
+        } else if (tipoReajuste === RenovacaoReajusteTipo.MANTER) {
+          novoValor = Number(renovacao?.novo_valor_cobranca ?? valorBase);
+        }
       }
 
       novoValor = Number(Math.max(0, novoValor).toFixed(2));
@@ -215,15 +229,15 @@ export const renovacaoService = {
         ano_origem: passageiro.ano_letivo || 2026,
         ano_destino: dto.ano_destino,
         status: renovacao?.status || RenovacaoStatus.PENDENTE,
-        novo_valor_cobranca: novoValor,
-        novo_dia_vencimento: renovacao?.novo_dia_vencimento ?? passageiro.dia_vencimento,
+        novo_valor_cobranca: isPassageiroIsento ? 0 : novoValor,
+        novo_dia_vencimento: isPassageiroIsento ? null : (renovacao?.novo_dia_vencimento ?? passageiro.dia_vencimento),
         nova_escola_id: renovacao?.nova_escola_id ?? passageiro.escola_id,
         novo_periodo: renovacao?.novo_periodo ?? passageiro.periodo,
         nova_modalidade: renovacao?.nova_modalidade ?? passageiro.modalidade,
         nova_turma: renovacao?.nova_turma ?? passageiro.turma,
         novo_nome_professor: renovacao?.novo_nome_professor ?? passageiro.nome_professor,
         novo_veiculo_id: renovacao?.novo_veiculo_id ?? passageiro.veiculo_id,
-        novo_isento: false,
+        novo_isento: isPassageiroIsento,
         token_publico: renovacao?.token_publico || crypto.randomBytes(16).toString("hex"),
       };
 
@@ -239,16 +253,21 @@ export const renovacaoService = {
         payload.nova_data_fim_transporte = renovacao.nova_data_fim_transporte;
       }
 
-      if (dto.data_inicio_cobranca !== undefined) {
-        payload.nova_data_inicio_cobranca = dto.data_inicio_cobranca ? toPersistenceString(dto.data_inicio_cobranca) : null;
-      } else if (renovacao?.nova_data_inicio_cobranca) {
-        payload.nova_data_inicio_cobranca = renovacao.nova_data_inicio_cobranca;
-      }
+      if (!isPassageiroIsento) {
+        if (dto.data_inicio_cobranca !== undefined) {
+          payload.nova_data_inicio_cobranca = dto.data_inicio_cobranca ? toPersistenceString(dto.data_inicio_cobranca) : null;
+        } else if (renovacao?.nova_data_inicio_cobranca) {
+          payload.nova_data_inicio_cobranca = renovacao.nova_data_inicio_cobranca;
+        }
 
-      if (dto.data_fim_cobranca !== undefined) {
-        payload.nova_data_fim_cobranca = dto.data_fim_cobranca ? toPersistenceString(dto.data_fim_cobranca) : null;
-      } else if (renovacao?.nova_data_fim_cobranca) {
-        payload.nova_data_fim_cobranca = renovacao.nova_data_fim_cobranca;
+        if (dto.data_fim_cobranca !== undefined) {
+          payload.nova_data_fim_cobranca = dto.data_fim_cobranca ? toPersistenceString(dto.data_fim_cobranca) : null;
+        } else if (renovacao?.nova_data_fim_cobranca) {
+          payload.nova_data_fim_cobranca = renovacao.nova_data_fim_cobranca;
+        }
+      } else {
+        payload.nova_data_inicio_cobranca = null;
+        payload.nova_data_fim_cobranca = null;
       }
 
       updates.push(payload);
@@ -263,6 +282,7 @@ export const renovacaoService = {
       throw new AppError("Passageiro não encontrado.", 404);
     }
 
+    const isPassageiroIsento = Boolean((passageiro as any).isento);
     const existente = await renovacaoRepository.getByPassageiroEAno(passageiroId, dto.ano_destino);
 
     const payload: Record<string, unknown> = {
@@ -271,45 +291,33 @@ export const renovacaoService = {
       ano_origem: (passageiro as any).ano_letivo || 2026,
       ano_destino: dto.ano_destino,
       status: dto.status ?? (existente?.status || RenovacaoStatus.PENDENTE),
-      novo_valor_cobranca: dto.novo_valor_cobranca !== undefined ? dto.novo_valor_cobranca : (existente?.novo_valor_cobranca ?? passageiro.valor_cobranca),
-      novo_dia_vencimento: dto.novo_dia_vencimento !== undefined ? dto.novo_dia_vencimento : (existente?.novo_dia_vencimento ?? passageiro.dia_vencimento),
+      novo_valor_cobranca: isPassageiroIsento ? 0 : (dto.novo_valor_cobranca !== undefined ? dto.novo_valor_cobranca : (existente?.novo_valor_cobranca ?? passageiro.valor_cobranca)),
+      novo_dia_vencimento: isPassageiroIsento ? null : (dto.novo_dia_vencimento !== undefined ? dto.novo_dia_vencimento : (existente?.novo_dia_vencimento ?? passageiro.dia_vencimento)),
       nova_escola_id: dto.nova_escola_id !== undefined ? dto.nova_escola_id : (existente?.nova_escola_id ?? passageiro.escola_id),
       novo_periodo: dto.novo_periodo !== undefined ? dto.novo_periodo : (existente?.novo_periodo ?? passageiro.periodo),
       nova_modalidade: dto.nova_modalidade !== undefined ? dto.nova_modalidade : (existente?.nova_modalidade ?? passageiro.modalidade),
       nova_turma: dto.nova_turma !== undefined ? dto.nova_turma : (existente?.nova_turma ?? passageiro.turma),
       novo_nome_professor: dto.novo_nome_professor !== undefined ? dto.novo_nome_professor : (existente?.novo_nome_professor ?? passageiro.nome_professor),
       novo_veiculo_id: dto.novo_veiculo_id !== undefined ? dto.novo_veiculo_id : (existente?.novo_veiculo_id ?? passageiro.veiculo_id),
-      novo_isento: dto.novo_isento !== undefined ? dto.novo_isento : (existente?.novo_isento ?? passageiro.isento),
+      novo_isento: isPassageiroIsento,
       token_publico: existente?.token_publico || crypto.randomBytes(16).toString("hex"),
     };
 
     if (dto.nova_data_inicio_transporte !== undefined) payload.nova_data_inicio_transporte = dto.nova_data_inicio_transporte ? toPersistenceString(dto.nova_data_inicio_transporte) : null;
     if (dto.nova_data_fim_transporte !== undefined) payload.nova_data_fim_transporte = dto.nova_data_fim_transporte ? toPersistenceString(dto.nova_data_fim_transporte) : null;
-    if (dto.nova_data_inicio_cobranca !== undefined) payload.nova_data_inicio_cobranca = dto.nova_data_inicio_cobranca ? toPersistenceString(dto.nova_data_inicio_cobranca) : null;
-    if (dto.nova_data_fim_cobranca !== undefined) payload.nova_data_fim_cobranca = dto.nova_data_fim_cobranca ? toPersistenceString(dto.nova_data_fim_cobranca) : null;
+    
+    if (!isPassageiroIsento) {
+      if (dto.nova_data_inicio_cobranca !== undefined) payload.nova_data_inicio_cobranca = dto.nova_data_inicio_cobranca ? toPersistenceString(dto.nova_data_inicio_cobranca) : null;
+      if (dto.nova_data_fim_cobranca !== undefined) payload.nova_data_fim_cobranca = dto.nova_data_fim_cobranca ? toPersistenceString(dto.nova_data_fim_cobranca) : null;
+    } else {
+      payload.nova_data_inicio_cobranca = null;
+      payload.nova_data_fim_cobranca = null;
+    }
 
-    if (dto.status === RenovacaoStatus.CONFIRMADO_MANUAL || dto.status === RenovacaoStatus.CONFIRMADO_ONLINE) {
+    if (dto.status === RenovacaoStatus.CONFIRMADO) {
       payload.confirmado_em = new Date().toISOString();
-      payload.motivo_recusa = null;
-      payload.justificativa_recusa = null;
-      payload.quem_recusou = null;
-      payload.recusado_em = null;
-    } else if (dto.status === RenovacaoStatus.RECUSADO_MOTORISTA || dto.status === RenovacaoStatus.RECUSADO_PAIS) {
-      payload.recusado_em = new Date().toISOString();
-      payload.motivo_recusa = dto.motivo_recusa ?? (existente?.motivo_recusa || RenovacaoMotivoRecusa.OUTRO);
-      payload.justificativa_recusa = dto.justificativa_recusa !== undefined ? (dto.justificativa_recusa ? cleanString(dto.justificativa_recusa) : null) : (existente?.justificativa_recusa || null);
-      payload.quem_recusou = dto.quem_recusou ?? (dto.status === RenovacaoStatus.RECUSADO_MOTORISTA ? "motorista" : "responsavel");
+    } else {
       payload.confirmado_em = null;
-      payload.ip_confirmacao = null;
-      payload.user_agent_confirmacao = null;
-    } else if (dto.status === RenovacaoStatus.PENDENTE) {
-      payload.confirmado_em = null;
-      payload.recusado_em = null;
-      payload.motivo_recusa = null;
-      payload.justificativa_recusa = null;
-      payload.quem_recusou = null;
-      payload.ip_confirmacao = null;
-      payload.user_agent_confirmacao = null;
     }
 
     return renovacaoRepository.upsertReserva(payload);

@@ -12,10 +12,8 @@ ON "public"."passageiros"("usuario_id", "ano_letivo");
 DO $$ BEGIN
     CREATE TYPE "public"."renovacao_status_enum" AS ENUM (
         'pendente',
-        'confirmado_manual',
-        'confirmado_online',
-        'recusado_motorista',
-        'recusado_pais',
+        'confirmado',
+        'recusado',
         'concluido'
     );
 EXCEPTION
@@ -46,21 +44,11 @@ CREATE TABLE IF NOT EXISTS "public"."passageiro_renovacoes" (
     "nova_data_inicio_cobranca" date,
     "nova_data_fim_cobranca" date,
     "novo_veiculo_id" uuid REFERENCES "public"."veiculos"("id") ON UPDATE CASCADE ON DELETE SET NULL,
-    "novo_isento" boolean DEFAULT false NOT NULL,
-    
-    -- Motivo de Recusa / Saída
-    "motivo_recusa" text,
-    "justificativa_recusa" text,
-    "recusado_em" timestamp with time zone,
-    "quem_recusou" text CONSTRAINT check_quem_recusou CHECK (quem_recusou IN ('motorista', 'responsavel')),
     
     -- Notificação e Autoatendimento
     "notificacao_enviada_em" timestamp with time zone,
     "token_publico" text UNIQUE,
     "confirmado_em" timestamp with time zone,
-    "ip_confirmacao" text,
-    "user_agent_confirmacao" text,
-    "observacoes_pais" text,
     
     "created_at" timestamp with time zone DEFAULT now() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT now() NOT NULL,

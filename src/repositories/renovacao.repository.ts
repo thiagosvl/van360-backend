@@ -138,7 +138,7 @@ export const renovacaoRepository = {
       .select("*")
       .eq("usuario_id", usuarioId)
       .eq("ano_destino", anoDestino)
-      .in("status", [RenovacaoStatus.CONFIRMADO_MANUAL, RenovacaoStatus.CONFIRMADO_ONLINE]);
+      .eq("status", RenovacaoStatus.CONFIRMADO);
 
     if (error) throw error;
     return data || [];
@@ -150,7 +150,7 @@ export const renovacaoRepository = {
       .select("passageiro_id")
       .eq("usuario_id", usuarioId)
       .eq("ano_destino", anoDestino)
-      .in("status", [RenovacaoStatus.RECUSADO_MOTORISTA, RenovacaoStatus.RECUSADO_PAIS]);
+      .eq("status", RenovacaoStatus.RECUSADO);
 
     if (error) throw error;
     return data || [];
