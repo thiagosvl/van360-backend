@@ -12,6 +12,8 @@ interface CronDefinition {
     every?: number;
 }
 
+const TIMEZONE_BR = 'America/Sao_Paulo';
+
 const CRON_DEFINITIONS: CronDefinition[] = [
     { name: CronJob.CHARGE_GENERATOR, pattern: '10 6 * * *' },
     { name: CronJob.SUBSCRIPTION_GENERATOR, pattern: '20 6 * * *' },
@@ -26,22 +28,26 @@ export const setupCronJobs = async (maxAttempts = 3, delayMs = 3000): Promise<vo
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
             const existingJobs = await cronQueue.getRepeatableJobs();
-            const validJobNames = new Set(CRON_DEFINITIONS.map(d => d.name));
 
             for (const job of existingJobs) {
-                if (!validJobNames.has(job.name as CronJob)) {
-                    await cronQueue.removeRepeatableByKey(job.key);
-                }
+                await cronQueue.removeRepeatableByKey(job.key);
             }
 
             for (const def of CRON_DEFINITIONS) {
                 if (def.pattern) {
                     await cronQueue.add(def.name, {}, {
-                        repeat: { pattern: def.pattern }
+                        jobId: `cron-${def.name}`,
+                        repeat: {
+                            pattern: def.pattern,
+                            tz: TIMEZONE_BR
+                        }
                     });
                 } else if (def.every) {
                     await cronQueue.add(def.name, {}, {
-                        repeat: { every: def.every }
+                        jobId: `cron-${def.name}`,
+                        repeat: {
+                            every: def.every
+                        }
                     });
                 }
             }
