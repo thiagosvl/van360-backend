@@ -10,11 +10,22 @@ const optionalString = z.union([z.string(), z.null(), z.undefined()]).transform(
 });
 const optionalNumber = z.union([z.number(), z.string().length(0).transform(() => undefined), z.string().min(1).transform(val => Number(val))]).optional();
 
+const optionalEmail = z.union([
+  z.string().email("E-mail inválido"),
+  z.literal(""),
+  z.null(),
+  z.undefined()
+]).transform(v => {
+  if (v === undefined) return undefined;
+  if (v === null || v === "") return null;
+  return v;
+});
+
 export const responsavelPrincipalInputSchema = z.object({
   nome: z.string().min(1, "Nome do responsável é obrigatório"),
   telefone: z.string().min(8, "Telefone do responsável é obrigatório"),
   cpf: optionalString,
-  email: z.string().email().optional().or(z.literal("")).transform(v => v === "" ? undefined : v),
+  email: optionalEmail,
   parentesco: z.union([z.nativeEnum(ParentescoResponsavel), z.string(), z.null(), z.undefined()]).optional().nullable(),
   logradouro: optionalString,
   numero: optionalString,
@@ -140,7 +151,7 @@ export const createResponsavelAdicionalSchema = z.object({
   nome: z.string().min(2, "Nome é obrigatório"),
   telefone: z.string().min(8, "Telefone é obrigatório"),
   cpf: optionalString,
-  email: optionalString,
+  email: optionalEmail,
   parentesco: z.nativeEnum(ParentescoResponsavel, { message: "Parentesco é obrigatório" }),
   logradouro: optionalString,
   numero: optionalString,
