@@ -93,7 +93,7 @@ export const portalResponsavelService = {
 
     const isValid = await bcrypt.compare(pin, recordWithPin.pin_acesso);
     if (!isValid) {
-      throw new AppError("PIN incorreto. Tente novamente.", 401);
+      throw new AppError("Senha incorreta. Tente novamente.", 401);
     }
 
     const passageiroIds = passageiros.map(p => p.id);
@@ -233,8 +233,8 @@ export const portalResponsavelService = {
           usuarioId: target.motorista_id
         },
         { usuarioId: target.motorista_id }
-      ).catch(() => {});
-    } catch {}
+      ).catch(() => { });
+    } catch { }
 
     return ausencia;
   },
@@ -271,8 +271,8 @@ export const portalResponsavelService = {
             usuarioId: target.motorista_id
           },
           { usuarioId: target.motorista_id }
-        ).catch(() => {});
-      } catch {}
+        ).catch(() => { });
+      } catch { }
     }
 
     return { success: true };
