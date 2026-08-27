@@ -4,9 +4,11 @@ import {
     EVENTO_ROTA_INICIADA_IDA,
     EVENTO_ROTA_A_CAMINHO_IDA,
     EVENTO_ROTA_EMBARCOU_IDA,
+    EVENTO_ROTA_DESFEITO_EMBARQUE_IDA,
     EVENTO_ROTA_INICIADA_VOLTA,
     EVENTO_ROTA_A_CAMINHO_VOLTA,
     EVENTO_ROTA_DESEMBARCOU_VOLTA,
+    EVENTO_ROTA_DESFEITO_DESEMBARQUE_VOLTA,
     EVENTO_ROTA_REORDENADA,
     EVENTO_PASSAGEIRO_CONTRATO_ASSINADO,
     EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
@@ -71,9 +73,11 @@ export class FirebaseMapper {
                 case EVENTO_ROTA_INICIADA_IDA: return FirebasePassengerTemplates.routeStartedIda(contextData);
                 case EVENTO_ROTA_A_CAMINHO_IDA: return FirebasePassengerTemplates.routeEnRouteIda(contextData);
                 case EVENTO_ROTA_EMBARCOU_IDA: return FirebasePassengerTemplates.routeBoardedIda(contextData);
+                case EVENTO_ROTA_DESFEITO_EMBARQUE_IDA: return FirebasePassengerTemplates.routeBoardingCancelledIda(contextData);
                 case EVENTO_ROTA_INICIADA_VOLTA: return FirebasePassengerTemplates.routeStartedVolta(contextData);
                 case EVENTO_ROTA_A_CAMINHO_VOLTA: return FirebasePassengerTemplates.routeEnRouteVolta(contextData);
                 case EVENTO_ROTA_DESEMBARCOU_VOLTA: return FirebasePassengerTemplates.routeDisembarkedVolta(contextData);
+                case EVENTO_ROTA_DESFEITO_DESEMBARQUE_VOLTA: return FirebasePassengerTemplates.routeDisembarkingCancelledVolta(contextData);
                 case EVENTO_ROTA_REORDENADA: return FirebasePassengerTemplates.routeReordered(contextData);
                 
                 default:

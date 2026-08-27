@@ -51,6 +51,18 @@ export class FirebasePassengerTemplates {
         };
     }
 
+    static routeBoardingCancelledIda(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Passageiro");
+        return {
+            title: "Aviso da Rota ⚠️",
+            body: `Por favor, desconsidere a confirmação anterior. O passageiro ${passName} não embarcou na van.`,
+            data: {
+                action: PushNotificationAction.OPEN_ROUTE,
+                passageiroId: (ctx.passageiroId || "") as string
+            }
+        };
+    }
+
     static routeEnRouteVolta(ctx: Record<string, unknown>): FirebaseMessagePayload {
         const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Passageiro");
         return {
@@ -68,6 +80,18 @@ export class FirebasePassengerTemplates {
         return {
             title: "Desembarque Confirmado ✅",
             body: `O passageiro ${passName} desembarcou com segurança!`,
+            data: {
+                action: PushNotificationAction.OPEN_ROUTE,
+                passageiroId: (ctx.passageiroId || "") as string
+            }
+        };
+    }
+
+    static routeDisembarkingCancelledVolta(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Passageiro");
+        return {
+            title: "Aviso da Rota ⚠️",
+            body: `Por favor, desconsidere a confirmação anterior. O passageiro ${passName} não desembarcou da van.`,
             data: {
                 action: PushNotificationAction.OPEN_ROUTE,
                 passageiroId: (ctx.passageiroId || "") as string

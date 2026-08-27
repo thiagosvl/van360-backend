@@ -1,7 +1,7 @@
 import { AppError } from "../errors/AppError.js";
 import { CreateRouteDTO, UpdateRouteDTO, StepRouteExecutionDTO, ReorderExecucaoDTO, CreateAusenciaDTO, ChamadaEscolaDTO, DELETE_AUSENCIA_BY_QUERY_PARAM, ExecucaoResumidaDTO, ExecucaoParadaLeveDTO } from "../types/dtos/route.dto.js";
 import { RouteExecutionStatus, RouteStopStatus, RouteNodeType, RouteSentido, AtividadeAcao, AtividadeEntidadeTipo, UserType, RouteBroadcastEvent, NotificationChannelEnum, TipoResponsavel, RastreamentoModo } from "../types/enums.js";
-import { EVENTO_ROTA_INICIADA_IDA, EVENTO_ROTA_A_CAMINHO_IDA, EVENTO_ROTA_EMBARCOU_IDA, EVENTO_ROTA_INICIADA_VOLTA, EVENTO_ROTA_A_CAMINHO_VOLTA, EVENTO_ROTA_DESEMBARCOU_VOLTA, EVENTO_ROTA_REORDENADA } from "../config/constants.js";
+import { EVENTO_ROTA_INICIADA_IDA, EVENTO_ROTA_A_CAMINHO_IDA, EVENTO_ROTA_EMBARCOU_IDA, EVENTO_ROTA_DESFEITO_EMBARQUE_IDA, EVENTO_ROTA_INICIADA_VOLTA, EVENTO_ROTA_A_CAMINHO_VOLTA, EVENTO_ROTA_DESEMBARCOU_VOLTA, EVENTO_ROTA_DESFEITO_DESEMBARQUE_VOLTA, EVENTO_ROTA_REORDENADA } from "../config/constants.js";
 import { routeRepository } from "../repositories/route.repository.js";
 import { userRepository } from "../repositories/user.repository.js";
 import { veiculoRepository } from "../repositories/veiculo.repository.js";
@@ -608,15 +608,27 @@ const atualizarParadaStatus = async (
         if (paradaObj?.passageiro_id) {
           let routeEvent: string | null = null;
           const sentido = (paradaObj as any)?.sentido;
+          const statusAnterior = paradaObj?.status;
+          const sentidaConclusaoAnterior = paradaObj?.notificacao_concluido_enviada ||
+            statusAnterior === RouteStopStatus.EMBARCADO ||
+            statusAnterior === RouteStopStatus.DESEMBARCADO;
 
           if (novoStatus === RouteStopStatus.EMBARCADO || novoStatus === RouteStopStatus.DESEMBARCADO) {
             routeEvent = sentido === RouteSentido.VOLTANDO ? EVENTO_ROTA_DESEMBARCOU_VOLTA : EVENTO_ROTA_EMBARCOU_IDA;
+          } else if (novoStatus === RouteStopStatus.PENDENTE && sentidaConclusaoAnterior) {
+            routeEvent = sentido === RouteSentido.VOLTANDO ? EVENTO_ROTA_DESFEITO_DESEMBARQUE_VOLTA : EVENTO_ROTA_DESFEITO_EMBARQUE_IDA;
           }
 
           const notificarConclusao = (exec as any)?.notificar_conclusao_parada !== false;
-          if (routeEvent && notificarConclusao && !paradaObj.notificacao_concluido_enviada) {
-            await routeRepository.updateNotificacaoConcluidoEnviada(paradaId, true);
-            await notifyParentRouteEvent(paradaObj.passageiro_id, routeEvent, exec);
+          if (routeEvent && notificarConclusao) {
+            if (novoStatus === RouteStopStatus.EMBARCADO || novoStatus === RouteStopStatus.DESEMBARCADO) {
+              if (!paradaObj.notificacao_concluido_enviada) {
+                await routeRepository.updateNotificacaoConcluidoEnviada(paradaId, true);
+                await notifyParentRouteEvent(paradaObj.passageiro_id, routeEvent, exec);
+              }
+            } else if (novoStatus === RouteStopStatus.PENDENTE) {
+              await notifyParentRouteEvent(paradaObj.passageiro_id, routeEvent, exec);
+            }
           }
         } else if (paradaObj?.tipo_no === RouteNodeType.ESCOLA && (novoStatus === RouteStopStatus.EMBARCADO || novoStatus === RouteStopStatus.DESEMBARCADO)) {
           await notifySchoolDepartureVolta(execucaoId, paradaId);
