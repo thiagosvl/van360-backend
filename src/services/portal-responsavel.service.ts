@@ -158,11 +158,14 @@ export const portalResponsavelService = {
     const payload = await this.verifyResponsavelToken(token);
     const target = await this._authorizePassageiroAccess(payload.phone, passageiroId);
 
-    const updatePayload: Record<string, unknown> = {
-      cpf: onlyDigits(data.cpf),
-      email: data.email.trim().toLowerCase(),
-    };
+    const updatePayload: Record<string, unknown> = {};
 
+    if (data.cpf !== undefined && data.cpf !== null) {
+      updatePayload.cpf = onlyDigits(data.cpf);
+    }
+    if (data.email !== undefined && data.email !== null) {
+      updatePayload.email = data.email.trim().toLowerCase();
+    }
     if (data.logradouro !== undefined) updatePayload.logradouro = data.logradouro ? data.logradouro.trim() : null;
     if (data.numero !== undefined) updatePayload.numero = data.numero ? String(data.numero).trim() : null;
     if (data.bairro !== undefined) updatePayload.bairro = data.bairro ? data.bairro.trim() : null;

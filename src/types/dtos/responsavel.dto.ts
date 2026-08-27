@@ -21,8 +21,8 @@ export const loginResponsavelSchema = z.object({
 export type LoginResponsavelDTO = z.infer<typeof loginResponsavelSchema>;
 
 export const updateDadosComplementaresSchema = z.object({
-  cpf: z.string().min(11, "CPF inválido"),
-  email: z.string().email("E-mail inválido"),
+  cpf: z.string().min(11, "CPF inválido").optional().nullable(),
+  email: z.string().email("E-mail inválido").optional().nullable(),
   cep: z.string().optional().nullable(),
   logradouro: z.string().optional().nullable(),
   numero: z.string().optional().nullable(),
