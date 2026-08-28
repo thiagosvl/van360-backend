@@ -196,3 +196,26 @@ export const parseBrazilianDateToISO = (dateStr: string | null | undefined): str
 
   return null;
 };
+
+export const parseMonthYearFromDateString = (dateStr?: string | null): { year: number; month: number } | null => {
+  if (!dateStr) return null;
+
+  if (typeof dateStr === "string" && dateStr.includes("-")) {
+    const parts = dateStr.split("-");
+    if (parts.length >= 2) {
+      const year = Number(parts[0]);
+      const month = Number(parts[1]);
+      if (!isNaN(year) && !isNaN(month) && month >= 1 && month <= 12) {
+        return { year, month };
+      }
+    }
+  }
+
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+
+  return {
+    year: d.getFullYear(),
+    month: d.getMonth() + 1,
+  };
+};

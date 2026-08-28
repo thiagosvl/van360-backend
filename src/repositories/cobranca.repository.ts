@@ -147,6 +147,16 @@ export const cobrancaRepository = {
             .eq("ano", ano);
     },
 
+    async getByPassageiroMesAno(passageiroId: string, mes: number, ano: number) {
+        return supabaseAdmin
+            .from("cobrancas")
+            .select(`*, passageiro:passageiros(${COBRANCA_PASSAGEIRO_SELECT})`)
+            .eq("passageiro_id", passageiroId)
+            .eq("mes", mes)
+            .eq("ano", ano)
+            .maybeSingle();
+    },
+
     async getByMesAnoParaMotorista(usuarioId: string, mes: number, ano: number) {
         return supabaseAdmin
             .from("cobrancas")

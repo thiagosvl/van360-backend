@@ -14,7 +14,7 @@ import {
   EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS
 } from "../config/constants.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
-import { getNowBR, getLastDayOfMonth, getSafeDueDateString, toPersistenceString, diffInDays, formatToBrazilianDate, getMonthNameBR, getShortWeekDayBR, parseLocalDate } from "../utils/date.utils.js";
+import { getNowBR, getLastDayOfMonth, getSafeDueDateString, toPersistenceString, diffInDays, formatToBrazilianDate, getMonthNameBR, getShortWeekDayBR, parseLocalDate, parseMonthYearFromDateString } from "../utils/date.utils.js";
 import { getDriverDisplayName } from "../utils/format.js";
 
 import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
@@ -99,6 +99,21 @@ const _enrichCobrancaWithResponsavelPrincipal = (cobranca: Record<string, any>) 
     };
 };
 
+const _normalizeText = (text?: string | null): string => {
+  if (!text) return "";
+  return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+};
+
+const _filterBySearchTerm = <T extends Record<string, any>>(cobrancas: T[], searchTerm?: string): T[] => {
+  if (!searchTerm || !searchTerm.trim()) return cobrancas;
+  const term = _normalizeText(searchTerm);
+  return cobrancas.filter((c) => {
+    const nomePassageiro = _normalizeText(c.passageiro?.nome);
+    const nomeRespPrincipal = _normalizeText(c.passageiro?.responsavel_principal?.nome);
+    return nomePassageiro.includes(term) || nomeRespPrincipal.includes(term);
+  });
+};
+
 interface CreateCobrancaOptions {
   skipLog?: boolean;
 }
@@ -143,7 +158,6 @@ export const cobrancaService = {
     const { data: inserted, error: insertError } = await cobrancaRepository.insert(cobrancaData);
     if (insertError || !inserted) throw new AppError(`Erro ao criar cobrança no banco: ${insertError?.message}`, 500);
 
-    // --- LOG DE AUDITORIA ---
     if (!options.skipLog) {
       historicoService.log({
         usuario_id: data.usuario_id,
@@ -302,13 +316,16 @@ export const cobrancaService = {
   },
 
   async listCobrancasWithFilters(filtros: Record<string, any>): Promise<any[]> {
-    const { data: cobrancasReais, error } = await cobrancaRepository.listWithFilters(filtros);
+    const hasPeriodoMesAno = Boolean(filtros.mes && filtros.ano && filtros.usuarioId);
+    const repoFiltros = hasPeriodoMesAno ? { ...filtros, search: undefined } : filtros;
+
+    const { data: cobrancasReais, error } = await cobrancaRepository.listWithFilters(repoFiltros);
     if (error) throw error;
 
     const listReal = (cobrancasReais || []).map(_enrichCobrancaWithResponsavelPrincipal);
 
-    if (!filtros.mes || !filtros.ano || !filtros.usuarioId || filtros.passageiroId || (filtros.status && filtros.status !== CobrancaStatus.PENDENTE)) {
-      return listReal;
+    if (!hasPeriodoMesAno || filtros.passageiroId || (filtros.status && filtros.status !== CobrancaStatus.PENDENTE)) {
+      return _filterBySearchTerm(listReal, filtros.search);
     }
 
     const now = getNowBR();
@@ -318,9 +335,8 @@ export const cobrancaService = {
     const targetYear = Number(filtros.ano);
 
     const isPastPeriod = targetYear < currentYear || (targetYear === currentYear && targetMonth < currentMonth);
-
     if (isPastPeriod) {
-      return listReal;
+      return _filterBySearchTerm(listReal, filtros.search);
     }
 
     const { data: passageirosAtivos, error: passError } = await passageiroRepository.listAtivosParaProjecao(
@@ -329,28 +345,10 @@ export const cobrancaService = {
     );
 
     if (passError || !passageirosAtivos) {
-      return listReal;
+      return _filterBySearchTerm(listReal, filtros.search);
     }
 
     const passageirosComCobranca = new Set(listReal.map((c: any) => c.passageiro_id));
-
-    const parseYearMonth = (dateStr?: string | null) => {
-      if (!dateStr) return null;
-      if (typeof dateStr === "string" && dateStr.includes("-")) {
-        const parts = dateStr.split("-");
-        if (parts.length >= 2) {
-          const year = Number(parts[0]);
-          const month = Number(parts[1]);
-          if (!isNaN(year) && !isNaN(month) && month >= 1 && month <= 12) {
-            return { year, month };
-          }
-        }
-      }
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return null;
-      return { year: d.getFullYear(), month: d.getMonth() + 1 };
-    };
-
     const projList: any[] = [];
 
     for (const p of passageirosAtivos) {
@@ -358,7 +356,7 @@ export const cobrancaService = {
       if (!p.valor_cobranca || Number(p.valor_cobranca) <= 0) continue;
 
       const inicioStr = p.data_inicio_cobranca || p.created_at;
-      const inicio = parseYearMonth(inicioStr);
+      const inicio = parseMonthYearFromDateString(inicioStr);
       if (inicio) {
         if (targetYear < inicio.year || (targetYear === inicio.year && targetMonth < inicio.month)) {
           continue;
@@ -366,7 +364,7 @@ export const cobrancaService = {
       }
 
       if (p.data_fim_cobranca) {
-        const fim = parseYearMonth(p.data_fim_cobranca);
+        const fim = parseMonthYearFromDateString(p.data_fim_cobranca);
         if (fim) {
           if (targetYear > fim.year || (targetYear === fim.year && targetMonth > fim.month)) {
             continue;
@@ -392,17 +390,8 @@ export const cobrancaService = {
       });
     }
 
-    let combined = [...listReal, ...projList];
-
-    if (filtros.search && filtros.search.trim()) {
-      const term = filtros.search.trim().toLowerCase();
-      combined = combined.filter((c: any) =>
-        c.passageiro?.nome?.toLowerCase().includes(term) ||
-        c.passageiro?.responsavel_principal?.nome?.toLowerCase().includes(term)
-      );
-    }
-
-    return combined;
+    const combined = [...listReal, ...projList];
+    return _filterBySearchTerm(combined, filtros.search);
   },
 
   async listCobrancasByPassageiro(passageiroId: string, ano?: string): Promise<any[]> {
