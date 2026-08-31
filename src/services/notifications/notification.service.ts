@@ -229,10 +229,6 @@ class NotificationService {
                 );
 
                 if (!isDeliverable) {
-                    logger.debug(
-                        { channel, eventName, to },
-                        "[NotificationService] Canal ignorado por ausência de destinatário/token válido (Short-Circuit)."
-                    );
                     continue;
                 }
 
@@ -249,10 +245,6 @@ class NotificationService {
             }
 
             if (results.length === 0) {
-                logger.info(
-                    { eventName, to, channels },
-                    "[NotificationService] Nenhum canal elegível para envio (Short-Circuit)."
-                );
                 return false;
             }
 
@@ -312,7 +304,7 @@ class NotificationService {
         const userTokenCount = await usuarioPushTokenRepository.countTokensByUsuarioId(userId);
         const isFirstToken = userTokenCount === 0;
 
-        await usuarioPushTokenRepository.insertToken(userId, token, platform);
+        await usuarioPushTokenRepository.upsertToken(userId, token, platform);
         logger.info({ userId, isFirstToken, count: userTokenCount + 1 }, "[NotificationService.registerPushToken] Token salvo com sucesso na tabela usuario_push_tokens");
 
         if (isFirstToken) {
