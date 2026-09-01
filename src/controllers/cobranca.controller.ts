@@ -95,5 +95,12 @@ export const cobrancaController = {
     const data = registrarPagamentoManualSchema.parse(request.body);
     const cobranca = await cobrancaPagamentoService.registrarPagamentoManual(id, data);
     return reply.status(200).send(cobranca);
+  },
+
+  restaurar: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    logger.info({ cobrancaId: id }, "CobrancaController.restaurar - Starting");
+    const cobranca = await cobrancaService.restaurarCobranca(id);
+    return reply.status(200).send(cobranca);
   }
 };

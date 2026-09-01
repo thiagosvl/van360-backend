@@ -330,6 +330,43 @@ export const cobrancaService = {
     });
   },
 
+  async restaurarCobranca(id: string): Promise<any> {
+    const { data: cobranca, error: fetchError } = await cobrancaRepository.getByIdBasic(id);
+
+    if (fetchError || !cobranca) {
+      logger.error({ error: fetchError?.message, cobrancaId: id }, "Erro ao buscar cobrança para restauração.");
+      throw new AppError("Erro ao buscar cobrança para restauração.", 500);
+    }
+
+    if (cobranca.status !== CobrancaStatus.CANCELADA) {
+      throw new AppError("Apenas cobranças canceladas podem ser reativadas.", 400);
+    }
+
+    const { data: updated, error: updateError } = await cobrancaRepository.update(id, {
+      status: CobrancaStatus.PENDENTE,
+      updated_at: new Date().toISOString()
+    });
+
+    if (updateError) throw new AppError("Erro ao reativar cobrança no banco de dados.", 500);
+
+    const passageiroNomeRestore = (cobranca as Record<string, any>).passageiros?.nome || (cobranca as Record<string, any>).passageiro?.nome;
+    historicoService.log({
+      usuario_id: cobranca.usuario_id,
+      entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
+      entidade_id: id,
+      acao: AtividadeAcao.COBRANCA_CRIADA,
+      descricao: `Parcela de ${cobranca.mes}/${cobranca.ano} do passageiro ${passageiroNomeRestore} foi reativada para pendente.`,
+      meta: {
+        valor: cobranca.valor,
+        mes: cobranca.mes,
+        ano: cobranca.ano,
+        status: CobrancaStatus.PENDENTE
+      }
+    });
+
+    return updated;
+  },
+
   async listCobrancasWithFilters(filtros: Record<string, any>): Promise<any[]> {
     const hasPeriodoMesAno = Boolean(filtros.mes && filtros.ano && filtros.usuarioId);
     const repoFiltros = hasPeriodoMesAno ? { ...filtros, search: undefined } : filtros;
