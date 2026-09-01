@@ -8,6 +8,11 @@ import { moneyToNumber } from "../utils/currency.utils.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
 import { parseLocalDate, toPersistenceString, getNowBR } from "../utils/date.utils.js";
+import { notificationService } from "./notifications/notification.service.js";
+import { EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA } from "../config/constants.js";
+import { NotificationChannelEnum } from "../types/enums.js";
+import { formatarPlacaExibicao } from "../utils/placa.utils.js";
+import { userRepository } from "../repositories/user.repository.js";
 
 const _enrichPassageiroWithResponsavel = (p: Record<string, any>, isListMode: boolean = false) => {
     if (!p) return p;
@@ -559,6 +564,55 @@ const toggleNotificacoesRota = async (passageiroId: string, responsavelId: strin
     return updated;
 };
 
+const processarLembreteAniversarioMotorista = async (params: {
+    motoristaId: string;
+    telefone?: string;
+    nomeMotorista?: string;
+    mesAtual?: number;
+    diaAtual?: number;
+}): Promise<{ sent: boolean; reason?: string }> => {
+    let { motoristaId, telefone, nomeMotorista, mesAtual, diaAtual } = params;
+
+    if (!telefone || !nomeMotorista) {
+        const { data: user } = await userRepository.getById(motoristaId);
+        if (!user) return { sent: false, reason: "Motorista não encontrado" };
+        telefone = user.telefone || "";
+        nomeMotorista = user.nome || "Motorista";
+    }
+
+    if (!telefone) return { sent: false, reason: "Telefone não cadastrado" };
+
+    const hoje = getNowBR();
+    const mes = mesAtual || (hoje.getMonth() + 1);
+    const dia = diaAtual || hoje.getDate();
+
+    const { semanas, passageirosSemData, totalPassageiros } = await listarAniversariantesDoMes(motoristaId, mes);
+
+    if (totalPassageiros === 0) {
+        return { sent: false, reason: "Sem passageiros cadastrados" };
+    }
+
+    const semanaAtualNoMes = Math.ceil(dia / 7);
+    const semanaGarantida = semanaAtualNoMes > 5 ? 5 : semanaAtualNoMes;
+
+    const dadosDaSemana = semanas.find(s => s.semana === semanaGarantida);
+    const aniversariantesList = dadosDaSemana?.aniversariantes || [];
+
+    await notificationService.notifyDriver(telefone, EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA, {
+        nomeMotorista,
+        aniversariantesList: aniversariantesList.map((p: any) => ({
+            veiculo: p.veiculo?.placa ? formatarPlacaExibicao(p.veiculo.placa) : undefined,
+            escola: p.escola?.nome,
+            nome: p.nome,
+            dia: p.dia,
+            mes
+        })),
+        passageirosSemData
+    }, { channels: [NotificationChannelEnum.FIREBASE], usuarioId: motoristaId });
+
+    return { sent: true };
+};
+
 // Exportar objeto unificado no final
 export const passageiroService = {
     createPassageiro,
@@ -571,6 +625,7 @@ export const passageiroService = {
     finalizePreCadastro,
     lookupResponsavelByCpf,
     listarAniversariantesDoMes,
+    processarLembreteAniversarioMotorista,
     addResponsavelAdicional,
     updateResponsavelAdicional,
     deleteResponsavelAdicional,
