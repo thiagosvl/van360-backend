@@ -170,7 +170,8 @@ export const usuarioResumoService = {
       });
     }
 
-    const receitaPrevista = cobrancas.reduce((acc: number, c: Record<string, any>) => acc + Number(c.valor || 0), 0) + receitaProjetada;
+    const cobrancasAtivas = cobrancas.filter((c: Record<string, any>) => c.status !== CobrancaStatus.CANCELADA);
+    const receitaPrevista = cobrancasAtivas.reduce((acc: number, c: Record<string, any>) => acc + Number(c.valor || 0), 0) + receitaProjetada;
     const taxaRecebimento = receitaPrevista > 0 ? (receitaRealizada / receitaPrevista) * 100 : 0;
 
     const totalDespesas = gastos.reduce((acc: number, g: Record<string, any>) => acc + Number(g.valor || 0), 0);

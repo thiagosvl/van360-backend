@@ -1,7 +1,8 @@
 
 export enum CobrancaStatus {
   PAGO = "pago",
-  PENDENTE = "pendente"
+  PENDENTE = "pendente",
+  CANCELADA = "cancelada",
 }
 
 export enum CobrancaTipoPagamento {
@@ -13,10 +14,6 @@ export enum CobrancaTipoPagamento {
   BOLETO = "boleto"
 }
 
-export enum CobrancaOrigem {
-  MANUAL = "manual",
-  AUTOMATICA = "automatica",
-}
 
 export enum UserType {
   ADMIN = "admin",

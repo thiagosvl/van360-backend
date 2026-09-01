@@ -22,6 +22,7 @@ export const cobrancaPagamentoService = {
 
     if (findError || !cobranca) throw new AppError("Cobrança não encontrada.", 404);
     if (cobranca.status === CobrancaStatus.PAGO) throw new AppError("Esta cobrança já está paga.", 400);
+    if (cobranca.status === CobrancaStatus.CANCELADA) throw new AppError("Esta cobrança está cancelada.", 400);
 
     // 2. REGISTRAR NO BANCO
     const dataPagamentoStr = data.data_pagamento ? toPersistenceString(data.data_pagamento) : toPersistenceString(getNowBR());

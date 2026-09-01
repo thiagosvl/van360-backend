@@ -14,11 +14,11 @@ import {
   EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS
 } from "../config/constants.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
-import { getNowBR, getLastDayOfMonth, getSafeDueDateString, toPersistenceString, diffInDays, formatToBrazilianDate, getMonthNameBR, getShortWeekDayBR, parseLocalDate, parseMonthYearFromDateString } from "../utils/date.utils.js";
+import { getNowBR, getSafeDueDateString, toPersistenceString, diffInDays, getMonthNameBR, getShortWeekDayBR, parseLocalDate, parseMonthYearFromDateString } from "../utils/date.utils.js";
 import { getDriverDisplayName } from "../utils/format.js";
 
 import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
-import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaOrigem, CobrancaStatus, ConfigKey } from "../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaStatus, CobrancaTipoPagamento, ConfigKey } from "../types/enums.js";
 import { historicoService } from "./historico.service.js";
 import { receiptService } from "./receipt.service.js";
 import { getConfigNumber } from "./configuracao.service.js";
@@ -56,47 +56,47 @@ interface PassageiroCobrancaInfo {
 }
 
 const _getResponsavelFromPassageiro = (passageiroInfo?: PassageiroCobrancaInfo | null) => {
-    if (!passageiroInfo) return { nome: "", telefone: "", email: "", cpf: "" };
-    const respLink = Array.isArray(passageiroInfo.responsaveis)
-      ? (passageiroInfo.responsaveis.find((r) => r.tipo === TipoResponsavel.PRINCIPAL) || passageiroInfo.responsaveis[0])
-      : null;
-    const rawResp = passageiroInfo.responsavel_principal || (respLink ? (Array.isArray(respLink.responsavel) ? respLink.responsavel[0] : respLink.responsavel) : null);
-    const resp = Array.isArray(rawResp) ? rawResp[0] : rawResp;
-    return {
-        nome: resp?.nome || "",
-        telefone: resp?.telefone || "",
-        email: resp?.email || "",
-        cpf: resp?.cpf || ""
-    };
+  if (!passageiroInfo) return { nome: "", telefone: "", email: "", cpf: "" };
+  const respLink = Array.isArray(passageiroInfo.responsaveis)
+    ? (passageiroInfo.responsaveis.find((r) => r.tipo === TipoResponsavel.PRINCIPAL) || passageiroInfo.responsaveis[0])
+    : null;
+  const rawResp = passageiroInfo.responsavel_principal || (respLink ? (Array.isArray(respLink.responsavel) ? respLink.responsavel[0] : respLink.responsavel) : null);
+  const resp = Array.isArray(rawResp) ? rawResp[0] : rawResp;
+  return {
+    nome: resp?.nome || "",
+    telefone: resp?.telefone || "",
+    email: resp?.email || "",
+    cpf: resp?.cpf || ""
+  };
 };
 
 const _enrichCobrancaWithResponsavelPrincipal = (cobranca: Record<string, any>) => {
-    if (!cobranca || !cobranca.passageiro) return cobranca;
+  if (!cobranca || !cobranca.passageiro) return cobranca;
 
-    const p = cobranca.passageiro;
-    const links = (p.responsaveis as ResponsavelLinkInfo[]) || [];
-    const principalLink = links.find((l) => l.tipo === TipoResponsavel.PRINCIPAL) || links[0];
-    const rawResp = p.responsavel_principal || principalLink?.responsavel;
-    const resp = Array.isArray(rawResp) ? rawResp[0] : rawResp;
+  const p = cobranca.passageiro;
+  const links = (p.responsaveis as ResponsavelLinkInfo[]) || [];
+  const principalLink = links.find((l) => l.tipo === TipoResponsavel.PRINCIPAL) || links[0];
+  const rawResp = p.responsavel_principal || principalLink?.responsavel;
+  const resp = Array.isArray(rawResp) ? rawResp[0] : rawResp;
 
-    const enrichedPassageiro = {
-        ...p,
-        responsavel_principal: (principalLink && resp) || p.responsavel_principal ? {
-            id: resp?.id || null,
-            nome: resp?.nome || null,
-            telefone: resp?.telefone || null,
-            cpf: resp?.cpf || null,
-            email: resp?.email || null,
-            parentesco: principalLink?.parentesco || (p.responsavel_principal as Record<string, any>)?.parentesco || null
-        } : null
-    };
+  const enrichedPassageiro = {
+    ...p,
+    responsavel_principal: (principalLink && resp) || p.responsavel_principal ? {
+      id: resp?.id || null,
+      nome: resp?.nome || null,
+      telefone: resp?.telefone || null,
+      cpf: resp?.cpf || null,
+      email: resp?.email || null,
+      parentesco: principalLink?.parentesco || (p.responsavel_principal as Record<string, any>)?.parentesco || null
+    } : null
+  };
 
-    delete enrichedPassageiro.responsaveis;
+  delete enrichedPassageiro.responsaveis;
 
-    return {
-        ...cobranca,
-        passageiro: enrichedPassageiro
-    };
+  return {
+    ...cobranca,
+    passageiro: enrichedPassageiro
+  };
 };
 
 const _normalizeText = (text?: string | null): string => {
@@ -134,29 +134,53 @@ export const cobrancaService = {
     if (!passageiro) throw new AppError("Passageiro não encontrado para gerar cobrança.", 404);
     if ((passageiro as any).isento === true) throw new AppError("Passageiro é isento de pagamento e não possui cobranças.", 400);
 
-    const cobrancaId = crypto.randomUUID();
     const valorNumerico = typeof data.valor === "string" ? moneyToNumber(data.valor) : data.valor;
 
     const statusVal = data.status || CobrancaStatus.PENDENTE;
 
-    const cobrancaData = {
-      id: cobrancaId,
-      passageiro_id: data.passageiro_id,
-      usuario_id: data.usuario_id,
-      mes: Number(data.mes),
-      ano: Number(data.ano),
-      valor: valorNumerico,
-      data_vencimento: data.data_vencimento,
-      status: statusVal,
-      data_pagamento: statusVal === CobrancaStatus.PAGO ? (data.data_pagamento || getNowBR().toISOString()) : null,
-      tipo_pagamento: statusVal === CobrancaStatus.PAGO ? (data.tipo_pagamento || 'PIX') : null,
-      valor_pago: statusVal === CobrancaStatus.PAGO ? valorNumerico : null,
-      pagamento_manual: statusVal === CobrancaStatus.PAGO,
-      origem: CobrancaOrigem.MANUAL,
-    };
+    const { data: existingCobranca } = await cobrancaRepository.getByPassageiroMesAno(
+      data.passageiro_id,
+      Number(data.mes),
+      Number(data.ano)
+    );
 
-    const { data: inserted, error: insertError } = await cobrancaRepository.insert(cobrancaData);
-    if (insertError || !inserted) throw new AppError(`Erro ao criar cobrança no banco: ${insertError?.message}`, 500);
+    let inserted: any;
+
+    if (existingCobranca) {
+      const updateData = {
+        valor: valorNumerico,
+        data_vencimento: data.data_vencimento,
+        status: statusVal,
+        data_pagamento: statusVal === CobrancaStatus.PAGO ? (data.data_pagamento || getNowBR().toISOString()) : null,
+        tipo_pagamento: statusVal === CobrancaStatus.PAGO ? (data.tipo_pagamento || CobrancaTipoPagamento.PIX) : null,
+        valor_pago: statusVal === CobrancaStatus.PAGO ? valorNumerico : null,
+        pagamento_manual: statusVal === CobrancaStatus.PAGO,
+      };
+
+      const { data: updated, error: updateError } = await cobrancaRepository.update(existingCobranca.id, updateData);
+      if (updateError || !updated) throw new AppError(`Erro ao atualizar cobrança no banco: ${updateError?.message}`, 500);
+      inserted = updated;
+    } else {
+      const cobrancaId = crypto.randomUUID();
+      const cobrancaData = {
+        id: cobrancaId,
+        passageiro_id: data.passageiro_id,
+        usuario_id: data.usuario_id,
+        mes: Number(data.mes),
+        ano: Number(data.ano),
+        valor: valorNumerico,
+        data_vencimento: data.data_vencimento,
+        status: statusVal,
+        data_pagamento: statusVal === CobrancaStatus.PAGO ? (data.data_pagamento || getNowBR().toISOString()) : null,
+        tipo_pagamento: statusVal === CobrancaStatus.PAGO ? (data.tipo_pagamento || CobrancaTipoPagamento.PIX) : null,
+        valor_pago: statusVal === CobrancaStatus.PAGO ? valorNumerico : null,
+        pagamento_manual: statusVal === CobrancaStatus.PAGO,
+      };
+
+      const { data: created, error: insertError } = await cobrancaRepository.insert(cobrancaData);
+      if (insertError || !created) throw new AppError(`Erro ao criar cobrança no banco: ${insertError?.message}`, 500);
+      inserted = created;
+    }
 
     if (!options.skipLog) {
       historicoService.log({
@@ -280,7 +304,6 @@ export const cobrancaService = {
   },
 
   async deleteCobranca(id: string): Promise<void> {
-    // 1. Buscar dados antes de deletar (p/ log e cancelamento)
     const { data: cobranca, error: fetchError } = await cobrancaRepository.getByIdBasic(id);
 
     if (fetchError || !cobranca) {
@@ -288,29 +311,21 @@ export const cobrancaService = {
       throw new AppError("Erro ao buscar cobrança para exclusão.", 500);
     }
 
-    // Cancelamento de PIX removido conforme diretrizes do plano base.
+    const { error: updateError } = await cobrancaRepository.update(id, { status: CobrancaStatus.CANCELADA });
+    if (updateError) throw new AppError("Erro ao cancelar cobrança no banco de dados.", 500);
 
-    // 3. Deletar do Banco e do Storage
-    if (cobranca.recibo_url) {
-      await receiptService.deleteReceipt(cobranca.recibo_url);
-    }
-
-    const { error } = await cobrancaRepository.delete(id);
-    if (error) throw new AppError("Erro ao excluir cobrança no banco de dados.", 500);
-
-    // --- LOG DE AUDITORIA ---
     const passageiroNomeDelete = (cobranca as Record<string, any>).passageiros?.nome || (cobranca as Record<string, any>).passageiro?.nome;
     historicoService.log({
       usuario_id: cobranca.usuario_id,
       entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
       entidade_id: id,
       acao: AtividadeAcao.COBRANCA_EXCLUIDA,
-      descricao: `Parcela de ${cobranca.mes}/${cobranca.ano} do passageiro ${passageiroNomeDelete} foi removida.`,
+      descricao: `Parcela de ${cobranca.mes}/${cobranca.ano} do passageiro ${passageiroNomeDelete} foi cancelada.`,
       meta: {
         valor: cobranca.valor,
         mes: cobranca.mes,
         ano: cobranca.ano,
-        backup: cobranca // Guarda o estado final antes da deleção física
+        backup: cobranca
       }
     });
   },
@@ -322,10 +337,12 @@ export const cobrancaService = {
     const { data: cobrancasReais, error } = await cobrancaRepository.listWithFilters(repoFiltros);
     if (error) throw error;
 
-    const listReal = (cobrancasReais || []).map(_enrichCobrancaWithResponsavelPrincipal);
+    const listRealAtivas = (cobrancasReais || [])
+      .filter((c: any) => c.status !== CobrancaStatus.CANCELADA)
+      .map(_enrichCobrancaWithResponsavelPrincipal);
 
     if (!hasPeriodoMesAno || filtros.passageiroId || (filtros.status && filtros.status !== CobrancaStatus.PENDENTE)) {
-      return _filterBySearchTerm(listReal, filtros.search);
+      return _filterBySearchTerm(listRealAtivas, filtros.search);
     }
 
     const now = getNowBR();
@@ -336,7 +353,7 @@ export const cobrancaService = {
 
     const isPastPeriod = targetYear < currentYear || (targetYear === currentYear && targetMonth < currentMonth);
     if (isPastPeriod) {
-      return _filterBySearchTerm(listReal, filtros.search);
+      return _filterBySearchTerm(listRealAtivas, filtros.search);
     }
 
     const { data: passageirosAtivos, error: passError } = await passageiroRepository.listAtivosParaProjecao(
@@ -345,10 +362,10 @@ export const cobrancaService = {
     );
 
     if (passError || !passageirosAtivos) {
-      return _filterBySearchTerm(listReal, filtros.search);
+      return _filterBySearchTerm(listRealAtivas, filtros.search);
     }
 
-    const passageirosComCobranca = new Set(listReal.map((c: any) => c.passageiro_id));
+    const passageirosComCobranca = new Set((cobrancasReais || []).map((c: any) => c.passageiro_id));
     const projList: any[] = [];
 
     for (const p of passageirosAtivos) {
@@ -384,13 +401,12 @@ export const cobrancaService = {
         valor: Number(p.valor_cobranca),
         status: CobrancaStatus.PENDENTE,
         data_vencimento: dataVenc,
-        origem: CobrancaOrigem.AUTOMATICA,
         isProjection: true,
         passageiro: enrichedPassageiro
       });
     }
 
-    const combined = [...listReal, ...projList];
+    const combined = [...listRealAtivas, ...projList];
     return _filterBySearchTerm(combined, filtros.search);
   },
 
@@ -521,7 +537,6 @@ export const cobrancaService = {
           passageiro_id: passageiro.id,
           valor: valorFinal,
           data_vencimento: dataVencimentoStr,
-          origem: CobrancaOrigem.AUTOMATICA,
           mes: targetMonth,
           ano: targetYear
         }, { skipLog: true });
@@ -543,7 +558,7 @@ export const cobrancaService = {
       const todayStr = toPersistenceString(now);
 
       const globalThresholdDays = await getConfigNumber(ConfigKey.PASSAGEIRO_DIAS_AVISO_VENCIMENTO, 2);
-      
+
       const targetDates = [todayStr];
 
       // Dias futuros de 1 a 5 para cobrir qualquer preferência de motorista

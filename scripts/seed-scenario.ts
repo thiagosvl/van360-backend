@@ -20,7 +20,6 @@ import {
     ParentescoResponsavel,
     GastoCategoria,
     CobrancaStatus,
-    CobrancaOrigem,
     CobrancaTipoPagamento,
     TipoResponsavel,
     RouteSentido,
@@ -216,7 +215,6 @@ async function seedPassageiros(
     for (let index = 0; index < cfg.passageiros.quantidade; index++) {
         const escola = escolasInseridas[randomNumber(0, escolasInseridas.length - 1)];
         const veiculo = veiculosInseridos[randomNumber(0, veiculosInseridos.length - 1)];
-        const coords = generateCoordinates();
 
         const semEndereco = cfg.passageiros.percentualSemEndereco
             ? randomNumber(1, 100) <= cfg.passageiros.percentualSemEndereco
@@ -573,7 +571,6 @@ async function seedCobrancas(usuarioId: string, passageirosInseridos: any[], cfg
                 mes: dataVenc.getMonth() + 1,
                 ano: dataVenc.getFullYear(),
                 status,
-                origem: CobrancaOrigem.AUTOMATICA,
                 pagamento_manual,
                 data_pagamento,
                 valor_pago,
