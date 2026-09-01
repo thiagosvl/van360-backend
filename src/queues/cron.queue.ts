@@ -20,7 +20,7 @@ const CRON_DEFINITIONS: CronDefinition[] = [
     { name: CronJob.DAILY_SUBSCRIPTION_MONITOR, pattern: '10 13 * * *' },
     { name: CronJob.DAILY_CHARGE_MONITOR, pattern: '30 13 * * *' },
     { name: CronJob.BIRTHDAY_REMINDER, pattern: '0 14 * * 0' },
-    { name: CronJob.WEEKLY_DRIVER_CHARGE_SUMMARY, pattern: '0 13 * * 1' },
+    { name: CronJob.WEEKLY_DRIVER_CHARGE_SUMMARY, pattern: '30 14 * * 1' },
     { name: CronJob.NOTIFICATION_RETRY, every: 2 * 60 * 1000 }
 ];
 

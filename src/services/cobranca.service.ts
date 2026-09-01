@@ -888,13 +888,17 @@ export const cobrancaService = {
           const dataVencimentoStr = `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}`;
 
           return {
-            passageiroNome: passageiroInfo?.nome || "Passageiro",
+            passageiroNome: passageiroInfo?.nome,
             responsavelNome: respInfo.nome,
             dataVencimentoStr,
             diaSemanaStr,
             valor: Number(c.valor) || 0
           };
         });
+
+        if (atrasadosList.length === 0 && proximosList.length === 0) {
+          continue;
+        }
 
         const totalAtrasado = atrasadosList.reduce((acc, curr) => acc + curr.valor, 0);
         const totalProximos = proximosList.reduce((acc, curr) => acc + curr.valor, 0);
@@ -909,7 +913,9 @@ export const cobrancaService = {
               cobrancasAtrasadasList: atrasadosList,
               cobrancasProximos7DiasList: proximosList,
               totalAtrasado,
-              totalProximos
+              totalProximos,
+              qtdAtrasados: atrasadosList.length,
+              qtdProximos: proximosList.length
             },
             { channels: [NotificationChannelEnum.FIREBASE], usuarioId: m.id, email: (m as Record<string, unknown>).email as string | undefined }
           );

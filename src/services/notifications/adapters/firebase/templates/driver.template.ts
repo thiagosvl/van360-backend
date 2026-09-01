@@ -177,9 +177,32 @@ export class FirebaseDriverTemplates {
     }
 
     static weeklySummary(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        const totalProximos = typeof ctx.totalProximos === "number" ? ctx.totalProximos : Number(ctx.totalProximos) || 0;
+        const totalAtrasado = typeof ctx.totalAtrasado === "number" ? ctx.totalAtrasado : Number(ctx.totalAtrasado) || 0;
+        const qtdProximos = typeof ctx.qtdProximos === "number" ? ctx.qtdProximos : Number(ctx.qtdProximos) || 0;
+        const qtdAtrasados = typeof ctx.qtdAtrasados === "number" ? ctx.qtdAtrasados : Number(ctx.qtdAtrasados) || 0;
+
+        let title = "Semana Financeira 💵";
+        let body = "Confira os pagamentos dos seus passageiros no app.";
+
+        if (totalProximos > 0 && totalAtrasado > 0) {
+            const proximosLabel = qtdProximos === 1 ? "1 parcela vence" : `${qtdProximos} parcelas vencem`;
+            const atrasadosLabel = qtdAtrasados === 1 ? "1 em aberto" : `${qtdAtrasados} em aberto`;
+            title = `Semana Financeira: ${NotificationContextFormatter.formatValue(totalProximos)} previstos 💵`;
+            body = `${proximosLabel} esta semana e ${atrasadosLabel} (${NotificationContextFormatter.formatValue(totalAtrasado)}). Confira seus recebimentos e dê baixa no app.`;
+        } else if (totalProximos > 0) {
+            const proximosLabel = qtdProximos === 1 ? "1 parcela vence" : `${qtdProximos} parcelas vencem`;
+            title = `Semana Financeira: ${NotificationContextFormatter.formatValue(totalProximos)} previstos 💵`;
+            body = `${proximosLabel} nos próximos 7 dias. Confira seus recebimentos e dê baixa no app.`;
+        } else if (totalAtrasado > 0) {
+            const atrasadosLabel = qtdAtrasados === 1 ? "1 parcela consta em aberto" : `${qtdAtrasados} parcelas constam em aberto`;
+            title = `Resumo de Pendências: ${NotificationContextFormatter.formatValue(totalAtrasado)} 💵`;
+            body = `Você possui ${atrasadosLabel}. Confira se já recebeu e dê baixa no app.`;
+        }
+
         return {
-            title: "Lembrete de Pagamentos 💵",
-            body: "Confira os pagamentos recebidos e dê baixa nas parcelas dos seus passageiros!",
+            title,
+            body,
             data: {
                 action: PushNotificationAction.OPEN_BILLING,
                 userId: (ctx.usuarioId || ctx.userId || "") as string
