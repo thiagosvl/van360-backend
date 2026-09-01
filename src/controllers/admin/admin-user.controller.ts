@@ -1,11 +1,13 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../../config/logger.js";
 import { adminUserService } from "../../services/admin/admin-user.service.js";
+import { adminNotificationService } from "../../services/admin/admin-notification.service.js";
 import {
   updateUserAdminSchema,
   updateSubscriptionAdminSchema,
   listUsersQuerySchema,
   createUserAdminSchema,
+  dispatchDriverNotificationSchema,
 } from "../../schemas/admin.schema.js";
 
 export const adminUserController = {
@@ -107,6 +109,21 @@ export const adminUserController = {
       const error = err as Error;
       logger.error({ error: error.message }, "[AdminUserController] Erro ao deletar usuário.");
       return reply.status(400).send({ error: error.message });
+    }
+  },
+
+  async dispatchNotification(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { id } = request.params as { id: string };
+      const body = dispatchDriverNotificationSchema.parse(request.body);
+      const adminId = (request as any).user?.id;
+      const result = await adminNotificationService.dispatchToDriver(id, body, adminId);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao disparar notificação.");
+      const status = error.message?.includes("não encontrado") ? 404 : 400;
+      return reply.status(status).send({ error: error.message });
     }
   },
 };

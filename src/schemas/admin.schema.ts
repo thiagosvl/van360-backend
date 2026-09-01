@@ -88,3 +88,11 @@ export const createUserAdminSchema = z.object({
 });
 export type CreateUserAdminDTO = z.infer<typeof createUserAdminSchema>;
 
+export const dispatchDriverNotificationSchema = z.object({
+  evento: z.enum([
+    "MOTORISTA_RESUMO_SEMANAL_PARCELAS",
+    "MOTORISTA_ANIVERSARIANTES_SEMANA",
+  ]),
+});
+export type DispatchDriverNotificationDTO = z.infer<typeof dispatchDriverNotificationSchema>;
+
