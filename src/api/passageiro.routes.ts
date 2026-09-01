@@ -28,6 +28,7 @@ const passageiroRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     app.put("/responsaveis/:responsavelId", { preHandler: [requirePermission("passageiros.gerenciar")] }, passageiroController.updateResponsavelAdicional);
     app.delete("/responsaveis/:responsavelId", { preHandler: [requirePermission("passageiros.gerenciar")] }, passageiroController.deleteResponsavelAdicional);
     app.patch("/:id/responsaveis/:responsavelId/set-principal", { preHandler: [requirePermission("passageiros.gerenciar")] }, passageiroController.setPrincipalResponsavel);
+    app.patch("/:id/responsaveis/:responsavelId/toggle-notificacoes-rota", { preHandler: [requirePermission("passageiros.gerenciar")] }, passageiroController.toggleNotificacoesRota);
 
     // Aniversários
     app.get("/aniversariantes", { preHandler: [requirePermission("aniversarios.visualizar")] }, passageiroController.getAniversariantesDoMes);

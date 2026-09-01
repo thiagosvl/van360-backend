@@ -32,7 +32,8 @@ const _enrichPassageiroWithResponsavel = (p: Record<string, any>, isListMode: bo
             estado: resp.estado || null,
             cep: resp.cep || null,
             referencia: resp.referencia || null,
-            complemento: resp.complemento || null
+            complemento: resp.complemento || null,
+            notificacoes_rota_habilitadas: principalLink?.notificacoes_rota_habilitadas !== false,
         } : null
     };
 
@@ -54,6 +55,7 @@ const _enrichPassageiroWithResponsavel = (p: Record<string, any>, isListMode: bo
                 email: lResp?.email || null,
                 parentesco: l.parentesco || null,
                 tipo: l.tipo,
+                notificacoes_rota_habilitadas: l.notificacoes_rota_habilitadas !== false,
                 created_at: l.created_at,
                 logradouro: lResp?.logradouro || null,
                 numero: lResp?.numero || null,
@@ -154,12 +156,16 @@ const _syncResponsavelPrincipal = async (
     });
 
     const parentesco = respData.parentesco !== undefined ? respData.parentesco : (currentResp?.parentesco || null);
+    const notificacoesRota = respData.notificacoes_rota_habilitadas !== undefined
+        ? respData.notificacoes_rota_habilitadas
+        : (currentResp?.notificacoes_rota_habilitadas !== undefined ? currentResp.notificacoes_rota_habilitadas : true);
 
     await passageiroRepository.linkPassageiroResponsavel(
         passageiroId,
         respObj.id,
         TipoResponsavel.PRINCIPAL,
-        parentesco
+        parentesco,
+        notificacoesRota
     );
 
     return respObj;
@@ -513,6 +519,7 @@ const addResponsavelAdicional = async (passageiroId: string, data: CreateRespons
         referencia: data.referencia ? cleanString(data.referencia, true) : null,
         complemento: data.complemento ? cleanString(data.complemento, true) : null,
         tornar_principal: data.tornar_principal,
+        notificacoes_rota_habilitadas: data.notificacoes_rota_habilitadas,
     });
 };
 
@@ -532,6 +539,7 @@ const updateResponsavelAdicional = async (responsavelId: string, data: UpdateRes
     if (data.referencia !== undefined) prepared.referencia = data.referencia ? cleanString(data.referencia, true) : null;
     if (data.complemento !== undefined) prepared.complemento = data.complemento ? cleanString(data.complemento, true) : null;
     if (data.tornar_principal !== undefined) prepared.tornar_principal = data.tornar_principal;
+    if (data.notificacoes_rota_habilitadas !== undefined) prepared.notificacoes_rota_habilitadas = data.notificacoes_rota_habilitadas;
 
     return responsavelRepository.updateResponsavelAdicional(responsavelId, prepared, passageiroId);
 };
@@ -544,6 +552,11 @@ const deleteResponsavelAdicional = async (responsavelId: string, passageiroId?: 
 const setPrincipalResponsavel = async (passageiroId: string, responsavelId: string) => {
     await responsavelRepository.setPrincipalResponsavel(passageiroId, responsavelId);
     return { success: true };
+};
+
+const toggleNotificacoesRota = async (passageiroId: string, responsavelId: string, status?: boolean) => {
+    const updated = await responsavelRepository.toggleNotificacoesRota(passageiroId, responsavelId, status);
+    return updated;
 };
 
 // Exportar objeto unificado no final
@@ -561,5 +574,6 @@ export const passageiroService = {
     addResponsavelAdicional,
     updateResponsavelAdicional,
     deleteResponsavelAdicional,
-    setPrincipalResponsavel
+    setPrincipalResponsavel,
+    toggleNotificacoesRota
 };

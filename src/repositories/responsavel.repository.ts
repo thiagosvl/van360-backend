@@ -165,7 +165,7 @@ export const responsavelRepository = {
         veiculo:veiculos (id, placa, modelo),
         usuario:usuarios (id, nome, apelido, telefone),
         responsaveis_links:passageiro_responsaveis (
-          id, tipo, parentesco,
+          id, tipo, parentesco, notificacoes_rota_habilitadas,
           responsavel:responsaveis (id, nome, telefone, cpf, email, logradouro, numero, bairro, cidade, estado, cep, referencia, complemento)
         )
       `)
@@ -239,6 +239,8 @@ export const responsavelRepository = {
           cpf: r?.cpf || null,
           email: r?.email || null,
           parentesco: l.parentesco || null,
+          tipo: l.tipo || TipoResponsavel.ADICIONAL,
+          notificacoes_rota_habilitadas: l.notificacoes_rota_habilitadas !== false,
           logradouro: r?.logradouro || null,
           numero: r?.numero || null,
           bairro: r?.bairro || null,
@@ -284,6 +286,8 @@ export const responsavelRepository = {
         cpf: principalResp.cpf || null,
         email: principalResp.email || null,
         parentesco: principalLink?.parentesco || null,
+        tipo: TipoResponsavel.PRINCIPAL,
+        notificacoes_rota_habilitadas: principalLink?.notificacoes_rota_habilitadas !== false,
         logradouro: principalResp.logradouro || null,
         numero: principalResp.numero || null,
         bairro: principalResp.bairro || null,
@@ -488,6 +492,7 @@ export const responsavelRepository = {
         responsavel_id: responsavelId,
         tipo: tipoLink,
         parentesco: data.parentesco || null,
+        notificacoes_rota_habilitadas: data.notificacoes_rota_habilitadas !== undefined ? data.notificacoes_rota_habilitadas : true,
         updated_at: new Date().toISOString()
       })
       .select()
@@ -567,29 +572,56 @@ export const responsavelRepository = {
 
     if (error) throw error;
 
-    if (data.tornar_principal === true && effectivePassageiroId) {
-      await supabaseAdmin
-        .from("passageiro_responsaveis")
-        .update({ tipo: TipoResponsavel.ADICIONAL, updated_at: new Date().toISOString() })
-        .eq("passageiro_id", effectivePassageiroId);
+    if (effectivePassageiroId) {
+      const linkPayload: Record<string, any> = { updated_at: new Date().toISOString() };
+      if (data.parentesco !== undefined) linkPayload.parentesco = data.parentesco || null;
+      if (data.notificacoes_rota_habilitadas !== undefined) linkPayload.notificacoes_rota_habilitadas = data.notificacoes_rota_habilitadas;
+
+      if (data.tornar_principal === true) {
+        await supabaseAdmin
+          .from("passageiro_responsaveis")
+          .update({ tipo: TipoResponsavel.ADICIONAL, updated_at: new Date().toISOString() })
+          .eq("passageiro_id", effectivePassageiroId);
+
+        linkPayload.tipo = TipoResponsavel.PRINCIPAL;
+      }
 
       await supabaseAdmin
         .from("passageiro_responsaveis")
-        .update({
-          tipo: TipoResponsavel.PRINCIPAL,
-          ...(data.parentesco !== undefined ? { parentesco: data.parentesco || null } : {}),
-          updated_at: new Date().toISOString()
-        })
-        .eq("passageiro_id", effectivePassageiroId)
-        .eq("responsavel_id", responsavelId);
-    } else if (data.parentesco !== undefined && effectivePassageiroId) {
-      await supabaseAdmin
-        .from("passageiro_responsaveis")
-        .update({ parentesco: data.parentesco || null, updated_at: new Date().toISOString() })
+        .update(linkPayload)
         .eq("passageiro_id", effectivePassageiroId)
         .eq("responsavel_id", responsavelId);
     }
 
+    return updated;
+  },
+
+  async toggleNotificacoesRota(passageiroId: string, responsavelId: string, novoStatus?: boolean) {
+    let finalStatus = novoStatus;
+
+    if (finalStatus === undefined) {
+      const { data: currentLink } = await supabaseAdmin
+        .from("passageiro_responsaveis")
+        .select("notificacoes_rota_habilitadas")
+        .eq("passageiro_id", passageiroId)
+        .eq("responsavel_id", responsavelId)
+        .single();
+
+      finalStatus = !(currentLink?.notificacoes_rota_habilitadas ?? true);
+    }
+
+    const { data: updated, error } = await supabaseAdmin
+      .from("passageiro_responsaveis")
+      .update({
+        notificacoes_rota_habilitadas: finalStatus,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("passageiro_id", passageiroId)
+      .eq("responsavel_id", responsavelId)
+      .select()
+      .single();
+
+    if (error) throw error;
     return updated;
   },
 

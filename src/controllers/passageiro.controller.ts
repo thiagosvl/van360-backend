@@ -11,7 +11,8 @@ import {
     updatePassageiroSchema,
     getAniversariantesQuerySchema,
     createResponsavelAdicionalSchema,
-    updateResponsavelAdicionalSchema
+    updateResponsavelAdicionalSchema,
+    toggleNotificacoesRotaResponsavelSchema
 } from "../types/dtos/passageiro.dto.js";
 
 
@@ -152,6 +153,14 @@ export const passageiroController = {
   setPrincipalResponsavel: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id: passageiroId, responsavelId } = request.params as { id: string; responsavelId: string };
     const result = await passageiroService.setPrincipalResponsavel(passageiroId, responsavelId);
+    return reply.status(200).send(result);
+  },
+
+  toggleNotificacoesRota: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id: passageiroId, responsavelId } = request.params as { id: string; responsavelId: string };
+    const parsedBody = toggleNotificacoesRotaResponsavelSchema.safeParse(request.body || {});
+    const status = parsedBody.success ? parsedBody.data.status : undefined;
+    const result = await passageiroService.toggleNotificacoesRota(passageiroId, responsavelId, status);
     return reply.status(200).send(result);
   }
 };

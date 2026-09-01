@@ -780,22 +780,29 @@ const notifyParentRouteEvent = async (passageiroId: string, eventType: string, e
   try {
     const passageiroInfo = await passageiroRepository.getResponsavelInfo(passageiroId);
     if (!passageiroInfo) return;
-    const resp = passageiroInfo.responsavel_principal;
-    if (resp?.telefone) {
-      await notificationService.notifyPassenger(
-        resp.telefone,
-        eventType,
-        {
-          nomePassageiro: passageiroInfo.nome,
-          passageiroId: passageiroInfo.id,
-          rotaId: execData.rota_id,
-          ...extraContext
-        },
-        { channels: [NotificationChannelEnum.FIREBASE], usuarioId: execData.usuario_id }
-      ).catch(err => logger.error({ err }, "[routeService] Erro ao enviar Push de rota ao responsável"));
-    }
+
+    const responsaveisHabilitados = await passageiroRepository.getResponsaveisNotificacaoRota(passageiroId);
+    if (!responsaveisHabilitados || responsaveisHabilitados.length === 0) return;
+
+    const payload = {
+      nomePassageiro: passageiroInfo.nome,
+      passageiroId: passageiroInfo.id,
+      rotaId: execData.rota_id,
+      ...extraContext
+    };
+
+    await Promise.allSettled(
+      responsaveisHabilitados.map(resp =>
+        notificationService.notifyPassenger(
+          resp.telefone,
+          eventType,
+          payload,
+          { channels: [NotificationChannelEnum.FIREBASE], usuarioId: execData.usuario_id }
+        ).catch(err => logger.error({ err, responsavelId: resp.id }, "[routeService] Erro ao enviar Push de rota ao responsável"))
+      )
+    );
   } catch (err) {
-    logger.error({ err }, "[routeService] Falha ao notificar responsável sobre status da rota");
+    logger.error({ err, passageiroId }, "[routeService] Falha ao notificar responsáveis sobre status da rota");
   }
 };
 

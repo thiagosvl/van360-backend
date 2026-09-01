@@ -9,6 +9,7 @@ const PASSAGEIRO_RESPONSAVEIS_SELECT = `
     id,
     tipo,
     parentesco,
+    notificacoes_rota_habilitadas,
     created_at,
     responsavel:responsaveis(
       id,
@@ -253,8 +254,44 @@ export const passageiroRepository = {
         cep: resp.cep || null,
         referencia: resp.referencia || null,
         complemento: resp.complemento || null,
+        notificacoes_rota_habilitadas: respLink?.notificacoes_rota_habilitadas ?? true,
       } : null
     };
+  },
+
+  async getResponsaveisNotificacaoRota(passageiroId: string): Promise<Array<{ id: string; nome: string; telefone: string; tipo: string; parentesco: string | null }>> {
+    const { data, error } = await supabaseAdmin
+      .from("passageiros")
+      .select(`
+        id,
+        enviar_notificacoes,
+        ${PASSAGEIRO_RESPONSAVEIS_SELECT}
+      `)
+      .eq("id", passageiroId)
+      .single();
+
+    if (error || !data) return [];
+    if (data.enviar_notificacoes === false) return [];
+
+    const rawLinks = (data.responsaveis as any[]) || [];
+    const habilitados = rawLinks.filter((l: any) => l.notificacoes_rota_habilitadas !== false);
+
+    const result: Array<{ id: string; nome: string; telefone: string; tipo: string; parentesco: string | null }> = [];
+
+    for (const link of habilitados) {
+      const resp = Array.isArray(link.responsavel) ? link.responsavel[0] : link.responsavel;
+      if (resp?.telefone && resp.telefone.trim() !== "") {
+        result.push({
+          id: resp.id,
+          nome: resp.nome || "Responsável",
+          telefone: resp.telefone.trim(),
+          tipo: link.tipo,
+          parentesco: link.parentesco || null,
+        });
+      }
+    }
+
+    return result;
   },
 
   async listParaCobrancaAutomatica(usuarioId: string) {
@@ -398,7 +435,7 @@ export const passageiroRepository = {
   /**
    * Vincula responsável a um passageiro na pivô passageiro_responsaveis
    */
-  async linkPassageiroResponsavel(passageiroId: string, responsavelId: string, tipo: string = TipoResponsavel.PRINCIPAL, parentesco?: string | null) {
+  async linkPassageiroResponsavel(passageiroId: string, responsavelId: string, tipo: string = TipoResponsavel.PRINCIPAL, parentesco?: string | null, notificacoes_rota_habilitadas?: boolean) {
     if (tipo === TipoResponsavel.PRINCIPAL) {
       await supabaseAdmin
         .from("passageiro_responsaveis")
@@ -414,6 +451,7 @@ export const passageiroRepository = {
         responsavel_id: responsavelId,
         tipo,
         parentesco: parentesco !== undefined ? (parentesco || null) : undefined,
+        notificacoes_rota_habilitadas: notificacoes_rota_habilitadas !== undefined ? notificacoes_rota_habilitadas : true,
         updated_at: new Date().toISOString()
       }, { onConflict: "passageiro_id,responsavel_id" })
       .select()

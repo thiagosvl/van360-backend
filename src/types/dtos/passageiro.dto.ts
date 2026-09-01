@@ -35,6 +35,7 @@ export const responsavelPrincipalInputSchema = z.object({
   cep: optionalString,
   referencia: optionalString,
   complemento: optionalString,
+  notificacoes_rota_habilitadas: z.boolean().optional().default(true),
 });
 
 export const createPassageiroSchema = z.object({
@@ -163,10 +164,16 @@ export const createResponsavelAdicionalSchema = z.object({
   complemento: optionalString,
   passageiroId: optionalString,
   tornar_principal: z.boolean().optional(),
+  notificacoes_rota_habilitadas: z.boolean().optional().default(true),
 });
 
 export type CreateResponsavelAdicionalDTO = z.infer<typeof createResponsavelAdicionalSchema>;
 
 export const updateResponsavelAdicionalSchema = createResponsavelAdicionalSchema.partial();
 export type UpdateResponsavelAdicionalDTO = z.infer<typeof updateResponsavelAdicionalSchema>;
+
+export const toggleNotificacoesRotaResponsavelSchema = z.object({
+  status: z.boolean().optional(),
+});
+export type ToggleNotificacoesRotaResponsavelDTO = z.infer<typeof toggleNotificacoesRotaResponsavelSchema>;
 
