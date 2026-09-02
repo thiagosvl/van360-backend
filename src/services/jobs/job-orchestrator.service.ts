@@ -19,7 +19,7 @@ export const jobOrchestratorService = {
         throw err;
       }),
       cobrancaService.gerarCobrancasMensaisParaTodos().catch((err: Error) => {
-        logger.error({ err }, "[JobOrchestrator] Erro ao processar parcelas de passageiros");
+        logger.error({ err }, "[JobOrchestrator] Erro ao processar parcelas de alunos");
         throw err;
       })
     ];

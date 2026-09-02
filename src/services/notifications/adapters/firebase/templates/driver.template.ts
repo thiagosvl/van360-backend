@@ -56,7 +56,7 @@ export class FirebaseDriverTemplates {
 
         return {
             title: "Mais tempo para você! 🎁",
-            body: `Olá ${driverName}, liberamos +${bonusDays} dias gratuitos para você testar o Van360 com calma. Aproveite para cadastrar seus passageiros!`,
+            body: `Olá ${driverName}, liberamos +${bonusDays} dias gratuitos para você testar o Van360 com calma. Aproveite para cadastrar seus alunos!`,
             data: {
                 action: PushNotificationAction.OPEN_HOME,
                 userId: (ctx.usuarioId || ctx.userId || "") as string
@@ -102,7 +102,7 @@ export class FirebaseDriverTemplates {
     }
 
     static contractSignedDriver(ctx: Record<string, unknown>): FirebaseMessagePayload {
-        const passName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro as string, "Passageiro");
+        const passName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro as string, "Aluno");
         const rawTokenOrLink = (ctx.linkAssinatura || ctx.linkContrato || ctx.contratoUrl || ctx.tokenAssinatura || ctx.token || "") as string;
         const contractUrl = NotificationUrlBuilder.getContractSignatureUrl(rawTokenOrLink);
 
@@ -198,7 +198,7 @@ export class FirebaseDriverTemplates {
         const qtdAtrasados = typeof ctx.qtdAtrasados === "number" ? ctx.qtdAtrasados : Number(ctx.qtdAtrasados) || 0;
 
         let title = "Pagamentos da Semana 🚐💵";
-        let body = "Confira os pagamentos dos seus passageiros no app.";
+        let body = "Confira os pagamentos dos seus alunos no app.";
 
         if (totalProximos > 0 && totalAtrasado > 0) {
             const proximosLabel = qtdProximos === 1 ? "1 parcela" : `${qtdProximos} parcelas`;
@@ -228,7 +228,7 @@ export class FirebaseDriverTemplates {
     static birthdayReminder(ctx: Record<string, unknown>): FirebaseMessagePayload {
         return {
             title: "Aniversariantes da Semana 🎂",
-            body: "Confira quem faz aniversário esta semana e dê os parabéns aos seus passageiros!",
+            body: "Confira quem faz aniversário esta semana e dê os parabéns aos seus alunos!",
             data: {
                 action: PushNotificationAction.OPEN_BIRTHDAYS,
                 userId: (ctx.usuarioId || ctx.userId || "") as string

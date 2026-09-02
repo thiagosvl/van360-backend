@@ -128,7 +128,7 @@ export const DriverTemplates = {
             : "Pague o Pix enviado anteriormente (ou acesse o aplicativo) para reativar seu acesso na hora.";
 
         return textPart(`🚨 *Acesso temporariamente pausado*\n\n` +
-            `${getFirstName(ctx.nomeMotorista)}, não identificamos o pagamento da sua assinatura${planoStr}${valorStr}. Por isso, as cobranças automáticas para os seus passageiros foram pausadas.\n\n` +
+            `${getFirstName(ctx.nomeMotorista)}, não identificamos o pagamento da sua assinatura${planoStr}${valorStr}. Por isso, as cobranças automáticas para os seus alunos foram pausadas.\n\n` +
             `🔓 _A boa notícia é que todos os seus dados estão a salvo! ${instrucao}_`);
     },
 

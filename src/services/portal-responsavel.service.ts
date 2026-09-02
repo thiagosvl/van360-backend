@@ -142,7 +142,7 @@ export const portalResponsavelService = {
     const target = passageiros.find(p => p.id === passageiroId);
 
     if (!target) {
-      throw new AppError("Acesso não autorizado para este passageiro.", 403);
+      throw new AppError("Acesso não autorizado para este aluno.", 403);
     }
 
     return target;
@@ -200,7 +200,7 @@ export const portalResponsavelService = {
       if (rotasDisponiveis.length === 1) {
         rotaId = rotasDisponiveis[0].id;
       } else if (rotasDisponiveis.length === 0) {
-        throw new AppError("O passageiro não está vinculado a nenhuma rota para registrar ausência.", 400);
+        throw new AppError("O aluno não está vinculado a nenhuma rota para registrar ausência.", 400);
       } else {
         throw new AppError("Selecione a qual rota a ausência se refere.", 400);
       }

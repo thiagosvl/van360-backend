@@ -25,8 +25,8 @@ export const adminNotificationController = {
       return reply.status(200).send(result);
     } catch (err: unknown) {
       const error = err as Error;
-      logger.error({ error: error.message, id }, "[AdminNotificationController] Erro ao buscar notificações do passageiro.");
-      return reply.status(500).send({ error: "Erro ao buscar notificações do passageiro." });
+      logger.error({ error: error.message, id }, "[AdminNotificationController] Erro ao buscar notificações do aluno.");
+      return reply.status(500).send({ error: "Erro ao buscar notificações do aluno." });
     }
   },
 };

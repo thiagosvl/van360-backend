@@ -157,7 +157,7 @@ class ReceiptService {
                                     style: { display: "flex", flexDirection: "column", gap: "20px" },
                                     children: [
                                         this.renderRow("Pagador", pagadorFormatado),
-                                        passageiroFormatado ? this.renderRow("Passageiro", passageiroFormatado) : null,
+                                        passageiroFormatado ? this.renderRow("Aluno", passageiroFormatado) : null,
                                         data.pagadorDocumento ? this.renderRow("CPF/CNPJ", formatCpfCnpj(data.pagadorDocumento)) : null,
                                         this.renderRow("Data do Pagamento", data.data),
                                         data.mes ? this.renderRow("Mês de Referência", `${data.descricao || 'Parcela'} de ${referencia}`) :

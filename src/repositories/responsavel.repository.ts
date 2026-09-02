@@ -464,7 +464,7 @@ export const responsavelRepository = {
       .maybeSingle();
 
     if (existingLink) {
-      throw new AppError("Este responsável já está vinculado a este passageiro.", 400);
+      throw new AppError("Este responsável já está vinculado a este aluno.", 400);
     }
 
     if (data.tornar_principal === true) {

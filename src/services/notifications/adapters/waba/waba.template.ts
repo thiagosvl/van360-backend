@@ -64,7 +64,7 @@ export class WabaTemplates {
 
     static vencimentoProximo(ctx: Record<string, unknown>): WabaTemplatePayload {
         const respName = NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string, "Responsável");
-        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Passageiro");
+        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
         const dataStr = NotificationContextFormatter.formatDate(ctx.dataVencimento as string);
         
@@ -108,7 +108,7 @@ export class WabaTemplates {
 
     static vencimentoHoje(ctx: Record<string, unknown>): WabaTemplatePayload {
         const respName = NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string, "Responsável");
-        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Passageiro");
+        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
         
         const pixButton = this.buildPixButtonComponent(ctx);
@@ -149,7 +149,7 @@ export class WabaTemplates {
 
     static cobrancaAtrasado(ctx: Record<string, unknown>): WabaTemplatePayload {
         const respName = NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string, "Responsável");
-        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Passageiro");
+        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
         const mesLabel = NotificationContextFormatter.getMonthLabel(ctx.mes as number | string);
         
@@ -193,7 +193,7 @@ export class WabaTemplates {
 
     static paymentReceipt(ctx: Record<string, unknown>): WabaTemplatePayload {
         const respName = NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string, "Responsável");
-        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Passageiro");
+        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
         const mesLabel = NotificationContextFormatter.getMonthLabel(ctx.mes as number | string);
         const reciboUrl = (ctx.reciboUrl || ctx.mediaUrl || "") as string;
@@ -228,7 +228,7 @@ export class WabaTemplates {
 
     static contratoDisponivel(ctx: Record<string, unknown>): WabaTemplatePayload {
         const respName = NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string, "Responsável");
-        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Passageiro");
+        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         
         const rawTokenOrLink = (ctx.linkAssinatura || ctx.linkContrato || ctx.contratoUrl || ctx.tokenAssinatura || ctx.token || "") as string;
         const fullContractUrl = NotificationUrlBuilder.getContractSignatureUrl(rawTokenOrLink);

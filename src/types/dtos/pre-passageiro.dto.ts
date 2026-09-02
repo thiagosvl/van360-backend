@@ -3,7 +3,7 @@ import { PassageiroGenero, PassageiroModalidade, PeriodoEnum } from '../enums.js
 
 export const createPrePassageiroSchema = z.object({
   usuario_id: z.string().uuid('ID do motorista inválido'),
-  nome: z.string().min(2, 'Nome do passageiro é obrigatório'),
+  nome: z.string().min(2, 'Nome do aluno é obrigatório'),
   nome_responsavel: z.string().min(2, 'Nome do responsável é obrigatório'),
 
   cpf_responsavel: z.string().optional().or(z.literal('')),

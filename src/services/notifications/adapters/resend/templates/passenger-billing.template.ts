@@ -57,7 +57,7 @@ export class ResendPassengerBillingTemplates {
 
     static dueSoon(ctx: ResendTemplateContext): ResendTemplatePayload {
         const respFirstName = NotificationContextFormatter.getFirstName(ctx.nomeResponsavel, "Responsável");
-        const passDisplayName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro, "Passageiro");
+        const passDisplayName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro, "Aluno");
         const valorStr = formatCurrency(Number(ctx.valor) || 0);
         const dataVencStr = formatToBrazilianDate((ctx.dataVencimento as string) || "");
         const mesName = getMonthNameBR(ctx.mes as number);
@@ -91,7 +91,7 @@ export class ResendPassengerBillingTemplates {
 
     static dueToday(ctx: ResendTemplateContext): ResendTemplatePayload {
         const respFirstName = NotificationContextFormatter.getFirstName(ctx.nomeResponsavel, "Responsável");
-        const passDisplayName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro, "Passageiro");
+        const passDisplayName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro, "Aluno");
         const valorStr = formatCurrency(Number(ctx.valor) || 0);
         const mesName = getMonthNameBR(ctx.mes as number);
         const refMesStr = mesName ? ` referente ao mês de <strong>${mesName}</strong>` : "";
@@ -120,7 +120,7 @@ export class ResendPassengerBillingTemplates {
 
     static overdue(ctx: ResendTemplateContext): ResendTemplatePayload {
         const respFirstName = NotificationContextFormatter.getFirstName(ctx.nomeResponsavel, "Responsável");
-        const passDisplayName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro, "Passageiro");
+        const passDisplayName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro, "Aluno");
         const valorStr = formatCurrency(Number(ctx.valor) || 0);
         const dataVencStr = formatToBrazilianDate((ctx.dataVencimento as string) || "");
         const mesName = getMonthNameBR(ctx.mes as number);

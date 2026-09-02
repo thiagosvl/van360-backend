@@ -445,7 +445,7 @@ const iniciarRota = async (rotaId: string, usuarioId: string, notificarPais: boo
   });
 
   if (paradasValidas.length === 0) {
-    throw new AppError("Não há passageiros ativos cadastrados nesta rota.", 400);
+    throw new AppError("Não há alunos ativos cadastrados nesta rota.", 400);
   }
 
   const { dataOwnerId } = await resolveDataOwnerId(usuarioId);
@@ -490,7 +490,7 @@ const iniciarRota = async (rotaId: string, usuarioId: string, notificarPais: boo
       logger.error({ err, execId: exec.id }, "Erro ao disparar notificação de rota iniciada")
     );
     notifyNextPendingPassengerStop(exec.id).catch((err) =>
-      logger.error({ err, execId: exec.id }, "Erro ao notificar próximo passageiro na inicialização da rota")
+      logger.error({ err, execId: exec.id }, "Erro ao notificar próximo aluno na inicialização da rota")
     );
   }
 
@@ -520,7 +520,7 @@ const iniciarRota = async (rotaId: string, usuarioId: string, notificarPais: boo
 
   return {
     ...result,
-    alertaInativos: inativosContador > 0 ? `${inativosContador} passageiro(s) inativo(s) foram desconsiderados nesta corrida.` : null
+    alertaInativos: inativosContador > 0 ? `${inativosContador} aluno(s) inativo(s) foram desconsiderados nesta corrida.` : null
   };
 };
 
@@ -995,7 +995,7 @@ const checkEFinalizarSeTodasParadasConcluidas = async (execucaoId: string): Prom
 };
 
 const registrarAusenciaAntecipada = async (data: CreateAusenciaDTO & { registrado_por?: string }): Promise<any> => {
-  if (!data.passageiro_id) throw new AppError("Passageiro é obrigatório", 400);
+  if (!data.passageiro_id) throw new AppError("Aluno é obrigatório", 400);
   if (!data.rota_id) throw new AppError("Rota é obrigatória", 400);
   if (!data.data_ausencia) throw new AppError("Data da ausência é obrigatória", 400);
 
@@ -1022,7 +1022,7 @@ const registrarAusenciaAntecipada = async (data: CreateAusenciaDTO & { registrad
       entidade_tipo: AtividadeEntidadeTipo.ROTA,
       entidade_id: data.rota_id,
       acao: AtividadeAcao.PASSAGEIRO_STATUS,
-      descricao: `Registrou ausência antecipada para o passageiro "${inserted?.passageiro?.nome || 'Passageiro'}" na data ${data.data_ausencia}.`,
+      descricao: `Registrou ausência antecipada para o aluno "${inserted?.passageiro?.nome || 'Aluno'}" na data ${data.data_ausencia}.`,
       meta: { passageiro_id: data.passageiro_id, rota_id: data.rota_id, data_ausencia: data.data_ausencia }
     });
   }
@@ -1103,7 +1103,7 @@ const listAusenciasByRota = async (rotaId: string, dataAusencia?: string): Promi
 };
 
 const listAusenciasByPassageiro = async (passageiroId: string): Promise<any[]> => {
-  if (!passageiroId) throw new AppError("ID do passageiro é obrigatório", 400);
+  if (!passageiroId) throw new AppError("ID do aluno é obrigatório", 400);
 
   const { data: ausencias, error } = await routeRepository.getAusenciasByPassageiro(passageiroId);
   if (error) throw error;
@@ -1112,7 +1112,7 @@ const listAusenciasByPassageiro = async (passageiroId: string): Promise<any[]> =
 };
 
 const listRotasByPassageiro = async (passageiroId: string): Promise<any[]> => {
-  if (!passageiroId) throw new AppError("ID do passageiro é obrigatório", 400);
+  if (!passageiroId) throw new AppError("ID do aluno é obrigatório", 400);
 
   const { data, error } = await routeRepository.getRotasByPassageiro(passageiroId);
   if (error) throw error;

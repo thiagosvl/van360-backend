@@ -52,7 +52,7 @@ export async function checkSubscriptionAccess(
         code: "SAAS_EXPIRED",
         message: isSubAccount
           ? "O acesso à sua frota está temporariamente suspenso. Por favor, entre em contato com o seu gestor."
-          : "Sua conta está em modo leitura. Regularize seu pagamento para continuar criando cobranças e gerenciando passageiros."
+          : "Sua conta está em modo leitura. Regularize seu pagamento para continuar criando cobranças e gerenciando alunos."
       });
     }
   } catch (err) {

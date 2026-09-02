@@ -106,8 +106,8 @@ class ContractService {
 
     // 2. Buscar dados completos do passageiro no repositório
     const passageiro = await passageiroRepository.getByIdCompleto(passageiroId, usuarioId).catch((passageiroError) => {
-      logger.error({ passageiroError }, 'Passageiro não encontrado');
-      throw new AppError('Passageiro não encontrado', 404);
+      logger.error({ passageiroError }, 'Aluno não encontrado');
+      throw new AppError('Aluno não encontrado', 404);
     });
 
     const respInfo = _getResponsavelInfoFromPassageiro(passageiro);
@@ -118,7 +118,7 @@ class ContractService {
       : "";
       
     if (!respInfo.nome || nomeRespNormalized.includes("responsavel nao info") || nomeRespNormalized.includes("responsavel teste")) {
-      throw new AppError("O nome real do responsável é obrigatório para gerar o contrato. Edite o passageiro para continuar.", 400);
+      throw new AppError("O nome real do responsável é obrigatório para gerar o contrato. Edite o aluno para continuar.", 400);
     }
 
     if (!respInfo.cpf) {
@@ -267,7 +267,7 @@ class ContractService {
 
     const { data: passageiro, error: passageiroError } = await passageiroRepository.getById(data.passageiroId, usuarioId);
     if (passageiroError || !passageiro) {
-      throw new AppError('Passageiro não encontrado', 404);
+      throw new AppError('Aluno não encontrado', 404);
     }
 
     const cleanBase64 = data.arquivoBase64
@@ -612,7 +612,7 @@ class ContractService {
     const passageiro = contrato.passageiro;
 
     const respInfo = _getResponsavelInfoFromPassageiro(passageiro);
-    if (!respInfo.telefone) throw new AppError('Passageiro sem telefone do responsável', 400);
+    if (!respInfo.telefone) throw new AppError('Aluno sem telefone do responsável', 400);
 
     await addToContractQueue({
       contratoId: contrato.id,
@@ -684,7 +684,7 @@ class ContractService {
     const clausulas = config.clausulas !== undefined ? config.clausulas : (savedConfig.clausulas || []);
 
     const dadosContrato: DadosContrato = {
-      nomePassageiro: "Passageiro Exemplo da Silva",
+      nomePassageiro: "Aluno Exemplo da Silva",
       nomeResponsavel: "Responsável Exemplo da Silva",
       cpfResponsavel: "000.000.000-00",
       telefoneResponsavel: "(11) 99999-9999",

@@ -131,8 +131,8 @@ export const cobrancaService = {
 
     const passageiro = await passageiroRepository.getResponsavelInfo(data.passageiro_id);
 
-    if (!passageiro) throw new AppError("Passageiro não encontrado para gerar cobrança.", 404);
-    if ((passageiro as any).isento === true) throw new AppError("Passageiro é isento de pagamento e não possui cobranças.", 400);
+    if (!passageiro) throw new AppError("Aluno não encontrado para gerar cobrança.", 404);
+    if ((passageiro as any).isento === true) throw new AppError("Aluno é isento de pagamento e não possui cobranças.", 400);
 
     const valorNumerico = typeof data.valor === "string" ? moneyToNumber(data.valor) : data.valor;
 
@@ -289,7 +289,7 @@ export const cobrancaService = {
       entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
       entidade_id: id,
       acao: AtividadeAcao.COBRANCA_EDITADA,
-      descricao: `Cobrança de ${cobrancaOriginal?.mes}/${cobrancaOriginal?.ano} do passageiro ${passageiroNomeUpdate} editada pelo motorista.`,
+      descricao: `Cobrança de ${cobrancaOriginal?.mes}/${cobrancaOriginal?.ano} do aluno ${passageiroNomeUpdate} editada pelo motorista.`,
       meta: {
         antes: { valor: cobrancaOriginal?.valor, vencimento: cobrancaOriginal?.data_vencimento },
         depois: { valor: updated.valor, vencimento: updated.data_vencimento },
@@ -327,7 +327,7 @@ export const cobrancaService = {
       entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
       entidade_id: id,
       acao: AtividadeAcao.COBRANCA_EXCLUIDA,
-      descricao: `Parcela de ${cobranca.mes}/${cobranca.ano} do passageiro ${passageiroNomeDelete} foi cancelada.`,
+      descricao: `Parcela de ${cobranca.mes}/${cobranca.ano} do aluno ${passageiroNomeDelete} foi cancelada.`,
       meta: {
         valor: cobranca.valor,
         mes: cobranca.mes,
@@ -362,7 +362,7 @@ export const cobrancaService = {
       entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
       entidade_id: id,
       acao: AtividadeAcao.COBRANCA_CRIADA,
-      descricao: `Parcela de ${cobranca.mes}/${cobranca.ano} do passageiro ${passageiroNomeRestore} foi reativada para pendente.`,
+      descricao: `Parcela de ${cobranca.mes}/${cobranca.ano} do aluno ${passageiroNomeRestore} foi reativada para pendente.`,
       meta: {
         valor: cobranca.valor,
         mes: cobranca.mes,
@@ -884,7 +884,7 @@ export const cobrancaService = {
 
       const respInfo = _getResponsavelFromPassageiro(passageiroInfo);
       return {
-        passageiroNome: passageiroInfo?.nome || "Passageiro",
+        passageiroNome: passageiroInfo?.nome || "Aluno",
         responsavelNome: respInfo.nome,
         telefoneResponsavel: respInfo.telefone,
         valor: Number(c.valor) || 0,

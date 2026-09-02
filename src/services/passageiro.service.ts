@@ -178,7 +178,7 @@ const _syncResponsavelPrincipal = async (
 
 const createPassageiro = async (data: CreatePassageiroDTO, isPreCadastro: boolean = false): Promise<any> => {
     if (!data.usuario_id) throw new Error("Usuário obrigatório");
-    if (!data.nome) throw new Error("Nome do passageiro é obrigatório");
+    if (!data.nome) throw new Error("Nome do aluno é obrigatório");
 
     const passageiroData = _preparePassageiroData(data, data.usuario_id, false);
 
@@ -197,7 +197,7 @@ const createPassageiro = async (data: CreatePassageiroDTO, isPreCadastro: boolea
             entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
             entidade_id: inserted.id,
             acao: AtividadeAcao.PASSAGEIRO_CRIADO,
-            descricao: `Novo passageiro ${inserted.nome} cadastrado.`,
+            descricao: `Novo aluno ${inserted.nome} cadastrado.`,
             meta: {
                 nome: inserted.nome,
                 responsavel: respPrincipalData?.nome || null,
@@ -211,10 +211,10 @@ const createPassageiro = async (data: CreatePassageiroDTO, isPreCadastro: boolea
 };
 
 const updatePassageiro = async (id: string, data: UpdatePassageiroDTO, targetOwnerId?: string, assignedVeiculoId?: string): Promise<any> => {
-    if (!id) throw new Error("ID do passageiro é obrigatório");
+    if (!id) throw new Error("ID do aluno é obrigatório");
 
     const estadoAnterior = await getPassageiro(id, targetOwnerId, assignedVeiculoId);
-    if (!estadoAnterior) throw new AppError("Passageiro não encontrado", 404);
+    if (!estadoAnterior) throw new AppError("Aluno não encontrado", 404);
 
     const passageiroData = _preparePassageiroData(data, undefined, true);
 
@@ -232,7 +232,7 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO, targetOwn
 };
 
 const deletePassageiro = async (id: string, targetOwnerId?: string, assignedVeiculoId?: string): Promise<void> => {
-    if (!id) throw new Error("ID do passageiro é obrigatório");
+    if (!id) throw new Error("ID do aluno é obrigatório");
 
     const passageiro = await getPassageiro(id, targetOwnerId, assignedVeiculoId);
 
@@ -245,7 +245,7 @@ const deletePassageiro = async (id: string, targetOwnerId?: string, assignedVeic
             entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
             entidade_id: id,
             acao: AtividadeAcao.PASSAGEIRO_EXCLUIDO,
-            descricao: `Passageiro ${passageiro.nome} removido permanentemente.`,
+            descricao: `Aluno ${passageiro.nome} removido permanentemente.`,
             meta: {
                 backup: passageiro
             }
@@ -257,7 +257,7 @@ const getPassageiro = async (id: string, targetOwnerId?: string, assignedVeiculo
     const { data, error } = await passageiroRepository.getById(id);
 
     if (error) throw error;
-    if (!data) throw new AppError("Passageiro não encontrado", 404);
+    if (!data) throw new AppError("Aluno não encontrado", 404);
 
     if (targetOwnerId && data.usuario_id !== targetOwnerId) {
         throw new AppError("Acesso negado", 403);
@@ -332,7 +332,7 @@ const toggleAtivo = async (passageiroId: string, novoStatus: boolean, targetOwne
     const pass = await getPassageiro(passageiroId, targetOwnerId, assignedVeiculoId);
     const { error } = await passageiroRepository.updateAtivo(passageiroId, novoStatus);
 
-    if (error) throw new Error(`Falha ao alterar status do passageiro: ${error.message}`);
+    if (error) throw new Error(`Falha ao alterar status do aluno: ${error.message}`);
 
     // --- LOG DE AUDITORIA ---
     if (pass) {
@@ -357,7 +357,7 @@ const countListPassageirosByUsuario = async (
 ): Promise<number> => {
     const { count, error } = await passageiroRepository.countByUsuario(usuarioId, filtros);
 
-    if (error) throw new Error(error.message || "Erro ao contar passageiros");
+    if (error) throw new Error(error.message || "Erro ao contar alunos");
     return count || 0;
 };
 
@@ -419,7 +419,7 @@ const finalizePreCadastro = async (
         entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
         entidade_id: novoPassageiro.id,
         acao: AtividadeAcao.PRE_CADASTRO_CONCLUIDO,
-        descricao: `Cadastro Pendente de (${novoPassageiro.nome}) aprovado como passageiro.`,
+        descricao: `Cadastro Pendente de (${novoPassageiro.nome}) aprovado como aluno.`,
         meta: { pre_id: prePassageiroId }
     });
 
@@ -446,7 +446,7 @@ const listarAniversariantesDoMes = async (usuarioId: string, mes: number, veicul
     if (mes < 1 || mes > 12) throw new AppError("Mês inválido", 400);
 
     const { data: todosAtivos, error } = await passageiroRepository.listAniversariantesInfo(usuarioId, veiculoId);
-    if (error) throw new AppError("Erro ao buscar passageiros para aniversários", 500);
+    if (error) throw new AppError("Erro ao buscar alunos para aniversários", 500);
 
     let passageirosSemData = 0;
     const passageirosSemDataList: any[] = [];
@@ -589,7 +589,7 @@ const processarLembreteAniversarioMotorista = async (params: {
     const { semanas, passageirosSemData, totalPassageiros } = await listarAniversariantesDoMes(motoristaId, mes);
 
     if (totalPassageiros === 0) {
-        return { sent: false, reason: "Sem passageiros cadastrados" };
+        return { sent: false, reason: "Sem alunos cadastrados" };
     }
 
     const semanaAtualNoMes = Math.ceil(dia / 7);

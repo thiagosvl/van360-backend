@@ -211,7 +211,7 @@ export class InHouseContractProvider implements ContractProvider {
 
     currentY -= 70;
 
-    currentY = drawHeader('PASSAGEIRO(A)', currentY);
+    currentY = drawHeader('ALUNO(A)', currentY);
     page.drawText(`Nome: ${dados.nomePassageiro}`, { x: margin, y: currentY, size: smallTextSize, font });
     page.drawText(`Escola: ${dados.nomeEscola}`, { x: 300, y: currentY, size: smallTextSize, font });
 

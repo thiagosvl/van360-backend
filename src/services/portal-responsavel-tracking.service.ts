@@ -55,7 +55,7 @@ export const portalResponsavelTrackingService = {
     const payload = await portalResponsavelService.verifyResponsavelToken(token);
 
     if (!payload.passageiro_ids.includes(passageiroId)) {
-      throw new AppError("Acesso não autorizado para este passageiro.", 403);
+      throw new AppError("Acesso não autorizado para este aluno.", 403);
     }
 
     const { data: paradaAtiva, error: paradaError } = await supabaseAdmin
@@ -110,7 +110,7 @@ export const portalResponsavelTrackingService = {
       .maybeSingle();
 
     if (paradaError) {
-      throw new AppError(`Erro ao buscar rastreamento do passageiro: ${paradaError.message}`, 500);
+      throw new AppError(`Erro ao buscar rastreamento do aluno: ${paradaError.message}`, 500);
     }
 
     if (!paradaAtiva || !paradaAtiva.execucao) {

@@ -18,7 +18,7 @@ export class NotificationContextFormatter {
     /**
      * Extrai o nome e o primeiro sobrenome (2 primeiros nomes) reutilizando o utilitário central getFirstAndSecondName
      */
-    static getFirstAndLastName(fullName?: string, fallback = "Passageiro"): string {
+    static getFirstAndLastName(fullName?: string, fallback = "Aluno"): string {
         const formatted = getFirstAndSecondName(fullName);
         return formatted || fallback;
     }

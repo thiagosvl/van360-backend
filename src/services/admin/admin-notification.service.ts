@@ -45,7 +45,7 @@ export const adminNotificationService = {
     );
 
     if (error) {
-      logger.error({ error, passageiroId }, "[AdminNotificationService] Erro ao buscar notificações do passageiro.");
+      logger.error({ error, passageiroId }, "[AdminNotificationService] Erro ao buscar notificações do aluno.");
       throw error;
     }
 

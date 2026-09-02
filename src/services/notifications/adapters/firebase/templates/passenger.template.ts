@@ -16,7 +16,7 @@ export class FirebasePassengerTemplates {
     }
 
     static routeStartedVolta(ctx: Record<string, unknown>): FirebaseMessagePayload {
-        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Passageiro");
+        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         return {
             title: "Voltando para Casa! 🏡",
             body: `A van já saiu da escola com ${passName} e iniciou o trajeto de volta!`,
@@ -28,7 +28,7 @@ export class FirebasePassengerTemplates {
     }
 
     static routeEnRouteIda(ctx: Record<string, unknown>): FirebaseMessagePayload {
-        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Passageiro");
+        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         return {
             title: "Van a Caminho! 🚌",
             body: `A van está a caminho da sua residência para buscar ${passName}.`,
@@ -40,10 +40,10 @@ export class FirebasePassengerTemplates {
     }
 
     static routeBoardedIda(ctx: Record<string, unknown>): FirebaseMessagePayload {
-        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Passageiro");
+        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         return {
             title: "Embarque Confirmado ✅",
-            body: `O passageiro ${passName} já embarcou na van a caminho da escola!`,
+            body: `O aluno ${passName} já embarcou na van a caminho da escola!`,
             data: {
                 action: PushNotificationAction.OPEN_ROUTE,
                 passageiroId: (ctx.passageiroId || "") as string
@@ -52,10 +52,10 @@ export class FirebasePassengerTemplates {
     }
 
     static routeBoardingCancelledIda(ctx: Record<string, unknown>): FirebaseMessagePayload {
-        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Passageiro");
+        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         return {
             title: "Aviso da Rota ⚠️",
-            body: `Por favor, desconsidere a confirmação anterior. O passageiro ${passName} não embarcou na van.`,
+            body: `Por favor, desconsidere a confirmação anterior. O aluno ${passName} não embarcou na van.`,
             data: {
                 action: PushNotificationAction.OPEN_ROUTE,
                 passageiroId: (ctx.passageiroId || "") as string
@@ -64,10 +64,10 @@ export class FirebasePassengerTemplates {
     }
 
     static routeEnRouteVolta(ctx: Record<string, unknown>): FirebaseMessagePayload {
-        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Passageiro");
+        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         return {
             title: `${passName} Chegando! 🏡`,
-            body: "A van está a caminho da sua residência para desembarcar o passageiro.",
+            body: "A van está a caminho da sua residência para desembarcar o aluno.",
             data: {
                 action: PushNotificationAction.OPEN_ROUTE,
                 passageiroId: (ctx.passageiroId || "") as string
@@ -76,10 +76,10 @@ export class FirebasePassengerTemplates {
     }
 
     static routeDisembarkedVolta(ctx: Record<string, unknown>): FirebaseMessagePayload {
-        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Passageiro");
+        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         return {
             title: "Desembarque Confirmado ✅",
-            body: `O passageiro ${passName} desembarcou com segurança!`,
+            body: `O aluno ${passName} desembarcou com segurança!`,
             data: {
                 action: PushNotificationAction.OPEN_ROUTE,
                 passageiroId: (ctx.passageiroId || "") as string
@@ -88,10 +88,10 @@ export class FirebasePassengerTemplates {
     }
 
     static routeDisembarkingCancelledVolta(ctx: Record<string, unknown>): FirebaseMessagePayload {
-        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Passageiro");
+        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         return {
             title: "Aviso da Rota ⚠️",
-            body: `Por favor, desconsidere a confirmação anterior. O passageiro ${passName} não desembarcou da van.`,
+            body: `Por favor, desconsidere a confirmação anterior. O aluno ${passName} não desembarcou da van.`,
             data: {
                 action: PushNotificationAction.OPEN_ROUTE,
                 passageiroId: (ctx.passageiroId || "") as string
@@ -111,7 +111,7 @@ export class FirebasePassengerTemplates {
     }
 
     static dueSoonParent(ctx: Record<string, unknown>): FirebaseMessagePayload {
-        const passName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro as string, "Passageiro");
+        const passName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro as string, "Aluno");
         const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
         const dataStr = NotificationContextFormatter.formatDate(ctx.dataVencimento as string);
         const diasAntecedencia = ctx.diasAntecedencia as number | undefined;
@@ -135,7 +135,7 @@ export class FirebasePassengerTemplates {
     }
 
     static dueTodayParent(ctx: Record<string, unknown>): FirebaseMessagePayload {
-        const passName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro as string, "Passageiro");
+        const passName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro as string, "Aluno");
         const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
 
         return {
@@ -151,7 +151,7 @@ export class FirebasePassengerTemplates {
     }
 
     static overdueParent(ctx: Record<string, unknown>): FirebaseMessagePayload {
-        const passName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro as string, "Passageiro");
+        const passName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro as string, "Aluno");
         const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
         const diasAtraso = ctx.diasAtraso as number | undefined;
 
@@ -174,7 +174,7 @@ export class FirebasePassengerTemplates {
     }
 
     static paymentReceiptParent(ctx: Record<string, unknown>): FirebaseMessagePayload {
-        const passName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro as string, "Passageiro");
+        const passName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro as string, "Aluno");
         const mes = ctx.mes as number | undefined;
         const ano = ctx.ano as number | undefined;
 
@@ -197,7 +197,7 @@ export class FirebasePassengerTemplates {
     }
 
     static contractSignedParent(ctx: Record<string, unknown>): FirebaseMessagePayload {
-        const passName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro as string, "Passageiro");
+        const passName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro as string, "Aluno");
         const rawTokenOrLink = (ctx.linkAssinatura || ctx.linkContrato || ctx.contratoUrl || ctx.tokenAssinatura || ctx.token || "") as string;
         const contractUrl = NotificationUrlBuilder.getContractSignatureUrl(rawTokenOrLink);
 

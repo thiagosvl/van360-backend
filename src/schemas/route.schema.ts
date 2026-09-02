@@ -51,7 +51,7 @@ export const reorderExecucaoSchema = z.object({
 });
 
 export const createAusenciaSchema = z.object({
-  passageiro_id: z.string().uuid("ID do passageiro é obrigatório"),
+  passageiro_id: z.string().uuid("ID do aluno é obrigatório"),
   rota_id: z.string().uuid("ID da rota é obrigatório"),
   data_ausencia: z.string().min(1, "Data é obrigatória"),
   sentido: z.nativeEnum(RouteSentido).optional().nullable()
