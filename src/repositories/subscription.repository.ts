@@ -60,13 +60,6 @@ export const subscriptionRepository = {
             .eq("id", id);
     },
 
-    async updatePreferredMethod(id: string, preferredMethodId: string) {
-        return supabaseAdmin
-            .from("assinaturas")
-            .update({ metodo_pagamento_preferencial_id: preferredMethodId })
-            .eq("id", id);
-    },
-
     async updatePreferredMethodToNull(userId: string, paymentMethodId: string) {
         return supabaseAdmin
             .from("assinaturas")

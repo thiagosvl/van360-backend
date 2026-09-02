@@ -80,16 +80,19 @@ export class ResendDriverTemplates {
         const nome = NotificationContextFormatter.getFirstName(ctx.nomeMotorista || ctx.nome, "Motorista");
         const email = (ctx.email || ctx.emailMotorista) as string | undefined;
         const fullUrl = await NotificationUrlBuilder.getSubscriptionCheckoutUrl({ autoOpen: false, email });
+        const pixCode = (ctx.pixCopiaECola || ctx.chavePix) as string | undefined;
 
         const subject = formatSubject("Lembrete de Vencimento da Assinatura");
         const preheader = "Sua assinatura do Van360 está próxima do vencimento. Acesse o sistema para renovar via Pix ou cartão.";
-        const text = `Olá, ${nome}!\n\nSua assinatura do Van360 está próxima do vencimento. Acesse o sistema para renovar via Pix ou cartão.\n\nAcesse: ${fullUrl}\n\nAtenciosamente,\nEquipe Van360`;
+        const text = `Olá, ${nome}!\n\nSua assinatura do Van360 está próxima do vencimento.${pixCode ? `\n\nPix Copia e Cola:\n${pixCode}` : ""}\n\nAcesse: ${fullUrl}\n\nAtenciosamente,\nEquipe Van360`;
 
         const contentHtml = `
             ${EmailComponents.greeting(nome)}
             ${EmailComponents.paragraph("Sua assinatura do Van360 está próxima do vencimento. Acesse a tela de pagamento para concluir a renovação via Pix ou cartão.")}
 
-            ${EmailComponents.button("Acessar Minha Assinatura", fullUrl)}
+            ${pixCode ? EmailComponents.pixCopyPasteCard(pixCode.trim()) : ""}
+
+            ${EmailComponents.button(pixCode ? "Ver Detalhes da Assinatura" : "Acessar Minha Assinatura", fullUrl)}
         `;
 
         const html = EmailComponents.layout({ subject, preheader, contentHtml });
@@ -103,16 +106,19 @@ export class ResendDriverTemplates {
         const nome = NotificationContextFormatter.getFirstName(ctx.nomeMotorista || ctx.nome, "Motorista");
         const email = (ctx.email || ctx.emailMotorista) as string | undefined;
         const fullUrl = await NotificationUrlBuilder.getSubscriptionCheckoutUrl({ autoOpen: true, email });
+        const pixCode = (ctx.pixCopiaECola || ctx.chavePix) as string | undefined;
 
         const subject = formatSubject("Assinatura Vence Hoje");
         const preheader = "Sua assinatura do Van360 vence hoje. Realize o pagamento para evitar interrupções no sistema.";
-        const text = `Olá, ${nome}!\n\nSua assinatura do Van360 vence hoje. Realize o pagamento para evitar interrupções no sistema.\n\nAcesse: ${fullUrl}\n\nAtenciosamente,\nEquipe Van360`;
+        const text = `Olá, ${nome}!\n\nSua assinatura do Van360 vence hoje. Realize o pagamento para evitar interrupções no sistema.${pixCode ? `\n\nPix Copia e Cola:\n${pixCode}` : ""}\n\nAcesse: ${fullUrl}\n\nAtenciosamente,\nEquipe Van360`;
 
         const contentHtml = `
             ${EmailComponents.greeting(nome)}
             ${EmailComponents.paragraph("Sua assinatura do Van360 vence hoje. Clique no botão abaixo para acessar a tela de renovação e pagar via Pix ou cartão.")}
 
-            ${EmailComponents.button("Pagar Assinatura", fullUrl)}
+            ${pixCode ? EmailComponents.pixCopyPasteCard(pixCode.trim()) : ""}
+
+            ${EmailComponents.button(pixCode ? "Pagar com Cartão / Outras Opções" : "Pagar Assinatura", fullUrl)}
         `;
 
         const html = EmailComponents.layout({ subject, preheader, contentHtml });

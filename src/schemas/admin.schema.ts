@@ -3,6 +3,7 @@ import { SubscriptionStatus, ConfigKey } from "../types/enums.js";
 import {
   EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS,
   EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA,
+  EVENTO_MOTORISTA_ASSINATURA_VENCENDO,
 } from "../config/constants.js";
 
 export const updateUserAdminSchema = z.object({
@@ -96,6 +97,7 @@ export const dispatchDriverNotificationSchema = z.object({
   evento: z.enum([
     EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS,
     EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA,
+    EVENTO_MOTORISTA_ASSINATURA_VENCENDO,
   ]),
 });
 export type DispatchDriverNotificationDTO = z.infer<typeof dispatchDriverNotificationSchema>;

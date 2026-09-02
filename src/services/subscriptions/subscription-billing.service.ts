@@ -358,7 +358,7 @@ export const subscriptionBillingService = {
             }
 
             if (preferredMethodId) {
-                await subscriptionRepository.updatePreferredMethod(sub.id, preferredMethodId);
+                await subscriptionRepository.updatePaymentMethod(userId, preferredMethodId, CheckoutPaymentMethod.CREDIT_CARD);
             }
 
             if (street) {

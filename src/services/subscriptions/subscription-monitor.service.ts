@@ -625,6 +625,13 @@ export const subscriptionMonitorService = {
     }
 
     const cicloRef = this.toCicloRef(sub.data_vencimento || new Date());
+    const now = getNowBR();
+    const hojeStr = toPersistenceString(now);
+    const vencimentoStr = this.toCicloRef(sub.data_vencimento || now);
+
+    if (isCard && hojeStr < vencimentoStr) {
+      return null;
+    }
 
     if (isCard && failedCount >= maxRetries) {
       logger.warn({ subId: sub.id, failedCount, cicloRef }, "[SubscriptionMonitor] Limite de tentativas de cartão atingido para o ciclo. Pulando.");
