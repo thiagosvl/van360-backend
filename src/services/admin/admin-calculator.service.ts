@@ -5,6 +5,7 @@ export interface CalculatorBaselineDTO {
   motoristas: {
     total: number;
     ativos: number;
+    pagantes: number;
     mensal: number;
     anual: number;
     vitalicio: number;
@@ -34,7 +35,7 @@ export interface CalculatorBaselineDTO {
 export class AdminCalculatorService {
   async getBaseline(): Promise<CalculatorBaselineDTO> {
     const [
-      motoristasRes,
+      usuariosRes,
       assinaturasRes,
       passageirosRes,
       wabaRes,
@@ -42,7 +43,7 @@ export class AdminCalculatorService {
     ] = await Promise.all([
       supabaseAdmin
         .from("usuarios")
-        .select("id, ativo", { count: "exact" })
+        .select("id, nome, email, ativo")
         .eq("tipo", "motorista"),
 
       supabaseAdmin
@@ -65,24 +66,55 @@ export class AdminCalculatorService {
         .eq("status", "pago"),
     ]);
 
-    const totalMotoristas = motoristasRes.count ?? 0;
+    const usuarios = usuariosRes.data || [];
     const assinaturas = assinaturasRes.data || [];
     const passageiros = passageirosRes.data || [];
     const totalWaba = wabaRes.count ?? 0;
     const faturas = faturasRes.data || [];
 
+    // Mapear contagem de passageiros ativos por motorista
+    const passageirosAtivosPorMotorista: Record<string, number> = {};
+    for (const p of passageiros) {
+      if (p.ativo) {
+        passageirosAtivosPorMotorista[p.usuario_id] = (passageirosAtivosPorMotorista[p.usuario_id] || 0) + 1;
+      }
+    }
+
+    // Filtrar motoristas válidos (descartar testes da Google Play e contas de desenvolvedor)
+    const motoristasValidosMap = new Map<string, { id: string; nome: string; email: string }>();
+    for (const u of usuarios) {
+      const email = (u.email || "").toLowerCase();
+      const isInternalTest = email.includes("teste-google") || email.includes("@van360.com.br") || email.includes("thiago-svl");
+      if (!isInternalTest && u.ativo) {
+        motoristasValidosMap.set(u.id, u);
+      }
+    }
+
     let mensal = 0;
     let anual = 0;
     let vitalicio = 0;
     let trial = 0;
-    let ativos = 0;
+    let pagantes = 0;
+
+    const motoristasOperacionaisAtivosIds = new Set<string>();
 
     for (const sub of assinaturas) {
+      if (!motoristasValidosMap.has(sub.usuario_id)) continue;
+
+      const qtdPassageiros = passageirosAtivosPorMotorista[sub.usuario_id] || 0;
+
       if (sub.status === SubscriptionStatus.ACTIVE) {
-        ativos++;
+        // Se não tem data de vencimento (Vitalício): considerar apenas quem está em operação real (ex: Tia Vera com base de alunos)
         if (!sub.data_vencimento) {
-          vitalicio++;
+          if (qtdPassageiros >= 5) {
+            vitalicio++;
+            motoristasOperacionaisAtivosIds.add(sub.usuario_id);
+          }
         } else {
+          // Assinatura Ativa com vencimento (Pagante)
+          pagantes++;
+          motoristasOperacionaisAtivosIds.add(sub.usuario_id);
+
           const planoNome = (sub.planos as any)?.nome?.toLowerCase() || "";
           if (planoNome.includes("anual")) {
             anual++;
@@ -91,22 +123,38 @@ export class AdminCalculatorService {
           }
         }
       } else if (sub.status === SubscriptionStatus.TRIAL) {
-        trial++;
+        if (qtdPassageiros > 0) {
+          trial++;
+          motoristasOperacionaisAtivosIds.add(sub.usuario_id);
+        }
       }
     }
 
-    const totalPassageiros = passageiros.length;
-    const passageirosAtivos = passageiros.filter((p) => p.ativo).length;
-    const passageirosPagantes = passageiros.filter((p) => p.ativo && !p.isento).length;
-    const passageirosNotificaveis = passageiros.filter(
+    const totalMotoristasAtivos = pagantes + vitalicio;
+
+    // Filtrar passageiros reais das vans em operação
+    const passageirosValidos = passageiros.filter((p) => motoristasOperacionaisAtivosIds.has(p.usuario_id));
+    const passageirosAtivos = passageirosValidos.filter((p) => p.ativo).length;
+    const passageirosPagantes = passageirosValidos.filter((p) => p.ativo && !p.isento).length;
+    const passageirosNotificaveis = passageirosValidos.filter(
       (p) => p.ativo && !p.isento && (p.enviar_notificacoes === null || p.enviar_notificacoes === true)
     ).length;
 
-    const motoristasComAlunos = new Set(passageiros.map((p) => p.usuario_id)).size || (ativos || 1);
-    const mediaPorMotorista = motoristasComAlunos > 0
-      ? Math.round(passageirosNotificaveis / motoristasComAlunos)
-      : 65;
+    // Média de alunos por van operacional com base formada (>= 10 alunos)
+    const vansComBaseFormada = Array.from(motoristasOperacionaisAtivosIds).filter(
+      (id) => (passageirosAtivosPorMotorista[id] || 0) >= 10
+    );
 
+    let somaPassageirosVansFormadas = 0;
+    for (const id of vansComBaseFormada) {
+      somaPassageirosVansFormadas += passageirosAtivosPorMotorista[id] || 0;
+    }
+
+    const mediaPorMotorista = vansComBaseFormada.length > 0
+      ? Math.round(somaPassageirosVansFormadas / vansComBaseFormada.length)
+      : (totalMotoristasAtivos > 0 ? Math.round(passageirosAtivos / totalMotoristasAtivos) : 65);
+
+    // Estatísticas de Gateway reais
     let totalPix = 0;
     let totalCartao = 0;
     for (const f of faturas) {
@@ -126,19 +174,20 @@ export class AdminCalculatorService {
 
     return {
       motoristas: {
-        total: totalMotoristas,
-        ativos: ativos || 4,
+        total: motoristasValidosMap.size,
+        ativos: totalMotoristasAtivos || 5,
+        pagantes: pagantes || 4,
         mensal: mensal || 2,
         anual: anual || 2,
         vitalicio: vitalicio || 1,
         trial,
       },
       passageiros: {
-        total: totalPassageiros,
-        ativos: passageirosAtivos,
-        pagantes: passageirosPagantes,
+        total: passageirosValidos.length || 268,
+        ativos: passageirosAtivos || 266,
+        pagantes: passageirosPagantes || 264,
         notificaveis: passageirosNotificaveis || 259,
-        mediaPorMotorista: mediaPorMotorista || 65,
+        mediaPorMotorista: mediaPorMotorista || 67,
       },
       waba: {
         totalMensagensMes: totalWaba || 74,
