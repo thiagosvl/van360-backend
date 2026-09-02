@@ -83,7 +83,7 @@ export const adminNotificationService = {
           throw new Error("Motorista não encontrado.");
         }
 
-        const subRes = await subscriptionRepository.getSubscriptionByUserId(driverId);
+        const subRes = await subscriptionRepository.getSubscriptionWithPlanByUserId(driverId);
         const sub = subRes.data;
         if (!sub) {
           throw new Error("Motorista não possui assinatura cadastrada.");
@@ -91,7 +91,9 @@ export const adminNotificationService = {
 
         let pixCopyPaste: string | null = null;
         let valor: number = 0;
-        let dataVencimentoFatura = sub.data_vencimento || new Date().toISOString();
+        const dataVencimentoAssinatura = (sub.status === "TRIAL" && sub.trial_ends_at)
+          ? sub.trial_ends_at
+          : (sub.data_vencimento || new Date().toISOString());
 
         const { data: pendingInvoice } = await monitorRepository.getPendingInvoiceByUserId(driverId);
         if (pendingInvoice && pendingInvoice.pix_copy_paste) {
@@ -105,7 +107,6 @@ export const adminNotificationService = {
           });
           pixCopyPaste = fatura.pix_copy_paste || null;
           valor = Number(fatura.valor) || 0;
-          dataVencimentoFatura = fatura.data_vencimento || dataVencimentoFatura;
         }
 
         await notificationService.notifyDriver(
@@ -114,10 +115,10 @@ export const adminNotificationService = {
           {
             nomeMotorista: user.nome,
             email: user.email,
-            dataVencimento: dataVencimentoFatura,
+            dataVencimento: dataVencimentoAssinatura,
             pixCopiaECola: pixCopyPaste,
             valor: valor,
-            planoNome: (sub as any).planos?.nome || "Plano Van360",
+            planoNome: sub.planos?.nome || "Plano Van360",
             usuarioId: driverId,
           },
           {

@@ -257,14 +257,16 @@ export class WabaTemplates {
         };
     }
 
-    static subscriptionDueSoon(ctx: Record<string, unknown>): WabaTemplatePayload {
+    static async subscriptionDueSoon(ctx: Record<string, unknown>): Promise<WabaTemplatePayload> {
         const driverName = NotificationContextFormatter.getFirstName(ctx.nomeMotorista as string, "Motorista");
         const valorStr = NotificationContextFormatter.formatValue(ctx.valor as number | string);
         const dataStr = NotificationContextFormatter.formatDate(ctx.dataVencimento as string);
         const planoStr = (ctx.planoNome as string) || "Plano Mensal";
+        const email = (ctx.email || ctx.emailMotorista) as string | undefined;
 
         const pixButton = this.buildPixButtonComponent(ctx, "0");
-        const dynamicSuffix = "assinatura?open_checkout=true";
+        const fullCheckoutUrl = await NotificationUrlBuilder.getSubscriptionCheckoutUrl({ autoOpen: true, email });
+        const dynamicSuffix = NotificationUrlBuilder.extractWabaDynamicToken(fullCheckoutUrl);
 
         const components: WabaComponent[] = [
             {
@@ -306,9 +308,11 @@ export class WabaTemplates {
         };
     }
 
-    static subscriptionFailedCC(ctx: Record<string, unknown>): WabaTemplatePayload {
+    static async subscriptionFailedCC(ctx: Record<string, unknown>): Promise<WabaTemplatePayload> {
         const driverName = NotificationContextFormatter.getFirstName(ctx.nomeMotorista as string, "Motorista");
-        const dynamicSuffix = "assinatura?open_checkout=true";
+        const email = (ctx.email || ctx.emailMotorista) as string | undefined;
+        const fullCheckoutUrl = await NotificationUrlBuilder.getSubscriptionCheckoutUrl({ autoOpen: true, email });
+        const dynamicSuffix = NotificationUrlBuilder.extractWabaDynamicToken(fullCheckoutUrl);
 
         return {
             templateName: WabaTemplateNameEnum.MOTORISTA_FALHA_CARTAO,

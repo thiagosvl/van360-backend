@@ -54,12 +54,21 @@ export class NotificationUrlBuilder {
                 },
             });
 
-            if (error || !data?.properties?.action_link) {
+            if (error || !data?.properties) {
                 logger.warn({ email, error: error?.message }, "[NotificationUrlBuilder] Falha ao gerar Magic Link, utilizando Smart Fallback");
                 return fallbackUrl;
             }
 
-            return data.properties.action_link;
+            if (data.properties.hashed_token) {
+                const autoOpenParam = autoOpen ? "&auto_open=true" : "";
+                return `${baseUrl}/checkout-externo?token_hash=${data.properties.hashed_token}&type=magiclink${autoOpenParam}`;
+            }
+
+            if (data.properties.action_link) {
+                return data.properties.action_link;
+            }
+
+            return fallbackUrl;
         } catch (err: unknown) {
             const errorMessage = err instanceof Error ? err.message : String(err);
             logger.error({ error: errorMessage, email }, "[NotificationUrlBuilder] Exceção ao gerar Magic Link para checkout");
@@ -108,10 +117,22 @@ export class NotificationUrlBuilder {
      * Extrai apenas o sufixo/token de uma URL para uso em botões de URL Dinâmica da Meta (WABA)
      */
     static extractWabaDynamicToken(urlOrToken?: string): string {
-        if (!urlOrToken) return "assinatura";
+        if (!urlOrToken) return "assinatura?open_checkout=true";
         const clean = urlOrToken.trim();
-        const lastPart = clean.split("/").pop() || clean;
-        return lastPart.replace(/^\//, "");
+        const baseUrl = this.getBaseAppUrl();
+        if (clean.startsWith(baseUrl)) {
+            return clean.slice(baseUrl.length).replace(/^\//, "");
+        }
+        if (clean.startsWith("http://") || clean.startsWith("https://")) {
+            try {
+                const urlObj = new URL(clean);
+                return (urlObj.pathname + urlObj.search).replace(/^\//, "");
+            } catch {
+                const lastPart = clean.split("/").pop() || clean;
+                return lastPart.replace(/^\//, "");
+            }
+        }
+        return clean.replace(/^\//, "");
     }
 
     /**

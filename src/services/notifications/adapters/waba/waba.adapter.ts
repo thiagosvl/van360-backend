@@ -22,7 +22,7 @@ export class WabaAdapter implements NotificationProviderPort {
             const digitsOnly = String(rawPhone).replace(/\D/g, "");
             const formattedPhone = digitsOnly.startsWith("55") ? digitsOnly : `55${digitsOnly}`;
 
-            const payload = WabaMapper.getTemplate(eventName, contextData);
+            const payload = await WabaMapper.getTemplate(eventName, contextData);
             if (!payload || !payload.templateName) {
                 const errStr = `[WabaAdapter] Payload do template WABA não encontrado para o evento '${eventName}'.`;
                 logger.warn({ eventName }, errStr);

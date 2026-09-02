@@ -53,6 +53,14 @@ export const subscriptionRepository = {
             .single();
     },
 
+    async getSubscriptionWithPlanByUserId(userId: string) {
+        return supabaseAdmin
+            .from("assinaturas")
+            .select("*, planos(*)")
+            .eq("usuario_id", userId)
+            .maybeSingle();
+    },
+
     async updateStatus(id: string, status: string) {
         return supabaseAdmin
             .from("assinaturas")
