@@ -6,6 +6,7 @@ import { adminLoginAttemptsController } from "../controllers/admin/admin-login-a
 import { adminConfigController } from "../controllers/admin/admin-config.controller.js";
 import { adminPlanController } from "../controllers/admin/admin-plan.controller.js";
 import { adminEvolutionController } from "../controllers/admin/admin-evolution.controller.js";
+import { adminCalculatorController } from "../controllers/admin/admin-calculator.controller.js";
 import { adminBlogController } from "../controllers/blog.controller.js";
 import { verifySupabaseJWT } from "../middleware/auth.js";
 import { verifyAdmin } from "../middleware/admin.js";
@@ -32,11 +33,12 @@ const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get("/users/:id/notifications", adminNotificationController.getUserNotifications);
   app.get("/passengers/:id/notifications", adminNotificationController.getPassengerNotifications);
 
-  // Configurações Internas & Planos SaaS
+  // Configurações Internas & Planos SaaS & Calculadora
   app.get("/configs", adminConfigController.getConfigs);
   app.put("/configs", adminConfigController.updateConfig);
   app.get("/plans", adminPlanController.getPlans);
   app.patch("/plans/:id", adminPlanController.updatePlan);
+  app.get("/calculator/baseline", adminCalculatorController.getBaseline);
 
   // Evolution Instâncias
   app.get("/evolution-instances", adminEvolutionController.getEvolutionInstances);
