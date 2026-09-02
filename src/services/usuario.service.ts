@@ -22,27 +22,51 @@ export async function validarAcessoUsuario(authUid: string, targetUsuarioId: str
 
 export async function atualizarUsuario(usuarioId: string, payload: {
   nome?: string;
-  razao_social?: string;
-  apelido?: string;
+  razao_social?: string | null;
+  apelido?: string | null;
   telefone?: string;
-  avatar_url?: string;
-  assinatura_digital_url?: string;
-  config_contrato?: any;
-  data_nascimento?: string;
+  assinatura_digital_url?: string | null;
+  config_contrato?: Record<string, unknown> | null;
+  data_nascimento?: string | null;
 }) {
   if (!usuarioId) throw new AppError("ID do usuário é obrigatório.", 400);
 
-  const updates: any = { updated_at: getNowBR().toISOString() };
-  if (payload.nome) updates.nome = cleanString(payload.nome, true);
-  if (payload.razao_social !== undefined) updates.razao_social = payload.razao_social ? cleanString(payload.razao_social, true) : null;
-  if (payload.apelido) updates.apelido = cleanString(payload.apelido, true);
-  if (payload.telefone) updates.telefone = onlyDigits(payload.telefone);
-  if (payload.avatar_url !== undefined) updates.avatar_url = payload.avatar_url;
-  if (payload.assinatura_digital_url !== undefined) updates.assinatura_digital_url = payload.assinatura_digital_url;
-  if (payload.config_contrato !== undefined) updates.config_contrato = payload.config_contrato;
+  const updates: Record<string, unknown> = { updated_at: getNowBR().toISOString() };
+
+  if (payload.nome !== undefined) {
+    const nomeLimpo = cleanString(payload.nome, true);
+    if (!nomeLimpo) {
+      throw new AppError("Nome completo é obrigatório.", 400);
+    }
+    updates.nome = nomeLimpo;
+  }
+
+  if (payload.razao_social !== undefined) {
+    updates.razao_social = payload.razao_social ? (cleanString(payload.razao_social, true) || null) : null;
+  }
+
+  if (payload.apelido !== undefined) {
+    updates.apelido = payload.apelido ? (cleanString(payload.apelido, true) || null) : null;
+  }
+
+  if (payload.telefone !== undefined) {
+    const telefoneLimpo = onlyDigits(payload.telefone);
+    if (!telefoneLimpo || telefoneLimpo.length < 10 || telefoneLimpo.length > 11) {
+      throw new AppError("Número de telefone inválido.", 400);
+    }
+    updates.telefone = telefoneLimpo;
+  }
+
+  if (payload.assinatura_digital_url !== undefined) {
+    updates.assinatura_digital_url = payload.assinatura_digital_url ? payload.assinatura_digital_url.trim() : null;
+  }
+
+  if (payload.config_contrato !== undefined) {
+    updates.config_contrato = payload.config_contrato;
+  }
 
   if (payload.data_nascimento !== undefined) {
-    updates.data_nascimento = parseBrazilianDateToISO(payload.data_nascimento);
+    updates.data_nascimento = payload.data_nascimento ? parseBrazilianDateToISO(payload.data_nascimento) : null;
   }
 
   const { error } = await userRepository.update(usuarioId, updates);
@@ -51,7 +75,12 @@ export async function atualizarUsuario(usuarioId: string, payload: {
     throw new AppError(`Erro ao atualizar usuário: ${error.message}`, 500);
   }
 
-  const perfilAlterado = payload.nome || payload.apelido || payload.telefone || payload.data_nascimento || payload.avatar_url;
+  const perfilAlterado =
+    payload.nome !== undefined ||
+    payload.razao_social !== undefined ||
+    payload.apelido !== undefined ||
+    payload.telefone !== undefined ||
+    payload.data_nascimento !== undefined;
 
   if (perfilAlterado) {
     historicoService.log({
@@ -59,8 +88,12 @@ export async function atualizarUsuario(usuarioId: string, payload: {
       entidade_tipo: AtividadeEntidadeTipo.USUARIO,
       entidade_id: usuarioId,
       acao: AtividadeAcao.PERFIL_EDITADO,
-      descricao: "Dados de identificação do perfil (nome/apelido/telefone/data_nascimento/avatar) atualizados.",
-      meta: { campos: Object.keys(payload).filter(k => ['nome', 'apelido', 'telefone', 'data_nascimento', 'avatar_url'].includes(k)) }
+      descricao: "Dados de identificação do perfil atualizados.",
+      meta: {
+        campos: Object.keys(payload).filter((k) =>
+          ["nome", "razao_social", "apelido", "telefone", "data_nascimento"].includes(k)
+        ),
+      },
     });
   } else if (payload.config_contrato !== undefined) {
     const config = payload.config_contrato;
@@ -69,46 +102,18 @@ export async function atualizarUsuario(usuarioId: string, payload: {
       entidade_tipo: AtividadeEntidadeTipo.USUARIO,
       entidade_id: usuarioId,
       acao: AtividadeAcao.CONTRATO_CONFIG_EDITADA,
-      descricao: `Configurações de contrato atualizadas (Usa contratos: ${config.usar_contratos ? 'Sim' : 'Não'}).`,
+      descricao: `Configurações de contrato atualizadas (Usa contratos: ${config?.usar_contratos ? "Sim" : "Não"}).`,
       meta: {
-        usar_contratos: config.usar_contratos,
-        multa_atraso: config.multa_atraso,
-        juros_atraso: config.juros_atraso,
-        multa_rescisao: config.multa_rescisao,
-        campos_alterados: Object.keys(config)
-      }
+        usar_contratos: config?.usar_contratos,
+        multa_atraso: config?.multa_atraso,
+        juros_atraso: config?.juros_atraso,
+        multa_rescisao: config?.multa_rescisao,
+        campos_alterados: config ? Object.keys(config) : [],
+      },
     });
   }
 
   return { success: true };
-}
-
-export async function uploadAvatar(usuarioId: string, avatarUrl: string) {
-  if (!usuarioId) throw new AppError("ID do usuário é obrigatório.", 400);
-  if (!avatarUrl || typeof avatarUrl !== "string" || !avatarUrl.trim()) {
-    throw new AppError("URL do avatar é obrigatória.", 400);
-  }
-
-  const cleanUrl = avatarUrl.trim();
-  const { error } = await userRepository.update(usuarioId, {
-    avatar_url: cleanUrl,
-    updated_at: getNowBR().toISOString()
-  });
-
-  if (error) {
-    throw new AppError(`Erro ao atualizar avatar do usuário: ${error.message}`, 500);
-  }
-
-  historicoService.log({
-    usuario_id: usuarioId,
-    entidade_tipo: AtividadeEntidadeTipo.USUARIO,
-    entidade_id: usuarioId,
-    acao: AtividadeAcao.PERFIL_EDITADO,
-    descricao: "Avatar do perfil atualizado.",
-    meta: { avatar_url: cleanUrl }
-  });
-
-  return { success: true, avatar_url: cleanUrl };
 }
 
 export async function alterarTelefoneUsuario(usuarioId: string, telefone: string) {

@@ -10,11 +10,12 @@ export const UsuarioController = {
         const { id: usuarioId } = request.params as { id: string };
         const payload = request.body as { 
             nome?: string; 
-            razao_social?: string;
-            apelido?: string; 
+            razao_social?: string | null;
+            apelido?: string | null; 
             telefone?: string; 
-            assinatura_digital_url?: string;
-            config_contrato?: Record<string, unknown>;
+            assinatura_digital_url?: string | null;
+            config_contrato?: Record<string, unknown> | null;
+            data_nascimento?: string | null;
         };
         const authUid = request.user?.id;
 
