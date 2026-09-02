@@ -197,22 +197,22 @@ export class FirebaseDriverTemplates {
         const qtdProximos = typeof ctx.qtdProximos === "number" ? ctx.qtdProximos : Number(ctx.qtdProximos) || 0;
         const qtdAtrasados = typeof ctx.qtdAtrasados === "number" ? ctx.qtdAtrasados : Number(ctx.qtdAtrasados) || 0;
 
-        let title = "Pagamentos da Semana 🚐💵";
-        let body = "Confira os pagamentos dos seus alunos no app.";
+        let title = "Pagamentos da Semana 💵";
+        let body = "Confira as parcelas dos seus alunos no app.";
 
-        if (totalProximos > 0 && totalAtrasado > 0) {
-            const proximosLabel = qtdProximos === 1 ? "1 parcela" : `${qtdProximos} parcelas`;
-            const atrasadosLabel = qtdAtrasados === 1 ? "1 em aberto" : `${qtdAtrasados} em aberto`;
-            title = "Pagamentos da Semana 🚐💵";
-            body = `Você tem ${NotificationContextFormatter.formatValue(totalProximos)} para receber esta semana (${proximosLabel}) e ${atrasadosLabel}. Não esqueça de conferir e dar baixa!`;
-        } else if (totalProximos > 0) {
-            const proximosLabel = qtdProximos === 1 ? "1 parcela vencendo" : `${qtdProximos} parcelas vencendo`;
-            title = "Pagamentos da Semana 🚐💵";
-            body = `Você tem ${proximosLabel} nos próximos dias (${NotificationContextFormatter.formatValue(totalProximos)}). Confira no app.`;
+        if (totalAtrasado > 0 && totalProximos > 0) {
+            const atrasadosLabel = qtdAtrasados === 1 ? "1 parcela" : `${qtdAtrasados} parcelas`;
+            const proximosLabel = qtdProximos === 1 ? "1 a vencer esta semana" : `${qtdProximos} a vencer esta semana`;
+            title = "Pagamentos da Semana 💵";
+            body = `Você tem ${atrasadosLabel} em atraso (${NotificationContextFormatter.formatValue(totalAtrasado)}) e ${proximosLabel} (${NotificationContextFormatter.formatValue(totalProximos)}). Confira se já recebeu e dê baixa no app.`;
         } else if (totalAtrasado > 0) {
-            const atrasadosLabel = qtdAtrasados === 1 ? "1 parcela que consta" : `${qtdAtrasados} parcelas que constam`;
+            const atrasadosLabel = qtdAtrasados === 1 ? "1 parcela" : `${qtdAtrasados} parcelas`;
             title = "Parcelas em Aberto ⚠️";
-            body = `Você tem ${atrasadosLabel} em aberto (${NotificationContextFormatter.formatValue(totalAtrasado)}). Confira se já caiu na sua conta e dê baixa.`;
+            body = `Você tem ${atrasadosLabel} em atraso (${NotificationContextFormatter.formatValue(totalAtrasado)}). Confira se já recebeu e dê baixa no app.`;
+        } else if (totalProximos > 0) {
+            const proximosLabel = qtdProximos === 1 ? "1 parcela a vencer" : `${qtdProximos} parcelas a vencer`;
+            title = "Pagamentos da Semana 💵";
+            body = `Você tem ${proximosLabel} nos próximos dias (${NotificationContextFormatter.formatValue(totalProximos)}). Confira os vencimentos no app.`;
         }
 
         return {
