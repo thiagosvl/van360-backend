@@ -11,6 +11,12 @@ export interface CalculatorBaselineDTO {
     vitalicio: number;
     trial: number;
   };
+  receita: {
+    mrrReal: number;
+    arrReal: number;
+    mensalReal: number;
+    anualRealDiluido: number;
+  };
   passageiros: {
     total: number;
     ativos: number;
@@ -30,6 +36,36 @@ export interface CalculatorBaselineDTO {
     taxaCartao: number;
     impostoSimples: number;
   };
+}
+
+interface UsuarioItem {
+  id: string;
+  nome: string | null;
+  email: string | null;
+  ativo: boolean | null;
+}
+
+interface AssinaturaItem {
+  id: string;
+  usuario_id: string;
+  status: string | null;
+  data_vencimento: string | null;
+  planos: { nome: string | null } | null;
+}
+
+interface PassageiroItem {
+  id: string;
+  usuario_id: string;
+  ativo: boolean | null;
+  isento: boolean | null;
+  enviar_notificacoes: boolean | null;
+}
+
+interface FaturaItem {
+  id: string;
+  metodo_pagamento: string | null;
+  status: string | null;
+  valor: number | null;
 }
 
 export class AdminCalculatorService {
@@ -62,17 +98,16 @@ export class AdminCalculatorService {
 
       supabaseAdmin
         .from("assinatura_faturas")
-        .select("id, metodo_pagamento, status")
+        .select("id, metodo_pagamento, status, valor")
         .eq("status", "pago"),
     ]);
 
-    const usuarios = usuariosRes.data || [];
-    const assinaturas = assinaturasRes.data || [];
-    const passageiros = passageirosRes.data || [];
+    const usuarios = (usuariosRes.data || []) as UsuarioItem[];
+    const assinaturas = (assinaturasRes.data || []) as unknown as AssinaturaItem[];
+    const passageiros = (passageirosRes.data || []) as PassageiroItem[];
     const totalWaba = wabaRes.count ?? 0;
-    const faturas = faturasRes.data || [];
+    const faturas = (faturasRes.data || []) as FaturaItem[];
 
-    // Mapear contagem de passageiros ativos por motorista
     const passageirosAtivosPorMotorista: Record<string, number> = {};
     for (const p of passageiros) {
       if (p.ativo) {
@@ -80,8 +115,7 @@ export class AdminCalculatorService {
       }
     }
 
-    // Filtrar motoristas válidos (descartar testes da Google Play e contas de desenvolvedor)
-    const motoristasValidosMap = new Map<string, { id: string; nome: string; email: string }>();
+    const motoristasValidosMap = new Map<string, UsuarioItem>();
     for (const u of usuarios) {
       const email = (u.email || "").toLowerCase();
       const isInternalTest = email.includes("teste-google") || email.includes("@van360.com.br") || email.includes("thiago-svl");
@@ -104,18 +138,16 @@ export class AdminCalculatorService {
       const qtdPassageiros = passageirosAtivosPorMotorista[sub.usuario_id] || 0;
 
       if (sub.status === SubscriptionStatus.ACTIVE) {
-        // Se não tem data de vencimento (Vitalício): considerar apenas quem está em operação real (ex: Tia Vera com base de alunos)
         if (!sub.data_vencimento) {
           if (qtdPassageiros >= 5) {
             vitalicio++;
             motoristasOperacionaisAtivosIds.add(sub.usuario_id);
           }
         } else {
-          // Assinatura Ativa com vencimento (Pagante)
           pagantes++;
           motoristasOperacionaisAtivosIds.add(sub.usuario_id);
 
-          const planoNome = (sub.planos as any)?.nome?.toLowerCase() || "";
+          const planoNome = sub.planos?.nome?.toLowerCase() || "";
           if (planoNome.includes("anual")) {
             anual++;
           } else {
@@ -123,8 +155,8 @@ export class AdminCalculatorService {
           }
         }
       } else if (sub.status === SubscriptionStatus.TRIAL) {
+        trial++;
         if (qtdPassageiros > 0) {
-          trial++;
           motoristasOperacionaisAtivosIds.add(sub.usuario_id);
         }
       }
@@ -132,7 +164,11 @@ export class AdminCalculatorService {
 
     const totalMotoristasAtivos = pagantes + vitalicio;
 
-    // Filtrar passageiros reais das vans em operação
+    const anualRealDiluido = Number((anual * (250 / 12)).toFixed(2));
+    const mensalReal = Number((mensal * 25).toFixed(2));
+    const mrrReal = Number((anualRealDiluido + mensalReal).toFixed(2));
+    const arrReal = Number((mrrReal * 12).toFixed(2));
+
     const passageirosValidos = passageiros.filter((p) => motoristasOperacionaisAtivosIds.has(p.usuario_id));
     const passageirosAtivos = passageirosValidos.filter((p) => p.ativo).length;
     const passageirosPagantes = passageirosValidos.filter((p) => p.ativo && !p.isento).length;
@@ -140,7 +176,6 @@ export class AdminCalculatorService {
       (p) => p.ativo && !p.isento && (p.enviar_notificacoes === null || p.enviar_notificacoes === true)
     ).length;
 
-    // Média de alunos por van operacional com base formada (>= 10 alunos)
     const vansComBaseFormada = Array.from(motoristasOperacionaisAtivosIds).filter(
       (id) => (passageirosAtivosPorMotorista[id] || 0) >= 10
     );
@@ -152,9 +187,8 @@ export class AdminCalculatorService {
 
     const mediaPorMotorista = vansComBaseFormada.length > 0
       ? Math.round(somaPassageirosVansFormadas / vansComBaseFormada.length)
-      : (totalMotoristasAtivos > 0 ? Math.round(passageirosAtivos / totalMotoristasAtivos) : 65);
+      : (totalMotoristasAtivos > 0 ? Math.round(passageirosAtivos / totalMotoristasAtivos) : 66);
 
-    // Estatísticas de Gateway reais
     let totalPix = 0;
     let totalCartao = 0;
     for (const f of faturas) {
@@ -175,24 +209,30 @@ export class AdminCalculatorService {
     return {
       motoristas: {
         total: motoristasValidosMap.size,
-        ativos: totalMotoristasAtivos || 5,
-        pagantes: pagantes || 4,
-        mensal: mensal || 2,
-        anual: anual || 2,
-        vitalicio: vitalicio || 1,
+        ativos: totalMotoristasAtivos,
+        pagantes,
+        mensal,
+        anual,
+        vitalicio,
         trial,
       },
+      receita: {
+        mrrReal,
+        arrReal,
+        mensalReal,
+        anualRealDiluido,
+      },
       passageiros: {
-        total: passageirosValidos.length || 268,
-        ativos: passageirosAtivos || 266,
-        pagantes: passageirosPagantes || 264,
-        notificaveis: passageirosNotificaveis || 259,
-        mediaPorMotorista: mediaPorMotorista || 67,
+        total: passageirosValidos.length,
+        ativos: passageirosAtivos,
+        pagantes: passageirosPagantes,
+        notificaveis: passageirosNotificaveis,
+        mediaPorMotorista,
       },
       waba: {
-        totalMensagensMes: totalWaba || 74,
-        custoEstimadoUsd: Number(((totalWaba || 74) * unitWabaUsd).toFixed(2)),
-        custoEstimadoBrl: Number(((totalWaba || 74) * unitWabaBrl).toFixed(2)),
+        totalMensagensMes: totalWaba,
+        custoEstimadoUsd: Number((totalWaba * unitWabaUsd).toFixed(2)),
+        custoEstimadoBrl: Number((totalWaba * unitWabaBrl).toFixed(2)),
       },
       gateway: {
         pctPix,
