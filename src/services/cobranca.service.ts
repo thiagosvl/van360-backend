@@ -147,7 +147,7 @@ export const cobrancaService = {
     let inserted: any;
 
     if (existingCobranca) {
-      const updateData = {
+      const updateData: Record<string, any> = {
         valor: valorNumerico,
         data_vencimento: data.data_vencimento,
         status: statusVal,
@@ -156,6 +156,10 @@ export const cobrancaService = {
         valor_pago: statusVal === CobrancaStatus.PAGO ? valorNumerico : null,
         pagamento_manual: statusVal === CobrancaStatus.PAGO,
       };
+
+      if (data.desativar_lembretes !== undefined) {
+        updateData.desativar_lembretes = data.desativar_lembretes;
+      }
 
       const { data: updated, error: updateError } = await cobrancaRepository.update(existingCobranca.id, updateData);
       if (updateError || !updated) throw new AppError(`Erro ao atualizar cobrança no banco: ${updateError?.message}`, 500);
@@ -175,6 +179,7 @@ export const cobrancaService = {
         tipo_pagamento: statusVal === CobrancaStatus.PAGO ? (data.tipo_pagamento || CobrancaTipoPagamento.PIX) : null,
         valor_pago: statusVal === CobrancaStatus.PAGO ? valorNumerico : null,
         pagamento_manual: statusVal === CobrancaStatus.PAGO,
+        desativar_lembretes: data.desativar_lembretes ?? false,
       };
 
       const { data: created, error: insertError } = await cobrancaRepository.insert(cobrancaData);
