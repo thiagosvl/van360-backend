@@ -14,6 +14,7 @@ export interface EnqueueNotificationParams {
     payload: Record<string, unknown>;
     options?: NotificationOptions;
     usuarioId?: string;
+    passageiroId?: string;
 }
 
 export class NotificationQueueService {
@@ -128,6 +129,7 @@ export class NotificationQueueService {
         try {
             queueItem = await notificationQueueRepository.create({
                 usuario_id: params.usuarioId || (params.payload.usuarioId as string) || (params.options?.usuarioId as string) || null,
+                passageiro_id: params.passageiroId || (params.payload.passageiroId as string) || (params.options?.passageiroId as string) || null,
                 canal: params.canal,
                 evento: params.evento,
                 destinatario: cleanDest,

@@ -102,11 +102,13 @@ export const cobrancaPagamentoService = {
               mes: updated.mes,
               ano: updated.ano,
               reciboUrl: updated.recibo_url,
-              usuarioId: updated.usuario_id
+              usuarioId: updated.usuario_id,
+              passageiroId: updated.passageiro_id
             },
             {
               channels: [NotificationChannelEnum.FIREBASE],
-              usuarioId: updated.usuario_id
+              usuarioId: updated.usuario_id,
+              passageiroId: updated.passageiro_id || undefined
             }
           );
         }

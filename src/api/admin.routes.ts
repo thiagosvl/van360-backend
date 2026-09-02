@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { adminUserController } from "../controllers/admin/admin-user.controller.js";
 import { adminLogController } from "../controllers/admin/admin-log.controller.js";
+import { adminNotificationController } from "../controllers/admin/admin-notification.controller.js";
 import { adminLoginAttemptsController } from "../controllers/admin/admin-login-attempts.controller.js";
 import { adminConfigController } from "../controllers/admin/admin-config.controller.js";
 import { adminPlanController } from "../controllers/admin/admin-plan.controller.js";
@@ -24,10 +25,12 @@ const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post("/users/:id/dispatch-notification", adminUserController.dispatchNotification);
   app.delete("/users/:id", adminUserController.deleteUser);
 
-  // Logs & Atividades & Tentativas de Login
+  // Logs & Atividades & Notificações & Tentativas de Login
   app.get("/login-attempts", adminLoginAttemptsController.getLoginAttempts);
   app.get("/logs", adminLogController.getGlobalLogs);
   app.get("/users/:id/logs", adminLogController.getUserLogs);
+  app.get("/users/:id/notifications", adminNotificationController.getUserNotifications);
+  app.get("/passengers/:id/notifications", adminNotificationController.getPassengerNotifications);
 
   // Configurações Internas & Planos SaaS
   app.get("/configs", adminConfigController.getConfigs);

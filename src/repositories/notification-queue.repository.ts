@@ -4,6 +4,7 @@ import { NotificationChannelEnum, NotificationQueueStatus } from "../types/enums
 export interface NotificationQueueItemPayload {
     id?: string;
     usuario_id?: string | null;
+    passageiro_id?: string | null;
     canal: NotificationChannelEnum;
     evento: string;
     destinatario: string;
@@ -24,6 +25,7 @@ export const notificationQueueRepository = {
             .from("fila_notificacoes")
             .insert({
                 usuario_id: item.usuario_id || null,
+                passageiro_id: item.passageiro_id || null,
                 canal: item.canal,
                 evento: item.evento,
                 destinatario: item.destinatario,
@@ -47,6 +49,7 @@ export const notificationQueueRepository = {
 
         const records = items.map(item => ({
             usuario_id: item.usuario_id || null,
+            passageiro_id: item.passageiro_id || null,
             canal: item.canal,
             evento: item.evento,
             destinatario: item.destinatario,

@@ -223,11 +223,13 @@ export const cobrancaService = {
                   mes: inserted.mes,
                   ano: inserted.ano,
                   reciboUrl: inserted.recibo_url,
-                  usuarioId: inserted.usuario_id
+                  usuarioId: inserted.usuario_id,
+                  passageiroId: inserted.passageiro_id
                 },
                 {
                   channels: [NotificationChannelEnum.FIREBASE],
                   usuarioId: inserted.usuario_id,
+                  passageiroId: inserted.passageiro_id || undefined,
                   email: respInfo.email
                 }
               );
@@ -728,6 +730,7 @@ export const cobrancaService = {
               diasAntecedencia,
               diasAtraso: eventType === EVENTO_PASSAGEIRO_ATRASADO ? diffInDays(dataVencimentoStr, todayStr) : undefined,
               usuarioId: c.usuario_id,
+              passageiroId: passageiro.id,
               chavePix: motorista.chave_pix,
               tipoChavePix: motorista.tipo_chave_pix,
               mes: c.mes,
@@ -742,6 +745,7 @@ export const cobrancaService = {
               {
                 channels: activeChannels,
                 usuarioId: c.usuario_id,
+                passageiroId: passageiro.id,
                 email: resp.email || undefined,
                 metadata: { cobrancaId: c.id }
               }

@@ -797,7 +797,7 @@ const notifyParentRouteEvent = async (passageiroId: string, eventType: string, e
           resp.telefone,
           eventType,
           payload,
-          { channels: [NotificationChannelEnum.FIREBASE], usuarioId: execData.usuario_id }
+          { channels: [NotificationChannelEnum.FIREBASE], usuarioId: execData.usuario_id, passageiroId: passageiroInfo.id }
         ).catch(err => logger.error({ err, responsavelId: resp.id }, "[routeService] Erro ao enviar Push de rota ao responsável"))
       )
     );

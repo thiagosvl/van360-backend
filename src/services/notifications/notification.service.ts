@@ -22,6 +22,7 @@ export interface NotificationOptions {
     };
     jobId?: string;
     usuarioId?: string;
+    passageiroId?: string;
     email?: string;
     metadata?: Record<string, unknown>;
 }
@@ -204,9 +205,10 @@ class NotificationService {
             return false;
         }
         const usuarioId = options?.usuarioId || (contextData?.usuarioId as string);
+        const passageiroId = options?.passageiroId || (contextData?.passageiroId as string) || (contextData?.passageiro_id as string);
 
-        const enrichedOptions = { ...options, usuarioId };
-        const enrichedContext = { ...contextData, to, usuarioId };
+        const enrichedOptions = { ...options, usuarioId, passageiroId };
+        const enrichedContext = { ...contextData, to, usuarioId, passageiroId };
 
         try {
             const { notificationQueueService } = await import("./notification-queue.service.js");
@@ -239,7 +241,8 @@ class NotificationService {
                         destinatario: targetAddress,
                         payload: enrichedContext,
                         options: enrichedOptions,
-                        usuarioId
+                        usuarioId,
+                        passageiroId
                     })
                 );
             }

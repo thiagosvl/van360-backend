@@ -73,11 +73,13 @@ export const contractWorker = new Worker<ContractJobData>(
                         }),
                         apelidoMotorista: dadosContrato.apelidoCondutor,
                         linkAssinatura,
-                        email: hasValidEmail ? emailResponsavel : undefined
+                        email: hasValidEmail ? emailResponsavel : undefined,
+                        passageiroId: passageiro.id
                     },
                     {
                         channels,
-                        email: hasValidEmail ? emailResponsavel : undefined
+                        email: hasValidEmail ? emailResponsavel : undefined,
+                        passageiroId: passageiro.id
                     }
                 );
 

@@ -397,9 +397,10 @@ class ContractService {
           nomeMotorista: usuario.nome,
           apelidoMotorista: usuario.apelido,
           contratoUrl: response.documentoFinalUrl,
-          usuarioId: usuario.id
+          usuarioId: usuario.id,
+          passageiroId: passageiro.id
         },
-        { channels: [NotificationChannelEnum.RESEND], email: respInfo.email, usuarioId: usuario.id }
+        { channels: [NotificationChannelEnum.RESEND], email: respInfo.email, usuarioId: usuario.id, passageiroId: passageiro.id }
       ).catch(err => logger.error({ err }, 'Erro ao notificar responsável sobre assinatura'));
     }
 

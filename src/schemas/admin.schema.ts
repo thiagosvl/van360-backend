@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { SubscriptionStatus, ConfigKey } from "../types/enums.js";
+import {
+  EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS,
+  EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA,
+} from "../config/constants.js";
 
 export const updateUserAdminSchema = z.object({
   nome: z.string().min(2).max(120).optional(),
@@ -90,9 +94,15 @@ export type CreateUserAdminDTO = z.infer<typeof createUserAdminSchema>;
 
 export const dispatchDriverNotificationSchema = z.object({
   evento: z.enum([
-    "MOTORISTA_RESUMO_SEMANAL_PARCELAS",
-    "MOTORISTA_ANIVERSARIANTES_SEMANA",
+    EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS,
+    EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA,
   ]),
 });
 export type DispatchDriverNotificationDTO = z.infer<typeof dispatchDriverNotificationSchema>;
+
+export const listUserNotificationsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(500).default(25),
+});
+export type ListUserNotificationsQuery = z.infer<typeof listUserNotificationsQuerySchema>;
 
