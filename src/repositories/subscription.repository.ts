@@ -101,6 +101,13 @@ export const subscriptionRepository = {
             .eq("id", id);
     },
 
+    async extendTrialBonus(id: string, newTrialEnd: string) {
+        return supabaseAdmin
+            .from("assinaturas")
+            .update({ trial_ends_at: newTrialEnd, trial_estendido: true, updated_at: new Date().toISOString() })
+            .eq("id", id);
+    },
+
     async confirmInvoicePaymentRpc(faturaId: string) {
         return supabaseAdmin.rpc("confirm_invoice_payment", { p_fatura_id: faturaId });
     },

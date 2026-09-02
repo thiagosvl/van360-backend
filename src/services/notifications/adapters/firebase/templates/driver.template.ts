@@ -1,4 +1,5 @@
 import { PushNotificationAction } from "../../../../../types/enums.js";
+import { TRIAL_BONUS_INACTIVE_DAYS } from "../../../../../config/constants.js";
 import { NotificationContextFormatter } from "../../../utils/notification-context.formatter.js";
 import { NotificationUrlBuilder } from "../../../utils/notification-url.builder.js";
 import { FirebaseMessagePayload } from "../firebase.template.js";
@@ -45,6 +46,20 @@ export class FirebaseDriverTemplates {
             data: {
                 action: PushNotificationAction.OPEN_SUBSCRIPTION,
                 checkoutUrl
+            }
+        };
+    }
+
+    static trialBonusInactive(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        const driverName = NotificationContextFormatter.getFirstName(ctx.nomeMotorista as string, "Motorista");
+        const bonusDays = (ctx.bonusDays as number) || TRIAL_BONUS_INACTIVE_DAYS;
+
+        return {
+            title: "Mais tempo para você! 🎁",
+            body: `Olá ${driverName}, liberamos +${bonusDays} dias gratuitos para você testar o Van360 com calma. Aproveite para cadastrar seus passageiros!`,
+            data: {
+                action: PushNotificationAction.OPEN_HOME,
+                userId: (ctx.usuarioId || ctx.userId || "") as string
             }
         };
     }
@@ -182,22 +197,22 @@ export class FirebaseDriverTemplates {
         const qtdProximos = typeof ctx.qtdProximos === "number" ? ctx.qtdProximos : Number(ctx.qtdProximos) || 0;
         const qtdAtrasados = typeof ctx.qtdAtrasados === "number" ? ctx.qtdAtrasados : Number(ctx.qtdAtrasados) || 0;
 
-        let title = "Semana Financeira 💵";
+        let title = "Pagamentos da Semana 🚐💵";
         let body = "Confira os pagamentos dos seus passageiros no app.";
 
         if (totalProximos > 0 && totalAtrasado > 0) {
-            const proximosLabel = qtdProximos === 1 ? "1 parcela vence" : `${qtdProximos} parcelas vencem`;
+            const proximosLabel = qtdProximos === 1 ? "1 parcela" : `${qtdProximos} parcelas`;
             const atrasadosLabel = qtdAtrasados === 1 ? "1 em aberto" : `${qtdAtrasados} em aberto`;
-            title = `Semana Financeira: ${NotificationContextFormatter.formatValue(totalProximos)} previstos 💵`;
-            body = `${proximosLabel} esta semana e ${atrasadosLabel} (${NotificationContextFormatter.formatValue(totalAtrasado)}). Confira seus recebimentos e dê baixa no app.`;
+            title = "Pagamentos da Semana 🚐💵";
+            body = `Você tem ${NotificationContextFormatter.formatValue(totalProximos)} para receber esta semana (${proximosLabel}) e ${atrasadosLabel}. Não esqueça de conferir e dar baixa!`;
         } else if (totalProximos > 0) {
-            const proximosLabel = qtdProximos === 1 ? "1 parcela vence" : `${qtdProximos} parcelas vencem`;
-            title = `Semana Financeira: ${NotificationContextFormatter.formatValue(totalProximos)} previstos 💵`;
-            body = `${proximosLabel} nos próximos 7 dias. Confira seus recebimentos e dê baixa no app.`;
+            const proximosLabel = qtdProximos === 1 ? "1 parcela vencendo" : `${qtdProximos} parcelas vencendo`;
+            title = "Pagamentos da Semana 🚐💵";
+            body = `Você tem ${proximosLabel} nos próximos dias (${NotificationContextFormatter.formatValue(totalProximos)}). Confira no app.`;
         } else if (totalAtrasado > 0) {
-            const atrasadosLabel = qtdAtrasados === 1 ? "1 parcela consta em aberto" : `${qtdAtrasados} parcelas constam em aberto`;
-            title = `Resumo de Pendências: ${NotificationContextFormatter.formatValue(totalAtrasado)} 💵`;
-            body = `Você possui ${atrasadosLabel}. Confira se já recebeu e dê baixa no app.`;
+            const atrasadosLabel = qtdAtrasados === 1 ? "1 parcela que consta" : `${qtdAtrasados} parcelas que constam`;
+            title = "Parcelas em Aberto ⚠️";
+            body = `Você tem ${atrasadosLabel} em aberto (${NotificationContextFormatter.formatValue(totalAtrasado)}). Confira se já caiu na sua conta e dê baixa.`;
         }
 
         return {
@@ -276,9 +291,6 @@ export class FirebaseDriverTemplates {
         };
     }
 
-    /**
-     * Notificação Push enviada ao motorista quando um novo pré-cadastro é submetido por um responsável
-     */
     static newPassengerPreRegistration(ctx: Record<string, unknown>): FirebaseMessagePayload {
         const parentName = NotificationContextFormatter.getFirstName((ctx.nomeResponsavel || ctx.nomePai || ctx.nome) as string, "Responsável");
         const studentName = (ctx.nomePassageiro || ctx.nomeAluno || "novo aluno") as string;
@@ -295,9 +307,6 @@ export class FirebaseDriverTemplates {
         };
     }
 
-    /**
-     * Notificação Push enviada ao motorista quando um responsável informa uma ausência
-     */
     static absenceRegisteredByParent(ctx: Record<string, unknown>): FirebaseMessagePayload {
         const studentName = (ctx.nomePassageiro || ctx.nomeAluno || "O aluno") as string;
         const routeName = (ctx.nomeRota || ctx.rota || "rota") as string;
@@ -315,9 +324,6 @@ export class FirebaseDriverTemplates {
         };
     }
 
-    /**
-     * Notificação Push enviada ao motorista quando um responsável cancela/remove uma ausência agendada
-     */
     static absenceRemovedByParent(ctx: Record<string, unknown>): FirebaseMessagePayload {
         const studentName = (ctx.nomePassageiro || ctx.nomeAluno || "O aluno") as string;
         const routeName = (ctx.nomeRota || ctx.rota || "rota") as string;

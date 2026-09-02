@@ -3,6 +3,7 @@ import { logger } from "../../config/logger.js";
 import { SubscriptionStatus, ConfigKey, CheckoutPaymentMethod } from "../../types/enums.js";
 import { subscriptionService } from "./subscription.service.js";
 import { subscriptionBillingService } from "./subscription-billing.service.js";
+import { subscriptionRepository } from "../../repositories/subscription.repository.js";
 import { monitorRepository } from "../../repositories/monitor.repository.js";
 import { notificationRepository } from "../../repositories/notification.repository.js";
 import { notificationService } from "../notifications/notification.service.js";
@@ -15,8 +16,11 @@ import {
   EVENTO_MOTORISTA_ASSINATURA_VENCENDO,
   EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO,
   EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO,
+  EVENTO_MOTORISTA_TRIAL_BONUS_INATIVO,
   EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1,
   EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2,
+  TRIAL_BONUS_INACTIVE_DAYS,
+  TRIAL_INACTIVE_PASSENGERS_THRESHOLD,
   EVENTO_MOTORISTA_RENOVACAO_LEMBRETE,
   EVENTO_MOTORISTA_RENOVACAO_URGENCIA,
   EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_1,
@@ -131,18 +135,53 @@ export const subscriptionMonitorService = {
     sub: any,
     now: Date = getNowBR(),
     notifiedSet?: Set<string>
-  ): Promise<boolean> {
+  ): Promise<{ tipo: string; cicloRef: string } | null> {
     const user = this.getUserObject((sub as any).usuarios);
-    if (!user?.telefone || !sub.trial_ends_at) return false;
+    if (!user?.telefone || !sub.trial_ends_at) return null;
 
     const daysLeft = diffInDays(now, sub.trial_ends_at);
-    if (daysLeft !== 1) return false;
+    if (daysLeft !== 1) return null;
+
+    const jaEstendeu = Boolean(sub.trial_estendido);
+    const { count } = await monitorRepository.getPassengerCount(sub.usuario_id);
+    const totalPassageiros = count ?? 0;
+
+    if (totalPassageiros < TRIAL_INACTIVE_PASSENGERS_THRESHOLD && !jaEstendeu) {
+      const tipo: string = EVENTO_MOTORISTA_TRIAL_BONUS_INATIVO;
+      const cicloRef = this.toCicloRef(sub.trial_ends_at);
+
+      if (notifiedSet?.has(`${sub.usuario_id}:${tipo}:${cicloRef}`)) return null;
+      if (!notifiedSet && await this.hasNotified(sub.usuario_id, tipo, cicloRef)) return null;
+
+      const novoTrialEnd = getEndOfDayBR(addDays(new Date(sub.trial_ends_at), TRIAL_BONUS_INACTIVE_DAYS)).toISOString();
+      await subscriptionRepository.extendTrialBonus(sub.id, novoTrialEnd);
+
+      logger.info({
+        usuarioId: sub.usuario_id,
+        totalPassageiros,
+        novoTrialEnd
+      }, "[SubscriptionMonitor] Bônus de trial (+7 dias) concedido para motorista inativo");
+
+      await notificationService.notifyDriver(user.telefone || "", tipo, {
+        nomeMotorista: user.nome,
+        email: user.email,
+        bonusDays: TRIAL_BONUS_INACTIVE_DAYS,
+        dataVencimento: novoTrialEnd,
+        usuarioId: sub.usuario_id,
+      }, { channels: [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND], email: user.email, usuarioId: sub.usuario_id });
+
+      if (!notifiedSet) {
+        await this.logNotification(sub.usuario_id, tipo, cicloRef);
+      }
+
+      return { tipo, cicloRef };
+    }
 
     const tipo: string = EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO;
     const cicloRef = this.toCicloRef(sub.trial_ends_at);
 
-    if (notifiedSet?.has(`${sub.usuario_id}:${tipo}:${cicloRef}`)) return false;
-    if (!notifiedSet && await this.hasNotified(sub.usuario_id, tipo, cicloRef)) return false;
+    if (notifiedSet?.has(`${sub.usuario_id}:${tipo}:${cicloRef}`)) return null;
+    if (!notifiedSet && await this.hasNotified(sub.usuario_id, tipo, cicloRef)) return null;
 
     await notificationService.notifyDriver(user.telefone || "", tipo, {
       nomeMotorista: user.nome,
@@ -156,7 +195,7 @@ export const subscriptionMonitorService = {
       await this.logNotification(sub.usuario_id, tipo, cicloRef);
     }
 
-    return true;
+    return { tipo, cicloRef };
   },
 
   async warnExpiringTrials(): Promise<void> {
@@ -170,17 +209,17 @@ export const subscriptionMonitorService = {
     if (error || !expiring?.length) return;
 
     const userIds = expiring.map((sub: any) => sub.usuario_id);
-    const tiposPossiveis = [EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO];
+    const tiposPossiveis = [EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO, EVENTO_MOTORISTA_TRIAL_BONUS_INATIVO];
     const notifiedSet = await this.getNotifiedSet(userIds, tiposPossiveis);
     const logsToSave: { usuarioId: string; tipo: string; cicloRef: string }[] = [];
 
     for (const sub of expiring) {
-      const sent = await this.processarAvisoTrialUltimoDia(sub, now, notifiedSet);
-      if (sent) {
+      const result = await this.processarAvisoTrialUltimoDia(sub, now, notifiedSet);
+      if (result) {
         logsToSave.push({
           usuarioId: sub.usuario_id,
-          tipo: EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO,
-          cicloRef: this.toCicloRef(sub.trial_ends_at)
+          tipo: result.tipo,
+          cicloRef: result.cicloRef
         });
       }
     }
@@ -189,9 +228,41 @@ export const subscriptionMonitorService = {
   },
 
   async processarExpiracaoTrial(sub: any): Promise<boolean> {
+    const user = this.getUserObject((sub as any).usuarios);
+    const jaEstendeu = Boolean(sub.trial_estendido);
+    const { count } = await monitorRepository.getPassengerCount(sub.usuario_id);
+    const totalPassageiros = count ?? 0;
+
+    if (totalPassageiros < TRIAL_INACTIVE_PASSENGERS_THRESHOLD && !jaEstendeu) {
+      const tipo: string = EVENTO_MOTORISTA_TRIAL_BONUS_INATIVO;
+      const cicloRef = this.toCicloRef(sub.trial_ends_at || new Date());
+
+      const novoTrialEnd = getEndOfDayBR(addDays(getNowBR(), TRIAL_BONUS_INACTIVE_DAYS)).toISOString();
+      await subscriptionRepository.extendTrialBonus(sub.id, novoTrialEnd);
+
+      logger.info({
+        usuarioId: sub.usuario_id,
+        totalPassageiros,
+        novoTrialEnd
+      }, "[SubscriptionMonitor] Bônus de trial (+7 dias) concedido via fallback de expiração para motorista inativo");
+
+      if (user?.telefone) {
+        await notificationService.notifyDriver(user.telefone || "", tipo, {
+          nomeMotorista: user.nome,
+          email: user.email,
+          bonusDays: TRIAL_BONUS_INACTIVE_DAYS,
+          dataVencimento: novoTrialEnd,
+          usuarioId: sub.usuario_id,
+        }, { channels: [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND], email: user.email, usuarioId: sub.usuario_id });
+
+        await this.logNotification(sub.usuario_id, tipo, cicloRef);
+      }
+
+      return false;
+    }
+
     await subscriptionService.updateStatus(sub.id, SubscriptionStatus.EXPIRED, "Período de teste encerrado.");
 
-    const user = this.getUserObject((sub as any).usuarios);
     if (user?.telefone) {
       await notificationService.notifyDriver(user.telefone || "", EVENTO_MOTORISTA_TESTE_ENCERRADO, {
         nomeMotorista: user.nome,

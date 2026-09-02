@@ -30,6 +30,7 @@ import {
     EVENTO_MOTORISTA_INDICACAO_BONUS,
     EVENTO_MOTORISTA_INDICACAO_CADASTRO,
     EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO,
+    EVENTO_MOTORISTA_TRIAL_BONUS_INATIVO,
     EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1,
     EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2,
     EVENTO_MOTORISTA_NOVO_PRE_CADASTRO,
@@ -46,6 +47,7 @@ export class FirebaseMapper {
                 case EVENTO_MOTORISTA_TESTE_BOAS_VINDAS: return FirebaseDriverTemplates.welcomeTrial(contextData);
                 case EVENTO_MOTORISTA_TESTE_ENCERRADO: return FirebaseDriverTemplates.trialEnded(contextData);
                 case EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO: return FirebaseDriverTemplates.trialLastCall(contextData);
+                case EVENTO_MOTORISTA_TRIAL_BONUS_INATIVO: return FirebaseDriverTemplates.trialBonusInactive(contextData);
                 case EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1: return FirebaseDriverTemplates.trialRecovery1(contextData);
                 case EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2: return FirebaseDriverTemplates.trialRecovery2(contextData);
                 case EVENTO_MOTORISTA_NOVO_PRE_CADASTRO: return FirebaseDriverTemplates.newPassengerPreRegistration(contextData);
