@@ -166,6 +166,7 @@ export const cobrancaService = {
       inserted = updated;
     } else {
       const cobrancaId = crypto.randomUUID();
+
       const cobrancaData = {
         id: cobrancaId,
         passageiro_id: data.passageiro_id,
@@ -234,8 +235,7 @@ export const cobrancaService = {
                 {
                   channels: [NotificationChannelEnum.FIREBASE],
                   usuarioId: inserted.usuario_id,
-                  passageiroId: inserted.passageiro_id || undefined,
-                  email: respInfo.email
+                  passageiroId: inserted.passageiro_id || undefined
                 }
               );
             }

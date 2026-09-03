@@ -24,7 +24,6 @@ export const cobrancaPagamentoService = {
     if (cobranca.status === CobrancaStatus.PAGO) throw new AppError("Esta cobrança já está paga.", 400);
     if (cobranca.status === CobrancaStatus.CANCELADA) throw new AppError("Esta cobrança está cancelada.", 400);
 
-    // 2. REGISTRAR NO BANCO
     const dataPagamentoStr = data.data_pagamento ? toPersistenceString(data.data_pagamento) : toPersistenceString(getNowBR());
 
     const { data: updated, error } = await cobrancaRepository.registrarPagamentoManual(cobrancaId, {
@@ -51,7 +50,6 @@ export const cobrancaPagamentoService = {
       }
     });
 
-    // 3. GERAR RECIBO (Sincrono e Obrigatorio para consistencia)
     try {
       const reciboUrl = await receiptService.generateForCobranca(cobrancaId);
       if (!reciboUrl) {
@@ -59,8 +57,6 @@ export const cobrancaPagamentoService = {
       }
       updated.recibo_url = reciboUrl;
     } catch (receiptError: unknown) {
-      // Rollback manual (setando status de volta ou apenas lancando erro se a transacao nao for SQL)
-      // Como ja demos o update, vamos reverter o status caso a geracao do recibo falhe CRITICAMENTE
       await cobrancaRepository.update(cobrancaId, {
         status: cobranca.status,
         pagamento_manual: false,
