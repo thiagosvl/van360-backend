@@ -135,6 +135,27 @@ export class NotificationUrlBuilder {
         return clean.replace(/^\//, "");
     }
 
+    static extractContractToken(tokenOrUrl?: string): string {
+        if (!tokenOrUrl) return "";
+        const clean = tokenOrUrl.trim();
+        if (clean.includes("/assinar/")) {
+            const parts = clean.split("/assinar/");
+            const afterAssinar = parts[parts.length - 1] || "";
+            return afterAssinar.split("?")[0].replace(/^\//, "");
+        }
+        if (clean.startsWith("http://") || clean.startsWith("https://")) {
+            try {
+                const urlObj = new URL(clean);
+                const pathParts = urlObj.pathname.split("/").filter(Boolean);
+                return pathParts[pathParts.length - 1] || "";
+            } catch {
+                const parts = clean.split("/").filter(Boolean);
+                return parts[parts.length - 1] || clean;
+            }
+        }
+        return clean.replace(/^\//, "");
+    }
+
     /**
      * URL oficial da Play Store (Android)
      */

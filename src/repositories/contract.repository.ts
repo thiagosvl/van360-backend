@@ -12,13 +12,23 @@ const CONTRACT_PASSAGEIRO_SELECT = `
 
 export const contractRepository = {
   async getByToken(tokenAcesso: string) {
-    const { data, error } = await supabaseAdmin
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tokenAcesso);
+    let query = supabaseAdmin
       .from("contratos")
-      .select(`*, usuario:usuarios(*), passageiro:passageiros(${CONTRACT_PASSAGEIRO_SELECT})`)
-      .eq("token_acesso", tokenAcesso)
-      .single();
+      .select(`*, usuario:usuarios(*), passageiro:passageiros(${CONTRACT_PASSAGEIRO_SELECT})`);
+
+    if (isUuid) {
+      query = query.or(`token_acesso.eq.${tokenAcesso},id.eq.${tokenAcesso}`);
+    } else {
+      query = query.eq("token_acesso", tokenAcesso);
+    }
+
+    const { data, error } = await query.maybeSingle();
 
     if (error) throw error;
+    if (!data) {
+      throw new Error("Contrato não encontrado");
+    }
     return data;
   },
 

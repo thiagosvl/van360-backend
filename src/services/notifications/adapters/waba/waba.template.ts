@@ -231,8 +231,7 @@ export class WabaTemplates {
         const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         
         const rawTokenOrLink = (ctx.linkAssinatura || ctx.linkContrato || ctx.contratoUrl || ctx.tokenAssinatura || ctx.token || "") as string;
-        const fullContractUrl = NotificationUrlBuilder.getContractSignatureUrl(rawTokenOrLink);
-        const tokenOrLink = NotificationUrlBuilder.extractWabaDynamicToken(fullContractUrl);
+        const token = NotificationUrlBuilder.extractContractToken(rawTokenOrLink);
 
         return {
             templateName: WabaTemplateNameEnum.PAIS_CONTRATO,
@@ -250,7 +249,7 @@ export class WabaTemplates {
                     sub_type: WabaButtonSubTypeEnum.URL,
                     index: "0",
                     parameters: [
-                        { type: WabaParameterTypeEnum.TEXT, text: tokenOrLink }
+                        { type: WabaParameterTypeEnum.TEXT, text: token }
                     ]
                 }
             ]
