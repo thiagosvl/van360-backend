@@ -404,23 +404,38 @@ const getExecucaoDetail = async (id: string, targetOwnerId?: string, assignedVei
   return exec;
 };
 
-const iniciarRota = async (rotaId: string, usuarioId: string, notificarPais: boolean = true): Promise<any> => {
+interface IniciarRotaOptions {
+  notificarPais?: boolean;
+  modoExecucao?: "simples" | "passo_a_passo";
+  rastreamentoAtivo?: boolean;
+}
+
+const iniciarRota = async (rotaId: string, usuarioId: string, options?: boolean | IniciarRotaOptions): Promise<any> => {
   if (!rotaId) throw new AppError("ID da rota é obrigatório", 400);
   if (!usuarioId) throw new AppError("ID do usuário é obrigatório", 400);
 
-  // Verifica se esta rota específica já possui uma execução ativa em andamento
+  const opts: IniciarRotaOptions = typeof options === "boolean" 
+    ? { notificarPais: options, modoExecucao: "passo_a_passo" }
+    : (options || { notificarPais: true, modoExecucao: "passo_a_passo" });
+
+  const modoExecucao = opts.modoExecucao ?? "passo_a_passo";
+  const rastreamentoAtivo = opts.rastreamentoAtivo ?? true;
+  
+  let notificarPais = opts.notificarPais !== undefined ? opts.notificarPais : true;
+  if (modoExecucao === "simples") {
+    notificarPais = rastreamentoAtivo;
+  }
+
   const { data: activeExec, error: checkError } = await routeRepository.getExecucaoAtivaByRotaId(rotaId);
 
   if (checkError) throw checkError;
   if (activeExec) {
-    // Se esta rota já tiver uma execução em andamento, retorna os detalhes da execução existente
     return getExecucaoDetail(activeExec.id);
   }
 
   const route = await getRoute(rotaId);
   if (!route) throw new AppError("Rota não encontrada", 404);
 
-  // Se a rota possui um veículo associado, verifica se esse veículo JÁ TEM outra corrida em andamento!
   if (route.veiculo_id) {
     const { data: vehicleActiveExec } = await routeRepository.getExecucaoAtivaByVeiculoId(route.veiculo_id);
     if (vehicleActiveExec && vehicleActiveExec.rota_id !== rotaId) {
@@ -454,8 +469,9 @@ const iniciarRota = async (rotaId: string, usuarioId: string, notificarPais: boo
     notificar_inicio_rota: userConfig?.notificar_inicio_rota ?? true,
     notificar_proxima_parada: userConfig?.notificar_proxima_parada ?? true,
     notificar_conclusao_parada: userConfig?.notificar_conclusao_parada ?? true,
-    rastreamento_ativo: userConfig?.rastreamento_ativo ?? true,
+    rastreamento_ativo: rastreamentoAtivo,
     rastreamento_modo: userConfig?.rastreamento_modo ?? RastreamentoModo.COMPLETO,
+    modo_execucao: modoExecucao,
   };
 
   const { data: exec, error: execError } = await routeRepository.insertExecucao(rotaId, usuarioId, notificarPais, snapshotConfig);
@@ -489,9 +505,11 @@ const iniciarRota = async (rotaId: string, usuarioId: string, notificarPais: boo
     notifyRouteStarted(exec.id).catch((err) =>
       logger.error({ err, execId: exec.id }, "Erro ao disparar notificação de rota iniciada")
     );
-    notifyNextPendingPassengerStop(exec.id).catch((err) =>
-      logger.error({ err, execId: exec.id }, "Erro ao notificar próximo aluno na inicialização da rota")
-    );
+    if (modoExecucao === "passo_a_passo") {
+      notifyNextPendingPassengerStop(exec.id).catch((err) =>
+        logger.error({ err, execId: exec.id }, "Erro ao notificar próximo aluno na inicialização da rota")
+      );
+    }
   }
 
   await checkEFinalizarSeTodasParadasConcluidas(exec.id);

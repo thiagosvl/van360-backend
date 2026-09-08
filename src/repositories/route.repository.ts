@@ -314,6 +314,7 @@ export const routeRepository = {
       notificar_conclusao_parada?: boolean;
       rastreamento_ativo?: boolean;
       rastreamento_modo?: string;
+      modo_execucao?: "simples" | "passo_a_passo";
     }
   ) {
     return supabaseAdmin
@@ -322,6 +323,7 @@ export const routeRepository = {
         rota_id: rotaId,
         usuario_id: usuarioId,
         status: RouteExecutionStatus.INICIADA,
+        modo_execucao: snapshotConfig?.modo_execucao ?? "passo_a_passo",
         notificar_pais: notificarPais,
         notificar_inicio_rota: snapshotConfig?.notificar_inicio_rota ?? true,
         notificar_proxima_parada: snapshotConfig?.notificar_proxima_parada ?? true,
@@ -329,7 +331,7 @@ export const routeRepository = {
         rastreamento_ativo: snapshotConfig?.rastreamento_ativo ?? true,
         rastreamento_modo: snapshotConfig?.rastreamento_modo ?? "completo",
       }])
-      .select()
+      .select("*")
       .single();
   },
 

@@ -67,4 +67,13 @@ export const chamadaEscolaSchema = z.object({
   )
 });
 
-export const DELETE_AUSENCIA_BY_QUERY_PARAM = "by-query";
+export const startRouteSchema = z.object({
+  notificar_pais: z.boolean().optional(),
+  notificarPais: z.boolean().optional(),
+  modo_execucao: z.enum(["simples", "passo_a_passo"]).optional(),
+  modoExecucao: z.enum(["simples", "passo_a_passo"]).optional(),
+  rastreamento_ativo: z.boolean().optional(),
+  rastreamentoAtivo: z.boolean().optional(),
+});
+
+export const DELETE_AUSENCIA_BY_QUERY_PARAM = "by-query";

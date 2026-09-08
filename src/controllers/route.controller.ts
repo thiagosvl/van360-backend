@@ -10,7 +10,8 @@ import {
   stepRouteExecutionSchema,
   reorderExecucaoSchema,
   createAusenciaSchema,
-  chamadaEscolaSchema
+  chamadaEscolaSchema,
+  startRouteSchema
 } from "../types/dtos/route.dto.js";
 
 export const routeController = {
@@ -94,17 +95,24 @@ export const routeController = {
 
   iniciarRota: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
-    const body = (request.body || {}) as { notificar_pais?: boolean; notificarPais?: boolean };
-    const notificarPais = body.notificar_pais !== undefined ? body.notificar_pais : (body.notificarPais !== undefined ? body.notificarPais : true);
+    const parsed = startRouteSchema.parse(request.body || {});
+    
+    const notificarPais = parsed.notificar_pais !== undefined ? parsed.notificar_pais : (parsed.notificarPais !== undefined ? parsed.notificarPais : true);
+    const modoExecucao = parsed.modo_execucao || parsed.modoExecucao || "passo_a_passo";
+    const rastreamentoAtivo = parsed.rastreamento_ativo !== undefined ? parsed.rastreamento_ativo : (parsed.rastreamentoAtivo !== undefined ? parsed.rastreamentoAtivo : true);
 
-    logger.info({ routeId: id, notificarPais }, "RouteController.iniciarRota - Starting");
+    logger.info({ routeId: id, notificarPais, modoExecucao, rastreamentoAtivo }, "RouteController.iniciarRota - Starting");
 
     const authUid = request.user?.id;
     if (!authUid) {
       throw new AppError("Não autorizado", 401);
     }
 
-    const result = await routeService.iniciarRota(id, authUid, notificarPais);
+    const result = await routeService.iniciarRota(id, authUid, {
+      notificarPais,
+      modoExecucao,
+      rastreamentoAtivo
+    });
     return reply.status(201).send(result);
   },
 
