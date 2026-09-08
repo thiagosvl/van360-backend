@@ -67,31 +67,24 @@ export const getStartOfDayBR = (date?: Date | string): Date => {
   return d;
 };
 
-/**
- * Formata um objeto Date (ou string) como YYYY-MM-DD para persistência no banco (colunas DATE).
- * ESSENCIAL para evitar o bug de pular um dia ao usar .toISOString() perto da meia-noite.
- */
 export const toPersistenceString = (date: Date | string): string => {
   const d = typeof date === 'string' ? parseLocalDate(date) : date;
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(d);
 };
 
-/**
- * Alias para compatibilidade legada.
- */
 export const toLocalDateString = (date: Date | string): string => {
   return toPersistenceString(date);
 };
 
-/**
- * Formata para DD/MM/YYYY HH:mm.
- */
 export const formatDateTime = (date: string | Date): string => {
   const d = typeof date === 'string' ? parseLocalDate(date) : date;
   return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -101,15 +94,14 @@ export const formatDateTime = (date: string | Date): string => {
   }).format(d);
 };
 
-/**
- * Formata para DD/MM/YYYY.
- */
 export const formatToBrazilianDate = (date: Date | string): string => {
   const d = typeof date === 'string' ? parseLocalDate(date) : date;
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = d.getFullYear();
-  return `${day}/${month}/${year}`;
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  }).format(d);
 };
 
 export const getMonthNameBR = (monthNumber?: number): string => {

@@ -19,6 +19,7 @@ export const createInvoiceSchema = z.object({
     zipcode: z.string().optional(),
     city: z.string().optional(),
     state: z.string().optional(),
+    origem: z.enum(["MANUAL", "AUTOMATICO"]).optional(),
 });
 
 export type CreateInvoiceDTO = z.infer<typeof createInvoiceSchema>;

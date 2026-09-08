@@ -684,6 +684,7 @@ export const subscriptionMonitorService = {
         planId: sub.plano_id,
         paymentMethod: sub.metodo_pagamento || CheckoutPaymentMethod.PIX,
         saveCard: false,
+        origem: "AUTOMATICO",
       });
 
       if (!isCard && user?.telefone && fatura.pix_copy_paste) {

@@ -126,7 +126,7 @@ export const subscriptionBillingService = {
     async createInvoice(userId: string, requestData: CreateInvoiceDTO) {
         const {
             planId, paymentMethod, installments, paymentToken, savedCardId, saveCard, cardBrand, cardLast4, expireMonth, expireYear,
-            birth, street, number, neighborhood, zipcode, city, state
+            birth, street, number, neighborhood, zipcode, city, state, origem = "MANUAL"
         } = requestData;
 
         const [userRes, planRes] = await Promise.all([
@@ -249,7 +249,7 @@ export const subscriptionBillingService = {
                     }
                 }
 
-                if (paymentMethod === CheckoutPaymentMethod.CREDIT_CARD) {
+                if (paymentMethod === CheckoutPaymentMethod.CREDIT_CARD && origem !== "AUTOMATICO") {
                     const { notificationService } = await import("../notifications/notification.service.js");
                     const { EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO } = await import("../../config/constants.js");
                     notificationService.notifyAdmin(EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO, {
@@ -306,7 +306,7 @@ export const subscriptionBillingService = {
                     }
                 }
 
-                if (paymentMethod === CheckoutPaymentMethod.CREDIT_CARD) {
+                if (paymentMethod === CheckoutPaymentMethod.CREDIT_CARD && origem !== "AUTOMATICO") {
                     const { notificationService } = await import("../notifications/notification.service.js");
                     const { EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO } = await import("../../config/constants.js");
                     notificationService.notifyAdmin(EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO, {
