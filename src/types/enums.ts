@@ -247,6 +247,8 @@ export enum SubscriptionStatus {
   EXPIRED = "EXPIRED"
 }
 
+export const SUBSCRIPTION_VITALICIO_FILTER = "VITALICIO" as const;
+
 export const STATUS_ASSINATURA_LIBERADA = [
   SubscriptionStatus.TRIAL,
   SubscriptionStatus.ACTIVE,

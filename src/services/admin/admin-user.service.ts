@@ -286,23 +286,22 @@ export const adminUserService = {
       }
     }
 
-    const { data, error, count } = await adminUserRepository.listUsers({ from, to, searchClean, digits, isId });
+    const { data, error, count } = await adminUserRepository.listUsers({
+      from,
+      to,
+      searchClean,
+      digits,
+      isId,
+      status: status?.trim() || undefined,
+    });
+
     if (error) {
       logger.error({ error }, "[AdminUserService] Erro ao listar usuários.");
       throw error;
     }
 
-    let filtered = data || [];
-
-    if (status) {
-      filtered = filtered.filter((u: { assinaturas?: Array<{ status: string }> | { status: string } }) => {
-        const sub = Array.isArray(u.assinaturas) ? u.assinaturas[0] : u.assinaturas;
-        return sub?.status === status;
-      });
-    }
-
     return {
-      data: filtered,
+      data: data || [],
       total: count ?? 0,
       page,
       limit,

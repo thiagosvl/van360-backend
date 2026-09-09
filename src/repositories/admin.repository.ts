@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "../config/supabase.js";
-import { UserType } from "../types/enums.js";
+import { UserType, SubscriptionStatus, SUBSCRIPTION_VITALICIO_FILTER } from "../types/enums.js";
 import { isValidFilterValue } from "../utils/filter.utils.js";
 
 export const adminRepository = {
@@ -43,13 +43,34 @@ export const adminRepository = {
         ]);
     },
 
-    async listUsers(query: { from: number; to: number; searchClean?: string; isId?: boolean; digits?: string }) {
+    async listUsers(query: {
+        from: number;
+        to: number;
+        searchClean?: string;
+        isId?: boolean;
+        digits?: string;
+        status?: string;
+    }) {
+        const isFilteredByStatus = Boolean(query.status);
+        const assinaturasRelation = isFilteredByStatus ? "assinaturas!inner" : "assinaturas";
+
         let q = supabaseAdmin
             .from("usuarios")
-            .select("id, nome, apelido, email, cpfcnpj, telefone, ativo, tipo, created_at, data_nascimento, assinaturas(id, status, plano_id, data_vencimento, trial_ends_at, planos(id, nome, identificador))", { count: "exact" })
+            .select(`id, nome, apelido, email, cpfcnpj, telefone, ativo, tipo, created_at, data_nascimento, ${assinaturasRelation}(id, status, plano_id, data_vencimento, trial_ends_at, planos(id, nome, identificador))`, { count: "exact" })
             .eq("tipo", UserType.MOTORISTA)
-            .order("created_at", { ascending: false })
-            .range(query.from, query.to);
+            .order("created_at", { ascending: false });
+
+        if (query.status === SUBSCRIPTION_VITALICIO_FILTER) {
+            q = q
+                .eq("assinaturas.status", SubscriptionStatus.ACTIVE)
+                .is("assinaturas.data_vencimento", null);
+        } else if (query.status === SubscriptionStatus.ACTIVE) {
+            q = q
+                .eq("assinaturas.status", SubscriptionStatus.ACTIVE)
+                .not("assinaturas.data_vencimento", "is", null);
+        } else if (query.status) {
+            q = q.eq("assinaturas.status", query.status);
+        }
 
         if (query.isId && isValidFilterValue(query.searchClean)) {
             q = q.eq("id", query.searchClean);
@@ -60,7 +81,7 @@ export const adminRepository = {
                 q = q.or(`nome.ilike.%${query.searchClean}%`);
             }
         }
-        return q;
+        return q.range(query.from, query.to);
     },
 
     async getUserLogs(
