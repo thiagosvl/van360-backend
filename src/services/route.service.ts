@@ -849,17 +849,6 @@ const processarChamadaEscola = async (execucaoId: string, data: ChamadaEscolaDTO
 
   notifyFleetRealtime(RouteBroadcastEvent.STOP_STATUS_CHANGED, { execucaoId });
 
-  if ((exec as any)?.notificar_pais !== false) {
-    if (data.escola_parada_id) {
-      notifySchoolDepartureVolta(execucaoId, data.escola_parada_id).catch((bgErr) =>
-        logger.error({ bgErr, execucaoId }, "[routeService] Erro ao notificar saída da escola após chamada escola")
-      );
-    }
-    notifyNextPendingPassengerStop(execucaoId).catch((bgErr) =>
-      logger.error({ bgErr, execucaoId }, "[routeService] Erro ao notificar próximo após chamada escola")
-    );
-  }
-
   return await getExecucaoDetail(execucaoId);
 };
 
