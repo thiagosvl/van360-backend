@@ -25,8 +25,8 @@ export class FirebaseDriverTemplates {
         });
 
         return {
-            title: "Seu teste expirou ⏰",
-            body: `Olá ${driverName}, assine agora e continue gerindo sua frota sem interrupções!`,
+            title: "Seu teste encerrou ⏰",
+            body: `Olá ${driverName}, assine agora para manter o envio de lembretes aos pais e suas cobranças em dia!`,
             data: {
                 action: PushNotificationAction.OPEN_SUBSCRIPTION,
                 checkoutUrl
@@ -41,8 +41,8 @@ export class FirebaseDriverTemplates {
         });
 
         return {
-            title: "Último dia de acesso gratuito ⚠️",
-            body: "Seu teste grátis encerra amanhã. Assine hoje para não perder acesso à sua frota.",
+            title: "Último dia de teste! ⚠️",
+            body: "Assine hoje para continuar enviando lembretes aos pais e manter suas mensalidades organizadas.",
             data: {
                 action: PushNotificationAction.OPEN_SUBSCRIPTION,
                 checkoutUrl
@@ -72,7 +72,7 @@ export class FirebaseDriverTemplates {
 
         return {
             title: "Sentimos sua falta! 💙",
-            body: "Seu acesso encerrou, mas seus dados estão salvos. Assine e volte a usar o Van360!",
+            body: "Seus alunos continuam salvos. Reative sua conta e deixe as cobranças e rotas no automático!",
             data: {
                 action: PushNotificationAction.OPEN_SUBSCRIPTION,
                 checkoutUrl
