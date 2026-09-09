@@ -15,11 +15,12 @@ const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.addHook("onRequest", verifySupabaseJWT);
   app.addHook("onRequest", verifyAdmin);
 
-  // Dashboard & Usuários / Motoristas
   app.get("/dashboard", adminUserController.getDashboard);
   app.get("/users", adminUserController.getUsers);
+  app.get("/users/latest-activity", adminUserController.getUsersLatestActivity);
   app.post("/users", adminUserController.createUser);
   app.get("/users/:id", adminUserController.getUserDetails);
+
   app.patch("/users/:id", adminUserController.updateUser);
   app.patch("/users/:id/subscription", adminUserController.updateSubscription);
   app.post("/users/:id/reset-password", adminUserController.resetUserPassword);
@@ -30,6 +31,7 @@ const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get("/login-attempts", adminLoginAttemptsController.getLoginAttempts);
   app.get("/logs", adminLogController.getGlobalLogs);
   app.get("/users/:id/logs", adminLogController.getUserLogs);
+  app.get("/notifications", adminNotificationController.getGlobalNotifications);
   app.get("/users/:id/notifications", adminNotificationController.getUserNotifications);
   app.get("/passengers/:id/notifications", adminNotificationController.getPassengerNotifications);
 

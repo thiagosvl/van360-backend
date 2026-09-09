@@ -105,6 +105,64 @@ export type DispatchDriverNotificationDTO = z.infer<typeof dispatchDriverNotific
 export const listUserNotificationsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(500).default(25),
+  canal: z.string().optional(),
+  status: z.string().optional(),
+  categoria: z.string().optional(),
+  evento: z.string().optional(),
+  search: z.string().optional(),
+  searchMotorista: z.string().optional(),
+  dataInicio: z.string().optional(),
+  dataFim: z.string().optional(),
 });
 export type ListUserNotificationsQuery = z.infer<typeof listUserNotificationsQuerySchema>;
+
+export interface NotificationKpisDTO {
+  total: number;
+  sent: number;
+  failed: number;
+  wabaSent: number;
+  wabaFailed: number;
+  custoEstimadoWaba: number;
+  taxaSucesso: number;
+  canais: {
+    waba: number;
+    firebase: number;
+    resend: number;
+    telegram: number;
+    evolution: number;
+    sms: number;
+  };
+}
+
+export const listUsersLatestActivityQuerySchema = z.object({
+  search: z.string().optional(),
+  sort: z.enum(["inactive_first", "recent_first"]).default("inactive_first"),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(10),
+});
+export type ListUsersLatestActivityQuery = z.infer<typeof listUsersLatestActivityQuerySchema>;
+
+export interface MotoristaLatestActivityDTO {
+  id: string;
+  nome: string;
+  apelido: string | null;
+  telefone: string;
+  email: string;
+  cadastrado_em: string;
+  ultima_acao: string | null;
+  ultima_descricao: string | null;
+  ultima_atividade_at: string | null;
+  assinatura_status: string | null;
+  assinatura_vencimento: string | null;
+  dias_inativo: number;
+}
+
+export interface MotoristasLatestActivityResponseDTO {
+  data: MotoristaLatestActivityDTO[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+
 

@@ -8,7 +8,9 @@ import {
   listUsersQuerySchema,
   createUserAdminSchema,
   dispatchDriverNotificationSchema,
+  listUsersLatestActivityQuerySchema,
 } from "../../schemas/admin.schema.js";
+
 
 export const adminUserController = {
   async getDashboard(_request: FastifyRequest, reply: FastifyReply) {
@@ -126,4 +128,17 @@ export const adminUserController = {
       return reply.status(status).send({ error: error.message });
     }
   },
+
+  async getUsersLatestActivity(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const query = listUsersLatestActivityQuerySchema.parse(request.query);
+      const result = await adminUserService.getUsersLatestActivity(query);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao buscar última atividade dos usuários.");
+      return reply.status(500).send({ error: "Erro ao buscar última atividade dos usuários." });
+    }
+  },
 };
+

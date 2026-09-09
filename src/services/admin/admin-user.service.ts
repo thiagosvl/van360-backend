@@ -22,8 +22,18 @@ import {
 import { historicoService } from "../historico.service.js";
 import { getNowBR, parseBrazilianDateToISO } from "../../utils/date.utils.js";
 import { onlyDigits, cleanString } from "../../utils/string.utils.js";
-import type { UpdateUserAdminDTO, UpdateSubscriptionAdminDTO, ListUsersQuery, CreateUserAdminDTO } from "../../schemas/admin.schema.js";
 import { subscriptionService } from "../subscriptions/subscription.service.js";
+import type {
+  UpdateUserAdminDTO,
+  UpdateSubscriptionAdminDTO,
+  ListUsersQuery,
+  CreateUserAdminDTO,
+  ListUsersLatestActivityQuery,
+  MotoristaLatestActivityDTO,
+  MotoristasLatestActivityResponseDTO,
+} from "../../schemas/admin.schema.js";
+
+
 import { notificationService } from "../notifications/notification.service.js";
 import { EVENTO_MOTORISTA_CADASTRO_ADMIN, EVENTO_MOTORISTA_RESET_SENHA_ADMIN } from "../../config/constants.js";
 import { adminPassageiroService } from "./admin-passageiro.service.js";
@@ -605,4 +615,47 @@ export const adminUserService = {
 
     return { success: true };
   },
+
+  async getUsersLatestActivity(query: ListUsersLatestActivityQuery): Promise<MotoristasLatestActivityResponseDTO> {
+    const { search, sort, page, limit } = query;
+    const offset = (page - 1) * limit;
+
+    const { data, error } = await adminUserRepository.getUsersLatestActivity({
+      search,
+      sort,
+      limit,
+      offset,
+    });
+
+    if (error) {
+      logger.error({ error }, "[AdminUserService] Erro ao buscar última atividade dos motoristas.");
+      throw error;
+    }
+
+    const rows = (data || []) as (MotoristaLatestActivityDTO & { total_count: number | string })[];
+    const total = rows.length > 0 ? Number(rows[0].total_count) : 0;
+
+    const items: MotoristaLatestActivityDTO[] = rows.map((r) => ({
+      id: r.id,
+      nome: r.nome,
+      apelido: r.apelido,
+      telefone: r.telefone,
+      email: r.email,
+      cadastrado_em: r.cadastrado_em,
+      ultima_acao: r.ultima_acao,
+      ultima_descricao: r.ultima_descricao,
+      ultima_atividade_at: r.ultima_atividade_at,
+      assinatura_status: r.assinatura_status,
+      assinatura_vencimento: r.assinatura_vencimento,
+      dias_inativo: Number(r.dias_inativo),
+    }));
+
+    return {
+      data: items,
+      total,
+      page,
+      limit,
+    };
+  },
 };
+

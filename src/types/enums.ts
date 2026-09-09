@@ -64,6 +64,18 @@ export enum NotificationQueueStatus {
   CANCELLED = "CANCELLED"
 }
 
+export enum NotificationCategoryEnum {
+  TODOS = "TODOS",
+  ROTA = "ROTA",
+  COBRANCA = "COBRANCA",
+  CONTRATO = "CONTRATO",
+  MOTORISTA = "MOTORISTA",
+  SISTEMA = "SISTEMA",
+}
+
+export type { NotificationEvent } from "../config/constants.js";
+export type NotificationEventEnum = import("../config/constants.js").NotificationEvent;
+
 export enum WabaTemplateNameEnum {
   PAIS_VENCIMENTO_PROXIMO = "van360_pais_vencimento_proximo",
   PAIS_VENCIMENTO_PROXIMO_PIX = "van360_pais_vencimento_proximo_pix",

@@ -132,4 +132,19 @@ export const adminUserRepository = {
       .update(data)
       .eq("id", id);
   },
+
+  async getUsersLatestActivity(params: {
+    search?: string;
+    sort: "inactive_first" | "recent_first";
+    limit: number;
+    offset: number;
+  }) {
+    return supabaseAdmin.rpc("get_motoristas_latest_activity", {
+      p_search: params.search || null,
+      p_sort: params.sort,
+      p_limit: params.limit,
+      p_offset: params.offset,
+    });
+  },
 };
+

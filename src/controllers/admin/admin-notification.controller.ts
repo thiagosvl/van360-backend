@@ -29,4 +29,17 @@ export const adminNotificationController = {
       return reply.status(500).send({ error: "Erro ao buscar notificações do aluno." });
     }
   },
+
+  async getGlobalNotifications(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const query = listUserNotificationsQuerySchema.parse(request.query);
+      const result = await adminNotificationService.getGlobalNotifications(query);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminNotificationController] Erro ao buscar notificações globais.");
+      return reply.status(500).send({ error: "Erro ao buscar notificações globais." });
+    }
+  },
 };
+

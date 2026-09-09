@@ -17,14 +17,15 @@ import { userRepository } from "../../repositories/user.repository.js";
 
 export const adminNotificationService = {
   async getUserNotifications(userId: string, query: ListUserNotificationsQuery) {
-    const { page, limit } = query;
+    const { page, limit, ...filters } = query;
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
     const { data, error, count } = await adminNotificationRepository.getUserNotifications(
       userId,
       from,
-      to
+      to,
+      filters
     );
 
     if (error) {
@@ -41,14 +42,15 @@ export const adminNotificationService = {
   },
 
   async getPassengerNotifications(passageiroId: string, query: ListUserNotificationsQuery) {
-    const { page, limit } = query;
+    const { page, limit, ...filters } = query;
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
     const { data, error, count } = await adminNotificationRepository.getPassengerNotifications(
       passageiroId,
       from,
-      to
+      to,
+      filters
     );
 
     if (error) {
@@ -61,6 +63,30 @@ export const adminNotificationService = {
       total: count ?? 0,
       page,
       limit,
+    };
+  },
+
+  async getGlobalNotifications(query: ListUserNotificationsQuery) {
+    const { page, limit, ...filters } = query;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    const [{ data, error, count }, kpis] = await Promise.all([
+      adminNotificationRepository.getGlobalNotifications(from, to, filters),
+      adminNotificationRepository.getGlobalNotificationKpis(filters),
+    ]);
+
+    if (error) {
+      logger.error({ error }, "[AdminNotificationService] Erro ao buscar notificações globais.");
+      throw error;
+    }
+
+    return {
+      data: data || [],
+      total: count ?? 0,
+      page,
+      limit,
+      kpis,
     };
   },
 
