@@ -13,7 +13,7 @@ import { ContratoProvider, TipoResponsavel } from '../types/enums.js';
 export const contractWorker = new Worker<ContractJobData>(
     QUEUE_NAME_CONTRACT,
     async (job: Job<ContractJobData>) => {
-        const { contratoId, providerName, dadosContrato, passageiro, tokenAcesso } = job.data;
+        const { contratoId, usuarioId, providerName, dadosContrato, passageiro, tokenAcesso } = job.data;
 
         logger.info({ jobId: job.id, contratoId }, "[Worker] Iniciando processamento de contrato...");
 
@@ -74,12 +74,14 @@ export const contractWorker = new Worker<ContractJobData>(
                         apelidoMotorista: dadosContrato.apelidoCondutor,
                         linkAssinatura,
                         email: hasValidEmail ? emailResponsavel : undefined,
-                        passageiroId: passageiro.id
+                        passageiroId: passageiro.id,
+                        usuarioId
                     },
                     {
                         channels,
                         email: hasValidEmail ? emailResponsavel : undefined,
-                        passageiroId: passageiro.id
+                        passageiroId: passageiro.id,
+                        usuarioId
                     }
                 );
 

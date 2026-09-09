@@ -2,6 +2,7 @@ import { EVENTO_MOTORISTA_TESTE_BOAS_VINDAS } from "../../config/constants.js";
 import { NotificationChannelEnum, UserType } from "../../types/enums.js";
 import { logger } from "../../config/logger.js";
 import { usuarioPushTokenRepository } from "../../repositories/usuario-push-token.repository.js";
+import { supabaseAdmin } from "../../config/supabase.js";
 
 import { onlyDigits } from "../../utils/string.utils.js";
 
@@ -204,8 +205,19 @@ class NotificationService {
             );
             return false;
         }
-        const usuarioId = options?.usuarioId || (contextData?.usuarioId as string);
+        let usuarioId = options?.usuarioId || (contextData?.usuarioId as string);
         const passageiroId = options?.passageiroId || (contextData?.passageiroId as string) || (contextData?.passageiro_id as string);
+
+        if (!usuarioId && passageiroId) {
+            const { data: pass } = await supabaseAdmin
+                .from("passageiros")
+                .select("usuario_id")
+                .eq("id", passageiroId)
+                .maybeSingle();
+            if (pass?.usuario_id) {
+                usuarioId = pass.usuario_id;
+            }
+        }
 
         const enrichedOptions = { ...options, usuarioId, passageiroId };
         const enrichedContext = { ...contextData, to, usuarioId, passageiroId };
