@@ -21,8 +21,14 @@ export const contractWorker = new Worker<ContractJobData>(
             // 1. Import dinâmico do serviço para evitar circular dependency
             const { contractService } = await import('../services/contract.service.js');
 
-            // 2. Gerar PDF usando o provider correspondente
-            // Nota: O provider deve ser obtido via service para garantir consistência
+            if (!dadosContrato.assinaturaCondutorUrl && usuarioId) {
+                const { userRepository } = await import('../repositories/user.repository.js');
+                const { data: usuario } = await userRepository.getById(usuarioId);
+                if (usuario?.assinatura_digital_url) {
+                    dadosContrato.assinaturaCondutorUrl = usuario.assinatura_digital_url;
+                }
+            }
+
             const provider = (contractService as any).getProvider(providerName);
             const response = await provider.gerarContrato({
                 contratoId,

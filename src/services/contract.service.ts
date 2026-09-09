@@ -195,12 +195,14 @@ class ContractService {
     // 6. Gerar token único e criar registro no banco via Repositorio
     const tokenAcesso = uuidv4();
 
+    const { assinaturaCondutorUrl: _, ...dadosContratoPersistidos } = dadosContrato;
+
     const contrato = await contractRepository.insert({
       usuario_id: usuarioId,
       passageiro_id: passageiroId,
       token_acesso: tokenAcesso,
       provider: providerName,
-      dados_contrato: dadosContrato,
+      dados_contrato: dadosContratoPersistidos,
       status: ContratoStatus.PENDENTE,
       ano: dInicio.getFullYear(),
       data_inicio: dataInicio,
@@ -427,7 +429,13 @@ class ContractService {
 
   async consultarContrato(tokenAcesso: string) {
     try {
-      return await contractRepository.getByToken(tokenAcesso);
+      const contrato = await contractRepository.getByToken(tokenAcesso);
+      if (contrato?.dados_contrato && typeof contrato.dados_contrato === 'object' && 'assinaturaCondutorUrl' in (contrato.dados_contrato as Record<string, unknown>)) {
+        const dados = { ...(contrato.dados_contrato as Record<string, unknown>) };
+        delete dados.assinaturaCondutorUrl;
+        contrato.dados_contrato = dados;
+      }
+      return contrato;
     } catch(err) {
       throw new AppError('Contrato não encontrado', 404);
     }
@@ -504,8 +512,13 @@ class ContractService {
     return {
       data: data.map((c: Record<string, any>) => {
         const respInfo = _getResponsavelInfoFromPassageiro(c.passageiro);
+        const dadosContrato = c.dados_contrato ? { ...(c.dados_contrato as Record<string, unknown>) } : null;
+        if (dadosContrato && 'assinaturaCondutorUrl' in dadosContrato) {
+          delete dadosContrato.assinaturaCondutorUrl;
+        }
         return { 
           ...c, 
+          dados_contrato: dadosContrato,
           tipo: 'contrato',
           passageiro: c.passageiro ? {
             ...c.passageiro,

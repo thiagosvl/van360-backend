@@ -15,7 +15,7 @@ export const contractRepository = {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tokenAcesso);
     let query = supabaseAdmin
       .from("contratos")
-      .select(`*, usuario:usuarios(*), passageiro:passageiros(${CONTRACT_PASSAGEIRO_SELECT})`);
+      .select(`*, usuario:usuarios(id, nome, apelido, razao_social, cpfcnpj, telefone, email), passageiro:passageiros(${CONTRACT_PASSAGEIRO_SELECT})`);
 
     if (isUuid) {
       query = query.or(`token_acesso.eq.${tokenAcesso},id.eq.${tokenAcesso}`);
