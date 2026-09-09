@@ -276,7 +276,8 @@ export const adminNotificationRepository = {
   async getGlobalNotificationKpis(filters?: AdminNotificationFilters): Promise<NotificationKpisDTO> {
     let query = supabaseAdmin
       .from("fila_notificacoes")
-      .select("canal, status");
+      .select("canal, status", { count: "exact" })
+      .limit(10000);
 
     const driverIds = await resolveDriverUserIds(filters?.searchMotorista);
     if (driverIds) {
@@ -285,7 +286,7 @@ export const adminNotificationRepository = {
 
     query = applyFilters(query, filters);
 
-    const { data, error } = await query;
+    const { data, error, count } = await query;
     if (error) {
       throw error;
     }
@@ -334,9 +335,9 @@ export const adminNotificationRepository = {
       }
     }
 
-    const total = rows.length;
+    const total = count ?? rows.length;
     const custoEstimadoWaba = Number((wabaSent * CUSTO_ESTIMADO_WABA_UNITARIO).toFixed(2));
-    const taxaSucesso = total > 0 ? Number((((total - failed) / total) * 100).toFixed(1)) : 100;
+    const taxaSucesso = total > 0 ? Number(((sent / total) * 100).toFixed(1)) : 0;
 
     return {
       total,

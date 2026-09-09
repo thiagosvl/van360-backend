@@ -1,6 +1,6 @@
-﻿CREATE OR REPLACE FUNCTION get_motoristas_latest_activity(
+CREATE OR REPLACE FUNCTION get_motoristas_latest_activity(
   p_search TEXT DEFAULT NULL,
-  p_sort TEXT DEFAULT 'inactive_first',
+  p_sort TEXT DEFAULT 'recent_first',
   p_limit INT DEFAULT 10,
   p_offset INT DEFAULT 0
 )
@@ -35,7 +35,15 @@ BEGIN
   SELECT COUNT(*)
   INTO v_total
   FROM usuarios u
+  LEFT JOIN LATERAL (
+    SELECT s.status
+    FROM assinaturas s
+    WHERE s.usuario_id = u.id
+    ORDER BY s.created_at DESC
+    LIMIT 1
+  ) sub ON true
   WHERE u.tipo = 'motorista'
+    AND sub.status IN ('ACTIVE', 'TRIAL')
     AND (
       v_search_clean IS NULL
       OR u.nome ILIKE '%' || v_search_clean || '%'
@@ -79,6 +87,7 @@ BEGIN
     LIMIT 1
   ) sub ON true
   WHERE u.tipo = 'motorista'
+    AND sub.status IN ('ACTIVE', 'TRIAL')
     AND (
       v_search_clean IS NULL
       OR u.nome ILIKE '%' || v_search_clean || '%'

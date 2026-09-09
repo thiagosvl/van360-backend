@@ -136,7 +136,7 @@ export interface NotificationKpisDTO {
 
 export const listUsersLatestActivityQuerySchema = z.object({
   search: z.string().optional(),
-  sort: z.enum(["inactive_first", "recent_first"]).default("inactive_first"),
+  sort: z.enum(["inactive_first", "recent_first"]).default("recent_first"),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(10),
 });
