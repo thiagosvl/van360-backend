@@ -4,6 +4,7 @@ import {
   EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS,
   EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA,
   EVENTO_MOTORISTA_ASSINATURA_VENCENDO,
+  EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO,
 } from "../config/constants.js";
 
 export const updateUserAdminSchema = z.object({
@@ -98,6 +99,7 @@ export const dispatchDriverNotificationSchema = z.object({
     EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS,
     EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA,
     EVENTO_MOTORISTA_ASSINATURA_VENCENDO,
+    EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO,
   ]),
 });
 export type DispatchDriverNotificationDTO = z.infer<typeof dispatchDriverNotificationSchema>;

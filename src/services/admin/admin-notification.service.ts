@@ -5,6 +5,7 @@ import {
   EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS,
   EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA,
   EVENTO_MOTORISTA_ASSINATURA_VENCENDO,
+  EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO,
 } from "../../config/constants.js";
 import { NotificationChannelEnum, CheckoutPaymentMethod } from "../../types/enums.js";
 import { cobrancaService } from "../cobranca.service.js";
@@ -14,6 +15,7 @@ import { monitorRepository } from "../../repositories/monitor.repository.js";
 import { subscriptionBillingService } from "../subscriptions/subscription-billing.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { userRepository } from "../../repositories/user.repository.js";
+import { diffInDays, getNowBR } from "../../utils/date.utils.js";
 
 export const adminNotificationService = {
   async getUserNotifications(userId: string, query: ListUserNotificationsQuery) {
@@ -155,6 +157,41 @@ export const adminNotificationService = {
         );
 
         return { success: true, pixCopyPaste, valor };
+      }
+
+      case EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO: {
+        const userRes = await userRepository.getById(driverId);
+        const user = userRes.data;
+        if (!user) {
+          throw new Error("Motorista não encontrado.");
+        }
+
+        const subRes = await subscriptionRepository.getSubscriptionWithPlanByUserId(driverId);
+        const sub = subRes.data;
+        if (!sub) {
+          throw new Error("Motorista não possui assinatura cadastrada.");
+        }
+
+        const trialDays = sub.trial_ends_at ? Math.max(1, diffInDays(getNowBR(), sub.trial_ends_at)) : 1;
+
+        await notificationService.notifyDriver(
+          user.telefone || "",
+          EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO,
+          {
+            nomeMotorista: user.nome,
+            email: user.email,
+            trialDays,
+            dataVencimento: sub.trial_ends_at,
+            usuarioId: driverId,
+          },
+          {
+            channels: [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND],
+            email: user.email,
+            usuarioId: driverId,
+          }
+        );
+
+        return { success: true };
       }
 
       default: {
