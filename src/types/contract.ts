@@ -38,18 +38,18 @@ export interface DadosContrato {
   valorParcela: number;
 
   // Multas
-  multaAtraso: {
+  multaAtraso?: {
     valor: number;
     tipo: ContractMultaTipo;
-  };
-  jurosAtraso: {
+  } | null;
+  jurosAtraso?: {
     valor: number;
     tipo: ContractMultaTipo;
-  };
-  multaRescisao: {
+  } | null;
+  multaRescisao?: {
     valor: number;
     tipo: ContractMultaTipo;
-  };
+  } | null;
   
   // Dados do condutor
   nomeCondutor: string;

@@ -270,18 +270,20 @@ export class InHouseContractProvider implements ContractProvider {
       }); // Com decimais se R$
     };
 
-    const multaAtrasoLabel = `Multa por atraso de pagamento (${dados.multaAtraso.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}):`;
-    const multaAtrasoValor = formatMulta(dados.multaAtraso.tipo, dados.multaAtraso.valor);
-    page.drawText(`${multaAtrasoLabel} ${multaAtrasoValor}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
+    const multaAtrasoTexto = (dados.multaAtraso && dados.multaAtraso.valor > 0)
+      ? `Multa por atraso de pagamento (${dados.multaAtraso.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}): ${formatMulta(dados.multaAtraso.tipo, dados.multaAtraso.valor)}`
+      : 'Multa por atraso de pagamento:';
+    page.drawText(multaAtrasoTexto, { x: margin, y: currentY - 28, size: smallTextSize, font });
 
-    const multaRescisaoLabel = `Multa por rescisão de contrato (${dados.multaRescisao.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}):`;
-    const multaRescisaoValor = formatMulta(dados.multaRescisao.tipo, dados.multaRescisao.valor);
-    page.drawText(`${multaRescisaoLabel} ${multaRescisaoValor}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
+    const multaRescisaoTexto = (dados.multaRescisao && dados.multaRescisao.valor > 0)
+      ? `Multa por rescisão de contrato (${dados.multaRescisao.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}): ${formatMulta(dados.multaRescisao.tipo, dados.multaRescisao.valor)}`
+      : 'Multa por rescisão de contrato:';
+    page.drawText(multaRescisaoTexto, { x: 300, y: currentY - 28, size: smallTextSize, font });
 
-    const jurosAtrasoLabel = dados.jurosAtraso.tipo === ContractMultaTipo.PERCENTUAL ? `Juros de mora (atraso):` : `Juros de mora diário:`;
-    const jurosAtrasoFormat = dados.jurosAtraso.tipo === ContractMultaTipo.PERCENTUAL ? ' ao mês' : ' / dia';
-    const jurosAtrasoValor = formatMulta(dados.jurosAtraso.tipo, dados.jurosAtraso.valor);
-    page.drawText(`${jurosAtrasoLabel} ${jurosAtrasoValor}${jurosAtrasoFormat}`, { x: margin, y: currentY - 42, size: smallTextSize, font });
+    const jurosAtrasoTexto = (dados.jurosAtraso && dados.jurosAtraso.valor > 0)
+      ? `${dados.jurosAtraso.tipo === ContractMultaTipo.PERCENTUAL ? 'Juros de mora (atraso):' : 'Juros de mora diário:'} ${formatMulta(dados.jurosAtraso.tipo, dados.jurosAtraso.valor)}${dados.jurosAtraso.tipo === ContractMultaTipo.PERCENTUAL ? ' ao mês' : ' / dia'}`
+      : 'Juros de mora (atraso):';
+    page.drawText(jurosAtrasoTexto, { x: margin, y: currentY - 42, size: smallTextSize, font });
 
     currentY -= 74;
 

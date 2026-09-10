@@ -175,9 +175,15 @@ class ContractService {
       valorTotal,
       qtdParcelas,
       valorParcela: valorMensal,
-      multaAtraso: usuario.config_contrato?.multa_atraso || { valor: 10, tipo: ContractMultaTipo.FIXO },
-      jurosAtraso: usuario.config_contrato?.juros_atraso || { valor: 1, tipo: ContractMultaTipo.PERCENTUAL },
-      multaRescisao: usuario.config_contrato?.multa_rescisao || { valor: 15, tipo: ContractMultaTipo.FIXO },
+      multaAtraso: (usuario.config_contrato?.multa_atraso?.valor && usuario.config_contrato.multa_atraso.valor > 0)
+        ? usuario.config_contrato.multa_atraso
+        : null,
+      jurosAtraso: (usuario.config_contrato?.juros_atraso?.valor && usuario.config_contrato.juros_atraso.valor > 0)
+        ? usuario.config_contrato.juros_atraso
+        : null,
+      multaRescisao: (usuario.config_contrato?.multa_rescisao?.valor && usuario.config_contrato.multa_rescisao.valor > 0)
+        ? usuario.config_contrato.multa_rescisao
+        : null,
       nomeCondutor: getDriverDisplayName(usuario),
       cpfCnpjCondutor: usuario.cpfcnpj,
       telefoneCondutor: usuario.telefone,
@@ -189,10 +195,8 @@ class ContractService {
       apelidoCondutor: usuario.apelido,
     };
 
-    // 5. Aposentar rascunhos PENDENTES anteriores do mesmo passageiro
     await contractRepository.aposentarContratosPassageiro(data.passageiroId, true);
 
-    // 6. Gerar token único e criar registro no banco via Repositorio
     const tokenAcesso = uuidv4();
 
     const { assinaturaCondutorUrl: _, ...dadosContratoPersistidos } = dadosContrato;
@@ -211,12 +215,12 @@ class ContractService {
       qtd_parcelas: qtdParcelas,
       valor_parcela: valorMensal,
       dia_vencimento: dadosContrato.diaVencimento,
-      multa_atraso_valor: dadosContrato.multaAtraso.valor,
-      multa_atraso_tipo: dadosContrato.multaAtraso.tipo,
-      juros_atraso_valor: dadosContrato.jurosAtraso.valor,
-      juros_atraso_tipo: dadosContrato.jurosAtraso.tipo,
-      multa_rescisao_valor: dadosContrato.multaRescisao.valor,
-      multa_rescisao_tipo: dadosContrato.multaRescisao.tipo,
+      multa_atraso_valor: (dadosContrato.multaAtraso?.valor && dadosContrato.multaAtraso.valor > 0) ? dadosContrato.multaAtraso.valor : null,
+      multa_atraso_tipo: (dadosContrato.multaAtraso?.valor && dadosContrato.multaAtraso.valor > 0) ? dadosContrato.multaAtraso.tipo : null,
+      juros_atraso_valor: (dadosContrato.jurosAtraso?.valor && dadosContrato.jurosAtraso.valor > 0) ? dadosContrato.jurosAtraso.valor : null,
+      juros_atraso_tipo: (dadosContrato.jurosAtraso?.valor && dadosContrato.jurosAtraso.valor > 0) ? dadosContrato.jurosAtraso.tipo : null,
+      multa_rescisao_valor: (dadosContrato.multaRescisao?.valor && dadosContrato.multaRescisao.valor > 0) ? dadosContrato.multaRescisao.valor : null,
+      multa_rescisao_tipo: (dadosContrato.multaRescisao?.valor && dadosContrato.multaRescisao.valor > 0) ? dadosContrato.multaRescisao.tipo : null,
     });
 
     // 6. Enfileirar para Geração de PDF e Notificações (Assíncrono via BullMQ)
@@ -691,9 +695,14 @@ class ContractService {
     const config = draftConfig || {};
     const savedConfig = usuario.config_contrato || {};
 
-    const multaAtraso = config.multaAtraso || savedConfig.multa_atraso || { valor: 10, tipo: ContractMultaTipo.FIXO };
-    const jurosAtraso = config.jurosAtraso || savedConfig.juros_atraso || { valor: 1, tipo: ContractMultaTipo.PERCENTUAL };
-    const multaRescisao = config.multaRescisao || savedConfig.multa_rescisao || { valor: 15, tipo: ContractMultaTipo.FIXO };
+    const rawMultaAtraso = config.multaAtraso !== undefined ? config.multaAtraso : savedConfig.multa_atraso;
+    const multaAtraso = (rawMultaAtraso?.valor && rawMultaAtraso.valor > 0) ? rawMultaAtraso : null;
+
+    const rawJurosAtraso = config.jurosAtraso !== undefined ? config.jurosAtraso : savedConfig.juros_atraso;
+    const jurosAtraso = (rawJurosAtraso?.valor && rawJurosAtraso.valor > 0) ? rawJurosAtraso : null;
+
+    const rawMultaRescisao = config.multaRescisao !== undefined ? config.multaRescisao : savedConfig.multa_rescisao;
+    const multaRescisao = (rawMultaRescisao?.valor && rawMultaRescisao.valor > 0) ? rawMultaRescisao : null;
     const clausulas = config.clausulas !== undefined ? config.clausulas : (savedConfig.clausulas || []);
 
     const dadosContrato: DadosContrato = {
