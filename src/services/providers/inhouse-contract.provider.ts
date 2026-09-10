@@ -178,7 +178,7 @@ export class InHouseContractProvider implements ContractProvider {
       // Cor removida (default black)
       page.drawText(title, { x: margin, y, size: fontSizeHeader, font: fontBold });
       page.drawLine({ start: { x: margin, y: y - 5 }, end: { x: 545, y: y - 5 }, thickness: 0.5, color: rgb(0, 0, 0) });
-      return y - 30; // Espaçamento um pouco maior
+      return y - 26;
     };
 
     // ...
@@ -201,7 +201,7 @@ export class InHouseContractProvider implements ContractProvider {
     page.drawText(`Telefone: ${maskPhone(dados.telefoneResponsavel)}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
     page.drawText(`Parentesco: ${formatParentesco(dados.parentescoResponsavel || '')}`, { x: margin, y: currentY - 42, size: smallTextSize, font });
 
-    currentY -= 80;
+    currentY -= 68;
 
     // CONTRATADA
     page.drawText('PRESTADOR(A) DE SERVIÇOS DE TRANSPORTE', { x: margin, y: currentY, size: smallTextSize, font: fontBold });
@@ -209,7 +209,7 @@ export class InHouseContractProvider implements ContractProvider {
     page.drawText(`Documento: ${maskDoc(dados.cpfCnpjCondutor)}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
     page.drawText(`Telefone: ${maskPhone(dados.telefoneCondutor)}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
 
-    currentY -= 70;
+    currentY -= 56;
 
     currentY = drawHeader('ALUNO(A)', currentY);
     page.drawText(`Nome: ${dados.nomePassageiro}`, { x: margin, y: currentY, size: smallTextSize, font });
@@ -220,12 +220,12 @@ export class InHouseContractProvider implements ContractProvider {
 
     page.drawText(`Endereço: ${dados.enderecoCompleto}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
 
-    currentY -= 70;
+    currentY -= 56;
 
     currentY = drawHeader('VEÍCULO', currentY);
     page.drawText(`Modelo: ${dados.modeloVeiculo}`, { x: margin, y: currentY, size: smallTextSize, font });
     page.drawText(`Placa: ${dados.placaVeiculo}`, { x: 300, y: currentY, size: smallTextSize, font });
-    currentY -= 45;
+    currentY -= 32;
 
     currentY = drawHeader('DO PERÍODO DO CONTRATO', currentY);
     const currentYear = getNowBR().getFullYear();
@@ -242,7 +242,7 @@ export class InHouseContractProvider implements ContractProvider {
     page.drawText(`Término do Transporte: ${formatToBrazilianDate(dados.dataFim)}`, { x: 300, y: currentY - 14, size: smallTextSize, font });
     page.drawText(`Primeira Parcela: ${formatMonthYear(dados.dataInicioCobranca)}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
     page.drawText(`Última Parcela: ${formatMonthYear(dados.dataFimCobranca)}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
-    currentY -= 68;
+    currentY -= 56;
 
     currentY = drawHeader('DAS CONDIÇÕES DE VALOR', currentY);
     page.drawText(`Valor total do contrato (R$): ${dados.valorTotal.toLocaleString("pt-BR", {
@@ -285,7 +285,7 @@ export class InHouseContractProvider implements ContractProvider {
       : 'Juros de mora (atraso):';
     page.drawText(jurosAtrasoTexto, { x: margin, y: currentY - 42, size: smallTextSize, font });
 
-    currentY -= 74;
+    currentY -= 62;
 
     const intro = "As partes acima identificadas têm, entre si, justo e acertado o presente Contrato de Prestação de Serviços de Transportes Escolares, sob as cláusulas e as seguintes condições.";
     const introLines = await this.splitTextToLines(intro, fontItalic, fontSizeBody, width);
@@ -298,7 +298,7 @@ export class InHouseContractProvider implements ContractProvider {
       currentY -= lineHeight;
     }
 
-    currentY -= 15;
+    currentY -= 10;
 
     // Processamento Dinâmico de Seções e Cláusulas
     let sections: { title: string; clauses: string[] }[] = [];
@@ -323,9 +323,8 @@ export class InHouseContractProvider implements ContractProvider {
     let clauseCounter = 1;
 
     for (const section of sections) {
-      currentY -= 20;
+      currentY -= 14;
 
-      // Calcular altura necessária para o Título da Seção + 1ª Cláusula da Seção (Evitar cabeçalho órfão)
       let firstClauseHeight = 60;
       if (section.clauses.length > 0) {
         const firstClauseText = `Cláusula ${clauseCounter}ª - ${section.clauses[0]}`;
@@ -333,9 +332,9 @@ export class InHouseContractProvider implements ContractProvider {
         firstClauseHeight = firstClauseLines.length * lineHeight + (lineHeight / 2);
       }
 
-      const totalSectionHeaderSpace = (headerSpacing + 6) + firstClauseHeight + 20;
+      const totalSectionHeaderSpace = (headerSpacing + 6) + firstClauseHeight + 12;
 
-      if (currentY - totalSectionHeaderSpace < 50) {
+      if (currentY - totalSectionHeaderSpace < 45) {
         page = pdfDoc.addPage([595, 842]);
         currentY = 800;
       }
@@ -363,25 +362,23 @@ export class InHouseContractProvider implements ContractProvider {
           }
           currentY -= lineHeight;
         }
-        currentY -= (lineHeight / 2); // Espaço extra entre cláusulas
+        currentY -= (lineHeight / 2);
         clauseCounter++;
       }
 
-      // Espaçamento adicional após cada seção completa
-      currentY -= 16;
+      currentY -= 14;
     }
 
-    if (currentY < 200) { // Garantir espaço para assinaturas
+    if (currentY < 155) {
       page = pdfDoc.addPage([595, 842]);
       currentY = 800;
     }
 
-    currentY -= 40;
+    currentY -= 30;
     const today = getNowBR().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
 
-
     page.drawText(`${today}`, { x: margin, y: currentY, size: smallTextSize, font });
-    currentY -= 80; // Mais espaço para assinar
+    currentY -= 68;
 
     // Linhas de Assinatura
     const signatureLineY = currentY;
