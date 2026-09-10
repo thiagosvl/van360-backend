@@ -7,7 +7,6 @@ export const telegramQueue = createQueue(QUEUE_NAME_TELEGRAM);
 
 export interface TelegramJobData {
     message: string;
-    options?: any;
     context?: string; 
 }
 

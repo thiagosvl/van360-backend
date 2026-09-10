@@ -6,6 +6,23 @@ import { initSentry } from "./config/sentry.js";
 initSentry();
 
 import { createApp } from "./app.js";
+import { errorAlertService } from "./services/error-alert.service.js";
+
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled Rejection:", reason);
+  void errorAlertService.notifyFatalError({
+    error: reason,
+    origin: "unhandledRejection"
+  });
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught Exception:", error);
+  void errorAlertService.notifyFatalError({
+    error,
+    origin: "uncaughtException"
+  });
+});
 
 const start = async () => {
   try {

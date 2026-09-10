@@ -19,6 +19,9 @@ export const env = {
   LOGTAIL_TOKEN: process.env.LOGTAIL_TOKEN,
   LOG_LEVEL: process.env.LOG_LEVEL || "info",
 
+  TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || "",
+  TELEGRAM_ADMIN_CHAT_ID: process.env.TELEGRAM_ADMIN_CHAT_ID || "",
+
   // C6 Bank
   C6_CLIENT_ID: process.env.C6_CLIENT_ID!,
   C6_CLIENT_SECRET: process.env.C6_CLIENT_SECRET!,
