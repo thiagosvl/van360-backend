@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "../../config/supabase.js";
 import { isValidFilterValue } from "../../utils/filter.utils.js";
-import { NotificationCategoryEnum } from "../../types/enums.js";
+import { NotificationCategoryEnum, NotificationQueueStatus } from "../../types/enums.js";
 import {
   EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
   EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
@@ -294,6 +294,7 @@ export const adminNotificationRepository = {
     const rows = data || [];
     let sent = 0;
     let failed = 0;
+    let cancelled = 0;
     let wabaSent = 0;
     let wabaFailed = 0;
     const canais = {
@@ -309,17 +310,19 @@ export const adminNotificationRepository = {
       const statusUpper = (row.status || "").toUpperCase();
       const canalUpper = (row.canal || "").toUpperCase();
 
-      if (statusUpper === "SENT" || statusUpper === "DELIVERED") {
+      if (statusUpper === NotificationQueueStatus.SENT || statusUpper === "DELIVERED") {
         sent++;
-      } else if (statusUpper === "FAILED") {
+      } else if (statusUpper === NotificationQueueStatus.FAILED) {
         failed++;
+      } else if (statusUpper === NotificationQueueStatus.CANCELLED) {
+        cancelled++;
       }
 
       if (canalUpper === "WABA") {
         canais.waba++;
-        if (statusUpper === "SENT" || statusUpper === "DELIVERED") {
+        if (statusUpper === NotificationQueueStatus.SENT || statusUpper === "DELIVERED") {
           wabaSent++;
-        } else if (statusUpper === "FAILED") {
+        } else if (statusUpper === NotificationQueueStatus.FAILED) {
           wabaFailed++;
         }
       } else if (canalUpper === "FIREBASE") {
@@ -337,12 +340,16 @@ export const adminNotificationRepository = {
 
     const total = count ?? rows.length;
     const custoEstimadoWaba = Number((wabaSent * CUSTO_ESTIMADO_WABA_UNITARIO).toFixed(2));
-    const taxaSucesso = total > 0 ? Number(((sent / total) * 100).toFixed(1)) : 0;
+    const elegiveis = Math.max(0, total - cancelled);
+    const taxaSucesso = elegiveis > 0
+      ? Number(((sent / elegiveis) * 100).toFixed(1))
+      : (total > 0 && cancelled === total ? 100 : 0);
 
     return {
       total,
       sent,
       failed,
+      cancelled,
       wabaSent,
       wabaFailed,
       custoEstimadoWaba,
