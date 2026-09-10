@@ -249,8 +249,8 @@ export class FirebaseDriverTemplates {
 
     static referralRegistered(ctx: Record<string, unknown>): FirebaseMessagePayload {
         return {
-            title: "Novo Indicado! 🤝",
-            body: "Seu amigo se cadastrou pelo seu link!",
+            title: "Alguém se cadastrou usando o seu link de indicação! 🎉",
+            body: "Você receberá o bônus de indicação assim que ele realizar a assinatura.",
             data: {
                 action: PushNotificationAction.OPEN_SUBSCRIPTION,
                 userId: (ctx.usuarioId || ctx.userId || "") as string
