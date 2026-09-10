@@ -56,15 +56,14 @@ const _prepareGastoData = (data: Partial<CreateGastoDTO>, usuarioId?: string, is
 
 const addMonthsFinancial = (dateStr: string, monthsToAdd: number): string => {
     const d = parseLocalDate(dateStr);
-    const year = d.getFullYear();
-    const month = d.getMonth();
-    const day = d.getDate();
-
-    const targetDate = new Date(year, month + monthsToAdd, 1);
-    const maxDays = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0).getDate();
-    const targetDay = Math.min(day, maxDays);
-    targetDate.setDate(targetDay);
-    return toPersistenceString(targetDate);
+    const totalMonths = d.getFullYear() * 12 + d.getMonth() + monthsToAdd;
+    const targetYear = Math.floor(totalMonths / 12);
+    const targetMonth = (totalMonths % 12) + 1;
+    const maxDays = new Date(targetYear, targetMonth, 0).getDate();
+    const targetDay = Math.min(d.getDate(), maxDays);
+    const mStr = String(targetMonth).padStart(2, "0");
+    const dStr = String(targetDay).padStart(2, "0");
+    return `${targetYear}-${mStr}-${dStr}`;
 };
 
 export const gastoService = {

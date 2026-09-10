@@ -14,7 +14,7 @@ import {
   EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS
 } from "../config/constants.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
-import { getNowBR, getSafeDueDateString, toPersistenceString, diffInDays, getMonthNameBR, getShortWeekDayBR, parseLocalDate, parseMonthYearFromDateString } from "../utils/date.utils.js";
+import { getNowBR, getSafeDueDateString, toPersistenceString, diffInDays, getMonthNameBR, getShortWeekDayBR, parseLocalDate, parseMonthYearFromDateString, createLocalDateBR } from "../utils/date.utils.js";
 import { getDriverDisplayName } from "../utils/format.js";
 
 import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
@@ -522,7 +522,7 @@ export const cobrancaService = {
       // Repescagem (antes do dia 23): Ignora passageiros cadastrados neste mesmo mês
       if (!isNextMonthWindow && passageiro.created_at) {
         const passageiroCreatedAt = new Date(passageiro.created_at);
-        const startOfCurrentMonth = new Date(targetYear, targetMonth - 1, 1);
+        const startOfCurrentMonth = createLocalDateBR(targetYear, targetMonth, 1, 0, 0, 0, 0);
         if (passageiroCreatedAt >= startOfCurrentMonth) {
           skipped++;
           continue;
@@ -853,8 +853,8 @@ export const cobrancaService = {
     const currentMonth = now.getMonth();
     const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
     const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-    const primeiroDiaMesAnterior = new Date(prevYear, prevMonth, 1);
-    const primeiroDiaMesAnteriorStr = toPersistenceString(primeiroDiaMesAnterior);
+    const prevMonthStr = String(prevMonth + 1).padStart(2, "0");
+    const primeiroDiaMesAnteriorStr = `${prevYear}-${prevMonthStr}-01`;
 
     const proximos7Dias = new Date(now);
     proximos7Dias.setDate(now.getDate() + 7);

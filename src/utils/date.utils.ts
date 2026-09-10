@@ -49,22 +49,26 @@ export const getNowBR = (): Date => {
   return parseLocalDate(new Date());
 };
 
-/**
- * Retorna o objeto Date representando o final do dia (23:59:59.999) no fuso de Brasília.
- */
-export const getEndOfDayBR = (date?: Date | string): Date => {
-  const d = date ? parseLocalDate(date) : getNowBR();
-  d.setHours(23, 59, 59, 999);
-  return d;
+export const createLocalDateBR = (year: number, month: number, day: number, hour = 12, minute = 0, second = 0, ms = 0): Date => {
+  const m = String(month).padStart(2, "0");
+  const d = String(day).padStart(2, "0");
+  const h = String(hour).padStart(2, "0");
+  const min = String(minute).padStart(2, "0");
+  const s = String(second).padStart(2, "0");
+  const mill = String(ms).padStart(3, "0");
+  return new Date(`${year}-${m}-${d}T${h}:${min}:${s}.${mill}-03:00`);
 };
 
-/**
- * Retorna o objeto Date representando o início do dia (00:00:00.000) no fuso de Brasília.
- */
+export const getEndOfDayBR = (date?: Date | string): Date => {
+  const d = date ? parseLocalDate(date) : getNowBR();
+  const dateStr = toPersistenceString(d);
+  return new Date(`${dateStr}T23:59:59.999-03:00`);
+};
+
 export const getStartOfDayBR = (date?: Date | string): Date => {
   const d = date ? parseLocalDate(date) : getNowBR();
-  d.setHours(0, 0, 0, 0);
-  return d;
+  const dateStr = toPersistenceString(d);
+  return new Date(`${dateStr}T00:00:00.000-03:00`);
 };
 
 export const toPersistenceString = (date: Date | string): string => {
