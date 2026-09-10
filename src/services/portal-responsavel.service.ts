@@ -12,8 +12,12 @@ import { EVENTO_PASSAGEIRO_PIN_RESET, EVENTO_MOTORISTA_AUSENCIA_REGISTRADA, EVEN
 import { CreateResponsavelAusenciaDTO } from "../types/dtos/responsavel-ausencia.dto.js";
 import { UpdateDadosComplementaresDTO } from "../types/dtos/responsavel.dto.js";
 
+import { redisClient } from "../config/redis.js";
+
 const JWT_SECRET = process.env.JWT_SECRET || "van360_responsavel_secret_key_2026";
 const TOKEN_EXPIRATION = "30d";
+const OTP_KEY_PREFIX = "otp:responsavel:";
+const OTP_TTL_SECONDS = 15 * 60;
 
 export interface ResponsavelTokenPayload {
   phone: string;
@@ -24,10 +28,7 @@ interface OtpStoreItem {
   phone: string;
   email: string;
   code: string;
-  expiresAt: number;
 }
-
-const otpStore = new Map<string, OtpStoreItem>();
 
 export const portalResponsavelService = {
   async checkPhone(phoneRaw: string) {
@@ -350,14 +351,16 @@ export const portalResponsavelService = {
     const emailTarget = emails[selectedIndex];
 
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = Date.now() + 15 * 60 * 1000;
 
-    otpStore.set(phoneDigits, {
-      phone: phoneDigits,
-      email: emailTarget,
-      code: otpCode,
-      expiresAt
-    });
+    await redisClient.setex(
+      `${OTP_KEY_PREFIX}${phoneDigits}`,
+      OTP_TTL_SECONDS,
+      JSON.stringify({
+        phone: phoneDigits,
+        email: emailTarget,
+        code: otpCode,
+      })
+    );
 
     await notificationService.sendDirect(
       NotificationChannelEnum.RESEND,
@@ -374,20 +377,19 @@ export const portalResponsavelService = {
 
   async validateResetOtp(phoneRaw: string, code: string) {
     const phoneDigits = onlyDigits(phoneRaw);
-    const stored = otpStore.get(phoneDigits);
+    const storedRaw = await redisClient.get(`${OTP_KEY_PREFIX}${phoneDigits}`);
 
-    if (!stored) {
+    if (!storedRaw) {
       throw new AppError("Código de verificação expirado ou não encontrado. Solicite um novo código.", 400);
     }
 
-    if (Date.now() > stored.expiresAt) {
-      otpStore.delete(phoneDigits);
-      throw new AppError("O código expirou. Solicite um novo código.", 400);
-    }
+    const stored: OtpStoreItem = JSON.parse(storedRaw);
 
     if (stored.code !== code.trim()) {
       throw new AppError("Código de verificação incorreto.", 400);
     }
+
+    await redisClient.del(`${OTP_KEY_PREFIX}${phoneDigits}`);
 
     const resetToken = jwt.sign(
       { phone: phoneDigits, scope: "pin_reset" },
@@ -415,7 +417,7 @@ export const portalResponsavelService = {
       const pinHash = await bcrypt.hash(newPin, 10);
       await responsavelRepository.updatePinByPhone(phoneDigits, pinHash);
 
-      otpStore.delete(phoneDigits);
+      await redisClient.del(`${OTP_KEY_PREFIX}${phoneDigits}`);
 
       return { success: true };
     } catch {

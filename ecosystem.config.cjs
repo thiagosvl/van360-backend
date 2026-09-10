@@ -3,7 +3,7 @@ module.exports = {
     {
       name: "van360-api",
       script: "./dist/src/server.js",
-      instances: 1, // Pode aumentar para "max" quando tiver mais tráfego
+      instances: 2,
       exec_mode: "cluster",
       env: {
         NODE_ENV: "production",
