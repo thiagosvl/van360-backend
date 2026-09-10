@@ -8,6 +8,7 @@ import { veiculoRepository } from "../repositories/veiculo.repository.js";
 import { passageiroRepository } from "../repositories/passageiro.repository.js";
 import { usuarioConfiguracoesRepository } from "../repositories/usuario-configuracoes.repository.js";
 import { notificationService } from "./notifications/notification.service.js";
+import { NotificationContextFormatter } from "./notifications/utils/notification-context.formatter.js";
 import { historicoService } from "./historico.service.js";
 import { logger } from "../config/logger.js";
 import { getNowBR, toPersistenceString } from "../utils/date.utils.js";
@@ -788,6 +789,8 @@ const notifyParentRouteEvent = async (passageiroId: string, eventType: string, e
       nomePassageiro: passageiroInfo.nome,
       passageiroId: passageiroInfo.id,
       rotaId: execData.rota_id,
+      genero: passageiroInfo.genero || null,
+      horario: NotificationContextFormatter.formatTime(new Date()),
       ...extraContext
     };
 

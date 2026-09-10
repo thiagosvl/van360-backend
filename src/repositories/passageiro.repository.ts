@@ -224,7 +224,7 @@ export const passageiroRepository = {
     const { data, error } = await supabaseAdmin
       .from("passageiros")
       .select(`
-        id, nome, isento,
+        id, nome, isento, genero,
         ${PASSAGEIRO_RESPONSAVEIS_SELECT}
       `)
       .eq("id", id)
@@ -239,6 +239,7 @@ export const passageiroRepository = {
       id: data.id,
       nome: data.nome,
       isento: data.isento,
+      genero: (data.genero as string | null) || null,
       responsavel_principal: resp?.id ? {
         id: resp.id,
         nome: resp.nome || null,

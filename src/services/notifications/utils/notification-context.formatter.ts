@@ -1,6 +1,6 @@
 import { formatToBrazilianDate, getMonthNameBR } from "../../../utils/date.utils.js";
 import { formatCurrency, maskCpf, maskCnpj, maskPhone, formatCpfCnpj, getFirstName, getFirstAndSecondName } from "../../../utils/format.js";
-import { TipoChavePix } from "../../../types/enums.js";
+import { TipoChavePix, PassageiroGenero } from "../../../types/enums.js";
 
 /**
  * NotificationContextFormatter (SSOT - Formatação Unificada para Notificações)
@@ -104,5 +104,38 @@ export class NotificationContextFormatter {
         }
 
         return { key: formattedKey, typeLabel: label };
+    }
+
+    static getStudentTitle(genero?: PassageiroGenero | string | null): string {
+        return genero === PassageiroGenero.FEMININO ? "A aluna" : "O aluno";
+    }
+
+    static getStudentNoun(genero?: PassageiroGenero | string | null): string {
+        return genero === PassageiroGenero.FEMININO ? "aluna" : "aluno";
+    }
+
+    static getStudentArticle(genero?: PassageiroGenero | string | null, uppercase: boolean = false): string {
+        const isFeminino = genero === PassageiroGenero.FEMININO;
+        if (uppercase) {
+            return isFeminino ? "A" : "O";
+        }
+        return isFeminino ? "a" : "o";
+    }
+
+    static formatTime(timeOrDate?: string | Date | null): string {
+        if (!timeOrDate) {
+            return new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+        }
+        if (timeOrDate instanceof Date) {
+            return timeOrDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+        }
+        if (typeof timeOrDate === "string") {
+            if (/^\d{2}:\d{2}$/.test(timeOrDate)) return timeOrDate;
+            const parsed = new Date(timeOrDate);
+            if (!isNaN(parsed.getTime())) {
+                return parsed.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+            }
+        }
+        return new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
     }
 }

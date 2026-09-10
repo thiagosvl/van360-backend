@@ -1,13 +1,14 @@
-import { PushNotificationAction } from "../../../../../types/enums.js";
+import { PushNotificationAction, PassageiroGenero } from "../../../../../types/enums.js";
 import { NotificationContextFormatter } from "../../../utils/notification-context.formatter.js";
 import { NotificationUrlBuilder } from "../../../utils/notification-url.builder.js";
 import { FirebaseMessagePayload } from "../firebase.template.js";
 
 export class FirebasePassengerTemplates {
     static routeStartedIda(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        const timeStr = NotificationContextFormatter.formatTime(ctx.horario as string | Date);
         return {
             title: "Rota Iniciada! 🚌",
-            body: "A van já iniciou a rota de ida para a escola. Avisaremos quando estiver a caminho da sua residência!",
+            body: `A van iniciou a rota de ida para a escola às ${timeStr}. Avisaremos quando estiver a caminho da sua residência!`,
             data: {
                 action: PushNotificationAction.OPEN_ROUTE,
                 passageiroId: (ctx.passageiroId || "") as string
@@ -17,9 +18,11 @@ export class FirebasePassengerTemplates {
 
     static routeStartedVolta(ctx: Record<string, unknown>): FirebaseMessagePayload {
         const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
+        const article = NotificationContextFormatter.getStudentArticle(ctx.genero as PassageiroGenero | string | null);
+        const timeStr = NotificationContextFormatter.formatTime(ctx.horario as string | Date);
         return {
             title: "Voltando para Casa! 🏡",
-            body: `A van já saiu da escola com ${passName} e iniciou o trajeto de volta!`,
+            body: `A van saiu da escola com ${article} ${passName} às ${timeStr} e iniciou o trajeto de volta!`,
             data: {
                 action: PushNotificationAction.OPEN_ROUTE,
                 passageiroId: (ctx.passageiroId || "") as string
@@ -29,9 +32,10 @@ export class FirebasePassengerTemplates {
 
     static routeEnRouteIda(ctx: Record<string, unknown>): FirebaseMessagePayload {
         const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
+        const article = NotificationContextFormatter.getStudentArticle(ctx.genero as PassageiroGenero | string | null);
         return {
             title: "Van a Caminho! 🚌",
-            body: `A van está a caminho da sua residência para buscar ${passName}.`,
+            body: `A van está a caminho para buscar ${article} ${passName}.`,
             data: {
                 action: PushNotificationAction.OPEN_ROUTE,
                 passageiroId: (ctx.passageiroId || "") as string
@@ -41,9 +45,11 @@ export class FirebasePassengerTemplates {
 
     static routeBoardedIda(ctx: Record<string, unknown>): FirebaseMessagePayload {
         const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
+        const capitalArticle = NotificationContextFormatter.getStudentArticle(ctx.genero as PassageiroGenero | string | null, true);
+        const timeStr = NotificationContextFormatter.formatTime(ctx.horario as string | Date);
         return {
             title: "Embarque Confirmado ✅",
-            body: `O aluno ${passName} já embarcou na van a caminho da escola!`,
+            body: `${capitalArticle} ${passName} embarcou na van às ${timeStr} a caminho da escola!`,
             data: {
                 action: PushNotificationAction.OPEN_ROUTE,
                 passageiroId: (ctx.passageiroId || "") as string
@@ -53,9 +59,10 @@ export class FirebasePassengerTemplates {
 
     static routeBoardingCancelledIda(ctx: Record<string, unknown>): FirebaseMessagePayload {
         const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
+        const capitalArticle = NotificationContextFormatter.getStudentArticle(ctx.genero as PassageiroGenero | string | null, true);
         return {
             title: "Aviso da Rota ⚠️",
-            body: `Por favor, desconsidere a confirmação anterior. O aluno ${passName} não embarcou na van.`,
+            body: `Por favor, desconsidere a confirmação anterior. ${capitalArticle} ${passName} não embarcou na van.`,
             data: {
                 action: PushNotificationAction.OPEN_ROUTE,
                 passageiroId: (ctx.passageiroId || "") as string
@@ -65,9 +72,10 @@ export class FirebasePassengerTemplates {
 
     static routeEnRouteVolta(ctx: Record<string, unknown>): FirebaseMessagePayload {
         const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
+        const article = NotificationContextFormatter.getStudentArticle(ctx.genero as PassageiroGenero | string | null);
         return {
             title: `${passName} Chegando! 🏡`,
-            body: "A van está a caminho da sua residência para desembarcar o aluno.",
+            body: `A van está a caminho para desembarcar ${article} ${passName}.`,
             data: {
                 action: PushNotificationAction.OPEN_ROUTE,
                 passageiroId: (ctx.passageiroId || "") as string
@@ -77,9 +85,11 @@ export class FirebasePassengerTemplates {
 
     static routeDisembarkedVolta(ctx: Record<string, unknown>): FirebaseMessagePayload {
         const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
+        const capitalArticle = NotificationContextFormatter.getStudentArticle(ctx.genero as PassageiroGenero | string | null, true);
+        const timeStr = NotificationContextFormatter.formatTime(ctx.horario as string | Date);
         return {
             title: "Desembarque Confirmado ✅",
-            body: `O aluno ${passName} desembarcou com segurança!`,
+            body: `${capitalArticle} ${passName} desembarcou com segurança às ${timeStr}!`,
             data: {
                 action: PushNotificationAction.OPEN_ROUTE,
                 passageiroId: (ctx.passageiroId || "") as string
@@ -89,9 +99,10 @@ export class FirebasePassengerTemplates {
 
     static routeDisembarkingCancelledVolta(ctx: Record<string, unknown>): FirebaseMessagePayload {
         const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
+        const capitalArticle = NotificationContextFormatter.getStudentArticle(ctx.genero as PassageiroGenero | string | null, true);
         return {
             title: "Aviso da Rota ⚠️",
-            body: `Por favor, desconsidere a confirmação anterior. O aluno ${passName} não desembarcou da van.`,
+            body: `Por favor, desconsidere a confirmação anterior. ${capitalArticle} ${passName} não desembarcou da van.`,
             data: {
                 action: PushNotificationAction.OPEN_ROUTE,
                 passageiroId: (ctx.passageiroId || "") as string
@@ -140,7 +151,7 @@ export class FirebasePassengerTemplates {
 
         return {
             title: "Parcela Vence Hoje ⚠️",
-            body: `Hoje é o dia do vencimento da parcela de ${passName} (R$ ${valorStr}).`,
+            body: `A parcela de ${passName} (R$ ${valorStr}) vence hoje.`,
             data: {
                 action: PushNotificationAction.OPEN_HOME,
                 cobrancaId: (ctx.cobrancaId || "") as string,
@@ -175,6 +186,7 @@ export class FirebasePassengerTemplates {
 
     static paymentReceiptParent(ctx: Record<string, unknown>): FirebaseMessagePayload {
         const passName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro as string, "Aluno");
+        const valorStr = ctx.valor ? ` (R$ ${NotificationContextFormatter.formatRawValue(ctx.valor as number | string)})` : "";
         const mes = ctx.mes as number | undefined;
         const ano = ctx.ano as number | undefined;
 
@@ -185,7 +197,7 @@ export class FirebasePassengerTemplates {
 
         return {
             title: "Recibo de Pagamento 🧾",
-            body: `O pagamento de ${passName}${mesAnoStr} foi registrado com sucesso.`,
+            body: `O pagamento da mensalidade de ${passName}${valorStr}${mesAnoStr} foi confirmado com sucesso.`,
             data: {
                 action: PushNotificationAction.OPEN_HOME,
                 reciboUrl: (ctx.reciboUrl || "") as string,

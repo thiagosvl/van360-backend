@@ -67,9 +67,14 @@ export class FirebasePushAdapter implements NotificationProviderPort {
                     title,
                     body: payload.body
                 },
-                data: payload.data,
+                data: {
+                    ...(payload.data || {}),
+                    title,
+                    body: payload.body
+                },
                 android: {
                     priority: "high" as const,
+                    ttl: 14400,
                     notification: {
                         title,
                         body: payload.body,
@@ -79,6 +84,9 @@ export class FirebasePushAdapter implements NotificationProviderPort {
                     }
                 },
                 apns: {
+                    headers: {
+                        "apns-priority": "10"
+                    },
                     payload: {
                         aps: {
                             alert: {
