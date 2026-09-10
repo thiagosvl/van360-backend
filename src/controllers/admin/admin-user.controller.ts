@@ -140,5 +140,17 @@ export const adminUserController = {
       return reply.status(500).send({ error: "Erro ao buscar última atividade dos usuários." });
     }
   },
+
+  async getVencimentosPorDia(_request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const result = await adminUserService.getVencimentosPassageirosPorDia();
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao buscar vencimentos dos passageiros por dia.");
+      return reply.status(500).send({ error: "Erro ao buscar vencimentos dos passageiros por dia." });
+    }
+  },
 };
+
 

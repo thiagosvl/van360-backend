@@ -168,5 +168,23 @@ export const adminUserRepository = {
       p_offset: params.offset,
     });
   },
+
+  async getPassageirosAtivosComVencimento() {
+    return supabaseAdmin
+      .from("passageiros")
+      .select("id, usuario_id, dia_vencimento, isento")
+      .eq("ativo", true)
+      .eq("isento", false)
+      .not("dia_vencimento", "is", null);
+  },
+
+  async getMotoristasComAssinaturas() {
+    return supabaseAdmin
+      .from("usuarios")
+      .select("id, email, ativo, assinaturas(id, status, data_vencimento, trial_ends_at)")
+      .eq("tipo", UserType.MOTORISTA)
+      .eq("ativo", true);
+  },
 };
+
 

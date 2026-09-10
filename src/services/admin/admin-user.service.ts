@@ -20,7 +20,8 @@ import {
   IndicacaoStatus,
 } from "../../types/enums.js";
 import { historicoService } from "../historico.service.js";
-import { getNowBR, parseBrazilianDateToISO } from "../../utils/date.utils.js";
+import { getNowBR, parseLocalDate, parseBrazilianDateToISO } from "../../utils/date.utils.js";
+import type { VencimentoDiaItemDTO, VencimentosPassageirosResponseDTO } from "../../types/dtos/admin-vencimento.dto.js";
 import { onlyDigits, cleanString } from "../../utils/string.utils.js";
 import { subscriptionService } from "../subscriptions/subscription.service.js";
 import type {
@@ -656,5 +657,106 @@ export const adminUserService = {
       limit,
     };
   },
+
+  async getVencimentosPassageirosPorDia(): Promise<VencimentosPassageirosResponseDTO> {
+    const [passageirosRes, motoristasRes] = await Promise.all([
+      adminUserRepository.getPassageirosAtivosComVencimento(),
+      adminUserRepository.getMotoristasComAssinaturas(),
+    ]);
+
+    if (passageirosRes.error) {
+      logger.error({ error: passageirosRes.error }, "[AdminUserService] Erro ao buscar passageiros com vencimento.");
+      throw passageirosRes.error;
+    }
+
+    if (motoristasRes.error) {
+      logger.error({ error: motoristasRes.error }, "[AdminUserService] Erro ao buscar motoristas com assinaturas.");
+      throw motoristasRes.error;
+    }
+
+    const nowBR = getNowBR();
+    const motoristasValidosIds = new Set<string>();
+
+    for (const m of (motoristasRes.data || [])) {
+      const email = (m.email || "").toLowerCase();
+      const isInternalTest = email.includes("teste-google") || email.includes("@van360.com.br") || email.includes("thiago-svl");
+      if (isInternalTest) continue;
+
+      const assinaturas = (m.assinaturas as Array<{ status: string | null; data_vencimento: string | null; trial_ends_at: string | null }>) || [];
+      const sub = assinaturas[0];
+      if (!sub) continue;
+
+      let isMotoristaAtivo = false;
+      if (sub.status === SubscriptionStatus.ACTIVE) {
+        isMotoristaAtivo = true;
+      } else if (sub.status === SubscriptionStatus.TRIAL) {
+        if (!sub.trial_ends_at) {
+          isMotoristaAtivo = true;
+        } else {
+          const trialLimit = parseLocalDate(sub.trial_ends_at);
+          if (!isNaN(trialLimit.getTime()) && trialLimit >= nowBR) {
+            isMotoristaAtivo = true;
+          }
+        }
+      }
+
+      if (isMotoristaAtivo) {
+        motoristasValidosIds.add(m.id);
+      }
+    }
+
+    const contagemPorDia: Record<number, number> = {};
+    for (let i = 1; i <= 31; i++) {
+      contagemPorDia[i] = 0;
+    }
+
+    let totalPassageirosAtivosComVencimento = 0;
+
+    for (const p of (passageirosRes.data || [])) {
+      if (!motoristasValidosIds.has(p.usuario_id)) continue;
+      if (p.isento) continue;
+
+      const dia = Number(p.dia_vencimento);
+      if (dia >= 1 && dia <= 31) {
+        contagemPorDia[dia] = (contagemPorDia[dia] || 0) + 1;
+        totalPassageirosAtivosComVencimento++;
+      }
+    }
+
+    const diaAtual = nowBR.getDate();
+    const vencimentosHoje = contagemPorDia[diaAtual] || 0;
+
+    let diaComPico: { dia: number; quantidade: number } | null = null;
+    let maxQtd = 0;
+
+    const dias: VencimentoDiaItemDTO[] = [];
+    for (let d = 1; d <= 31; d++) {
+      const qtd = contagemPorDia[d] || 0;
+      if (qtd > maxQtd) {
+        maxQtd = qtd;
+        diaComPico = { dia: d, quantidade: qtd };
+      }
+
+      const percentual = totalPassageirosAtivosComVencimento > 0
+        ? Number(((qtd / totalPassageirosAtivosComVencimento) * 100).toFixed(1))
+        : 0;
+
+      dias.push({
+        dia: d,
+        quantidade: qtd,
+        isHoje: d === diaAtual,
+        percentual,
+      });
+    }
+
+    return {
+      totalPassageirosAtivosComVencimento,
+      vencimentosHoje,
+      diaComPico,
+      diaAtual,
+      dias,
+    };
+  },
 };
+
 
