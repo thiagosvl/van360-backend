@@ -297,12 +297,13 @@ export class FirebaseDriverTemplates {
         const requestsUrl = NotificationUrlBuilder.getPassengerRequestsUrl();
 
         return {
-            title: "Novo pré-cadastro recebido! 🚌",
-            body: `${parentName} enviou o pré-cadastro de ${studentName}. Toque para revisar.`,
+            title: "Nova solicitação de cadastro! 🚌",
+            body: `${parentName} enviou uma solicitação para ${studentName}. Toque para revisar.`,
             data: {
                 action: PushNotificationAction.OPEN_PASSENGER_REQUESTS,
                 targetUrl: requestsUrl,
-                passageiroId: (ctx.passageiroId || ctx.id || "") as string
+                prePassageiroId: (ctx.prePassageiroId || ctx.passageiroId || ctx.id || "") as string,
+                passageiroId: (ctx.prePassageiroId || ctx.passageiroId || ctx.id || "") as string
             }
         };
     }

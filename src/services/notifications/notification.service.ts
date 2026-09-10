@@ -13,6 +13,7 @@ import { WabaAdapter } from "./adapters/waba/waba.adapter.js";
 import { ResendAdapter } from "./adapters/resend/resend.adapter.js";
 import { TelegramAdapter } from "./adapters/telegram/telegram.adapter.js";
 import { FirebasePushAdapter } from "./adapters/firebase/firebase.adapter.js";
+import { extractErrorMessage } from "../../utils/error.utils.js";
 
 export type NotificationChannel = "EVOLUTION" | "SMS" | "RESEND" | "TELEGRAM" | "FIREBASE" | "WABA";
 
@@ -62,7 +63,7 @@ class NotificationService {
         try {
             return await adapter.send(eventName, enrichedContext, enrichedOptions);
         } catch (error: unknown) {
-            const msg = error instanceof Error ? error.message : String(error);
+            const msg = extractErrorMessage(error);
             return { success: false, error: msg };
         }
     }
@@ -266,7 +267,7 @@ class NotificationService {
             const outcomes = await Promise.allSettled(results);
             return outcomes.some(o => o.status === "fulfilled" && o.value === true);
         } catch (error: unknown) {
-            const msg = error instanceof Error ? error.message : String(error);
+            const msg = extractErrorMessage(error);
             logger.error({ error: msg, eventName }, "[NotificationService] Erro ao orquestrar notificações.");
             return false;
         }

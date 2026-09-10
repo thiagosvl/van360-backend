@@ -7,6 +7,7 @@ import { NotificationProviderPort, NotificationSendResult } from "../../ports/no
 import { NotificationOptions } from "../../notification.service.js";
 import { EvolutionMapper } from "./evolution.mapper.js";
 import { env } from "../../../../config/env.js";
+import { extractErrorMessage } from "../../../../utils/error.utils.js";
 
 export class EvolutionQueueAdapter implements NotificationProviderPort {
 
@@ -78,7 +79,7 @@ export class EvolutionQueueAdapter implements NotificationProviderPort {
 
             return true;
         } catch (error: unknown) {
-            const msg = error instanceof Error ? error.message : String(error);
+            const msg = extractErrorMessage(error);
             logger.error({ error: msg, to, instanceName }, "[EvolutionQueueAdapter] Falha ao enfileirar");
             return false;
         }

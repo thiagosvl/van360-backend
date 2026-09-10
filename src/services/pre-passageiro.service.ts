@@ -78,7 +78,7 @@ export const prePassageiroService = {
       {
         nomeResponsavel: inserted.nome_responsavel,
         nomePassageiro: inserted.nome,
-        passageiroId: inserted.id,
+        prePassageiroId: inserted.id,
       },
       {
         channels: [NotificationChannelEnum.FIREBASE],

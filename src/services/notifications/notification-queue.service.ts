@@ -5,6 +5,7 @@ import { NotificationChannelEnum, NotificationQueueStatus, CobrancaStatus } from
 import { notificationService, NotificationOptions } from "./notification.service.js";
 import { usuarioPushTokenRepository } from "../../repositories/usuario-push-token.repository.js";
 import { EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO, EVENTO_PASSAGEIRO_VENCIMENTO_HOJE, EVENTO_PASSAGEIRO_ATRASADO, EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO } from "../../config/constants.js";
+import { extractErrorMessage } from "../../utils/error.utils.js";
 
 
 export interface EnqueueNotificationParams {
@@ -140,7 +141,7 @@ export class NotificationQueueService {
                 payload: params.payload
             });
         } catch (dbError: unknown) {
-            const msg = dbError instanceof Error ? dbError.message : String(dbError);
+            const msg = extractErrorMessage(dbError);
             logger.error({ error: msg, evento: params.evento }, "[NotificationQueueService] Falha ao persistir item na fila.");
             return false;
         }
@@ -162,7 +163,7 @@ export class NotificationQueueService {
                 lastErrorMsg = sendResult.error;
             }
         } catch (sendError: unknown) {
-            lastErrorMsg = sendError instanceof Error ? sendError.message : String(sendError);
+            lastErrorMsg = extractErrorMessage(sendError);
             logger.warn({ error: lastErrorMsg, id: queueItem.id, canal: params.canal }, "[NotificationQueueService] Fast Path falhou. Agendando retentativa.");
         }
 

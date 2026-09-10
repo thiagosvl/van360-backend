@@ -5,6 +5,7 @@ import { usuarioPushTokenRepository } from "../../../../repositories/usuario-pus
 import { ResendMapper } from "./resend.mapper.js";
 import { ResendTemplatePayload, ResendTemplateContext } from "./resend.template.js";
 import { NotificationOptions } from "../../notification.service.js";
+import { extractErrorMessage } from "../../../../utils/error.utils.js";
 
 export class ResendAdapter implements NotificationProviderPort {
     private resendClient: Resend | null = null;
@@ -59,7 +60,7 @@ export class ResendAdapter implements NotificationProviderPort {
 
             return await this.executeResendSend(recipientEmail, eventName, template);
         } catch (error: unknown) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
+            const errorMessage = extractErrorMessage(error);
             logger.error({ error: errorMessage, eventName }, "[ResendAdapter] Falha de exceção ao disparar e-mail");
             return { success: false, error: errorMessage };
         }

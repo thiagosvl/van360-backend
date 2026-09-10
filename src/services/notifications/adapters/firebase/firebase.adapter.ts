@@ -7,6 +7,7 @@ import { env } from "../../../../config/env.js";
 import { onlyDigits } from "../../../../utils/string.utils.js";
 
 import { NotificationOptions } from "../../notification.service.js";
+import { extractErrorMessage } from "../../../../utils/error.utils.js";
 
 export class FirebasePushAdapter implements NotificationProviderPort {
     async send(eventName: string, contextData: Record<string, unknown>, options?: NotificationOptions): Promise<NotificationSendResult> {
@@ -125,7 +126,7 @@ export class FirebasePushAdapter implements NotificationProviderPort {
 
             return { success: true };
         } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : "Erro desconhecido";
+            const message = extractErrorMessage(error);
             logger.error({ error: message, eventName }, "[FirebasePushAdapter] Falha ao enviar notificação Push");
             return { success: false, error: message };
         }

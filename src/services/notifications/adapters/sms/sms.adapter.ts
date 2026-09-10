@@ -1,6 +1,7 @@
 import { logger } from "../../../../config/logger.js";
 import { NotificationProviderPort, NotificationSendResult } from "../../ports/notification-provider.port.js";
 import { NotificationOptions } from "../../notification.service.js";
+import { extractErrorMessage } from "../../../../utils/error.utils.js";
 
 export class SmsAdapter implements NotificationProviderPort {
     async send(eventName: string, contextData: Record<string, unknown>, options?: NotificationOptions): Promise<NotificationSendResult> {
@@ -9,7 +10,7 @@ export class SmsAdapter implements NotificationProviderPort {
             logger.debug({ to, eventName, contextData }, "[MockSmsAdapter] Dispatcher SMS Simulado");
             return { success: true };
         } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : String(error);
+            const message = extractErrorMessage(error);
             return { success: false, error: message };
         }
     }

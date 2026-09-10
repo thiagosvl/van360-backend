@@ -636,7 +636,7 @@ export const cobrancaService = {
 
       let sentCount = 0;
 
-      const BATCH_SIZE = 15;
+      const BATCH_SIZE = 8;
       for (let i = 0; i < cobrancas.length; i += BATCH_SIZE) {
         const chunk = cobrancas.slice(i, i + BATCH_SIZE);
         const successfulIdsInChunk: string[] = [];
@@ -777,6 +777,10 @@ export const cobrancaService = {
         if (successfulIdsInChunk.length > 0) {
           sentCount += successfulIdsInChunk.length;
           await cobrancaRepository.updateBulkUltimaNotificacao(successfulIdsInChunk, todayStr);
+        }
+
+        if (i + BATCH_SIZE < cobrancas.length) {
+          await new Promise((resolve) => setTimeout(resolve, 600));
         }
       }
 
