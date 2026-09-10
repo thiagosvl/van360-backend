@@ -398,8 +398,18 @@ export class InHouseContractProvider implements ContractProvider {
         const resp = await fetch(dados.assinaturaCondutorUrl);
         const signatureBytes = await resp.arrayBuffer();
         const signatureImage = await pdfDoc.embedPng(signatureBytes);
-        // Melhor posicionamento da assinatura do motorista (usando a mesma referência Y da linha)
-        page.drawImage(signatureImage, { x: margin, y: signatureLineY + 2, width: 150, height: 50 });
+        const { width: imgW, height: imgH } = signatureImage;
+        const targetWidth = 150;
+        const targetHeight = (imgH / imgW) * targetWidth;
+        const maxHeight = 50;
+        const finalHeight = Math.min(targetHeight, maxHeight);
+        const finalWidth = (imgW / imgH) * finalHeight;
+        page.drawImage(signatureImage, {
+          x: margin,
+          y: signatureLineY + 2,
+          width: finalWidth,
+          height: finalHeight,
+        });
       } catch (e) { console.error('Error signature', e); }
     }
 

@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "../../config/supabase.js";
-import { UserType, SubscriptionInvoiceStatus, SubscriptionStatus, SUBSCRIPTION_VITALICIO_FILTER } from "../../types/enums.js";
+import { UserType, SubscriptionInvoiceStatus, SubscriptionStatus, SUBSCRIPTION_VITALICIO_FILTER, CobrancaStatus } from "../../types/enums.js";
 
 export const adminUserRepository = {
   async getDashboardStats() {
@@ -159,15 +159,25 @@ export const adminUserRepository = {
 
   async getUsersLatestActivity(params: {
     search?: string;
-    sort: "inactive_first" | "recent_first";
+    sort: "inactive_first" | "recent_first" | "oldest_first" | "newest_first" | "name_asc";
     limit: number;
     offset: number;
+    healthStatus: "all" | "active" | "alert" | "risk" | "inactive";
+    subscriptionStatus: string;
   }) {
     return supabaseAdmin.rpc("get_motoristas_latest_activity", {
       p_search: params.search || null,
       p_sort: params.sort,
       p_limit: params.limit,
       p_offset: params.offset,
+      p_health_status: params.healthStatus,
+      p_subscription_status: params.subscriptionStatus,
+    });
+  },
+
+  async getUsersRadarStats(subscriptionStatus: string = "active_trial") {
+    return supabaseAdmin.rpc("get_motoristas_radar_stats", {
+      p_subscription_status: subscriptionStatus,
     });
   },
 
@@ -187,6 +197,100 @@ export const adminUserRepository = {
       .eq("tipo", UserType.MOTORISTA)
       .eq("ativo", true);
   },
+
+  async getCobrancasDoDiaNoMes(dia: number, mes: number, ano: number) {
+    return supabaseAdmin
+      .from("cobrancas")
+      .select(`
+        id,
+        mes,
+        ano,
+        valor,
+        valor_pago,
+        data_vencimento,
+        status,
+        desativar_lembretes,
+        data_envio_ultima_notificacao,
+        usuario_id,
+        passageiro_id,
+        passageiro:passageiros!inner(
+          id,
+          nome,
+          ativo,
+          isento,
+          dia_vencimento,
+          enviar_notificacoes,
+          responsaveis:passageiro_responsaveis(
+            tipo,
+            responsavel:responsaveis(id, nome, telefone, email)
+          )
+        ),
+        motorista:usuarios!cobrancas_usuario_id_fkey!inner(
+          id,
+          ativo,
+          tipo,
+          email,
+          assinaturas(id, status, data_vencimento, trial_ends_at),
+          usuario_configuracoes(
+            notificar_pais_cobrancas,
+            cobranca_vencimento_hoje_ativo
+          )
+        )
+      `)
+      .eq("mes", mes)
+      .eq("ano", ano)
+      .eq("passageiro.dia_vencimento", dia)
+      .eq("passageiro.ativo", true)
+      .eq("passageiro.isento", false);
+  },
+
+  async getCobrancasPendentesParaReguas(targetDates: string[]) {
+    return supabaseAdmin
+      .from("cobrancas")
+      .select(`
+        id,
+        valor,
+        data_vencimento,
+        status,
+        desativar_lembretes,
+        data_envio_ultima_notificacao,
+        usuario_id,
+        passageiro_id,
+        passageiro:passageiros!inner(
+          id,
+          nome,
+          ativo,
+          isento,
+          dia_vencimento,
+          enviar_notificacoes,
+          responsaveis:passageiro_responsaveis(
+            tipo,
+            responsavel:responsaveis(id, nome, telefone, email)
+          )
+        ),
+        motorista:usuarios!cobrancas_usuario_id_fkey!inner(
+          id,
+          ativo,
+          tipo,
+          email,
+          assinaturas(id, status, data_vencimento, trial_ends_at),
+          usuario_configuracoes(
+            notificar_pais_cobrancas,
+            cobranca_aviso_previo_ativo,
+            cobranca_dias_aviso_previo,
+            cobranca_vencimento_hoje_ativo,
+            cobranca_atraso_3_dias_ativo,
+            cobranca_atraso_5_dias_ativo,
+            cobranca_atraso_7_dias_ativo
+          )
+        )
+      `)
+      .eq("status", CobrancaStatus.PENDENTE)
+      .eq("passageiro.ativo", true)
+      .eq("passageiro.isento", false)
+      .in("data_vencimento", targetDates);
+  },
 };
+
 
 

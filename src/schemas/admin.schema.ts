@@ -142,11 +142,18 @@ export interface NotificationKpisDTO {
 
 export const listUsersLatestActivityQuerySchema = z.object({
   search: z.string().optional(),
-  sort: z.enum(["inactive_first", "recent_first"]).default("recent_first"),
+  sort: z.enum(["inactive_first", "recent_first", "oldest_first", "newest_first", "name_asc"]).default("recent_first"),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(10),
+  healthStatus: z.enum(["all", "active", "alert", "risk", "inactive"]).default("all"),
+  subscriptionStatus: z.string().default("active_trial"),
 });
 export type ListUsersLatestActivityQuery = z.infer<typeof listUsersLatestActivityQuerySchema>;
+
+export const getMotoristasRadarStatsQuerySchema = z.object({
+  subscriptionStatus: z.string().default("active_trial"),
+});
+export type GetMotoristasRadarStatsQuery = z.infer<typeof getMotoristasRadarStatsQuerySchema>;
 
 export interface MotoristaLatestActivityDTO {
   id: string;
@@ -168,6 +175,14 @@ export interface MotoristasLatestActivityResponseDTO {
   total: number;
   page: number;
   limit: number;
+}
+
+export interface MotoristasRadarStatsDTO {
+  totalMotoristas: number;
+  totalAtivos: number;
+  totalAlerta: number;
+  totalEmRisco: number;
+  totalSemAtividade: number;
 }
 
 

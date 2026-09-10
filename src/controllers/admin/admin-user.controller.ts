@@ -9,6 +9,7 @@ import {
   createUserAdminSchema,
   dispatchDriverNotificationSchema,
   listUsersLatestActivityQuerySchema,
+  getMotoristasRadarStatsQuerySchema,
 } from "../../schemas/admin.schema.js";
 
 
@@ -141,6 +142,18 @@ export const adminUserController = {
     }
   },
 
+  async getUsersRadarStats(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const query = getMotoristasRadarStatsQuerySchema.parse(request.query);
+      const result = await adminUserService.getUsersRadarStats(query);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao buscar estatísticas do radar dos usuários.");
+      return reply.status(500).send({ error: "Erro ao buscar estatísticas do radar dos usuários." });
+    }
+  },
+
   async getVencimentosPorDia(_request: FastifyRequest, reply: FastifyReply) {
     try {
       const result = await adminUserService.getVencimentosPassageirosPorDia();
@@ -149,6 +162,23 @@ export const adminUserController = {
       const error = err as Error;
       logger.error({ error: error.message }, "[AdminUserController] Erro ao buscar vencimentos dos passageiros por dia.");
       return reply.status(500).send({ error: "Erro ao buscar vencimentos dos passageiros por dia." });
+    }
+  },
+
+  async getVencimentoDetalhes(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { dia } = request.params as { dia: string };
+      const { mes, ano } = (request.query as { mes?: string; ano?: string }) || {};
+      const result = await adminUserService.getVencimentoDetalhes(
+        Number(dia),
+        mes ? Number(mes) : undefined,
+        ano ? Number(ano) : undefined
+      );
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao buscar detalhes do vencimento.");
+      return reply.status(500).send({ error: "Erro ao buscar detalhes do vencimento." });
     }
   },
 };

@@ -8,7 +8,7 @@ import { SubscriptionInvoiceStatus,
     SubscriptionIdentifer, NotificationChannelEnum } from '../../types/enums.js';
 import { getConfig, getConfigNumber } from "../configuracao.service.js";
 import { historicoService } from "../historico.service.js";
-import { getNowBR, toPersistenceString, addDays } from "../../utils/date.utils.js";
+import { getNowBR, toPersistenceString, addDays, parseLocalDate } from "../../utils/date.utils.js";
 import { extractErrorMessage, onlyDigits } from "../../utils/string.utils.js";
 import type { CreateInvoiceDTO } from "../../types/dtos/subscription.dto.js";
 import { subscriptionService } from "./subscription.service.js";
@@ -18,8 +18,36 @@ import { paymentMethodRepository } from "../../repositories/payment-method.repos
 import { invoiceRepository } from "../../repositories/invoice.repository.js";
 import { subscriptionRepository } from "../../repositories/subscription.repository.js";
 import { userRepository } from "../../repositories/user.repository.js";
+import type { Tables } from "../../types/database.types.js";
 
 export const subscriptionBillingService = {
+    async getEffectiveMonthlyPrice(sub: Tables<"assinaturas">, isPromotionActive: boolean): Promise<number> {
+        const { data: planoMensal } = await planRepository.getByIdentifier(SubscriptionIdentifer.MONTHLY);
+        let valor = planoMensal ? Number(planoMensal.valor) : 0;
+
+        if (isPromotionActive && planoMensal?.valor_promocional) {
+            valor = Number(planoMensal.valor_promocional);
+        }
+
+        if (sub.valor_base_mensal !== null && sub.valor_base_mensal !== undefined) {
+            valor = Number(sub.valor_base_mensal);
+        }
+
+        if (sub.valor_promocional_mensal !== null && sub.valor_promocional_mensal !== undefined) {
+            if (!sub.data_fim_promocao) {
+                valor = Number(sub.valor_promocional_mensal);
+            } else {
+                const fim = parseLocalDate(sub.data_fim_promocao).getTime();
+                const agora = getNowBR().getTime();
+                if (fim >= agora) {
+                    valor = Number(sub.valor_promocional_mensal);
+                }
+            }
+        }
+
+        return valor;
+    },
+
     async calculatePrice(userId: string, planIdentificador: string): Promise<number> {
         const { data: plano } = await planRepository.getByIdentifier(planIdentificador);
 
@@ -28,9 +56,14 @@ export const subscriptionBillingService = {
         const sub = await subscriptionService.getOrCreateSubscription(userId);
         if (!sub) throw new Error("Erro ao obter assinatura do usuário.");
 
+        const isPromotionActive = await getConfig(ConfigKey.SAAS_PROMOCAO_ATIVA, "false") === "true";
+
         let valorFinal = Number(plano.valor);
 
-        // Define which base/promo values to look at based on the requested plan
+        if (isPromotionActive && plano.valor_promocional) {
+            valorFinal = Number(plano.valor_promocional);
+        }
+
         const isAnual = planIdentificador === SubscriptionIdentifer.YEARLY;
         const subValorBase = isAnual ? sub.valor_base_anual : sub.valor_base_mensal;
         const subValorPromo = isAnual ? sub.valor_promocional_anual : sub.valor_promocional_mensal;
@@ -39,18 +72,11 @@ export const subscriptionBillingService = {
             valorFinal = Number(subValorBase);
         }
 
-        const isPromotionActive = await getConfig(ConfigKey.SAAS_PROMOCAO_ATIVA, "false") === "true";
-
-        if (isPromotionActive && plano.valor_promocional) {
-            valorFinal = Number(plano.valor_promocional);
-        }
-
         if (subValorPromo !== null && subValorPromo !== undefined) {
             if (!sub.data_fim_promocao) {
-                // Definitivo
                 valorFinal = Number(subValorPromo);
             } else {
-                const fim = new Date(sub.data_fim_promocao).getTime();
+                const fim = parseLocalDate(sub.data_fim_promocao).getTime();
                 const agora = getNowBR().getTime();
                 if (fim >= agora) {
                     valorFinal = Number(subValorPromo);
@@ -63,7 +89,11 @@ export const subscriptionBillingService = {
         if (indicacao) {
             const descontoPct = await getConfigNumber(ConfigKey.SAAS_REFERRAL_DISCOUNT_PCT, 10);
             if (descontoPct > 0) {
-                valorFinal = valorFinal * (1 - descontoPct / 100);
+                const valorMensalReferencia = isAnual
+                    ? await this.getEffectiveMonthlyPrice(sub, isPromotionActive)
+                    : valorFinal;
+                const valorDesconto = valorMensalReferencia * (descontoPct / 100);
+                valorFinal = Math.max(0, valorFinal - valorDesconto);
             }
         }
 

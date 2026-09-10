@@ -18,10 +18,17 @@ import {
   ContratoStatus,
   DriverContractConfigStatus,
   IndicacaoStatus,
+  CobrancaStatus,
+  TipoResponsavel,
 } from "../../types/enums.js";
 import { historicoService } from "../historico.service.js";
-import { getNowBR, parseLocalDate, parseBrazilianDateToISO } from "../../utils/date.utils.js";
+import { getNowBR, parseLocalDate, parseBrazilianDateToISO, toPersistenceString, addDays, diffInDays } from "../../utils/date.utils.js";
 import type { VencimentoDiaItemDTO, VencimentosPassageirosResponseDTO } from "../../types/dtos/admin-vencimento.dto.js";
+import type {
+  VencimentoDetalhesResponseDTO,
+  CarteiraDiaResumoDTO,
+  DisparosHojeResumoDTO,
+} from "../../types/dtos/admin-vencimento-detalhes.dto.js";
 import { onlyDigits, cleanString, buildAccentInsensitiveRegex } from "../../utils/string.utils.js";
 import { subscriptionService } from "../subscriptions/subscription.service.js";
 import type {
@@ -32,6 +39,8 @@ import type {
   ListUsersLatestActivityQuery,
   MotoristaLatestActivityDTO,
   MotoristasLatestActivityResponseDTO,
+  MotoristasRadarStatsDTO,
+  GetMotoristasRadarStatsQuery,
 } from "../../schemas/admin.schema.js";
 
 
@@ -619,7 +628,7 @@ export const adminUserService = {
   },
 
   async getUsersLatestActivity(query: ListUsersLatestActivityQuery): Promise<MotoristasLatestActivityResponseDTO> {
-    const { search, sort, page, limit } = query;
+    const { search, sort, page, limit, healthStatus, subscriptionStatus } = query;
     const offset = (page - 1) * limit;
 
     const { data, error } = await adminUserRepository.getUsersLatestActivity({
@@ -627,6 +636,8 @@ export const adminUserService = {
       sort,
       limit,
       offset,
+      healthStatus,
+      subscriptionStatus,
     });
 
     if (error) {
@@ -657,6 +668,32 @@ export const adminUserService = {
       total,
       page,
       limit,
+    };
+  },
+
+  async getUsersRadarStats(query: GetMotoristasRadarStatsQuery): Promise<MotoristasRadarStatsDTO> {
+    const { subscriptionStatus } = query;
+    const { data, error } = await adminUserRepository.getUsersRadarStats(subscriptionStatus);
+
+    if (error) {
+      logger.error({ error }, "[AdminUserService] Erro ao buscar estatísticas do radar dos motoristas.");
+      throw error;
+    }
+
+    const row = ((data || []) as Array<{
+      total_motoristas: number | string;
+      total_ativos: number | string;
+      total_alerta: number | string;
+      total_em_risco: number | string;
+      total_sem_atividade: number | string;
+    }>)[0];
+
+    return {
+      totalMotoristas: row ? Number(row.total_motoristas) : 0,
+      totalAtivos: row ? Number(row.total_ativos) : 0,
+      totalAlerta: row ? Number(row.total_alerta) : 0,
+      totalEmRisco: row ? Number(row.total_em_risco) : 0,
+      totalSemAtividade: row ? Number(row.total_sem_atividade) : 0,
     };
   },
 
@@ -759,6 +796,375 @@ export const adminUserService = {
       dias,
     };
   },
+
+  async getVencimentoDetalhes(dia: number, mes?: number, ano?: number): Promise<VencimentoDetalhesResponseDTO> {
+    const nowBR = getNowBR();
+    const diaAtual = nowBR.getDate();
+    const mesAtual = nowBR.getMonth() + 1;
+    const anoAtual = nowBR.getFullYear();
+    const mesAlvo = mes || mesAtual;
+    const anoAlvo = ano || anoAtual;
+    const isHoje = dia === diaAtual && mesAlvo === mesAtual && anoAlvo === anoAtual;
+    const todayStr = toPersistenceString(nowBR);
+
+    const isDriverEligible = (m: {
+      ativo?: boolean | null;
+      tipo?: string | null;
+      email?: string | null;
+      assinaturas?: Array<{ status: string | null; data_vencimento: string | null; trial_ends_at: string | null }> | null;
+    }) => {
+      if (!m || !m.ativo || m.tipo !== UserType.MOTORISTA) return false;
+      const email = (m.email || "").toLowerCase();
+      if (email.includes("teste-google") || email.includes("@van360.com.br") || email.includes("thiago-svl")) {
+        return false;
+      }
+      const assinaturas = m.assinaturas || [];
+      const sub = assinaturas[0];
+      if (!sub) return false;
+
+      if (sub.status === SubscriptionStatus.ACTIVE) return true;
+      if (sub.status === SubscriptionStatus.TRIAL) {
+        if (!sub.trial_ends_at) return true;
+        const trialLimit = parseLocalDate(sub.trial_ends_at);
+        return !isNaN(trialLimit.getTime()) && trialLimit >= nowBR;
+      }
+      return false;
+    };
+
+    const targetDates = [todayStr];
+    if (isHoje) {
+      for (let adv = 1; adv <= 5; adv++) {
+        targetDates.push(toPersistenceString(addDays(nowBR, adv)));
+      }
+      for (const diasAtraso of [3, 5, 7]) {
+        targetDates.push(toPersistenceString(addDays(nowBR, -diasAtraso)));
+      }
+    }
+
+    const [cobrancasDiaRes, cobrancasReguasRes] = await Promise.all([
+      adminUserRepository.getCobrancasDoDiaNoMes(dia, mesAlvo, anoAlvo),
+      isHoje ? adminUserRepository.getCobrancasPendentesParaReguas(targetDates) : Promise.resolve({ data: null, error: null }),
+    ]);
+
+    if (cobrancasDiaRes.error) {
+      logger.error({ error: cobrancasDiaRes.error }, "[AdminUserService] Erro ao buscar cobranças do dia.");
+      throw cobrancasDiaRes.error;
+    }
+
+    if (cobrancasReguasRes.error) {
+      logger.error({ error: cobrancasReguasRes.error }, "[AdminUserService] Erro ao buscar cobranças para réguas de hoje.");
+      throw cobrancasReguasRes.error;
+    }
+
+    const cobrancasDia = (cobrancasDiaRes.data || []).filter((c) => isDriverEligible(c.motorista as Parameters<typeof isDriverEligible>[0]));
+
+    let faturasPagas = 0;
+    let faturasPendentes = 0;
+    let valorPrevistoTotal = 0;
+    let valorPagoTotal = 0;
+    let valorPendenteTotal = 0;
+
+    let comTelefoneValido = 0;
+    let comEmailValido = 0;
+    let semResponsavelPrincipal = 0;
+    let semContato = 0;
+    let notificacoesDesativadasMotorista = 0;
+    let lembretesDesativadosAluno = 0;
+
+    let wabaCarteira = 0;
+    let resendCarteira = 0;
+    let firebaseCarteira = 0;
+
+    for (const c of cobrancasDia) {
+      const valor = Number(c.valor) || 0;
+      valorPrevistoTotal += valor;
+
+      if (c.status === CobrancaStatus.PAGO) {
+        faturasPagas++;
+        valorPagoTotal += Number(c.valor_pago || c.valor) || 0;
+      } else if (c.status === CobrancaStatus.PENDENTE) {
+        faturasPendentes++;
+        valorPendenteTotal += valor;
+      }
+
+      const responsaveisLinks = ((c.passageiro as { responsaveis?: Array<{ tipo: string; responsavel: { id: string; nome: string | null; telefone: string | null; email: string | null } | null }> })?.responsaveis || []);
+      const principalLink = responsaveisLinks.find((r) => r.tipo === TipoResponsavel.PRINCIPAL) || responsaveisLinks.find((r) => r.tipo === "PRINCIPAL");
+      const resp = principalLink?.responsavel;
+
+      const motoristaConfigs = (c.motorista as { usuario_configuracoes?: Array<{ notificar_pais_cobrancas: boolean; cobranca_vencimento_hoje_ativo: boolean }> })?.usuario_configuracoes?.[0];
+
+      if (!principalLink || !resp) {
+        semResponsavelPrincipal++;
+        semContato++;
+      } else {
+        const hasPhone = Boolean(resp.telefone && resp.telefone.replace(/\D/g, "").length >= 8);
+        const hasEmail = Boolean(resp.email && resp.email.includes("@"));
+
+        if (hasPhone) comTelefoneValido++;
+        if (hasEmail) comEmailValido++;
+
+        if (!hasPhone && !hasEmail) {
+          semContato++;
+        }
+
+        const motoristaAtivoEnvio = motoristaConfigs?.notificar_pais_cobrancas !== false;
+        if (!motoristaAtivoEnvio) {
+          notificacoesDesativadasMotorista++;
+        }
+
+        const alunoAtivoEnvio = c.desativar_lembretes !== true && (c.passageiro as { enviar_notificacoes?: boolean })?.enviar_notificacoes !== false;
+        if (!alunoAtivoEnvio) {
+          lembretesDesativadosAluno++;
+        }
+
+        if (c.status === CobrancaStatus.PENDENTE && motoristaAtivoEnvio && alunoAtivoEnvio) {
+          if (hasPhone) wabaCarteira++;
+          if (hasEmail) resendCarteira++;
+          firebaseCarteira++;
+        }
+      }
+    }
+
+    const carteira: CarteiraDiaResumoDTO = {
+      dia,
+      totalAlunos: cobrancasDia.length,
+      faturasPagas,
+      faturasPendentes,
+      valorPrevistoTotal: Number(valorPrevistoTotal.toFixed(2)),
+      valorPagoTotal: Number(valorPagoTotal.toFixed(2)),
+      valorPendenteTotal: Number(valorPendenteTotal.toFixed(2)),
+      canaisDisponiveis: {
+        waba: wabaCarteira,
+        resend: resendCarteira,
+        firebase: firebaseCarteira,
+        custoEstimadoWabaBrl: Number((wabaCarteira * 0.038).toFixed(2)),
+      },
+      diagnostico: {
+        comTelefoneValido,
+        comEmailValido,
+        semResponsavelPrincipal,
+        semContato,
+        notificacoesDesativadasMotorista,
+        lembretesDesativadosAluno,
+      },
+    };
+
+    let disparosHoje: DisparosHojeResumoDTO | null = null;
+
+    if (isHoje && cobrancasReguasRes.data) {
+      const cobrancasReguas = (cobrancasReguasRes.data || []).filter((c) => isDriverEligible(c.motorista as Parameters<typeof isDriverEligible>[0]));
+
+      let vencendoHojeFaturas = 0;
+      let vencendoHojeWaba = 0;
+      let vencendoHojeResend = 0;
+      let vencendoHojeFirebase = 0;
+
+      let avisoPrevioFaturas = 0;
+      let avisoPrevioResend = 0;
+      let avisoPrevioFirebase = 0;
+
+      let atraso3DiasFaturas = 0;
+      let atraso3DiasWaba = 0;
+      let atraso3DiasResend = 0;
+      let atraso3DiasFirebase = 0;
+
+      let atraso5DiasFaturas = 0;
+      let atraso5DiasResend = 0;
+      let atraso5DiasFirebase = 0;
+
+      let atraso7DiasFaturas = 0;
+      let atraso7DiasResend = 0;
+      let atraso7DiasFirebase = 0;
+
+      let totalJaEnviadasHoje = 0;
+      let totalAguardandoEnvioHoje = 0;
+
+      for (const c of cobrancasReguas) {
+        if (c.desativar_lembretes || (c.passageiro as { enviar_notificacoes?: boolean })?.enviar_notificacoes === false) continue;
+
+        const responsaveisLinks = ((c.passageiro as { responsaveis?: Array<{ tipo: string; responsavel: { id: string; nome: string | null; telefone: string | null; email: string | null } | null }> })?.responsaveis || []);
+        const principalLink = responsaveisLinks.find((r) => r.tipo === TipoResponsavel.PRINCIPAL) || responsaveisLinks.find((r) => r.tipo === "PRINCIPAL");
+        const resp = principalLink?.responsavel;
+        if (!resp) continue;
+
+        const hasPhone = Boolean(resp.telefone && resp.telefone.replace(/\D/g, "").length >= 8);
+        const hasEmail = Boolean(resp.email && resp.email.includes("@"));
+        if (!hasPhone && !hasEmail) continue;
+
+        const motoristaConfig = (c.motorista as {
+          usuario_configuracoes?: Array<{
+            notificar_pais_cobrancas?: boolean;
+            cobranca_aviso_previo_ativo?: boolean;
+            cobranca_dias_aviso_previo?: number;
+            cobranca_vencimento_hoje_ativo?: boolean;
+            cobranca_atraso_3_dias_ativo?: boolean;
+            cobranca_atraso_5_dias_ativo?: boolean;
+            cobranca_atraso_7_dias_ativo?: boolean;
+          }>;
+        })?.usuario_configuracoes?.[0];
+
+        if (motoristaConfig?.notificar_pais_cobrancas === false) continue;
+
+        const avisoPrevioAtivo = motoristaConfig?.cobranca_aviso_previo_ativo ?? true;
+        const driverThresholdDays = Number(motoristaConfig?.cobranca_dias_aviso_previo) || 2;
+        const vencimentoHojeAtivo = motoristaConfig?.cobranca_vencimento_hoje_ativo ?? true;
+        const atraso3DiasAtivo = motoristaConfig?.cobranca_atraso_3_dias_ativo ?? true;
+        const atraso5DiasAtivo = motoristaConfig?.cobranca_atraso_5_dias_ativo ?? true;
+        const atraso7DiasAtivo = motoristaConfig?.cobranca_atraso_7_dias_ativo ?? true;
+
+        const dataVencimentoStr = String(c.data_vencimento);
+        const jaEnviado = Boolean(c.data_envio_ultima_notificacao && toPersistenceString(c.data_envio_ultima_notificacao) >= todayStr);
+
+        if (dataVencimentoStr === todayStr) {
+          if (vencimentoHojeAtivo) {
+            vencendoHojeFaturas++;
+            if (hasPhone) vencendoHojeWaba++;
+            if (hasEmail) vencendoHojeResend++;
+            vencendoHojeFirebase++;
+
+            if (jaEnviado) totalJaEnviadasHoje++;
+            else totalAguardandoEnvioHoje++;
+          }
+        } else if (dataVencimentoStr > todayStr) {
+          if (avisoPrevioAtivo) {
+            const diasAntecedencia = diffInDays(todayStr, dataVencimentoStr);
+            if (diasAntecedencia === driverThresholdDays) {
+              avisoPrevioFaturas++;
+              if (hasEmail) avisoPrevioResend++;
+              avisoPrevioFirebase++;
+
+              if (jaEnviado) totalJaEnviadasHoje++;
+              else totalAguardandoEnvioHoje++;
+            }
+          }
+        } else {
+          const diasAtraso = diffInDays(dataVencimentoStr, todayStr);
+          if (diasAtraso === 3 && atraso3DiasAtivo) {
+            atraso3DiasFaturas++;
+            if (hasPhone) atraso3DiasWaba++;
+            if (hasEmail) atraso3DiasResend++;
+            atraso3DiasFirebase++;
+
+            if (jaEnviado) totalJaEnviadasHoje++;
+            else totalAguardandoEnvioHoje++;
+          } else if (diasAtraso === 5 && atraso5DiasAtivo) {
+            atraso5DiasFaturas++;
+            if (hasEmail) atraso5DiasResend++;
+            atraso5DiasFirebase++;
+
+            if (jaEnviado) totalJaEnviadasHoje++;
+            else totalAguardandoEnvioHoje++;
+          } else if (diasAtraso === 7 && atraso7DiasAtivo) {
+            atraso7DiasFaturas++;
+            if (hasEmail) atraso7DiasResend++;
+            atraso7DiasFirebase++;
+
+            if (jaEnviado) totalJaEnviadasHoje++;
+            else totalAguardandoEnvioHoje++;
+          }
+        }
+      }
+
+      const totalWaba = vencendoHojeWaba + atraso3DiasWaba;
+      const totalResend = vencendoHojeResend + avisoPrevioResend + atraso3DiasResend + atraso5DiasResend + atraso7DiasResend;
+      const totalFirebase = vencendoHojeFirebase + avisoPrevioFirebase + atraso3DiasFirebase + atraso5DiasFirebase + atraso7DiasFirebase;
+      const totalFaturasHoje = vencendoHojeFaturas + avisoPrevioFaturas + atraso3DiasFaturas + atraso5DiasFaturas + atraso7DiasFaturas;
+      const totalNotificacoesPrevistas = totalJaEnviadasHoje + totalAguardandoEnvioHoje;
+
+      const atrasadosConsolidado = {
+        titulo: "Cobranças em Atraso",
+        descricao: "Faturas vencidas há 3, 5 ou 7 dias",
+        totalFaturas: atraso3DiasFaturas + atraso5DiasFaturas + atraso7DiasFaturas,
+        canais: {
+          waba: atraso3DiasWaba,
+          resend: atraso3DiasResend + atraso5DiasResend + atraso7DiasResend,
+          firebase: atraso3DiasFirebase + atraso5DiasFirebase + atraso7DiasFirebase,
+          custoEstimadoWabaBrl: Number((atraso3DiasWaba * 0.038).toFixed(2)),
+        },
+      };
+
+      disparosHoje = {
+        totalFaturasHoje,
+        totalNotificacoesPrevistas,
+        totalJaEnviadasHoje,
+        totalAguardandoEnvioHoje,
+        canaisConsolidados: {
+          waba: totalWaba,
+          resend: totalResend,
+          firebase: totalFirebase,
+          custoEstimadoWabaBrl: Number((totalWaba * 0.038).toFixed(2)),
+        },
+        reguas: {
+          vencendoHoje: {
+            titulo: "Vencendo Hoje",
+            descricao: `Faturas com vencimento no dia de hoje (${diaAtual}/${mesAtual})`,
+            totalFaturas: vencendoHojeFaturas,
+            canais: {
+              waba: vencendoHojeWaba,
+              resend: vencendoHojeResend,
+              firebase: vencendoHojeFirebase,
+              custoEstimadoWabaBrl: Number((vencendoHojeWaba * 0.038).toFixed(2)),
+            },
+          },
+          avisoPrevio: {
+            titulo: "Avisos Prévios",
+            descricao: "Faturas que vencerão nos próximos dias (D+1 a D+5)",
+            totalFaturas: avisoPrevioFaturas,
+            canais: {
+              waba: 0,
+              resend: avisoPrevioResend,
+              firebase: avisoPrevioFirebase,
+              custoEstimadoWabaBrl: 0,
+            },
+          },
+          atraso3Dias: {
+            titulo: "Cobrança 3 Dias em Atraso (D-3)",
+            descricao: "Faturas vencidas há 3 dias (com disparo de WhatsApp WABA)",
+            totalFaturas: atraso3DiasFaturas,
+            canais: {
+              waba: atraso3DiasWaba,
+              resend: atraso3DiasResend,
+              firebase: atraso3DiasFirebase,
+              custoEstimadoWabaBrl: Number((atraso3DiasWaba * 0.038).toFixed(2)),
+            },
+          },
+          atraso5Dias: {
+            titulo: "Cobrança 5 Dias em Atraso (D-5)",
+            descricao: "Faturas vencidas há 5 dias (E-mail e Push)",
+            totalFaturas: atraso5DiasFaturas,
+            canais: {
+              waba: 0,
+              resend: atraso5DiasResend,
+              firebase: atraso5DiasFirebase,
+              custoEstimadoWabaBrl: 0,
+            },
+          },
+          atraso7Dias: {
+            titulo: "Cobrança 7 Dias em Atraso (D-7)",
+            descricao: "Faturas vencidas há 7 dias (E-mail e Push)",
+            totalFaturas: atraso7DiasFaturas,
+            canais: {
+              waba: 0,
+              resend: atraso7DiasResend,
+              firebase: atraso7DiasFirebase,
+              custoEstimadoWabaBrl: 0,
+            },
+          },
+          atrasados: atrasadosConsolidado,
+        },
+      };
+    }
+
+    return {
+      dia,
+      mes: mesAlvo,
+      ano: anoAlvo,
+      isHoje,
+      carteira,
+      disparosHoje,
+    };
+  },
 };
+
 
 
