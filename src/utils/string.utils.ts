@@ -3,6 +3,28 @@ export function cleanString(str: string, capitalize = false): string {
   return str.trim().replace(/\s+/g, " ");
 }
 
+export function buildAccentInsensitiveRegex(term: string): string {
+  if (!term) return "";
+  const cleaned = term.trim().replace(/\s+/g, " ");
+  const escaped = cleaned.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const charMap: Record<string, string> = {
+    a: "[aáàâãä]",
+    e: "[eéèêë]",
+    i: "[iíìîï]",
+    o: "[oóòôõö]",
+    u: "[uúùûü]",
+    c: "[cç]",
+  };
+
+  return escaped
+    .split("")
+    .map((char) => {
+      const base = char.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      return charMap[base] || char;
+    })
+    .join("");
+}
+
 export const onlyDigits = (value: string | null | undefined): string => {
   if (!value) return "";
   return String(value).replace(/\D/g, "");

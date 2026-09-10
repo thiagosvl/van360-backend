@@ -22,7 +22,7 @@ import {
 import { historicoService } from "../historico.service.js";
 import { getNowBR, parseLocalDate, parseBrazilianDateToISO } from "../../utils/date.utils.js";
 import type { VencimentoDiaItemDTO, VencimentosPassageirosResponseDTO } from "../../types/dtos/admin-vencimento.dto.js";
-import { onlyDigits, cleanString } from "../../utils/string.utils.js";
+import { onlyDigits, cleanString, buildAccentInsensitiveRegex } from "../../utils/string.utils.js";
 import { subscriptionService } from "../subscriptions/subscription.service.js";
 import type {
   UpdateUserAdminDTO,
@@ -273,17 +273,18 @@ export const adminUserService = {
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
-    let digits: string | undefined = undefined;
     let searchClean: string | undefined = undefined;
+    let regexPattern: string | undefined = undefined;
     let isId = false;
 
     if (search) {
-      searchClean = search.trim();
-      digits = onlyDigits(searchClean);
+      searchClean = cleanString(search);
 
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (uuidRegex.test(searchClean)) {
         isId = true;
+      } else {
+        regexPattern = buildAccentInsensitiveRegex(searchClean);
       }
     }
 
@@ -291,9 +292,10 @@ export const adminUserService = {
       from,
       to,
       searchClean,
-      digits,
+      regexPattern,
       isId,
       status: status?.trim() || undefined,
+      tipo: query.tipo?.trim() || undefined,
     });
 
     if (error) {

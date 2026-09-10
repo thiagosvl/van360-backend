@@ -46,9 +46,10 @@ export const adminUserRepository = {
     from: number;
     to: number;
     searchClean?: string;
+    regexPattern?: string;
     isId?: boolean;
-    digits?: string;
     status?: string;
+    tipo?: string;
   }) {
     const isFilteredByStatus = Boolean(query.status);
     const assinaturasRelation = isFilteredByStatus ? "assinaturas!inner" : "assinaturas";
@@ -59,8 +60,11 @@ export const adminUserRepository = {
         `id, nome, apelido, email, cpfcnpj, telefone, ativo, tipo, created_at, data_nascimento, canal_aquisicao, dispositivo_cadastro, ${assinaturasRelation}(id, status, plano_id, data_vencimento, trial_ends_at, planos(id, nome, identificador))`,
         { count: "exact" }
       )
-      .eq("tipo", UserType.MOTORISTA)
       .order("created_at", { ascending: false });
+
+    if (query.tipo) {
+      q = q.eq("tipo", query.tipo);
+    }
 
     if (query.status === SUBSCRIPTION_VITALICIO_FILTER) {
       q = q
@@ -76,12 +80,10 @@ export const adminUserRepository = {
 
     if (query.isId && query.searchClean) {
       q = q.eq("id", query.searchClean);
+    } else if (query.regexPattern) {
+      q = q.or(`nome.imatch.${query.regexPattern},apelido.imatch.${query.regexPattern}`);
     } else if (query.searchClean) {
-      if (query.digits && query.digits.length >= 3) {
-        q = q.or(`nome.ilike.%${query.searchClean}%,telefone.ilike.%${query.digits}%`);
-      } else {
-        q = q.or(`nome.ilike.%${query.searchClean}%`);
-      }
+      q = q.or(`nome.ilike.%${query.searchClean}%,apelido.ilike.%${query.searchClean}%`);
     }
 
     return q.range(query.from, query.to);
