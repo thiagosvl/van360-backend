@@ -153,12 +153,10 @@ export const subscriptionService = {
         const sub = await this.getOrCreateSubscription(userId);
         if (!sub) throw new Error("Assinatura não encontrada.");
 
-        if (sub.status === SubscriptionStatus.CANCELED) {
-            logger.info({ subId: sub.id }, "Assinatura já estava cancelada.");
-            return true;
+        if (sub.status !== SubscriptionStatus.ACTIVE) {
+            throw new Error("Apenas assinaturas ativas podem ser canceladas.");
         }
 
-        // 1. Atualizar status da assinatura
         await this.updateStatus(sub.id, SubscriptionStatus.CANCELED, "Assinatura cancelada manualmente.");
 
         // 2. Cancelar faturas pendentes/com erro
