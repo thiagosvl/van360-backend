@@ -121,6 +121,19 @@ export const listUserNotificationsQuerySchema = z.object({
 });
 export type ListUserNotificationsQuery = z.infer<typeof listUserNotificationsQuerySchema>;
 
+export const retrySingleNotificationSchema = z.object({
+  executeImmediately: z.boolean().optional().default(true),
+});
+export type RetrySingleNotificationDTO = z.infer<typeof retrySingleNotificationSchema>;
+
+export const retryBulkNotificationsSchema = z.object({
+  ids: z.array(z.string().uuid()).optional(),
+  filters: listUserNotificationsQuerySchema.omit({ page: true, limit: true }).optional(),
+}).refine(data => (data.ids && data.ids.length > 0) || (data.filters && Object.keys(data.filters).length > 0), {
+  message: "É necessário informar uma lista de IDs ou filtros válidos para retentativa em lote.",
+});
+export type RetryBulkNotificationsDTO = z.infer<typeof retryBulkNotificationsSchema>;
+
 export interface NotificationKpisDTO {
   total: number;
   sent: number;

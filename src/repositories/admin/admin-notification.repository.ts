@@ -357,6 +357,87 @@ export const adminNotificationRepository = {
       canais,
     };
   },
+
+  async findNotificationById(id: string) {
+    const { data, error } = await supabaseAdmin
+      .from("fila_notificacoes")
+      .select("*, usuarios(id, nome, email, telefone, cpfcnpj)")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async resetNotificationForRetry(id: string) {
+    const { data, error } = await supabaseAdmin
+      .from("fila_notificacoes")
+      .update({
+        status: NotificationQueueStatus.RETRY_PENDING,
+        tentativas: 0,
+        proxima_tentativa_em: new Date().toISOString(),
+        erro_mensagem: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async bulkResetNotificationsByIds(ids: string[]) {
+    if (!ids.length) return 0;
+    const { data, error } = await supabaseAdmin
+      .from("fila_notificacoes")
+      .update({
+        status: NotificationQueueStatus.RETRY_PENDING,
+        tentativas: 0,
+        proxima_tentativa_em: new Date().toISOString(),
+        erro_mensagem: null,
+        updated_at: new Date().toISOString(),
+      })
+      .in("id", ids)
+      .in("status", [
+        NotificationQueueStatus.FAILED,
+        NotificationQueueStatus.RETRY_PENDING,
+        NotificationQueueStatus.CANCELLED,
+      ])
+      .select("id");
+
+    if (error) throw error;
+    return data ? data.length : 0;
+  },
+
+  async bulkResetNotificationsByFilters(filters: AdminNotificationFilters) {
+    let query = supabaseAdmin
+      .from("fila_notificacoes")
+      .select("id");
+
+    const driverIds = await resolveDriverUserIds(filters?.searchMotorista);
+    if (driverIds) {
+      if (driverIds.length === 0) return 0;
+      query = query.in("usuario_id", driverIds);
+    }
+
+    query = applyFilters(query, filters);
+
+    if (!filters.status || filters.status.toUpperCase() === "TODOS" || filters.status.toUpperCase() === "ALL") {
+      query = query.in("status", [
+        NotificationQueueStatus.FAILED,
+        NotificationQueueStatus.RETRY_PENDING,
+        NotificationQueueStatus.CANCELLED,
+      ]);
+    }
+
+    const { data: items, error } = await query.limit(500);
+    if (error) throw error;
+    if (!items || items.length === 0) return 0;
+
+    const ids = items.map((i) => i.id);
+    return this.bulkResetNotificationsByIds(ids);
+  },
 };
 
 

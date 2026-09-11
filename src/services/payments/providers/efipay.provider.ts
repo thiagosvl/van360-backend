@@ -13,6 +13,7 @@ import {
 import { CheckoutPaymentMethod, PaymentProvider } from "../../../types/enums.js";
 import { parseLocalDate } from "../../../utils/date.utils.js";
 import { onlyDigits, extractErrorMessage } from "../../../utils/string.utils.js";
+import { errorAlertService } from "../../error-alert.service.js";
 
 export class EfipayProvider implements PaymentProviderAdapter {
     readonly providerName = PaymentProvider.EFIPAY;
@@ -185,6 +186,16 @@ export class EfipayProvider implements PaymentProviderAdapter {
                     errorDetail.toLowerCase().includes("bloqueado")
                 )
             );
+
+            if (!isUserFacing) {
+                void errorAlertService.notifyPaymentError({
+                    provider: PaymentProvider.EFIPAY,
+                    error: errorDetail,
+                    externalId: request.externalId,
+                    paymentMethod: request.paymentMethod,
+                    amount: `R$ ${request.amount.toFixed(2)}`
+                });
+            }
 
             logger.error({ 
                 error: errorDetail, 

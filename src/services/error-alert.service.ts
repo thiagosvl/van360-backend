@@ -3,6 +3,7 @@ import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { redisClient } from "../config/redis.js";
 import { addToTelegramQueue } from "../queues/telegram.queue.js";
+import { NotificationChannelEnum, PaymentProvider } from "../types/enums.js";
 
 interface HttpErrorAlertContext {
   error: unknown;
@@ -17,11 +18,22 @@ interface FatalErrorAlertContext {
   origin: string;
 }
 
-interface IntegrationErrorAlertContext {
-  provider: string;
+interface NotificationErrorAlertContext {
+  channel: NotificationChannelEnum;
   error: unknown;
   statusCode?: number;
   eventName?: string;
+  templateName?: string;
+  destinatario?: string;
+  details?: Record<string, string | number | boolean | null | undefined>;
+}
+
+interface PaymentErrorAlertContext {
+  provider: PaymentProvider;
+  error: unknown;
+  externalId?: string;
+  paymentMethod?: string;
+  amount?: string;
   details?: Record<string, string | number | boolean | null | undefined>;
 }
 
@@ -66,12 +78,12 @@ export const errorAlertService = {
         .update(`${ctx.method}:${ctx.url}:${errorMessage}`)
         .digest("hex");
 
-      const throttleKey = `alert:error:${hash}`;
+      const throttleKey = `alert:http:${hash}`;
 
       try {
         const isThrottled = await redisClient.get(throttleKey);
         if (isThrottled) {
-          logger.info({ throttleKey, url: ctx.url }, "[ErrorAlertService] Alerta de erro silenciado pelo cooldown");
+          logger.info({ throttleKey, url: ctx.url }, "[ErrorAlertService] Alerta HTTP silenciado pelo cooldown");
           return;
         }
         await redisClient.setex(throttleKey, COOLDOWN_SECONDS, "1");
@@ -154,7 +166,7 @@ export const errorAlertService = {
     }
   },
 
-  async notifyIntegrationError(ctx: IntegrationErrorAlertContext): Promise<void> {
+  async notifyNotificationError(ctx: NotificationErrorAlertContext): Promise<void> {
     try {
       if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_ADMIN_CHAT_ID) {
         return;
@@ -163,15 +175,15 @@ export const errorAlertService = {
       const errorMessage = resolveErrorMessage(ctx.error);
       const hash = crypto
         .createHash("md5")
-        .update(`${ctx.provider}:${ctx.eventName || ""}:${errorMessage}`)
+        .update(`notif:${ctx.channel}:${ctx.eventName || ""}:${errorMessage}`)
         .digest("hex");
 
-      const throttleKey = `alert:integration:${hash}`;
+      const throttleKey = `alert:notification:${hash}`;
 
       try {
         const isThrottled = await redisClient.get(throttleKey);
         if (isThrottled) {
-          logger.info({ throttleKey, provider: ctx.provider }, "[ErrorAlertService] Alerta de integração silenciado pelo cooldown");
+          logger.info({ throttleKey, channel: ctx.channel }, "[ErrorAlertService] Alerta de notificação silenciado pelo cooldown");
           return;
         }
         await redisClient.setex(throttleKey, COOLDOWN_SECONDS, "1");
@@ -183,10 +195,10 @@ export const errorAlertService = {
       const environment = env.NODE_ENV;
 
       const lines = [
-        `🚨 <b>[FALHA DE INTEGRAÇÃO - ${escapeHtml(ctx.provider)}]</b>`,
+        `🚨 <b>[FALHA DE NOTIFICAÇÃO - ${escapeHtml(ctx.channel)}]</b>`,
         "",
         `<b>Ambiente:</b> <code>${environment}</code>`,
-        `<b>Provedor:</b> <code>${escapeHtml(ctx.provider)}</code>`,
+        `<b>Canal:</b> <code>${escapeHtml(ctx.channel)}</code>`,
       ];
 
       if (ctx.statusCode) {
@@ -195,6 +207,14 @@ export const errorAlertService = {
 
       if (ctx.eventName) {
         lines.push(`<b>Evento:</b> <code>${escapeHtml(ctx.eventName)}</code>`);
+      }
+
+      if (ctx.templateName) {
+        lines.push(`<b>Template:</b> <code>${escapeHtml(ctx.templateName)}</code>`);
+      }
+
+      if (ctx.destinatario) {
+        lines.push(`<b>Destinatário:</b> <code>${escapeHtml(ctx.destinatario)}</code>`);
       }
 
       lines.push(`<b>Horário:</b> ${timestamp}`);
@@ -214,10 +234,82 @@ export const errorAlertService = {
 
       await addToTelegramQueue({
         message,
-        context: "integration-error-alert"
-      }, `alert-integration-${hash}-${Date.now()}`);
+        context: "notification-error-alert"
+      }, `alert-notif-${hash}-${Date.now()}`);
     } catch (dispatchError) {
-      logger.error({ error: resolveErrorMessage(dispatchError) }, "[ErrorAlertService] Falha ao despachar alerta de integração");
+      logger.error({ error: resolveErrorMessage(dispatchError) }, "[ErrorAlertService] Falha ao despachar alerta de notificação");
+    }
+  },
+
+  async notifyPaymentError(ctx: PaymentErrorAlertContext): Promise<void> {
+    try {
+      if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_ADMIN_CHAT_ID) {
+        return;
+      }
+
+      const errorMessage = resolveErrorMessage(ctx.error);
+      const hash = crypto
+        .createHash("md5")
+        .update(`payment:${ctx.provider}:${errorMessage}`)
+        .digest("hex");
+
+      const throttleKey = `alert:payment:${hash}`;
+
+      try {
+        const isThrottled = await redisClient.get(throttleKey);
+        if (isThrottled) {
+          logger.info({ throttleKey, provider: ctx.provider }, "[ErrorAlertService] Alerta de pagamento silenciado pelo cooldown");
+          return;
+        }
+        await redisClient.setex(throttleKey, COOLDOWN_SECONDS, "1");
+      } catch (redisErr) {
+        logger.warn({ error: resolveErrorMessage(redisErr) }, "[ErrorAlertService] Falha ao verificar cooldown no Redis");
+      }
+
+      const timestamp = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+      const environment = env.NODE_ENV;
+      const providerUpper = ctx.provider.toUpperCase();
+
+      const lines = [
+        `💳 <b>[FALHA DE PAGAMENTO - ${escapeHtml(providerUpper)}]</b>`,
+        "",
+        `<b>Ambiente:</b> <code>${environment}</code>`,
+        `<b>Provedor:</b> <code>${escapeHtml(providerUpper)}</code>`,
+      ];
+
+      if (ctx.externalId) {
+        lines.push(`<b>Fatura / External ID:</b> <code>${escapeHtml(ctx.externalId)}</code>`);
+      }
+
+      if (ctx.paymentMethod) {
+        lines.push(`<b>Método:</b> <code>${escapeHtml(ctx.paymentMethod)}</code>`);
+      }
+
+      if (ctx.amount) {
+        lines.push(`<b>Valor:</b> <code>${escapeHtml(ctx.amount)}</code>`);
+      }
+
+      lines.push(`<b>Horário:</b> ${timestamp}`);
+      lines.push(`<b>Erro:</b> <code>${escapeHtml(errorMessage)}</code>`);
+
+      if (ctx.details && Object.keys(ctx.details).length > 0) {
+        lines.push("");
+        lines.push("<b>Detalhes:</b>");
+        for (const [key, value] of Object.entries(ctx.details)) {
+          if (value !== undefined && value !== null) {
+            lines.push(`• <b>${escapeHtml(key)}:</b> <code>${escapeHtml(String(value))}</code>`);
+          }
+        }
+      }
+
+      const message = lines.join("\n");
+
+      await addToTelegramQueue({
+        message,
+        context: "payment-error-alert"
+      }, `alert-pay-${hash}-${Date.now()}`);
+    } catch (dispatchError) {
+      logger.error({ error: resolveErrorMessage(dispatchError) }, "[ErrorAlertService] Falha ao despachar alerta de pagamento");
     }
   }
 };

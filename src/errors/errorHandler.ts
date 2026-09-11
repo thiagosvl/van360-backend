@@ -8,8 +8,6 @@ import { AppError } from "./AppError.js";
 export function globalErrorHandler(error: FastifyError, request: FastifyRequest, reply: FastifyReply) {
     const { method, url } = request;
 
-    // 1. Erro Conhecido (AppError ou validações tratadas)
-    // Check for instanceof OR duck typing (if serialized or prototype lost)
     if (error instanceof AppError || error.name === 'AppError' || (error as { isOperational?: boolean }).isOperational) {
         const statusCode = (error as { statusCode?: number }).statusCode || 500;
         const message = error.message || "Erro desconhecido";
@@ -64,9 +62,16 @@ export function globalErrorHandler(error: FastifyError, request: FastifyRequest,
         });
     }
 
-    // 2. Erros de Validação do Fastify (Schema)
     if (error.validation) {
-         logger.warn({
+        void errorAlertService.notifyHttpError({
+            error: new Error(`Validação (Schema): ${error.message}`),
+            method,
+            url,
+            statusCode: 400,
+            userId: request.user?.id
+        });
+
+        logger.warn({
             msg: "Erro de Validação (Schema)",
             error: error.message,
             details: error.validation,

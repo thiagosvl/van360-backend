@@ -1,6 +1,6 @@
 import { logger } from "../../config/logger.js";
 import { adminNotificationRepository } from "../../repositories/admin/admin-notification.repository.js";
-import type { ListUserNotificationsQuery, DispatchDriverNotificationDTO } from "../../schemas/admin.schema.js";
+import type { ListUserNotificationsQuery, DispatchDriverNotificationDTO, RetryBulkNotificationsDTO } from "../../schemas/admin.schema.js";
 import {
   EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS,
   EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA,
@@ -8,7 +8,7 @@ import {
   EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO,
   EVENTO_MOTORISTA_TESTE_ENCERRADO,
 } from "../../config/constants.js";
-import { NotificationChannelEnum, CheckoutPaymentMethod } from "../../types/enums.js";
+import { NotificationChannelEnum, CheckoutPaymentMethod, NotificationQueueStatus } from "../../types/enums.js";
 import { cobrancaService } from "../cobranca.service.js";
 import { passageiroService } from "../passageiro.service.js";
 import { subscriptionRepository } from "../../repositories/subscription.repository.js";
@@ -18,6 +18,10 @@ import { notificationService } from "../notifications/notification.service.js";
 import { userRepository } from "../../repositories/user.repository.js";
 import { notificationRepository } from "../../repositories/notification.repository.js";
 import { diffInDays, getNowBR, toPersistenceString } from "../../utils/date.utils.js";
+import { notificationQueueRepository, NotificationQueueItemPayload } from "../../repositories/notification-queue.repository.js";
+import { NotificationQueueService, notificationQueueService } from "../notifications/notification-queue.service.js";
+import { notificationRetryWorker } from "../notifications/notification-retry.worker.js";
+import { extractErrorMessage } from "../../utils/error.utils.js";
 
 export const adminNotificationService = {
   async getUserNotifications(userId: string, query: ListUserNotificationsQuery) {
@@ -257,5 +261,98 @@ export const adminNotificationService = {
         throw new Error(`Evento de notificação desconhecido: ${_exhaustiveCheck}`);
       }
     }
+  },
+
+  async retryNotification(id: string, executeImmediately = true) {
+    const item = await adminNotificationRepository.findNotificationById(id);
+    if (!item) {
+      throw new Error("Notificação não encontrada na fila.");
+    }
+
+    if (!executeImmediately) {
+      const reset = await adminNotificationRepository.resetNotificationForRetry(id);
+      void notificationRetryWorker.processPendingRetries();
+      return { success: true, item: reset, message: "Notificação reenfileirada com sucesso." };
+    }
+
+    const eligibility = await notificationQueueService.checkEligibility(item as NotificationQueueItemPayload);
+    if (!eligibility.eligible) {
+      await notificationQueueRepository.markAsCancelled(id, eligibility.cancelReason || "Item inelegível para reenvio.");
+      return {
+        success: false,
+        status: NotificationQueueStatus.CANCELLED,
+        message: eligibility.cancelReason || "Notificação cancelada por inelegibilidade.",
+      };
+    }
+
+    const maxAttempts = item.max_tentativas || 3;
+    const currentAttempts = (item.tentativas || 0) >= maxAttempts ? 1 : (item.tentativas || 0) + 1;
+
+    try {
+      const sendResult = await notificationService.sendDirect(
+        item.canal as NotificationChannelEnum,
+        item.evento,
+        { ...(item.payload as Record<string, unknown>), to: item.destinatario },
+        { usuarioId: item.usuario_id || undefined }
+      );
+
+      if (sendResult.success) {
+        await notificationQueueRepository.markAsSent(id, sendResult.providerMessageId, currentAttempts);
+        return {
+          success: true,
+          status: NotificationQueueStatus.SENT,
+          providerMessageId: sendResult.providerMessageId,
+          message: "Notificação reenviada com sucesso!",
+        };
+      }
+
+      const errorMsg = sendResult.error || "Erro ao disparar via provedor";
+      const errDetail = `${errorMsg} (Tentativa ${currentAttempts}/${maxAttempts})`;
+      if (currentAttempts >= maxAttempts) {
+        await notificationQueueRepository.markAsFailed(id, currentAttempts, errDetail);
+      } else {
+        const nextRetryDate = NotificationQueueService.calculateNextRetryDate(currentAttempts + 1);
+        await notificationQueueRepository.markAsRetryPending(id, currentAttempts, nextRetryDate, errDetail);
+      }
+
+      return {
+        success: false,
+        status: currentAttempts >= maxAttempts ? NotificationQueueStatus.FAILED : NotificationQueueStatus.RETRY_PENDING,
+        error: errorMsg,
+        message: `Falha ao reenviar: ${errorMsg}`,
+      };
+    } catch (error: unknown) {
+      const errorMsg = extractErrorMessage(error);
+      const errDetail = `${errorMsg} (Tentativa ${currentAttempts}/${maxAttempts})`;
+      await notificationQueueRepository.markAsFailed(id, currentAttempts, errDetail);
+      return {
+        success: false,
+        status: NotificationQueueStatus.FAILED,
+        error: errorMsg,
+        message: `Falha ao reenviar: ${errorMsg}`,
+      };
+    }
+  },
+
+  async retryBulkNotifications(payload: RetryBulkNotificationsDTO) {
+    let affectedCount = 0;
+
+    if (payload.ids && payload.ids.length > 0) {
+      affectedCount = await adminNotificationRepository.bulkResetNotificationsByIds(payload.ids);
+    } else if (payload.filters) {
+      affectedCount = await adminNotificationRepository.bulkResetNotificationsByFilters(payload.filters);
+    }
+
+    if (affectedCount > 0) {
+      void notificationRetryWorker.processPendingRetries();
+    }
+
+    return {
+      success: true,
+      count: affectedCount,
+      message: affectedCount > 0
+        ? `${affectedCount} notificações foram reenfileiradas com sucesso.`
+        : "Nenhuma notificação elegível encontrada para reprocessamento.",
+    };
   },
 };

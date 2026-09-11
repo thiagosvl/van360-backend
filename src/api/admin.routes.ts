@@ -38,6 +38,8 @@ const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get("/logs", adminLogController.getGlobalLogs);
   app.get("/users/:id/logs", adminLogController.getUserLogs);
   app.get("/notifications", adminNotificationController.getGlobalNotifications);
+  app.post("/notifications/:id/retry", adminNotificationController.retryNotification);
+  app.post("/notifications/retry-bulk", adminNotificationController.retryBulkNotifications);
   app.get("/users/:id/notifications", adminNotificationController.getUserNotifications);
   app.get("/passengers/:id/notifications", adminNotificationController.getPassengerNotifications);
 

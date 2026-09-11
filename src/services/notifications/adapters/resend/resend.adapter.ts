@@ -6,6 +6,8 @@ import { ResendMapper } from "./resend.mapper.js";
 import { ResendTemplatePayload, ResendTemplateContext } from "./resend.template.js";
 import { NotificationOptions } from "../../notification.service.js";
 import { extractErrorMessage } from "../../../../utils/error.utils.js";
+import { errorAlertService } from "../../../error-alert.service.js";
+import { NotificationChannelEnum } from "../../../../types/enums.js";
 
 export class ResendAdapter implements NotificationProviderPort {
     private resendClient: Resend | null = null;
@@ -114,6 +116,15 @@ export class ResendAdapter implements NotificationProviderPort {
 
         if (response.error) {
             const errStr = response.error.message || JSON.stringify(response.error);
+            void errorAlertService.notifyNotificationError({
+                channel: NotificationChannelEnum.RESEND,
+                eventName,
+                destinatario: to,
+                error: errStr,
+                details: {
+                    assunto: template.subject
+                }
+            });
             logger.error({
                 error: response.error,
                 from: this.fromEmail,

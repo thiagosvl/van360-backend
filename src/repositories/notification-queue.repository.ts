@@ -98,7 +98,7 @@ export const notificationQueueRepository = {
         return true;
     },
 
-    async markAsSent(id: string, providerMessageId?: string): Promise<void> {
+    async markAsSent(id: string, providerMessageId?: string, tentativas?: number): Promise<void> {
         const updatePayload: Record<string, unknown> = {
             status: NotificationQueueStatus.SENT,
             erro_mensagem: null,
@@ -107,6 +107,10 @@ export const notificationQueueRepository = {
 
         if (providerMessageId) {
             updatePayload.provider_message_id = providerMessageId;
+        }
+
+        if (typeof tentativas === "number") {
+            updatePayload.tentativas = tentativas;
         }
 
         await supabaseAdmin

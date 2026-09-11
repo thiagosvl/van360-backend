@@ -8,14 +8,15 @@ import { onlyDigits } from "../../../../utils/string.utils.js";
 
 import { NotificationOptions } from "../../notification.service.js";
 import { extractErrorMessage } from "../../../../utils/error.utils.js";
+import { errorAlertService } from "../../../error-alert.service.js";
+import { NotificationChannelEnum } from "../../../../types/enums.js";
 
 export class FirebasePushAdapter implements NotificationProviderPort {
     async send(eventName: string, contextData: Record<string, unknown>, options?: NotificationOptions): Promise<NotificationSendResult> {
+        let targetUserId: string | undefined = undefined;
         try {
             const to = (contextData.to as string) || "";
             const isPassengerEvent = eventName.startsWith("PASSAGEIRO_") || eventName.startsWith("ROTA_");
-
-            let targetUserId: string | undefined = undefined;
 
             if (isPassengerEvent && to) {
                 const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(to);
@@ -127,6 +128,12 @@ export class FirebasePushAdapter implements NotificationProviderPort {
             return { success: true };
         } catch (error: unknown) {
             const message = extractErrorMessage(error);
+            void errorAlertService.notifyNotificationError({
+                channel: NotificationChannelEnum.FIREBASE,
+                eventName,
+                error: message,
+                destinatario: targetUserId
+            });
             logger.error({ error: message, eventName }, "[FirebasePushAdapter] Falha ao enviar notificação Push");
             return { success: false, error: message };
         }
