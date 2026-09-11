@@ -306,7 +306,64 @@ export const adminUserRepository = {
         "PASSAGEIRO_ATRASADO"
       ]);
   },
+
+  async getIdentificadoresComPushToken(): Promise<Set<string>> {
+    const { data: pushTokens } = await supabaseAdmin
+      .from("usuario_push_tokens")
+      .select("user_id");
+
+    if (!pushTokens || pushTokens.length === 0) {
+      return new Set<string>();
+    }
+
+    const rawUserIds = pushTokens.map((p) => p.user_id).filter(Boolean);
+    const identifierSet = new Set<string>(rawUserIds);
+
+    const uuids = rawUserIds.filter((id) =>
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+    );
+
+    if (uuids.length > 0) {
+      const [{ data: users }, { data: resps }] = await Promise.all([
+        supabaseAdmin.from("usuarios").select("id, telefone, email").in("id", uuids),
+        supabaseAdmin.from("responsaveis").select("id, telefone, email").in("id", uuids),
+      ]);
+
+      if (users) {
+        for (const u of users) {
+          if (u.telefone) {
+            const cleanPhone = u.telefone.replace(/\D/g, "");
+            identifierSet.add(cleanPhone);
+            if (cleanPhone.length >= 10 && !cleanPhone.startsWith("55")) {
+              identifierSet.add(`55${cleanPhone}`);
+            }
+          }
+          if (u.email) {
+            identifierSet.add(u.email.trim().toLowerCase());
+          }
+        }
+      }
+
+      if (resps) {
+        for (const r of resps) {
+          if (r.telefone) {
+            const cleanPhone = r.telefone.replace(/\D/g, "");
+            identifierSet.add(cleanPhone);
+            if (cleanPhone.length >= 10 && !cleanPhone.startsWith("55")) {
+              identifierSet.add(`55${cleanPhone}`);
+            }
+          }
+          if (r.email) {
+            identifierSet.add(r.email.trim().toLowerCase());
+          }
+        }
+      }
+    }
+
+    return identifierSet;
+  },
 };
+
 
 
 

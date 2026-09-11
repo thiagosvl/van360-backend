@@ -1234,6 +1234,7 @@ export const adminUserService = {
       };
     } else if (cobrancasReguasRes.data) {
       const cobrancasReguas = (cobrancasReguasRes.data || []).filter((c) => isDriverEligible(c.motorista as Parameters<typeof isDriverEligible>[0]));
+      const pushTokenIdentifiers = await adminUserRepository.getIdentificadoresComPushToken();
 
       let vencendoHojeFaturas = 0;
       let vencendoHojeWaba = 0;
@@ -1268,9 +1269,19 @@ export const adminUserService = {
         const resp = principalLink?.responsavel;
         if (!resp) continue;
 
-        const hasPhone = Boolean(resp.telefone && resp.telefone.replace(/\D/g, "").length >= 8);
+        const respPhoneClean = resp.telefone ? resp.telefone.replace(/\D/g, "") : "";
+        const hasPhone = Boolean(respPhoneClean.length >= 8);
         const hasEmail = Boolean(resp.email && resp.email.includes("@"));
-        if (!hasPhone && !hasEmail) continue;
+        const hasPush = Boolean(
+          (resp.id && pushTokenIdentifiers.has(resp.id)) ||
+          (respPhoneClean && (
+            pushTokenIdentifiers.has(respPhoneClean) ||
+            pushTokenIdentifiers.has(`55${respPhoneClean}`) ||
+            (respPhoneClean.startsWith("55") && pushTokenIdentifiers.has(respPhoneClean.substring(2)))
+          )) ||
+          (resp.email && pushTokenIdentifiers.has(resp.email.trim().toLowerCase()))
+        );
+        if (!hasPhone && !hasEmail && !hasPush) continue;
 
         const motoristaConfig = (c.motorista as {
           usuario_configuracoes?: Array<{
@@ -1301,7 +1312,7 @@ export const adminUserService = {
             vencendoHojeFaturas++;
             if (hasPhone) vencendoHojeWaba++;
             if (hasEmail) vencendoHojeResend++;
-            vencendoHojeFirebase++;
+            if (hasPush) vencendoHojeFirebase++;
 
             if (jaEnviado) totalJaEnviadasHoje++;
             else totalAguardandoEnvioHoje++;
@@ -1312,7 +1323,7 @@ export const adminUserService = {
             if (diasAntecedencia === driverThresholdDays) {
               avisoPrevioFaturas++;
               if (hasEmail) avisoPrevioResend++;
-              avisoPrevioFirebase++;
+              if (hasPush) avisoPrevioFirebase++;
 
               if (jaEnviado) totalJaEnviadasHoje++;
               else totalAguardandoEnvioHoje++;
@@ -1324,21 +1335,21 @@ export const adminUserService = {
             atraso3DiasFaturas++;
             if (hasPhone) atraso3DiasWaba++;
             if (hasEmail) atraso3DiasResend++;
-            atraso3DiasFirebase++;
+            if (hasPush) atraso3DiasFirebase++;
 
             if (jaEnviado) totalJaEnviadasHoje++;
             else totalAguardandoEnvioHoje++;
           } else if (diasAtraso === 5 && atraso5DiasAtivo) {
             atraso5DiasFaturas++;
             if (hasEmail) atraso5DiasResend++;
-            atraso5DiasFirebase++;
+            if (hasPush) atraso5DiasFirebase++;
 
             if (jaEnviado) totalJaEnviadasHoje++;
             else totalAguardandoEnvioHoje++;
           } else if (diasAtraso === 7 && atraso7DiasAtivo) {
             atraso7DiasFaturas++;
             if (hasEmail) atraso7DiasResend++;
-            atraso7DiasFirebase++;
+            if (hasPush) atraso7DiasFirebase++;
 
             if (jaEnviado) totalJaEnviadasHoje++;
             else totalAguardandoEnvioHoje++;
