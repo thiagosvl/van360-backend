@@ -290,6 +290,22 @@ export const adminUserRepository = {
       .eq("passageiro.isento", false)
       .in("data_vencimento", targetDates);
   },
+
+  async getHistoricoNotificacoesCobrancaDoDia(dataISO: string) {
+    const start = `${dataISO}T00:00:00-03:00`;
+    const end = `${dataISO}T23:59:59-03:00`;
+
+    return supabaseAdmin
+      .from("fila_notificacoes")
+      .select("id, evento, canal, status, payload, created_at")
+      .gte("created_at", start)
+      .lte("created_at", end)
+      .in("evento", [
+        "PASSAGEIRO_VENCIMENTO_HOJE",
+        "PASSAGEIRO_VENCIMENTO_PROXIMO",
+        "PASSAGEIRO_ATRASADO"
+      ]);
+  },
 };
 
 

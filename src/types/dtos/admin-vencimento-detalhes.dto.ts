@@ -54,6 +54,8 @@ export interface VencimentoDetalhesResponseDTO {
   mes: number;
   ano: number;
   isHoje: boolean;
+  isPassado?: boolean;
+  isFuturo?: boolean;
   carteira: CarteiraDiaResumoDTO;
   disparosHoje: DisparosHojeResumoDTO | null;
   disparosDia?: DisparosDiaResumoDTO | null;

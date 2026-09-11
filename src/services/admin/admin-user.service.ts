@@ -943,6 +943,8 @@ export const adminUserService = {
 
     const dataReferencia = new Date(anoAlvo, mesAlvo - 1, dia);
     const dataRefStr = toPersistenceString(dataReferencia);
+    const isPassado = dataRefStr < todayStr;
+    const isFuturo = dataRefStr > todayStr;
 
     const targetDates = [dataRefStr];
     for (let adv = 1; adv <= 5; adv++) {
@@ -952,9 +954,10 @@ export const adminUserService = {
       targetDates.push(toPersistenceString(addDays(dataReferencia, -diasAtraso)));
     }
 
-    const [cobrancasDiaRes, cobrancasReguasRes] = await Promise.all([
+    const [cobrancasDiaRes, cobrancasReguasRes, historicoNotifsRes] = await Promise.all([
       adminUserRepository.getCobrancasDoDiaNoMes(dia, mesAlvo, anoAlvo),
-      adminUserRepository.getCobrancasPendentesParaReguas(targetDates),
+      !isPassado ? adminUserRepository.getCobrancasPendentesParaReguas(targetDates) : Promise.resolve({ data: null, error: null }),
+      isPassado ? adminUserRepository.getHistoricoNotificacoesCobrancaDoDia(dataRefStr) : Promise.resolve({ data: null, error: null }),
     ]);
 
     if (cobrancasDiaRes.error) {
@@ -963,8 +966,13 @@ export const adminUserService = {
     }
 
     if (cobrancasReguasRes.error) {
-      logger.error({ error: cobrancasReguasRes.error }, "[AdminUserService] Erro ao buscar cobranças para réguas de hoje.");
+      logger.error({ error: cobrancasReguasRes.error }, "[AdminUserService] Erro ao buscar cobranças para réguas.");
       throw cobrancasReguasRes.error;
+    }
+
+    if (historicoNotifsRes.error) {
+      logger.error({ error: historicoNotifsRes.error }, "[AdminUserService] Erro ao buscar histórico de notificações do dia.");
+      throw historicoNotifsRes.error;
     }
 
     const cobrancasDia = (cobrancasDiaRes.data || []).filter((c) => isDriverEligible(c.motorista as Parameters<typeof isDriverEligible>[0]));
@@ -1062,7 +1070,169 @@ export const adminUserService = {
 
     let disparosHoje: DisparosHojeResumoDTO | null = null;
 
-    if (cobrancasReguasRes.data) {
+    if (isPassado) {
+      const historicoItems = (historicoNotifsRes.data || []) as Array<{
+        id: string;
+        evento: string;
+        canal: string;
+        status: string;
+        payload: Record<string, unknown> | null;
+        created_at: string;
+      }>;
+
+      const cobrancasUnicasSet = new Set<string>();
+      let wabaSent = 0;
+      let resendSent = 0;
+      let firebaseSent = 0;
+
+      let vencendoHojeFaturas = 0;
+      let vencendoHojeWaba = 0;
+      let vencendoHojeResend = 0;
+      let vencendoHojeFirebase = 0;
+
+      let avisoPrevioFaturas = 0;
+      let avisoPrevioResend = 0;
+      let avisoPrevioFirebase = 0;
+
+      let atraso3DiasFaturas = 0;
+      let atraso3DiasWaba = 0;
+      let atraso3DiasResend = 0;
+      let atraso3DiasFirebase = 0;
+
+      const vencendoIds = new Set<string>();
+      const avisoIds = new Set<string>();
+      const atraso3Ids = new Set<string>();
+
+      for (const item of historicoItems) {
+        const cobrancaId = (item.payload?.cobrancaId || (item.payload?.metadata as Record<string, unknown> | undefined)?.cobrancaId) as string | undefined;
+        if (cobrancaId) cobrancasUnicasSet.add(cobrancaId);
+
+        const isSent = item.status === "SENT";
+
+        if (item.evento === "PASSAGEIRO_VENCIMENTO_HOJE") {
+          if (cobrancaId) vencendoIds.add(cobrancaId);
+          if (item.canal === "WABA" && isSent) {
+            wabaSent++;
+            vencendoHojeWaba++;
+          } else if (item.canal === "RESEND" && isSent) {
+            resendSent++;
+            vencendoHojeResend++;
+          } else if (item.canal === "FIREBASE" && isSent) {
+            firebaseSent++;
+            vencendoHojeFirebase++;
+          }
+        } else if (item.evento === "PASSAGEIRO_VENCIMENTO_PROXIMO") {
+          if (cobrancaId) avisoIds.add(cobrancaId);
+          if (item.canal === "RESEND" && isSent) {
+            resendSent++;
+            avisoPrevioResend++;
+          } else if (item.canal === "FIREBASE" && isSent) {
+            firebaseSent++;
+            avisoPrevioFirebase++;
+          }
+        } else if (item.evento === "PASSAGEIRO_ATRASADO") {
+          if (cobrancaId) atraso3Ids.add(cobrancaId);
+          if (item.canal === "WABA" && isSent) {
+            wabaSent++;
+            atraso3DiasWaba++;
+          } else if (item.canal === "RESEND" && isSent) {
+            resendSent++;
+            atraso3DiasResend++;
+          } else if (item.canal === "FIREBASE" && isSent) {
+            firebaseSent++;
+            atraso3DiasFirebase++;
+          }
+        }
+      }
+
+      vencendoHojeFaturas = vencendoIds.size || vencendoHojeWaba || vencendoHojeResend || vencendoHojeFirebase;
+      avisoPrevioFaturas = avisoIds.size || avisoPrevioResend || avisoPrevioFirebase;
+      atraso3DiasFaturas = atraso3Ids.size || atraso3DiasWaba || atraso3DiasResend || atraso3DiasFirebase;
+
+      const totalFaturasProcessadas = cobrancasUnicasSet.size || (vencendoHojeFaturas + avisoPrevioFaturas + atraso3DiasFaturas);
+      const totalEnviadas = totalFaturasProcessadas;
+
+      disparosHoje = {
+        totalFaturasHoje: totalFaturasProcessadas,
+        totalNotificacoesPrevistas: totalFaturasProcessadas,
+        totalJaEnviadasHoje: totalEnviadas,
+        totalAguardandoEnvioHoje: 0,
+        canaisConsolidados: {
+          waba: wabaSent,
+          resend: resendSent,
+          firebase: firebaseSent,
+          custoEstimadoWabaBrl: Number((wabaSent * 0.038).toFixed(2)),
+        },
+        reguas: {
+          vencendoHoje: {
+            titulo: `Vencendo no Dia (${dia.toString().padStart(2, "0")}/${mesAlvo.toString().padStart(2, "0")})`,
+            descricao: `Faturas com vencimento no dia executado (${dia.toString().padStart(2, "0")}/${mesAlvo.toString().padStart(2, "0")})`,
+            totalFaturas: vencendoHojeFaturas,
+            canais: {
+              waba: vencendoHojeWaba,
+              resend: vencendoHojeResend,
+              firebase: vencendoHojeFirebase,
+              custoEstimadoWabaBrl: Number((vencendoHojeWaba * 0.038).toFixed(2)),
+            },
+          },
+          avisoPrevio: {
+            titulo: "Avisos Prévios",
+            descricao: "Faturas que vencerão nos próximos dias (D+1 a D+5)",
+            totalFaturas: avisoPrevioFaturas,
+            canais: {
+              waba: 0,
+              resend: avisoPrevioResend,
+              firebase: avisoPrevioFirebase,
+              custoEstimadoWabaBrl: 0,
+            },
+          },
+          atraso3Dias: {
+            titulo: "Cobrança 3 Dias em Atraso (D-3)",
+            descricao: "Faturas vencidas há 3 dias (com disparo de WhatsApp WABA)",
+            totalFaturas: atraso3DiasFaturas,
+            canais: {
+              waba: atraso3DiasWaba,
+              resend: atraso3DiasResend,
+              firebase: atraso3DiasFirebase,
+              custoEstimadoWabaBrl: Number((atraso3DiasWaba * 0.038).toFixed(2)),
+            },
+          },
+          atraso5Dias: {
+            titulo: "Cobrança 5 Dias em Atraso (D-5)",
+            descricao: "Faturas vencidas há 5 dias (E-mail e Push)",
+            totalFaturas: 0,
+            canais: {
+              waba: 0,
+              resend: 0,
+              firebase: 0,
+              custoEstimadoWabaBrl: 0,
+            },
+          },
+          atraso7Dias: {
+            titulo: "Cobrança 7 Dias em Atraso (D-7)",
+            descricao: "Faturas vencidas há 7 dias (E-mail e Push)",
+            totalFaturas: 0,
+            canais: {
+              waba: 0,
+              resend: 0,
+              firebase: 0,
+              custoEstimadoWabaBrl: 0,
+            },
+          },
+          atrasados: {
+            titulo: "Cobranças em Atraso",
+            descricao: "Faturas vencidas há 3, 5 ou 7 dias",
+            totalFaturas: atraso3DiasFaturas,
+            canais: {
+              waba: atraso3DiasWaba,
+              resend: atraso3DiasResend,
+              firebase: atraso3DiasFirebase,
+              custoEstimadoWabaBrl: Number((atraso3DiasWaba * 0.038).toFixed(2)),
+            },
+          },
+        },
+      };
+    } else if (cobrancasReguasRes.data) {
       const cobrancasReguas = (cobrancasReguasRes.data || []).filter((c) => isDriverEligible(c.motorista as Parameters<typeof isDriverEligible>[0]));
 
       let vencendoHojeFaturas = 0;
@@ -1273,6 +1443,8 @@ export const adminUserService = {
       mes: mesAlvo,
       ano: anoAlvo,
       isHoje,
+      isPassado,
+      isFuturo,
       carteira,
       disparosHoje,
       disparosDia: disparosHoje,
