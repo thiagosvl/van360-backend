@@ -9,3 +9,6 @@ ideias
 documentacoes
 # Firebase credentials
 firebase-service-account.json
+
+# Assinaturas de teste locais
+assinatura_*

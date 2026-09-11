@@ -427,6 +427,10 @@ export const adminUserService = {
       throw new AppError("Motorista indicador não encontrado.", 404);
     }
 
+    if (indicador.tipo !== UserType.MOTORISTA) {
+      throw new AppError("O usuário indicador deve ser do tipo motorista.", 400);
+    }
+
     const { data: existingReferral } = await referralRepository.getReferralByIndicadoId(indicadoId);
     if (existingReferral) {
       await referralRepository.updateReferralIndicador(indicadoId, indicadorId);
