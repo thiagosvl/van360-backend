@@ -941,19 +941,20 @@ export const adminUserService = {
       return false;
     };
 
-    const targetDates = [todayStr];
-    if (isHoje) {
-      for (let adv = 1; adv <= 5; adv++) {
-        targetDates.push(toPersistenceString(addDays(nowBR, adv)));
-      }
-      for (const diasAtraso of [3, 5, 7]) {
-        targetDates.push(toPersistenceString(addDays(nowBR, -diasAtraso)));
-      }
+    const dataReferencia = new Date(anoAlvo, mesAlvo - 1, dia);
+    const dataRefStr = toPersistenceString(dataReferencia);
+
+    const targetDates = [dataRefStr];
+    for (let adv = 1; adv <= 5; adv++) {
+      targetDates.push(toPersistenceString(addDays(dataReferencia, adv)));
+    }
+    for (const diasAtraso of [3, 5, 7]) {
+      targetDates.push(toPersistenceString(addDays(dataReferencia, -diasAtraso)));
     }
 
     const [cobrancasDiaRes, cobrancasReguasRes] = await Promise.all([
       adminUserRepository.getCobrancasDoDiaNoMes(dia, mesAlvo, anoAlvo),
-      isHoje ? adminUserRepository.getCobrancasPendentesParaReguas(targetDates) : Promise.resolve({ data: null, error: null }),
+      adminUserRepository.getCobrancasPendentesParaReguas(targetDates),
     ]);
 
     if (cobrancasDiaRes.error) {
@@ -1061,7 +1062,7 @@ export const adminUserService = {
 
     let disparosHoje: DisparosHojeResumoDTO | null = null;
 
-    if (isHoje && cobrancasReguasRes.data) {
+    if (cobrancasReguasRes.data) {
       const cobrancasReguas = (cobrancasReguasRes.data || []).filter((c) => isDriverEligible(c.motorista as Parameters<typeof isDriverEligible>[0]));
 
       let vencendoHojeFaturas = 0;
@@ -1123,9 +1124,9 @@ export const adminUserService = {
         const atraso7DiasAtivo = motoristaConfig?.cobranca_atraso_7_dias_ativo ?? true;
 
         const dataVencimentoStr = String(c.data_vencimento);
-        const jaEnviado = Boolean(c.data_envio_ultima_notificacao && toPersistenceString(c.data_envio_ultima_notificacao) >= todayStr);
+        const jaEnviado = isHoje && Boolean(c.data_envio_ultima_notificacao && toPersistenceString(c.data_envio_ultima_notificacao) >= todayStr);
 
-        if (dataVencimentoStr === todayStr) {
+        if (dataVencimentoStr === dataRefStr) {
           if (vencimentoHojeAtivo) {
             vencendoHojeFaturas++;
             if (hasPhone) vencendoHojeWaba++;
@@ -1135,9 +1136,9 @@ export const adminUserService = {
             if (jaEnviado) totalJaEnviadasHoje++;
             else totalAguardandoEnvioHoje++;
           }
-        } else if (dataVencimentoStr > todayStr) {
+        } else if (dataVencimentoStr > dataRefStr) {
           if (avisoPrevioAtivo) {
-            const diasAntecedencia = diffInDays(todayStr, dataVencimentoStr);
+            const diasAntecedencia = diffInDays(dataRefStr, dataVencimentoStr);
             if (diasAntecedencia === driverThresholdDays) {
               avisoPrevioFaturas++;
               if (hasEmail) avisoPrevioResend++;
@@ -1148,7 +1149,7 @@ export const adminUserService = {
             }
           }
         } else {
-          const diasAtraso = diffInDays(dataVencimentoStr, todayStr);
+          const diasAtraso = diffInDays(dataVencimentoStr, dataRefStr);
           if (diasAtraso === 3 && atraso3DiasAtivo) {
             atraso3DiasFaturas++;
             if (hasPhone) atraso3DiasWaba++;
@@ -1206,8 +1207,10 @@ export const adminUserService = {
         },
         reguas: {
           vencendoHoje: {
-            titulo: "Vencendo Hoje",
-            descricao: `Faturas com vencimento no dia de hoje (${diaAtual}/${mesAtual})`,
+            titulo: isHoje ? "Vencendo Hoje" : `Vencendo no Dia (${dia.toString().padStart(2, "0")}/${mesAlvo.toString().padStart(2, "0")})`,
+            descricao: isHoje
+              ? `Faturas com vencimento no dia de hoje (${diaAtual}/${mesAtual})`
+              : `Faturas com vencimento no dia selecionado (${dia.toString().padStart(2, "0")}/${mesAlvo.toString().padStart(2, "0")})`,
             totalFaturas: vencendoHojeFaturas,
             canais: {
               waba: vencendoHojeWaba,
@@ -1272,6 +1275,7 @@ export const adminUserService = {
       isHoje,
       carteira,
       disparosHoje,
+      disparosDia: disparosHoje,
     };
   },
 };

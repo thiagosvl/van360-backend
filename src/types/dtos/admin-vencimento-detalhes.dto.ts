@@ -47,6 +47,8 @@ export interface CarteiraDiaResumoDTO {
   };
 }
 
+export type DisparosDiaResumoDTO = DisparosHojeResumoDTO;
+
 export interface VencimentoDetalhesResponseDTO {
   dia: number;
   mes: number;
@@ -54,4 +56,6 @@ export interface VencimentoDetalhesResponseDTO {
   isHoje: boolean;
   carteira: CarteiraDiaResumoDTO;
   disparosHoje: DisparosHojeResumoDTO | null;
+  disparosDia?: DisparosDiaResumoDTO | null;
 }
+
