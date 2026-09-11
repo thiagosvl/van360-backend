@@ -12,6 +12,7 @@ import { NotificationContextFormatter } from "./notifications/utils/notification
 import { historicoService } from "./historico.service.js";
 import { logger } from "../config/logger.js";
 import { getNowBR, toPersistenceString } from "../utils/date.utils.js";
+import { calculateAuditDiff } from "../utils/audit-diff.util.js";
 
 import { supabaseAdmin } from "../config/supabase.js";
 
@@ -151,6 +152,37 @@ const updateRoute = async (id: string, data: UpdateRouteDTO): Promise<any> => {
     veiculoId: updatedRoute?.veiculo_id,
     previousVeiculoId: oldRouteData?.veiculo_id
   });
+
+  const diff = calculateAuditDiff(oldRouteData, updatePayload);
+  if (data.paradas !== undefined) {
+    const totalParadasAntigas = oldRouteData?.paradas?.length || 0;
+    const totalParadasNovas = data.paradas.length;
+    if (totalParadasAntigas !== totalParadasNovas) {
+      diff.alteracoes.push({
+        campo: "total_paradas",
+        de: totalParadasAntigas,
+        para: totalParadasNovas
+      });
+      diff.campos.push("total_paradas");
+      diff.hasChanges = true;
+    }
+  }
+
+  if (diff.hasChanges && updatedRoute?.usuario_id) {
+    historicoService.log({
+      usuario_id: updatedRoute.usuario_id,
+      entidade_tipo: AtividadeEntidadeTipo.ROTA,
+      entidade_id: id,
+      acao: AtividadeAcao.ROTA_EDITADA,
+      descricao: `Rota "${updatedRoute.nome || 'Rota'}" atualizada.`,
+      meta: {
+        nome: updatedRoute.nome,
+        campos_alterados: diff.campos,
+        campos: diff.campos,
+        alteracoes: diff.alteracoes
+      }
+    });
+  }
 
   return updatedRoute;
 };

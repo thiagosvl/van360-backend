@@ -667,6 +667,14 @@ export const responsavelRepository = {
 
     if (errSet) throw errSet;
     return true;
+  },
+
+  async getById(id: string) {
+    return await supabaseAdmin
+      .from("responsaveis")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
   }
 };
 

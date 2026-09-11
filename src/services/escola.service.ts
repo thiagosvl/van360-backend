@@ -4,6 +4,7 @@ import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { cleanString } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
 import { AppError } from "../errors/AppError.js";
+import { calculateAuditDiff } from "../utils/audit-diff.util.js";
 
 // Helper Methods
 const _prepareEscolaData = (data: Partial<CreateEscolaDTO>, usuarioId?: string, isUpdate: boolean = false): Record<string, unknown> => {
@@ -54,20 +55,29 @@ export const escolaService = {
     async updateEscola(id: string, data: UpdateEscolaDTO): Promise<any> {
         if (!id) throw new AppError("ID da escola é obrigatório", 400);
 
+        const escolaAnterior = await this.getEscola(id);
         const escolaData = _prepareEscolaData(data, undefined, true);
 
         const { data: updated, error } = await escolaRepository.update(id, escolaData);
         if (error) throw error;
 
-        // --- LOG DE AUDITORIA ---
-        historicoService.log({
-            usuario_id: updated.usuario_id,
-            entidade_tipo: AtividadeEntidadeTipo.ESCOLA,
-            entidade_id: id,
-            acao: AtividadeAcao.ESCOLA_EDITADA,
-            descricao: `Dados da escola ${updated.nome} foram editados.`,
-            meta: { nome: updated.nome }
-        });
+        const diff = calculateAuditDiff(escolaAnterior, escolaData);
+
+        if (diff.hasChanges) {
+            historicoService.log({
+                usuario_id: updated.usuario_id,
+                entidade_tipo: AtividadeEntidadeTipo.ESCOLA,
+                entidade_id: id,
+                acao: AtividadeAcao.ESCOLA_EDITADA,
+                descricao: `Dados da escola ${updated.nome} foram editados.`,
+                meta: {
+                    nome: updated.nome,
+                    campos_alterados: diff.campos,
+                    campos: diff.campos,
+                    alteracoes: diff.alteracoes
+                }
+            });
+        }
 
         return updated;
     },
@@ -127,7 +137,6 @@ export const escolaService = {
 
         if (error) throw new Error(`Falha ao ${novoStatus ? "ativar" : "desativar"} a escola.`);
 
-        // --- LOG DE AUDITORIA ---
         const { data: e } = await escolaRepository.getUsuarioIdAndNome(escolaId);
         if (e) {
             historicoService.log({
@@ -135,8 +144,16 @@ export const escolaService = {
                 entidade_tipo: AtividadeEntidadeTipo.ESCOLA,
                 entidade_id: escolaId,
                 acao: AtividadeAcao.ESCOLA_STATUS,
-                descricao: `Escola ${e.nome} foi ${novoStatus ? 'ATIVADA' : 'DESATIVADO'}.`,
-                meta: { ativo: novoStatus }
+                descricao: `Escola ${e.nome} foi ${novoStatus ? 'ATIVADA' : 'DESATIVADA'}.`,
+                meta: {
+                    ativo: novoStatus,
+                    alteracoes: [{
+                        campo: "ativo",
+                        de: !novoStatus,
+                        para: novoStatus
+                    }],
+                    campos: ["ativo"]
+                }
             });
         }
 

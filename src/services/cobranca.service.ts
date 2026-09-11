@@ -24,6 +24,7 @@ import { receiptService } from "./receipt.service.js";
 import { getConfigNumber } from "./configuracao.service.js";
 import { notificationService } from "./notifications/notification.service.js";
 import { addToGenerationQueue } from "../queues/generation.queue.js";
+import { calculateAuditDiff } from "../utils/audit-diff.util.js";
 
 interface ResponsavelLinkInfo {
   id?: string;
@@ -282,20 +283,26 @@ export const cobrancaService = {
 
     if (error) throw new AppError(`Erro ao atualizar cobrança: ${error.message}`, 500);
 
-    // --- LOG DE AUDITORIA ---
-    const passageiroNomeUpdate = cobrancaOriginal?.passageiros?.nome || cobrancaOriginal?.passageiro?.nome;
-    historicoService.log({
-      usuario_id: cobrancaOriginal?.usuario_id,
-      entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
-      entidade_id: id,
-      acao: AtividadeAcao.COBRANCA_EDITADA,
-      descricao: `Cobrança de ${cobrancaOriginal?.mes}/${cobrancaOriginal?.ano} do aluno ${passageiroNomeUpdate} editada pelo motorista.`,
-      meta: {
-        antes: { valor: cobrancaOriginal?.valor, vencimento: cobrancaOriginal?.data_vencimento },
-        depois: { valor: updated.valor, vencimento: updated.data_vencimento },
-        passageiro: passageiroNomeUpdate
-      }
-    });
+    const diff = calculateAuditDiff(cobrancaOriginal, cobrancaData);
+
+    if (diff.hasChanges) {
+      const passageiroNomeUpdate = cobrancaOriginal?.passageiros?.nome || cobrancaOriginal?.passageiro?.nome;
+      historicoService.log({
+        usuario_id: cobrancaOriginal?.usuario_id,
+        entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
+        entidade_id: id,
+        acao: AtividadeAcao.COBRANCA_EDITADA,
+        descricao: `Cobrança de ${cobrancaOriginal?.mes}/${cobrancaOriginal?.ano} do aluno ${passageiroNomeUpdate} editada pelo motorista.`,
+        meta: {
+          antes: { valor: cobrancaOriginal?.valor, vencimento: cobrancaOriginal?.data_vencimento },
+          depois: { valor: updated.valor, vencimento: updated.data_vencimento },
+          passageiro: passageiroNomeUpdate,
+          campos_alterados: diff.campos,
+          campos: diff.campos,
+          alteracoes: diff.alteracoes
+        }
+      });
+    }
 
     return updated;
   },

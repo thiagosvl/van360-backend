@@ -8,6 +8,7 @@ import { cleanString } from "../utils/string.utils.js";
 import { AppError } from "../errors/AppError.js";
 import { historicoService } from "./historico.service.js";
 import { toPersistenceString, parseLocalDate } from "../utils/date.utils.js";
+import { calculateAuditDiff } from "../utils/audit-diff.util.js";
 
 const _validarObterSlugCategoria = async (categoria: string, usuarioId: string): Promise<string> => {
     const catsRes = await gastoCategoriaRepository.list(usuarioId);
@@ -220,14 +221,24 @@ export const gastoService = {
                 await this._recalcularTotalParcelas(gastoExistente.parcelamento_id);
             }
 
-            historicoService.log({
-                usuario_id: updated.usuario_id,
-                entidade_tipo: AtividadeEntidadeTipo.GASTO,
-                entidade_id: id,
-                acao: AtividadeAcao.GASTO_EDITADO,
-                descricao: `Registro de gasto (${updated.categoria}) foi atualizado.`,
-                meta: { valor: updated.valor, categoria: updated.categoria, campos: Object.keys(data) }
-            });
+            const diff = calculateAuditDiff(gastoExistente, gastoData);
+
+            if (diff.hasChanges) {
+                historicoService.log({
+                    usuario_id: updated.usuario_id,
+                    entidade_tipo: AtividadeEntidadeTipo.GASTO,
+                    entidade_id: id,
+                    acao: AtividadeAcao.GASTO_EDITADO,
+                    descricao: `Registro de gasto (${updated.categoria}) foi atualizado.`,
+                    meta: {
+                        valor: updated.valor,
+                        categoria: updated.categoria,
+                        campos_alterados: diff.campos,
+                        campos: diff.campos,
+                        alteracoes: diff.alteracoes
+                    }
+                });
+            }
 
             return updated;
         }
@@ -260,15 +271,25 @@ export const gastoService = {
         }
 
         const { data: updatedMain } = await gastoRepository.getById(id);
+        const diffLote = calculateAuditDiff(gastoExistente, gastoData);
 
-        historicoService.log({
-            usuario_id: gastoExistente.usuario_id,
-            entidade_tipo: AtividadeEntidadeTipo.GASTO,
-            entidade_id: id,
-            acao: AtividadeAcao.GASTO_EDITADO,
-            descricao: `Parcelas do gasto (${gastoExistente.categoria}) foram atualizadas em lote (${escopo}).`,
-            meta: { parcelamento_id: gastoExistente.parcelamento_id, escopo, registros_afetados: parcelasAfetadas?.length || 0 }
-        });
+        if (diffLote.hasChanges) {
+            historicoService.log({
+                usuario_id: gastoExistente.usuario_id,
+                entidade_tipo: AtividadeEntidadeTipo.GASTO,
+                entidade_id: id,
+                acao: AtividadeAcao.GASTO_EDITADO,
+                descricao: `Parcelas do gasto (${gastoExistente.categoria}) foram atualizadas em lote (${escopo}).`,
+                meta: {
+                    parcelamento_id: gastoExistente.parcelamento_id,
+                    escopo,
+                    registros_afetados: parcelasAfetadas?.length || 0,
+                    campos_alterados: diffLote.campos,
+                    campos: diffLote.campos,
+                    alteracoes: diffLote.alteracoes
+                }
+            });
+        }
 
         return updatedMain || gastoExistente;
     },

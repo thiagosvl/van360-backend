@@ -13,6 +13,7 @@ import { EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA } from "../config/constants.js"
 import { NotificationChannelEnum } from "../types/enums.js";
 import { formatarPlacaExibicao } from "../utils/placa.utils.js";
 import { userRepository } from "../repositories/user.repository.js";
+import { calculateAuditDiff } from "../utils/audit-diff.util.js";
 
 const _enrichPassageiroWithResponsavel = (p: Record<string, any>, isListMode: boolean = false) => {
     if (!p) return p;
@@ -230,20 +231,26 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO, targetOwn
     const fullPassageiro = await passageiroRepository.getByIdCompleto(id);
     const enriched = _enrichPassageiroWithResponsavel(fullPassageiro);
 
-    historicoService.log({
-        usuario_id: fullPassageiro.usuario_id,
-        entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
-        entidade_id: id,
-        acao: AtividadeAcao.PASSAGEIRO_EDITADO,
-        descricao: `Cadastro do aluno ${fullPassageiro.nome} atualizado.`,
-        meta: {
-            nome: fullPassageiro.nome,
-            campos_alterados: Object.keys(data),
-            responsavel: enriched.responsavel_principal?.nome || null,
-            valor_cobranca: fullPassageiro.valor_cobranca,
-            dia_vencimento: fullPassageiro.dia_vencimento
-        }
-    });
+    const diff = calculateAuditDiff(estadoAnterior, passageiroData);
+
+    if (diff.hasChanges) {
+        historicoService.log({
+            usuario_id: fullPassageiro.usuario_id,
+            entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
+            entidade_id: id,
+            acao: AtividadeAcao.PASSAGEIRO_EDITADO,
+            descricao: `Cadastro do aluno ${fullPassageiro.nome} atualizado.`,
+            meta: {
+                nome: fullPassageiro.nome,
+                campos_alterados: diff.campos,
+                campos: diff.campos,
+                alteracoes: diff.alteracoes,
+                responsavel: enriched.responsavel_principal?.nome || null,
+                valor_cobranca: fullPassageiro.valor_cobranca,
+                dia_vencimento: fullPassageiro.dia_vencimento
+            }
+        });
+    }
 
     return enriched;
 };
@@ -351,15 +358,22 @@ const toggleAtivo = async (passageiroId: string, novoStatus: boolean, targetOwne
 
     if (error) throw new Error(`Falha ao alterar status do aluno: ${error.message}`);
 
-    // --- LOG DE AUDITORIA ---
-    if (pass) {
+    if (pass && pass.ativo !== novoStatus) {
         historicoService.log({
             usuario_id: pass.usuario_id,
             entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
             entidade_id: passageiroId,
             acao: AtividadeAcao.PASSAGEIRO_STATUS,
             descricao: `Cadastro de ${pass.nome} foi ${novoStatus ? 'ATIVADO' : 'DESATIVADO'}.`,
-            meta: { ativo: novoStatus }
+            meta: {
+                ativo: novoStatus,
+                alteracoes: [{
+                    campo: "ativo",
+                    de: pass.ativo,
+                    para: novoStatus
+                }],
+                campos: ["ativo"]
+            }
         });
     }
 
@@ -582,11 +596,14 @@ const updateResponsavelAdicional = async (responsavelId: string, data: UpdateRes
     if (data.tornar_principal !== undefined) prepared.tornar_principal = data.tornar_principal;
     if (data.notificacoes_rota_habilitadas !== undefined) prepared.notificacoes_rota_habilitadas = data.notificacoes_rota_habilitadas;
 
+    const { data: respAnterior } = await responsavelRepository.getById(responsavelId);
     const result = await responsavelRepository.updateResponsavelAdicional(responsavelId, prepared, passageiroId);
 
     if (passageiroId) {
         const { data: passageiro } = await passageiroRepository.getById(passageiroId);
-        if (passageiro) {
+        const diff = calculateAuditDiff(respAnterior, prepared);
+
+        if (passageiro && diff.hasChanges) {
             historicoService.log({
                 usuario_id: passageiro.usuario_id,
                 entidade_tipo: AtividadeEntidadeTipo.RESPONSAVEL,
@@ -597,7 +614,9 @@ const updateResponsavelAdicional = async (responsavelId: string, data: UpdateRes
                     passageiro_id: passageiroId,
                     passageiro_nome: passageiro.nome,
                     responsavel_id: responsavelId,
-                    campos_alterados: Object.keys(data)
+                    campos_alterados: diff.campos,
+                    campos: diff.campos,
+                    alteracoes: diff.alteracoes
                 }
             });
         }
@@ -644,7 +663,13 @@ const setPrincipalResponsavel = async (passageiroId: string, responsavelId: stri
             meta: {
                 passageiro_id: passageiroId,
                 passageiro_nome: passageiro.nome,
-                responsavel_id: responsavelId
+                responsavel_id: responsavelId,
+                alteracoes: [{
+                    campo: "responsavel_principal",
+                    de: "adicional",
+                    para: "principal"
+                }],
+                campos: ["responsavel_principal"]
             }
         });
     }
@@ -657,17 +682,24 @@ const toggleNotificacoesRota = async (passageiroId: string, responsavelId: strin
 
     const { data: passageiro } = await passageiroRepository.getById(passageiroId);
     if (passageiro) {
+        const novoStatus = status !== false;
         historicoService.log({
             usuario_id: passageiro.usuario_id,
             entidade_tipo: AtividadeEntidadeTipo.RESPONSAVEL,
             entidade_id: responsavelId,
             acao: AtividadeAcao.RESPONSAVEL_NOTIFICACAO,
-            descricao: `Notificações de rota ${status !== false ? "ativadas" : "desativadas"} para responsável do aluno ${passageiro.nome}.`,
+            descricao: `Notificações de rota ${novoStatus ? "ativadas" : "desativadas"} para responsável do aluno ${passageiro.nome}.`,
             meta: {
                 passageiro_id: passageiroId,
                 passageiro_nome: passageiro.nome,
                 responsavel_id: responsavelId,
-                status: status !== false
+                status: novoStatus,
+                alteracoes: [{
+                    campo: "notificacoes_rota_habilitadas",
+                    de: !novoStatus,
+                    para: novoStatus
+                }],
+                campos: ["notificacoes_rota_habilitadas"]
             }
         });
     }

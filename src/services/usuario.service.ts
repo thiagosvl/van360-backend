@@ -5,6 +5,7 @@ import { AtividadeAcao, AtividadeEntidadeTipo, TipoChavePix } from "../types/enu
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
 import { isValidPixKey } from "../utils/validators.js";
+import { calculateAuditDiff } from "../utils/audit-diff.util.js";
 
 export async function getUsuarioData(usuarioId: string) {
   const { data: usuario, error } = await userRepository.getProfileData(usuarioId);
@@ -30,6 +31,8 @@ export async function atualizarUsuario(usuarioId: string, payload: {
   data_nascimento?: string | null;
 }) {
   if (!usuarioId) throw new AppError("ID do usuário é obrigatório.", 400);
+
+  const { data: usuarioAnterior } = await userRepository.getById(usuarioId);
 
   const updates: Record<string, unknown> = { updated_at: getNowBR().toISOString() };
 
@@ -83,34 +86,50 @@ export async function atualizarUsuario(usuarioId: string, payload: {
     payload.data_nascimento !== undefined;
 
   if (perfilAlterado) {
-    historicoService.log({
-      usuario_id: usuarioId,
-      entidade_tipo: AtividadeEntidadeTipo.USUARIO,
-      entidade_id: usuarioId,
-      acao: AtividadeAcao.PERFIL_EDITADO,
-      descricao: "Dados de identificação do perfil atualizados.",
-      meta: {
-        campos: Object.keys(payload).filter((k) =>
-          ["nome", "razao_social", "apelido", "telefone", "data_nascimento"].includes(k)
-        ),
-      },
-    });
+    const perfilDiff = calculateAuditDiff(
+      usuarioAnterior as Record<string, unknown> | null,
+      updates,
+      ["assinatura_digital_url", "config_contrato"]
+    );
+
+    if (perfilDiff.hasChanges) {
+      historicoService.log({
+        usuario_id: usuarioId,
+        entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+        entidade_id: usuarioId,
+        acao: AtividadeAcao.PERFIL_EDITADO,
+        descricao: "Dados de identificação do perfil atualizados.",
+        meta: {
+          campos_alterados: perfilDiff.campos,
+          campos: perfilDiff.campos,
+          alteracoes: perfilDiff.alteracoes,
+        },
+      });
+    }
   } else if (payload.config_contrato !== undefined) {
-    const config = payload.config_contrato;
-    historicoService.log({
-      usuario_id: usuarioId,
-      entidade_tipo: AtividadeEntidadeTipo.USUARIO,
-      entidade_id: usuarioId,
-      acao: AtividadeAcao.CONTRATO_CONFIG_EDITADA,
-      descricao: `Configurações de contrato atualizadas (Usa contratos: ${config?.usar_contratos ? "Sim" : "Não"}).`,
-      meta: {
-        usar_contratos: config?.usar_contratos,
-        multa_atraso: config?.multa_atraso,
-        juros_atraso: config?.juros_atraso,
-        multa_rescisao: config?.multa_rescisao,
-        campos_alterados: config ? Object.keys(config) : [],
-      },
-    });
+    const configAntiga = (usuarioAnterior?.config_contrato as Record<string, unknown>) || {};
+    const configNova = payload.config_contrato || {};
+    const configDiff = calculateAuditDiff(configAntiga, configNova);
+
+    if (configDiff.hasChanges) {
+      const config = payload.config_contrato as Record<string, unknown> | null;
+      historicoService.log({
+        usuario_id: usuarioId,
+        entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+        entidade_id: usuarioId,
+        acao: AtividadeAcao.CONTRATO_CONFIG_EDITADA,
+        descricao: `Configurações de contrato atualizadas (Usa contratos: ${config?.usar_contratos ? "Sim" : "Não"}).`,
+        meta: {
+          usar_contratos: config?.usar_contratos,
+          multa_atraso: config?.multa_atraso,
+          juros_atraso: config?.juros_atraso,
+          multa_rescisao: config?.multa_rescisao,
+          campos_alterados: configDiff.campos,
+          campos: configDiff.campos,
+          alteracoes: configDiff.alteracoes,
+        },
+      });
+    }
   }
 
   return { success: true };
@@ -124,6 +143,9 @@ export async function alterarTelefoneUsuario(usuarioId: string, telefone: string
   if (!telefoneLimpo || telefoneLimpo.length < 10 || telefoneLimpo.length > 11) {
     throw new AppError("Número de telefone inválido. Informe DDD e número com 10 ou 11 dígitos.", 400);
   }
+
+  const { data: usuarioAtual } = await userRepository.getById(usuarioId);
+  const telefoneAntigo = usuarioAtual?.telefone;
 
   const { error } = await userRepository.update(usuarioId, {
     telefone: telefoneLimpo,
@@ -140,7 +162,15 @@ export async function alterarTelefoneUsuario(usuarioId: string, telefone: string
     entidade_id: usuarioId,
     acao: AtividadeAcao.PERFIL_EDITADO,
     descricao: "Telefone de contato do usuário alterado.",
-    meta: { telefone: telefoneLimpo }
+    meta: {
+      telefone: telefoneLimpo,
+      alteracoes: [{
+        campo: "telefone",
+        de: telefoneAntigo || null,
+        para: telefoneLimpo
+      }],
+      campos: ["telefone"]
+    }
   });
 
   return { success: true, telefone: telefoneLimpo };
@@ -187,17 +217,27 @@ export async function atualizarPixUsuario(usuarioId: string, payload: {
     ? (isNewPix ? "Chave Pix de recebimento estática configurada pelo motorista." : "Chave Pix de recebimento estática atualizada pelo motorista.")
     : "Chave Pix de recebimento estática removida pelo motorista.";
 
-  historicoService.log({
-    usuario_id: usuarioId,
-    entidade_tipo: AtividadeEntidadeTipo.USUARIO,
-    entidade_id: usuarioId,
-    acao: AtividadeAcao.CHAVE_PIX_ALTERADA,
-    descricao: descricaoPix,
-    meta: { 
-      tipo_chave_pix,
-      chave_pix: updates.chave_pix ? "***" : null
-    }
-  });
+  const pixDiff = calculateAuditDiff(
+    { tipo_chave_pix: currentPixData?.tipo_chave_pix, chave_pix: currentPixData?.chave_pix },
+    { tipo_chave_pix, chave_pix: updates.chave_pix }
+  );
+
+  if (pixDiff.hasChanges) {
+    historicoService.log({
+      usuario_id: usuarioId,
+      entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+      entidade_id: usuarioId,
+      acao: AtividadeAcao.CHAVE_PIX_ALTERADA,
+      descricao: descricaoPix,
+      meta: { 
+        tipo_chave_pix,
+        chave_pix: updates.chave_pix ? "***" : null,
+        campos_alterados: pixDiff.campos,
+        campos: pixDiff.campos,
+        alteracoes: pixDiff.alteracoes
+      }
+    });
+  }
 
   return { success: true };
 }
@@ -205,7 +245,10 @@ export async function atualizarPixUsuario(usuarioId: string, payload: {
 export async function atualizarCanalAquisicao(usuarioId: string, canalAquisicao: string) {
   if (!usuarioId) throw new AppError("ID do usuário é obrigatório.", 400);
 
-  const updates: any = {
+  const { data: usuarioAtual } = await userRepository.getById(usuarioId);
+  const canalAntigo = (usuarioAtual as Record<string, unknown> | null)?.canal_aquisicao;
+
+  const updates: Record<string, unknown> = {
     canal_aquisicao: canalAquisicao,
     updated_at: getNowBR().toISOString()
   };
@@ -222,7 +265,15 @@ export async function atualizarCanalAquisicao(usuarioId: string, canalAquisicao:
     entidade_id: usuarioId,
     acao: AtividadeAcao.PERFIL_EDITADO,
     descricao: "Canal de aquisição informado pelo usuário.",
-    meta: { canal_aquisicao: canalAquisicao }
+    meta: {
+      canal_aquisicao: canalAquisicao,
+      alteracoes: [{
+        campo: "canal_aquisicao",
+        de: canalAntigo || null,
+        para: canalAquisicao
+      }],
+      campos: ["canal_aquisicao"]
+    }
   });
 
   return { success: true };

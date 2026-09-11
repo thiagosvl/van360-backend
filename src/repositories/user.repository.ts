@@ -45,7 +45,7 @@ export const userRepository = {
     async getPixKey(id: string) {
         return supabaseAdmin
             .from("usuarios")
-            .select("chave_pix")
+            .select("chave_pix, tipo_chave_pix")
             .eq("id", id)
             .single();
     },

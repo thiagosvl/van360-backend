@@ -7,10 +7,12 @@ import { usuarioPushTokenRepository } from "../repositories/usuario-push-token.r
 import { maskEmail, onlyDigits } from "../utils/string.utils.js";
 import { notificationService } from "./notifications/notification.service.js";
 import { routeService } from "./route.service.js";
-import { NotificationChannelEnum, TipoResponsavel } from "../types/enums.js";
+import { NotificationChannelEnum, TipoResponsavel, AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { EVENTO_PASSAGEIRO_PIN_RESET, EVENTO_MOTORISTA_AUSENCIA_REGISTRADA, EVENTO_MOTORISTA_AUSENCIA_REMOVIDA } from "../config/constants.js";
 import { CreateResponsavelAusenciaDTO } from "../types/dtos/responsavel-ausencia.dto.js";
 import { UpdateDadosComplementaresDTO } from "../types/dtos/responsavel.dto.js";
+import { historicoService } from "./historico.service.js";
+import { calculateAuditDiff } from "../utils/audit-diff.util.js";
 
 import { redisClient } from "../config/redis.js";
 
@@ -176,10 +178,31 @@ export const portalResponsavelService = {
     if (data.referencia !== undefined) updatePayload.referencia = data.referencia ? data.referencia.trim() : null;
     if (data.complemento !== undefined) updatePayload.complemento = data.complemento ? data.complemento.trim() : null;
 
+    const { data: respAnterior } = await responsavelRepository.getById(target.responsavel_id);
+
     if (target.tipo_responsavel === TipoResponsavel.PRINCIPAL) {
       await responsavelRepository.updateDadosComplementaresPrincipal(passageiroId, updatePayload);
     } else {
       await responsavelRepository.updateDadosComplementaresAdicional(target.responsavel_id, updatePayload);
+    }
+
+    const diff = calculateAuditDiff(respAnterior, updatePayload);
+    if (diff.hasChanges) {
+      historicoService.log({
+        usuario_id: target.motorista_id,
+        entidade_tipo: AtividadeEntidadeTipo.RESPONSAVEL,
+        entidade_id: target.responsavel_id,
+        acao: AtividadeAcao.RESPONSAVEL_EDITADO,
+        descricao: `Dados do responsável do aluno ${target.nome} atualizados pelo portal do responsável.`,
+        meta: {
+          passageiro_id: passageiroId,
+          passageiro_nome: target.nome,
+          responsavel_id: target.responsavel_id,
+          campos_alterados: diff.campos,
+          campos: diff.campos,
+          alteracoes: diff.alteracoes
+        }
+      });
     }
 
     return { success: true };
@@ -297,9 +320,30 @@ export const portalResponsavelService = {
 
   async updateResponsavel(token: string, passageiroId: string, responsavelId: string, data: Record<string, unknown>) {
     const payload = await this.verifyResponsavelToken(token);
-    await this._authorizePassageiroAccess(payload.phone, passageiroId);
+    const target = await this._authorizePassageiroAccess(payload.phone, passageiroId);
 
+    const { data: respAnterior } = await responsavelRepository.getById(responsavelId);
     const updated = await responsavelRepository.updateResponsavelAdicional(responsavelId, data, passageiroId);
+
+    const diff = calculateAuditDiff(respAnterior, data);
+    if (diff.hasChanges) {
+      historicoService.log({
+        usuario_id: target.motorista_id,
+        entidade_tipo: AtividadeEntidadeTipo.RESPONSAVEL,
+        entidade_id: responsavelId,
+        acao: AtividadeAcao.RESPONSAVEL_EDITADO,
+        descricao: `Dados do responsável adicional do aluno ${target.nome} atualizados pelo portal do responsável.`,
+        meta: {
+          passageiro_id: passageiroId,
+          passageiro_nome: target.nome,
+          responsavel_id: responsavelId,
+          campos_alterados: diff.campos,
+          campos: diff.campos,
+          alteracoes: diff.alteracoes
+        }
+      });
+    }
+
     return updated;
   },
 

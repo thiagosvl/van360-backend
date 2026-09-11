@@ -7,6 +7,7 @@ import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 
 import { getConfigNumber } from "./configuracao.service.js";
 import { ConfigKey } from "../types/enums.js";
+import { calculateAuditDiff } from "../utils/audit-diff.util.js";
 
 export async function obterConfiguracoesUsuario(usuarioId: string): Promise<ConfiguracoesUsuarioDTO> {
   const { data: usuario, error: userError } = await userRepository.getById(usuarioId);
@@ -44,16 +45,29 @@ export async function atualizarConfiguracoesUsuario(
   payload: UpdateConfiguracoesDTO
 ): Promise<ConfiguracoesUsuarioDTO> {
   try {
+    const configAnterior = await usuarioConfiguracoesRepository.getByUsuarioId(usuarioId);
     await usuarioConfiguracoesRepository.update(usuarioId, payload);
 
-    historicoService.log({
-      usuario_id: usuarioId,
-      entidade_tipo: AtividadeEntidadeTipo.USUARIO,
-      entidade_id: usuarioId,
-      acao: AtividadeAcao.CONFIGURACES_EDITADAS,
-      descricao: "Preferências de notificação do motorista alteradas.",
-      meta: payload,
-    });
+    const diff = calculateAuditDiff(
+      configAnterior as Record<string, unknown> | null,
+      payload as Record<string, unknown>
+    );
+
+    if (diff.hasChanges) {
+      historicoService.log({
+        usuario_id: usuarioId,
+        entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+        entidade_id: usuarioId,
+        acao: AtividadeAcao.CONFIGURACES_EDITADAS,
+        descricao: "Preferências de notificação do motorista alteradas.",
+        meta: {
+          campos_alterados: diff.campos,
+          campos: diff.campos,
+          alteracoes: diff.alteracoes,
+          ...payload,
+        },
+      });
+    }
 
     return await obterConfiguracoesUsuario(usuarioId);
   } catch (err: unknown) {
