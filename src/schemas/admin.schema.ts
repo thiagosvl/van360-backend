@@ -185,5 +185,7 @@ export interface MotoristasRadarStatsDTO {
   totalSemAtividade: number;
 }
 
-
-
+export const setReferralAdminSchema = z.object({
+  indicadorId: z.string().uuid("ID do indicador inválido"),
+});
+export type SetReferralAdminDTO = z.infer<typeof setReferralAdminSchema>;

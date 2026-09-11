@@ -1,6 +1,36 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { IndicacaoStatus } from "../types/enums.js";
 
+export interface IndicadorReferralDTO {
+    id: string;
+    nome: string;
+    telefone: string;
+    email: string;
+    cpfcnpj?: string | null;
+}
+
+export interface IndicadoReferralDTO {
+    id: string;
+    nome: string;
+    telefone: string;
+    email: string;
+}
+
+export interface ReferralWithIndicadorRow {
+    id: string;
+    status: IndicacaoStatus;
+    created_at: string;
+    fatura_origem_id: string | null;
+    indicador: IndicadorReferralDTO | null;
+}
+
+export interface ReferredUserRow {
+    id: string;
+    status: IndicacaoStatus;
+    created_at: string;
+    indicado: IndicadoReferralDTO | null;
+}
+
 export const referralRepository = {
     async getPendingReferralByIndicadoId(indicadoId: string) {
         return supabaseAdmin
@@ -48,5 +78,58 @@ export const referralRepository = {
             .eq("id", indicacao.id);
 
         return { data: indicacao, error: updateRes.error };
+    },
+
+    async getReferralWithIndicador(indicadoId: string) {
+        return supabaseAdmin
+            .from("indicacoes")
+            .select(`
+                id,
+                status,
+                created_at,
+                fatura_origem_id,
+                indicador:indicador_id (
+                    id,
+                    nome,
+                    telefone,
+                    email,
+                    cpfcnpj
+                )
+            `)
+            .eq("indicado_id", indicadoId)
+            .maybeSingle();
+    },
+
+    async updateReferralIndicador(indicadoId: string, novoIndicadorId: string) {
+        return supabaseAdmin
+            .from("indicacoes")
+            .update({ indicador_id: novoIndicadorId, updated_at: new Date().toISOString() })
+            .eq("indicado_id", indicadoId);
+    },
+
+    async deleteReferralByIndicadoId(indicadoId: string) {
+        return supabaseAdmin
+            .from("indicacoes")
+            .delete()
+            .eq("indicado_id", indicadoId);
+    },
+
+    async getReferredUsersByIndicadorId(indicadorId: string) {
+        return supabaseAdmin
+            .from("indicacoes")
+            .select(`
+                id,
+                status,
+                created_at,
+                indicado:indicado_id (
+                    id,
+                    nome,
+                    telefone,
+                    email
+                )
+            `)
+            .eq("indicador_id", indicadorId)
+            .order("created_at", { ascending: false });
     }
 };
+

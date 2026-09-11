@@ -10,6 +10,7 @@ import {
   dispatchDriverNotificationSchema,
   listUsersLatestActivityQuerySchema,
   getMotoristasRadarStatsQuerySchema,
+  setReferralAdminSchema,
 } from "../../schemas/admin.schema.js";
 
 
@@ -181,6 +182,32 @@ export const adminUserController = {
       return reply.status(500).send({ error: "Erro ao buscar detalhes do vencimento." });
     }
   },
+
+  async setReferral(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { id } = request.params as { id: string };
+      const body = setReferralAdminSchema.parse(request.body);
+      const result = await adminUserService.setReferralAdmin(id, body.indicadorId);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao atribuir indicação.");
+      return reply.status(400).send({ error: error.message || "Erro ao atribuir indicação." });
+    }
+  },
+
+  async removeReferral(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { id } = request.params as { id: string };
+      const result = await adminUserService.removeReferralAdmin(id);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao remover indicação.");
+      return reply.status(400).send({ error: error.message || "Erro ao remover indicação." });
+    }
+  },
 };
+
 
 

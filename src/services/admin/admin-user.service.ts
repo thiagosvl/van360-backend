@@ -50,6 +50,12 @@ import { adminPassageiroService } from "./admin-passageiro.service.js";
 import { adminVeiculoService } from "./admin-veiculo.service.js";
 import { adminEscolaService } from "./admin-escola.service.js";
 import { subscriptionReferralService } from "../subscriptions/subscription-referral.service.js";
+import {
+  referralRepository,
+  type ReferralWithIndicadorRow,
+  type ReferredUserRow,
+} from "../../repositories/referral.repository.js";
+import { AppError } from "../../errors/AppError.js";
 
 function maskCpfCnpjHidden(cpfcnpj: string): string {
   const cleaned = cpfcnpj.replace(/\D/g, "");
@@ -328,6 +334,8 @@ export const adminUserService = {
       veiculosList,
       escolasList,
       referralSummary,
+      referralWithIndicadorRes,
+      referredUsersRes,
     ] = await Promise.all([
       adminUserRepository.getUserDetails(userId),
       adminPassageiroService.getPassageirosByUserId(userId),
@@ -345,6 +353,8 @@ export const adminUserService = {
         hasActiveDiscount: false,
         hasIndicator: false,
       })),
+      referralRepository.getReferralWithIndicador(userId).catch(() => ({ data: null })),
+      referralRepository.getReferredUsersByIndicadorId(userId).catch(() => ({ data: [] })),
     ]);
 
     if (userReq.error || !userReq.data) throw new Error("Usuário não encontrado.");
@@ -361,6 +371,10 @@ export const adminUserService = {
     const valorTotalContratos = contratosList
       .filter((c: any) => c.status === ContratoStatus.ASSINADO)
       .reduce((acc: number, c: any) => acc + (Number(c.valor_total) || 0), 0);
+
+    const referralData = referralWithIndicadorRes?.data as unknown as ReferralWithIndicadorRow | null;
+    const indicadorData = referralData?.indicador;
+    const referredUsersList = (referredUsersRes?.data || []) as unknown as ReferredUserRow[];
 
     return {
       user: userData,
@@ -379,6 +393,22 @@ export const adminUserService = {
         statusConfiguracaoContrato,
       },
       referralSummary,
+      indicador: (referralData && indicadorData) ? {
+        id: indicadorData.id,
+        nome: indicadorData.nome,
+        telefone: indicadorData.telefone,
+        email: indicadorData.email,
+        cpfcnpj: indicadorData.cpfcnpj,
+        status: referralData.status,
+        created_at: referralData.created_at,
+        fatura_origem_id: referralData.fatura_origem_id,
+      } : null,
+      referredUsers: referredUsersList.map((r) => ({
+        id: r.id,
+        status: r.status,
+        created_at: r.created_at,
+        indicado: r.indicado,
+      })),
       passageiros: passageirosList,
       prePassageiros: prePassageirosList,
       veiculos: veiculosList,
@@ -386,6 +416,54 @@ export const adminUserService = {
       contratos: contratosList,
     };
   },
+
+  async setReferralAdmin(indicadoId: string, indicadorId: string) {
+    if (indicadoId === indicadorId) {
+      throw new AppError("O usuário não pode indicar a si mesmo.", 400);
+    }
+
+    const { data: indicador, error: indicadorError } = await userRepository.getById(indicadorId);
+    if (indicadorError || !indicador) {
+      throw new AppError("Motorista indicador não encontrado.", 404);
+    }
+
+    const { data: existingReferral } = await referralRepository.getReferralByIndicadoId(indicadoId);
+    if (existingReferral) {
+      await referralRepository.updateReferralIndicador(indicadoId, indicadorId);
+    } else {
+      await subscriptionReferralService.registerReferral(indicadorId, indicadoId);
+    }
+
+    await userRepository.update(indicadoId, {
+      canal_aquisicao: CanalAquisicao.INDICACAO,
+      updated_at: getNowBR().toISOString(),
+    });
+
+    await historicoService.log({
+      usuario_id: indicadoId,
+      entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+      entidade_id: indicadoId,
+      acao: AtividadeAcao.PERFIL_EDITADO,
+      descricao: `Indicador atribuído pelo administrador: ${indicador.nome} (${indicador.telefone}).`,
+    });
+
+    return { success: true };
+  },
+
+  async removeReferralAdmin(indicadoId: string) {
+    await referralRepository.deleteReferralByIndicadoId(indicadoId);
+
+    await historicoService.log({
+      usuario_id: indicadoId,
+      entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+      entidade_id: indicadoId,
+      acao: AtividadeAcao.PERFIL_EDITADO,
+      descricao: "Vínculo de indicação removido pelo administrador.",
+    });
+
+    return { success: true };
+  },
+
 
   async updateUser(userId: string, data: UpdateUserAdminDTO) {
     const updatePayload: Record<string, unknown> = {};

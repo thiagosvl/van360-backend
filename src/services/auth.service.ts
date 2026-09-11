@@ -9,7 +9,7 @@ import { userRepository } from "../repositories/user.repository.js";
 import { authRepository } from "../repositories/auth.repository.js";
 import { authProvider } from "./providers/auth.provider.js";
 import { AppError } from "../errors/AppError.js";
-import { AtividadeAcao, AtividadeEntidadeTipo, UserType, DispositivoCadastro } from "../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, UserType, DispositivoCadastro, CanalAquisicao } from "../types/enums.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
 import { getNowBR, addMinutes, isBeforeNowBR, parseLocalDate, parseBrazilianDateToISO } from "../utils/date.utils.js";
@@ -264,7 +264,11 @@ export async function registrarUsuario(
 
     if (!usuarioId || !authUid) throw new AppError("Falha ao gerar identificador único.", 500);
 
-    const usuario = await criarUsuario({ ...payload, id: authUid });
+    const usuario = await criarUsuario({
+      ...payload,
+      id: authUid,
+      ...(resolvedIndicadorId ? { canal_aquisicao: CanalAquisicao.INDICACAO } : {}),
+    });
 
     // --- SETUP SAAS SUBSCRIPTION ---
     const { subscriptionService } = await import("./subscriptions/subscription.service.js");
