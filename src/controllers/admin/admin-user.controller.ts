@@ -12,6 +12,7 @@ import {
   getMotoristasRadarStatsQuerySchema,
   setReferralAdminSchema,
 } from "../../schemas/admin.schema.js";
+import { AppError } from "../../errors/AppError.js";
 
 
 export const adminUserController = {
@@ -101,6 +102,19 @@ export const adminUserController = {
       const error = err as Error;
       logger.error({ error: error.message }, "[AdminUserController] Erro ao resetar senha.");
       return reply.status(400).send({ error: error.message });
+    }
+  },
+
+  async impersonateUser(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { id } = request.params as { id: string };
+      const result = await adminUserService.impersonateUser(id);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao gerar link de impersonation.");
+      const status = err instanceof AppError ? err.statusCode : 400;
+      return reply.status(status).send({ error: error.message });
     }
   },
 

@@ -44,8 +44,6 @@ import type {
 } from "../../schemas/admin.schema.js";
 
 
-import { notificationService } from "../notifications/notification.service.js";
-import { EVENTO_MOTORISTA_CADASTRO_ADMIN, EVENTO_MOTORISTA_RESET_SENHA_ADMIN } from "../../config/constants.js";
 import { adminPassageiroService } from "./admin-passageiro.service.js";
 import { adminVeiculoService } from "./admin-veiculo.service.js";
 import { adminEscolaService } from "./admin-escola.service.js";
@@ -56,14 +54,8 @@ import {
   type ReferredUserRow,
 } from "../../repositories/referral.repository.js";
 import { AppError } from "../../errors/AppError.js";
-
-function maskCpfCnpjHidden(cpfcnpj: string): string {
-  const cleaned = cpfcnpj.replace(/\D/g, "");
-  if (cleaned.length <= 11) {
-    return `${cleaned.slice(0, 3)}.${cleaned.slice(3, 4)}**.***-${cleaned.slice(9, 11)}`;
-  }
-  return `${cleaned.slice(0, 2)}.${cleaned.slice(2, 3)}**.***/****-${cleaned.slice(12, 14)}`;
-}
+import { NotificationUrlBuilder } from "../notifications/utils/notification-url.builder.js";
+import type { ImpersonateUserResponseDto } from "../../types/dtos/admin-impersonate.dto.js";
 
 function generateTempPassword(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
@@ -674,6 +666,42 @@ export const adminUserService = {
     }
 
     return { success: true, senha: newPassword };
+  },
+
+  async impersonateUser(userId: string): Promise<ImpersonateUserResponseDto> {
+    const { data: user, error: fetchError } = await userRepository.getById(userId);
+
+    if (fetchError || !user) {
+      throw new AppError("Usuário não encontrado.", 404);
+    }
+
+    if (!user.email) {
+      throw new AppError("Usuário não possui e-mail cadastrado para gerar o link de acesso.", 400);
+    }
+
+    const baseUrl = NotificationUrlBuilder.getBaseAppUrl();
+    const redirectTo = `${baseUrl}/impersonate-bridge`;
+
+    const { data, error: authError } = await authProvider.generateLink({
+      type: "magiclink",
+      email: user.email,
+      options: {
+        redirectTo,
+      },
+    });
+
+    if (authError || !data?.properties) {
+      logger.error({ authError, userId }, "[AdminUserService] Falha ao gerar link mágico de impersonation.");
+      throw new AppError("Falha ao gerar o link de acesso no serviço de autenticação.", 500);
+    }
+
+    const tokenHash = data.properties.hashed_token || "";
+    const impersonateUrl = `${baseUrl}/impersonate-bridge?token_hash=${tokenHash}`;
+
+    return {
+      tokenHash,
+      impersonateUrl,
+    };
   },
 
   async deleteUser(userId: string) {

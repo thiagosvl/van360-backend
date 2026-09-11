@@ -29,6 +29,7 @@ const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.put("/users/:id/referral", adminUserController.setReferral);
   app.delete("/users/:id/referral", adminUserController.removeReferral);
   app.post("/users/:id/reset-password", adminUserController.resetUserPassword);
+  app.post("/users/:id/impersonate", adminUserController.impersonateUser);
   app.post("/users/:id/dispatch-notification", adminUserController.dispatchNotification);
   app.delete("/users/:id", adminUserController.deleteUser);
 

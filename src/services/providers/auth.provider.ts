@@ -41,5 +41,9 @@ export const authProvider = {
             auth: { persistSession: false, autoRefreshToken: false }
         });
         return tempClient.auth.refreshSession(data);
+    },
+
+    async generateLink(params: { type: "magiclink"; email: string; options?: { redirectTo?: string } }) {
+        return supabaseAdmin.auth.admin.generateLink(params);
     }
 };
