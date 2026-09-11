@@ -228,7 +228,24 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO, targetOwn
     }
 
     const fullPassageiro = await passageiroRepository.getByIdCompleto(id);
-    return _enrichPassageiroWithResponsavel(fullPassageiro);
+    const enriched = _enrichPassageiroWithResponsavel(fullPassageiro);
+
+    historicoService.log({
+        usuario_id: fullPassageiro.usuario_id,
+        entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
+        entidade_id: id,
+        acao: AtividadeAcao.PASSAGEIRO_EDITADO,
+        descricao: `Cadastro do aluno ${fullPassageiro.nome} atualizado.`,
+        meta: {
+            nome: fullPassageiro.nome,
+            campos_alterados: Object.keys(data),
+            responsavel: enriched.responsavel_principal?.nome || null,
+            valor_cobranca: fullPassageiro.valor_cobranca,
+            dia_vencimento: fullPassageiro.dia_vencimento
+        }
+    });
+
+    return enriched;
 };
 
 const deletePassageiro = async (id: string, targetOwnerId?: string, assignedVeiculoId?: string): Promise<void> => {
@@ -509,7 +526,7 @@ const listarAniversariantesDoMes = async (usuarioId: string, mes: number, veicul
 };
 
 const addResponsavelAdicional = async (passageiroId: string, data: CreateResponsavelAdicionalDTO) => {
-    return responsavelRepository.addResponsavelAdicional(passageiroId, {
+    const result = await responsavelRepository.addResponsavelAdicional(passageiroId, {
         nome: cleanString(data.nome, true),
         telefone: onlyDigits(data.telefone),
         cpf: data.cpf ? onlyDigits(data.cpf) : null,
@@ -526,6 +543,25 @@ const addResponsavelAdicional = async (passageiroId: string, data: CreateRespons
         tornar_principal: data.tornar_principal,
         notificacoes_rota_habilitadas: data.notificacoes_rota_habilitadas,
     });
+
+    const { data: passageiro } = await passageiroRepository.getById(passageiroId);
+    if (passageiro) {
+        historicoService.log({
+            usuario_id: passageiro.usuario_id,
+            entidade_tipo: AtividadeEntidadeTipo.RESPONSAVEL,
+            entidade_id: result.id,
+            acao: AtividadeAcao.RESPONSAVEL_CADASTRADO,
+            descricao: `Responsável ${data.nome} cadastrado para o aluno ${passageiro.nome}.`,
+            meta: {
+                passageiro_id: passageiroId,
+                passageiro_nome: passageiro.nome,
+                responsavel_nome: data.nome,
+                parentesco: data.parentesco
+            }
+        });
+    }
+
+    return result;
 };
 
 const updateResponsavelAdicional = async (responsavelId: string, data: UpdateResponsavelAdicionalDTO, passageiroId?: string) => {
@@ -546,21 +582,96 @@ const updateResponsavelAdicional = async (responsavelId: string, data: UpdateRes
     if (data.tornar_principal !== undefined) prepared.tornar_principal = data.tornar_principal;
     if (data.notificacoes_rota_habilitadas !== undefined) prepared.notificacoes_rota_habilitadas = data.notificacoes_rota_habilitadas;
 
-    return responsavelRepository.updateResponsavelAdicional(responsavelId, prepared, passageiroId);
+    const result = await responsavelRepository.updateResponsavelAdicional(responsavelId, prepared, passageiroId);
+
+    if (passageiroId) {
+        const { data: passageiro } = await passageiroRepository.getById(passageiroId);
+        if (passageiro) {
+            historicoService.log({
+                usuario_id: passageiro.usuario_id,
+                entidade_tipo: AtividadeEntidadeTipo.RESPONSAVEL,
+                entidade_id: responsavelId,
+                acao: AtividadeAcao.RESPONSAVEL_EDITADO,
+                descricao: `Dados do responsável do aluno ${passageiro.nome} foram atualizados.`,
+                meta: {
+                    passageiro_id: passageiroId,
+                    passageiro_nome: passageiro.nome,
+                    responsavel_id: responsavelId,
+                    campos_alterados: Object.keys(data)
+                }
+            });
+        }
+    }
+
+    return result;
 };
 
 const deleteResponsavelAdicional = async (responsavelId: string, passageiroId?: string) => {
     await responsavelRepository.deleteResponsavelAdicional(responsavelId, passageiroId);
+
+    if (passageiroId) {
+        const { data: passageiro } = await passageiroRepository.getById(passageiroId);
+        if (passageiro) {
+            historicoService.log({
+                usuario_id: passageiro.usuario_id,
+                entidade_tipo: AtividadeEntidadeTipo.RESPONSAVEL,
+                entidade_id: responsavelId,
+                acao: AtividadeAcao.RESPONSAVEL_EXCLUIDO,
+                descricao: `Responsável removido do cadastro do aluno ${passageiro.nome}.`,
+                meta: {
+                    passageiro_id: passageiroId,
+                    passageiro_nome: passageiro.nome,
+                    responsavel_id: responsavelId
+                }
+            });
+        }
+    }
+
     return { success: true };
 };
 
 const setPrincipalResponsavel = async (passageiroId: string, responsavelId: string) => {
     await responsavelRepository.setPrincipalResponsavel(passageiroId, responsavelId);
+
+    const { data: passageiro } = await passageiroRepository.getById(passageiroId);
+    if (passageiro) {
+        historicoService.log({
+            usuario_id: passageiro.usuario_id,
+            entidade_tipo: AtividadeEntidadeTipo.RESPONSAVEL,
+            entidade_id: responsavelId,
+            acao: AtividadeAcao.RESPONSAVEL_PRINCIPAL,
+            descricao: `Responsável principal alterado para o aluno ${passageiro.nome}.`,
+            meta: {
+                passageiro_id: passageiroId,
+                passageiro_nome: passageiro.nome,
+                responsavel_id: responsavelId
+            }
+        });
+    }
+
     return { success: true };
 };
 
 const toggleNotificacoesRota = async (passageiroId: string, responsavelId: string, status?: boolean) => {
     const updated = await responsavelRepository.toggleNotificacoesRota(passageiroId, responsavelId, status);
+
+    const { data: passageiro } = await passageiroRepository.getById(passageiroId);
+    if (passageiro) {
+        historicoService.log({
+            usuario_id: passageiro.usuario_id,
+            entidade_tipo: AtividadeEntidadeTipo.RESPONSAVEL,
+            entidade_id: responsavelId,
+            acao: AtividadeAcao.RESPONSAVEL_NOTIFICACAO,
+            descricao: `Notificações de rota ${status !== false ? "ativadas" : "desativadas"} para responsável do aluno ${passageiro.nome}.`,
+            meta: {
+                passageiro_id: passageiroId,
+                passageiro_nome: passageiro.nome,
+                responsavel_id: responsavelId,
+                status: status !== false
+            }
+        });
+    }
+
     return updated;
 };
 
