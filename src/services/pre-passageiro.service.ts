@@ -61,7 +61,9 @@ export const prePassageiroService = {
       genero: payload.genero || null,
       parentesco_responsavel: payload.parentesco_responsavel || null,
       data_inicio_transporte: payload.data_inicio_transporte ? toPersistenceString(payload.data_inicio_transporte) : null,
-      data_nascimento: payload.data_nascimento ? toPersistenceString(payload.data_nascimento) : null
+      data_nascimento: payload.data_nascimento ? toPersistenceString(payload.data_nascimento) : null,
+      dispositivo_cadastro: payload.dispositivo_cadastro || null,
+      metadados_cadastro: payload.metadados_cadastro || {},
     };
 
     const inserted = await prePassageiroRepository.insert(prePassageiroData);

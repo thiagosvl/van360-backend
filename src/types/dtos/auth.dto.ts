@@ -13,6 +13,7 @@ export interface MetadadosCadastroDTO {
   user_agent?: string;
   referrer?: string;
   utm?: MetadadosCadastroUtmDTO;
+  [key: string]: unknown;
 }
 
 export interface RegistrarUsuarioBodyDTO {

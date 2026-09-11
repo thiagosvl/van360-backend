@@ -6,13 +6,14 @@ import { paymentService } from "../services/payments/payment.service.js";
 import { subscriptionService } from "../services/subscriptions/subscription.service.js";
 import { invoiceRepository } from "../repositories/invoice.repository.js";
 import { subscriptionRepository } from "../repositories/subscription.repository.js";
+import { getClientIp } from "../utils/request-client.utils.js";
 
 export const WebhookController = {
 
   async handleEfipay(request: FastifyRequest, reply: FastifyReply) {
     const { token } = request.query as Record<string, string>;
     if (env.EFI_WEBHOOK_TOKEN && token !== env.EFI_WEBHOOK_TOKEN) {
-      logger.warn({ ip: request.ip }, "[WebhookController] Webhook Efí rejeitado: token inválido");
+      logger.warn({ ip: getClientIp(request) }, "[WebhookController] Webhook Efí rejeitado: token inválido");
       return reply.code(401).send({ error: "Unauthorized" });
     }
 

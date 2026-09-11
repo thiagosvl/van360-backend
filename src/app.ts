@@ -12,6 +12,7 @@ import { env } from "./config/env.js";
 import { globalErrorHandler } from "./errors/errorHandler.js";
 import { setupBullBoard } from "./queues/bull-board.js";
 import { initializeFirebase } from "./config/firebase.js";
+import { getClientIp } from "./utils/request-client.utils.js";
 
 export { };
 declare module "@fastify/request-context" {
@@ -76,11 +77,7 @@ export async function createApp(): Promise<FastifyInstance> {
     await app.register(fastifyRequestContext);
 
     app.addHook('onRequest', async (request) => {
-      const clientIp = request.headers['x-forwarded-for'] || request.headers['x-real-ip'];
-      const finalIp = typeof clientIp === 'string'
-        ? clientIp.split(',')[0].trim()
-        : (Array.isArray(clientIp) ? (clientIp[0] as string).trim() : request.ip);
-        
+      const finalIp = getClientIp(request);
       (request as any).requestContext.set('ip', finalIp);
     });
     

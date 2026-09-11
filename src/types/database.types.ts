@@ -1400,6 +1400,8 @@ export type Database = {
           updated_at: string
           usuario_id: string
           valor_cobranca: number | null
+          dispositivo_cadastro: string | null
+          metadados_cadastro: Json | null
         }
         Insert: {
           ano_letivo?: number
@@ -1435,6 +1437,8 @@ export type Database = {
           updated_at?: string
           usuario_id: string
           valor_cobranca?: number | null
+          dispositivo_cadastro?: string | null
+          metadados_cadastro?: Json | null
         }
         Update: {
           ano_letivo?: number
@@ -1470,6 +1474,8 @@ export type Database = {
           updated_at?: string
           usuario_id?: string
           valor_cobranca?: number | null
+          dispositivo_cadastro?: string | null
+          metadados_cadastro?: Json | null
         }
         Relationships: [
           {

@@ -2,6 +2,7 @@ import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
 import { registrarUsuario, login as loginService, logout as logoutService, refreshToken as refreshTokenService, updatePassword as updatePasswordService, solicitarRecuperacao, validarCodigo, resetarSenhaComCodigo } from "../services/auth.service.js";
 import { RegistrarUsuarioBodyDTO, LoginBodyDTO, UpdatePasswordBodyDTO, ConfirmarResetBodyDTO, ValidarCodigoBodyDTO, RefreshTokenBodyDTO, SolicitarRecuperacaoBodyDTO, } from "../types/dtos/auth.dto.js";
+import { extractClientAccessData } from "../utils/request-client.utils.js";
 
 
 export const AuthController = {
@@ -19,18 +20,16 @@ export const AuthController = {
         }
 
         try {
-            const ip = request.ip;
-            const userAgent = (request.headers['user-agent'] as string) || undefined;
-
-            const metadados_cadastro = {
-                ...(payload.metadados_cadastro || {}),
-                ip: ip || payload.metadados_cadastro?.ip,
-                user_agent: userAgent || payload.metadados_cadastro?.user_agent,
-            };
+            const clientAccess = extractClientAccessData(
+                request,
+                payload.metadados_cadastro,
+                payload.dispositivo_cadastro
+            );
 
             const result = await registrarUsuario({
                 ...payload,
-                metadados_cadastro,
+                dispositivo_cadastro: clientAccess.dispositivoCadastro,
+                metadados_cadastro: clientAccess.metadados,
             });
             return reply.status(200).send({
                 success: true,
@@ -56,16 +55,13 @@ export const AuthController = {
         }
 
         try {
-            const ip = request.ip;
-            const userAgent = request.headers['user-agent'] || null;
-            let dispositivo = 'Desconhecido';
-            if (userAgent) {
-                if (/mobile/i.test(userAgent)) dispositivo = 'Mobile';
-                else if (/tablet/i.test(userAgent)) dispositivo = 'Tablet';
-                else dispositivo = 'Desktop';
-            }
+            const clientAccess = extractClientAccessData(request);
 
-            const result = await loginService(identifier, password, { ip, userAgent, dispositivo });
+            const result = await loginService(identifier, password, {
+                ip: clientAccess.ip,
+                userAgent: clientAccess.userAgent,
+                dispositivo: clientAccess.dispositivo,
+            });
             return reply.status(200).send(result);
         } catch (err: any) {
             logger.warn({ error: err.message, identifier }, "Falha no Login.");

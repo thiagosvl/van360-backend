@@ -30,6 +30,8 @@ export const createPrePassageiroSchema = z.object({
   data_inicio_transporte: z.string().optional().nullable().or(z.literal('')),
   data_fim_transporte: z.string().optional().nullable().or(z.literal('')),
   data_nascimento: z.string().optional().nullable().or(z.literal('')),
+  dispositivo_cadastro: z.string().optional().nullable(),
+  metadados_cadastro: z.record(z.string(), z.unknown()).optional().nullable(),
 });
 
 export type CreatePrePassageiroDTO = z.infer<typeof createPrePassageiroSchema>;
