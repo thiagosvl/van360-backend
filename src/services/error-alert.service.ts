@@ -17,6 +17,14 @@ interface FatalErrorAlertContext {
   origin: string;
 }
 
+interface IntegrationErrorAlertContext {
+  provider: string;
+  error: unknown;
+  statusCode?: number;
+  eventName?: string;
+  details?: Record<string, string | number | boolean | null | undefined>;
+}
+
 const COOLDOWN_SECONDS = 600;
 
 function escapeHtml(text: string): string {
@@ -143,6 +151,73 @@ export const errorAlertService = {
       }, `alert-fatal-${hash}-${Date.now()}`);
     } catch (dispatchError) {
       logger.error({ error: resolveErrorMessage(dispatchError) }, "[ErrorAlertService] Falha ao despachar alerta fatal");
+    }
+  },
+
+  async notifyIntegrationError(ctx: IntegrationErrorAlertContext): Promise<void> {
+    try {
+      if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_ADMIN_CHAT_ID) {
+        return;
+      }
+
+      const errorMessage = resolveErrorMessage(ctx.error);
+      const hash = crypto
+        .createHash("md5")
+        .update(`${ctx.provider}:${ctx.eventName || ""}:${errorMessage}`)
+        .digest("hex");
+
+      const throttleKey = `alert:integration:${hash}`;
+
+      try {
+        const isThrottled = await redisClient.get(throttleKey);
+        if (isThrottled) {
+          logger.info({ throttleKey, provider: ctx.provider }, "[ErrorAlertService] Alerta de integração silenciado pelo cooldown");
+          return;
+        }
+        await redisClient.setex(throttleKey, COOLDOWN_SECONDS, "1");
+      } catch (redisErr) {
+        logger.warn({ error: resolveErrorMessage(redisErr) }, "[ErrorAlertService] Falha ao verificar cooldown no Redis");
+      }
+
+      const timestamp = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+      const environment = env.NODE_ENV;
+
+      const lines = [
+        `🚨 <b>[FALHA DE INTEGRAÇÃO - ${escapeHtml(ctx.provider)}]</b>`,
+        "",
+        `<b>Ambiente:</b> <code>${environment}</code>`,
+        `<b>Provedor:</b> <code>${escapeHtml(ctx.provider)}</code>`,
+      ];
+
+      if (ctx.statusCode) {
+        lines.push(`<b>Status HTTP:</b> ${ctx.statusCode}`);
+      }
+
+      if (ctx.eventName) {
+        lines.push(`<b>Evento:</b> <code>${escapeHtml(ctx.eventName)}</code>`);
+      }
+
+      lines.push(`<b>Horário:</b> ${timestamp}`);
+      lines.push(`<b>Erro:</b> <code>${escapeHtml(errorMessage)}</code>`);
+
+      if (ctx.details && Object.keys(ctx.details).length > 0) {
+        lines.push("");
+        lines.push("<b>Detalhes:</b>");
+        for (const [key, value] of Object.entries(ctx.details)) {
+          if (value !== undefined && value !== null) {
+            lines.push(`• <b>${escapeHtml(key)}:</b> <code>${escapeHtml(String(value))}</code>`);
+          }
+        }
+      }
+
+      const message = lines.join("\n");
+
+      await addToTelegramQueue({
+        message,
+        context: "integration-error-alert"
+      }, `alert-integration-${hash}-${Date.now()}`);
+    } catch (dispatchError) {
+      logger.error({ error: resolveErrorMessage(dispatchError) }, "[ErrorAlertService] Falha ao despachar alerta de integração");
     }
   }
 };

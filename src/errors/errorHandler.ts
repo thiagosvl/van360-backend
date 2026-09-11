@@ -18,14 +18,15 @@ export function globalErrorHandler(error: FastifyError, request: FastifyRequest,
 
         if (statusCode >= 500) {
             Sentry.captureException(error);
-            void errorAlertService.notifyHttpError({
-                error,
-                method,
-                url,
-                statusCode,
-                userId: request.user?.id
-            });
         }
+
+        void errorAlertService.notifyHttpError({
+            error,
+            method,
+            url,
+            statusCode,
+            userId: request.user?.id
+        });
 
         logger[logMethod]({
             msg: "Erro Operacional",
@@ -40,8 +41,16 @@ export function globalErrorHandler(error: FastifyError, request: FastifyRequest,
         });
     }
 
-    // 1.5 Erro de Validação Zod
     if (error instanceof ZodError) {
+        const zodMessage = error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ');
+        void errorAlertService.notifyHttpError({
+            error: new Error(`Validação (Zod): ${zodMessage}`),
+            method,
+            url,
+            statusCode: 400,
+            userId: request.user?.id
+        });
+
         logger.warn({
             msg: "Erro de Validação (Zod)",
             details: error.issues,

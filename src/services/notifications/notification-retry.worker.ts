@@ -3,6 +3,7 @@ import { notificationQueueRepository, NotificationQueueItemPayload } from "../..
 import { notificationService } from "./notification.service.js";
 import { NotificationQueueService, notificationQueueService } from "./notification-queue.service.js";
 import { extractErrorMessage } from "../../utils/error.utils.js";
+import { errorAlertService } from "../error-alert.service.js";
 
 export class NotificationRetryWorker {
 
@@ -78,6 +79,16 @@ export class NotificationRetryWorker {
 
         if (currentAttempts >= maxAttempts) {
             await notificationQueueRepository.markAsFailed(item.id, currentAttempts, errDetail);
+            void errorAlertService.notifyIntegrationError({
+                provider: item.canal || "FILA_NOTIFICACOES",
+                eventName: item.evento,
+                error: errDetail,
+                details: {
+                    destinatario: item.destinatario,
+                    tentativas: `${currentAttempts}/${maxAttempts}`,
+                    itemId: item.id
+                }
+            });
             logger.warn({ id: item.id, tentativas: currentAttempts, error: errDetail }, "[NotificationRetryWorker] Número máximo de tentativas atingido. Marcado como FAILED.");
         } else {
             const nextRetryDate = NotificationQueueService.calculateNextRetryDate(currentAttempts + 1);

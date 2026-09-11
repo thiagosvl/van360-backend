@@ -6,6 +6,7 @@ import { usuarioPushTokenRepository } from "../../../../repositories/usuario-pus
 import { WabaMapper } from "./waba.mapper.js";
 import { NotificationOptions } from "../../notification.service.js";
 import { extractErrorMessage } from "../../../../utils/error.utils.js";
+import { errorAlertService } from "../../../error-alert.service.js";
 
 export class WabaAdapter implements NotificationProviderPort {
     async send(eventName: string, contextData: Record<string, unknown>, options?: NotificationOptions): Promise<NotificationSendResult> {
@@ -68,19 +69,39 @@ export class WabaAdapter implements NotificationProviderPort {
                 return { success: true, providerMessageId: messageId };
             } catch (apiError: unknown) {
                 const errorDetails = extractErrorMessage(apiError);
+                const statusCode = axios.isAxiosError(apiError) ? apiError.response?.status : undefined;
+                const metaData = axios.isAxiosError(apiError) ? (apiError.response?.data as { error?: { message?: string; code?: number } }) : undefined;
+
+                void errorAlertService.notifyIntegrationError({
+                    provider: "META_WABA",
+                    eventName,
+                    statusCode,
+                    error: errorDetails,
+                    details: {
+                        template: payload.templateName,
+                        destinatario: formattedPhone,
+                        metaCode: metaData?.error?.code,
+                        metaMessage: metaData?.error?.message
+                    }
+                });
 
                 logger.error({
                     error: errorDetails,
                     to: formattedPhone,
                     eventName,
                     templateName: payload.templateName,
-                    statusCode: axios.isAxiosError(apiError) ? apiError.response?.status : undefined,
+                    statusCode,
                     metaResponse: axios.isAxiosError(apiError) ? apiError.response?.data : undefined
                 }, "[WabaAdapter] Erro ao enviar template WABA na Meta API");
                 return { success: false, error: errorDetails };
             }
         } catch (error: unknown) {
             const message = extractErrorMessage(error);
+            void errorAlertService.notifyIntegrationError({
+                provider: "META_WABA",
+                eventName,
+                error: message
+            });
             logger.error({ error: message, eventName }, "[WabaAdapter] Falha ao enviar notificação WABA");
             return { success: false, error: message };
         }
