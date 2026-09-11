@@ -1,8 +1,89 @@
 import fs from 'fs';
 import path from 'path';
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import zlib from 'zlib';
+import { PDFDocument, PDFImage, rgb, StandardFonts } from 'pdf-lib';
 import { formatToBrazilianDate, getNowBR, parseLocalDate } from '../../utils/date.utils.js';
 import { formatModalidade, formatParentesco, formatPeriodo, maskCnpj, maskCpf, maskPhone } from '../../utils/format.js';
+
+function isValidPng(buf: Buffer | Uint8Array): boolean {
+  if (!buf || buf.length < 8) return false;
+  const pngSig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  for (let i = 0; i < 8; i++) {
+    if (buf[i] !== pngSig[i]) return false;
+  }
+  let offset = 8;
+  let hasIend = false;
+  const idatChunks: Buffer[] = [];
+
+  while (offset + 8 <= buf.length) {
+    const len = ((buf[offset] << 24) | (buf[offset + 1] << 16) | (buf[offset + 2] << 8) | buf[offset + 3]) >>> 0;
+    const type = String.fromCharCode(buf[offset + 4], buf[offset + 5], buf[offset + 6], buf[offset + 7]);
+    offset += 8;
+
+    if (offset + len + 4 > buf.length) {
+      return false;
+    }
+
+    if (type === 'IDAT') {
+      idatChunks.push(Buffer.from(buf.buffer, buf.byteOffset + offset, len));
+    } else if (type === 'IEND') {
+      hasIend = true;
+      break;
+    }
+
+    offset += len + 4;
+  }
+
+  if (!hasIend || idatChunks.length === 0) return false;
+
+  try {
+    const totalIdat = Buffer.concat(idatChunks);
+    zlib.inflateSync(totalIdat);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isJpeg(buf: Buffer | Uint8Array): boolean {
+  return !!buf && buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+}
+
+async function resolveImageBuffer(imageSource?: string | null): Promise<Buffer | null> {
+  if (!imageSource) return null;
+
+  if (imageSource.startsWith('data:')) {
+    const commaIdx = imageSource.indexOf(',');
+    if (commaIdx !== -1) {
+      return Buffer.from(imageSource.slice(commaIdx + 1), 'base64');
+    }
+    return null;
+  }
+
+  if (imageSource.startsWith('http://') || imageSource.startsWith('https://')) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    try {
+      const resp = await fetch(imageSource, { signal: controller.signal });
+      if (!resp.ok) return null;
+      return Buffer.from(await resp.arrayBuffer());
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  return null;
+}
+
+async function embedImageSafely(pdfDoc: PDFDocument, imageBuffer: Buffer): Promise<PDFImage | null> {
+  if (isValidPng(imageBuffer)) {
+    return await pdfDoc.embedPng(imageBuffer);
+  }
+  if (isJpeg(imageBuffer)) {
+    return await pdfDoc.embedJpg(imageBuffer);
+  }
+  return null;
+}
 
 import { storageProvider } from './storage.provider.js';
 import { contractRepository } from '../../repositories/contract.repository.js';
@@ -69,23 +150,22 @@ export class InHouseContractProvider implements ContractProvider {
 
     if (params.assinaturaBase64) {
       try {
-        const resp = await fetch(params.assinaturaBase64);
-        const signatureBytes = await resp.arrayBuffer();
-        const signatureImage = await pdfDoc.embedPng(signatureBytes);
-        const pages = pdfDoc.getPages();
-        const ultimaPagina = pages[pages.length - 1];
+        const imageBuffer = await resolveImageBuffer(params.assinaturaBase64);
+        if (imageBuffer) {
+          const signatureImage = await embedImageSafely(pdfDoc, imageBuffer);
+          if (signatureImage) {
+            const pages = pdfDoc.getPages();
+            const ultimaPagina = pages[pages.length - 1];
+            const imageY = signatureY + 2;
 
-        // Ajuste fino: A imagem deve ficar um pouco acima da linha (y)
-        // Se signatureY é a linha, a imagem começa um pouco acima.
-        // drawImage usa y como canto inferior esquerdo.
-        const imageY = signatureY + 2;
-
-        ultimaPagina.drawImage(signatureImage, {
-          x: 350,
-          y: imageY,
-          width: 150,
-          height: 50,
-        });
+            ultimaPagina.drawImage(signatureImage, {
+              x: 350,
+              y: imageY,
+              width: 150,
+              height: 50,
+            });
+          }
+        }
       } catch (e) {
         console.error('Error embedding parent signature', e);
       }
@@ -395,22 +475,27 @@ export class InHouseContractProvider implements ContractProvider {
 
     if (dados.assinaturaCondutorUrl) {
       try {
-        const resp = await fetch(dados.assinaturaCondutorUrl);
-        const signatureBytes = await resp.arrayBuffer();
-        const signatureImage = await pdfDoc.embedPng(signatureBytes);
-        const { width: imgW, height: imgH } = signatureImage;
-        const targetWidth = 150;
-        const targetHeight = (imgH / imgW) * targetWidth;
-        const maxHeight = 50;
-        const finalHeight = Math.min(targetHeight, maxHeight);
-        const finalWidth = (imgW / imgH) * finalHeight;
-        page.drawImage(signatureImage, {
-          x: margin,
-          y: signatureLineY + 2,
-          width: finalWidth,
-          height: finalHeight,
-        });
-      } catch (e) { console.error('Error signature', e); }
+        const imageBuffer = await resolveImageBuffer(dados.assinaturaCondutorUrl);
+        if (imageBuffer) {
+          const signatureImage = await embedImageSafely(pdfDoc, imageBuffer);
+          if (signatureImage) {
+            const { width: imgW, height: imgH } = signatureImage;
+            const targetWidth = 150;
+            const targetHeight = (imgH / imgW) * targetWidth;
+            const maxHeight = 50;
+            const finalHeight = Math.min(targetHeight, maxHeight);
+            const finalWidth = (imgW / imgH) * finalHeight;
+            page.drawImage(signatureImage, {
+              x: margin,
+              y: signatureLineY + 2,
+              width: finalWidth,
+              height: finalHeight,
+            });
+          }
+        }
+      } catch (e) {
+        console.error('Error signature', e);
+      }
     }
 
     // ADICIONAR LOGO NO FIM DA PÁGINA (CENTRALIZADO)
