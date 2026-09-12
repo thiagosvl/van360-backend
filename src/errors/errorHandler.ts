@@ -19,6 +19,8 @@ export function globalErrorHandler(error: FastifyError, request: FastifyRequest,
             Sentry.captureException(error);
         }
 
+        (request as FastifyRequest & { __errorAlertDispatched?: boolean }).__errorAlertDispatched = true;
+
         void errorAlertService.notifyHttpError({
             error,
             method,
@@ -87,6 +89,7 @@ export function globalErrorHandler(error: FastifyError, request: FastifyRequest,
     }
 
     Sentry.captureException(error);
+    (request as FastifyRequest & { __errorAlertDispatched?: boolean }).__errorAlertDispatched = true;
     void errorAlertService.notifyHttpError({
         error,
         method,

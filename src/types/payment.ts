@@ -1,4 +1,4 @@
-import { CheckoutPaymentMethod, PaymentProvider } from "./enums.js";
+import { CheckoutPaymentMethod, PaymentProvider, NormalizedPaymentEventType } from "./enums.js";
 
 export interface CreateChargeRequest {
     externalId: string;
@@ -45,7 +45,7 @@ export interface ChargeResponse {
 }
 
 export interface NormalizedPaymentEvent {
-    type: "PAYMENT_RECEIVED" | "PAYMENT_FAILED" | "PAYMENT_REFUNDED" | "SUBSCRIPTION_CREATED" | "SUBSCRIPTION_CANCELED" | "SUBSCRIPTION_EXPIRED";
+    type: NormalizedPaymentEventType;
     internalId: string;
     providerRef: string;
     amount?: number;

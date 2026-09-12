@@ -25,7 +25,7 @@ export class SystemCleanupService {
         // 2. Purga de Logs de Sistema/Auditoria com mais de 60 dias
         try {
             const cutoffDate = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
-            const { data } = await supabaseAdmin
+            const { data } = await (supabaseAdmin as unknown as import("@supabase/supabase-js").SupabaseClient)
                 .from("logs_sistema")
                 .delete()
                 .lte("created_at", cutoffDate)

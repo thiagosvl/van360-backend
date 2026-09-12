@@ -13,6 +13,7 @@ import { globalErrorHandler } from "./errors/errorHandler.js";
 import { setupBullBoard } from "./queues/bull-board.js";
 import { initializeFirebase } from "./config/firebase.js";
 import { getClientIp } from "./utils/request-client.utils.js";
+import { errorAlertService } from "./services/error-alert.service.js";
 
 export { };
 declare module "@fastify/request-context" {
@@ -86,6 +87,39 @@ export async function createApp(): Promise<FastifyInstance> {
     
     // Global Error Handler
     app.setErrorHandler(globalErrorHandler);
+
+    app.addHook("onSend", async (request, reply, payload) => {
+      const isServerError = reply.statusCode >= 500;
+      const reqWithFlag = request as FastifyRequest & { __errorAlertDispatched?: boolean; user?: { id?: string } };
+
+      if (isServerError && !reqWithFlag.__errorAlertDispatched) {
+        reqWithFlag.__errorAlertDispatched = true;
+
+        let parsedMessage: string | undefined;
+        if (typeof payload === "string") {
+          try {
+            const parsed = JSON.parse(payload) as { error?: string; message?: string };
+            parsedMessage = parsed.error || parsed.message;
+          } catch {
+            parsedMessage = payload.slice(0, 300);
+          }
+        }
+
+        const fallbackError = new Error(parsedMessage || `Falha HTTP ${reply.statusCode}`);
+
+        Sentry.captureException(fallbackError);
+
+        void errorAlertService.notifyHttpError({
+          error: fallbackError,
+          method: request.method,
+          url: request.url,
+          statusCode: reply.statusCode,
+          userId: reqWithFlag.user?.id,
+        });
+      }
+
+      return payload;
+    });
 
     // Inicializar Firebase Admin SDK (para Push Notifications)
     initializeFirebase();

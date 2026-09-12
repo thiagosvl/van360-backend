@@ -10,7 +10,7 @@ import {
     NormalizedPaymentEvent,
     PaymentProviderAdapter
 } from "../../../types/payment.js";
-import { CheckoutPaymentMethod, PaymentProvider } from "../../../types/enums.js";
+import { CheckoutPaymentMethod, PaymentProvider, NormalizedPaymentEventType } from "../../../types/enums.js";
 import { parseLocalDate } from "../../../utils/date.utils.js";
 import { onlyDigits, extractErrorMessage } from "../../../utils/string.utils.js";
 import { errorAlertService } from "../../error-alert.service.js";
@@ -246,7 +246,7 @@ export class EfipayProvider implements PaymentProviderAdapter {
             if (rawBody.pix && Array.isArray(rawBody.pix)) {
                 const payment = rawBody.pix[0] as Record<string, unknown>;
                 return {
-                    type: "PAYMENT_RECEIVED",
+                    type: NormalizedPaymentEventType.PAYMENT_RECEIVED,
                     internalId: payment.txid as string,
                     providerRef: payment.endToEndId as string,
                     amount: parseFloat(payment.valor as string),
@@ -274,7 +274,7 @@ export class EfipayProvider implements PaymentProviderAdapter {
 
                     if (status === "approved" || status === "paid") {
                         return {
-                            type: "PAYMENT_RECEIVED",
+                            type: NormalizedPaymentEventType.PAYMENT_RECEIVED,
                             internalId: chargeId ?? "",
                             providerRef: lastLog.id?.toString() ?? "",
                             amount,
@@ -283,14 +283,14 @@ export class EfipayProvider implements PaymentProviderAdapter {
                         };
                     } else if (status === "declined" || status === "unpaid" || status === "canceled") {
                         return {
-                            type: "PAYMENT_FAILED",
+                            type: NormalizedPaymentEventType.PAYMENT_FAILED,
                             internalId: chargeId ?? "",
                             providerRef: lastLog.id?.toString() ?? "",
                             raw: response.data as unknown as Record<string, unknown>
                         };
                     } else if (status === "refunded" || status === "contested" || status === "chargeback") {
                         return {
-                            type: "PAYMENT_REFUNDED",
+                            type: NormalizedPaymentEventType.PAYMENT_REFUNDED,
                             internalId: chargeId ?? "",
                             providerRef: lastLog.id?.toString() ?? "",
                             raw: response.data as unknown as Record<string, unknown>

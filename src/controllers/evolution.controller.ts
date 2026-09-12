@@ -3,6 +3,7 @@ import { logger } from "../config/logger.js";
 import { webhookEvolutionHandler } from "../services/handlers/webhook-evolution.handler.js";
 import { EvolutionEvent, EvolutionConnectionStatus } from "../types/enums.js";
 import { getNowBR, parseLocalDate } from "../utils/date.utils.js";
+import { errorAlertService } from "../services/error-alert.service.js";
 
 interface EvolutionPayload {
     event: EvolutionEvent;
@@ -50,6 +51,14 @@ export const evolutionController = {
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : "Internal Server Error";
             logger.error({ err: message }, "Erro no processamento do webhook");
+
+            void errorAlertService.notifyHttpError({
+                error: err,
+                method: request.method,
+                url: request.url,
+                statusCode: 500,
+            });
+
             return reply.status(500).send({ error: message });
         }
     }

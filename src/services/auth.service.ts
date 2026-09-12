@@ -18,6 +18,7 @@ import { notificationService } from "./notifications/notification.service.js";
 import { EVENTO_AUTH_RECUPERACAO_SENHA, EVENTO_AUTH_SENHA_ALTERADA } from "../config/constants.js";
 import { loginAttemptsRepository } from "../repositories/login-attempts.repository.js";
 import { usuarioPushTokenRepository } from "../repositories/usuario-push-token.repository.js";
+import { withRetry } from "../utils/retry.utils.js";
 
 // ... (interfaces remain unchanged)
 
@@ -97,13 +98,18 @@ export async function checkUserStatus(
   telefone: string
 ): Promise<CheckUserStatusResult> {
 
-  // Normalizar valores para comparação
   const cpfcnpjNormalizado = onlyDigits(cpfcnpj);
   const emailNormalizado = email.toLowerCase().trim();
   const telefoneNormalizado = onlyDigits(telefone);
 
-  // Uma única query para buscar usuário que corresponda a qualquer um dos campos
-  const { data: usuarios, error: findUserError } = await authRepository.checkUserStatus(cpfcnpjNormalizado, emailNormalizado, telefoneNormalizado);
+  const { data: usuarios, error: findUserError } = await withRetry(
+    async () => authRepository.checkUserStatus(cpfcnpjNormalizado, emailNormalizado, telefoneNormalizado),
+    {
+      maxRetries: 2,
+      initialDelayMs: 400,
+      backoffFactor: 1.5,
+    }
+  );
 
   if (findUserError) {
     logger.error({ error: findUserError.message }, "Erro DB ao verificar status.");

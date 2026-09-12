@@ -3,6 +3,7 @@ import { logger } from "../config/logger.js";
 import { registrarUsuario, login as loginService, logout as logoutService, refreshToken as refreshTokenService, updatePassword as updatePasswordService, solicitarRecuperacao, validarCodigo, resetarSenhaComCodigo } from "../services/auth.service.js";
 import { RegistrarUsuarioBodyDTO, LoginBodyDTO, UpdatePasswordBodyDTO, ConfirmarResetBodyDTO, ValidarCodigoBodyDTO, RefreshTokenBodyDTO, SolicitarRecuperacaoBodyDTO, } from "../types/dtos/auth.dto.js";
 import { extractClientAccessData } from "../utils/request-client.utils.js";
+import { errorAlertService } from "../services/error-alert.service.js";
 
 
 export const AuthController = {
@@ -36,13 +37,26 @@ export const AuthController = {
                 session: result.session,
             });
 
-        } catch (err: any) {
+        } catch (err: unknown) {
+            const errorObj = err as { message?: string; statusCode?: number; field?: string };
+            const message = errorObj?.message || "Erro interno no cadastro.";
+            const status = errorObj?.statusCode || (message.includes("já está em uso") ? 409 : 400);
+
             logger.error(
-                { error: err.message, payload: { email: payload.email } },
+                { error: message, payload: { email: payload.email }, status },
                 "Falha no Endpoint de Cadastro."
             );
-            const status = err.statusCode || (err.message.includes("já está em uso") ? 409 : 400);
-            return reply.status(status).send({ error: err.message, field: err.field });
+
+            if (status >= 500) {
+                void errorAlertService.notifyHttpError({
+                    error: err,
+                    method: request.method,
+                    url: request.url,
+                    statusCode: status,
+                });
+            }
+
+            return reply.status(status).send({ error: message, field: errorObj?.field });
         }
     },
 

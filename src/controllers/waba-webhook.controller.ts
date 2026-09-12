@@ -3,6 +3,8 @@ import { logger } from "../config/logger.js";
 import { notificationQueueRepository } from "../repositories/notification-queue.repository.js";
 
 import { env } from "../config/env.js";
+import { errorAlertService } from "../services/error-alert.service.js";
+import { NotificationChannelEnum } from "../types/enums.js";
 
 export class WabaWebhookController {
     /**
@@ -87,6 +89,12 @@ export class WabaWebhookController {
         } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);
             logger.error({ error: msg }, "[WabaWebhookController] Erro ao processar webhook da Meta WABA");
+
+            void errorAlertService.notifyNotificationError({
+                channel: NotificationChannelEnum.WABA,
+                error,
+                eventName: "waba-webhook-failure",
+            });
         }
     }
 }
