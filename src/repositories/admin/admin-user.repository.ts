@@ -137,6 +137,11 @@ export const adminUserRepository = {
         )
         .eq("usuario_id", userId)
         .order("created_at", { ascending: false }),
+      supabaseAdmin
+        .from("usuario_push_tokens")
+        .select("id, platform, created_at, updated_at")
+        .eq("user_id", userId)
+        .order("updated_at", { ascending: false }),
     ]);
   },
 

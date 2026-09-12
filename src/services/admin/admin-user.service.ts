@@ -56,6 +56,7 @@ import {
 import { AppError } from "../../errors/AppError.js";
 import { NotificationUrlBuilder } from "../notifications/utils/notification-url.builder.js";
 import type { ImpersonateUserResponseDto } from "../../types/dtos/admin-impersonate.dto.js";
+import type { DispositivosUsuarioResumoDTO } from "../../types/dtos/admin-user-details.dto.js";
 
 function generateTempPassword(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
@@ -320,7 +321,7 @@ export const adminUserService = {
 
   async getUserDetails(userId: string) {
     const [
-      [userReq, assinaturaReq, faturasReq, planosReq, veiculosReq, escolasReq, passageirosReq, prePassageirosReq, contratosReq],
+      [userReq, assinaturaReq, faturasReq, planosReq, veiculosReq, escolasReq, passageirosReq, prePassageirosReq, contratosReq, pushTokensReq],
       passageirosList,
       prePassageirosList,
       veiculosList,
@@ -368,6 +369,17 @@ export const adminUserService = {
     const indicadorData = referralData?.indicador;
     const referredUsersList = (referredUsersRes?.data || []) as unknown as ReferredUserRow[];
 
+    const tokensList = pushTokensReq?.data || [];
+    const dispositivos: DispositivosUsuarioResumoDTO = {
+      total: tokensList.length,
+      itens: tokensList.map((t) => ({
+        id: t.id,
+        plataforma: t.platform,
+        criado_em: t.created_at,
+        atualizado_em: t.updated_at,
+      })),
+    };
+
     return {
       user: userData,
       assinatura: assinaturaReq.data,
@@ -406,6 +418,7 @@ export const adminUserService = {
       veiculos: veiculosList,
       escolas: escolasList,
       contratos: contratosList,
+      dispositivos,
     };
   },
 
