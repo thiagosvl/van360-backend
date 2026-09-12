@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { adminUserController } from "../controllers/admin/admin-user.controller.js";
 import { adminLogController } from "../controllers/admin/admin-log.controller.js";
 import { adminNotificationController } from "../controllers/admin/admin-notification.controller.js";
+import { adminBroadcastController } from "../controllers/admin/admin-broadcast.controller.js";
 import { adminLoginAttemptsController } from "../controllers/admin/admin-login-attempts.controller.js";
 import { adminConfigController } from "../controllers/admin/admin-config.controller.js";
 import { adminPlanController } from "../controllers/admin/admin-plan.controller.js";
@@ -38,6 +39,8 @@ const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get("/logs", adminLogController.getGlobalLogs);
   app.get("/users/:id/logs", adminLogController.getUserLogs);
   app.get("/notifications", adminNotificationController.getGlobalNotifications);
+  app.get("/notifications/broadcast/estimate", adminBroadcastController.estimate);
+  app.post("/notifications/broadcast/send", adminBroadcastController.send);
   app.post("/notifications/:id/retry", adminNotificationController.retryNotification);
   app.post("/notifications/retry-bulk", adminNotificationController.retryBulkNotifications);
   app.get("/users/:id/notifications", adminNotificationController.getUserNotifications);
