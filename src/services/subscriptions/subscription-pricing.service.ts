@@ -1,4 +1,4 @@
-﻿import { planRepository } from "../../repositories/plan.repository.js";
+import { planRepository } from "../../repositories/plan.repository.js";
 import { referralRepository } from "../../repositories/referral.repository.js";
 import { subscriptionService } from "./subscription.service.js";
 import { getConfig, getConfigNumber } from "../configuracao.service.js";
@@ -31,6 +31,9 @@ export const subscriptionPricingService = {
         const baseMonthlyPrice = monthlyPlanRaw ? Number(monthlyPlanRaw.valor) : 0;
         const baseAnnualPrice = annualPlanRaw ? Number(annualPlanRaw.valor) : 0;
 
+        let effectiveBaseMonthlyPrice = baseMonthlyPrice;
+        let effectiveBaseAnnualPrice = baseAnnualPrice;
+
         let regularMonthlyPrice = isPromotionActive && monthlyPlanRaw?.valor_promocional
             ? Number(monthlyPlanRaw.valor_promocional)
             : baseMonthlyPrice;
@@ -55,7 +58,8 @@ export const subscriptionPricingService = {
                 const isPromoValid = !sub.data_fim_promocao || parseLocalDate(sub.data_fim_promocao).getTime() >= nowTime;
 
                 if (sub.valor_base_mensal !== null && sub.valor_base_mensal !== undefined) {
-                    regularMonthlyPrice = Number(sub.valor_base_mensal);
+                    effectiveBaseMonthlyPrice = Number(sub.valor_base_mensal);
+                    regularMonthlyPrice = effectiveBaseMonthlyPrice;
                     hasOverride = true;
                 }
 
@@ -65,7 +69,8 @@ export const subscriptionPricingService = {
                 }
 
                 if (sub.valor_base_anual !== null && sub.valor_base_anual !== undefined) {
-                    regularAnnualPrice = Number(sub.valor_base_anual);
+                    effectiveBaseAnnualPrice = Number(sub.valor_base_anual);
+                    regularAnnualPrice = effectiveBaseAnnualPrice;
                     hasOverride = true;
                 }
 
@@ -99,14 +104,14 @@ export const subscriptionPricingService = {
             ? Math.round((totalAnnualSavings / (regularMonthlyPrice * 12)) * 100)
             : 0;
 
-        const hasPromoMonthly = regularMonthlyPrice < baseMonthlyPrice;
-        const hasPromoAnnual = regularAnnualPrice < baseAnnualPrice;
+        const hasPromoMonthly = regularMonthlyPrice < effectiveBaseMonthlyPrice;
+        const hasPromoAnnual = regularAnnualPrice < effectiveBaseAnnualPrice;
 
         const summary: SubscriptionPricingSummaryDTO = {
             monthlyPrice: finalMonthlyPrice,
             annualPrice: finalAnnualPrice,
-            baseMonthlyPrice,
-            baseAnnualPrice,
+            baseMonthlyPrice: effectiveBaseMonthlyPrice,
+            baseAnnualPrice: effectiveBaseAnnualPrice,
             regularMonthlyPrice,
             regularAnnualPrice,
             annualMonthlyEquivalent,
@@ -124,7 +129,7 @@ export const subscriptionPricingService = {
             const isAnual = p.identificador === SubscriptionIdentifer.YEARLY;
 
             const pricing: PlanPricingDTO = isAnual ? {
-                basePrice: baseAnnualPrice,
+                basePrice: effectiveBaseAnnualPrice,
                 regularPrice: regularAnnualPrice,
                 finalPrice: finalAnnualPrice,
                 monthlyEquivalent: annualMonthlyEquivalent,
@@ -137,7 +142,7 @@ export const subscriptionPricingService = {
                 referralDiscountPct,
                 referralDiscountAmount: annualDiscountAmount
             } : {
-                basePrice: baseMonthlyPrice,
+                basePrice: effectiveBaseMonthlyPrice,
                 regularPrice: regularMonthlyPrice,
                 finalPrice: finalMonthlyPrice,
                 monthlyEquivalent: finalMonthlyPrice,
