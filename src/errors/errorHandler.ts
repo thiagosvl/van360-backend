@@ -4,6 +4,7 @@ import { ZodError } from "zod";
 import { logger } from "../config/logger.js";
 import { errorAlertService } from "../services/error-alert.service.js";
 import { AppError } from "./AppError.js";
+import { extractErrorMessage, extractErrorStack } from "../utils/error.utils.js";
 
 export function globalErrorHandler(error: FastifyError, request: FastifyRequest, reply: FastifyReply) {
     const { method, url } = request;
@@ -94,10 +95,13 @@ export function globalErrorHandler(error: FastifyError, request: FastifyRequest,
         userId: request.user?.id
     });
 
+    const errorMessage = extractErrorMessage(error);
+    const errorStack = extractErrorStack(error);
+
     logger.error({
         msg: "Erro Interno (500)",
-        error: error.message,
-        stack: error.stack,
+        error: errorMessage,
+        stack: errorStack,
         method,
         url,
         userId: request.user?.id

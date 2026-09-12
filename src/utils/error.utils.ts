@@ -67,3 +67,41 @@ export function extractErrorMessage(error: unknown): string {
 
     return String(error);
 }
+
+export function extractErrorStack(error: unknown): string {
+    if (error instanceof Error && error.stack) {
+        const lines = error.stack.split("\n").slice(0, 5).join("\n");
+        return lines.slice(0, 350);
+    }
+
+    if (axios.isAxiosError(error)) {
+        const method = error.config?.method?.toUpperCase() || "REQUEST";
+        const url = error.config?.url || "unknown";
+        const responseData = typeof error.response?.data === "object"
+            ? JSON.stringify(error.response?.data).slice(0, 250)
+            : String(error.response?.data || "").slice(0, 250);
+        return `Axios Error [${method} ${url}]\nData: ${responseData}`;
+    }
+
+    if (isPostgrestError(error)) {
+        const parts: string[] = [];
+        if (error.code) parts.push(`Code: ${error.code}`);
+        if (error.details) parts.push(`Details: ${error.details}`);
+        if (error.hint) parts.push(`Hint: ${error.hint}`);
+        if (parts.length > 0) return parts.join("\n");
+    }
+
+    if (typeof error === "object" && error !== null) {
+        const errObj = error as Record<string, unknown>;
+        if (typeof errObj.stack === "string") {
+            return errObj.stack.split("\n").slice(0, 5).join("\n").slice(0, 350);
+        }
+        try {
+            return JSON.stringify(error, null, 2).slice(0, 350);
+        } catch {
+            return String(error);
+        }
+    }
+
+    return "Sem stack trace disponível";
+}

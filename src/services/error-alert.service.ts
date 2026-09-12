@@ -4,6 +4,7 @@ import { logger } from "../config/logger.js";
 import { redisClient } from "../config/redis.js";
 import { addToTelegramQueue } from "../queues/telegram.queue.js";
 import { NotificationChannelEnum, PaymentProvider } from "../types/enums.js";
+import { extractErrorMessage, extractErrorStack } from "../utils/error.utils.js";
 
 interface HttpErrorAlertContext {
   error: unknown;
@@ -47,21 +48,11 @@ function escapeHtml(text: string): string {
 }
 
 function resolveErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  if (typeof error === "string") {
-    return error;
-  }
-  return "Erro interno desconhecido";
+  return extractErrorMessage(error);
 }
 
 function resolveErrorStack(error: unknown): string {
-  if (error instanceof Error && error.stack) {
-    const lines = error.stack.split("\n").slice(0, 5).join("\n");
-    return lines.slice(0, 350);
-  }
-  return "Sem stack trace disponível";
+  return extractErrorStack(error);
 }
 
 export const errorAlertService = {
