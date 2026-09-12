@@ -1474,6 +1474,35 @@ export const adminUserService = {
       disparosDia: disparosHoje,
     };
   },
+
+  async deleteInvoice(invoiceId: string) {
+    const { data: fatura, error: fetchError } = await invoiceRepository.getById(invoiceId);
+    if (fetchError || !fatura) {
+      throw new AppError("Fatura não encontrada.", 404);
+    }
+
+    await referralRepository.nullifyFaturaOrigem(invoiceId).catch((err: unknown) => {
+      logger.warn({ err, invoiceId }, "[AdminUserService] Falha não impeditiva ao desvincular fatura na indicação.");
+    });
+
+    const { error: deleteError } = await invoiceRepository.deleteInvoice(invoiceId);
+    if (deleteError) {
+      logger.error({ deleteError, invoiceId }, "[AdminUserService] Erro ao deletar fatura.");
+      throw new AppError("Erro ao excluir fatura.", 500);
+    }
+
+    await historicoService.log({
+      usuario_id: fatura.usuario_id,
+      entidade_tipo: AtividadeEntidadeTipo.SAAS_FATURA,
+      entidade_id: invoiceId,
+      acao: AtividadeAcao.SAAS_FATURA_EXCLUIDA,
+      descricao: `Fatura no valor de R$ ${Number(fatura.valor || 0).toFixed(2)} foi excluída pelo administrador.`,
+    }).catch((err: unknown) => {
+      logger.warn({ err, invoiceId }, "[AdminUserService] Falha não impeditiva ao registrar log de histórico da fatura.");
+    });
+
+    return { success: true, message: "Fatura excluída com sucesso." };
+  },
 };
 
 

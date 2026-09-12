@@ -30,14 +30,14 @@ async function register() {
   try {
     console.log(`📡 Registrando Webhook na Efí Pay...`);
     console.log(`URL ALVO: ${webhookUrl}`);
-    console.log(`CHAVE PIX: ${env.EFI_PIX_KEY}`);
+    console.log(`CHAVE Pix: ${env.EFI_PIX_KEY}`);
 
     const params = { chave: env.EFI_PIX_KEY };
     const body = { webhookUrl };
 
     // 1. Registrar Pix (Obrigatório vincular à chave na Efí)
     const pixRes = await efipay.pixConfigWebhook(params, body);
-    console.log("✅ Webhook PIX configurado!", pixRes);
+    console.log("✅ Webhook Pix configurado!", pixRes);
 
     console.log("\n🚀 INFO: O Webhook para Cartão/Boleto (v1) não exige registro global.");
     console.log("   A URL é enviada em cada transação através do campo 'notification_url'.");

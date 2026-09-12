@@ -33,6 +33,7 @@ const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post("/users/:id/impersonate", adminUserController.impersonateUser);
   app.post("/users/:id/dispatch-notification", adminUserController.dispatchNotification);
   app.delete("/users/:id", adminUserController.deleteUser);
+  app.delete("/invoices/:id", adminUserController.deleteInvoice);
 
   // Logs & Atividades & Notificações & Tentativas de Login
   app.get("/login-attempts", adminLoginAttemptsController.getLoginAttempts);

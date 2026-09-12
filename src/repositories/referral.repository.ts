@@ -130,6 +130,13 @@ export const referralRepository = {
             `)
             .eq("indicador_id", indicadorId)
             .order("created_at", { ascending: false });
+    },
+
+    async nullifyFaturaOrigem(faturaId: string) {
+        return supabaseAdmin
+            .from("indicacoes")
+            .update({ fatura_origem_id: null })
+            .eq("fatura_origem_id", faturaId);
     }
 };
 

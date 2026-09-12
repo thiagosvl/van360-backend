@@ -1,4 +1,5 @@
 import { FastifyReply, FastifyRequest } from "fastify";
+import { z } from "zod";
 import { logger } from "../../config/logger.js";
 import { adminUserService } from "../../services/admin/admin-user.service.js";
 import { adminNotificationService } from "../../services/admin/admin-notification.service.js";
@@ -219,6 +220,19 @@ export const adminUserController = {
       const error = err as Error;
       logger.error({ error: error.message }, "[AdminUserController] Erro ao remover indicação.");
       return reply.status(400).send({ error: error.message || "Erro ao remover indicação." });
+    }
+  },
+
+  async deleteInvoice(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+      const result = await adminUserService.deleteInvoice(id);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao excluir fatura.");
+      const status = error.message?.includes("não encontrada") ? 404 : 400;
+      return reply.status(status).send({ error: error.message || "Erro ao excluir fatura." });
     }
   },
 };

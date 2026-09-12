@@ -5,10 +5,11 @@ import { logger } from "../config/logger.js";
 import { UserType } from "../types/enums.js";
 
 const EXEMPTED_ROUTES = [
+  "/api/auth",
   "/api/admin",
   "/api/subscriptions",
   "/api/payments",
-  "/api/usuarios" // Permite atualizar dados do próprio perfil (canal aquisição, pix, etc)
+  "/api/usuarios"
 ];
 
 /**
