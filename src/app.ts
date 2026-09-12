@@ -5,7 +5,7 @@ import fastifyHelmet from "@fastify/helmet";
 import fastifyRateLimit from "@fastify/rate-limit";
 import { fastifyRequestContext } from "@fastify/request-context";
 import * as Sentry from "@sentry/node";
-import Fastify, { FastifyInstance } from "fastify";
+import Fastify, { FastifyInstance, FastifyRequest } from "fastify";
 import routes from "./api/routes.js";
 import { logger } from "./config/logger.js";
 import { env } from "./config/env.js";
