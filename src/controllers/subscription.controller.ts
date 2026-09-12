@@ -1,6 +1,7 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { subscriptionService } from "../services/subscriptions/subscription.service.js";
 import { subscriptionBillingService } from "../services/subscriptions/subscription-billing.service.js";
+import { subscriptionPricingService } from "../services/subscriptions/subscription-pricing.service.js";
 import { subscriptionReferralService } from "../services/subscriptions/subscription-referral.service.js";
 import { logger } from "../config/logger.js";
 import { z } from "zod";
@@ -31,15 +32,13 @@ export const subscriptionController = {
     }
   },
 
-  async listPlans(_request: FastifyRequest, reply: FastifyReply) {
+  async listPlans(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const { getConfig } = await import("../services/configuracao.service.js");
-      const [plans, isPromotionActive] = await Promise.all([
-        subscriptionService.listPlans(),
-        getConfig(ConfigKey.SAAS_PROMOCAO_ATIVA, "false").then(v => v === "true")
-      ]);
+      const authRequest = request as Partial<AuthenticatedRequest>;
+      const targetUserId = authRequest.data_owner_id || authRequest.usuario_id;
+      const result = await subscriptionPricingService.getPlansWithPricing(targetUserId);
 
-      return reply.send({ plans, isPromotionActive });
+      return reply.send(result);
     } catch (err) {
       const error = err as Error;
       logger.error({ err: error }, "[SubscriptionController] Erro ao listar planos.");
@@ -66,34 +65,32 @@ export const subscriptionController = {
 
   async cancelSubscription(request: FastifyRequest, reply: FastifyReply) {
     const authRequest = request as AuthenticatedRequest;
-    const userId = authRequest.usuario_id;
+    const targetUserId = authRequest.data_owner_id || authRequest.usuario_id;
 
     try {
-      await subscriptionService.cancelSubscription(userId);
+      await subscriptionService.cancelSubscription(targetUserId);
       return reply.send({ success: true, message: "Assinatura cancelada com sucesso." });
     } catch (err) {
       const error = err as Error;
-      logger.error({ err: error, userId }, "[SubscriptionController] Erro ao cancelar assinatura.");
+      logger.error({ err: error, userId: targetUserId }, "[SubscriptionController] Erro ao cancelar assinatura.");
       return reply.status(500).send({ error: error.message || "Erro interno ao cancelar assinatura." });
     }
   },
 
   async createCheckout(request: FastifyRequest, reply: FastifyReply) {
     const authRequest = request as AuthenticatedRequest;
-    const userId = authRequest.usuario_id;
+    const targetUserId = authRequest.data_owner_id || authRequest.usuario_id;
 
     try {
       const parsedBody = createInvoiceSchema.parse(request.body);
-      const invoice = await subscriptionBillingService.createInvoice(userId, parsedBody);
+      const invoice = await subscriptionBillingService.createInvoice(targetUserId, parsedBody);
       return reply.status(201).send(invoice);
     } catch (err) {
       if (err instanceof z.ZodError) {
         return reply.status(400).send({ error: "Dados inválidos.", details: err.issues });
       }
       const error = err as Error;
-      logger.error({ err: error, userId }, "[SubscriptionController] Erro ao gerar checkout.");
-      
-      // Se for um erro do gateway ou de negócio, retornamos a mensagem real para o usuário
+      logger.error({ err: error, userId: targetUserId }, "[SubscriptionController] Erro ao gerar checkout.");
       const errorMessage = error.message || "Erro interno ao gerar checkout.";
       return reply.status(400).send({ error: errorMessage });
     }
