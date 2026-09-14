@@ -41,16 +41,45 @@ export const adminUserController = {
   },
 
   async getUserDetails(request: FastifyRequest, reply: FastifyReply) {
-    try {
-      const { id } = request.params as { id: string };
-      const result = await adminUserService.getUserDetails(id);
-      return reply.status(200).send(result);
-    } catch (err: unknown) {
-      const error = err as Error;
-      logger.error({ error: error.message }, "[AdminUserController] Erro ao buscar detalhes.");
-      const status = error.message?.includes("não encontrado") ? 404 : 500;
-      return reply.status(status).send({ error: error.message });
-    }
+    const { id } = request.params as { id: string };
+    const result = await adminUserService.getUserDetails(id);
+    return reply.status(200).send(result);
+  },
+
+  async getUserContratos(request: FastifyRequest, reply: FastifyReply) {
+    const { id } = request.params as { id: string };
+    const result = await adminUserService.getUserContratos(id);
+    return reply.status(200).send(result);
+  },
+
+  async getUserPassageiros(request: FastifyRequest, reply: FastifyReply) {
+    const { id } = request.params as { id: string };
+    const result = await adminUserService.getUserPassageiros(id);
+    return reply.status(200).send(result);
+  },
+
+  async getUserPrePassageiros(request: FastifyRequest, reply: FastifyReply) {
+    const { id } = request.params as { id: string };
+    const result = await adminUserService.getUserPrePassageiros(id);
+    return reply.status(200).send(result);
+  },
+
+  async getUserVeiculos(request: FastifyRequest, reply: FastifyReply) {
+    const { id } = request.params as { id: string };
+    const result = await adminUserService.getUserVeiculos(id);
+    return reply.status(200).send(result);
+  },
+
+  async getUserEscolas(request: FastifyRequest, reply: FastifyReply) {
+    const { id } = request.params as { id: string };
+    const result = await adminUserService.getUserEscolas(id);
+    return reply.status(200).send(result);
+  },
+
+  async getUserReferral(request: FastifyRequest, reply: FastifyReply) {
+    const { id } = request.params as { id: string };
+    const result = await adminUserService.getUserReferral(id);
+    return reply.status(200).send(result);
   },
 
   async updateUser(request: FastifyRequest, reply: FastifyReply) {

@@ -86,39 +86,9 @@ export function resolveDriverContractConfigStatus(
 
 export const adminUserService = {
   async getDashboardStats() {
-    const [
-      motoristasRes,
-      passageirosRes,
-      assinaturasRes,
-      receitaRes,
-      recentUsersRes,
-      canaisRes,
-      contratosRes,
-      motoristasConfigsRes,
-      indicacoesRes,
-    ] = await adminUserRepository.getDashboardStats();
-
-    const totalMotoristas = motoristasRes.count ?? 0;
-    const totalPassageiros = passageirosRes.count ?? 0;
-
-    const statusCounts: Record<string, number> = {};
-    let vitalicios = 0;
-    if (assinaturasRes.data) {
-      for (const sub of assinaturasRes.data) {
-        if (sub.status === SubscriptionStatus.ACTIVE && !sub.data_vencimento) {
-          vitalicios++;
-        } else {
-          statusCounts[sub.status] = (statusCounts[sub.status] || 0) + 1;
-        }
-      }
-    }
-
-    let receitaTotal = 0;
-    if (receitaRes.data) {
-      for (const f of receitaRes.data) {
-        receitaTotal += Number(f.valor) || 0;
-      }
-    }
+    const [kpisRpcRes, recentUsersRes] = await adminUserRepository.getDashboardStats();
+    if (kpisRpcRes.error) throw kpisRpcRes.error;
+    const kpis = (kpisRpcRes.data as any) || {};
 
     const canaisAquisicao: Record<string, number> = {
       [CanalAquisicao.PLAY_STORE]: 0,
@@ -132,6 +102,7 @@ export const adminUserService = {
       [CanalAquisicao.GOOGLE]: 0,
       [CanalAquisicao.OUTROS]: 0,
       NAO_INFORMADO: 0,
+      ...(kpis.canaisAquisicao || {}),
     };
 
     const dispositivosCadastro: Record<string, number> = {
@@ -141,108 +112,7 @@ export const adminUserService = {
       [DispositivoCadastro.WEB_MOBILE_IOS]: 0,
       [DispositivoCadastro.WEB_DESKTOP]: 0,
       NAO_INFORMADO: 0,
-    };
-
-    if (canaisRes.data) {
-      for (const row of canaisRes.data) {
-        const canal = row.canal_aquisicao;
-        if (canal && canaisAquisicao[canal] !== undefined) {
-          canaisAquisicao[canal]++;
-        } else {
-          canaisAquisicao.NAO_INFORMADO++;
-        }
-
-        const disp = (row as any).dispositivo_cadastro;
-        if (disp && dispositivosCadastro[disp] !== undefined) {
-          dispositivosCadastro[disp]++;
-        } else {
-          dispositivosCadastro.NAO_INFORMADO++;
-        }
-      }
-    }
-
-    // PROCESSAMENTO DE STATS DE CONTRATOS DIGITAIS
-    let totalContratos = 0;
-    let contratosAssinados = 0;
-    let contratosPendentes = 0;
-    let contratosSubstituidos = 0;
-    let valorTotalContratos = 0;
-
-    if (contratosRes?.data) {
-      totalContratos = contratosRes.data.length;
-      for (const c of contratosRes.data) {
-        if (c.status === ContratoStatus.ASSINADO) {
-          contratosAssinados++;
-          valorTotalContratos += Number(c.valor_total) || 0;
-        } else if (c.status === ContratoStatus.PENDENTE) {
-          contratosPendentes++;
-        } else if (c.status === ContratoStatus.SUBSTITUIDO) {
-          contratosSubstituidos++;
-        }
-      }
-    }
-
-    const motoristasConfigContrato = {
-      ativo: 0,
-      inativo: 0,
-      nao_configurado: 0,
-    };
-
-    if (motoristasConfigsRes?.data) {
-      for (const m of motoristasConfigsRes.data) {
-        const statusConfig = resolveDriverContractConfigStatus(m.assinatura_digital_url, m.config_contrato);
-
-        if (statusConfig === DriverContractConfigStatus.NAO_CONFIGURADO) {
-          motoristasConfigContrato.nao_configurado++;
-        } else if (statusConfig === DriverContractConfigStatus.ATIVO) {
-          motoristasConfigContrato.ativo++;
-        } else {
-          motoristasConfigContrato.inativo++;
-        }
-      }
-    }
-
-    let totalIndicacoes = 0;
-    let indicacoesConcluidas = 0;
-    let indicacoesPendentes = 0;
-
-    if (indicacoesRes?.data) {
-      totalIndicacoes = indicacoesRes.data.length;
-      for (const ind of indicacoesRes.data) {
-        if (ind.status === IndicacaoStatus.COMPLETED) {
-          indicacoesConcluidas++;
-        } else if (ind.status === IndicacaoStatus.PENDING) {
-          indicacoesPendentes++;
-        }
-      }
-    }
-
-    const taxaConversaoIndicacao = totalIndicacoes > 0 ? Math.round((indicacoesConcluidas / totalIndicacoes) * 100) : 0;
-    const diasBonusConcedidos = indicacoesConcluidas * 30;
-    const motoristasIndicadosCount = canaisAquisicao[CanalAquisicao.INDICACAO] || totalIndicacoes;
-
-    const indicacoesStats = {
-      total: totalIndicacoes,
-      concluidas: indicacoesConcluidas,
-      pendentes: indicacoesPendentes,
-      taxaConversao: taxaConversaoIndicacao,
-      diasBonusConcedidos,
-      motoristasIndicados: motoristasIndicadosCount,
-    };
-
-    const motoristasConfiguradosCount = motoristasConfigContrato.ativo + motoristasConfigContrato.inativo;
-
-    const contratosStats = {
-      totalContratos,
-      contratosAssinados,
-      contratosPendentes,
-      contratosSubstituidos,
-      valorTotalContratos,
-      motoristasConfigurados: motoristasConfiguradosCount,
-      motoristasAtivos: motoristasConfigContrato.ativo,
-      motoristasPausados: motoristasConfigContrato.inativo,
-      motoristasNaoConfigurados: motoristasConfigContrato.nao_configurado,
-      motoristasConfig: motoristasConfigContrato,
+      ...(kpis.dispositivosCadastro || {}),
     };
 
     let evolutionStatus: string = EvolutionConnectionStatus.UNKNOWN;
@@ -256,19 +126,37 @@ export const adminUserService = {
     }
 
     return {
-      totalMotoristas,
-      totalPassageiros,
-      receitaTotal,
-      assinaturas: {
-        trial: statusCounts[SubscriptionStatus.TRIAL] || 0,
-        active: statusCounts[SubscriptionStatus.ACTIVE] || 0,
-        vitalicio: vitalicios,
-        past_due: statusCounts[SubscriptionStatus.PAST_DUE] || 0,
-        expired: statusCounts[SubscriptionStatus.EXPIRED] || 0,
-        canceled: statusCounts[SubscriptionStatus.CANCELED] || 0,
+      totalMotoristas: kpis.totalMotoristas || 0,
+      totalPassageiros: kpis.totalPassageiros || 0,
+      receitaTotal: Number(kpis.receitaTotal) || 0,
+      assinaturas: kpis.assinaturas || {
+        trial: 0,
+        active: 0,
+        vitalicio: 0,
+        past_due: 0,
+        expired: 0,
+        canceled: 0,
       },
-      contratosStats,
-      indicacoesStats,
+      contratosStats: kpis.contratosStats || {
+        totalContratos: 0,
+        contratosAssinados: 0,
+        contratosPendentes: 0,
+        contratosSubstituidos: 0,
+        valorTotalContratos: 0,
+        motoristasConfigurados: 0,
+        motoristasAtivos: 0,
+        motoristasPausados: 0,
+        motoristasNaoConfigurados: 0,
+        motoristasConfig: { ativo: 0, inativo: 0, nao_configurado: 0 },
+      },
+      indicacoesStats: kpis.indicacoesStats || {
+        total: 0,
+        concluidas: 0,
+        pendentes: 0,
+        taxaConversao: 0,
+        diasBonusConcedidos: 0,
+        motoristasIndicados: 0,
+      },
       recentUsers: recentUsersRes.data || [],
       canaisAquisicao,
       dispositivosCadastro,
@@ -321,20 +209,88 @@ export const adminUserService = {
 
   async getUserDetails(userId: string) {
     const [
-      [userReq, assinaturaReq, faturasReq, planosReq, veiculosReq, escolasReq, passageirosReq, prePassageirosReq, contratosReq, pushTokensReq],
-      passageirosList,
-      prePassageirosList,
-      veiculosList,
-      escolasList,
-      referralSummary,
-      referralWithIndicadorRes,
-      referredUsersRes,
-    ] = await Promise.all([
-      adminUserRepository.getUserDetails(userId),
-      adminPassageiroService.getPassageirosByUserId(userId),
-      adminPassageiroService.getPrePassageirosByUserId(userId),
-      adminVeiculoService.getVeiculosByUserId(userId),
-      adminEscolaService.getEscolasByUserId(userId),
+      userReq,
+      assinaturaReq,
+      faturasReq,
+      kpisRpcRes,
+      pushTokensReq,
+    ] = await adminUserRepository.getUserDetails(userId);
+
+    if (userReq.error || !userReq.data) throw new Error("Usuário não encontrado.");
+
+    const userData = userReq.data;
+    const statusConfiguracaoContrato = resolveDriverContractConfigStatus(
+      userData.assinatura_digital_url,
+      userData.config_contrato
+    );
+
+    const kpisData = (kpisRpcRes?.data as any) || {};
+
+    const tokensList = pushTokensReq?.data || [];
+    const dispositivos: DispositivosUsuarioResumoDTO = {
+      total: tokensList.length,
+      itens: tokensList.map((t: any) => ({
+        id: t.id,
+        plataforma: t.platform,
+        criado_em: t.created_at,
+        atualizado_em: t.updated_at,
+      })),
+    };
+
+    const planos = await adminUserRepository.getPlanos();
+
+    return {
+      user: userData,
+      assinatura: assinaturaReq.data,
+      faturas: faturasReq.data || [],
+      planos: planos.data || [],
+      kpis: {
+        veiculosCount: kpisData.veiculosCount ?? 0,
+        escolasCount: kpisData.escolasCount ?? 0,
+        passageirosCount: kpisData.passageirosCount ?? 0,
+        solicitacoesPendentesCount: kpisData.solicitacoesPendentesCount ?? 0,
+        contratosCount: kpisData.contratosCount ?? 0,
+        contratosAssinadosCount: kpisData.contratosAssinadosCount ?? 0,
+        contratosPendentesCount: kpisData.contratosPendentesCount ?? 0,
+        valorTotalContratos: Number(kpisData.valorTotalContratos) || 0,
+        statusConfiguracaoContrato,
+      },
+      referralSummary: null,
+      indicador: null,
+      referredUsers: [],
+      passageiros: [],
+      prePassageiros: [],
+      veiculos: [],
+      escolas: [],
+      contratos: [],
+      dispositivos,
+    };
+  },
+
+  async getUserContratos(userId: string) {
+    const { data, error } = await adminUserRepository.getUserContratos(userId);
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getUserPassageiros(userId: string) {
+    return adminPassageiroService.getPassageirosByUserId(userId);
+  },
+
+  async getUserPrePassageiros(userId: string) {
+    return adminPassageiroService.getPrePassageirosByUserId(userId);
+  },
+
+  async getUserVeiculos(userId: string) {
+    return adminVeiculoService.getVeiculosByUserId(userId);
+  },
+
+  async getUserEscolas(userId: string) {
+    return adminEscolaService.getEscolasByUserId(userId);
+  },
+
+  async getUserReferral(userId: string) {
+    const [referralSummary, referralWithIndicadorRes, referredUsersRes] = await Promise.all([
       subscriptionReferralService.getReferralSummary(userId).catch(() => ({
         total: 0,
         completed: 0,
@@ -350,52 +306,11 @@ export const adminUserService = {
       referralRepository.getReferredUsersByIndicadorId(userId).catch(() => ({ data: [] })),
     ]);
 
-    if (userReq.error || !userReq.data) throw new Error("Usuário não encontrado.");
-
-    const userData = userReq.data;
-    const statusConfiguracaoContrato = resolveDriverContractConfigStatus(
-      userData.assinatura_digital_url,
-      userData.config_contrato
-    );
-
-    const contratosList = contratosReq.data || [];
-    const contratosAssinadosCount = contratosList.filter((c: any) => c.status === ContratoStatus.ASSINADO).length;
-    const contratosPendentesCount = contratosList.filter((c: any) => c.status === ContratoStatus.PENDENTE).length;
-    const valorTotalContratos = contratosList
-      .filter((c: any) => c.status === ContratoStatus.ASSINADO)
-      .reduce((acc: number, c: any) => acc + (Number(c.valor_total) || 0), 0);
-
     const referralData = referralWithIndicadorRes?.data as unknown as ReferralWithIndicadorRow | null;
     const indicadorData = referralData?.indicador;
     const referredUsersList = (referredUsersRes?.data || []) as unknown as ReferredUserRow[];
 
-    const tokensList = pushTokensReq?.data || [];
-    const dispositivos: DispositivosUsuarioResumoDTO = {
-      total: tokensList.length,
-      itens: tokensList.map((t) => ({
-        id: t.id,
-        plataforma: t.platform,
-        criado_em: t.created_at,
-        atualizado_em: t.updated_at,
-      })),
-    };
-
     return {
-      user: userData,
-      assinatura: assinaturaReq.data,
-      faturas: faturasReq.data || [],
-      planos: planosReq.data || [],
-      kpis: {
-        veiculosCount: veiculosReq.count ?? 0,
-        escolasCount: escolasReq.count ?? 0,
-        passageirosCount: passageirosReq.count ?? 0,
-        solicitacoesPendentesCount: prePassageirosReq.count ?? 0,
-        contratosCount: contratosList.length,
-        contratosAssinadosCount,
-        contratosPendentesCount,
-        valorTotalContratos,
-        statusConfiguracaoContrato,
-      },
       referralSummary,
       indicador: (referralData && indicadorData) ? {
         id: indicadorData.id,
@@ -413,12 +328,6 @@ export const adminUserService = {
         created_at: r.created_at,
         indicado: r.indicado,
       })),
-      passageiros: passageirosList,
-      prePassageiros: prePassageirosList,
-      veiculos: veiculosList,
-      escolas: escolasList,
-      contratos: contratosList,
-      dispositivos,
     };
   },
 

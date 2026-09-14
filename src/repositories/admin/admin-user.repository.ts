@@ -4,41 +4,13 @@ import { UserType, SubscriptionInvoiceStatus, SubscriptionStatus, SUBSCRIPTION_V
 export const adminUserRepository = {
   async getDashboardStats() {
     return Promise.all([
-      supabaseAdmin
-        .from("usuarios")
-        .select("id, ativo", { count: "exact", head: true })
-        .eq("tipo", UserType.MOTORISTA),
-      supabaseAdmin
-        .from("passageiros")
-        .select("id", { count: "exact", head: true })
-        .eq("ativo", true),
-      supabaseAdmin
-        .from("assinaturas")
-        .select("status, data_vencimento"),
-      supabaseAdmin
-        .from("assinatura_faturas")
-        .select("valor, status")
-        .eq("status", SubscriptionInvoiceStatus.PAID),
+      (supabaseAdmin.rpc as any)("get_admin_dashboard_kpis"),
       supabaseAdmin
         .from("usuarios")
         .select("id, nome, email, telefone, created_at, tipo, assinaturas(status, data_vencimento)")
         .eq("tipo", UserType.MOTORISTA)
         .order("created_at", { ascending: false })
         .limit(10),
-      supabaseAdmin
-        .from("usuarios")
-        .select("canal_aquisicao, dispositivo_cadastro")
-        .eq("tipo", UserType.MOTORISTA),
-      supabaseAdmin
-        .from("contratos")
-        .select("id, status, valor_total"),
-      supabaseAdmin
-        .from("usuarios")
-        .select("config_contrato, assinatura_digital_url")
-        .eq("tipo", UserType.MOTORISTA),
-      supabaseAdmin
-        .from("indicacoes")
-        .select("id, status, indicador_id, indicado_id"),
     ]);
   },
 
@@ -109,40 +81,31 @@ export const adminUserRepository = {
         .eq("usuario_id", userId)
         .order("created_at", { ascending: false })
         .limit(20),
-      supabaseAdmin
-        .from("planos")
-        .select("id, nome, identificador, valor, valor_promocional, ativo")
-        .eq("ativo", true)
-        .order("valor", { ascending: true }),
-      supabaseAdmin
-        .from("veiculos")
-        .select("id", { count: "exact", head: true })
-        .eq("usuario_id", userId),
-      supabaseAdmin
-        .from("escolas")
-        .select("id", { count: "exact", head: true })
-        .eq("usuario_id", userId),
-      supabaseAdmin
-        .from("passageiros")
-        .select("id", { count: "exact", head: true })
-        .eq("usuario_id", userId),
-      supabaseAdmin
-        .from("pre_passageiros")
-        .select("id", { count: "exact", head: true })
-        .eq("usuario_id", userId),
-      supabaseAdmin
-        .from("contratos")
-        .select(
-          "id, usuario_id, passageiro_id, status, provider, valor_total, valor_parcela, qtd_parcelas, minuta_url, contrato_final_url, created_at, assinado_em, passageiros(id, nome, responsaveis:passageiro_responsaveis(tipo, parentesco, responsavel:responsaveis(id, nome, cpf, telefone, email)))"
-        )
-        .eq("usuario_id", userId)
-        .order("created_at", { ascending: false }),
+      (supabaseAdmin.rpc as any)("get_admin_user_kpis", { p_user_id: userId }),
       supabaseAdmin
         .from("usuario_push_tokens")
         .select("id, platform, created_at, updated_at")
         .eq("user_id", userId)
         .order("updated_at", { ascending: false }),
     ]);
+  },
+
+  async getUserContratos(userId: string) {
+    return supabaseAdmin
+      .from("contratos")
+      .select(
+        "id, usuario_id, passageiro_id, status, provider, valor_total, valor_parcela, qtd_parcelas, minuta_url, contrato_final_url, created_at, assinado_em, passageiros(id, nome, responsaveis:passageiro_responsaveis(tipo, parentesco, responsavel:responsaveis(id, nome, cpf, telefone, email)))"
+      )
+      .eq("usuario_id", userId)
+      .order("created_at", { ascending: false });
+  },
+
+  async getPlanos() {
+    return supabaseAdmin
+      .from("planos")
+      .select("id, nome, identificador, valor, valor_promocional, ativo")
+      .eq("ativo", true)
+      .order("valor", { ascending: true });
   },
 
   async getSubscriptionForUser(userId: string) {
