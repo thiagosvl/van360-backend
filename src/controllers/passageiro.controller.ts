@@ -37,9 +37,9 @@ export const passageiroController = {
 
     const data = updatePassageiroSchema.parse(request.body);
     
-    await passageiroService.updatePassageiro(id, data, targetOwnerId, assignedVeiculoId);
+    const result = await passageiroService.updatePassageiro(id, data, targetOwnerId, assignedVeiculoId);
     
-    return reply.status(200).send({ success: true });
+    return reply.status(200).send(result);
   },
 
   delete: async (request: FastifyRequest, reply: FastifyReply) => {
