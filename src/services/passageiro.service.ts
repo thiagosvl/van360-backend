@@ -400,7 +400,8 @@ const finalizePreCadastro = async (
     // 1. Buscar Pré-Cadastro
     const { data: pre, error } = await prePassageiroRepository.getById(prePassageiroId, usuarioId);
 
-    if (error || !pre) throw new AppError("Pré-cadastro não encontrado.", 404);
+    if (error) throw error;
+    if (!pre) throw new AppError("Pré-cadastro não encontrado.", 404);
 
     const responsavelPrincipal = {
         nome: data.responsavel_principal?.nome || pre.nome_responsavel || "",

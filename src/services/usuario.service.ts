@@ -10,7 +10,11 @@ import { calculateAuditDiff } from "../utils/audit-diff.util.js";
 export async function getUsuarioData(usuarioId: string) {
   const { data: usuario, error } = await userRepository.getProfileData(usuarioId);
 
-  if (error || !usuario) {
+  if (error) {
+    throw error;
+  }
+
+  if (!usuario) {
     throw new AppError("Usuário não encontrado.", 404);
   }
 

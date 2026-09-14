@@ -28,12 +28,17 @@ export async function verifySupabaseJWT(
     }
 
     const userId = user.id;
+    request.user = {
+      ...user,
+      id: user.id,
+      email: user.email,
+    };
+    request.usuario_id = userId;
 
     const { data: profile, error: profileError } = await authRepository.getAuthProfile(userId);
 
     if (profileError) {
-      console.error("[Auth] Database error during verification:", profileError.message);
-      return reply.status(500).send({ error: "Erro interno ao validar perfil", code: "AUTH_DB_ERROR" });
+      throw profileError;
     }
 
     if (!profile) {

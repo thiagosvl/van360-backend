@@ -3,9 +3,7 @@ import { subscriptionService } from "../services/subscriptions/subscription.serv
 import { subscriptionBillingService } from "../services/subscriptions/subscription-billing.service.js";
 import { subscriptionPricingService } from "../services/subscriptions/subscription-pricing.service.js";
 import { subscriptionReferralService } from "../services/subscriptions/subscription-referral.service.js";
-import { logger } from "../config/logger.js";
-import { z } from "zod";
-import { ConfigKey } from "../types/enums.js";
+import { AppError } from "../errors/AppError.js";
 import { createInvoiceSchema } from "../types/dtos/subscription.dto.js";
 
 interface AuthenticatedRequest extends FastifyRequest {
@@ -17,33 +15,21 @@ export const subscriptionController = {
     const authRequest = request as AuthenticatedRequest;
     const targetUserId = authRequest.data_owner_id || authRequest.usuario_id;
 
-    try {
-      const subscription = await subscriptionService.getOrCreateSubscription(targetUserId);
+    const subscription = await subscriptionService.getOrCreateSubscription(targetUserId);
 
-      if (!subscription) {
-        return reply.status(404).send({ error: "Assinatura não encontrada." });
-      }
-
-      return reply.send(subscription);
-    } catch (err) {
-      const error = err as Error;
-      logger.error({ err: error, targetUserId }, "[SubscriptionController] Erro ao buscar assinatura.");
-      return reply.status(500).send({ error: "Erro interno ao buscar assinatura." });
+    if (!subscription) {
+      throw new AppError("Assinatura não encontrada.", 404);
     }
+
+    return reply.send(subscription);
   },
 
   async listPlans(request: FastifyRequest, reply: FastifyReply) {
-    try {
-      const authRequest = request as Partial<AuthenticatedRequest>;
-      const targetUserId = authRequest.data_owner_id || authRequest.usuario_id;
-      const result = await subscriptionPricingService.getPlansWithPricing(targetUserId);
+    const authRequest = request as Partial<AuthenticatedRequest>;
+    const targetUserId = authRequest.data_owner_id || authRequest.usuario_id;
+    const result = await subscriptionPricingService.getPlansWithPricing(targetUserId);
 
-      return reply.send(result);
-    } catch (err) {
-      const error = err as Error;
-      logger.error({ err: error }, "[SubscriptionController] Erro ao listar planos.");
-      return reply.status(500).send({ error: "Erro interno ao listar planos." });
-    }
+    return reply.send(result);
   },
 
   async myInvoices(request: FastifyRequest, reply: FastifyReply) {
@@ -53,101 +39,55 @@ export const subscriptionController = {
     const page = query.page ? parseInt(query.page, 10) : undefined;
     const limit = query.limit ? parseInt(query.limit, 10) : undefined;
 
-    try {
-      const invoices = await subscriptionBillingService.getInvoices(userId, page, limit);
-      return reply.send(invoices);
-    } catch (err) {
-      const error = err as Error;
-      logger.error({ err: error, userId }, "[SubscriptionController] Erro ao buscar faturas.");
-      return reply.status(500).send({ error: "Erro interno ao buscar faturas." });
-    }
+    const invoices = await subscriptionBillingService.getInvoices(userId, page, limit);
+    return reply.send(invoices);
   },
 
   async cancelSubscription(request: FastifyRequest, reply: FastifyReply) {
     const authRequest = request as AuthenticatedRequest;
     const targetUserId = authRequest.data_owner_id || authRequest.usuario_id;
 
-    try {
-      await subscriptionService.cancelSubscription(targetUserId);
-      return reply.send({ success: true, message: "Assinatura cancelada com sucesso." });
-    } catch (err) {
-      const error = err as Error;
-      logger.error({ err: error, userId: targetUserId }, "[SubscriptionController] Erro ao cancelar assinatura.");
-      return reply.status(500).send({ error: error.message || "Erro interno ao cancelar assinatura." });
-    }
+    await subscriptionService.cancelSubscription(targetUserId);
+    return reply.send({ success: true, message: "Assinatura cancelada com sucesso." });
   },
 
   async createCheckout(request: FastifyRequest, reply: FastifyReply) {
     const authRequest = request as AuthenticatedRequest;
     const targetUserId = authRequest.data_owner_id || authRequest.usuario_id;
 
-    try {
-      const parsedBody = createInvoiceSchema.parse(request.body);
-      const invoice = await subscriptionBillingService.createInvoice(targetUserId, parsedBody);
-      return reply.status(201).send(invoice);
-    } catch (err) {
-      if (err instanceof z.ZodError) {
-        return reply.status(400).send({ error: "Dados inválidos.", details: err.issues });
-      }
-      const error = err as Error;
-      logger.error({ err: error, userId: targetUserId }, "[SubscriptionController] Erro ao gerar checkout.");
-      const errorMessage = error.message || "Erro interno ao gerar checkout.";
-      return reply.status(400).send({ error: errorMessage });
-    }
+    const parsedBody = createInvoiceSchema.parse(request.body);
+    const invoice = await subscriptionBillingService.createInvoice(targetUserId, parsedBody);
+    return reply.status(201).send(invoice);
   },
 
   async getReferralStatus(request: FastifyRequest, reply: FastifyReply) {
     const authRequest = request as AuthenticatedRequest;
     const userId = authRequest.usuario_id;
 
-    try {
-      const summary = await subscriptionReferralService.getReferralSummary(userId);
-      return reply.send(summary);
-    } catch (err) {
-      const error = err as Error;
-      logger.error({ err: error, userId }, "[SubscriptionController] Erro ao buscar indicações.");
-      return reply.status(500).send({ error: "Erro interno ao buscar indicações." });
-    }
+    const summary = await subscriptionReferralService.getReferralSummary(userId);
+    return reply.send(summary);
   },
 
   async listPaymentMethods(request: FastifyRequest, reply: FastifyReply) {
     const authRequest = request as AuthenticatedRequest;
     const userId = authRequest.usuario_id;
-    try {
-      const methods = await subscriptionBillingService.listPaymentMethods(userId);
-      return reply.send(methods);
-    } catch (err) {
-      const error = err as Error;
-      logger.error({ err: error, userId }, "[SubscriptionController] Erro ao buscar métodos de pagamento.");
-      return reply.status(500).send({ error: "Erro ao buscar métodos de pagamento." });
-    }
+    const methods = await subscriptionBillingService.listPaymentMethods(userId);
+    return reply.send(methods);
   },
 
   async setDefaultPaymentMethod(request: FastifyRequest, reply: FastifyReply) {
     const userId = request.usuario_id!;
     const { id } = request.params as { id: string };
 
-    try {
-      await subscriptionBillingService.updateDefaultPaymentMethod(userId, id);
-      return reply.send({ success: true, message: "Método de pagamento padrão atualizado." });
-    } catch (err) {
-      const error = err as Error;
-      logger.error({ err: error, userId, id }, "[SubscriptionController] Erro ao definir método de pagamento padrão.");
-      return reply.status(500).send({ error: "Erro ao definir método de pagamento padrão." });
-    }
+    await subscriptionBillingService.updateDefaultPaymentMethod(userId, id);
+    return reply.send({ success: true, message: "Método de pagamento padrão atualizado." });
   },
 
   async deletePaymentMethod(request: FastifyRequest, reply: FastifyReply) {
     const userId = request.usuario_id!;
     const { id } = request.params as { id: string };
 
-    try {
-      await subscriptionBillingService.deletePaymentMethod(userId, id);
-      return reply.send({ success: true, message: "Método de pagamento removido." });
-    } catch (err) {
-      const error = err as Error;
-      logger.error({ err: error, userId, id }, "[SubscriptionController] Erro ao deletar método de pagamento.");
-      return reply.status(500).send({ error: "Erro ao deletar método de pagamento." });
-    }
+    await subscriptionBillingService.deletePaymentMethod(userId, id);
+    return reply.send({ success: true, message: "Método de pagamento removido." });
   },
 };

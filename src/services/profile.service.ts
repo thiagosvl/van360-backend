@@ -2,10 +2,10 @@ import { userRepository } from "../repositories/user.repository.js";
 import { AppError } from "../errors/AppError.js";
 
 export async function getUserProfile(userId: string) {
-    const { data, error } = await userRepository.getById(userId).catch(() => ({ data: null, error: true }));
+    const { data, error } = await userRepository.getById(userId);
 
     if (error) {
-        throw new AppError("Erro ao buscar perfil.", 500);
+        throw error;
     }
 
     if (!data) {

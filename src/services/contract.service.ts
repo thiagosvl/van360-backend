@@ -84,8 +84,11 @@ class ContractService {
   private async getUsuarioByAuthId(authId: string) {
     const { data: usuario, error } = await userRepository.getById(authId);
 
-    if (error || !usuario) {
-      logger.error({ authId, error }, 'Usuário não encontrado');
+    if (error) {
+      throw error;
+    }
+
+    if (!usuario) {
       throw new AppError('Usuário não encontrado', 404);
     }
     return usuario;
@@ -104,11 +107,10 @@ class ContractService {
 
     logger.info({ usuarioId: usuario.id, passageiroId, providerName }, 'Criando contrato');
 
-    // 2. Buscar dados completos do passageiro no repositório
-    const passageiro = await passageiroRepository.getByIdCompleto(passageiroId, usuarioId).catch((passageiroError) => {
-      logger.error({ passageiroError }, 'Aluno não encontrado');
+    const passageiro = await passageiroRepository.getByIdCompleto(passageiroId, usuarioId);
+    if (!passageiro) {
       throw new AppError('Aluno não encontrado', 404);
-    });
+    }
 
     const respInfo = _getResponsavelInfoFromPassageiro(passageiro);
 
