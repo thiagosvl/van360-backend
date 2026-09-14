@@ -31,6 +31,8 @@ export interface DadosContrato {
   ano: number;
   dataInicio: string; // YYYY-MM-DD
   dataFim: string; // YYYY-MM-DD
+  horarioEntrada?: string | null;
+  horarioSaida?: string | null;
   dataInicioCobranca?: string; // YYYY-MM-DD
   dataFimCobranca?: string; // YYYY-MM-DD
   valorTotal: number;

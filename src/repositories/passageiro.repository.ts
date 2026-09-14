@@ -117,7 +117,7 @@ export const passageiroRepository = {
     let query = supabaseAdmin
       .from("passageiros")
       .select(`
-        id, usuario_id, nome, ativo, isento, data_nascimento, genero, modalidade, periodo, turma, nome_professor, observacoes, valor_cobranca, dia_vencimento, data_inicio_cobranca, data_fim_cobranca, data_inicio_transporte, data_fim_transporte, enviar_notificacoes, escola_id, veiculo_id, created_at, updated_at,
+        id, usuario_id, nome, ativo, isento, data_nascimento, genero, modalidade, periodo, turma, nome_professor, observacoes, valor_cobranca, dia_vencimento, data_inicio_cobranca, data_fim_cobranca, data_inicio_transporte, data_fim_transporte, horario_entrada, horario_saida, enviar_notificacoes, escola_id, veiculo_id, created_at, updated_at,
         escola:escolas(id, nome),
         veiculo:veiculos(id, placa, modelo),
         contratos(id, status, provider, token_acesso),
@@ -375,12 +375,8 @@ export const passageiroRepository = {
 
     if (existing) {
       if (existing.cpf && data.cpf && data.cpf !== existing.cpf) {
-        const cpfDigits = String(existing.cpf);
-        const cpfMasked = cpfDigits.length >= 11
-          ? `***.***.${cpfDigits.slice(6, 9)}-${cpfDigits.slice(9)}`
-          : `final ***-${cpfDigits.slice(-2)}`;
         throw new AppError(
-          `Este telefone já está cadastrado para ${existing.nome} (CPF ${cpfMasked}). Verifique se o telefone digitado está correto.`,
+          "Telefone já cadastrado com outro CPF. Verifique os dados.",
           409
         );
       }

@@ -5,6 +5,7 @@ import { CreatePrePassageiroDTO } from "../types/dtos/pre-passageiro.dto.js";
 import { prePassageiroRepository } from "../repositories/pre-passageiro.repository.js";
 
 import { userRepository } from "../repositories/user.repository.js";
+import { AppError } from "../errors/AppError.js";
 
 export const prePassageiroService = {
   async listPrePassageiros(usuarioId: string, search?: string) {
@@ -34,6 +35,10 @@ export const prePassageiroService = {
     const { data: targetUser } = await userRepository.getById(payload.usuario_id);
     const targetOwnerId = targetUser?.conta_pai_id || payload.usuario_id;
 
+    if (payload.horario_entrada && payload.horario_saida && payload.horario_saida <= payload.horario_entrada) {
+      throw new AppError("Horário de saída deve ser maior que o horário de entrada", 400);
+    }
+
     const prePassageiroData = {
       usuario_id: targetOwnerId,
       nome: cleanString(payload.nome, true),
@@ -61,6 +66,9 @@ export const prePassageiroService = {
       genero: payload.genero || null,
       parentesco_responsavel: payload.parentesco_responsavel || null,
       data_inicio_transporte: payload.data_inicio_transporte ? toPersistenceString(payload.data_inicio_transporte) : null,
+      data_fim_transporte: payload.data_fim_transporte ? toPersistenceString(payload.data_fim_transporte) : null,
+      horario_entrada: payload.horario_entrada || null,
+      horario_saida: payload.horario_saida || null,
       data_nascimento: payload.data_nascimento ? toPersistenceString(payload.data_nascimento) : null,
       dispositivo_cadastro: payload.dispositivo_cadastro || null,
       metadados_cadastro: payload.metadados_cadastro || {},

@@ -1243,6 +1243,8 @@ export type Database = {
           enviar_notificacoes: boolean
           escola_id: string
           genero: Database["public"]["Enums"]["genero_enum"] | null
+          horario_entrada: string | null
+          horario_saida: string | null
           id: string
           isento: boolean
           modalidade: Database["public"]["Enums"]["modalidade_enum"] | null
@@ -1269,6 +1271,8 @@ export type Database = {
           enviar_notificacoes?: boolean
           escola_id: string
           genero?: Database["public"]["Enums"]["genero_enum"] | null
+          horario_entrada?: string | null
+          horario_saida?: string | null
           id?: string
           isento?: boolean
           modalidade?: Database["public"]["Enums"]["modalidade_enum"] | null
@@ -1295,6 +1299,8 @@ export type Database = {
           enviar_notificacoes?: boolean
           escola_id?: string
           genero?: Database["public"]["Enums"]["genero_enum"] | null
+          horario_entrada?: string | null
+          horario_saida?: string | null
           id?: string
           isento?: boolean
           modalidade?: Database["public"]["Enums"]["modalidade_enum"] | null
@@ -1382,6 +1388,8 @@ export type Database = {
           escola_id: string | null
           estado: string | null
           genero: Database["public"]["Enums"]["genero_enum"] | null
+          horario_entrada: string | null
+          horario_saida: string | null
           id: string
           logradouro: string | null
           modalidade: Database["public"]["Enums"]["modalidade_enum"] | null
@@ -1419,6 +1427,8 @@ export type Database = {
           escola_id?: string | null
           estado?: string | null
           genero?: Database["public"]["Enums"]["genero_enum"] | null
+          horario_entrada?: string | null
+          horario_saida?: string | null
           id?: string
           logradouro?: string | null
           modalidade?: Database["public"]["Enums"]["modalidade_enum"] | null
@@ -1456,6 +1466,8 @@ export type Database = {
           escola_id?: string | null
           estado?: string | null
           genero?: Database["public"]["Enums"]["genero_enum"] | null
+          horario_entrada?: string | null
+          horario_saida?: string | null
           id?: string
           logradouro?: string | null
           modalidade?: Database["public"]["Enums"]["modalidade_enum"] | null

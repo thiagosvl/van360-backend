@@ -116,6 +116,8 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO> | UpdatePassa
     }
     if (data.data_inicio_transporte !== undefined) prepared.data_inicio_transporte = data.data_inicio_transporte ? toPersistenceString(data.data_inicio_transporte) : null;
     if (data.data_fim_transporte !== undefined) prepared.data_fim_transporte = data.data_fim_transporte ? toPersistenceString(data.data_fim_transporte) : null;
+    if (data.horario_entrada !== undefined) prepared.horario_entrada = data.horario_entrada ? cleanString(data.horario_entrada, true) : null;
+    if (data.horario_saida !== undefined) prepared.horario_saida = data.horario_saida ? cleanString(data.horario_saida, true) : null;
     if (data.data_inicio_cobranca !== undefined) prepared.data_inicio_cobranca = data.data_inicio_cobranca ? toPersistenceString(data.data_inicio_cobranca) : null;
     if (data.data_fim_cobranca !== undefined) prepared.data_fim_cobranca = data.data_fim_cobranca ? toPersistenceString(data.data_fim_cobranca) : null;
     if (data.enviar_notificacoes !== undefined) prepared.enviar_notificacoes = data.enviar_notificacoes;
@@ -124,7 +126,10 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO> | UpdatePassa
     if (data.ativo !== undefined) prepared.ativo = data.ativo;
     if (data.isento !== undefined) prepared.isento = data.isento;
 
-    // Regra de Negócio: Se o passageiro for isento, zera/anula todos os campos de cobrança
+    if (prepared.horario_entrada && prepared.horario_saida && prepared.horario_saida <= prepared.horario_entrada) {
+        throw new AppError("Horário de saída deve ser maior que o horário de entrada", 400);
+    }
+
     if (prepared.isento === true) {
         prepared.valor_cobranca = null;
         prepared.dia_vencimento = null;
@@ -218,6 +223,13 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO, targetOwn
     if (!estadoAnterior) throw new AppError("Aluno não encontrado", 404);
 
     const passageiroData = _preparePassageiroData(data, undefined, true);
+
+    const entradaFinal = passageiroData.horario_entrada !== undefined ? passageiroData.horario_entrada : estadoAnterior.horario_entrada;
+    const saidaFinal = passageiroData.horario_saida !== undefined ? passageiroData.horario_saida : estadoAnterior.horario_saida;
+
+    if (entradaFinal && saidaFinal && saidaFinal <= entradaFinal) {
+        throw new AppError("Horário de saída deve ser maior que o horário de entrada", 400);
+    }
 
     if (Object.keys(passageiroData).length > 0) {
         const { error } = await passageiroRepository.update(id, passageiroData);

@@ -87,6 +87,8 @@ export const createPassageiroSchema = z.object({
   }, { message: "Data de nascimento não pode ser no futuro" }),
   turma: optionalString,
   nome_professor: optionalString,
+  horario_entrada: optionalString,
+  horario_saida: optionalString,
   data_inicio_transporte: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
     if (v === undefined) return undefined;
     if (v === null || v === "") return null;
