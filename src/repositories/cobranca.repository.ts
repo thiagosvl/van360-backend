@@ -236,7 +236,7 @@ export const cobrancaRepository = {
         const hasVeiculo = isValidFilterValue(veiculoId);
         let query = supabaseAdmin
             .from("cobrancas")
-            .select(hasVeiculo ? "*, passageiro:passageiros!inner(veiculo_id)" : "*")
+            .select(hasVeiculo ? "id, status, valor, passageiro_id, data_vencimento, passageiro:passageiros!inner(veiculo_id)" : "id, status, valor, passageiro_id, data_vencimento")
             .eq("usuario_id", usuarioId)
             .gte("data_vencimento", start)
             .lte("data_vencimento", end);
