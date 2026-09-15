@@ -248,10 +248,72 @@ export class InHouseContractProvider implements ContractProvider {
 
     let currentY = 800;
     const margin = 50;
-    const width = 495; // Largura útil
+    const width = 495;
 
-    page.drawText('CONTRATO DE PRESTAÇÃO DE SERVIÇO DE TRANSPORTE', { x: margin, y: 770, size: fontSizeTitle, font: fontBold });
-    currentY = 730;
+    if (dados.logoCondutorUrl) {
+      try {
+        const imageBuffer = await resolveImageBuffer(dados.logoCondutorUrl);
+        if (imageBuffer) {
+          const logoImage = await embedImageSafely(pdfDoc, imageBuffer);
+          if (logoImage) {
+            const { width: imgW, height: imgH } = logoImage;
+            const maxWidth = 80;
+            const maxHeight = 45;
+            const scale = Math.min(maxWidth / imgW, maxHeight / imgH, 1);
+            const finalWidth = imgW * scale;
+            const finalHeight = imgH * scale;
+
+            const headerTopY = 790;
+            const headerHeight = Math.max(finalHeight, 38);
+            const headerBottomY = headerTopY - headerHeight;
+
+            const logoY = headerBottomY + (headerHeight - finalHeight) / 2;
+            page.drawImage(logoImage, {
+              x: margin,
+              y: logoY,
+              width: finalWidth,
+              height: finalHeight,
+            });
+
+            const titleStartX = margin + finalWidth + 18;
+            const line1 = 'CONTRATO DE PRESTAÇÃO DE';
+            const line2 = 'SERVIÇO DE TRANSPORTE';
+            const titleFontSize = 13;
+
+            page.drawText(line1, {
+              x: titleStartX,
+              y: headerBottomY + (headerHeight / 2) + 2,
+              size: titleFontSize,
+              font: fontBold,
+            });
+
+            page.drawText(line2, {
+              x: titleStartX,
+              y: headerBottomY + (headerHeight / 2) - 13,
+              size: titleFontSize,
+              font: fontBold,
+            });
+
+            const dividerY = headerBottomY - 8;
+            page.drawLine({
+              start: { x: margin, y: dividerY },
+              end: { x: 545, y: dividerY },
+              thickness: 0.5,
+              color: rgb(0.8, 0.8, 0.8),
+            });
+
+            currentY = dividerY - 22;
+          }
+        }
+      } catch (e) {
+        console.error('Error embedding driver logo', e);
+      }
+    }
+
+    if (currentY === 800) {
+      page.drawText('CONTRATO DE PRESTAÇÃO DE SERVIÇO DE TRANSPORTE', { x: margin, y: 770, size: fontSizeTitle, font: fontBold });
+      currentY = 730;
+    }
 
     // Helper de Header com cor preta (removendo azul)
     const drawHeader = (title: string, y: number) => {
@@ -320,8 +382,8 @@ export class InHouseContractProvider implements ContractProvider {
     page.drawText(`Ano Letivo: ${dados.ano || currentYear}`, { x: margin, y: currentY, size: smallTextSize, font });
     page.drawText(`Início do Transporte: ${formatToBrazilianDate(dados.dataInicio)}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
     page.drawText(`Término do Transporte: ${formatToBrazilianDate(dados.dataFim)}`, { x: 300, y: currentY - 14, size: smallTextSize, font });
-    page.drawText(`Horário de Entrada: ${dados.horarioEntrada || ''}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
-    page.drawText(`Horário de Saída: ${dados.horarioSaida || ''}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
+    page.drawText(`Horário de Entrada: ${dados.horarioEntrada || '-'}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
+    page.drawText(`Horário de Saída: ${dados.horarioSaida || '-'}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
     page.drawText(`Primeira Parcela: ${formatMonthYear(dados.dataInicioCobranca)}`, { x: margin, y: currentY - 42, size: smallTextSize, font });
     page.drawText(`Última Parcela: ${formatMonthYear(dados.dataFimCobranca)}`, { x: 300, y: currentY - 42, size: smallTextSize, font });
     currentY -= 70;

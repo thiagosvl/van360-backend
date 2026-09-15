@@ -23,6 +23,7 @@ const cobrancaRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     app.post("/:id/desfazer-pagamento-manual", cobrancaController.desfazerPagamentoManual);
     app.post("/:id/registrar-pagamento-manual", cobrancaController.registrarPagamentoManual);
     app.post("/:id/restaurar", cobrancaController.restaurar);
+    app.post("/:id/gerar-recibo", cobrancaController.gerarRecibo);
 };
 
 export default cobrancaRoute;

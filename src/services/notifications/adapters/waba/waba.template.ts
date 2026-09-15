@@ -247,16 +247,25 @@ export class WabaTemplates {
     }
 
     static contratoDisponivel(ctx: Record<string, unknown>): WabaTemplatePayload {
+        const driverName = (ctx.apelidoMotorista || NotificationContextFormatter.getFirstAndLastName(ctx.nomeMotorista as string, "Motorista")) as string;
         const respName = NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string, "Responsável");
         const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         
         const rawTokenOrLink = (ctx.linkAssinatura || ctx.linkContrato || ctx.contratoUrl || ctx.tokenAssinatura || ctx.token || "") as string;
         const token = NotificationUrlBuilder.extractContractToken(rawTokenOrLink);
 
+        const headerComponent: WabaComponent = {
+            type: WabaComponentTypeEnum.HEADER,
+            parameters: [
+                { type: WabaParameterTypeEnum.TEXT, text: driverName }
+            ]
+        };
+
         return {
             templateName: WabaTemplateNameEnum.PAIS_CONTRATO,
             languageCode: "pt_BR",
             components: [
+                headerComponent,
                 {
                     type: WabaComponentTypeEnum.BODY,
                     parameters: [
@@ -278,7 +287,7 @@ export class WabaTemplates {
 
     static async subscriptionDueSoon(ctx: Record<string, unknown>): Promise<WabaTemplatePayload> {
         const driverName = NotificationContextFormatter.getFirstName(ctx.nomeMotorista as string, "Motorista");
-        const valorStr = NotificationContextFormatter.formatValue(ctx.valor as number | string);
+        const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
         const dataStr = NotificationContextFormatter.formatDate(ctx.dataVencimento as string);
         const planoStr = (ctx.planoNome as string) || "Plano Mensal";
         const email = (ctx.email || ctx.emailMotorista) as string | undefined;

@@ -2,21 +2,12 @@ import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
 import { atualizarUsuario, atualizarPixUsuario, validarAcessoUsuario, atualizarCanalAquisicao } from "../services/usuario.service.js";
 import { TipoChavePix } from "../types/enums.js";
-
-
+import { atualizarUsuarioSchema } from "../schemas/usuario.schema.js";
 
 export const UsuarioController = {
     async atualizarUsuario(request: FastifyRequest, reply: FastifyReply) {
         const { id: usuarioId } = request.params as { id: string };
-        const payload = request.body as { 
-            nome?: string; 
-            razao_social?: string | null;
-            apelido?: string | null; 
-            telefone?: string; 
-            assinatura_digital_url?: string | null;
-            config_contrato?: Record<string, unknown> | null;
-            data_nascimento?: string | null;
-        };
+        const payload = atualizarUsuarioSchema.parse(request.body);
         const authUid = request.user?.id;
 
         if (authUid) {

@@ -25,15 +25,9 @@ export async function validarAcessoUsuario(authUid: string, targetUsuarioId: str
   return authUid === targetUsuarioId;
 }
 
-export async function atualizarUsuario(usuarioId: string, payload: {
-  nome?: string;
-  razao_social?: string | null;
-  apelido?: string | null;
-  telefone?: string;
-  assinatura_digital_url?: string | null;
-  config_contrato?: Record<string, unknown> | null;
-  data_nascimento?: string | null;
-}) {
+import { AtualizarUsuarioDTO } from "../types/dtos/usuario.dto.js";
+
+export async function atualizarUsuario(usuarioId: string, payload: AtualizarUsuarioDTO) {
   if (!usuarioId) throw new AppError("ID do usuário é obrigatório.", 400);
 
   const { data: usuarioAnterior } = await userRepository.getById(usuarioId);
@@ -66,6 +60,10 @@ export async function atualizarUsuario(usuarioId: string, payload: {
 
   if (payload.assinatura_digital_url !== undefined) {
     updates.assinatura_digital_url = payload.assinatura_digital_url ? payload.assinatura_digital_url.trim() : null;
+  }
+
+  if (payload.logo_url !== undefined) {
+    updates.logo_url = payload.logo_url ? payload.logo_url.trim() : null;
   }
 
   if (payload.config_contrato !== undefined) {

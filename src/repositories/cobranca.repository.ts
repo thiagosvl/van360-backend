@@ -75,7 +75,7 @@ export const cobrancaRepository = {
             .select(`
                 *,
                 passageiro:passageiros (${COBRANCA_PASSAGEIRO_SELECT}),
-                motorista:usuarios (nome, apelido, razao_social, cpfcnpj)
+                motorista:usuarios (nome, apelido, razao_social, cpfcnpj, logo_url)
             `)
             .eq("id", id);
 

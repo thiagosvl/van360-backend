@@ -1895,6 +1895,7 @@ export type Database = {
           estado: string | null
           id: string
           logradouro: string | null
+          logo_url: string | null
           metadados_cadastro: Json | null
           nome: string
           numero: string | null
@@ -1926,6 +1927,7 @@ export type Database = {
           estado?: string | null
           id: string
           logradouro?: string | null
+          logo_url?: string | null
           metadados_cadastro?: Json | null
           nome: string
           numero?: string | null
@@ -1957,6 +1959,7 @@ export type Database = {
           estado?: string | null
           id?: string
           logradouro?: string | null
+          logo_url?: string | null
           metadados_cadastro?: Json | null
           nome?: string
           numero?: string | null

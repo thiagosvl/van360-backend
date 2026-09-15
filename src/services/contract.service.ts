@@ -196,6 +196,7 @@ class ContractService {
       secoes: usuario.config_contrato?.secoes,
       clausulas: usuario.config_contrato?.clausulas,
       assinaturaCondutorUrl: usuario.assinatura_digital_url,
+      logoCondutorUrl: usuario.logo_url,
       apelidoCondutor: usuario.apelido,
     };
 
@@ -748,6 +749,7 @@ class ContractService {
       clausulas,
 
       assinaturaCondutorUrl: config.assinaturaCondutorUrl || usuario.assinatura_digital_url,
+      logoCondutorUrl: (config as Record<string, any>).logoCondutorUrl !== undefined ? (config as Record<string, any>).logoCondutorUrl : usuario.logo_url,
       apelidoCondutor: usuario.apelido,
     };
 

@@ -21,11 +21,16 @@ export const contractWorker = new Worker<ContractJobData>(
             // 1. Import dinâmico do serviço para evitar circular dependency
             const { contractService } = await import('../services/contract.service.js');
 
-            if (!dadosContrato.assinaturaCondutorUrl && usuarioId) {
+            if ((!dadosContrato.assinaturaCondutorUrl || !dadosContrato.logoCondutorUrl) && usuarioId) {
                 const { userRepository } = await import('../repositories/user.repository.js');
                 const { data: usuario } = await userRepository.getById(usuarioId);
-                if (usuario?.assinatura_digital_url) {
-                    dadosContrato.assinaturaCondutorUrl = usuario.assinatura_digital_url;
+                if (usuario) {
+                    if (!dadosContrato.assinaturaCondutorUrl && usuario.assinatura_digital_url) {
+                        dadosContrato.assinaturaCondutorUrl = usuario.assinatura_digital_url;
+                    }
+                    if (!dadosContrato.logoCondutorUrl && usuario.logo_url) {
+                        dadosContrato.logoCondutorUrl = usuario.logo_url;
+                    }
                 }
             }
 

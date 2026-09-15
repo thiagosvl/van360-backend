@@ -30,20 +30,19 @@ export interface ReceiptData {
     vencimento?: string;
     metodoPagamento: string;
     tipo: 'PASSAGEIRO' | 'ASSINATURA';
+    logoMotoristaUrl?: string | null;
 }
 
 class ReceiptService {
     private fontData: Buffer | null = null;
 
     private getRootPath(): string {
-        // __dirname é dist/src/services ou src/services
-        const pathSrc = path.resolve(__dirname, "..", ".."); // Raiz se for src/services
-        const pathDist = path.resolve(__dirname, "..", "..", ".."); // Raiz se for dist/src/services
+        const pathSrc = path.resolve(__dirname, "..", "..");
+        const pathDist = path.resolve(__dirname, "..", "..", "..");
 
         if (fs.existsSync(path.join(pathSrc, "assets"))) return pathSrc;
         if (fs.existsSync(path.join(pathDist, "assets"))) return pathDist;
 
-        // Fallback process.cwd() se PM2 iniciar na raiz
         return process.cwd();
     }
 
@@ -68,6 +67,25 @@ class ReceiptService {
         return this.fontData;
     }
 
+    private async getDriverLogoBase64(url?: string | null): Promise<string | null> {
+        if (!url) return null;
+        try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 5000);
+            const response = await fetch(url, { signal: controller.signal });
+            clearTimeout(timeout);
+            if (!response.ok) return null;
+            const arrayBuffer = await response.arrayBuffer();
+            const buffer = Buffer.from(arrayBuffer);
+            const contentType = response.headers.get("content-type") || "image/png";
+            return `data:${contentType};base64,${buffer.toString("base64")}`;
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            logger.warn({ error: msg, url }, "[ReceiptService] Falha ao carregar logo do motorista para o recibo");
+            return null;
+        }
+    }
+
     private async getLogo() {
         try {
             const rootPath = this.getRootPath();
@@ -86,9 +104,6 @@ class ReceiptService {
         return null;
     }
 
-    /**
-     * Gera a imagem do recibo e salva no Storage
-     */
     async generateAndSave(data: ReceiptData): Promise<string | null> {
         const logId = `REC-${Date.now()}`;
         try {
@@ -97,7 +112,10 @@ class ReceiptService {
             const font = await this.getFont();
             if (!font) throw new Error("Fonte não carregada");
 
-            const logoBase64 = await this.getLogo();
+            const driverLogoBase64 = await this.getDriverLogoBase64(data.logoMotoristaUrl);
+            const van360LogoBase64 = await this.getLogo();
+            const headerLogo = driverLogoBase64 || van360LogoBase64;
+
             const mesNome = getMonthNameBR(data.mes);
             const referencia = data.mes ? `${mesNome}/${data.ano}` : "";
 
@@ -121,20 +139,18 @@ class ReceiptService {
                             fontFamily: "Inter",
                         },
                         children: [
-                            // Header
                             {
                                 type: "div",
                                 props: {
                                     style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "50px" },
                                     children: [
-                                        logoBase64 ?
-                                            { type: "img", props: { src: logoBase64, style: { width: "100px", height: "60px" } } } :
+                                        headerLogo ?
+                                            { type: "img", props: { src: headerLogo, style: { maxWidth: "150px", maxHeight: "55px", objectFit: "contain" } } } :
                                             { type: "div", props: { style: { fontSize: "24px", fontWeight: "bold", color: "#2563eb" }, children: "VAN360" } },
                                         { type: "div", props: { style: { fontSize: "11px", color: "#94a3b8", marginTop: "10px" }, children: `ID: ${data.id.substring(0, 8)}` } }
                                     ]
                                 }
                             },
-                            // Título
                             { type: "div", props: { style: { fontSize: "28px", fontWeight: "bold", marginBottom: "4px" }, children: "Recibo de Pagamento" } },
                             { type: "div", props: { style: { fontSize: "14px", color: "#64748b", marginBottom: "40px" }, children: data.subtitulo } },
 
@@ -166,14 +182,16 @@ class ReceiptService {
                                 }
                             },
 
-                            // Footer
                             {
                                 type: "div",
                                 props: {
-                                    style: { marginTop: "auto", borderTop: "1px solid #e2e8f0", paddingTop: "20px", display: "flex", justifyContent: "center" },
+                                    style: { marginTop: "auto", borderTop: "1px solid #e2e8f0", paddingTop: "20px", display: "flex", justifyContent: "space-between", alignItems: "center" },
                                     children: [
-                                        { type: "div", props: { style: { fontSize: "12px", color: "#94a3b8" }, children: "Este é um recibo digital gerado automaticamente pelo Van360." } }
-                                    ]
+                                        { type: "div", props: { style: { fontSize: "12px", color: "#94a3b8" }, children: "Recibo digital gerado pela plataforma Van360." } },
+                                        van360LogoBase64 && driverLogoBase64 ?
+                                            { type: "img", props: { src: van360LogoBase64, style: { width: "70px", height: "24px", opacity: 0.6, objectFit: "contain" } } } :
+                                            null
+                                    ].filter(Boolean)
                                 }
                             }
                         ]
@@ -219,9 +237,6 @@ class ReceiptService {
         }
     }
 
-    /**
-     * Remove o arquivo de recibo do Storage
-     */
     async deleteReceipt(url: string | null): Promise<void> {
         if (!url) return;
         try {
@@ -268,7 +283,8 @@ class ReceiptService {
                 pagadorDocumento: respCpf,
                 descricao: cobranca.mes ? "Parcela" : "Cobrança Avulsa",
                 metodoPagamento: cobranca.tipo_pagamento,
-                tipo: 'PASSAGEIRO'
+                tipo: 'PASSAGEIRO',
+                logoMotoristaUrl: motoristaInfo?.logo_url || null,
             };
 
             const url = await this.generateAndSave(receiptData);

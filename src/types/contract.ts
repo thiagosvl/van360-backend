@@ -67,6 +67,7 @@ export interface DadosContrato {
   clausulas?: string[];
   secoes?: ContractSectionDto[];
   assinaturaCondutorUrl?: string;
+  logoCondutorUrl?: string | null;
 }
 
 export interface ContractSectionDto {

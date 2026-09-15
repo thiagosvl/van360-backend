@@ -3,6 +3,7 @@ import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
 import { cobrancaPagamentoService } from "../services/cobranca-pagamento.service.js";
 import { cobrancaService } from "../services/cobranca.service.js";
+import { receiptService } from "../services/receipt.service.js";
 import { historicoService } from "../services/historico.service.js";
 import {
   createCobrancaSchema,
@@ -102,5 +103,15 @@ export const cobrancaController = {
     logger.info({ cobrancaId: id }, "CobrancaController.restaurar - Starting");
     const cobranca = await cobrancaService.restaurarCobranca(id);
     return reply.status(200).send(cobranca);
+  },
+
+  gerarRecibo: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    logger.info({ cobrancaId: id }, "CobrancaController.gerarRecibo - Starting");
+    const reciboUrl = await receiptService.generateForCobranca(id);
+    if (!reciboUrl) {
+      return reply.status(500).send({ error: "Erro ao gerar recibo." });
+    }
+    return reply.status(200).send({ recibo_url: reciboUrl });
   }
 };
