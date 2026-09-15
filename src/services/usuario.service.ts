@@ -134,6 +134,40 @@ export async function atualizarUsuario(usuarioId: string, payload: AtualizarUsua
     }
   }
 
+  if (payload.logo_url !== undefined) {
+    const logoAnterior = usuarioAnterior?.logo_url || null;
+    const logoNovo = updates.logo_url ? (updates.logo_url as string) : null;
+
+    if (logoAnterior !== logoNovo) {
+      if (logoNovo) {
+        historicoService.log({
+          usuario_id: usuarioId,
+          entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+          entidade_id: usuarioId,
+          acao: AtividadeAcao.LOGO_ATUALIZADO,
+          descricao: logoAnterior
+            ? "Logotipo do motorista atualizado."
+            : "Logotipo do motorista cadastrado.",
+          meta: {
+            logo_anterior: logoAnterior,
+            logo_novo: logoNovo,
+          },
+        });
+      } else {
+        historicoService.log({
+          usuario_id: usuarioId,
+          entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+          entidade_id: usuarioId,
+          acao: AtividadeAcao.LOGO_REMOVIDO,
+          descricao: "Logotipo do motorista removido.",
+          meta: {
+            logo_anterior: logoAnterior,
+          },
+        });
+      }
+    }
+  }
+
   return { success: true };
 }
 

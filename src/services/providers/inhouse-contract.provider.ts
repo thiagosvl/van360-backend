@@ -257,14 +257,14 @@ export class InHouseContractProvider implements ContractProvider {
           const logoImage = await embedImageSafely(pdfDoc, imageBuffer);
           if (logoImage) {
             const { width: imgW, height: imgH } = logoImage;
-            const maxWidth = 80;
-            const maxHeight = 45;
+            const maxWidth = 110;
+            const maxHeight = 65;
             const scale = Math.min(maxWidth / imgW, maxHeight / imgH, 1);
             const finalWidth = imgW * scale;
             const finalHeight = imgH * scale;
 
-            const headerTopY = 790;
-            const headerHeight = Math.max(finalHeight, 38);
+            const headerTopY = 795;
+            const headerHeight = Math.max(finalHeight, 50);
             const headerBottomY = headerTopY - headerHeight;
 
             const logoY = headerBottomY + (headerHeight - finalHeight) / 2;
@@ -279,17 +279,18 @@ export class InHouseContractProvider implements ContractProvider {
             const line1 = 'CONTRATO DE PRESTAÇÃO DE';
             const line2 = 'SERVIÇO DE TRANSPORTE';
             const titleFontSize = 13;
+            const headerCenterY = headerBottomY + headerHeight / 2;
 
             page.drawText(line1, {
               x: titleStartX,
-              y: headerBottomY + (headerHeight / 2) + 2,
+              y: headerCenterY + 3,
               size: titleFontSize,
               font: fontBold,
             });
 
             page.drawText(line2, {
               x: titleStartX,
-              y: headerBottomY + (headerHeight / 2) - 13,
+              y: headerCenterY - 12,
               size: titleFontSize,
               font: fontBold,
             });
@@ -302,7 +303,7 @@ export class InHouseContractProvider implements ContractProvider {
               color: rgb(0.8, 0.8, 0.8),
             });
 
-            currentY = dividerY - 22;
+            currentY = dividerY - 18;
           }
         }
       } catch (e) {

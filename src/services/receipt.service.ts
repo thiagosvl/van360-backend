@@ -125,7 +125,7 @@ class ReceiptService {
 
             logger.debug({ logId, cobrancaId: data.id }, "[ReceiptService] Renderizando SVG via Satori");
             // @ts-ignore - Satori default export may lack call signature in Vercel build environment
-            const svg = await satori(
+            let svg = await satori(
                 {
                     type: "div",
                     props: {
@@ -142,23 +142,22 @@ class ReceiptService {
                             {
                                 type: "div",
                                 props: {
-                                    style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "50px" },
+                                    style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" },
                                     children: [
                                         headerLogo ?
-                                            { type: "img", props: { src: headerLogo, style: { maxWidth: "150px", maxHeight: "55px", objectFit: "contain" } } } :
+                                            { type: "img", props: { src: headerLogo, style: { maxWidth: "240px", maxHeight: "95px", objectFit: "contain" } } } :
                                             { type: "div", props: { style: { fontSize: "24px", fontWeight: "bold", color: "#2563eb" }, children: "VAN360" } },
                                         { type: "div", props: { style: { fontSize: "11px", color: "#94a3b8", marginTop: "10px" }, children: `ID: ${data.id.substring(0, 8)}` } }
                                     ]
                                 }
                             },
                             { type: "div", props: { style: { fontSize: "28px", fontWeight: "bold", marginBottom: "4px" }, children: "Recibo de Pagamento" } },
-                            { type: "div", props: { style: { fontSize: "14px", color: "#64748b", marginBottom: "40px" }, children: data.subtitulo } },
+                            { type: "div", props: { style: { fontSize: "14px", color: "#64748b", marginBottom: "28px" }, children: data.subtitulo } },
 
-                            // Valor Grande
                             {
                                 type: "div",
                                 props: {
-                                    style: { backgroundColor: "#f8fafc", padding: "30px", borderRadius: "16px", display: "flex", flexDirection: "column", alignItems: "center", marginBottom: "40px" },
+                                    style: { backgroundColor: "#f8fafc", padding: "26px", borderRadius: "16px", display: "flex", flexDirection: "column", alignItems: "center", marginBottom: "32px" },
                                     children: [
                                         { type: "div", props: { style: { fontSize: "14px", color: "#64748b", marginBottom: "8px" }, children: "VALOR PAGO" } },
                                         { type: "div", props: { style: { fontSize: "48px", fontWeight: "bold", color: "#1e293b" }, children: formatCurrency(data.valor) } },
@@ -166,11 +165,10 @@ class ReceiptService {
                                     ]
                                 }
                             },
-                            // Detalhes
                             {
                                 type: "div",
                                 props: {
-                                    style: { display: "flex", flexDirection: "column", gap: "20px" },
+                                    style: { display: "flex", flexDirection: "column", gap: "18px" },
                                     children: [
                                         this.renderRow("Pagador", pagadorFormatado),
                                         passageiroFormatado ? this.renderRow("Aluno", passageiroFormatado) : null,
@@ -211,8 +209,18 @@ class ReceiptService {
                 }
             );
 
+            svg = svg.replace(
+                /(<image[^>]+width="240"[^>]+)preserveAspectRatio="xMidYMid"/,
+                '$1preserveAspectRatio="xMinYMid meet"'
+            );
+
             logger.debug({ logId, cobrancaId: data.id }, "[ReceiptService] Convertendo SVG para PNG");
-            const resvg = new Resvg(svg);
+            const resvg = new Resvg(svg, {
+                fitTo: {
+                    mode: "zoom",
+                    value: 2,
+                },
+            });
             const pngData = resvg.render();
             const pngBuffer = pngData.asPng();
 
