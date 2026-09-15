@@ -127,10 +127,10 @@ export class FirebasePassengerTemplates {
         const dataStr = NotificationContextFormatter.formatDate(ctx.dataVencimento as string);
         const diasAntecedencia = ctx.diasAntecedencia as number | undefined;
 
-        let body = `A parcela de ${passName} (R$ ${valorStr}) vence em ${dataStr}.`;
+        let body = `A parcela de ${passName} (R$ ${valorStr}) vence em ${dataStr}. Caso já tenha pago, desconsidere.`;
         if (diasAntecedencia && diasAntecedencia > 0) {
             const rotuloDias = diasAntecedencia === 1 ? "daqui a 1 dia" : `daqui a ${diasAntecedencia} dias`;
-            body = `Lembrete: A parcela de ${passName} (R$ ${valorStr}) vence ${rotuloDias} (${dataStr}).`;
+            body = `Lembrete: A parcela de ${passName} (R$ ${valorStr}) vence ${rotuloDias} (${dataStr}). Caso já tenha pago, desconsidere.`;
         }
 
         return {
@@ -151,7 +151,7 @@ export class FirebasePassengerTemplates {
 
         return {
             title: "Parcela Vence Hoje ⚠️",
-            body: `A parcela de ${passName} (R$ ${valorStr}) vence hoje.`,
+            body: `A parcela de ${passName} (R$ ${valorStr}) vence hoje. Caso já tenha pago, desconsidere.`,
             data: {
                 action: PushNotificationAction.OPEN_HOME,
                 cobrancaId: (ctx.cobrancaId || "") as string,
@@ -166,10 +166,10 @@ export class FirebasePassengerTemplates {
         const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
         const diasAtraso = ctx.diasAtraso as number | undefined;
 
-        let body = `A parcela de ${passName} (R$ ${valorStr}) está em atraso.`;
+        let body = `A parcela de ${passName} (R$ ${valorStr}) está em atraso. Caso já tenha pago, desconsidere.`;
         if (diasAtraso && diasAtraso > 0) {
             const rotuloDias = diasAtraso === 1 ? "1 dia" : `${diasAtraso} dias`;
-            body = `A parcela de ${passName} (R$ ${valorStr}) está em atraso há ${rotuloDias}.`;
+            body = `A parcela de ${passName} (R$ ${valorStr}) está em atraso há ${rotuloDias}. Caso já tenha pago, desconsidere.`;
         }
 
         return {
