@@ -48,4 +48,9 @@ export const env = {
   WABA_PHONE_NUMBER_ID: process.env.WABA_PHONE_NUMBER_ID || "",
   WABA_ACCESS_TOKEN: process.env.WABA_ACCESS_TOKEN || "",
   WABA_WEBHOOK_VERIFY_TOKEN: process.env.WABA_WEBHOOK_VERIFY_TOKEN || "",
+
+  // Meta Conversions API (CAPI) & Pixel
+  META_PIXEL_ID: process.env.META_PIXEL_ID || "1084978180612741",
+  META_CAPI_ACCESS_TOKEN: process.env.META_CAPI_ACCESS_TOKEN || "EAAccnPVbFswBSdvXRYFidco8uHypPJ5p1pBAjtjft2X69tXU5igUDXtMMhcX1atYtIddZCkkLgOizAvor45EPV1XkPLB2ZCMFSsRiMAqduXLy6X2ee513unHdxxGo8BPdE8Foaf6l9wfvCMMFUPl3OGSirRFbrkqbYxpDum9jqz7ch0EikabyNT1Gq3VQtugZDZD",
+  META_TEST_EVENT_CODE: process.env.META_TEST_EVENT_CODE || "",
 };

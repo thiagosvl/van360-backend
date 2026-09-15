@@ -57,10 +57,10 @@ export const cenarios: Record<string, ScenarioConfig> = {
         escolas: { quantidade: 3 },
         veiculos: { quantidade: 2 },
         passageiros: {
-            quantidade: 25,
+            quantidade: 50,
             percentualComAniversario: 75,
             percentualSemEndereco: 10,
-            percentualComResponsaveisAdicionais: 40,
+            percentualComResponsaveisAdicionais: 5,
         },
         gastos: {
             quantidadeTotal: 15,
@@ -74,7 +74,7 @@ export const cenarios: Record<string, ScenarioConfig> = {
             criarAusencias: true,
         },
         cobrancas: {
-            taxaInadimplencia: 15,
+            taxaInadimplencia: 7,
         },
     },
     "cenario-vazio": {

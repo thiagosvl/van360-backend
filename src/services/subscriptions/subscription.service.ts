@@ -17,6 +17,7 @@ import { subscriptionRepository } from "../../repositories/subscription.reposito
 import { planRepository } from "../../repositories/plan.repository.js";
 import { invoiceRepository } from "../../repositories/invoice.repository.js";
 import { subscriptionReferralService } from "./subscription-referral.service.js";
+import { MetaCapiService } from "../meta-capi.service.js";
 
 export const subscriptionService = {
 
@@ -285,5 +286,14 @@ export const subscriptionService = {
             jobId: `admin-nova-assinatura-${res.usuario_id}-${res.fatura_id}`,
             usuarioId: res.usuario_id!
         }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "[SubscriptionService] Falha ao notificar admin sobre assinatura paga"));
+
+        void MetaCapiService.sendPurchaseEvent({
+            userId: res.usuario_id!,
+            email: "",
+            phone: res.usuario_telefone,
+            value: valorNumerico,
+            planName: res.plano_nome,
+            transactionId: res.fatura_id || faturaId,
+        }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "[SubscriptionService] Falha ao enviar evento Purchase para Meta CAPI"));
     }
 };

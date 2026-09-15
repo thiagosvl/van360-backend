@@ -19,6 +19,7 @@ import { EVENTO_AUTH_RECUPERACAO_SENHA, EVENTO_AUTH_SENHA_ALTERADA } from "../co
 import { loginAttemptsRepository } from "../repositories/login-attempts.repository.js";
 import { usuarioPushTokenRepository } from "../repositories/usuario-push-token.repository.js";
 import { withRetry } from "../utils/retry.utils.js";
+import { MetaCapiService } from "./meta-capi.service.js";
 
 // ... (interfaces remain unchanged)
 
@@ -329,6 +330,13 @@ export async function registrarUsuario(
       usuarioId: usuarioId as string,
       email: payload.email
     }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao notificar admin sobre cadastro"));
+
+    void MetaCapiService.sendRegistrationLead({
+      userId: usuarioId as string,
+      email: payload.email,
+      phone: payload.telefone,
+      sourceUrl: "https://van360.com.br",
+    }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar evento CAPI à Meta"));
 
     return { success: true, session };
   } catch (err: unknown) {

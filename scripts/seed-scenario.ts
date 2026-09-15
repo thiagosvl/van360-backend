@@ -124,6 +124,8 @@ async function clearData(usuarioId: string) {
         "pre_passageiros",
         "execucoes_rota",
         "rotas",
+        "passageiro_renovacoes",
+        "fila_notificacoes",
         "passageiros",
         "escolas",
         "veiculos",
@@ -244,6 +246,7 @@ async function seedPassageiros(
                 escola_id: escola.id,
                 veiculo_id: veiculo.id,
                 nome: generateName(),
+                ano_letivo: hoje.getFullYear(),
                 ativo: true,
                 isento: false,
                 periodo: periodos[randomNumber(0, periodos.length - 1)],
@@ -296,6 +299,7 @@ async function seedPassageiros(
             responsavel_id: rData.id,
             tipo: TipoResponsavel.PRINCIPAL,
             parentesco: respParentesco,
+            notificacoes_rota_habilitadas: true,
         });
 
         const deveTerAdicional = cfg.passageiros.percentualComResponsaveisAdicionais
@@ -329,6 +333,7 @@ async function seedPassageiros(
                     responsavel_id: rAdicional.id,
                     tipo: TipoResponsavel.ADICIONAL,
                     parentesco: parentescos[randomNumber(0, parentescos.length - 1)],
+                    notificacoes_rota_habilitadas: true,
                 });
             }
         }
@@ -441,6 +446,15 @@ async function seedRotas(
                 passageiro_id: passageiroAusente.id,
                 data_ausencia: dataHoje,
                 sentido,
+                registrado_por: usuarioId,
+            });
+
+            await supabaseAdmin.from("passageiro_ausencias").insert({
+                passageiro_id: passageiroAusente.id,
+                data_ausencia: dataHoje,
+                turno: passageiroAusente.periodo || PeriodoEnum.MANHA,
+                sentido,
+                motivo: "Ausência registrada via seed de teste",
                 registrado_por: usuarioId,
             });
         }
@@ -628,7 +642,7 @@ async function seedSantaMariaRoute(usuarioId: string, cfg: ScenarioConfig) {
                 const isFirst = respIndex === 1;
                 const phoneToUse = isFirst ? TARGET_PHONE : generatePhone();
 
-                const { data: resp, error: respErr } = await supabaseAdmin.from("responsaveis").insert({
+                const { data: resp, error: respErr } = await supabaseAdmin.from("responsaveis").upsert({
                     nome: stop.responsavel.nome,
                     telefone: phoneToUse,
                     cpf: "39542391838",
@@ -640,7 +654,7 @@ async function seedSantaMariaRoute(usuarioId: string, cfg: ScenarioConfig) {
                     estado: stop.responsavel.estado,
                     cep: stop.responsavel.cep,
                     complemento: stop.responsavel.complemento,
-                }).select("id").single();
+                }, { onConflict: "telefone" }).select("id").single();
                 if (respErr) throw respErr;
                 respId = resp.id;
                 responsaveisMap.set(stop.responsavel.telefone, respId);
@@ -652,6 +666,7 @@ async function seedSantaMariaRoute(usuarioId: string, cfg: ScenarioConfig) {
                 escola_id: targetEscolaId,
                 veiculo_id: veiculo.id,
                 nome: stop.passageiro.nome,
+                ano_letivo: new Date().getFullYear(),
                 data_nascimento: stop.passageiro.data_nascimento,
                 genero: stop.passageiro.genero,
                 modalidade: stop.passageiro.modalidade,
@@ -667,6 +682,7 @@ async function seedSantaMariaRoute(usuarioId: string, cfg: ScenarioConfig) {
                 responsavel_id: respId,
                 parentesco: stop.responsavel.parentesco,
                 tipo: TipoResponsavel.PRINCIPAL,
+                notificacoes_rota_habilitadas: true,
             });
 
             passageirosMap.set(passOriginalId, pass.id);
