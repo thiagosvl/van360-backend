@@ -197,7 +197,7 @@ export class FirebasePassengerTemplates {
 
         return {
             title: "Recibo de Pagamento 🧾",
-            body: `O pagamento da mensalidade de ${passName}${valorStr}${mesAnoStr} foi confirmado com sucesso.`,
+            body: `Pagamento confirmado! O recibo da mensalidade de ${passName}${mesAnoStr} já está disponível no app.`,
             data: {
                 action: PushNotificationAction.OPEN_HOME,
                 reciboUrl: (ctx.reciboUrl || "") as string,
@@ -215,7 +215,7 @@ export class FirebasePassengerTemplates {
 
         return {
             title: "Contrato Assinado com Sucesso! 📝",
-            body: `Sua cópia do contrato de transporte de ${passName} já está disponível.`,
+            body: `Sua cópia do contrato de transporte de ${passName} já está disponível no app.`,
             data: {
                 action: PushNotificationAction.OPEN_CONTRACTS,
                 contractUrl
