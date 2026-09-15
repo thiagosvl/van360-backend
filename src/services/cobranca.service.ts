@@ -325,6 +325,10 @@ export const cobrancaService = {
       throw new AppError("Erro ao buscar cobrança para exclusão.", 500);
     }
 
+    if (cobranca.status === CobrancaStatus.PAGO) {
+      throw new AppError("Não é possível cancelar uma parcela com pagamento confirmado.", 400);
+    }
+
     const { error: updateError } = await cobrancaRepository.update(id, { status: CobrancaStatus.CANCELADA });
     if (updateError) throw new AppError("Erro ao cancelar cobrança no banco de dados.", 500);
 
