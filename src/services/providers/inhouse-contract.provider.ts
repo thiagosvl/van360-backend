@@ -382,8 +382,8 @@ export class InHouseContractProvider implements ContractProvider {
     page.drawText(`Ano Letivo: ${dados.ano || currentYear}`, { x: margin, y: currentY, size: smallTextSize, font });
     page.drawText(`Início do Transporte: ${formatToBrazilianDate(dados.dataInicio)}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
     page.drawText(`Término do Transporte: ${formatToBrazilianDate(dados.dataFim)}`, { x: 300, y: currentY - 14, size: smallTextSize, font });
-    page.drawText(`Horário de Entrada: ${dados.horarioEntrada || '-'}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
-    page.drawText(`Horário de Saída: ${dados.horarioSaida || '-'}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
+    page.drawText(`Horário de Entrada: ${dados.horarioEntrada || ''}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
+    page.drawText(`Horário de Saída: ${dados.horarioSaida || ''}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
     page.drawText(`Primeira Parcela: ${formatMonthYear(dados.dataInicioCobranca)}`, { x: margin, y: currentY - 42, size: smallTextSize, font });
     page.drawText(`Última Parcela: ${formatMonthYear(dados.dataFimCobranca)}`, { x: 300, y: currentY - 42, size: smallTextSize, font });
     currentY -= 70;
