@@ -1,5 +1,11 @@
-﻿import { supabaseAdmin } from "../../config/supabase.js";
-import { SubscriptionStatus } from "../../types/enums.js";
+import { supabaseAdmin } from "../../config/supabase.js";
+import {
+  SubscriptionStatus,
+  NotificationQueueStatus,
+  NotificationChannelEnum,
+  SubscriptionInvoiceStatus,
+} from "../../types/enums.js";
+import { CUSTO_ESTIMADO_WABA_UNITARIO } from "../../config/constants.js";
 
 export interface CalculatorBaselineDTO {
   motoristas: {
@@ -93,13 +99,13 @@ export class AdminCalculatorService {
       supabaseAdmin
         .from("fila_notificacoes")
         .select("id", { count: "exact" })
-        .eq("canal", "WABA")
-        .eq("status", "SENT"),
+        .eq("canal", NotificationChannelEnum.WABA)
+        .eq("status", NotificationQueueStatus.SENT),
 
       supabaseAdmin
         .from("assinatura_faturas")
         .select("id, metodo_pagamento, status, valor")
-        .eq("status", "pago"),
+        .eq("status", SubscriptionInvoiceStatus.PAID),
     ]);
 
     const usuarios = (usuariosRes.data || []) as UsuarioItem[];
@@ -204,7 +210,7 @@ export class AdminCalculatorService {
     const pctCartao = totalPagos > 0 ? 100 - pctPix : 50;
 
     const unitWabaUsd = 0.0068;
-    const unitWabaBrl = 0.038;
+    const unitWabaBrl = CUSTO_ESTIMADO_WABA_UNITARIO;
 
     return {
       motoristas: {

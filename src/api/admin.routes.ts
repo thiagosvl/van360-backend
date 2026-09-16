@@ -8,6 +8,7 @@ import { adminConfigController } from "../controllers/admin/admin-config.control
 import { adminPlanController } from "../controllers/admin/admin-plan.controller.js";
 import { adminEvolutionController } from "../controllers/admin/admin-evolution.controller.js";
 import { adminCalculatorController } from "../controllers/admin/admin-calculator.controller.js";
+import { adminFinancialController } from "../controllers/admin/admin-financial.controller.js";
 import { adminBlogController } from "../controllers/blog.controller.js";
 import { verifySupabaseJWT } from "../middleware/auth.js";
 import { verifyAdmin } from "../middleware/admin.js";
@@ -17,6 +18,8 @@ const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.addHook("onRequest", verifyAdmin);
 
   app.get("/dashboard", adminUserController.getDashboard);
+  app.get("/stats/financial", adminFinancialController.getFinancialStats);
+  app.get("/stats/demographics", adminFinancialController.getDemographicsStats);
   app.get("/vencimentos-por-dia", adminUserController.getVencimentosPorDia);
   app.get("/vencimentos-por-dia/:dia/detalhes", adminUserController.getVencimentoDetalhes);
   app.get("/users", adminUserController.getUsers);

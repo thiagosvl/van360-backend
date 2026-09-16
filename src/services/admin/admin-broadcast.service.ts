@@ -4,7 +4,7 @@ import { env } from "../../config/env.js";
 import { usuarioPushTokenRepository } from "../../repositories/usuario-push-token.repository.js";
 import { adminBroadcastRepository } from "../../repositories/admin/admin-broadcast.repository.js";
 import { AppError } from "../../errors/AppError.js";
-import { PushNotificationAction } from "../../types/enums.js";
+import { PushNotificationAction, NotificationQueueStatus } from "../../types/enums.js";
 import type { AdminBroadcastSendDTO } from "../../schemas/admin-broadcast.schema.js";
 import type {
   AdminBroadcastEstimateResponseDTO,
@@ -147,7 +147,7 @@ export const adminBroadcastService = {
             queueLogs.push({
               usuario_id: userId,
               destinatario: currentToken,
-              status: "SENT",
+              status: NotificationQueueStatus.SENT,
               provider_message_id: resp.messageId || null,
               payload: {
                 titulo: data.titulo,
@@ -160,7 +160,7 @@ export const adminBroadcastService = {
             queueLogs.push({
               usuario_id: userId,
               destinatario: currentToken,
-              status: "FAILED",
+              status: NotificationQueueStatus.FAILED,
               erro_mensagem: resp.error?.message || "Falha no envio FCM",
               payload: {
                 titulo: data.titulo,

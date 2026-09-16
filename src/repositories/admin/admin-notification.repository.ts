@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "../../config/supabase.js";
 import { isValidFilterValue } from "../../utils/filter.utils.js";
-import { NotificationCategoryEnum, NotificationQueueStatus } from "../../types/enums.js";
+import { NotificationCategoryEnum, NotificationQueueStatus, NotificationChannelEnum } from "../../types/enums.js";
 import {
   EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
   EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
@@ -310,7 +310,7 @@ export const adminNotificationRepository = {
       const statusUpper = (row.status || "").toUpperCase();
       const canalUpper = (row.canal || "").toUpperCase();
 
-      if (statusUpper === NotificationQueueStatus.SENT || statusUpper === "DELIVERED") {
+      if (statusUpper === NotificationQueueStatus.SENT || statusUpper === NotificationQueueStatus.DELIVERED) {
         sent++;
       } else if (statusUpper === NotificationQueueStatus.FAILED) {
         failed++;
@@ -318,22 +318,22 @@ export const adminNotificationRepository = {
         cancelled++;
       }
 
-      if (canalUpper === "WABA") {
+      if (canalUpper === NotificationChannelEnum.WABA) {
         canais.waba++;
-        if (statusUpper === NotificationQueueStatus.SENT || statusUpper === "DELIVERED") {
+        if (statusUpper === NotificationQueueStatus.SENT || statusUpper === NotificationQueueStatus.DELIVERED) {
           wabaSent++;
         } else if (statusUpper === NotificationQueueStatus.FAILED) {
           wabaFailed++;
         }
-      } else if (canalUpper === "FIREBASE") {
+      } else if (canalUpper === NotificationChannelEnum.FIREBASE) {
         canais.firebase++;
-      } else if (canalUpper === "RESEND") {
+      } else if (canalUpper === NotificationChannelEnum.RESEND) {
         canais.resend++;
-      } else if (canalUpper === "TELEGRAM") {
+      } else if (canalUpper === NotificationChannelEnum.TELEGRAM) {
         canais.telegram++;
-      } else if (canalUpper === "EVOLUTION") {
+      } else if (canalUpper === NotificationChannelEnum.EVOLUTION) {
         canais.evolution++;
-      } else if (canalUpper === "SMS") {
+      } else if (canalUpper === NotificationChannelEnum.SMS) {
         canais.sms++;
       }
     }

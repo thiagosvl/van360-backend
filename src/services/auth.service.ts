@@ -38,6 +38,7 @@ export interface UsuarioPayload {
   data_nascimento?: string;
   dispositivo_cadastro?: DispositivoCadastro;
   metadados_cadastro?: Record<string, unknown>;
+  canal_aquisicao?: string;
 }
 
 export interface CheckUserStatusResult {
@@ -137,7 +138,7 @@ export async function checkUserStatus(
 }
 
 export async function criarUsuario(data: UsuarioPayload & { tipo?: UserType, id: string }) {
-  const { id, nome, razao_social, apelido, email, cpfcnpj, telefone, ativo = false, tipo, termos_aceitos, data_nascimento, dispositivo_cadastro, metadados_cadastro } = data;
+  const { id, nome, razao_social, apelido, email, cpfcnpj, telefone, ativo = false, tipo, termos_aceitos, data_nascimento, dispositivo_cadastro, metadados_cadastro, canal_aquisicao } = data;
 
   const { data: usuario, error } = await userRepository.insert({
     id,
@@ -149,6 +150,7 @@ export async function criarUsuario(data: UsuarioPayload & { tipo?: UserType, id:
     telefone: onlyDigits(telefone),
     ativo,
     tipo: tipo || UserType.MOTORISTA,
+    canal_aquisicao: canal_aquisicao || null,
     termos_aceitos_em: termos_aceitos ? getNowBR().toISOString() : null,
     termos_versao: termos_aceitos ? TERMOS_VERSAO_ATUAL : null,
     created_at: getNowBR().toISOString(),

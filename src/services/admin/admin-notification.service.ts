@@ -8,7 +8,7 @@ import {
   EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO,
   EVENTO_MOTORISTA_TESTE_ENCERRADO,
 } from "../../config/constants.js";
-import { NotificationChannelEnum, CheckoutPaymentMethod, NotificationQueueStatus } from "../../types/enums.js";
+import { NotificationChannelEnum, CheckoutPaymentMethod, NotificationQueueStatus, SubscriptionStatus } from "../../types/enums.js";
 import { cobrancaService } from "../cobranca.service.js";
 import { passageiroService } from "../passageiro.service.js";
 import { subscriptionRepository } from "../../repositories/subscription.repository.js";
@@ -125,7 +125,7 @@ export const adminNotificationService = {
 
         let pixCopyPaste: string | null = null;
         let valor: number = 0;
-        const dataVencimentoAssinatura = (sub.status === "TRIAL" && sub.trial_ends_at)
+        const dataVencimentoAssinatura = (sub.status === SubscriptionStatus.TRIAL && sub.trial_ends_at)
           ? sub.trial_ends_at
           : (sub.data_vencimento || new Date().toISOString());
 

@@ -1,5 +1,5 @@
 import { addToQueue, EvolutionJobData } from "../../../../queues/evolution.queue.js";
-import { EvolutionConnectionStatus, NotificationChannelEnum, EvolutionPurpose } from "../../../../types/enums.js";
+import { EvolutionConnectionStatus, EvolutionPurpose } from "../../../../types/enums.js";
 import { CompositeMessagePart } from "../../../../types/dtos/evolution.dto.js";
 import { logger } from "../../../../config/logger.js";
 import { evolutionService } from "../../../evolution.service.js";

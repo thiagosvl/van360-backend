@@ -20,7 +20,14 @@ import {
   IndicacaoStatus,
   CobrancaStatus,
   TipoResponsavel,
+  NotificationQueueStatus,
 } from "../../types/enums.js";
+import {
+  EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
+  EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
+  EVENTO_PASSAGEIRO_ATRASADO,
+  CUSTO_ESTIMADO_WABA_UNITARIO,
+} from "../../config/constants.js";
 import { historicoService } from "../historico.service.js";
 import { getNowBR, parseLocalDate, parseBrazilianDateToISO, toPersistenceString, addDays, diffInDays } from "../../utils/date.utils.js";
 import type { VencimentoDiaItemDTO, VencimentosPassageirosResponseDTO } from "../../types/dtos/admin-vencimento.dto.js";
@@ -209,12 +216,18 @@ export const adminUserService = {
 
   async getUserDetails(userId: string) {
     const [
-      userReq,
-      assinaturaReq,
-      faturasReq,
-      kpisRpcRes,
-      pushTokensReq,
-    ] = await adminUserRepository.getUserDetails(userId);
+      [
+        userReq,
+        assinaturaReq,
+        faturasReq,
+        kpisRpcRes,
+        pushTokensReq,
+      ],
+      referralWithIndicadorRes,
+    ] = await Promise.all([
+      adminUserRepository.getUserDetails(userId),
+      referralRepository.getReferralWithIndicador(userId).catch(() => ({ data: null })),
+    ]);
 
     if (userReq.error || !userReq.data) throw new Error("Usuário não encontrado.");
 
@@ -239,6 +252,23 @@ export const adminUserService = {
 
     const planos = await adminUserRepository.getPlanos();
 
+    const referralData = referralWithIndicadorRes?.data as unknown as ReferralWithIndicadorRow | null;
+    const indicadorData = referralData?.indicador;
+    const indicador = (referralData && indicadorData) ? {
+      id: indicadorData.id,
+      nome: indicadorData.nome,
+      telefone: indicadorData.telefone,
+      email: indicadorData.email,
+      cpfcnpj: indicadorData.cpfcnpj,
+      status: referralData.status,
+      created_at: referralData.created_at,
+      fatura_origem_id: referralData.fatura_origem_id,
+    } : null;
+
+    if (indicador && (!userData.canal_aquisicao || userData.canal_aquisicao.trim() === "")) {
+      userData.canal_aquisicao = CanalAquisicao.INDICACAO;
+    }
+
     return {
       user: userData,
       assinatura: assinaturaReq.data,
@@ -256,7 +286,7 @@ export const adminUserService = {
         statusConfiguracaoContrato,
       },
       referralSummary: null,
-      indicador: null,
+      indicador,
       referredUsers: [],
       passageiros: [],
       prePassageiros: [],
@@ -876,11 +906,17 @@ export const adminUserService = {
       targetDates.push(toPersistenceString(addDays(dataReferencia, -diasAtraso)));
     }
 
-    const [cobrancasDiaRes, cobrancasReguasRes, historicoNotifsRes] = await Promise.all([
+    const [passageirosDiaRes, cobrancasDiaRes, cobrancasReguasRes, historicoNotifsRes] = await Promise.all([
+      adminUserRepository.getPassageirosAtivosDoDia(dia),
       adminUserRepository.getCobrancasDoDiaNoMes(dia, mesAlvo, anoAlvo),
       !isPassado ? adminUserRepository.getCobrancasPendentesParaReguas(targetDates) : Promise.resolve({ data: null, error: null }),
       isPassado ? adminUserRepository.getHistoricoNotificacoesCobrancaDoDia(dataRefStr) : Promise.resolve({ data: null, error: null }),
     ]);
+
+    if (passageirosDiaRes.error) {
+      logger.error({ error: passageirosDiaRes.error }, "[AdminUserService] Erro ao buscar passageiros do dia.");
+      throw passageirosDiaRes.error;
+    }
 
     if (cobrancasDiaRes.error) {
       logger.error({ error: cobrancasDiaRes.error }, "[AdminUserService] Erro ao buscar cobranças do dia.");
@@ -897,10 +933,19 @@ export const adminUserService = {
       throw historicoNotifsRes.error;
     }
 
+    const passageirosDia = (passageirosDiaRes.data || []).filter((p) => isDriverEligible(p.motorista as Parameters<typeof isDriverEligible>[0]));
     const cobrancasDia = (cobrancasDiaRes.data || []).filter((c) => isDriverEligible(c.motorista as Parameters<typeof isDriverEligible>[0]));
+
+    const cobrancasByPassageiroId = new Map<string, typeof cobrancasDia[0]>();
+    for (const c of cobrancasDia) {
+      if (c.passageiro_id) {
+        cobrancasByPassageiroId.set(c.passageiro_id, c);
+      }
+    }
 
     let faturasPagas = 0;
     let faturasPendentes = 0;
+    let faturasNaoGeradas = 0;
     let valorPrevistoTotal = 0;
     let valorPagoTotal = 0;
     let valorPendenteTotal = 0;
@@ -916,23 +961,33 @@ export const adminUserService = {
     let resendCarteira = 0;
     let firebaseCarteira = 0;
 
-    for (const c of cobrancasDia) {
-      const valor = Number(c.valor) || 0;
-      valorPrevistoTotal += valor;
+    for (const p of passageirosDia) {
+      const c = cobrancasByPassageiroId.get(p.id);
 
-      if (c.status === CobrancaStatus.PAGO) {
-        faturasPagas++;
-        valorPagoTotal += Number(c.valor_pago || c.valor) || 0;
-      } else if (c.status === CobrancaStatus.PENDENTE) {
-        faturasPendentes++;
-        valorPendenteTotal += valor;
+      if (c) {
+        const valor = Number(c.valor) || 0;
+        valorPrevistoTotal += valor;
+
+        if (c.status === CobrancaStatus.PAGO) {
+          faturasPagas++;
+          valorPagoTotal += Number(c.valor_pago || c.valor) || 0;
+        } else if (c.status === CobrancaStatus.PENDENTE) {
+          faturasPendentes++;
+          valorPendenteTotal += valor;
+        }
+      } else {
+        faturasNaoGeradas++;
+        valorPrevistoTotal += Number(p.valor_cobranca) || 0;
       }
 
-      const responsaveisLinks = ((c.passageiro as { responsaveis?: Array<{ tipo: string; responsavel: { id: string; nome: string | null; telefone: string | null; email: string | null } | null }> })?.responsaveis || []);
-      const principalLink = responsaveisLinks.find((r) => r.tipo === TipoResponsavel.PRINCIPAL) || responsaveisLinks.find((r) => r.tipo === "PRINCIPAL");
-      const resp = principalLink?.responsavel;
+      const rawResponsaveis = (p as unknown as { responsaveis?: Array<{ tipo: string; responsavel: { id: string; nome: string | null; telefone: string | null; email: string | null } | Array<{ id: string; nome: string | null; telefone: string | null; email: string | null }> | null }> })?.responsaveis || [];
+      const principalLink = rawResponsaveis.find((r) => r.tipo?.toLowerCase() === TipoResponsavel.PRINCIPAL);
+      const rawResp = principalLink?.responsavel;
+      const resp = Array.isArray(rawResp) ? rawResp[0] : rawResp;
 
-      const motoristaConfigs = (c.motorista as { usuario_configuracoes?: Array<{ notificar_pais_cobrancas: boolean; cobranca_vencimento_hoje_ativo: boolean }> })?.usuario_configuracoes?.[0];
+      const rawMotorista = p.motorista as unknown as { usuario_configuracoes?: Array<{ notificar_pais_cobrancas: boolean; cobranca_vencimento_hoje_ativo: boolean }> } | Array<{ usuario_configuracoes?: Array<{ notificar_pais_cobrancas: boolean; cobranca_vencimento_hoje_ativo: boolean }> }> | null;
+      const motoristaObj = Array.isArray(rawMotorista) ? rawMotorista[0] : rawMotorista;
+      const motoristaConfigs = motoristaObj?.usuario_configuracoes?.[0];
 
       if (!principalLink || !resp) {
         semResponsavelPrincipal++;
@@ -953,12 +1008,12 @@ export const adminUserService = {
           notificacoesDesativadasMotorista++;
         }
 
-        const alunoAtivoEnvio = c.desativar_lembretes !== true && (c.passageiro as { enviar_notificacoes?: boolean })?.enviar_notificacoes !== false;
+        const alunoAtivoEnvio = p.enviar_notificacoes !== false && (!c || c.desativar_lembretes !== true);
         if (!alunoAtivoEnvio) {
           lembretesDesativadosAluno++;
         }
 
-        if (c.status === CobrancaStatus.PENDENTE && motoristaAtivoEnvio && alunoAtivoEnvio) {
+        if ((!c || c.status === CobrancaStatus.PENDENTE) && motoristaAtivoEnvio && alunoAtivoEnvio) {
           if (hasPhone) wabaCarteira++;
           if (hasEmail) resendCarteira++;
           firebaseCarteira++;
@@ -966,11 +1021,14 @@ export const adminUserService = {
       }
     }
 
+    const totalAlunos = passageirosDia.length || cobrancasDia.length;
+
     const carteira: CarteiraDiaResumoDTO = {
       dia,
-      totalAlunos: cobrancasDia.length,
+      totalAlunos,
       faturasPagas,
       faturasPendentes,
+      faturasNaoGeradas,
       valorPrevistoTotal: Number(valorPrevistoTotal.toFixed(2)),
       valorPagoTotal: Number(valorPagoTotal.toFixed(2)),
       valorPendenteTotal: Number(valorPendenteTotal.toFixed(2)),
@@ -978,7 +1036,7 @@ export const adminUserService = {
         waba: wabaCarteira,
         resend: resendCarteira,
         firebase: firebaseCarteira,
-        custoEstimadoWabaBrl: Number((wabaCarteira * 0.038).toFixed(2)),
+        custoEstimadoWabaBrl: Number((wabaCarteira * CUSTO_ESTIMADO_WABA_UNITARIO).toFixed(2)),
       },
       diagnostico: {
         comTelefoneValido,
@@ -1029,38 +1087,38 @@ export const adminUserService = {
         const cobrancaId = (item.payload?.cobrancaId || (item.payload?.metadata as Record<string, unknown> | undefined)?.cobrancaId) as string | undefined;
         if (cobrancaId) cobrancasUnicasSet.add(cobrancaId);
 
-        const isSent = item.status === "SENT";
+        const isSent = item.status === NotificationQueueStatus.SENT;
 
-        if (item.evento === "PASSAGEIRO_VENCIMENTO_HOJE") {
+        if (item.evento === EVENTO_PASSAGEIRO_VENCIMENTO_HOJE) {
           if (cobrancaId) vencendoIds.add(cobrancaId);
-          if (item.canal === "WABA" && isSent) {
+          if (item.canal === NotificationChannelEnum.WABA && isSent) {
             wabaSent++;
             vencendoHojeWaba++;
-          } else if (item.canal === "RESEND" && isSent) {
+          } else if (item.canal === NotificationChannelEnum.RESEND && isSent) {
             resendSent++;
             vencendoHojeResend++;
-          } else if (item.canal === "FIREBASE" && isSent) {
+          } else if (item.canal === NotificationChannelEnum.FIREBASE && isSent) {
             firebaseSent++;
             vencendoHojeFirebase++;
           }
-        } else if (item.evento === "PASSAGEIRO_VENCIMENTO_PROXIMO") {
+        } else if (item.evento === EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO) {
           if (cobrancaId) avisoIds.add(cobrancaId);
-          if (item.canal === "RESEND" && isSent) {
+          if (item.canal === NotificationChannelEnum.RESEND && isSent) {
             resendSent++;
             avisoPrevioResend++;
-          } else if (item.canal === "FIREBASE" && isSent) {
+          } else if (item.canal === NotificationChannelEnum.FIREBASE && isSent) {
             firebaseSent++;
             avisoPrevioFirebase++;
           }
-        } else if (item.evento === "PASSAGEIRO_ATRASADO") {
+        } else if (item.evento === EVENTO_PASSAGEIRO_ATRASADO) {
           if (cobrancaId) atraso3Ids.add(cobrancaId);
-          if (item.canal === "WABA" && isSent) {
+          if (item.canal === NotificationChannelEnum.WABA && isSent) {
             wabaSent++;
             atraso3DiasWaba++;
-          } else if (item.canal === "RESEND" && isSent) {
+          } else if (item.canal === NotificationChannelEnum.RESEND && isSent) {
             resendSent++;
             atraso3DiasResend++;
-          } else if (item.canal === "FIREBASE" && isSent) {
+          } else if (item.canal === NotificationChannelEnum.FIREBASE && isSent) {
             firebaseSent++;
             atraso3DiasFirebase++;
           }
@@ -1083,7 +1141,7 @@ export const adminUserService = {
           waba: wabaSent,
           resend: resendSent,
           firebase: firebaseSent,
-          custoEstimadoWabaBrl: Number((wabaSent * 0.038).toFixed(2)),
+          custoEstimadoWabaBrl: Number((wabaSent * CUSTO_ESTIMADO_WABA_UNITARIO).toFixed(2)),
         },
         reguas: {
           vencendoHoje: {
@@ -1094,7 +1152,7 @@ export const adminUserService = {
               waba: vencendoHojeWaba,
               resend: vencendoHojeResend,
               firebase: vencendoHojeFirebase,
-              custoEstimadoWabaBrl: Number((vencendoHojeWaba * 0.038).toFixed(2)),
+              custoEstimadoWabaBrl: Number((vencendoHojeWaba * CUSTO_ESTIMADO_WABA_UNITARIO).toFixed(2)),
             },
           },
           avisoPrevio: {
@@ -1116,7 +1174,7 @@ export const adminUserService = {
               waba: atraso3DiasWaba,
               resend: atraso3DiasResend,
               firebase: atraso3DiasFirebase,
-              custoEstimadoWabaBrl: Number((atraso3DiasWaba * 0.038).toFixed(2)),
+              custoEstimadoWabaBrl: Number((atraso3DiasWaba * CUSTO_ESTIMADO_WABA_UNITARIO).toFixed(2)),
             },
           },
           atraso5Dias: {
@@ -1149,7 +1207,7 @@ export const adminUserService = {
               waba: atraso3DiasWaba,
               resend: atraso3DiasResend,
               firebase: atraso3DiasFirebase,
-              custoEstimadoWabaBrl: Number((atraso3DiasWaba * 0.038).toFixed(2)),
+              custoEstimadoWabaBrl: Number((atraso3DiasWaba * CUSTO_ESTIMADO_WABA_UNITARIO).toFixed(2)),
             },
           },
         },
@@ -1187,7 +1245,7 @@ export const adminUserService = {
         if (c.desativar_lembretes || (c.passageiro as { enviar_notificacoes?: boolean })?.enviar_notificacoes === false) continue;
 
         const responsaveisLinks = ((c.passageiro as { responsaveis?: Array<{ tipo: string; responsavel: { id: string; nome: string | null; telefone: string | null; email: string | null } | null }> })?.responsaveis || []);
-        const principalLink = responsaveisLinks.find((r) => r.tipo === TipoResponsavel.PRINCIPAL) || responsaveisLinks.find((r) => r.tipo === "PRINCIPAL");
+        const principalLink = responsaveisLinks.find((r) => r.tipo?.toLowerCase() === TipoResponsavel.PRINCIPAL);
         const resp = principalLink?.responsavel;
         if (!resp) continue;
 
@@ -1293,7 +1351,7 @@ export const adminUserService = {
           waba: atraso3DiasWaba,
           resend: atraso3DiasResend + atraso5DiasResend + atraso7DiasResend,
           firebase: atraso3DiasFirebase + atraso5DiasFirebase + atraso7DiasFirebase,
-          custoEstimadoWabaBrl: Number((atraso3DiasWaba * 0.038).toFixed(2)),
+          custoEstimadoWabaBrl: Number((atraso3DiasWaba * CUSTO_ESTIMADO_WABA_UNITARIO).toFixed(2)),
         },
       };
 
@@ -1306,7 +1364,7 @@ export const adminUserService = {
           waba: totalWaba,
           resend: totalResend,
           firebase: totalFirebase,
-          custoEstimadoWabaBrl: Number((totalWaba * 0.038).toFixed(2)),
+          custoEstimadoWabaBrl: Number((totalWaba * CUSTO_ESTIMADO_WABA_UNITARIO).toFixed(2)),
         },
         reguas: {
           vencendoHoje: {
@@ -1319,7 +1377,7 @@ export const adminUserService = {
               waba: vencendoHojeWaba,
               resend: vencendoHojeResend,
               firebase: vencendoHojeFirebase,
-              custoEstimadoWabaBrl: Number((vencendoHojeWaba * 0.038).toFixed(2)),
+              custoEstimadoWabaBrl: Number((vencendoHojeWaba * CUSTO_ESTIMADO_WABA_UNITARIO).toFixed(2)),
             },
           },
           avisoPrevio: {
@@ -1341,7 +1399,7 @@ export const adminUserService = {
               waba: atraso3DiasWaba,
               resend: atraso3DiasResend,
               firebase: atraso3DiasFirebase,
-              custoEstimadoWabaBrl: Number((atraso3DiasWaba * 0.038).toFixed(2)),
+              custoEstimadoWabaBrl: Number((atraso3DiasWaba * CUSTO_ESTIMADO_WABA_UNITARIO).toFixed(2)),
             },
           },
           atraso5Dias: {

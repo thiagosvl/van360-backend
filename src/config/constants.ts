@@ -149,6 +149,6 @@ export const TRACKING_REALTIME_CONFIG = {
   EVENT_GPS_PING: "gps_ping"
 } as const;
 
-export const CUSTO_ESTIMADO_WABA_UNITARIO = 0.04;
+export const CUSTO_ESTIMADO_WABA_UNITARIO = 0.038;
 
 export const BUCKET_LOGOS = "logos" as const;

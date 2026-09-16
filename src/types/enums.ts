@@ -61,7 +61,8 @@ export enum NotificationQueueStatus {
   SENT = "SENT",
   RETRY_PENDING = "RETRY_PENDING",
   FAILED = "FAILED",
-  CANCELLED = "CANCELLED"
+  CANCELLED = "CANCELLED",
+  DELIVERED = "DELIVERED"
 }
 
 export enum NotificationCategoryEnum {

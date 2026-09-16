@@ -1,5 +1,10 @@
 import { supabaseAdmin } from "../../config/supabase.js";
 import { UserType, SubscriptionInvoiceStatus, SubscriptionStatus, SUBSCRIPTION_VITALICIO_FILTER, CobrancaStatus } from "../../types/enums.js";
+import {
+  EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
+  EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
+  EVENTO_PASSAGEIRO_ATRASADO
+} from "../../config/constants.js";
 
 export const adminUserRepository = {
   async getDashboardStats() {
@@ -212,6 +217,39 @@ export const adminUserRepository = {
       .eq("passageiro.isento", false);
   },
 
+  async getPassageirosAtivosDoDia(dia: number) {
+    return supabaseAdmin
+      .from("passageiros")
+      .select(`
+        id,
+        nome,
+        usuario_id,
+        dia_vencimento,
+        valor_cobranca,
+        ativo,
+        isento,
+        enviar_notificacoes,
+        responsaveis:passageiro_responsaveis(
+          tipo,
+          responsavel:responsaveis(id, nome, telefone, email)
+        ),
+        motorista:usuarios!passageiros_usuario_id_fkey!inner(
+          id,
+          ativo,
+          tipo,
+          email,
+          assinaturas(id, status, data_vencimento, trial_ends_at),
+          usuario_configuracoes(
+            notificar_pais_cobrancas,
+            cobranca_vencimento_hoje_ativo
+          )
+        )
+      `)
+      .eq("dia_vencimento", dia)
+      .eq("ativo", true)
+      .eq("isento", false);
+  },
+
   async getCobrancasPendentesParaReguas(targetDates: string[]) {
     return supabaseAdmin
       .from("cobrancas")
@@ -269,9 +307,9 @@ export const adminUserRepository = {
       .gte("created_at", start)
       .lte("created_at", end)
       .in("evento", [
-        "PASSAGEIRO_VENCIMENTO_HOJE",
-        "PASSAGEIRO_VENCIMENTO_PROXIMO",
-        "PASSAGEIRO_ATRASADO"
+        EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
+        EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
+        EVENTO_PASSAGEIRO_ATRASADO
       ]);
   },
 

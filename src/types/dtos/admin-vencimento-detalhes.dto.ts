@@ -33,6 +33,7 @@ export interface CarteiraDiaResumoDTO {
   totalAlunos: number;
   faturasPagas: number;
   faturasPendentes: number;
+  faturasNaoGeradas?: number;
   valorPrevistoTotal: number;
   valorPagoTotal: number;
   valorPendenteTotal: number;
