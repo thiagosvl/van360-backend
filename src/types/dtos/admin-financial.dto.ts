@@ -9,10 +9,16 @@ export interface AdminFinancialKpisDTO {
   arr: number;
   receitaRealizadaMes: number;
   receitaRealizadaMesAnterior: number;
+  previsaoFechamentoMes: number;
+  totalAssinantesAtivos: number;
+  totalMensais: number;
+  totalAnuais: number;
+  totalVitalicios: number;
   projecaoProximoMes: ProjecaoMesValorDTO;
   projecaoCaixaRealProximoMes: ProjecaoMesValorDTO;
   taxaConversaoTrial: number;
   trialsAtivosCount: number;
+  trialsConcluidosCount: number;
   trialsReceitaPotencial: number;
 }
 
@@ -21,6 +27,8 @@ export interface Projecao12MesesItemDTO {
   labelMes: string;
   mensal: number;
   anual: number;
+  mensalCaixa: number;
+  anualCaixa: number;
   trialPotencial: number;
   totalVencimento: number;
   totalCaixaReal: number;
@@ -38,6 +46,7 @@ export interface MeioPagamentoItemDTO {
   count: number;
   total: number;
   pct: number;
+  pctValor: number;
 }
 
 export interface MeiosPagamentoBreakdownDTO {
@@ -53,10 +62,22 @@ export interface ProximaRenovacaoItemDTO {
   motoristaTelefone: string;
   planoNome: string;
   tipoPlano: "MONTHLY" | "YEARLY";
+  isVitalicio: boolean;
   metodoPagamento: string | null;
   dataVencimento: string;
   dataLiquidacaoPrevista: string;
   valor: number;
+}
+
+export interface SafraTrialItemDTO {
+  chaveMes: string;
+  labelMes: string;
+  novosTrials: number;
+  convertidosPagantes: number;
+  vitalicios: number;
+  expirados: number;
+  emAndamento: number;
+  taxaConversao: number;
 }
 
 export interface AdminFinancialStatsResponseDTO {
@@ -65,6 +86,7 @@ export interface AdminFinancialStatsResponseDTO {
   distribuicaoDiasMes: DistribuicaoDiaMesItemDTO[];
   meiosPagamento: MeiosPagamentoBreakdownDTO;
   proximasRenovacoes: ProximaRenovacaoItemDTO[];
+  safrasTrials: SafraTrialItemDTO[];
   diasRetencaoCartao: number;
 }
 

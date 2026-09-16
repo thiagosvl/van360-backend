@@ -18,7 +18,7 @@ export const adminFinancialRepository = {
           valor_base_anual,
           valor_promocional_mensal,
           valor_promocional_anual,
-          usuarios(id, nome, telefone),
+          usuarios(id, nome, telefone, email),
           planos(id, nome, identificador, valor, valor_promocional)
         `)
         .in("status", [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIAL]),
@@ -30,11 +30,16 @@ export const adminFinancialRepository = {
 
       supabaseAdmin
         .from("assinaturas")
-        .select("id, status, usuario_id"),
+        .select("id, status, usuario_id, data_vencimento, trial_ends_at"),
 
       supabaseAdmin
         .from("planos")
-        .select("id, nome, identificador, valor, valor_promocional")
+        .select("id, nome, identificador, valor, valor_promocional"),
+
+      supabaseAdmin
+        .from("usuarios")
+        .select("id, created_at, assinaturas(id, status, data_vencimento, trial_ends_at)")
+        .eq("tipo", UserType.MOTORISTA)
     ]);
   },
 

@@ -12,6 +12,7 @@ import type {
   Projecao12MesesItemDTO,
   DistribuicaoDiaMesItemDTO,
   ProximaRenovacaoItemDTO,
+  SafraTrialItemDTO,
   FaixaEtariaItemDTO,
   EvolucaoMensalUsuarioItemDTO
 } from "../../types/dtos/admin-financial.dto.js";
@@ -34,13 +35,18 @@ function getYearMonthKey(date: Date): string {
 
 export const adminFinancialService = {
   async getFinancialStats(): Promise<AdminFinancialStatsResponseDTO> {
-    const [assinaturasAtivasRes, faturasPagasRes, todasAssinaturasRes, planosRes] =
+    const [assinaturasAtivasRes, faturasPagasRes, todasAssinaturasRes, planosRes, motoristasCohortRes] =
       await adminFinancialRepository.getFinancialRawData();
 
-    const assinaturasAtivas = assinaturasAtivasRes.data || [];
+    const assinaturasRaw = assinaturasAtivasRes.data || [];
     const faturasPagas = faturasPagasRes.data || [];
     const todasAssinaturas = todasAssinaturasRes.data || [];
     const planos = planosRes.data || [];
+    const todosMotoristasCadastrados = (motoristasCohortRes?.data || []) as Array<{
+      id: string;
+      created_at: string;
+      assinaturas?: Array<{ id: string; status: string; data_vencimento?: string | null; trial_ends_at?: string | null }>;
+    }>;
 
     const now = getNowBR();
     const currentYear = now.getFullYear();
@@ -53,20 +59,39 @@ export const adminFinancialService = {
 
     let mrr = 0;
     let arr = 0;
+    let totalMensais = 0;
+    let totalAnuais = 0;
+    let totalVitalicios = 0;
 
-    for (const sub of assinaturasAtivas) {
+    const assinantesPagantesAtivos: typeof assinaturasRaw = [];
+
+    for (const sub of assinaturasRaw) {
       if (sub.status !== SubscriptionStatus.ACTIVE) continue;
+
+      const user = Array.isArray(sub.usuarios) ? sub.usuarios[0] : sub.usuarios;
+      const email = (user?.email || "").toLowerCase();
+      if (email.includes("teste-google")) continue;
+
+      const isVitalicio = !sub.data_vencimento;
+      if (isVitalicio) {
+        totalVitalicios++;
+        continue;
+      }
+
+      assinantesPagantesAtivos.push(sub);
 
       const plano = Array.isArray(sub.planos) ? sub.planos[0] : sub.planos;
       const isYearly = plano?.identificador === SubscriptionIdentifer.YEARLY;
 
       if (isYearly) {
+        totalAnuais++;
         const valAnual = Number(
           sub.valor_promocional_anual ?? sub.valor_base_anual ?? plano?.valor_promocional ?? plano?.valor ?? 0
         );
         mrr += valAnual / 12;
         arr += valAnual;
       } else {
+        totalMensais++;
         const valMensal = Number(
           sub.valor_promocional_mensal ?? sub.valor_base_mensal ?? plano?.valor_promocional ?? plano?.valor ?? 0
         );
@@ -74,6 +99,8 @@ export const adminFinancialService = {
         arr += valMensal * 12;
       }
     }
+
+    const totalAssinantesAtivos = assinantesPagantesAtivos.length;
 
     const currentYearMonth = getYearMonthKey(now);
     const prevMonthDate = new Date(currentYear, currentMonth - 1, 1);
@@ -117,48 +144,113 @@ export const adminFinancialService = {
     }
 
     const totalFaturasCount = faturasPixCount + faturasCartaoCount + faturasOutrosCount;
+    const totalFaturasTotal = faturasPixTotal + faturasCartaoTotal + faturasOutrosTotal;
+
     const meiosPagamento = {
       pix: {
         count: faturasPixCount,
         total: Math.round(faturasPixTotal * 100) / 100,
-        pct: totalFaturasCount > 0 ? Math.round((faturasPixCount / totalFaturasCount) * 100) : 0
+        pct: totalFaturasCount > 0 ? Math.round((faturasPixCount / totalFaturasCount) * 100) : 0,
+        pctValor: totalFaturasTotal > 0 ? Math.round((faturasPixTotal / totalFaturasTotal) * 100) : 0
       },
       cartao: {
         count: faturasCartaoCount,
         total: Math.round(faturasCartaoTotal * 100) / 100,
-        pct: totalFaturasCount > 0 ? Math.round((faturasCartaoCount / totalFaturasCount) * 100) : 0
+        pct: totalFaturasCount > 0 ? Math.round((faturasCartaoCount / totalFaturasCount) * 100) : 0,
+        pctValor: totalFaturasTotal > 0 ? Math.round((faturasCartaoTotal / totalFaturasTotal) * 100) : 0
       },
       outros: {
         count: faturasOutrosCount,
         total: Math.round(faturasOutrosTotal * 100) / 100,
-        pct: totalFaturasCount > 0 ? Math.round((faturasOutrosCount / totalFaturasCount) * 100) : 0
+        pct: totalFaturasCount > 0 ? Math.round((faturasOutrosCount / totalFaturasCount) * 100) : 0,
+        pctValor: totalFaturasTotal > 0 ? Math.round((faturasOutrosTotal / totalFaturasTotal) * 100) : 0
       }
     };
 
-    const usuariosPagantesSet = new Set<string>();
-    for (const fat of faturasPagas) {
-      if (fat.status === SubscriptionInvoiceStatus.PAID) {
-        // Encontramos via fatura ou status
-      }
-    }
-    for (const sub of todasAssinaturas) {
-      if (sub.status === SubscriptionStatus.ACTIVE) {
-        usuariosPagantesSet.add(sub.usuario_id);
-      }
-    }
+    let receitaRestanteMes = 0;
+    const endOfMonth = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59);
 
-    const totalUsuariosComAssinatura = todasAssinaturas.length;
-    const taxaConversaoTrial =
-      totalUsuariosComAssinatura > 0
-        ? Math.round((usuariosPagantesSet.size / totalUsuariosComAssinatura) * 1000) / 10
-        : 0;
+    for (const sub of assinantesPagantesAtivos) {
+      if (!sub.data_vencimento) continue;
+      const vencDate = parseLocalDate(sub.data_vencimento);
+      if (vencDate > now && vencDate <= endOfMonth) {
+        const plano = Array.isArray(sub.planos) ? sub.planos[0] : sub.planos;
+        const isYearly = plano?.identificador === SubscriptionIdentifer.YEARLY;
+        const val = isYearly
+          ? Number(sub.valor_promocional_anual ?? sub.valor_base_anual ?? plano?.valor_promocional ?? plano?.valor ?? 0)
+          : Number(sub.valor_promocional_mensal ?? sub.valor_base_mensal ?? plano?.valor_promocional ?? plano?.valor ?? 0);
+        receitaRestanteMes += val;
+      }
+    }
+    const previsaoFechamentoMes = Math.round((receitaRealizadaMes + receitaRestanteMes) * 100) / 100;
 
     let trialsAtivosCount = 0;
-    for (const sub of assinaturasAtivas) {
+    for (const sub of assinaturasRaw) {
       if (sub.status === SubscriptionStatus.TRIAL) {
         trialsAtivosCount++;
       }
     }
+
+    const safrasTrialsMap = new Map<string, SafraTrialItemDTO>();
+    for (let j = 5; j >= 0; j--) {
+      const d = new Date(currentYear, currentMonth - j, 1);
+      const k = getYearMonthKey(d);
+      safrasTrialsMap.set(k, {
+        chaveMes: k,
+        labelMes: formatMonthYearLabel(d),
+        novosTrials: 0,
+        convertidosPagantes: 0,
+        vitalicios: 0,
+        expirados: 0,
+        emAndamento: 0,
+        taxaConversao: 0
+      });
+    }
+
+    let totalTrialsConcluidosGeral = 0;
+    let totalTrialsConvertidosGeral = 0;
+
+    for (const u of todosMotoristasCadastrados) {
+      if (!u.created_at) continue;
+      const cDate = parseLocalDate(u.created_at);
+      const ym = getYearMonthKey(cDate);
+
+      const ass = Array.isArray(u.assinaturas) ? u.assinaturas[0] : u.assinaturas;
+      const status = ass?.status;
+      const hasVencimento = Boolean(ass?.data_vencimento);
+
+      const isPag = status === SubscriptionStatus.ACTIVE && hasVencimento;
+      const isVit = status === SubscriptionStatus.ACTIVE && !hasVencimento;
+      const isEmTr = status === SubscriptionStatus.TRIAL;
+      const isExp = status === SubscriptionStatus.EXPIRED || status === SubscriptionStatus.CANCELED;
+
+      if (isPag) {
+        totalTrialsConvertidosGeral++;
+        totalTrialsConcluidosGeral++;
+      } else if (isExp) {
+        totalTrialsConcluidosGeral++;
+      }
+
+      if (safrasTrialsMap.has(ym)) {
+        const item = safrasTrialsMap.get(ym)!;
+        item.novosTrials++;
+        if (isPag) item.convertidosPagantes++;
+        else if (isVit) item.vitalicios++;
+        else if (isEmTr) item.emAndamento++;
+        else if (isExp) item.expirados++;
+      }
+    }
+
+    for (const item of safrasTrialsMap.values()) {
+      const concluidos = item.convertidosPagantes + item.expirados;
+      item.taxaConversao = concluidos > 0 ? Math.round((item.convertidosPagantes / concluidos) * 1000) / 10 : 0;
+    }
+
+    const taxaConversaoTrial =
+      totalTrialsConcluidosGeral > 0
+        ? Math.round((totalTrialsConvertidosGeral / totalTrialsConcluidosGeral) * 1000) / 10
+        : 0;
+
     const trialsReceitaPotencial =
       Math.round(trialsAtivosCount * (taxaConversaoTrial / 100) * ticketMensalReferencia * 100) / 100;
 
@@ -175,11 +267,13 @@ export const adminFinancialService = {
 
       let totalMensal = 0;
       let totalAnual = 0;
+      let totalMensalCaixa = 0;
+      let totalAnualCaixa = 0;
       let totalCaixaReal = 0;
       let qtdRenovacoes = 0;
 
-      for (const sub of assinaturasAtivas) {
-        if (sub.status !== SubscriptionStatus.ACTIVE || !sub.data_vencimento) continue;
+      for (const sub of assinantesPagantesAtivos) {
+        if (!sub.data_vencimento) continue;
 
         const vencDate = parseLocalDate(sub.data_vencimento);
         const plano = Array.isArray(sub.planos) ? sub.planos[0] : sub.planos;
@@ -203,6 +297,7 @@ export const adminFinancialService = {
             qtdRenovacoes++;
 
             if (liquidacaoChave === chaveMes) {
+              totalAnualCaixa += valAnual;
               totalCaixaReal += valAnual;
             }
           }
@@ -214,6 +309,7 @@ export const adminFinancialService = {
           qtdRenovacoes++;
 
           if (liquidacaoChave === chaveMes) {
+            totalMensalCaixa += valMensal;
             totalCaixaReal += valMensal;
           }
 
@@ -234,6 +330,8 @@ export const adminFinancialService = {
         labelMes,
         mensal: Math.round(totalMensal * 100) / 100,
         anual: Math.round(totalAnual * 100) / 100,
+        mensalCaixa: Math.round(totalMensalCaixa * 100) / 100,
+        anualCaixa: Math.round(totalAnualCaixa * 100) / 100,
         trialPotencial: Math.round(trialPotencialMes * 100) / 100,
         totalVencimento: Math.round(totalVencimento * 100) / 100,
         totalCaixaReal: Math.round(totalCaixaReal * 100) / 100,
@@ -256,54 +354,85 @@ export const adminFinancialService = {
       anual: 0
     };
 
-    const pctPix = meiosPagamento.pix.pct / 100 || 0.7;
-    const pctCartao = meiosPagamento.cartao.pct / 100 || 0.3;
+    let nextMonthPixVenc = 0;
+    let nextMonthCartaoVenc = 0;
+    let nextMonthPixCaixa = 0;
+    let nextMonthCartaoCaixa = 0;
+
+    const nextMonthIndex = (currentMonth + 1) % 12;
+    const nextMonthYear = currentMonth === 11 ? currentYear + 1 : currentYear;
+    const nextMonthKey = `${nextMonthYear}-${String(nextMonthIndex + 1).padStart(2, "0")}`;
+
+    for (const sub of assinantesPagantesAtivos) {
+      if (!sub.data_vencimento) continue;
+      const vencDate = parseLocalDate(sub.data_vencimento);
+      const diaVenc = vencDate.getDate();
+      const plano = Array.isArray(sub.planos) ? sub.planos[0] : sub.planos;
+      const isYearly = plano?.identificador === SubscriptionIdentifer.YEARLY;
+
+      const val = isYearly
+        ? Number(sub.valor_promocional_anual ?? sub.valor_base_anual ?? plano?.valor_promocional ?? plano?.valor ?? 0)
+        : Number(sub.valor_promocional_mensal ?? sub.valor_base_mensal ?? plano?.valor_promocional ?? plano?.valor ?? 0);
+
+      const isCartao = (sub.metodo_pagamento || "").toLowerCase().includes("cartao");
+      const diasLiq = isCartao ? DAYS_CARD_SETTLEMENT : 0;
+      const liqDate = addDays(new Date(nextMonthYear, nextMonthIndex, diaVenc), diasLiq);
+      const liqKey = getYearMonthKey(liqDate);
+
+      if (!isYearly) {
+        if (isCartao) nextMonthCartaoVenc += val;
+        else nextMonthPixVenc += val;
+
+        if (liqKey === nextMonthKey) {
+          if (isCartao) nextMonthCartaoCaixa += val;
+          else nextMonthPixCaixa += val;
+        }
+      }
+    }
 
     const projecaoProximoMes = {
       total: nextMonthProj.totalVencimento,
-      pix: Math.round(nextMonthProj.totalVencimento * pctPix * 100) / 100,
-      cartao: Math.round(nextMonthProj.totalVencimento * pctCartao * 100) / 100
+      pix: Math.round(nextMonthPixVenc * 100) / 100,
+      cartao: Math.round(nextMonthCartaoVenc * 100) / 100
     };
 
     const projecaoCaixaRealProximoMes = {
       total: nextMonthProj.totalCaixaReal,
-      pix: Math.round(nextMonthProj.totalCaixaReal * pctPix * 100) / 100,
-      cartao: Math.round(nextMonthProj.totalCaixaReal * pctCartao * 100) / 100
+      pix: Math.round(nextMonthPixCaixa * 100) / 100,
+      cartao: Math.round(nextMonthCartaoCaixa * 100) / 100
     };
 
-    const limitNext30Days = addDays(now, 30);
     const proximasRenovacoes: ProximaRenovacaoItemDTO[] = [];
 
-    for (const sub of assinaturasAtivas) {
-      if (sub.status !== SubscriptionStatus.ACTIVE || !sub.data_vencimento) continue;
+    for (const sub of assinantesPagantesAtivos) {
+      if (!sub.data_vencimento) continue;
 
       const venc = parseLocalDate(sub.data_vencimento);
-      if (venc >= now && venc <= limitNext30Days) {
-        const plano = Array.isArray(sub.planos) ? sub.planos[0] : sub.planos;
-        const usuario = Array.isArray(sub.usuarios) ? sub.usuarios[0] : sub.usuarios;
-        const isYearly = plano?.identificador === SubscriptionIdentifer.YEARLY;
+      const plano = Array.isArray(sub.planos) ? sub.planos[0] : sub.planos;
+      const usuario = Array.isArray(sub.usuarios) ? sub.usuarios[0] : sub.usuarios;
+      const isYearly = plano?.identificador === SubscriptionIdentifer.YEARLY;
 
-        const val = isYearly
-          ? Number(sub.valor_promocional_anual ?? sub.valor_base_anual ?? plano?.valor_promocional ?? plano?.valor ?? 0)
-          : Number(sub.valor_promocional_mensal ?? sub.valor_base_mensal ?? plano?.valor_promocional ?? plano?.valor ?? 0);
+      const val = isYearly
+        ? Number(sub.valor_promocional_anual ?? sub.valor_base_anual ?? plano?.valor_promocional ?? plano?.valor ?? 0)
+        : Number(sub.valor_promocional_mensal ?? sub.valor_base_mensal ?? plano?.valor_promocional ?? plano?.valor ?? 0);
 
-        const isCartao = (sub.metodo_pagamento || "").toLowerCase().includes("cartao");
-        const diasLiquidacao = isCartao ? DAYS_CARD_SETTLEMENT : 0;
-        const liqDate = addDays(venc, diasLiquidacao);
+      const isCartao = (sub.metodo_pagamento || "").toLowerCase().includes("cartao");
+      const diasLiquidacao = isCartao ? DAYS_CARD_SETTLEMENT : 0;
+      const liqDate = addDays(venc, diasLiquidacao);
 
-        proximasRenovacoes.push({
-          id: sub.id,
-          usuarioId: sub.usuario_id,
-          motoristaNome: usuario?.nome || "Motorista",
-          motoristaTelefone: usuario?.telefone || "",
-          planoNome: plano?.nome || (isYearly ? "Plano Anual" : "Plano Mensal"),
-          tipoPlano: isYearly ? "YEARLY" : "MONTHLY",
-          metodoPagamento: sub.metodo_pagamento,
-          dataVencimento: venc.toISOString(),
-          dataLiquidacaoPrevista: liqDate.toISOString(),
-          valor: Math.round(val * 100) / 100
-        });
-      }
+      proximasRenovacoes.push({
+        id: sub.id,
+        usuarioId: sub.usuario_id,
+        motoristaNome: usuario?.nome || "Motorista",
+        motoristaTelefone: usuario?.telefone || "",
+        planoNome: plano?.nome || (isYearly ? "Plano Anual" : "Plano Mensal"),
+        tipoPlano: isYearly ? "YEARLY" : "MONTHLY",
+        isVitalicio: false,
+        metodoPagamento: sub.metodo_pagamento,
+        dataVencimento: venc.toISOString(),
+        dataLiquidacaoPrevista: liqDate.toISOString(),
+        valor: Math.round(val * 100) / 100
+      });
     }
 
     proximasRenovacoes.sort((a, b) => new Date(a.dataVencimento).getTime() - new Date(b.dataVencimento).getTime());
@@ -314,16 +443,23 @@ export const adminFinancialService = {
         arr: Math.round(arr * 100) / 100,
         receitaRealizadaMes: Math.round(receitaRealizadaMes * 100) / 100,
         receitaRealizadaMesAnterior: Math.round(receitaRealizadaMesAnterior * 100) / 100,
+        previsaoFechamentoMes,
+        totalAssinantesAtivos,
+        totalMensais,
+        totalAnuais,
+        totalVitalicios,
         projecaoProximoMes,
         projecaoCaixaRealProximoMes,
         taxaConversaoTrial,
         trialsAtivosCount,
+        trialsConcluidosCount: totalTrialsConcluidosGeral,
         trialsReceitaPotencial
       },
       projecao12Meses: mesesProjecao,
       distribuicaoDiasMes,
       meiosPagamento,
-      proximasRenovacoes: proximasRenovacoes.slice(0, 50),
+      proximasRenovacoes,
+      safrasTrials: Array.from(safrasTrialsMap.values()),
       diasRetencaoCartao: DAYS_CARD_SETTLEMENT
     };
   },
