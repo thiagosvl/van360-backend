@@ -123,6 +123,12 @@ class ReceiptService {
             const passageiroFormatado = data.passageiroNome ? capitalize(data.passageiroNome) : null;
             const metodoPagamentoFormatado = formatPaymentMethod(data.metodoPagamento);
 
+            const headerMarginBottom = headerLogo ? "24px" : "50px";
+            const subtitleMarginBottom = headerLogo ? "28px" : "40px";
+            const valorPadding = headerLogo ? "26px" : "30px";
+            const valorMarginBottom = headerLogo ? "32px" : "40px";
+            const detailsGap = headerLogo ? "18px" : "20px";
+
             logger.debug({ logId, cobrancaId: data.id }, "[ReceiptService] Renderizando SVG via Satori");
             // @ts-ignore - Satori default export may lack call signature in Vercel build environment
             let svg = await satori(
@@ -142,7 +148,7 @@ class ReceiptService {
                             {
                                 type: "div",
                                 props: {
-                                    style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" },
+                                    style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: headerMarginBottom },
                                     children: [
                                         headerLogo ?
                                             { type: "img", props: { src: headerLogo, style: { maxWidth: "240px", maxHeight: "95px", objectFit: "contain" } } } :
@@ -152,12 +158,12 @@ class ReceiptService {
                                 }
                             },
                             { type: "div", props: { style: { fontSize: "28px", fontWeight: "bold", marginBottom: "4px" }, children: "Recibo de Pagamento" } },
-                            { type: "div", props: { style: { fontSize: "14px", color: "#64748b", marginBottom: "28px" }, children: data.subtitulo } },
+                            { type: "div", props: { style: { fontSize: "14px", color: "#64748b", marginBottom: subtitleMarginBottom }, children: data.subtitulo } },
 
                             {
                                 type: "div",
                                 props: {
-                                    style: { backgroundColor: "#f8fafc", padding: "26px", borderRadius: "16px", display: "flex", flexDirection: "column", alignItems: "center", marginBottom: "32px" },
+                                    style: { backgroundColor: "#f8fafc", padding: valorPadding, borderRadius: "16px", display: "flex", flexDirection: "column", alignItems: "center", marginBottom: valorMarginBottom },
                                     children: [
                                         { type: "div", props: { style: { fontSize: "14px", color: "#64748b", marginBottom: "8px" }, children: "VALOR PAGO" } },
                                         { type: "div", props: { style: { fontSize: "48px", fontWeight: "bold", color: "#1e293b" }, children: formatCurrency(data.valor) } },
@@ -168,7 +174,7 @@ class ReceiptService {
                             {
                                 type: "div",
                                 props: {
-                                    style: { display: "flex", flexDirection: "column", gap: "18px" },
+                                    style: { display: "flex", flexDirection: "column", gap: detailsGap },
                                     children: [
                                         this.renderRow("Pagador", pagadorFormatado),
                                         passageiroFormatado ? this.renderRow("Aluno", passageiroFormatado) : null,
