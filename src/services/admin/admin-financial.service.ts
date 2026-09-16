@@ -68,15 +68,15 @@ export const adminFinancialService = {
     for (const sub of assinaturasRaw) {
       if (sub.status !== SubscriptionStatus.ACTIVE) continue;
 
-      const user = Array.isArray(sub.usuarios) ? sub.usuarios[0] : sub.usuarios;
-      const email = (user?.email || "").toLowerCase();
-      if (email.includes("teste-google")) continue;
-
       const isVitalicio = !sub.data_vencimento;
       if (isVitalicio) {
         totalVitalicios++;
         continue;
       }
+
+      const user = Array.isArray(sub.usuarios) ? sub.usuarios[0] : sub.usuarios;
+      const email = (user?.email || "").toLowerCase();
+      if (email.includes("teste-google")) continue;
 
       assinantesPagantesAtivos.push(sub);
 
@@ -130,11 +130,10 @@ export const adminFinancialService = {
         receitaRealizadaMesAnterior += val;
       }
 
-      const metodo = (fatura.metodo_pagamento || "").toLowerCase();
-      if (metodo.includes("pix")) {
+      if (fatura.metodo_pagamento === CheckoutPaymentMethod.PIX) {
         faturasPixCount++;
         faturasPixTotal += val;
-      } else if (metodo.includes("cartao") || metodo.includes("credit")) {
+      } else if (fatura.metodo_pagamento === CheckoutPaymentMethod.CREDIT_CARD) {
         faturasCartaoCount++;
         faturasCartaoTotal += val;
       } else {
@@ -192,14 +191,14 @@ export const adminFinancialService = {
     }
 
     const safrasTrialsMap = new Map<string, SafraTrialItemDTO>();
-    for (let j = 5; j >= 0; j--) {
+    for (let j = 11; j >= 0; j--) {
       const d = new Date(currentYear, currentMonth - j, 1);
       const k = getYearMonthKey(d);
       safrasTrialsMap.set(k, {
         chaveMes: k,
         labelMes: formatMonthYearLabel(d),
         novosTrials: 0,
-        convertidosPagantes: 0,
+        convertidos: 0,
         vitalicios: 0,
         expirados: 0,
         emAndamento: 0,
@@ -234,7 +233,7 @@ export const adminFinancialService = {
       if (safrasTrialsMap.has(ym)) {
         const item = safrasTrialsMap.get(ym)!;
         item.novosTrials++;
-        if (isPag) item.convertidosPagantes++;
+        if (isPag) item.convertidos++;
         else if (isVit) item.vitalicios++;
         else if (isEmTr) item.emAndamento++;
         else if (isExp) item.expirados++;
@@ -242,8 +241,8 @@ export const adminFinancialService = {
     }
 
     for (const item of safrasTrialsMap.values()) {
-      const concluidos = item.convertidosPagantes + item.expirados;
-      item.taxaConversao = concluidos > 0 ? Math.round((item.convertidosPagantes / concluidos) * 1000) / 10 : 0;
+      const concluidos = item.convertidos + item.expirados;
+      item.taxaConversao = concluidos > 0 ? Math.round((item.convertidos / concluidos) * 1000) / 10 : 0;
     }
 
     const taxaConversaoTrial =
@@ -280,7 +279,7 @@ export const adminFinancialService = {
         const isYearly = plano?.identificador === SubscriptionIdentifer.YEARLY;
         const diaVenc = vencDate.getDate();
 
-        const isCartao = (sub.metodo_pagamento || "").toLowerCase().includes("cartao");
+        const isCartao = sub.metodo_pagamento === CheckoutPaymentMethod.CREDIT_CARD;
         const diasLiquidacao = isCartao ? DAYS_CARD_SETTLEMENT : 0;
         const liquidacaoDate = addDays(new Date(projDate.getFullYear(), projDate.getMonth(), diaVenc), diasLiquidacao);
         const liquidacaoChave = getYearMonthKey(liquidacaoDate);
@@ -374,7 +373,7 @@ export const adminFinancialService = {
         ? Number(sub.valor_promocional_anual ?? sub.valor_base_anual ?? plano?.valor_promocional ?? plano?.valor ?? 0)
         : Number(sub.valor_promocional_mensal ?? sub.valor_base_mensal ?? plano?.valor_promocional ?? plano?.valor ?? 0);
 
-      const isCartao = (sub.metodo_pagamento || "").toLowerCase().includes("cartao");
+      const isCartao = sub.metodo_pagamento === CheckoutPaymentMethod.CREDIT_CARD;
       const diasLiq = isCartao ? DAYS_CARD_SETTLEMENT : 0;
       const liqDate = addDays(new Date(nextMonthYear, nextMonthIndex, diaVenc), diasLiq);
       const liqKey = getYearMonthKey(liqDate);
@@ -416,7 +415,7 @@ export const adminFinancialService = {
         ? Number(sub.valor_promocional_anual ?? sub.valor_base_anual ?? plano?.valor_promocional ?? plano?.valor ?? 0)
         : Number(sub.valor_promocional_mensal ?? sub.valor_base_mensal ?? plano?.valor_promocional ?? plano?.valor ?? 0);
 
-      const isCartao = (sub.metodo_pagamento || "").toLowerCase().includes("cartao");
+      const isCartao = sub.metodo_pagamento === CheckoutPaymentMethod.CREDIT_CARD;
       const diasLiquidacao = isCartao ? DAYS_CARD_SETTLEMENT : 0;
       const liqDate = addDays(venc, diasLiquidacao);
 
@@ -428,14 +427,14 @@ export const adminFinancialService = {
         planoNome: plano?.nome || (isYearly ? "Plano Anual" : "Plano Mensal"),
         tipoPlano: isYearly ? "YEARLY" : "MONTHLY",
         isVitalicio: false,
-        metodoPagamento: sub.metodo_pagamento,
+        metodoPagamento: (sub.metodo_pagamento as CheckoutPaymentMethod) || null,
         dataVencimento: venc.toISOString(),
         dataLiquidacaoPrevista: liqDate.toISOString(),
         valor: Math.round(val * 100) / 100
       });
     }
 
-    proximasRenovacoes.sort((a, b) => new Date(a.dataVencimento).getTime() - new Date(b.dataVencimento).getTime());
+    proximasRenovacoes.sort((a, b) => new Date(a.dataVencimento || 0).getTime() - new Date(b.dataVencimento || 0).getTime());
 
     return {
       kpis: {

@@ -1,3 +1,5 @@
+import { CheckoutPaymentMethod } from "../enums.js";
+
 export interface ProjecaoMesValorDTO {
   total: number;
   pix: number;
@@ -63,9 +65,9 @@ export interface ProximaRenovacaoItemDTO {
   planoNome: string;
   tipoPlano: "MONTHLY" | "YEARLY";
   isVitalicio: boolean;
-  metodoPagamento: string | null;
-  dataVencimento: string;
-  dataLiquidacaoPrevista: string;
+  metodoPagamento: CheckoutPaymentMethod | null;
+  dataVencimento: string | null;
+  dataLiquidacaoPrevista: string | null;
   valor: number;
 }
 
@@ -73,7 +75,7 @@ export interface SafraTrialItemDTO {
   chaveMes: string;
   labelMes: string;
   novosTrials: number;
-  convertidosPagantes: number;
+  convertidos: number;
   vitalicios: number;
   expirados: number;
   emAndamento: number;
