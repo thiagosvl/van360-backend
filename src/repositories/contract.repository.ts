@@ -60,6 +60,36 @@ export const contractRepository = {
       .single();
   },
 
+  async getStatusByToken(tokenAcesso: string): Promise<{ id: string; status: ContratoStatus } | null> {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tokenAcesso);
+    let query = supabaseAdmin
+      .from("contratos")
+      .select("id, status");
+
+    if (isUuid) {
+      query = query.or(`token_acesso.eq.${tokenAcesso},id.eq.${tokenAcesso}`);
+    } else {
+      query = query.eq("token_acesso", tokenAcesso);
+    }
+
+    const { data, error } = await query.maybeSingle();
+    if (error || !data) return null;
+    return data as { id: string; status: ContratoStatus };
+  },
+
+  async getLatestStatusByPassageiroId(passageiroId: string): Promise<{ id: string; status: ContratoStatus } | null> {
+    const { data, error } = await supabaseAdmin
+      .from("contratos")
+      .select("id, status")
+      .eq("passageiro_id", passageiroId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    return data as { id: string; status: ContratoStatus };
+  },
+
   async getFinalUrl(id: string) {
     return supabaseAdmin
       .from("contratos")

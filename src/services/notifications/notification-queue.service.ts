@@ -1,11 +1,19 @@
 import { logger } from "../../config/logger.js";
 import { notificationQueueRepository, NotificationQueueItemPayload } from "../../repositories/notification-queue.repository.js";
 import { cobrancaRepository } from "../../repositories/cobranca.repository.js";
-import { NotificationChannelEnum, NotificationQueueStatus, CobrancaStatus } from "../../types/enums.js";
+import { NotificationChannelEnum, NotificationQueueStatus, CobrancaStatus, ContratoStatus } from "../../types/enums.js";
 import { notificationService, NotificationOptions } from "./notification.service.js";
 import { usuarioPushTokenRepository } from "../../repositories/usuario-push-token.repository.js";
-import { EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO, EVENTO_PASSAGEIRO_VENCIMENTO_HOJE, EVENTO_PASSAGEIRO_ATRASADO, EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO } from "../../config/constants.js";
+import {
+    EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
+    EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
+    EVENTO_PASSAGEIRO_ATRASADO,
+    EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO,
+    EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL
+} from "../../config/constants.js";
 import { extractErrorMessage } from "../../utils/error.utils.js";
+import { NotificationUrlBuilder } from "./utils/notification-url.builder.js";
+import { contractRepository } from "../../repositories/contract.repository.js";
 
 
 export interface EnqueueNotificationParams {
@@ -51,8 +59,13 @@ export class NotificationQueueService {
             return { eligible: false, cancelReason: "Cobrança foi excluída." };
         }
 
-        if ((cobranca as any).desativar_lembretes) {
+        const cobrancaObj = cobranca as { desativar_lembretes?: boolean; status: CobrancaStatus };
+        if (cobrancaObj.desativar_lembretes) {
             return { eligible: false, cancelReason: "Lembretes desativados para esta cobrança." };
+        }
+
+        if (cobranca.status === CobrancaStatus.CANCELADA) {
+            return { eligible: false, cancelReason: "Cobrança foi cancelada pelo motorista." };
         }
 
         if (evento === EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO || evento === EVENTO_PASSAGEIRO_VENCIMENTO_HOJE || evento === EVENTO_PASSAGEIRO_ATRASADO) {
@@ -65,6 +78,34 @@ export class NotificationQueueService {
             if (cobranca.status !== CobrancaStatus.PAGO) {
                 return { eligible: false, cancelReason: "Pagamento da cobrança não está mais confirmado." };
             }
+        }
+
+        return { eligible: true };
+    }
+
+    private async validateContratoEligibility(item: NotificationQueueItemPayload): Promise<{ eligible: boolean; cancelReason?: string }> {
+        if (item.evento !== EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL) {
+            return { eligible: true };
+        }
+
+        const payload = item.payload || {};
+        const linkAssinatura = typeof payload.linkAssinatura === "string" ? payload.linkAssinatura : undefined;
+        const token = linkAssinatura ? NotificationUrlBuilder.extractContractToken(linkAssinatura) : "";
+
+        const contrato = token
+            ? await contractRepository.getStatusByToken(token)
+            : (item.passageiro_id ? await contractRepository.getLatestStatusByPassageiroId(item.passageiro_id) : null);
+
+        if (!contrato) {
+            return { eligible: false, cancelReason: "Contrato não encontrado ou excluído." };
+        }
+
+        if (contrato.status === ContratoStatus.ASSINADO) {
+            return { eligible: false, cancelReason: "Contrato já foi assinado pelo responsável." };
+        }
+
+        if (contrato.status === ContratoStatus.SUBSTITUIDO) {
+            return { eligible: false, cancelReason: "Contrato foi substituído por uma nova versão." };
         }
 
         return { eligible: true };
@@ -90,6 +131,9 @@ export class NotificationQueueService {
             const cobrancaCheck = await this.validateCobrancaEligibility(cobrancaId, item.evento);
             if (!cobrancaCheck.eligible) return cobrancaCheck;
         }
+
+        const contratoCheck = await this.validateContratoEligibility(item);
+        if (!contratoCheck.eligible) return contratoCheck;
 
         const routeCheck = this.validateRouteEventTTL(item.evento, item.created_at);
         if (!routeCheck.eligible) return routeCheck;
