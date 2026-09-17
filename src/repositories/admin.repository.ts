@@ -122,7 +122,7 @@ export const adminRepository = {
     ) {
         let query = supabaseAdmin
             .from("historico_atividades")
-            .select("*, usuarios(nome, telefone)", { count: "exact" });
+            .select("*, usuarios(nome, telefone, apelido)", { count: "exact" });
 
         if (isValidFilterValue(filters?.search_cpf)) {
             const cleanSearch = filters!.search_cpf.trim();
@@ -136,7 +136,7 @@ export const adminRepository = {
                 if (digits && digits.length >= 3) {
                     userQuery = userQuery.or(`cpfcnpj.ilike.%${digits}%,telefone.ilike.%${digits}%`);
                 } else if (cleanSearch) {
-                    userQuery = userQuery.or(`nome.ilike.%${cleanSearch}%`);
+                    userQuery = userQuery.or(`nome.ilike.%${cleanSearch}%,apelido.ilike.%${cleanSearch}%`);
                 }
                 const { data: uData } = await userQuery;
                 if (uData && uData.length > 0) {
