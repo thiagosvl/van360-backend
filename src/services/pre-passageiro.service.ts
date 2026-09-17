@@ -6,6 +6,7 @@ import { prePassageiroRepository } from "../repositories/pre-passageiro.reposito
 
 import { userRepository } from "../repositories/user.repository.js";
 import { AppError } from "../errors/AppError.js";
+import { getFirstName } from "../utils/format.js";
 
 export const prePassageiroService = {
   async listPrePassageiros(usuarioId: string, search?: string) {
@@ -109,7 +110,7 @@ export const prePassageiroService = {
       entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
       entidade_id: inserted.id,
       acao: AtividadeAcao.PRE_CADASTRO_CRIADO,
-      descricao: `Responsável de ${inserted.nome} (${inserted.nome_responsavel}) realizou a solicitação de cadastro.`,
+      descricao: `Responsável de ${inserted.nome} (${getFirstName(inserted.nome_responsavel)}) realizou a solicitação de cadastro.`,
       meta: { nome: inserted.nome, responsavel: inserted.nome_responsavel }
     });
 
