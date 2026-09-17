@@ -109,7 +109,7 @@ export const prePassageiroService = {
       entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
       entidade_id: inserted.id,
       acao: AtividadeAcao.PRE_CADASTRO_CRIADO,
-      descricao: `Cadastro de solicitação de aluno preenchido para ${inserted.nome}.`,
+      descricao: `Responsável de ${inserted.nome} (${inserted.nome_responsavel}) realizou a solicitação de cadastro.`,
       meta: { nome: inserted.nome, responsavel: inserted.nome_responsavel }
     });
 
