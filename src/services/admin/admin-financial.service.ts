@@ -6,6 +6,7 @@ import {
   SubscriptionInvoiceStatus
 } from "../../types/enums.js";
 import { getNowBR, parseLocalDate, addDays } from "../../utils/date.utils.js";
+import { extrairDddTelefone, obterEstadoPorDdd } from "../../utils/ddd-estado.util.js";
 import type {
   AdminFinancialStatsResponseDTO,
   AdminDemographicsStatsResponseDTO,
@@ -14,7 +15,8 @@ import type {
   ProximaRenovacaoItemDTO,
   SafraTrialItemDTO,
   FaixaEtariaItemDTO,
-  EvolucaoMensalUsuarioItemDTO
+  EvolucaoMensalUsuarioItemDTO,
+  AdminEstadoDemographicsDTO
 } from "../../types/dtos/admin-financial.dto.js";
 
 const DAYS_CARD_SETTLEMENT = 21;
@@ -503,7 +505,20 @@ export const adminFinancialService = {
       });
     }
 
+    const estadosMap = new Map<string, { uf: string; nome: string; regiao: string; quantidade: number }>();
+
     for (const u of motoristas) {
+      const ddd = extrairDddTelefone((u as any).telefone);
+      const estadoInfo = obterEstadoPorDdd(ddd);
+      const estadoAtual = estadosMap.get(estadoInfo.uf) || {
+        uf: estadoInfo.uf,
+        nome: estadoInfo.nome,
+        regiao: estadoInfo.regiao,
+        quantidade: 0,
+      };
+      estadoAtual.quantidade++;
+      estadosMap.set(estadoInfo.uf, estadoAtual);
+
       if (u.data_nascimento) {
         const birthDate = parseLocalDate(u.data_nascimento);
         let age = currentYear - birthDate.getFullYear();
@@ -564,6 +579,16 @@ export const adminFinancialService = {
       porcentagem: totalCadastrados > 0 ? Math.round((quantidade / totalCadastrados) * 1000) / 10 : 0
     }));
 
+    const distribuicaoEstados: AdminEstadoDemographicsDTO[] = Array.from(estadosMap.values())
+      .map((item) => ({
+        uf: item.uf,
+        nome: item.nome,
+        regiao: item.regiao,
+        quantidade: item.quantidade,
+        porcentagem: totalCadastrados > 0 ? Math.round((item.quantidade / totalCadastrados) * 1000) / 10 : 0,
+      }))
+      .sort((a, b) => b.quantidade - a.quantidade);
+
     const taxaConversaoTrial =
       trialsIniciados > 0 ? Math.round((convertidosPagantes / trialsIniciados) * 1000) / 10 : 0;
     const taxaRetencaoAtiva =
@@ -580,7 +605,8 @@ export const adminFinancialService = {
         taxaConversaoTrial,
         taxaRetencaoAtiva
       },
-      evolucaoMensal: Array.from(ultimos6MesesMap.values())
+      evolucaoMensal: Array.from(ultimos6MesesMap.values()),
+      distribuicaoEstados,
     };
   }
 };

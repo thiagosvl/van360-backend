@@ -116,8 +116,17 @@ export interface EvolucaoMensalUsuarioItemDTO {
   cancelados: number;
 }
 
+export interface AdminEstadoDemographicsDTO {
+  uf: string;
+  nome: string;
+  regiao: string;
+  quantidade: number;
+  porcentagem: number;
+}
+
 export interface AdminDemographicsStatsResponseDTO {
   faixasEtarias: FaixaEtariaItemDTO[];
   funil: FunilConversaoDTO;
   evolucaoMensal: EvolucaoMensalUsuarioItemDTO[];
+  distribuicaoEstados: AdminEstadoDemographicsDTO[];
 }

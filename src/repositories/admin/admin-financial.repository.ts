@@ -48,6 +48,7 @@ export const adminFinancialRepository = {
       .from("usuarios")
       .select(`
         id,
+        telefone,
         data_nascimento,
         created_at,
         assinaturas(id, status, created_at)
