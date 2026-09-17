@@ -86,6 +86,7 @@ export const createPassageiroSchema = z.object({
     return v.getTime() <= getNowBR().getTime();
   }, { message: "Data de nascimento não pode ser no futuro" }),
   turma: optionalString,
+  sala: optionalString,
   nome_professor: optionalString,
   horario_entrada: optionalString,
   horario_saida: optionalString,

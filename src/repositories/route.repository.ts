@@ -66,6 +66,7 @@ export const routeRepository = {
             id,
             nome,
             turma,
+            sala,
             ativo,
             escola:escolas (
               id,
@@ -237,6 +238,7 @@ export const routeRepository = {
             id,
             nome,
             turma,
+            sala,
             ativo,
             escola:escolas (
               id,

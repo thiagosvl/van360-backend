@@ -62,6 +62,7 @@ export const prePassageiroService = {
       observacoes: payload.observacoes || null,
       modalidade: payload.modalidade || null,
       turma: payload.turma || null,
+      sala: payload.sala || null,
       nome_professor: payload.nome_professor || null,
       genero: payload.genero || null,
       parentesco_responsavel: payload.parentesco_responsavel || null,

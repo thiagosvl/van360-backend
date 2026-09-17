@@ -105,6 +105,7 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO> | UpdatePassa
     // Novos Campos
     if (data.modalidade !== undefined) prepared.modalidade = data.modalidade;
     if (data.turma !== undefined) prepared.turma = data.turma ? cleanString(data.turma, true) : null;
+    if (data.sala !== undefined) prepared.sala = data.sala ? cleanString(data.sala, true) : null;
     if (data.nome_professor !== undefined) prepared.nome_professor = data.nome_professor ? cleanString(data.nome_professor, true) : null;
     if (data.data_nascimento !== undefined && data.data_nascimento) {
         if (data.data_nascimento.getTime() > getNowBR().getTime()) {

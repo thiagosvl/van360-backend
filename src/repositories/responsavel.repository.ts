@@ -155,7 +155,7 @@ export const responsavelRepository = {
     const { data: passageiro, error: errPass } = await supabaseAdmin
       .from("passageiros")
       .select(`
-        id, usuario_id, nome, genero, data_nascimento, periodo, modalidade, turma, nome_professor,
+        id, usuario_id, nome, genero, data_nascimento, periodo, modalidade, turma, sala, nome_professor,
         data_inicio_transporte, data_fim_transporte, horario_entrada, horario_saida,
         valor_cobranca, dia_vencimento, data_inicio_cobranca, data_fim_cobranca, created_at,
         observacoes,

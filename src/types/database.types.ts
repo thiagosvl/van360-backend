@@ -1252,6 +1252,7 @@ export type Database = {
           nome_professor: string | null
           observacoes: string | null
           periodo: string | null
+          sala: string | null
           turma: string | null
           updated_at: string
           usuario_id: string
@@ -1280,6 +1281,7 @@ export type Database = {
           nome_professor?: string | null
           observacoes?: string | null
           periodo?: string | null
+          sala?: string | null
           turma?: string | null
           updated_at?: string
           usuario_id: string
@@ -1308,6 +1310,7 @@ export type Database = {
           nome_professor?: string | null
           observacoes?: string | null
           periodo?: string | null
+          sala?: string | null
           turma?: string | null
           updated_at?: string
           usuario_id?: string
@@ -1403,6 +1406,7 @@ export type Database = {
             | null
           periodo: string | null
           referencia: string | null
+          sala: string | null
           telefone_responsavel: string
           turma: string | null
           updated_at: string
@@ -1442,6 +1446,7 @@ export type Database = {
             | null
           periodo?: string | null
           referencia?: string | null
+          sala?: string | null
           telefone_responsavel: string
           turma?: string | null
           updated_at?: string
@@ -1481,6 +1486,7 @@ export type Database = {
             | null
           periodo?: string | null
           referencia?: string | null
+          sala?: string | null
           telefone_responsavel?: string
           turma?: string | null
           updated_at?: string
