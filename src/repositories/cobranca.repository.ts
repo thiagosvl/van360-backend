@@ -178,6 +178,7 @@ export const cobrancaRepository = {
                     usuario_configuracoes!inner(
                         notificar_pais_cobrancas,
                         cobranca_aviso_previo_ativo,
+                        cobranca_aviso_previo_whatsapp_ativo,
                         cobranca_dias_aviso_previo,
                         cobranca_vencimento_hoje_ativo,
                         cobranca_atraso_3_dias_ativo,

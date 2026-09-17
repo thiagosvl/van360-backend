@@ -22,6 +22,7 @@ export async function obterConfiguracoesUsuario(usuarioId: string): Promise<Conf
   return {
     notificar_pais_cobrancas: config?.notificar_pais_cobrancas ?? true,
     cobranca_aviso_previo_ativo: config?.cobranca_aviso_previo_ativo ?? true,
+    cobranca_aviso_previo_whatsapp_ativo: config?.cobranca_aviso_previo_whatsapp_ativo ?? false,
     cobranca_dias_aviso_previo: config?.cobranca_dias_aviso_previo ?? null,
     cobranca_vencimento_hoje_ativo: config?.cobranca_vencimento_hoje_ativo ?? true,
     cobranca_atraso_3_dias_ativo: config?.cobranca_atraso_3_dias_ativo ?? true,

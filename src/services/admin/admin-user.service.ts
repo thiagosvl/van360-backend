@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "../../config/supabase.js";
 import { usuarioPushTokenRepository } from "../../repositories/usuario-push-token.repository.js";
+import { usuarioConfiguracoesRepository } from "../../repositories/usuario-configuracoes.repository.js";
 import { motoristaEquipeRepository } from "../../repositories/motorista-equipe.repository.js";
 import { NotificationChannelEnum } from '../../types/enums.js';
 import { logger } from "../../config/logger.js";
@@ -15,9 +16,7 @@ import {
   CanalAquisicao,
   DispositivoCadastro,
   EvolutionConnectionStatus,
-  ContratoStatus,
   DriverContractConfigStatus,
-  IndicacaoStatus,
   CobrancaStatus,
   TipoResponsavel,
   NotificationQueueStatus,
@@ -222,6 +221,7 @@ export const adminUserService = {
         faturasReq,
         kpisRpcRes,
         pushTokensReq,
+        configReq,
       ],
       referralWithIndicadorRes,
     ] = await Promise.all([
@@ -294,6 +294,7 @@ export const adminUserService = {
       escolas: [],
       contratos: [],
       dispositivos,
+      configuracoes: configReq?.data || null,
     };
   },
 
@@ -452,6 +453,12 @@ export const adminUserService = {
     if (data.email !== undefined) {
       await authProvider.updateUserById(userId, {
         email: data.email.toLowerCase().trim(),
+      });
+    }
+
+    if (data.cobranca_aviso_previo_whatsapp_ativo !== undefined) {
+      await usuarioConfiguracoesRepository.update(userId, {
+        cobranca_aviso_previo_whatsapp_ativo: data.cobranca_aviso_previo_whatsapp_ativo,
       });
     }
 
@@ -1222,6 +1229,7 @@ export const adminUserService = {
       let vencendoHojeFirebase = 0;
 
       let avisoPrevioFaturas = 0;
+      let avisoPrevioWaba = 0;
       let avisoPrevioResend = 0;
       let avisoPrevioFirebase = 0;
 
@@ -1267,6 +1275,7 @@ export const adminUserService = {
           usuario_configuracoes?: Array<{
             notificar_pais_cobrancas?: boolean;
             cobranca_aviso_previo_ativo?: boolean;
+            cobranca_aviso_previo_whatsapp_ativo?: boolean;
             cobranca_dias_aviso_previo?: number;
             cobranca_vencimento_hoje_ativo?: boolean;
             cobranca_atraso_3_dias_ativo?: boolean;
@@ -1302,6 +1311,7 @@ export const adminUserService = {
             const diasAntecedencia = diffInDays(dataRefStr, dataVencimentoStr);
             if (diasAntecedencia === driverThresholdDays) {
               avisoPrevioFaturas++;
+              if (motoristaConfig?.cobranca_aviso_previo_whatsapp_ativo && hasPhone) avisoPrevioWaba++;
               if (hasEmail) avisoPrevioResend++;
               if (hasPush) avisoPrevioFirebase++;
 
@@ -1337,7 +1347,7 @@ export const adminUserService = {
         }
       }
 
-      const totalWaba = vencendoHojeWaba + atraso3DiasWaba;
+      const totalWaba = vencendoHojeWaba + atraso3DiasWaba + avisoPrevioWaba;
       const totalResend = vencendoHojeResend + avisoPrevioResend + atraso3DiasResend + atraso5DiasResend + atraso7DiasResend;
       const totalFirebase = vencendoHojeFirebase + avisoPrevioFirebase + atraso3DiasFirebase + atraso5DiasFirebase + atraso7DiasFirebase;
       const totalFaturasHoje = vencendoHojeFaturas + avisoPrevioFaturas + atraso3DiasFaturas + atraso5DiasFaturas + atraso7DiasFaturas;
@@ -1385,10 +1395,10 @@ export const adminUserService = {
             descricao: "Faturas que vencerão nos próximos dias (D+1 a D+5)",
             totalFaturas: avisoPrevioFaturas,
             canais: {
-              waba: 0,
+              waba: avisoPrevioWaba,
               resend: avisoPrevioResend,
               firebase: avisoPrevioFirebase,
-              custoEstimadoWabaBrl: 0,
+              custoEstimadoWabaBrl: Number((avisoPrevioWaba * CUSTO_ESTIMADO_WABA_UNITARIO).toFixed(2)),
             },
           },
           atraso3Dias: {

@@ -17,6 +17,7 @@ export const updateUserAdminSchema = z.object({
   cpfcnpj: z.string().min(11).max(14).optional(),
   ativo: z.boolean().optional(),
   data_nascimento: z.string().optional().nullable(),
+  cobranca_aviso_previo_whatsapp_ativo: z.boolean().optional(),
 });
 
 export const updateSubscriptionAdminSchema = z.object({

@@ -91,6 +91,11 @@ export const adminUserRepository = {
         .select("id, platform, created_at, updated_at")
         .eq("user_id", userId)
         .order("updated_at", { ascending: false }),
+      supabaseAdmin
+        .from("usuario_configuracoes")
+        .select("*")
+        .eq("usuario_id", userId)
+        .maybeSingle(),
     ]);
   },
 
@@ -282,6 +287,7 @@ export const adminUserRepository = {
           usuario_configuracoes(
             notificar_pais_cobrancas,
             cobranca_aviso_previo_ativo,
+            cobranca_aviso_previo_whatsapp_ativo,
             cobranca_dias_aviso_previo,
             cobranca_vencimento_hoje_ativo,
             cobranca_atraso_3_dias_ativo,

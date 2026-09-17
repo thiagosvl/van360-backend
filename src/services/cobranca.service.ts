@@ -678,6 +678,7 @@ export const cobrancaService = {
           const atraso3DiasAtivo = motoristaConfig?.cobranca_atraso_3_dias_ativo ?? true;
           const atraso5DiasAtivo = motoristaConfig?.cobranca_atraso_5_dias_ativo ?? true;
           const atraso7DiasAtivo = motoristaConfig?.cobranca_atraso_7_dias_ativo ?? true;
+          const avisoPrevioWhatsappAtivo = motoristaConfig?.cobranca_aviso_previo_whatsapp_ativo ?? false;
 
           let eventType:
             | typeof EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO
@@ -692,7 +693,9 @@ export const cobrancaService = {
               const diasAntecedencia = diffInDays(todayStr, dataVencimentoStr);
               if (diasAntecedencia === driverThresholdDays) {
                 eventType = EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO;
-                baseChannels = [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND];
+                baseChannels = avisoPrevioWhatsappAtivo
+                  ? [NotificationChannelEnum.WABA, NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND]
+                  : [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND];
                 shouldSend = true;
               }
             }
