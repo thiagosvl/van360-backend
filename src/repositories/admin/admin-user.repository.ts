@@ -39,9 +39,8 @@ export const adminUserRepository = {
       )
       .order("created_at", { ascending: false });
 
-    if (query.tipo) {
-      q = q.eq("tipo", query.tipo);
-    }
+    const tipo = query.tipo?.trim() || UserType.MOTORISTA;
+    q = q.eq("tipo", tipo);
 
     if (query.status === SUBSCRIPTION_VITALICIO_FILTER) {
       q = q

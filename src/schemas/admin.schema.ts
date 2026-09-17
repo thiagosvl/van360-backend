@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SubscriptionStatus, ConfigKey } from "../types/enums.js";
+import { SubscriptionStatus, ConfigKey, UserType } from "../types/enums.js";
 import {
   EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS,
   EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA,
@@ -41,7 +41,7 @@ export const listUsersQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   search: z.string().optional(),
   status: z.string().optional(),
-  tipo: z.string().optional(),
+  tipo: z.string().optional().default(UserType.MOTORISTA),
 });
 
 export const listUserLogsQuerySchema = z.object({

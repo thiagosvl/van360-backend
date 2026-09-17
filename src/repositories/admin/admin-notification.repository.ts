@@ -259,7 +259,7 @@ export const adminNotificationRepository = {
   async getGlobalNotifications(from: number, to: number, filters?: AdminNotificationFilters) {
     let query = supabaseAdmin
       .from("fila_notificacoes")
-      .select("*, usuarios(id, nome, email, telefone, cpfcnpj)", { count: "exact" });
+      .select("*, usuarios(id, nome, email, telefone, cpfcnpj, apelido)", { count: "exact" });
 
     const driverIds = await resolveDriverUserIds(filters?.searchMotorista);
     if (driverIds) {
@@ -361,7 +361,7 @@ export const adminNotificationRepository = {
   async findNotificationById(id: string) {
     const { data, error } = await supabaseAdmin
       .from("fila_notificacoes")
-      .select("*, usuarios(id, nome, email, telefone, cpfcnpj)")
+      .select("*, usuarios(id, nome, email, telefone, cpfcnpj, apelido)")
       .eq("id", id)
       .maybeSingle();
 
