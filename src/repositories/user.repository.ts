@@ -157,7 +157,7 @@ export const userRepository = {
     async getPublicData(id: string) {
         return supabaseAdmin
             .from("usuarios")
-            .select("id, nome, apelido")
+            .select("id, nome, apelido, razao_social, cpfcnpj, logo_url")
             .eq("id", id)
             .single();
     }
