@@ -1,10 +1,11 @@
 import { moneyToNumber } from "../utils/currency.utils.js";
-import { cleanString, onlyDigits } from "../utils/string.utils.js";
+import { cleanString, onlyDigits, normalizePhone, isSamePerson } from "../utils/string.utils.js";
 import { toPersistenceString } from "../utils/date.utils.js";
 import { CreatePrePassageiroDTO } from "../types/dtos/pre-passageiro.dto.js";
 import { prePassageiroRepository } from "../repositories/pre-passageiro.repository.js";
 
 import { userRepository } from "../repositories/user.repository.js";
+import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
 import { getFirstName } from "../utils/format.js";
 
@@ -46,7 +47,7 @@ export const prePassageiroService = {
       nome_responsavel: cleanString(payload.nome_responsavel, true),
 
       cpf_responsavel: payload.cpf_responsavel ? onlyDigits(payload.cpf_responsavel) : null,
-      telefone_responsavel: payload.telefone_responsavel ? onlyDigits(payload.telefone_responsavel) : null,
+      telefone_responsavel: payload.telefone_responsavel ? normalizePhone(payload.telefone_responsavel) : null,
       email_responsavel: payload.email_responsavel ? payload.email_responsavel.trim().toLowerCase() : null,
       escola_id: payload.escola_id || null,
       periodo: payload.periodo || null,
@@ -75,6 +76,31 @@ export const prePassageiroService = {
       dispositivo_cadastro: payload.dispositivo_cadastro || null,
       metadados_cadastro: payload.metadados_cadastro || {},
     };
+
+    if (prePassageiroData.telefone_responsavel) {
+      const { data: existingResp } = await supabaseAdmin
+        .from("responsaveis")
+        .select("cpf, nome")
+        .eq("telefone", prePassageiroData.telefone_responsavel)
+        .maybeSingle();
+
+      if (existingResp) {
+        if (existingResp.cpf && prePassageiroData.cpf_responsavel && existingResp.cpf !== prePassageiroData.cpf_responsavel) {
+          throw new AppError("Este telefone já está cadastrado com outro CPF. Verifique os dados.", 409);
+        }
+
+        const isSame = isSamePerson(existingResp.nome, prePassageiroData.nome_responsavel);
+
+        if (
+          existingResp.nome &&
+          prePassageiroData.nome_responsavel &&
+          !isSame &&
+          (!prePassageiroData.cpf_responsavel || !existingResp.cpf || prePassageiroData.cpf_responsavel !== existingResp.cpf)
+        ) {
+          throw new AppError("Este telefone já está cadastrado para outro responsável.", 409);
+        }
+      }
+    }
 
     const inserted = await prePassageiroRepository.insert(prePassageiroData);
 

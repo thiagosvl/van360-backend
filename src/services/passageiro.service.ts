@@ -3,9 +3,9 @@ import { responsavelRepository } from "../repositories/responsavel.repository.js
 import { prePassageiroRepository } from "../repositories/pre-passageiro.repository.js";
 import { AppError } from "../errors/AppError.js";
 import { CreatePassageiroDTO, ListPassageirosFiltersDTO, UpdatePassageiroDTO, CreateResponsavelAdicionalDTO, UpdateResponsavelAdicionalDTO } from "../types/dtos/passageiro.dto.js";
-import { AtividadeAcao, AtividadeEntidadeTipo, ParentescoResponsavel, TipoResponsavel } from "../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, TipoResponsavel } from "../types/enums.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
-import { cleanString, onlyDigits } from "../utils/string.utils.js";
+import { cleanString, onlyDigits, normalizePhone } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
 import { parseLocalDate, toPersistenceString, getNowBR } from "../utils/date.utils.js";
 import { notificationService } from "./notifications/notification.service.js";
@@ -21,7 +21,7 @@ const _enrichPassageiroWithResponsavel = (p: Record<string, any>, isListMode: bo
     const principalLink = links.find((l: any) => l.tipo === TipoResponsavel.PRINCIPAL) || links[0];
     const rawResp = principalLink?.responsavel;
     const resp = Array.isArray(rawResp) ? rawResp[0] : rawResp;
-    
+
     const enriched: Record<string, any> = {
         ...p,
         responsavel_principal: principalLink && resp ? {
@@ -149,7 +149,7 @@ const _syncResponsavelPrincipal = async (
     const rawPhone = respData.telefone || currentResp?.telefone;
     if (!rawPhone) return null;
 
-    const targetPhone = onlyDigits(String(rawPhone));
+    const targetPhone = normalizePhone(String(rawPhone));
     if (!targetPhone) return null;
 
     const respObj = await passageiroRepository.upsertResponsavel({
@@ -195,7 +195,12 @@ const createPassageiro = async (data: CreatePassageiroDTO, isPreCadastro: boolea
 
     const respPrincipalData = data.responsavel_principal;
     if (respPrincipalData) {
-        await _syncResponsavelPrincipal(inserted.id, respPrincipalData);
+        try {
+            await _syncResponsavelPrincipal(inserted.id, respPrincipalData);
+        } catch (syncErr) {
+            await passageiroRepository.delete(inserted.id);
+            throw syncErr;
+        }
     }
 
     if (!isPreCadastro) {
@@ -436,7 +441,7 @@ const finalizePreCadastro = async (
     const payload: CreatePassageiroDTO = {
         ...pre,
         ...data,
-        nome: data.nome || pre.nome_aluno || "Aluno",
+        nome: data.nome || pre.nome || pre.nome_aluno || "Aluno",
         usuario_id: usuarioId,
         responsavel_principal: responsavelPrincipal,
         // Garantir que valor_cobranca e dia_vencimento do pre sejam mantidos se não vierem no data
@@ -475,7 +480,7 @@ const lookupResponsavelByCpf = async (usuarioId: string, searchVal: string): Pro
     if (!usuarioId) throw new AppError("Usuário não identificado", 401);
     if (!searchVal) throw new AppError("Termo de busca obrigatório", 400);
 
-    const termClean = onlyDigits(searchVal);
+    const termClean = normalizePhone(searchVal);
 
     const { data, error } = await passageiroRepository.lookupResponsavel(usuarioId, termClean);
 
@@ -556,7 +561,7 @@ const listarAniversariantesDoMes = async (usuarioId: string, mes: number, veicul
 const addResponsavelAdicional = async (passageiroId: string, data: CreateResponsavelAdicionalDTO) => {
     const result = await responsavelRepository.addResponsavelAdicional(passageiroId, {
         nome: cleanString(data.nome, true),
-        telefone: onlyDigits(data.telefone),
+        telefone: normalizePhone(data.telefone),
         cpf: data.cpf ? onlyDigits(data.cpf) : null,
         email: data.email ? cleanString(data.email.trim().toLowerCase()) : null,
         parentesco: data.parentesco,
@@ -595,7 +600,7 @@ const addResponsavelAdicional = async (passageiroId: string, data: CreateRespons
 const updateResponsavelAdicional = async (responsavelId: string, data: UpdateResponsavelAdicionalDTO, passageiroId?: string) => {
     const prepared: Record<string, unknown> = {};
     if (data.nome !== undefined) prepared.nome = data.nome ? cleanString(data.nome, true) : null;
-    if (data.telefone !== undefined) prepared.telefone = data.telefone ? onlyDigits(data.telefone) : null;
+    if (data.telefone !== undefined) prepared.telefone = data.telefone ? normalizePhone(data.telefone) : null;
     if (data.cpf !== undefined) prepared.cpf = data.cpf ? onlyDigits(data.cpf) : null;
     if (data.email !== undefined) prepared.email = data.email ? cleanString(data.email.trim().toLowerCase()) : null;
     if (data.parentesco !== undefined) prepared.parentesco = data.parentesco;

@@ -55,6 +55,7 @@ const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post("/notifications/retry-bulk", adminNotificationController.retryBulkNotifications);
   app.get("/users/:id/notifications", adminNotificationController.getUserNotifications);
   app.get("/passengers/:id/notifications", adminNotificationController.getPassengerNotifications);
+  app.post("/passengers/:id/dispatch-cobranca", adminUserController.dispatchPassengerCobranca);
 
   // Configurações Internas & Planos SaaS & Calculadora
   app.get("/configs", adminConfigController.getConfigs);

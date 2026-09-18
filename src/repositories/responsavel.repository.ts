@@ -3,7 +3,7 @@ import { TipoResponsavel, RouteSentido } from "../types/enums.js";
 import { AppError } from "../errors/AppError.js";
 import { toPersistenceString, getNowBR } from "../utils/date.utils.js";
 import { usuarioPushTokenRepository } from "./usuario-push-token.repository.js";
-import { onlyDigits, getPhoneVariants } from "../utils/string.utils.js";
+import { onlyDigits, normalizePhone, getPhoneVariants, isSamePerson } from "../utils/string.utils.js";
 
 export interface ResponsavelPassageiroRecord {
   id: string; // passageiro_id
@@ -394,7 +394,7 @@ export const responsavelRepository = {
   },
 
   async addResponsavelAdicional(passageiroId: string, data: Record<string, any>) {
-    const phoneDigits = String(data.telefone || "").replace(/\D/g, "");
+    const phoneDigits = normalizePhone(data.telefone);
     let responsavelId: string;
 
     const { data: existing } = await supabaseAdmin
@@ -411,6 +411,27 @@ export const responsavelRepository = {
     }
 
     if (existing) {
+      if (existing.cpf && data.cpf && data.cpf !== existing.cpf) {
+        throw new AppError(
+          "Este telefone já está cadastrado com outro CPF. Verifique os dados.",
+          409
+        );
+      }
+
+      const isSame = isSamePerson(existing.nome, data.nome);
+
+      if (
+        data.nome &&
+        existing.nome &&
+        !isSame &&
+        (!data.cpf || !existing.cpf || data.cpf !== existing.cpf)
+      ) {
+        throw new AppError(
+          "Este telefone já está cadastrado para outro responsável.",
+          409
+        );
+      }
+
       responsavelId = existing.id;
       const updatePayload: Record<string, any> = { updated_at: new Date().toISOString() };
       // Só preenche se o campo estivesse nulo anteriormente para não sobrescrever dados existentes
@@ -534,7 +555,7 @@ export const responsavelRepository = {
     }
 
     const phoneDigits = data.telefone !== undefined && data.telefone !== null
-      ? String(data.telefone).replace(/\D/g, "")
+      ? normalizePhone(data.telefone)
       : undefined;
 
     if (phoneDigits) {
@@ -545,7 +566,7 @@ export const responsavelRepository = {
         .maybeSingle();
 
       if (existingResp && existingResp.id !== responsavelId) {
-        throw new AppError("Já existe outro responsável cadastrado com este número de telefone.", 409);
+        throw new AppError("Este telefone já está cadastrado para outro responsável.", 409);
       }
     }
 

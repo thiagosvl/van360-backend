@@ -3,6 +3,7 @@ import { isValidFilterValue } from "../utils/filter.utils.js";
 import { TipoResponsavel } from "../types/enums.js";
 import { ListPassageirosFiltersDTO } from "../types/dtos/passageiro.dto.js";
 import { AppError } from "../errors/AppError.js";
+import { isSamePerson, normalizePhone } from "../utils/string.utils.js";
 
 const PASSAGEIRO_RESPONSAVEIS_SELECT = `
   responsaveis:passageiro_responsaveis(
@@ -189,10 +190,12 @@ export const passageiroRepository = {
       .from("responsaveis")
       .select("id, nome, telefone, email, cpf, logradouro, numero, bairro, cidade, estado, cep, referencia, complemento");
 
-    if (termoLimpo.length === 11) {
-      query = query.or(`cpf.eq.${termoLimpo},telefone.eq.${termoLimpo}`);
-    } else if (termoLimpo.length === 10) {
-      query = query.eq("telefone", termoLimpo);
+    const clean = normalizePhone(termoLimpo) || termoLimpo;
+
+    if (clean.length === 11) {
+      query = query.or(`cpf.eq.${clean},telefone.eq.${clean}`);
+    } else if (clean.length === 10) {
+      query = query.eq("telefone", clean);
     } else {
       return { data: null, error: null };
     }
@@ -367,22 +370,38 @@ export const passageiroRepository = {
     referencia?: string | null;
     complemento?: string | null;
   }) {
+    const targetPhone = normalizePhone(data.telefone) || data.telefone;
+
     const { data: existing } = await supabaseAdmin
       .from("responsaveis")
       .select("*")
-      .eq("telefone", data.telefone)
+      .eq("telefone", targetPhone)
       .maybeSingle();
 
     if (existing) {
       if (existing.cpf && data.cpf && data.cpf !== existing.cpf) {
         throw new AppError(
-          "Telefone já cadastrado com outro CPF. Verifique os dados.",
+          "Este telefone já está cadastrado com outro CPF. Verifique os dados.",
+          409
+        );
+      }
+
+      const isSame = isSamePerson(existing.nome, data.nome);
+
+      if (
+        data.nome &&
+        existing.nome &&
+        !isSame &&
+        (!data.cpf || !existing.cpf || data.cpf !== existing.cpf)
+      ) {
+        throw new AppError(
+          "Este telefone já está cadastrado para outro responsável.",
           409
         );
       }
 
       const updatePayload: Record<string, any> = { updated_at: new Date().toISOString() };
-      if (data.nome && (!existing.cpf || data.cpf === existing.cpf)) updatePayload.nome = data.nome;
+      if (data.nome && (!existing.cpf || data.cpf === existing.cpf || isSame)) updatePayload.nome = data.nome;
       if (data.cpf !== undefined && (!existing.cpf || data.cpf === existing.cpf)) updatePayload.cpf = data.cpf;
       if (data.email !== undefined) updatePayload.email = data.email;
       if (data.pin_acesso !== undefined) updatePayload.pin_acesso = data.pin_acesso;

@@ -175,6 +175,27 @@ export const adminUserController = {
     }
   },
 
+  async dispatchPassengerCobranca(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+      const adminId = (request as { user?: { id?: string } }).user?.id;
+      const body = z
+        .object({
+          cobrancaId: z.string().uuid().optional(),
+          force: z.boolean().optional(),
+        })
+        .optional()
+        .parse(request.body);
+      const result = await adminNotificationService.dispatchPassengerCobranca(id, adminId, body);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao disparar cobrança do aluno.");
+      const status = error.message?.includes("não encontrado") ? 404 : 400;
+      return reply.status(status).send({ error: error.message });
+    }
+  },
+
   async getUsersLatestActivity(request: FastifyRequest, reply: FastifyReply) {
     try {
       const query = listUsersLatestActivityQuerySchema.parse(request.query);

@@ -7,8 +7,20 @@ import {
   EVENTO_MOTORISTA_ASSINATURA_VENCENDO,
   EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO,
   EVENTO_MOTORISTA_TESTE_ENCERRADO,
+  EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
+  EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
+  EVENTO_PASSAGEIRO_ATRASADO,
 } from "../../config/constants.js";
-import { NotificationChannelEnum, CheckoutPaymentMethod, NotificationQueueStatus, SubscriptionStatus } from "../../types/enums.js";
+import {
+  NotificationChannelEnum,
+  CheckoutPaymentMethod,
+  NotificationQueueStatus,
+  SubscriptionStatus,
+  AtividadeAcao,
+  AtividadeEntidadeTipo,
+  CobrancaStatus,
+  TipoResponsavel,
+} from "../../types/enums.js";
 import { cobrancaService } from "../cobranca.service.js";
 import { passageiroService } from "../passageiro.service.js";
 import { subscriptionRepository } from "../../repositories/subscription.repository.js";
@@ -17,11 +29,15 @@ import { subscriptionBillingService } from "../subscriptions/subscription-billin
 import { notificationService } from "../notifications/notification.service.js";
 import { userRepository } from "../../repositories/user.repository.js";
 import { notificationRepository } from "../../repositories/notification.repository.js";
+import { cobrancaRepository } from "../../repositories/cobranca.repository.js";
+import { adminPassageiroRepository } from "../../repositories/admin/admin-passageiro.repository.js";
+import { historicoRepository } from "../../repositories/historico.repository.js";
 import { diffInDays, getNowBR, toPersistenceString } from "../../utils/date.utils.js";
 import { notificationQueueRepository, NotificationQueueItemPayload } from "../../repositories/notification-queue.repository.js";
 import { NotificationQueueService, notificationQueueService } from "../notifications/notification-queue.service.js";
 import { notificationRetryWorker } from "../notifications/notification-retry.worker.js";
 import { extractErrorMessage } from "../../utils/error.utils.js";
+
 
 export const adminNotificationService = {
   async getUserNotifications(userId: string, query: ListUserNotificationsQuery) {
@@ -353,6 +369,191 @@ export const adminNotificationService = {
       message: affectedCount > 0
         ? `${affectedCount} notificações foram reenfileiradas com sucesso.`
         : "Nenhuma notificação elegível encontrada para reprocessamento.",
+    };
+  },
+
+  async dispatchPassengerCobranca(passageiroId: string, adminId?: string, options?: { cobrancaId?: string; force?: boolean }) {
+    const passageiro = await adminPassageiroRepository.getPassageiroParaNotificacao(passageiroId);
+    if (!passageiro) {
+      throw new Error("Passageiro não encontrado.");
+    }
+
+    if (!passageiro.ativo) {
+      throw new Error("Não é possível enviar cobrança para um aluno inativo.");
+    }
+
+    if (passageiro.enviar_notificacoes === false) {
+      throw new Error("As notificações automáticas estão desativadas para este aluno.");
+    }
+
+    const links = (passageiro.responsaveis as Array<Record<string, unknown>>) || [];
+    const principalLink = links.find((l) => l.tipo === TipoResponsavel.PRINCIPAL) || links[0];
+    const rawResp = principalLink?.responsavel;
+    const resp = (Array.isArray(rawResp) ? rawResp[0] : rawResp) as Record<string, unknown> | undefined;
+
+    const telefoneResp = (resp?.telefone as string | undefined)?.trim();
+    const emailResp = (resp?.email as string | undefined)?.trim();
+    const nomeResp = (resp?.nome as string | undefined) || "Responsável";
+
+    if (!telefoneResp && !emailResp) {
+      throw new Error("O responsável deste aluno não possui telefone ou e-mail cadastrado.");
+    }
+
+    const now = getNowBR();
+    const mesAtual = now.getMonth() + 1;
+    const anoAtual = now.getFullYear();
+
+    type CobrancaItem = {
+      id: string;
+      passageiro_id: string;
+      usuario_id: string | null;
+      mes: number;
+      ano: number;
+      valor: number;
+      status: string;
+      data_vencimento: string;
+      data_envio_ultima_notificacao: string | null;
+      desativar_lembretes: boolean;
+    };
+
+    let cobranca: CobrancaItem | null = null;
+
+    if (options?.cobrancaId) {
+      const { data: cobrancaById } = await cobrancaRepository.getByIdBasic(options.cobrancaId);
+      if (cobrancaById && cobrancaById.passageiro_id === passageiroId) {
+        cobranca = cobrancaById as unknown as CobrancaItem;
+      }
+    }
+
+    if (!cobranca) {
+      const { data: cobrancaMes, error: cobrancaError } = await cobrancaRepository.getByPassageiroMesAno(
+        passageiroId,
+        mesAtual,
+        anoAtual
+      );
+
+      if (cobrancaError) {
+        throw cobrancaError;
+      }
+
+      if (cobrancaMes) {
+        cobranca = cobrancaMes as unknown as CobrancaItem;
+      }
+    }
+
+    if (!cobranca) {
+      throw new Error("A parcela do mês atual ainda não foi gerada para este aluno.");
+    }
+
+    if (cobranca.status === CobrancaStatus.PAGO) {
+      throw new Error("A parcela deste mês já consta como paga.");
+    }
+
+    if (cobranca.status === CobrancaStatus.CANCELADA) {
+      throw new Error("A parcela deste mês está cancelada.");
+    }
+
+    if (cobranca.desativar_lembretes && !options?.force) {
+      throw new Error("Os lembretes para esta cobrança estão desativados.");
+    }
+
+    const todayStr = toPersistenceString(now);
+    const dataVencimentoStr = cobranca.data_vencimento;
+
+    let eventType: typeof EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO | typeof EVENTO_PASSAGEIRO_VENCIMENTO_HOJE | typeof EVENTO_PASSAGEIRO_ATRASADO;
+
+    if (dataVencimentoStr > todayStr) {
+      eventType = EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO;
+    } else if (dataVencimentoStr === todayStr) {
+      eventType = EVENTO_PASSAGEIRO_VENCIMENTO_HOJE;
+    } else {
+      eventType = EVENTO_PASSAGEIRO_ATRASADO;
+    }
+
+    const baseChannels: NotificationChannelEnum[] = [];
+    if (telefoneResp) {
+      baseChannels.push(NotificationChannelEnum.WABA);
+    }
+    if (emailResp) {
+      baseChannels.push(NotificationChannelEnum.RESEND);
+    }
+    baseChannels.push(NotificationChannelEnum.FIREBASE);
+
+    const motorista = (Array.isArray(passageiro.motorista) ? passageiro.motorista[0] : passageiro.motorista) as Record<string, unknown> | undefined;
+
+    const diasAntecedencia = dataVencimentoStr > todayStr ? diffInDays(todayStr, dataVencimentoStr) : undefined;
+    const diasAtraso = dataVencimentoStr < todayStr ? diffInDays(dataVencimentoStr, todayStr) : undefined;
+
+    const contextData = {
+      nomeResponsavel: nomeResp,
+      nomePassageiro: passageiro.nome,
+      nomeMotorista: (motorista?.apelido as string) || (motorista?.nome as string) || "Motorista",
+      apelidoMotorista: (motorista?.apelido as string) || undefined,
+      telefoneMotorista: (motorista?.telefone as string) || undefined,
+      valor: Number(cobranca.valor),
+      dataVencimento: dataVencimentoStr,
+      diasAntecedencia,
+      diasAtraso,
+      usuarioId: passageiro.usuario_id,
+      passageiroId: passageiro.id,
+      chavePix: (motorista?.chave_pix as string) || undefined,
+      tipoChavePix: (motorista?.tipo_chave_pix as string) || undefined,
+      mes: cobranca.mes,
+      ano: cobranca.ano,
+      cobrancaId: cobranca.id,
+    };
+
+    const success = await notificationService.notifyPassenger(
+      telefoneResp || emailResp || "",
+      eventType,
+      contextData,
+      {
+        channels: baseChannels,
+        usuarioId: passageiro.usuario_id || undefined,
+        passageiroId: passageiro.id,
+        email: emailResp || undefined,
+        metadata: {
+          cobrancaId: cobranca.id,
+          disparoManualAdmin: true,
+          adminId: adminId || null,
+        },
+      }
+    );
+
+    if (!success) {
+      throw new Error("Não foi possível enviar a notificação de cobrança. Verifique os canais de envio.");
+    }
+
+    await cobrancaRepository.updateUltimaNotificacao(cobranca.id, todayStr);
+
+    if (passageiro.usuario_id) {
+      await historicoRepository.insert({
+        usuario_id: passageiro.usuario_id,
+        entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
+        entidade_id: cobranca.id,
+        acao: AtividadeAcao.NOTIFICACAO_WABA,
+        descricao: `Lembrete de cobrança (${cobranca.mes}/${cobranca.ano}) disparado manualmente pelo administrador para ${nomeResp}.`,
+        meta: {
+          admin_id: adminId || null,
+          passageiro_id: passageiro.id,
+          evento: eventType,
+          destinatario: telefoneResp || emailResp,
+        },
+      });
+    }
+
+    return {
+      success: true,
+      message: "Lembrete de cobrança enviado com sucesso.",
+      evento: eventType,
+      destinatario: telefoneResp || emailResp,
+      cobranca: {
+        id: cobranca.id,
+        valor: Number(cobranca.valor),
+        data_vencimento: cobranca.data_vencimento,
+        mes: cobranca.mes,
+        ano: cobranca.ano,
+      },
     };
   },
 };

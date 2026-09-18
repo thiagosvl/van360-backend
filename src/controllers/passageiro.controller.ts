@@ -98,7 +98,7 @@ export const passageiroController = {
     const { prePassageiroId } = request.params as { prePassageiroId: string };
     const { data, usuarioId } = finalizePreCadastroSchema.parse(request.body);
     const result = await passageiroService.finalizePreCadastro(prePassageiroId, data, usuarioId);
-    return reply.status(200).send(result);
+    return reply.status(200).send({ success: true, passageiro: result });
   },
 
   lookupResponsavel: async (request: FastifyRequest, reply: FastifyReply) => {

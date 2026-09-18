@@ -1,6 +1,6 @@
 import { logger } from "../config/logger.js";
 import { historicoRepository } from "../repositories/historico.repository.js";
-import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, DispositivoCadastro } from "../types/enums.js";
 import { getContextIp } from "../utils/context.js";
 import { RegistrarEventoInput } from "../schemas/telemetria.schema.js";
 
@@ -18,7 +18,24 @@ export const historicoService = {
     async registrarEventoTelemetria(usuarioId: string, payload: RegistrarEventoInput): Promise<void> {
         const entidadeTipo = payload.entidade_tipo || AtividadeEntidadeTipo.USUARIO;
         const entidadeId = payload.entidade_id || usuarioId;
-        const descricao = payload.descricao || `Ação de telemetria registrada: ${payload.acao}`;
+
+        let descricao = payload.descricao;
+        if (!descricao) {
+            if (payload.acao === AtividadeAcao.APP_ABERTO) {
+                const disp = payload.meta?.dispositivo;
+                if (disp === DispositivoCadastro.APP_ANDROID || disp === DispositivoCadastro.APP_IOS) {
+                    descricao = "Acesso registrado via aplicativo móvel.";
+                } else if (disp === DispositivoCadastro.WEB_DESKTOP) {
+                    descricao = "Acesso registrado via navegador (computador).";
+                } else if (disp === DispositivoCadastro.WEB_MOBILE_ANDROID || disp === DispositivoCadastro.WEB_MOBILE_IOS) {
+                    descricao = "Acesso registrado via navegador (celular).";
+                } else {
+                    descricao = "Acesso ao sistema registrado.";
+                }
+            } else {
+                descricao = `Ação de telemetria registrada: ${payload.acao}`;
+            }
+        }
 
         await this.log({
             usuario_id: usuarioId,
