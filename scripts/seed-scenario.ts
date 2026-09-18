@@ -140,6 +140,10 @@ async function clearData(usuarioId: string) {
             .eq("usuario_id", usuarioId);
 
         if (error) {
+            if (error.code === "PGRST205" || error.message?.includes("Could not find the table")) {
+                console.log(`- Tabela '${table}' não existe no ambiente (ignorando).`);
+                continue;
+            }
             console.error(`Erro ao limpar tabela ${table}:`, error);
             throw error;
         }
