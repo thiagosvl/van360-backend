@@ -7,6 +7,7 @@ import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaStatus, CobrancaTipoPagam
 import { getNowBR, toPersistenceString } from "../utils/date.utils.js";
 import { historicoService } from "./historico.service.js";
 import { receiptService } from "./receipt.service.js";
+import { reciboAnualService } from "./recibo-anual.service.js";
 
 export const cobrancaPagamentoService = {
 
@@ -161,6 +162,10 @@ export const cobrancaPagamentoService = {
     // 2. DELETAR RECIBO DO STORAGE
     if (cobranca.recibo_url) {
       await receiptService.deleteReceipt(cobranca.recibo_url);
+    }
+
+    if (cobranca.passageiro_id && cobranca.ano) {
+      await reciboAnualService.removerReciboAnualSeExistir(cobranca.passageiro_id, cobranca.ano);
     }
 
     return data;

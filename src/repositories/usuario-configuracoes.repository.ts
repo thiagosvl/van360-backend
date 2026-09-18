@@ -17,7 +17,12 @@ export const usuarioConfiguracoesRepository = {
       const { data: newConfig, error: insertError } = await supabaseAdmin
         .from("usuario_configuracoes")
         .upsert(
-          { usuario_id: usuarioId },
+          {
+            usuario_id: usuarioId,
+            notificar_inicio_rota: false,
+            notificar_proxima_parada: false,
+            notificar_conclusao_parada: false,
+          },
           { onConflict: "usuario_id" }
         )
         .select("*")

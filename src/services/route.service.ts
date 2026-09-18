@@ -482,16 +482,17 @@ const iniciarRota = async (rotaId: string, usuarioId: string, notificarPais: boo
   }
 
   const { dataOwnerId } = await resolveDataOwnerId(usuarioId);
-  const userConfig = await usuarioConfiguracoesRepository.getByUsuarioId(dataOwnerId);
+  const targetOwnerId = dataOwnerId || route.usuario_id || usuarioId;
+  const userConfig = await usuarioConfiguracoesRepository.getByUsuarioId(targetOwnerId);
   const snapshotConfig = {
-    notificar_inicio_rota: userConfig?.notificar_inicio_rota ?? true,
-    notificar_proxima_parada: userConfig?.notificar_proxima_parada ?? true,
-    notificar_conclusao_parada: userConfig?.notificar_conclusao_parada ?? true,
+    notificar_inicio_rota: userConfig?.notificar_inicio_rota ?? false,
+    notificar_proxima_parada: userConfig?.notificar_proxima_parada ?? false,
+    notificar_conclusao_parada: userConfig?.notificar_conclusao_parada ?? false,
     rastreamento_ativo: userConfig?.rastreamento_ativo ?? true,
     rastreamento_modo: userConfig?.rastreamento_modo ?? RastreamentoModo.COMPLETO,
   };
 
-  const { data: exec, error: execError } = await routeRepository.insertExecucao(rotaId, usuarioId, notificarPais, snapshotConfig);
+  const { data: exec, error: execError } = await routeRepository.insertExecucao(rotaId, targetOwnerId, notificarPais, snapshotConfig);
 
   if (execError) throw execError;
 
@@ -531,10 +532,9 @@ const iniciarRota = async (rotaId: string, usuarioId: string, notificarPais: boo
 
   const result = await getExecucaoDetail(exec.id);
 
-  // --- LOG DE AUDITORIA ---
-  if (usuarioId) {
+  if (targetOwnerId) {
     historicoService.log({
-      usuario_id: usuarioId,
+      usuario_id: targetOwnerId,
       entidade_tipo: AtividadeEntidadeTipo.ROTA,
       entidade_id: rotaId,
       acao: AtividadeAcao.ROTA_INICIADA,
@@ -948,11 +948,11 @@ const cancelarExecucao = async (execucaoId: string): Promise<any> => {
   if (error) throw error;
 
   const execDetail = await getExecucaoDetail(execucaoId);
+  const targetOwnerId = execDetail?.rota?.usuario_id || execDetail?.usuario_id;
 
-  // --- LOG DE AUDITORIA ---
-  if (execDetail?.usuario_id) {
+  if (targetOwnerId) {
     historicoService.log({
-      usuario_id: execDetail.usuario_id,
+      usuario_id: targetOwnerId,
       entidade_tipo: AtividadeEntidadeTipo.ROTA,
       entidade_id: execDetail.rota_id || execucaoId,
       acao: AtividadeAcao.ROTA_CANCELADA,
@@ -993,11 +993,11 @@ const finalizarExecucao = async (execucaoId: string): Promise<any> => {
   });
 
   const execDetail = await getExecucaoDetail(execucaoId);
+  const targetOwnerId = execDetail?.rota?.usuario_id || execDetail?.usuario_id;
 
-  // --- LOG DE AUDITORIA ---
-  if (execDetail?.usuario_id) {
+  if (targetOwnerId) {
     historicoService.log({
-      usuario_id: execDetail.usuario_id,
+      usuario_id: targetOwnerId,
       entidade_tipo: AtividadeEntidadeTipo.ROTA,
       entidade_id: execDetail.rota_id || execucaoId,
       acao: AtividadeAcao.ROTA_CONCLUIDA,
@@ -1039,10 +1039,17 @@ const registrarAusenciaAntecipada = async (data: CreateAusenciaDTO & { registrad
 
   if (error) throw error;
 
-  // --- LOG DE AUDITORIA ---
-  if (data.registrado_por) {
+  let targetOwnerId = data.registrado_por;
+  if (targetOwnerId) {
+    const { dataOwnerId } = await resolveDataOwnerId(targetOwnerId);
+    if (dataOwnerId) {
+      targetOwnerId = dataOwnerId;
+    }
+  }
+
+  if (targetOwnerId) {
     historicoService.log({
-      usuario_id: data.registrado_por,
+      usuario_id: targetOwnerId,
       entidade_tipo: AtividadeEntidadeTipo.ROTA,
       entidade_id: data.rota_id,
       acao: AtividadeAcao.PASSAGEIRO_STATUS,

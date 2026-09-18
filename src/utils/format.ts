@@ -193,3 +193,43 @@ export const getDriverDisplayName = (usuario?: {
   }
   return usuario.nome || usuario.razao_social || "";
 };
+
+export const getReceiptProviderInfo = (usuario?: {
+  cpfcnpj?: string | null;
+  cpf_cnpj?: string | null;
+  razao_social?: string | null;
+  nome?: string | null;
+} | null): { nome: string; documento: string | null; linhaCabecalho: string } => {
+  if (!usuario) {
+    return {
+      nome: "Transporte Escolar",
+      documento: null,
+      linhaCabecalho: "Transporte Escolar"
+    };
+  }
+
+  const razao = usuario.razao_social?.trim();
+  const nomeCompleto = usuario.nome?.trim();
+  const nomePrincipal = razao || nomeCompleto || "Transporte Escolar";
+
+  const rawDoc = usuario.cpfcnpj || usuario.cpf_cnpj;
+  const cleanDoc = rawDoc ? rawDoc.replace(/\D/g, "") : "";
+  const isCnpj = cleanDoc.length > 11;
+  const docFormatado = rawDoc ? formatCpfCnpj(rawDoc) : null;
+
+  let linha = nomePrincipal;
+  if (docFormatado) {
+    if (isCnpj) {
+      linha = `${nomePrincipal} • CNPJ ${docFormatado}`;
+    } else {
+      linha = `${nomePrincipal} • CPF ${docFormatado}`;
+    }
+  }
+
+  return {
+    nome: nomePrincipal,
+    documento: docFormatado,
+    linhaCabecalho: linha
+  };
+};
+

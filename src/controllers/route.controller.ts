@@ -161,7 +161,7 @@ export const routeController = {
     const authUid = request.user?.id;
     const result = await routeService.registrarAusenciaAntecipada({
       ...data,
-      registrado_por: authUid
+      registrado_por: request.data_owner_id || authUid
     });
     return reply.status(201).send(result);
   },

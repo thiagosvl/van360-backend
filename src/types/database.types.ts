@@ -1604,6 +1604,57 @@ export type Database = {
         }
         Relationships: []
       }
+      recibos_anuais: {
+        Row: {
+          ano: number
+          created_at: string
+          id: string
+          motorista_id: string
+          passageiro_id: string
+          quantidade_meses: number
+          recibo_url: string
+          total_pago: number
+          updated_at: string
+        }
+        Insert: {
+          ano: number
+          created_at?: string
+          id?: string
+          motorista_id: string
+          passageiro_id: string
+          quantidade_meses: number
+          recibo_url: string
+          total_pago: number
+          updated_at?: string
+        }
+        Update: {
+          ano?: number
+          created_at?: string
+          id?: string
+          motorista_id?: string
+          passageiro_id?: string
+          quantidade_meses?: number
+          recibo_url?: string
+          total_pago?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recibos_anuais_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recibos_anuais_passageiro_id_fkey"
+            columns: ["passageiro_id"]
+            isOneToOne: false
+            referencedRelation: "passageiros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rota_ausencias: {
         Row: {
           created_at: string

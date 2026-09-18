@@ -14,28 +14,32 @@ interface LogAtividadeParams {
     ip_address?: string;
 }
 
+function resolveDescricaoTelemetria(acao: AtividadeAcao, meta?: Record<string, unknown>): string {
+    if (acao === AtividadeAcao.APP_ABERTO) {
+        const disp = meta?.dispositivo as DispositivoCadastro | undefined;
+        switch (disp) {
+            case DispositivoCadastro.APP_ANDROID:
+                return "Acesso registrado via App Android.";
+            case DispositivoCadastro.APP_IOS:
+                return "Acesso registrado via App Iphone (iOS).";
+            case DispositivoCadastro.WEB_DESKTOP:
+                return "Acesso registrado via navegador (computador).";
+            case DispositivoCadastro.WEB_MOBILE_ANDROID:
+            case DispositivoCadastro.WEB_MOBILE_IOS:
+                return "Acesso registrado via navegador (celular).";
+            default:
+                return "Acesso ao sistema registrado.";
+        }
+    }
+
+    return `Ação de telemetria registrada: ${acao}`;
+}
+
 export const historicoService = {
     async registrarEventoTelemetria(usuarioId: string, payload: RegistrarEventoInput): Promise<void> {
         const entidadeTipo = payload.entidade_tipo || AtividadeEntidadeTipo.USUARIO;
         const entidadeId = payload.entidade_id || usuarioId;
-
-        let descricao = payload.descricao;
-        if (!descricao) {
-            if (payload.acao === AtividadeAcao.APP_ABERTO) {
-                const disp = payload.meta?.dispositivo;
-                if (disp === DispositivoCadastro.APP_ANDROID || disp === DispositivoCadastro.APP_IOS) {
-                    descricao = "Acesso registrado via aplicativo móvel.";
-                } else if (disp === DispositivoCadastro.WEB_DESKTOP) {
-                    descricao = "Acesso registrado via navegador (computador).";
-                } else if (disp === DispositivoCadastro.WEB_MOBILE_ANDROID || disp === DispositivoCadastro.WEB_MOBILE_IOS) {
-                    descricao = "Acesso registrado via navegador (celular).";
-                } else {
-                    descricao = "Acesso ao sistema registrado.";
-                }
-            } else {
-                descricao = `Ação de telemetria registrada: ${payload.acao}`;
-            }
-        }
+        const descricao = payload.descricao || resolveDescricaoTelemetria(payload.acao, payload.meta);
 
         await this.log({
             usuario_id: usuarioId,

@@ -325,9 +325,9 @@ export const routeRepository = {
         usuario_id: usuarioId,
         status: RouteExecutionStatus.INICIADA,
         notificar_pais: notificarPais,
-        notificar_inicio_rota: snapshotConfig?.notificar_inicio_rota ?? true,
-        notificar_proxima_parada: snapshotConfig?.notificar_proxima_parada ?? true,
-        notificar_conclusao_parada: snapshotConfig?.notificar_conclusao_parada ?? true,
+        notificar_inicio_rota: snapshotConfig?.notificar_inicio_rota ?? false,
+        notificar_proxima_parada: snapshotConfig?.notificar_proxima_parada ?? false,
+        notificar_conclusao_parada: snapshotConfig?.notificar_conclusao_parada ?? false,
         rastreamento_ativo: snapshotConfig?.rastreamento_ativo ?? true,
         rastreamento_modo: snapshotConfig?.rastreamento_modo ?? "completo",
       }])

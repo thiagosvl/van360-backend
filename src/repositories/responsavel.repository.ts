@@ -197,6 +197,11 @@ export const responsavelRepository = {
       .order("ano", { ascending: false })
       .order("mes", { ascending: false });
 
+    const { data: recibosAnuais } = await supabaseAdmin
+      .from("recibos_anuais")
+      .select("id, ano, recibo_url, total_pago, quantidade_meses, created_at")
+      .eq("passageiro_id", passageiroId);
+
     const todayStr = toPersistenceString(getNowBR());
     const { data: ausencias } = await supabaseAdmin
       .from("rota_ausencias")
@@ -304,6 +309,7 @@ export const responsavelRepository = {
       veiculo_placa: veic?.placa || null,
       veiculo_modelo: veic?.modelo || null,
       cobrancas: cobrancas || [],
+      recibos_anuais: recibosAnuais || [],
       ausencias: ausenciasMapeadas || [],
       contrato: contrato || null,
       responsaveis: responsaveisAdicionais || [],

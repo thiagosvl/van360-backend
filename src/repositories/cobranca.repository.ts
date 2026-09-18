@@ -260,5 +260,15 @@ export const cobrancaRepository = {
             .gte("data_vencimento", start)
             .lte("data_vencimento", end)
             .order("data_vencimento", { ascending: true });
+    },
+
+    async getByPassageiroEAno(passageiroId: string, ano: number) {
+        return supabaseAdmin
+            .from("cobrancas")
+            .select("id, mes, ano, valor, valor_pago, status, data_vencimento, data_pagamento")
+            .eq("passageiro_id", passageiroId)
+            .eq("ano", ano)
+            .neq("status", CobrancaStatus.CANCELADA)
+            .order("mes", { ascending: true });
     }
 };

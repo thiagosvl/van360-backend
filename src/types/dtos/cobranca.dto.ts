@@ -74,3 +74,16 @@ export const registrarPagamentoManualSchema = z.object({
 });
 
 export type RegistrarPagamentoManualDTO = z.infer<typeof registrarPagamentoManualSchema>;
+
+export const obterReciboAnualParamsSchema = z.object({
+    passageiroId: z.string().uuid("ID do passageiro inválido")
+});
+
+export type ObterReciboAnualParamsDTO = z.infer<typeof obterReciboAnualParamsSchema>;
+
+export const obterReciboAnualQuerySchema = z.object({
+    ano: z.coerce.number().int().positive("Ano inválido")
+});
+
+export type ObterReciboAnualQueryDTO = z.infer<typeof obterReciboAnualQuerySchema>;
+
