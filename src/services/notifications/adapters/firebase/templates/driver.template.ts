@@ -297,8 +297,8 @@ export class FirebaseDriverTemplates {
         const requestsUrl = NotificationUrlBuilder.getPassengerRequestsUrl();
 
         return {
-            title: "Nova solicitação de cadastro! 🚌",
-            body: `${parentName} enviou uma solicitação para ${studentName}. Toque para revisar.`,
+            title: "Novo cadastro na van! 🚌",
+            body: `${parentName} realizou o cadastro de ${studentName}. Toque para revisar.`,
             data: {
                 action: PushNotificationAction.OPEN_PASSENGER_REQUESTS,
                 targetUrl: requestsUrl,
