@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "../../config/supabase.js";
-import { UserType, SubscriptionInvoiceStatus, SubscriptionStatus, SUBSCRIPTION_VITALICIO_FILTER, CobrancaStatus } from "../../types/enums.js";
+import { UserType, SubscriptionInvoiceStatus, SubscriptionStatus, SUBSCRIPTION_VITALICIO_FILTER, CobrancaStatus, AtividadeAcao } from "../../types/enums.js";
 import {
   EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
   EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
@@ -96,6 +96,13 @@ export const adminUserRepository = {
         .select("*")
         .eq("usuario_id", userId)
         .maybeSingle(),
+      supabaseAdmin
+        .from("historico_atividades")
+        .select("id, acao, meta, created_at")
+        .eq("usuario_id", userId)
+        .in("acao", [AtividadeAcao.APP_ABERTO, AtividadeAcao.LOGIN])
+        .order("created_at", { ascending: false })
+        .limit(30),
     ]);
   },
 

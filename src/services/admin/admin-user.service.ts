@@ -62,7 +62,7 @@ import {
 import { AppError } from "../../errors/AppError.js";
 import { NotificationUrlBuilder } from "../notifications/utils/notification-url.builder.js";
 import type { ImpersonateUserResponseDto } from "../../types/dtos/admin-impersonate.dto.js";
-import type { DispositivosUsuarioResumoDTO } from "../../types/dtos/admin-user-details.dto.js";
+import type { DispositivosUsuarioResumoDTO, UltimoAcessoResumoDTO } from "../../types/dtos/admin-user-details.dto.js";
 
 function generateTempPassword(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
@@ -222,6 +222,7 @@ export const adminUserService = {
         kpisRpcRes,
         pushTokensReq,
         configReq,
+        acessosReq,
       ],
       referralWithIndicadorRes,
     ] = await Promise.all([
@@ -249,6 +250,51 @@ export const adminUserService = {
         atualizado_em: t.updated_at,
       })),
     };
+
+    const acessosList = (acessosReq?.data as Array<{ acao: string; meta: Record<string, unknown> | null; created_at: string }>) || [];
+    let ultimoAcessoGeral: UltimoAcessoResumoDTO | null = null;
+
+    if (acessosList.length > 0) {
+      const mapaPorDispositivo = new Map<DispositivoCadastro, string>();
+      const validDispositivos = Object.values(DispositivoCadastro);
+
+      for (const item of acessosList) {
+        const meta = item.meta || {};
+        let disp: DispositivoCadastro = DispositivoCadastro.WEB_DESKTOP;
+
+        if (typeof meta.dispositivo === "string" && validDispositivos.includes(meta.dispositivo as DispositivoCadastro)) {
+          disp = meta.dispositivo as DispositivoCadastro;
+        } else if (typeof meta.plataforma === "string") {
+          if (meta.plataforma === "android") disp = DispositivoCadastro.APP_ANDROID;
+          else if (meta.plataforma === "ios") disp = DispositivoCadastro.APP_IOS;
+        }
+
+        if (!mapaPorDispositivo.has(disp)) {
+          mapaPorDispositivo.set(disp, item.created_at);
+        }
+      }
+
+      const primeiro = acessosList[0];
+      const primeiroMeta = primeiro.meta || {};
+      let primeiroDisp: DispositivoCadastro = DispositivoCadastro.WEB_DESKTOP;
+      if (typeof primeiroMeta.dispositivo === "string" && validDispositivos.includes(primeiroMeta.dispositivo as DispositivoCadastro)) {
+        primeiroDisp = primeiroMeta.dispositivo as DispositivoCadastro;
+      } else if (typeof primeiroMeta.plataforma === "string") {
+        if (primeiroMeta.plataforma === "android") primeiroDisp = DispositivoCadastro.APP_ANDROID;
+        else if (primeiroMeta.plataforma === "ios") primeiroDisp = DispositivoCadastro.APP_IOS;
+      }
+
+      const porDispositivo = Array.from(mapaPorDispositivo.entries()).map(([dispositivo, data_hora]) => ({
+        dispositivo,
+        data_hora,
+      }));
+
+      ultimoAcessoGeral = {
+        data_hora: primeiro.created_at,
+        dispositivo: primeiroDisp,
+        por_dispositivo: porDispositivo,
+      };
+    }
 
     const planos = await adminUserRepository.getPlanos();
 
@@ -294,6 +340,7 @@ export const adminUserService = {
       escolas: [],
       contratos: [],
       dispositivos,
+      ultimo_acesso: ultimoAcessoGeral,
       configuracoes: configReq?.data || null,
     };
   },

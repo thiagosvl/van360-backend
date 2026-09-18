@@ -19,6 +19,11 @@ const historicoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
         { preHandler: [requirePermission("relatorios.visualizar")] },
         historicoController.listByUsuario
     );
+
+    app.post(
+        "/evento",
+        historicoController.registrarEvento
+    );
 };
 
 export default historicoRoute;

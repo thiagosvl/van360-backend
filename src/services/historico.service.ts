@@ -2,6 +2,7 @@ import { logger } from "../config/logger.js";
 import { historicoRepository } from "../repositories/historico.repository.js";
 import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { getContextIp } from "../utils/context.js";
+import { RegistrarEventoInput } from "../schemas/telemetria.schema.js";
 
 interface LogAtividadeParams {
     usuario_id: string;
@@ -9,11 +10,26 @@ interface LogAtividadeParams {
     entidade_id: string;
     acao: AtividadeAcao;
     descricao: string;
-    meta?: Record<string, any>;
+    meta?: Record<string, unknown>;
     ip_address?: string;
 }
 
 export const historicoService = {
+    async registrarEventoTelemetria(usuarioId: string, payload: RegistrarEventoInput): Promise<void> {
+        const entidadeTipo = payload.entidade_tipo || AtividadeEntidadeTipo.USUARIO;
+        const entidadeId = payload.entidade_id || usuarioId;
+        const descricao = payload.descricao || `Ação de telemetria registrada: ${payload.acao}`;
+
+        await this.log({
+            usuario_id: usuarioId,
+            entidade_tipo: entidadeTipo,
+            entidade_id: entidadeId,
+            acao: payload.acao,
+            descricao,
+            meta: payload.meta || {},
+        });
+    },
+
     /**
      * Registra uma nova atividade no log de auditoria.
      */
