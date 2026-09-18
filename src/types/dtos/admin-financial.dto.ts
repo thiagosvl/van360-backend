@@ -101,6 +101,7 @@ export interface FaixaEtariaItemDTO {
 export interface FunilConversaoDTO {
   cadastrados: number;
   trialsIniciados: number;
+  trialsAtivos: number;
   convertidosPagantes: number;
   assinantesAtivos: number;
   expiradosOuCancelados: number;

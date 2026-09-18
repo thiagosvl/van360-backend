@@ -51,7 +51,7 @@ export const adminFinancialRepository = {
         telefone,
         data_nascimento,
         created_at,
-        assinaturas(id, status, data_vencimento, created_at)
+        assinaturas(id, status, data_vencimento, trial_ends_at, updated_at, created_at)
       `)
       .eq("tipo", UserType.MOTORISTA);
   }

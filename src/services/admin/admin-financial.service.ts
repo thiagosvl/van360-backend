@@ -484,6 +484,7 @@ export const adminFinancialService = {
 
     let totalCadastrados = motoristas.length;
     let trialsIniciados = 0;
+    let trialsAtivos = 0;
     let convertidosPagantes = 0;
     let assinantesAtivos = 0;
     let expiradosOuCancelados = 0;
@@ -550,9 +551,20 @@ export const adminFinancialService = {
       const assinaturas = Array.isArray(u.assinaturas) ? u.assinaturas : u.assinaturas ? [u.assinaturas] : [];
       if (assinaturas.length > 0) {
         trialsIniciados++;
-        const sub = assinaturas[0];
+        const sub = assinaturas[0] as {
+          id: string;
+          status: string;
+          data_vencimento?: string | null;
+          trial_ends_at?: string | null;
+          updated_at?: string | null;
+          created_at?: string | null;
+        };
 
-        const isPagante = sub.status === SubscriptionStatus.ACTIVE && Boolean((sub as { data_vencimento?: string | null }).data_vencimento);
+        const isPagante = sub.status === SubscriptionStatus.ACTIVE && Boolean(sub.data_vencimento);
+
+        if (sub.status === SubscriptionStatus.TRIAL) {
+          trialsAtivos++;
+        }
 
         if (isPagante) {
           convertidosPagantes++;
@@ -565,8 +577,12 @@ export const adminFinancialService = {
           }
         } else if (sub.status === SubscriptionStatus.EXPIRED || sub.status === SubscriptionStatus.CANCELED) {
           expiradosOuCancelados++;
-          if (sub.created_at) {
-            const ym = getYearMonthKey(parseLocalDate(sub.created_at));
+          const dataEvento = sub.status === SubscriptionStatus.EXPIRED
+            ? sub.trial_ends_at || sub.updated_at || sub.created_at
+            : sub.updated_at || sub.created_at;
+
+          if (dataEvento) {
+            const ym = getYearMonthKey(parseLocalDate(dataEvento));
             if (ultimos6MesesMap.has(ym)) {
               ultimos6MesesMap.get(ym)!.cancelados++;
             }
@@ -601,6 +617,7 @@ export const adminFinancialService = {
       funil: {
         cadastrados: totalCadastrados,
         trialsIniciados,
+        trialsAtivos,
         convertidosPagantes,
         assinantesAtivos,
         expiradosOuCancelados,
