@@ -92,7 +92,7 @@ export function resolveDriverContractConfigStatus(
 
 export const adminUserService = {
   async getDashboardStats() {
-    const [kpisRpcRes, recentUsersRes] = await adminUserRepository.getDashboardStats();
+    const kpisRpcRes = await adminUserRepository.getDashboardStats();
     if (kpisRpcRes.error) throw kpisRpcRes.error;
     const kpis = (kpisRpcRes.data as any) || {};
 
@@ -163,7 +163,7 @@ export const adminUserService = {
         diasBonusConcedidos: 0,
         motoristasIndicados: 0,
       },
-      recentUsers: recentUsersRes.data || [],
+      recentUsers: [],
       canaisAquisicao,
       dispositivosCadastro,
       evolutionStatus,

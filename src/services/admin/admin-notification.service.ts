@@ -37,6 +37,7 @@ import { notificationQueueRepository, NotificationQueueItemPayload } from "../..
 import { NotificationQueueService, notificationQueueService } from "../notifications/notification-queue.service.js";
 import { notificationRetryWorker } from "../notifications/notification-retry.worker.js";
 import { extractErrorMessage } from "../../utils/error.utils.js";
+import { getFirstName } from "../../utils/format.js";
 
 
 export const adminNotificationService = {
@@ -554,6 +555,81 @@ export const adminNotificationService = {
         mes: cobranca.mes,
         ano: cobranca.ano,
       },
+    };
+  },
+
+  async dispatchDriverCobrancaDemo(driverId: string, adminId?: string) {
+    const userRes = await userRepository.getById(driverId);
+    const user = userRes.data;
+    if (!user) {
+      throw new Error("Motorista não encontrado.");
+    }
+
+    const telefone = user.telefone?.trim();
+    if (!telefone) {
+      throw new Error("O motorista não possui telefone cadastrado para receber a demonstração no WhatsApp.");
+    }
+
+    const now = getNowBR();
+    const todayStr = toPersistenceString(now);
+    const primeiroNomeMotorista = getFirstName(user.nome) || "Motorista";
+    const nomeExibicaoMotorista = user.apelido || user.nome;
+
+    const contextData = {
+      nomeResponsavel: user.nome,
+      nomePassageiro: `TESTE ${primeiroNomeMotorista}`,
+      nomeMotorista: nomeExibicaoMotorista,
+      apelidoMotorista: user.apelido || undefined,
+      telefoneMotorista: telefone,
+      valor: 300,
+      dataVencimento: todayStr,
+      chavePix: user.chave_pix || undefined,
+      tipoChavePix: user.tipo_chave_pix || undefined,
+      usuarioId: user.id,
+      mes: now.getMonth() + 1,
+      ano: now.getFullYear(),
+    };
+
+    const success = await notificationService.notifyPassenger(
+      telefone,
+      EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
+      contextData,
+      {
+        channels: [NotificationChannelEnum.WABA],
+        usuarioId: user.id,
+        metadata: {
+          isDemo: true,
+          adminId: adminId || null,
+        },
+      }
+    );
+
+    if (!success) {
+      throw new Error("Não foi possível enviar a demonstração de cobrança via WhatsApp. Verifique a instância WABA.");
+    }
+
+    await historicoRepository.insert({
+      usuario_id: user.id,
+      entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
+      entidade_id: user.id,
+      acao: AtividadeAcao.NOTIFICACAO_WABA,
+      descricao: `Demonstração de cobrança de R$ 300,00 disparada manualmente pelo administrador para o WhatsApp do motorista (${telefone}).`,
+      meta: {
+        admin_id: adminId || null,
+        evento: EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
+        is_demo: true,
+        destinatario: telefone,
+        aluno_teste: `TESTE ${primeiroNomeMotorista}`,
+        valor: 300,
+      },
+    });
+
+    return {
+      success: true,
+      message: "Demonstração de cobrança enviada com sucesso para o WhatsApp do motorista.",
+      destinatario: telefone,
+      alunoTeste: `TESTE ${primeiroNomeMotorista}`,
+      valor: 300,
     };
   },
 };

@@ -196,6 +196,20 @@ export const adminUserController = {
     }
   },
 
+  async dispatchDriverCobrancaDemo(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+      const adminId = (request as { user?: { id?: string } }).user?.id;
+      const result = await adminNotificationService.dispatchDriverCobrancaDemo(id, adminId);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao disparar demonstração de cobrança.");
+      const status = error.message?.includes("não encontrado") ? 404 : 400;
+      return reply.status(status).send({ error: error.message });
+    }
+  },
+
   async getUsersLatestActivity(request: FastifyRequest, reply: FastifyReply) {
     try {
       const query = listUsersLatestActivityQuerySchema.parse(request.query);

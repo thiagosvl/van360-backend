@@ -41,6 +41,7 @@ const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post("/users/:id/reset-password", adminUserController.resetUserPassword);
   app.post("/users/:id/impersonate", adminUserController.impersonateUser);
   app.post("/users/:id/dispatch-notification", adminUserController.dispatchNotification);
+  app.post("/users/:id/dispatch-cobranca-demo", adminUserController.dispatchDriverCobrancaDemo);
   app.delete("/users/:id", adminUserController.deleteUser);
   app.delete("/invoices/:id", adminUserController.deleteInvoice);
 

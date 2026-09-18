@@ -8,15 +8,7 @@ import {
 
 export const adminUserRepository = {
   async getDashboardStats() {
-    return Promise.all([
-      (supabaseAdmin.rpc as any)("get_admin_dashboard_kpis"),
-      supabaseAdmin
-        .from("usuarios")
-        .select("id, nome, email, telefone, created_at, tipo, assinaturas(status, data_vencimento)")
-        .eq("tipo", UserType.MOTORISTA)
-        .order("created_at", { ascending: false })
-        .limit(10),
-    ]);
+    return (supabaseAdmin.rpc as any)("get_admin_dashboard_kpis");
   },
 
   async listUsers(query: {

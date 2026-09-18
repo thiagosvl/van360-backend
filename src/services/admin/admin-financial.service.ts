@@ -552,7 +552,9 @@ export const adminFinancialService = {
         trialsIniciados++;
         const sub = assinaturas[0];
 
-        if (sub.status === SubscriptionStatus.ACTIVE) {
+        const isPagante = sub.status === SubscriptionStatus.ACTIVE && Boolean((sub as { data_vencimento?: string | null }).data_vencimento);
+
+        if (isPagante) {
           convertidosPagantes++;
           assinantesAtivos++;
           if (sub.created_at) {
