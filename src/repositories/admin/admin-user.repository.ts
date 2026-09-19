@@ -26,7 +26,7 @@ export const adminUserRepository = {
     let q = supabaseAdmin
       .from("usuarios")
       .select(
-        `id, nome, apelido, email, cpfcnpj, telefone, ativo, tipo, created_at, data_nascimento, canal_aquisicao, dispositivo_cadastro, ${assinaturasRelation}(id, status, plano_id, data_vencimento, trial_ends_at, planos(id, nome, identificador))`,
+        `id, nome, apelido, email, cpfcnpj, telefone, ativo, tipo, created_at, data_nascimento, canal_aquisicao, dispositivo_cadastro, logo_url, ${assinaturasRelation}(id, status, plano_id, data_vencimento, trial_ends_at, planos(id, nome, identificador))`,
         { count: "exact" }
       )
       .order("created_at", { ascending: false });

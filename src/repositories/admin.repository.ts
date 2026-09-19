@@ -56,7 +56,7 @@ export const adminRepository = {
 
         let q = supabaseAdmin
             .from("usuarios")
-            .select(`id, nome, apelido, email, cpfcnpj, telefone, ativo, tipo, created_at, data_nascimento, ${assinaturasRelation}(id, status, plano_id, data_vencimento, trial_ends_at, planos(id, nome, identificador))`, { count: "exact" })
+            .select(`id, nome, apelido, email, cpfcnpj, telefone, ativo, tipo, created_at, data_nascimento, logo_url, ${assinaturasRelation}(id, status, plano_id, data_vencimento, trial_ends_at, planos(id, nome, identificador))`, { count: "exact" })
             .eq("tipo", UserType.MOTORISTA)
             .order("created_at", { ascending: false });
 
