@@ -4,8 +4,10 @@ import { getNowBR, parseBrazilianDateToISO } from "../utils/date.utils.js";
 import { AtividadeAcao, AtividadeEntidadeTipo, TipoChavePix } from "../types/enums.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
-import { isValidPixKey } from "../utils/validators.js";
+import { isValidPixKey, isValidCPF, isValidCNPJ } from "../utils/validators.js";
 import { calculateAuditDiff } from "../utils/audit-diff.util.js";
+import { authProvider } from "./providers/auth.provider.js";
+import { logger } from "../config/logger.js";
 
 export async function getUsuarioData(usuarioId: string) {
   const { data: usuario, error } = await userRepository.getProfileData(usuarioId);
@@ -31,6 +33,7 @@ export async function atualizarUsuario(usuarioId: string, payload: AtualizarUsua
   if (!usuarioId) throw new AppError("ID do usuário é obrigatório.", 400);
 
   const { data: usuarioAnterior } = await userRepository.getById(usuarioId);
+  if (!usuarioAnterior) throw new AppError("Usuário não encontrado.", 404);
 
   const updates: Record<string, unknown> = { updated_at: getNowBR().toISOString() };
 
@@ -42,8 +45,62 @@ export async function atualizarUsuario(usuarioId: string, payload: AtualizarUsua
     updates.nome = nomeLimpo;
   }
 
-  if (payload.razao_social !== undefined) {
-    updates.razao_social = payload.razao_social ? (cleanString(payload.razao_social, true) || null) : null;
+  if (payload.cpfcnpj !== undefined) {
+    const cpfcnpjLimpo = onlyDigits(payload.cpfcnpj);
+    const isCnpj = cpfcnpjLimpo.length > 11;
+    const isValido = isCnpj ? isValidCNPJ(cpfcnpjLimpo) : isValidCPF(cpfcnpjLimpo);
+    if (!isValido) {
+      throw new AppError(`O ${isCnpj ? "CNPJ" : "CPF"} informado é inválido.`, 400);
+    }
+
+    if (cpfcnpjLimpo !== onlyDigits(usuarioAnterior.cpfcnpj || "")) {
+      const { data: existingCpf } = await userRepository.getByCpfcnpjExcludingId(cpfcnpjLimpo, usuarioId);
+      if (existingCpf) {
+        throw new AppError(`Este ${isCnpj ? "CNPJ" : "CPF"} já está cadastrado em outra conta.`, 400);
+      }
+      updates.cpfcnpj = cpfcnpjLimpo;
+    }
+  }
+
+  const docFinal = ((updates.cpfcnpj as string | undefined) ?? usuarioAnterior.cpfcnpj ?? "").replace(/\D/g, "");
+  const isCnpjFinal = docFinal.length > 11;
+
+  if (isCnpjFinal) {
+    if (payload.razao_social !== undefined) {
+      const razaoLimpa = payload.razao_social ? cleanString(payload.razao_social, true) : "";
+      if (!razaoLimpa) {
+        throw new AppError("Razão social é obrigatória para CNPJ.", 400);
+      }
+      updates.razao_social = razaoLimpa;
+    } else if (!usuarioAnterior.razao_social) {
+      throw new AppError("Razão social é obrigatória para CNPJ.", 400);
+    }
+  } else {
+    if (payload.razao_social !== undefined || (updates.cpfcnpj && usuarioAnterior.razao_social)) {
+      updates.razao_social = null;
+    }
+  }
+
+  if (payload.email !== undefined) {
+    const emailLimpo = payload.email.toLowerCase().trim();
+    if (emailLimpo !== usuarioAnterior.email?.toLowerCase().trim()) {
+      const { data: existingEmail } = await userRepository.getByEmailExcludingId(emailLimpo, usuarioId);
+      if (existingEmail) {
+        throw new AppError("Este e-mail já está cadastrado em outra conta.", 400);
+      }
+
+      const { error: authError } = await authProvider.updateUserById(usuarioId, {
+        email: emailLimpo,
+        email_confirm: true,
+      });
+
+      if (authError) {
+        logger.error({ authError, usuarioId }, "Falha ao sincronizar e-mail no Supabase Auth.");
+        throw new AppError("Não foi possível atualizar o e-mail no serviço de autenticação.", 500);
+      }
+
+      updates.email = emailLimpo;
+    }
   }
 
   if (payload.apelido !== undefined) {
@@ -77,6 +134,14 @@ export async function atualizarUsuario(usuarioId: string, payload: AtualizarUsua
   const { error } = await userRepository.update(usuarioId, updates);
 
   if (error) {
+    if (updates.email && usuarioAnterior.email) {
+      await authProvider.updateUserById(usuarioId, {
+        email: usuarioAnterior.email.toLowerCase().trim(),
+        email_confirm: true,
+      }).catch((authRevertErr) => {
+        logger.error({ authRevertErr, usuarioId }, "Falha ao reverter e-mail no Supabase Auth após erro no banco.");
+      });
+    }
     throw new AppError(`Erro ao atualizar usuário: ${error.message}`, 500);
   }
 
@@ -85,7 +150,9 @@ export async function atualizarUsuario(usuarioId: string, payload: AtualizarUsua
     payload.razao_social !== undefined ||
     payload.apelido !== undefined ||
     payload.telefone !== undefined ||
-    payload.data_nascimento !== undefined;
+    payload.data_nascimento !== undefined ||
+    payload.cpfcnpj !== undefined ||
+    payload.email !== undefined;
 
   if (perfilAlterado) {
     const perfilDiff = calculateAuditDiff(

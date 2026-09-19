@@ -467,9 +467,23 @@ export const adminUserService = {
     if (data.nome !== undefined) updatePayload.nome = cleanString(data.nome, true);
     if (data.razao_social !== undefined) updatePayload.razao_social = data.razao_social ? cleanString(data.razao_social, true) : null;
     if (data.apelido !== undefined) updatePayload.apelido = data.apelido ? cleanString(data.apelido, true) : null;
-    if (data.email !== undefined) updatePayload.email = data.email.toLowerCase().trim();
+    if (data.email !== undefined) {
+      const emailClean = data.email.toLowerCase().trim();
+      const { data: existingEmail } = await userRepository.getByEmailExcludingId(emailClean, userId);
+      if (existingEmail) {
+        throw new AppError("Este e-mail já está cadastrado em outra conta.", 400);
+      }
+      updatePayload.email = emailClean;
+    }
     if (data.telefone !== undefined) updatePayload.telefone = onlyDigits(data.telefone);
-    if (data.cpfcnpj !== undefined) updatePayload.cpfcnpj = onlyDigits(data.cpfcnpj);
+    if (data.cpfcnpj !== undefined) {
+      const cpfcnpjClean = onlyDigits(data.cpfcnpj);
+      const { data: existingCpf } = await userRepository.getByCpfcnpjExcludingId(cpfcnpjClean, userId);
+      if (existingCpf) {
+        throw new AppError("Este CPF/CNPJ já está cadastrado em outra conta.", 400);
+      }
+      updatePayload.cpfcnpj = cpfcnpjClean;
+    }
     if (data.ativo !== undefined) updatePayload.ativo = data.ativo;
     if (data.data_nascimento !== undefined) {
       updatePayload.data_nascimento = parseBrazilianDateToISO(data.data_nascimento);
@@ -500,6 +514,7 @@ export const adminUserService = {
     if (data.email !== undefined) {
       await authProvider.updateUserById(userId, {
         email: data.email.toLowerCase().trim(),
+        email_confirm: true,
       });
     }
 

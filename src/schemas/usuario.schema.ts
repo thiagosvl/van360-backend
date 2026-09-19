@@ -9,6 +9,8 @@ export const atualizarUsuarioSchema = z.object({
   logo_url: z.string().url().nullable().optional(),
   config_contrato: z.record(z.string(), z.unknown()).nullable().optional(),
   data_nascimento: z.string().nullable().optional(),
+  cpfcnpj: z.string().optional(),
+  email: z.string().email().optional(),
 });
 
 export type AtualizarUsuarioInput = z.infer<typeof atualizarUsuarioSchema>;

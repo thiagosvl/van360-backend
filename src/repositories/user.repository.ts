@@ -133,11 +133,29 @@ export const userRepository = {
             .maybeSingle();
     },
 
+    async getByEmailExcludingId(email: string, excludeId: string) {
+        return supabaseAdmin
+            .from("usuarios")
+            .select("id")
+            .eq("email", email)
+            .neq("id", excludeId)
+            .maybeSingle();
+    },
+
     async getByCpfcnpj(cpfcnpj: string) {
         return supabaseAdmin
             .from("usuarios")
             .select("id")
             .eq("cpfcnpj", cpfcnpj)
+            .maybeSingle();
+    },
+
+    async getByCpfcnpjExcludingId(cpfcnpj: string, excludeId: string) {
+        return supabaseAdmin
+            .from("usuarios")
+            .select("id")
+            .eq("cpfcnpj", cpfcnpj)
+            .neq("id", excludeId)
             .maybeSingle();
     },
 
