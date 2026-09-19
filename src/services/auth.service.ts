@@ -306,7 +306,7 @@ export async function registrarUsuario(
         payload.telefone || "",
         EVENTO_MOTORISTA_TESTE_BOAS_VINDAS,
         {
-          nomeMotorista: payload.nome,
+          nomeMotorista: payload.apelido?.trim() || payload.nome,
           email: payload.email,
           usuarioId: usuarioId as string
         },
@@ -320,7 +320,7 @@ export async function registrarUsuario(
 
     // 5. Notificação para o Admin (Telegram)
     notificationService.notifyAdmin(EVENTO_ADMIN_NOVO_CADASTRO, {
-      nome: payload.nome,
+      nome: payload.apelido?.trim() ? `${payload.nome} (${payload.apelido.trim()})` : payload.nome,
       email: payload.email,
       telefone: payload.telefone,
       cpfcnpj: payload.cpfcnpj,
