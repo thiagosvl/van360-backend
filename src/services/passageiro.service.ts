@@ -2,7 +2,7 @@ import { passageiroRepository } from "../repositories/passageiro.repository.js";
 import { responsavelRepository } from "../repositories/responsavel.repository.js";
 import { prePassageiroRepository } from "../repositories/pre-passageiro.repository.js";
 import { AppError } from "../errors/AppError.js";
-import { CreatePassageiroDTO, ListPassageirosFiltersDTO, UpdatePassageiroDTO, CreateResponsavelAdicionalDTO, UpdateResponsavelAdicionalDTO } from "../types/dtos/passageiro.dto.js";
+import { CreatePassageiroDTO, ListPassageirosFiltersDTO, UpdatePassageiroDTO, CreateResponsavelAdicionalDTO, UpdateResponsavelAdicionalDTO, UpdatePassageiroBatchItemDTO } from "../types/dtos/passageiro.dto.js";
 import { AtividadeAcao, AtividadeEntidadeTipo, TipoResponsavel } from "../types/enums.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { cleanString, onlyDigits, normalizePhone } from "../utils/string.utils.js";
@@ -775,10 +775,80 @@ const processarLembreteAniversarioMotorista = async (params: {
     return { sent: true };
 };
 
-// Exportar objeto unificado no final
+const updatePassageirosBatch = async (
+    items: UpdatePassageiroBatchItemDTO[],
+    targetOwnerId?: string,
+    assignedVeiculoId?: string
+): Promise<{ success: boolean; updatedCount: number }> => {
+    if (!targetOwnerId) {
+        throw new AppError("Usuário não autenticado", 401);
+    }
+
+    if (!items || items.length === 0) {
+        return { success: true, updatedCount: 0 };
+    }
+
+    const ids = items.map(i => i.id);
+    const { data: passageirosExistentes, error } = await passageiroRepository.findByIds(ids);
+
+    if (error) throw error;
+
+    const existentesMap = new Map((passageirosExistentes || []).map(p => [p.id, p]));
+
+    for (const item of items) {
+        const existente = existentesMap.get(item.id);
+        if (!existente || existente.usuario_id !== targetOwnerId) {
+            throw new AppError(`Acesso negado para o aluno ${item.id}`, 403);
+        }
+        if (assignedVeiculoId && existente.veiculo_id && existente.veiculo_id !== assignedVeiculoId) {
+            throw new AppError(`Acesso negado para o veículo do aluno ${item.id}`, 403);
+        }
+    }
+
+    let updatedCount = 0;
+    const CHUNK_SIZE = 10;
+    for (let i = 0; i < items.length; i += CHUNK_SIZE) {
+        const chunk = items.slice(i, i + CHUNK_SIZE);
+        await Promise.all(chunk.map(async (item) => {
+            const payload: Record<string, unknown> = {};
+
+            if (item.escola_id !== undefined) payload.escola_id = (item.escola_id === "none" || item.escola_id === "") ? null : item.escola_id;
+            if (item.veiculo_id !== undefined) payload.veiculo_id = (item.veiculo_id === "none" || item.veiculo_id === "") ? null : item.veiculo_id;
+            if (item.turma !== undefined) payload.turma = item.turma ? cleanString(item.turma, true) : null;
+            if (item.periodo !== undefined) payload.periodo = item.periodo ? cleanString(item.periodo.toLowerCase()) : null;
+            if (item.valor_cobranca !== undefined) payload.valor_cobranca = typeof item.valor_cobranca === "string" ? moneyToNumber(item.valor_cobranca) : item.valor_cobranca;
+            if (item.dia_vencimento !== undefined) payload.dia_vencimento = item.dia_vencimento;
+            if (item.ativo !== undefined) payload.ativo = item.ativo;
+
+            if (Object.keys(payload).length > 0) {
+                const { error: updateError } = await passageiroRepository.update(item.id, payload);
+                if (updateError) throw updateError;
+                updatedCount++;
+            }
+        }));
+    }
+
+    if (updatedCount > 0) {
+        historicoService.log({
+            usuario_id: targetOwnerId,
+            entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
+            entidade_id: targetOwnerId,
+            acao: AtividadeAcao.PASSAGEIRO_EDITADO,
+            descricao: `Atualização rápida realizada em ${updatedCount} aluno(s).`,
+            meta: {
+                total_atualizados: updatedCount,
+                ids: items.map(i => i.id)
+            }
+        });
+    }
+
+    return { success: true, updatedCount };
+};
+
 export const passageiroService = {
     createPassageiro,
     updatePassageiro,
+    updatePassageirosBatch,
     deletePassageiro,
     getPassageiro,
     listPassageiros,

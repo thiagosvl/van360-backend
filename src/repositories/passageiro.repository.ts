@@ -80,6 +80,13 @@ export const passageiroRepository = {
     return supabaseAdmin.from("passageiros").delete().eq("id", id);
   },
 
+  async findByIds(ids: string[]) {
+    return supabaseAdmin
+      .from("passageiros")
+      .select("id, usuario_id, veiculo_id")
+      .in("id", ids);
+  },
+
   async getSummaryForDashboard(usuarioId: string, veiculoId?: string) {
     let query = supabaseAdmin.from("passageiros").select("id, ativo, isento, valor_cobranca, dia_vencimento, data_inicio_cobranca, data_fim_cobranca, created_at").eq("usuario_id", usuarioId);
     if (isValidFilterValue(veiculoId)) {

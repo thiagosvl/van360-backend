@@ -12,7 +12,8 @@ import {
     getAniversariantesQuerySchema,
     createResponsavelAdicionalSchema,
     updateResponsavelAdicionalSchema,
-    toggleNotificacoesRotaResponsavelSchema
+    toggleNotificacoesRotaResponsavelSchema,
+    updatePassageirosBatchSchema
 } from "../types/dtos/passageiro.dto.js";
 
 
@@ -39,6 +40,17 @@ export const passageiroController = {
     
     const result = await passageiroService.updatePassageiro(id, data, targetOwnerId, assignedVeiculoId);
     
+    return reply.status(200).send(result);
+  },
+
+  updateBatch: async (request: FastifyRequest, reply: FastifyReply) => {
+    const targetOwnerId = request.data_owner_id || request.user?.id;
+    const assignedVeiculoId = request.assigned_veiculo_id || undefined;
+    logger.info({ targetOwnerId }, "PassageiroController.updateBatch - Starting");
+
+    const data = updatePassageirosBatchSchema.parse(request.body);
+    const result = await passageiroService.updatePassageirosBatch(data.passageiros, targetOwnerId, assignedVeiculoId);
+
     return reply.status(200).send(result);
   },
 

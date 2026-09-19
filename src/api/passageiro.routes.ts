@@ -10,6 +10,7 @@ const passageiroRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
     // Rotas CRUD Básicas (Gerenciar = Apenas Gestor)
     app.post("/", { preHandler: [requirePermission("passageiros.gerenciar")] }, passageiroController.create);
+    app.put("/batch", { preHandler: [requirePermission("passageiros.gerenciar")] }, passageiroController.updateBatch);
     app.put("/:id", { preHandler: [requirePermission("passageiros.gerenciar")] }, passageiroController.update);
     app.delete("/:id", { preHandler: [requirePermission("passageiros.gerenciar")] }, passageiroController.delete);
     app.get("/:id", { preHandler: [requirePermission("passageiros.visualizar")] }, passageiroController.get);

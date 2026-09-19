@@ -180,3 +180,32 @@ export const toggleNotificacoesRotaResponsavelSchema = z.object({
 });
 export type ToggleNotificacoesRotaResponsavelDTO = z.infer<typeof toggleNotificacoesRotaResponsavelSchema>;
 
+export const updatePassageiroBatchItemSchema = z.object({
+  id: z.string().uuid("ID do passageiro inválido"),
+  escola_id: z.string().uuid().optional().nullable().or(z.literal("")).transform(v => (v === "" || v === "none") ? null : v),
+  veiculo_id: z.string().uuid().optional().nullable().or(z.literal("")).transform(v => (v === "" || v === "none") ? null : v),
+  turma: optionalString,
+  periodo: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
+    if (v === undefined) return undefined;
+    if (v === null || v === "") return null;
+    return v.toLowerCase();
+  }),
+  valor_cobranca: z.union([z.number(), z.string(), z.null(), z.undefined()]).transform(val => {
+    if (val === undefined) return undefined;
+    if (val === "" || val === null) return null;
+    return typeof val === 'string' ? moneyToNumber(val) : val;
+  }).optional().nullable(),
+  dia_vencimento: z.union([z.number(), z.string(), z.null(), z.undefined()]).transform(val => {
+    if (val === undefined) return undefined;
+    if (val === "" || val === null || val === "none") return null;
+    return typeof val === 'string' ? Number(val) : val;
+  }).optional().nullable(),
+  ativo: z.boolean().optional(),
+});
+
+export const updatePassageirosBatchSchema = z.object({
+  passageiros: z.array(updatePassageiroBatchItemSchema).min(1, "Ao menos um passageiro deve ser informado"),
+});
+
+export type UpdatePassageiroBatchItemDTO = z.infer<typeof updatePassageiroBatchItemSchema>;
+export type UpdatePassageirosBatchDTO = z.infer<typeof updatePassageirosBatchSchema>;
