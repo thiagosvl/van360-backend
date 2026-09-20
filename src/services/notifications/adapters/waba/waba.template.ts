@@ -63,10 +63,18 @@ export class WabaTemplates {
     }
 
     static vencimentoProximo(ctx: Record<string, unknown>): WabaTemplatePayload {
+        const driverName = (ctx.apelidoMotorista || NotificationContextFormatter.getFirstAndLastName(ctx.nomeMotorista as string, "Motorista")) as string;
         const respName = NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string, "Responsável");
         const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
         const dataStr = NotificationContextFormatter.formatDate(ctx.dataVencimento as string);
+
+        const headerComponent: WabaComponent = {
+            type: WabaComponentTypeEnum.HEADER,
+            parameters: [
+                { type: WabaParameterTypeEnum.TEXT, text: driverName }
+            ]
+        };
         
         const pixButton = this.buildPixButtonComponent(ctx);
 
@@ -75,13 +83,14 @@ export class WabaTemplates {
                 templateName: WabaTemplateNameEnum.PAIS_VENCIMENTO_PROXIMO_SEM_PIX,
                 languageCode: "pt_BR",
                 components: [
+                    headerComponent,
                     {
                         type: WabaComponentTypeEnum.BODY,
                         parameters: [
                             { type: WabaParameterTypeEnum.TEXT, text: respName },
                             { type: WabaParameterTypeEnum.TEXT, text: passName },
-                            { type: WabaParameterTypeEnum.TEXT, text: dataStr },
-                            { type: WabaParameterTypeEnum.TEXT, text: valorStr }
+                            { type: WabaParameterTypeEnum.TEXT, text: valorStr },
+                            { type: WabaParameterTypeEnum.TEXT, text: dataStr }
                         ]
                     }
                 ]
@@ -92,13 +101,14 @@ export class WabaTemplates {
             templateName: WabaTemplateNameEnum.PAIS_VENCIMENTO_PROXIMO_PIX,
             languageCode: "pt_BR",
             components: [
+                headerComponent,
                 {
                     type: WabaComponentTypeEnum.BODY,
                     parameters: [
                         { type: WabaParameterTypeEnum.TEXT, text: respName },
                         { type: WabaParameterTypeEnum.TEXT, text: passName },
-                        { type: WabaParameterTypeEnum.TEXT, text: dataStr },
-                        { type: WabaParameterTypeEnum.TEXT, text: valorStr }
+                        { type: WabaParameterTypeEnum.TEXT, text: valorStr },
+                        { type: WabaParameterTypeEnum.TEXT, text: dataStr }
                     ]
                 },
                 pixButton
