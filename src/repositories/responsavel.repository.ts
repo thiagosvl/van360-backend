@@ -157,7 +157,7 @@ export const responsavelRepository = {
       .select(`
         id, usuario_id, nome, genero, data_nascimento, periodo, modalidade, turma, sala, nome_professor,
         data_inicio_transporte, data_fim_transporte, horario_entrada, horario_saida,
-        valor_cobranca, dia_vencimento, data_inicio_cobranca, data_fim_cobranca, created_at,
+        valor_cobranca, dia_vencimento, data_inicio_cobranca, data_fim_cobranca, created_at, ano_letivo,
         observacoes,
         ativo, isento,
         escola_id, veiculo_id,
@@ -192,7 +192,7 @@ export const responsavelRepository = {
 
     const { data: cobrancas } = await supabaseAdmin
       .from("cobrancas")
-      .select("id, mes, ano, valor, status, data_vencimento, recibo_url, desativar_lembretes")
+      .select("id, mes, ano, ano_letivo, valor, status, data_vencimento, recibo_url, desativar_lembretes")
       .eq("passageiro_id", passageiroId)
       .order("ano", { ascending: false })
       .order("mes", { ascending: false });

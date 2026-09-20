@@ -88,7 +88,7 @@ export const passageiroRepository = {
   },
 
   async getSummaryForDashboard(usuarioId: string, veiculoId?: string) {
-    let query = supabaseAdmin.from("passageiros").select("id, ativo, isento, valor_cobranca, dia_vencimento, data_inicio_cobranca, data_fim_cobranca, created_at").eq("usuario_id", usuarioId);
+    let query = supabaseAdmin.from("passageiros").select("id, ativo, isento, valor_cobranca, dia_vencimento, data_inicio_cobranca, data_fim_cobranca, created_at, ano_letivo").eq("usuario_id", usuarioId);
     if (isValidFilterValue(veiculoId)) {
       query = query.eq("veiculo_id", veiculoId);
     }
@@ -234,7 +234,7 @@ export const passageiroRepository = {
     const { data, error } = await supabaseAdmin
       .from("passageiros")
       .select(`
-        id, nome, isento, genero,
+        id, nome, isento, genero, ano_letivo,
         ${PASSAGEIRO_RESPONSAVEIS_SELECT}
       `)
       .eq("id", id)
@@ -250,6 +250,7 @@ export const passageiroRepository = {
       nome: data.nome,
       isento: data.isento,
       genero: (data.genero as string | null) || null,
+      ano_letivo: data.ano_letivo ?? null,
       responsavel_principal: resp?.id ? {
         id: resp.id,
         nome: resp.nome || null,
@@ -309,7 +310,7 @@ export const passageiroRepository = {
     return supabaseAdmin
       .from("passageiros")
       .select(`
-        id, nome, valor_cobranca, dia_vencimento, created_at, data_inicio_cobranca, data_fim_cobranca, isento,
+        id, nome, valor_cobranca, dia_vencimento, created_at, data_inicio_cobranca, data_fim_cobranca, isento, ano_letivo,
         ${PASSAGEIRO_RESPONSAVEIS_SELECT}
       `)
       .eq("usuario_id", usuarioId)
@@ -322,7 +323,7 @@ export const passageiroRepository = {
     let query = supabaseAdmin
       .from("passageiros")
       .select(`
-        id, nome, valor_cobranca, dia_vencimento, created_at, data_inicio_cobranca, data_fim_cobranca, isento, ativo, veiculo_id,
+        id, nome, valor_cobranca, dia_vencimento, created_at, data_inicio_cobranca, data_fim_cobranca, isento, ativo, veiculo_id, ano_letivo,
         responsaveis:passageiro_responsaveis(
           id, tipo, parentesco,
           responsavel:responsaveis(id, nome, telefone, cpf, email)

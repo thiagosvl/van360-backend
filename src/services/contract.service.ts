@@ -7,7 +7,7 @@ import { addToContractQueue } from '../queues/contract.queue.js';
 import { ContractProvider, DadosContrato, SignatureMetadata } from '../types/contract.js';
 import { CreateContractDTO, ImportContractDTO, ListContractsDTO } from '../types/dtos/contract.dto.js';
 import { AtividadeAcao, AtividadeEntidadeTipo, ContractMultaTipo, ContratoProvider, ContratoStatus, PassageiroModalidade, PeriodoEnum, TipoResponsavel } from '../types/enums.js';
-import { getNowBR, toLocalDateString, parseLocalDate, addMonths } from '../utils/date.utils.js';
+import { getNowBR, toLocalDateString, parseLocalDate, addMonths, parseMonthYearFromDateString } from '../utils/date.utils.js';
 import { formatAddress, getDriverDisplayName } from '../utils/format.js';
 import { historicoService } from './historico.service.js';
 import { InHouseContractProvider } from './providers/inhouse-contract.provider.js';
@@ -146,8 +146,16 @@ class ContractService {
 
     let qtdParcelas = customTerms.qtdParcelas;
     if (!qtdParcelas) {
-      const diffMonths = (dFim.getFullYear() - dInicio.getFullYear()) * 12 + (dFim.getMonth() - dInicio.getMonth());
-      qtdParcelas = Math.max(1, diffMonths + 1);
+      const ymInicio = parseMonthYearFromDateString(passageiro.data_inicio_cobranca);
+      const ymFim = parseMonthYearFromDateString(passageiro.data_fim_cobranca);
+
+      if (ymInicio && ymFim) {
+        const diffMonths = (ymFim.year - ymInicio.year) * 12 + (ymFim.month - ymInicio.month);
+        qtdParcelas = Math.max(1, diffMonths + 1);
+      } else {
+        const diffMonths = (dFim.getFullYear() - dInicio.getFullYear()) * 12 + (dFim.getMonth() - dInicio.getMonth());
+        qtdParcelas = Math.max(1, diffMonths + 1);
+      }
     }
 
     const valorMensal = customTerms.valorMensal || Number(passageiro.valor_cobranca) || 0;
@@ -169,7 +177,7 @@ class ContractService {
       valorMensal: valorMensal,
       diaVencimento: customTerms.diaVencimento || passageiro.dia_vencimento,
 
-      ano: dInicio.getFullYear(),
+      ano: passageiro.ano_letivo || dInicio.getFullYear(),
       dataInicio,
       dataFim,
       horarioEntrada: passageiro.horario_entrada || null,
@@ -213,7 +221,7 @@ class ContractService {
       provider: providerName,
       dados_contrato: dadosContratoPersistidos,
       status: ContratoStatus.PENDENTE,
-      ano: dInicio.getFullYear(),
+      ano: passageiro.ano_letivo || dInicio.getFullYear(),
       data_inicio: dataInicio,
       data_fim: dataFim,
       valor_total: valorTotal,

@@ -121,6 +121,11 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO> | UpdatePassa
     if (data.horario_saida !== undefined) prepared.horario_saida = data.horario_saida ? cleanString(data.horario_saida, true) : null;
     if (data.data_inicio_cobranca !== undefined) prepared.data_inicio_cobranca = data.data_inicio_cobranca ? toPersistenceString(data.data_inicio_cobranca) : null;
     if (data.data_fim_cobranca !== undefined) prepared.data_fim_cobranca = data.data_fim_cobranca ? toPersistenceString(data.data_fim_cobranca) : null;
+    if (data.ano_letivo !== undefined) {
+        prepared.ano_letivo = data.ano_letivo;
+    } else if (data.data_inicio_cobranca) {
+        prepared.ano_letivo = data.data_inicio_cobranca.getFullYear();
+    }
     if (data.enviar_notificacoes !== undefined) prepared.enviar_notificacoes = data.enviar_notificacoes;
 
     // Controle

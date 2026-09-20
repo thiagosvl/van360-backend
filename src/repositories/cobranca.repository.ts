@@ -86,7 +86,7 @@ export const cobrancaRepository = {
         return query.single();
     },
 
-    async listWithFilters(filtros: { usuarioId?: string; veiculoId?: string; passageiroId?: string; status?: string; dataInicio?: string; dataFim?: string; mes?: number | string; ano?: number | string; search?: string }) {
+    async listWithFilters(filtros: { usuarioId?: string; veiculoId?: string; passageiroId?: string; status?: string; dataInicio?: string; dataFim?: string; mes?: number | string; ano?: number | string; ano_letivo?: number | string; search?: string }) {
         let query = supabaseAdmin
             .from("cobrancas")
             .select(`*, passageiro:passageiros!inner(${COBRANCA_PASSAGEIRO_SELECT})`)
@@ -96,6 +96,7 @@ export const cobrancaRepository = {
         if (isValidFilterValue(filtros.veiculoId)) query = query.eq("passageiros.veiculo_id", filtros.veiculoId);
         if (isValidFilterValue(filtros.passageiroId)) query = query.eq("passageiro_id", filtros.passageiroId);
         if (isValidFilterValue(filtros.status)) query = query.eq("status", filtros.status);
+        if (isValidFilterValue(filtros.ano_letivo)) query = query.eq("ano_letivo", Number(filtros.ano_letivo));
         if (isValidFilterValue(filtros.dataInicio)) query = query.gte("data_vencimento", filtros.dataInicio);
         if (isValidFilterValue(filtros.dataFim)) query = query.lte("data_vencimento", filtros.dataFim);
 
@@ -123,7 +124,8 @@ export const cobrancaRepository = {
             .order("data_vencimento", { ascending: false });
 
         if (isValidFilterValue(ano)) {
-            query = query.eq("ano", parseInt(ano));
+            const anoInt = parseInt(ano);
+            query = query.or(`ano.eq.${anoInt},ano_letivo.eq.${anoInt}`);
         }
 
         return query;

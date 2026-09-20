@@ -35,6 +35,7 @@ export const createPrePassageiroSchema = z.object({
   data_nascimento: z.string().optional().nullable().or(z.literal('')),
   dispositivo_cadastro: z.string().optional().nullable(),
   metadados_cadastro: z.record(z.string(), z.unknown()).optional().nullable(),
+  ano_letivo: z.union([z.number(), z.string()]).transform(Number).optional().nullable(),
 });
 
 export type CreatePrePassageiroDTO = z.infer<typeof createPrePassageiroSchema>;

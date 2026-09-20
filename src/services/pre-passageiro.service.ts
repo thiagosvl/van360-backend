@@ -75,6 +75,7 @@ export const prePassageiroService = {
       data_nascimento: payload.data_nascimento ? toPersistenceString(payload.data_nascimento) : null,
       dispositivo_cadastro: payload.dispositivo_cadastro || null,
       metadados_cadastro: payload.metadados_cadastro || {},
+      ano_letivo: payload.ano_letivo ? Number(payload.ano_letivo) : new Date().getFullYear(),
     };
 
     if (prePassageiroData.telefone_responsavel) {

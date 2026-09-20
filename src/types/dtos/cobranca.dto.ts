@@ -12,6 +12,7 @@ export const createCobrancaSchema = z.object({
 
     mes: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),
     ano: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),
+    ano_letivo: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),
 
     status: z.string().optional(),
     parcelas: z.number().int().positive("Número de parcelas deve ser maior que zero").optional(),
@@ -50,6 +51,7 @@ export const listCobrancasFiltersSchema = z.object({
     veiculoId: z.string().optional(),
     mes: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),
     ano: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),
+    ano_letivo: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),
 });
 
 export type ListCobrancasFiltersDTO = z.infer<typeof listCobrancasFiltersSchema>;

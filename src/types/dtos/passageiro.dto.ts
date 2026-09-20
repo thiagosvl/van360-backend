@@ -110,7 +110,7 @@ export const createPassageiroSchema = z.object({
     if (v === null || v === "") return null;
     return parseLocalDate(v);
   }),
-
+  ano_letivo: z.union([z.number(), z.string().transform(v => parseInt(v, 10))]).optional(),
 }).passthrough(); // Permite outros campos não estritos por enquanto (migração suave)
 
 export type CreatePassageiroDTO = z.infer<typeof createPassageiroSchema>;

@@ -133,7 +133,7 @@ export const cobrancaService = {
     const passageiro = await passageiroRepository.getResponsavelInfo(data.passageiro_id);
 
     if (!passageiro) throw new AppError("Aluno não encontrado para gerar cobrança.", 404);
-    if ((passageiro as any).isento === true) throw new AppError("Aluno é isento de pagamento e não possui cobranças.", 400);
+    if (passageiro.isento === true) throw new AppError("Aluno é isento de pagamento e não possui cobranças.", 400);
 
     const valorNumerico = typeof data.valor === "string" ? moneyToNumber(data.valor) : data.valor;
 
@@ -161,6 +161,9 @@ export const cobrancaService = {
       if (data.desativar_lembretes !== undefined) {
         updateData.desativar_lembretes = data.desativar_lembretes;
       }
+      if (data.ano_letivo !== undefined) {
+        updateData.ano_letivo = Number(data.ano_letivo);
+      }
 
       const { data: updated, error: updateError } = await cobrancaRepository.update(existingCobranca.id, updateData);
       if (updateError || !updated) throw new AppError(`Erro ao atualizar cobrança no banco: ${updateError?.message}`, 500);
@@ -173,6 +176,7 @@ export const cobrancaService = {
         usuario_id: data.usuario_id,
         mes: Number(data.mes),
         ano: Number(data.ano),
+        ano_letivo: data.ano_letivo !== undefined ? Number(data.ano_letivo) : (passageiro.ano_letivo || Number(data.ano)),
         valor: valorNumerico,
         data_vencimento: data.data_vencimento,
         status: statusVal,
@@ -453,6 +457,7 @@ export const cobrancaService = {
         usuario_id: filtros.usuarioId,
         mes: targetMonth,
         ano: targetYear,
+        ano_letivo: p.ano_letivo || targetYear,
         valor: Number(p.valor_cobranca),
         status: CobrancaStatus.PENDENTE,
         data_vencimento: dataVenc,
@@ -593,7 +598,8 @@ export const cobrancaService = {
           valor: valorFinal,
           data_vencimento: dataVencimentoStr,
           mes: targetMonth,
-          ano: targetYear
+          ano: targetYear,
+          ano_letivo: passageiro.ano_letivo || targetYear,
         }, { skipLog: true });
 
         created++;
