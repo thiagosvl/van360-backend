@@ -193,13 +193,29 @@ export const cobrancaService = {
     }
 
     if (!options.skipLog) {
+      const isPago = statusVal === CobrancaStatus.PAGO;
+      const statusDescricao = isPago
+        ? `paga${inserted.tipo_pagamento ? ` (${inserted.tipo_pagamento})` : ""}`
+        : "pendente";
+
       historicoService.log({
         usuario_id: data.usuario_id,
         entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
         entidade_id: inserted.id,
         acao: AtividadeAcao.COBRANCA_CRIADA,
-        descricao: `Cobrança de R$ ${valorNumerico.toFixed(2)} (${data.mes}/${data.ano}) gerada para ${passageiro.nome}.`,
-        meta: { passageiro_id: data.passageiro_id, mes: data.mes, ano: data.ano, valor: valorNumerico }
+        descricao: `Cobrança de R$ ${valorNumerico.toFixed(2)} (${data.mes}/${data.ano}) gerada como ${statusDescricao} para ${passageiro.nome}.`,
+        meta: {
+          passageiro_id: data.passageiro_id,
+          mes: data.mes,
+          ano: data.ano,
+          valor: valorNumerico,
+          status: inserted.status,
+          ...(isPago ? {
+            tipo_pagamento: inserted.tipo_pagamento,
+            data_pagamento: inserted.data_pagamento,
+            valor_pago: inserted.valor_pago
+          } : {})
+        }
       });
     }
 
