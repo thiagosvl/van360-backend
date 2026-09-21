@@ -390,7 +390,12 @@ async function seedRotas(
 
         const startIdx = rIdx * passageirosPorRota;
         const rotaPassageirosSlice = passageirosInseridos.slice(startIdx, startIdx + passageirosPorRota);
-        const escolaPrincipal = escolasInseridas[rIdx % escolasInseridas.length];
+        const escolasIdsDaRota = Array.from(
+            new Set(rotaPassageirosSlice.map((p) => p.escola_id).filter(Boolean))
+        );
+        const escolasDaRota = escolasIdsDaRota.length > 0
+            ? escolasIdsDaRota
+            : [escolasInseridas[rIdx % escolasInseridas.length].id];
 
         const paradasToInsert: any[] = [];
         let ordemAtual = 1;
@@ -406,23 +411,27 @@ async function seedRotas(
                     sentido: RouteSentido.INDO,
                 });
             }
-            paradasToInsert.push({
-                rota_id: rota.id,
-                tipo_no: RouteNodeType.ESCOLA,
-                passageiro_id: null,
-                escola_id: escolaPrincipal.id,
-                ordem: ordemAtual++,
-                sentido: RouteSentido.INDO,
-            });
+            for (const escId of escolasDaRota) {
+                paradasToInsert.push({
+                    rota_id: rota.id,
+                    tipo_no: RouteNodeType.ESCOLA,
+                    passageiro_id: null,
+                    escola_id: escId,
+                    ordem: ordemAtual++,
+                    sentido: RouteSentido.INDO,
+                });
+            }
         } else {
-            paradasToInsert.push({
-                rota_id: rota.id,
-                tipo_no: RouteNodeType.ESCOLA,
-                passageiro_id: null,
-                escola_id: escolaPrincipal.id,
-                ordem: ordemAtual++,
-                sentido: RouteSentido.VOLTANDO,
-            });
+            for (const escId of escolasDaRota) {
+                paradasToInsert.push({
+                    rota_id: rota.id,
+                    tipo_no: RouteNodeType.ESCOLA,
+                    passageiro_id: null,
+                    escola_id: escId,
+                    ordem: ordemAtual++,
+                    sentido: RouteSentido.VOLTANDO,
+                });
+            }
             for (const pass of rotaPassageirosSlice) {
                 paradasToInsert.push({
                     rota_id: rota.id,
