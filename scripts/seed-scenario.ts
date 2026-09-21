@@ -330,7 +330,7 @@ async function seedPassageiros(
                 .select()
                 .single();
 
-            if (!errAdicional && rAdicional) {
+            if (!errAdicional && rAdicional && rAdicional.id !== rData.id) {
                 await supabaseAdmin.from("passageiro_responsaveis").insert({
                     passageiro_id: pData.id,
                     responsavel_id: rAdicional.id,

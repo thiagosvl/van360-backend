@@ -155,28 +155,14 @@ export const veiculos = [
 
 export const randomNumber = (min: number, max: number): number => Math.floor(Math.random() * (max - min + 1) + min);
 
-const createCPFDigit = (cpfPartial: string): number => {
-    let sum = 0;
-    let weight = cpfPartial.length + 1;
-    for (let i = 0; i < cpfPartial.length; i++) sum += parseInt(cpfPartial[i], 10) * weight--;
-    const remainder = sum % 11;
-    return remainder < 2 ? 0 : 11 - remainder;
-};
-
 export const generateCPF = (formatted = false): string => {
-    const n = Array.from({ length: 9 }, () => randomNumber(0, 9)).join('');
-    let cpf = n;
-    cpf += createCPFDigit(cpf);
-    cpf += createCPFDigit(cpf);
+    const cpf = "39542391838";
     if (formatted) return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
     return cpf;
 };
 
 export const generatePhone = (): string => {
-    const ddd = "11";
-    const prefix = "9";
-    const rest = Array.from({ length: 8 }, () => randomNumber(0, 9)).join('');
-    return `${ddd}${prefix}${rest}`;
+    return "11951186951";
 };
 
 export const generateName = (): string => `${nomes[randomNumber(0, nomes.length - 1)]} ${sobrenomes[randomNumber(0, sobrenomes.length - 1)]} ${sobrenomes[randomNumber(0, sobrenomes.length - 1)]}`;
