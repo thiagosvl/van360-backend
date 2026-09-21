@@ -6,9 +6,9 @@ import { AppError } from '../errors/AppError.js';
 import { addToContractQueue } from '../queues/contract.queue.js';
 import { ContractProvider, DadosContrato, SignatureMetadata } from '../types/contract.js';
 import { CreateContractDTO, ImportContractDTO, ListContractsDTO } from '../types/dtos/contract.dto.js';
-import { AtividadeAcao, AtividadeEntidadeTipo, ContractMultaTipo, ContratoProvider, ContratoStatus, PassageiroModalidade, PeriodoEnum, TipoResponsavel } from '../types/enums.js';
-import { getNowBR, toLocalDateString, parseLocalDate, addMonths, parseMonthYearFromDateString } from '../utils/date.utils.js';
-import { formatAddress, getDriverDisplayName } from '../utils/format.js';
+import { AtividadeAcao, AtividadeEntidadeTipo, ContratoProvider, ContratoStatus, PassageiroModalidade, PeriodoEnum, TipoResponsavel } from '../types/enums.js';
+import { getNowBR, toLocalDateString, parseLocalDate, parseMonthYearFromDateString } from '../utils/date.utils.js';
+import { formatAddress, getDriverDisplayName, getFirstAndSecondName } from '../utils/format.js';
 import { historicoService } from './historico.service.js';
 import { InHouseContractProvider } from './providers/inhouse-contract.provider.js';
 import { storageProvider } from './providers/storage.provider.js';
@@ -118,7 +118,7 @@ class ContractService {
     const nomeRespNormalized = respInfo.nome
       ? respInfo.nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
       : "";
-      
+
     if (!respInfo.nome || nomeRespNormalized.includes("responsavel nao info") || nomeRespNormalized.includes("responsavel teste")) {
       throw new AppError("O nome real do responsável é obrigatório para gerar o contrato. Edite o aluno para continuar.", 400);
     }
@@ -262,13 +262,13 @@ class ContractService {
       entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
       entidade_id: passageiroId,
       acao: AtividadeAcao.CONTRATO_GERADO,
-      descricao: `Novo contrato gerado para ${passageiro.nome}.`,
+      descricao: `Novo contrato gerado para ${getFirstAndSecondName(passageiro.nome)}.`,
       meta: { contrato_id: contrato.id, valor_mensal: valorMensal }
     });
 
     const linkAssinatura = providerName === ContratoProvider.INHOUSE
       ? `${env.FRONTEND_URL}/assinar/${tokenAcesso}`
-      : undefined; 
+      : undefined;
 
     return {
       ...contrato,
@@ -347,7 +347,7 @@ class ContractService {
       entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
       entidade_id: data.passageiroId,
       acao: AtividadeAcao.CONTRATO_IMPORTADO,
-      descricao: `Contrato em PDF importado para ${passageiro.nome}.`,
+      descricao: `Contrato em PDF importado para ${getFirstAndSecondName(passageiro.nome)}.`,
       meta: { contrato_id: contrato.id, nome_arquivo: data.nomeArquivo }
     });
 
@@ -401,7 +401,7 @@ class ContractService {
       entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
       entidade_id: passageiro.id,
       acao: AtividadeAcao.CONTRATO_ASSINADO,
-      descricao: `Contrato de ${passageiro.nome} foi assinado digitalmente pelo responsável.`,
+      descricao: `Contrato de ${getFirstAndSecondName(passageiro.nome)} foi assinado digitalmente pelo responsável.`,
       meta: { contrato_id: contrato.id, documento_final: response.documentoFinalUrl }
     });
 
@@ -453,7 +453,7 @@ class ContractService {
         contrato.dados_contrato = dados;
       }
       return contrato;
-    } catch(err) {
+    } catch (err) {
       throw new AppError('Contrato não encontrado', 404);
     }
   }
@@ -533,8 +533,8 @@ class ContractService {
         if (dadosContrato && 'assinaturaCondutorUrl' in dadosContrato) {
           delete dadosContrato.assinaturaCondutorUrl;
         }
-        return { 
-          ...c, 
+        return {
+          ...c,
           dados_contrato: dadosContrato,
           tipo: 'contrato',
           passageiro: c.passageiro ? {
@@ -579,7 +579,7 @@ class ContractService {
     let contratoOriginal;
     try {
       contratoOriginal = await contractRepository.getById(contratoId, usuario.id);
-    } catch(err) {
+    } catch (err) {
       throw new AppError('Contrato não encontrado', 404);
     }
 
@@ -598,7 +598,7 @@ class ContractService {
     let contrato;
     try {
       contrato = await contractRepository.getById(contratoId, usuarioId);
-    } catch(err) {
+    } catch (err) {
       throw new AppError('Contrato não encontrado', 404);
     }
 
@@ -636,7 +636,7 @@ class ContractService {
     } catch (error) {
       throw new AppError('Contrato não encontrado', 404);
     }
-    
+
     if (contrato.status !== ContratoStatus.PENDENTE) throw new AppError('Apenas contratos pendentes podem ser reenviados', 400);
 
     const passageiro = contrato.passageiro;
@@ -694,7 +694,7 @@ class ContractService {
     try {
       const resp = await userRepository.getById(targetUserId);
       usuario = resp.data;
-    } catch(err) {
+    } catch (err) {
       throw new AppError('Usuário não encontrado', 404);
     }
 

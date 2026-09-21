@@ -533,7 +533,7 @@ export const adminNotificationService = {
         entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
         entidade_id: cobranca.id,
         acao: AtividadeAcao.NOTIFICACAO_WABA,
-        descricao: `Lembrete de cobrança (${cobranca.mes}/${cobranca.ano}) disparado manualmente pelo administrador para ${nomeResp}.`,
+        descricao: `Lembrete de cobrança (${cobranca.mes}/${cobranca.ano}) disparado manualmente pelo administrador para ${getFirstName(nomeResp)}.`,
         meta: {
           admin_id: adminId || null,
           passageiro_id: passageiro.id,

@@ -15,7 +15,7 @@ import {
 } from "../config/constants.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { getNowBR, getSafeDueDateString, toPersistenceString, diffInDays, getMonthNameBR, getShortWeekDayBR, parseLocalDate, parseMonthYearFromDateString, createLocalDateBR } from "../utils/date.utils.js";
-import { getDriverDisplayName } from "../utils/format.js";
+import { getDriverDisplayName, getFirstAndSecondName } from "../utils/format.js";
 
 import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
 import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaStatus, CobrancaTipoPagamento, ConfigKey } from "../types/enums.js";
@@ -204,7 +204,7 @@ export const cobrancaService = {
         entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
         entidade_id: inserted.id,
         acao: AtividadeAcao.COBRANCA_CRIADA,
-        descricao: `Cobrança de R$ ${valorNumerico.toFixed(2)} (${data.mes}/${data.ano}) gerada como ${statusDescricao} para ${passageiro.nome}.`,
+        descricao: `Cobrança de R$ ${valorNumerico.toFixed(2)} (${data.mes}/${data.ano}) gerada como ${statusDescricao} para ${getFirstAndSecondName(passageiro.nome)}.`,
         meta: {
           passageiro_id: data.passageiro_id,
           mes: data.mes,
@@ -313,7 +313,7 @@ export const cobrancaService = {
         entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
         entidade_id: id,
         acao: AtividadeAcao.COBRANCA_EDITADA,
-        descricao: `Cobrança de ${cobrancaOriginal?.mes}/${cobrancaOriginal?.ano} do aluno ${passageiroNomeUpdate} editada pelo motorista.`,
+        descricao: `Cobrança de ${cobrancaOriginal?.mes}/${cobrancaOriginal?.ano} do aluno ${getFirstAndSecondName(passageiroNomeUpdate)} editada pelo motorista.`,
         meta: {
           antes: { valor: cobrancaOriginal?.valor, vencimento: cobrancaOriginal?.data_vencimento },
           depois: { valor: updated.valor, vencimento: updated.data_vencimento },
@@ -359,7 +359,7 @@ export const cobrancaService = {
       entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
       entidade_id: id,
       acao: AtividadeAcao.COBRANCA_EXCLUIDA,
-      descricao: `Parcela de ${cobranca.mes}/${cobranca.ano} do aluno ${passageiroNomeDelete} foi cancelada.`,
+      descricao: `Parcela de ${cobranca.mes}/${cobranca.ano} do aluno ${getFirstAndSecondName(passageiroNomeDelete)} foi cancelada.`,
       meta: {
         valor: cobranca.valor,
         mes: cobranca.mes,
@@ -394,7 +394,7 @@ export const cobrancaService = {
       entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
       entidade_id: id,
       acao: AtividadeAcao.COBRANCA_CRIADA,
-      descricao: `Parcela de ${cobranca.mes}/${cobranca.ano} do aluno ${passageiroNomeRestore} foi reativada para pendente.`,
+      descricao: `Parcela de ${cobranca.mes}/${cobranca.ano} do aluno ${getFirstAndSecondName(passageiroNomeRestore)} foi reativada para pendente.`,
       meta: {
         valor: cobranca.valor,
         mes: cobranca.mes,

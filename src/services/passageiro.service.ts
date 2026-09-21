@@ -14,6 +14,7 @@ import { NotificationChannelEnum } from "../types/enums.js";
 import { formatarPlacaExibicao } from "../utils/placa.utils.js";
 import { userRepository } from "../repositories/user.repository.js";
 import { calculateAuditDiff } from "../utils/audit-diff.util.js";
+import { getFirstAndSecondName, getFirstName } from "../utils/format.js";
 
 const _enrichPassageiroWithResponsavel = (p: Record<string, any>, isListMode: boolean = false) => {
     if (!p) return p;
@@ -214,7 +215,7 @@ const createPassageiro = async (data: CreatePassageiroDTO, isPreCadastro: boolea
             entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
             entidade_id: inserted.id,
             acao: AtividadeAcao.PASSAGEIRO_CRIADO,
-            descricao: `Novo aluno ${inserted.nome} cadastrado.`,
+            descricao: `Novo aluno ${getFirstAndSecondName(inserted.nome)} cadastrado.`,
             meta: {
                 nome: inserted.nome,
                 responsavel: respPrincipalData?.nome || null,
@@ -262,7 +263,7 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO, targetOwn
             entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
             entidade_id: id,
             acao: AtividadeAcao.PASSAGEIRO_EDITADO,
-            descricao: `Cadastro do aluno ${fullPassageiro.nome} atualizado.`,
+            descricao: `Cadastro do aluno ${getFirstAndSecondName(fullPassageiro.nome)} atualizado.`,
             meta: {
                 nome: fullPassageiro.nome,
                 campos_alterados: diff.campos,
@@ -292,7 +293,7 @@ const deletePassageiro = async (id: string, targetOwnerId?: string, assignedVeic
             entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
             entidade_id: id,
             acao: AtividadeAcao.PASSAGEIRO_EXCLUIDO,
-            descricao: `Aluno ${passageiro.nome} removido permanentemente.`,
+            descricao: `Aluno ${getFirstAndSecondName(passageiro.nome)} removido permanentemente.`,
             meta: {
                 backup: passageiro
             }
@@ -387,7 +388,7 @@ const toggleAtivo = async (passageiroId: string, novoStatus: boolean, targetOwne
             entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
             entidade_id: passageiroId,
             acao: AtividadeAcao.PASSAGEIRO_STATUS,
-            descricao: `Cadastro de ${pass.nome} foi ${novoStatus ? 'ATIVADO' : 'DESATIVADO'}.`,
+            descricao: `Cadastro de ${getFirstAndSecondName(pass.nome)} foi ${novoStatus ? 'ATIVADO' : 'DESATIVADO'}.`,
             meta: {
                 ativo: novoStatus,
                 alteracoes: [{
@@ -474,7 +475,7 @@ const finalizePreCadastro = async (
         entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
         entidade_id: novoPassageiro.id,
         acao: AtividadeAcao.PRE_CADASTRO_CONCLUIDO,
-        descricao: `Cadastro Pendente de (${novoPassageiro.nome}) aprovado como aluno.`,
+        descricao: `Cadastro Pendente de (${getFirstAndSecondName(novoPassageiro.nome)}) aprovado como aluno.`,
         meta: { pre_id: prePassageiroId }
     });
 
@@ -589,7 +590,7 @@ const addResponsavelAdicional = async (passageiroId: string, data: CreateRespons
             entidade_tipo: AtividadeEntidadeTipo.RESPONSAVEL,
             entidade_id: result.id,
             acao: AtividadeAcao.RESPONSAVEL_CADASTRADO,
-            descricao: `Responsável ${data.nome} cadastrado para o aluno ${passageiro.nome}.`,
+            descricao: `Responsável ${getFirstName(data.nome)} cadastrado para o aluno ${getFirstAndSecondName(passageiro.nome)}.`,
             meta: {
                 passageiro_id: passageiroId,
                 passageiro_nome: passageiro.nome,
@@ -633,7 +634,7 @@ const updateResponsavelAdicional = async (responsavelId: string, data: UpdateRes
                 entidade_tipo: AtividadeEntidadeTipo.RESPONSAVEL,
                 entidade_id: responsavelId,
                 acao: AtividadeAcao.RESPONSAVEL_EDITADO,
-                descricao: `Dados do responsável do aluno ${passageiro.nome} foram atualizados.`,
+                descricao: `Dados do responsável do aluno ${getFirstAndSecondName(passageiro.nome)} foram atualizados.`,
                 meta: {
                     passageiro_id: passageiroId,
                     passageiro_nome: passageiro.nome,
@@ -660,7 +661,7 @@ const deleteResponsavelAdicional = async (responsavelId: string, passageiroId?: 
                 entidade_tipo: AtividadeEntidadeTipo.RESPONSAVEL,
                 entidade_id: responsavelId,
                 acao: AtividadeAcao.RESPONSAVEL_EXCLUIDO,
-                descricao: `Responsável removido do cadastro do aluno ${passageiro.nome}.`,
+                descricao: `Responsável removido do cadastro do aluno ${getFirstAndSecondName(passageiro.nome)}.`,
                 meta: {
                     passageiro_id: passageiroId,
                     passageiro_nome: passageiro.nome,
@@ -683,7 +684,7 @@ const setPrincipalResponsavel = async (passageiroId: string, responsavelId: stri
             entidade_tipo: AtividadeEntidadeTipo.RESPONSAVEL,
             entidade_id: responsavelId,
             acao: AtividadeAcao.RESPONSAVEL_PRINCIPAL,
-            descricao: `Responsável principal alterado para o aluno ${passageiro.nome}.`,
+            descricao: `Responsável principal alterado para o aluno ${getFirstAndSecondName(passageiro.nome)}.`,
             meta: {
                 passageiro_id: passageiroId,
                 passageiro_nome: passageiro.nome,
@@ -712,7 +713,7 @@ const toggleNotificacoesRota = async (passageiroId: string, responsavelId: strin
             entidade_tipo: AtividadeEntidadeTipo.RESPONSAVEL,
             entidade_id: responsavelId,
             acao: AtividadeAcao.RESPONSAVEL_NOTIFICACAO,
-            descricao: `Notificações de rota ${novoStatus ? "ativadas" : "desativadas"} para responsável do aluno ${passageiro.nome}.`,
+            descricao: `Notificações de rota ${novoStatus ? "ativadas" : "desativadas"} para responsável do aluno ${getFirstAndSecondName(passageiro.nome)}.`,
             meta: {
                 passageiro_id: passageiroId,
                 passageiro_nome: passageiro.nome,

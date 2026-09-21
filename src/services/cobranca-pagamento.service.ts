@@ -5,6 +5,7 @@ import { AppError } from "../errors/AppError.js";
 import { RegistrarPagamentoManualDTO } from "../types/dtos/cobranca.dto.js";
 import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaStatus, CobrancaTipoPagamento, TipoResponsavel } from "../types/enums.js";
 import { getNowBR, toPersistenceString } from "../utils/date.utils.js";
+import { getFirstAndSecondName } from "../utils/format.js";
 import { historicoService } from "./historico.service.js";
 import { receiptService } from "./receipt.service.js";
 import { reciboAnualService } from "./recibo-anual.service.js";
@@ -43,7 +44,7 @@ export const cobrancaPagamentoService = {
       entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
       entidade_id: cobrancaId,
       acao: AtividadeAcao.PAGAMENTO_MANUAL,
-      descricao: `Pagamento manual de ${updated.mes}/${updated.ano} (${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(updated.valor_pago)}) do aluno ${cobranca.passageiro?.nome || cobranca.passageiros?.nome} registrado.`,
+      descricao: `Pagamento manual de ${updated.mes}/${updated.ano} (${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(updated.valor_pago)}) do aluno ${getFirstAndSecondName(cobranca.passageiro?.nome || cobranca.passageiros?.nome)} registrado.`,
       meta: {
         valor_pago: updated.valor_pago,
         tipo_pagamento: updated.tipo_pagamento,
@@ -149,7 +150,7 @@ export const cobrancaPagamentoService = {
       entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
       entidade_id: cobrancaId,
       acao: AtividadeAcao.PAGAMENTO_REVERTIDO,
-      descricao: `Pagamento de ${cobranca.mes}/${cobranca.ano} do aluno ${cobranca.passageiro?.nome || cobranca.passageiros?.nome} desfeito pelo motorista.`,
+      descricao: `Pagamento de ${cobranca.mes}/${cobranca.ano} do aluno ${getFirstAndSecondName(cobranca.passageiro?.nome || cobranca.passageiros?.nome)} desfeito pelo motorista.`,
       meta: {
         cobranca_id: cobrancaId,
         passageiro: cobranca.passageiro?.nome || cobranca.passageiros?.nome,

@@ -23,24 +23,32 @@ export function formatDateTime(date: string | Date): string {
   }).format(d);
 }
 
-/**
- * Retorna apenas o primeiro nome de uma string
- */
+const PREPOSICOES_NOME = new Set(["de", "da", "do", "dos", "das", "e"]);
+
 export function getFirstName(name?: string): string {
   if (!name) return "";
   return name.trim().split(/\s+/)[0];
 }
 
-/**
- * Retorna o primeiro e o segundo nome de uma string (ex: João Silva)
- */
 export function getFirstAndSecondName(name?: string): string {
   if (!name) return "";
   const parts = name.trim().split(/\s+/);
-  if (parts.length > 1) {
-    return `${parts[0]} ${parts[1]}`;
+  if (parts.length < 2) return parts[0] || "";
+
+  const result: string[] = [];
+  let mainNameCount = 0;
+
+  for (const part of parts) {
+    result.push(part);
+    if (!PREPOSICOES_NOME.has(part.toLowerCase())) {
+      mainNameCount++;
+    }
+    if (mainNameCount === 2) {
+      break;
+    }
   }
-  return parts[0];
+
+  return result.join(" ");
 }
 
 export function maskCpf(value?: string | null) {

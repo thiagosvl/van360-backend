@@ -13,6 +13,7 @@ import { CreateResponsavelAusenciaDTO } from "../types/dtos/responsavel-ausencia
 import { UpdateDadosComplementaresDTO } from "../types/dtos/responsavel.dto.js";
 import { historicoService } from "./historico.service.js";
 import { calculateAuditDiff } from "../utils/audit-diff.util.js";
+import { getFirstAndSecondName } from "../utils/format.js";
 
 import { redisClient } from "../config/redis.js";
 
@@ -193,7 +194,7 @@ export const portalResponsavelService = {
         entidade_tipo: AtividadeEntidadeTipo.RESPONSAVEL,
         entidade_id: target.responsavel_id,
         acao: AtividadeAcao.RESPONSAVEL_EDITADO,
-        descricao: `Dados do responsável do aluno ${target.nome} atualizados pelo portal do responsável.`,
+        descricao: `Dados do responsável do aluno ${getFirstAndSecondName(target.nome)} atualizados pelo portal do responsável.`,
         meta: {
           passageiro_id: passageiroId,
           passageiro_nome: target.nome,
@@ -332,7 +333,7 @@ export const portalResponsavelService = {
         entidade_tipo: AtividadeEntidadeTipo.RESPONSAVEL,
         entidade_id: responsavelId,
         acao: AtividadeAcao.RESPONSAVEL_EDITADO,
-        descricao: `Dados do responsável adicional do aluno ${target.nome} atualizados pelo portal do responsável.`,
+        descricao: `Dados do responsável adicional do aluno ${getFirstAndSecondName(target.nome)} atualizados pelo portal do responsável.`,
         meta: {
           passageiro_id: passageiroId,
           passageiro_nome: target.nome,
