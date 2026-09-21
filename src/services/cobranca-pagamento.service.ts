@@ -2,22 +2,24 @@ import { NotificationChannelEnum } from '../types/enums.js';
 import { logger } from "../config/logger.js";
 import { cobrancaRepository } from "../repositories/cobranca.repository.js";
 import { AppError } from "../errors/AppError.js";
-import { RegistrarPagamentoManualDTO } from "../types/dtos/cobranca.dto.js";
+import { RegistrarPagamentoManualDTO, ComplementarPagamentoManualDTO } from "../types/dtos/cobranca.dto.js";
 import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaStatus, CobrancaTipoPagamento, TipoResponsavel } from "../types/enums.js";
 import { getNowBR, toPersistenceString } from "../utils/date.utils.js";
 import { getFirstAndSecondName } from "../utils/format.js";
 import { historicoService } from "./historico.service.js";
 import { receiptService } from "./receipt.service.js";
 import { reciboAnualService } from "./recibo-anual.service.js";
+import type { Tables } from "../types/database.types.js";
+
+type CobrancaRow = Tables<"cobrancas">;
+
+interface ResponsavelLinkItem {
+  tipo?: string;
+  responsavel?: { nome?: string; telefone?: string } | Array<{ nome?: string; telefone?: string }>;
+}
 
 export const cobrancaPagamentoService = {
-
-
-
-  /**
-   * Registra um pagamento manual feito pelo motorista.
-   */
-  async registrarPagamentoManual(cobrancaId: string, data: RegistrarPagamentoManualDTO): Promise<any> {
+  async registrarPagamentoManual(cobrancaId: string, data: RegistrarPagamentoManualDTO): Promise<CobrancaRow> {
     logger.info({ cobrancaId }, "[cobrancaPagamentoService.registrarPagamentoManual] Iniciando registro");
 
     const { data: cobranca, error: findError } = await cobrancaRepository.getById(cobrancaId);
@@ -26,7 +28,6 @@ export const cobrancaPagamentoService = {
     if (cobranca.status === CobrancaStatus.PAGO) throw new AppError("Esta cobrança já está paga.", 400);
     if (cobranca.status === CobrancaStatus.CANCELADA) throw new AppError("Esta cobrança está cancelada.", 400);
 
-    // 2. REGISTRAR NO BANCO
     const dataPagamentoStr = data.data_pagamento ? toPersistenceString(data.data_pagamento) : toPersistenceString(getNowBR());
 
     const { data: updated, error } = await cobrancaRepository.registrarPagamentoManual(cobrancaId, {
@@ -53,7 +54,6 @@ export const cobrancaPagamentoService = {
       }
     });
 
-    // 3. GERAR RECIBO (Sincrono e Obrigatorio para consistencia)
     try {
       const reciboUrl = await receiptService.generateForCobranca(cobrancaId);
       if (!reciboUrl) {
@@ -61,8 +61,6 @@ export const cobrancaPagamentoService = {
       }
       updated.recibo_url = reciboUrl;
     } catch (receiptError: unknown) {
-      // Rollback manual (setando status de volta ou apenas lancando erro se a transacao nao for SQL)
-      // Como ja demos o update, vamos reverter o status caso a geracao do recibo falhe CRITICAMENTE
       await cobrancaRepository.update(cobrancaId, {
         status: cobranca.status,
         pagamento_manual: false,
@@ -79,13 +77,13 @@ export const cobrancaPagamentoService = {
     if (updated.recibo_url) {
       try {
         const { data: cobrancaCompleta } = await cobrancaRepository.getByIdWithPassageiroAndMotorista(cobrancaId);
-        const passageiroInfo = cobrancaCompleta?.passageiro as Record<string, any> | undefined;
-        const motoristaInfo = cobrancaCompleta?.motorista as Record<string, any> | undefined;
-        const links = (passageiroInfo?.responsaveis as any[]) || [];
-        const respLink = links.find((r: any) => r.tipo === TipoResponsavel.PRINCIPAL) || links[0];
+        const passageiroInfo = cobrancaCompleta?.passageiro as (Record<string, unknown> & { responsaveis?: ResponsavelLinkItem[] }) | undefined;
+        const motoristaInfo = cobrancaCompleta?.motorista as { nome?: string; apelido?: string; razao_social?: string } | undefined;
+        const links = passageiroInfo?.responsaveis || [];
+        const respLink = links.find((r) => r.tipo === TipoResponsavel.PRINCIPAL) || links[0];
         const respObj = Array.isArray(respLink?.responsavel) ? respLink.responsavel[0] : (respLink?.responsavel || {});
         const phoneResp = respObj?.telefone;
-        const nameResp = respObj?.nome || passageiroInfo?.nome || "";
+        const nameResp = respObj?.nome || (passageiroInfo?.nome as string | undefined) || "";
 
         if (phoneResp) {
           const { notificationService } = await import("./notifications/notification.service.js");
@@ -96,7 +94,7 @@ export const cobrancaPagamentoService = {
             EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO,
             {
               nomeResponsavel: nameResp,
-              nomePassageiro: passageiroInfo?.nome || "",
+              nomePassageiro: (passageiroInfo?.nome as string | undefined) || "",
               nomeMotorista: getDriverDisplayName(motoristaInfo),
               apelidoMotorista: motoristaInfo?.apelido,
               valor: Number(updated.valor_pago || updated.valor),
@@ -123,7 +121,7 @@ export const cobrancaPagamentoService = {
     return updated;
   },
 
-  async desfazerPagamento(cobrancaId: string): Promise<any> {
+  async desfazerPagamento(cobrancaId: string): Promise<CobrancaRow> {
     logger.info({ cobrancaId }, "[cobrancaPagamentoService.desfazerPagamento] Iniciando reversão de pagamento manual");
 
     const { data: cobranca, error: findError } = await cobrancaRepository.getById(cobrancaId);
@@ -136,7 +134,6 @@ export const cobrancaPagamentoService = {
       throw new AppError("Não é permitido desfazer este pagamento: apenas recebimentos marcados manualmente pelo motorista podem ser revertidos.", 400);
     }
 
-
     const { data, error } = await cobrancaRepository.desfazerPagamento(cobrancaId);
 
     if (error) {
@@ -144,7 +141,6 @@ export const cobrancaPagamentoService = {
       throw new AppError("Erro ao desfazer pagamento.", 500);
     }
 
-    // --- LOG DE AUDITORIA ---
     historicoService.log({
       usuario_id: cobranca.usuario_id,
       entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
@@ -160,7 +156,6 @@ export const cobrancaPagamentoService = {
       }
     });
 
-    // 2. DELETAR RECIBO DO STORAGE
     if (cobranca.recibo_url) {
       await receiptService.deleteReceipt(cobranca.recibo_url);
     }
@@ -170,5 +165,120 @@ export const cobrancaPagamentoService = {
     }
 
     return data;
+  },
+
+  async complementarPagamentoManual(cobrancaId: string, data: ComplementarPagamentoManualDTO): Promise<CobrancaRow> {
+    logger.info({ cobrancaId, valorAdicional: data.valor_adicional }, "[cobrancaPagamentoService.complementarPagamentoManual] Iniciando complementação");
+
+    const { data: cobranca, error: findError } = await cobrancaRepository.getById(cobrancaId);
+
+    if (findError || !cobranca) throw new AppError("Cobrança não encontrada.", 404);
+    if (cobranca.status !== CobrancaStatus.PAGO) {
+      throw new AppError("Apenas cobranças que já possuem pagamento registrado podem ser complementadas.", 400);
+    }
+    if (cobranca.status === CobrancaStatus.CANCELADA) {
+      throw new AppError("Esta cobrança está cancelada.", 400);
+    }
+
+    const valorAdicional = Number(data.valor_adicional);
+    if (isNaN(valorAdicional) || valorAdicional <= 0) {
+      throw new AppError("O valor adicional deve ser maior que zero.", 400);
+    }
+
+    const valorAnterior = Number(cobranca.valor_pago || 0);
+    const novoValorPago = valorAnterior + valorAdicional;
+    const dataPagamentoStr = data.data_pagamento ? toPersistenceString(data.data_pagamento) : toPersistenceString(getNowBR());
+
+    if (cobranca.recibo_url) {
+      try {
+        await receiptService.deleteReceipt(cobranca.recibo_url);
+      } catch (delErr: unknown) {
+        logger.warn({ error: delErr, cobrancaId }, "[cobrancaPagamentoService.complementarPagamentoManual] Erro ao deletar recibo anterior");
+      }
+    }
+
+    const { data: updated, error } = await cobrancaRepository.update(cobrancaId, {
+      valor_pago: novoValorPago,
+      data_pagamento: dataPagamentoStr,
+      tipo_pagamento: data.tipo_pagamento || cobranca.tipo_pagamento || CobrancaTipoPagamento.DINHEIRO,
+      pagamento_manual: true,
+      recibo_url: null,
+    });
+
+    if (error) throw new AppError(`Erro ao atualizar pagamento: ${error.message}`, 500);
+
+    historicoService.log({
+      usuario_id: cobranca.usuario_id,
+      entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
+      entidade_id: cobrancaId,
+      acao: AtividadeAcao.PAGAMENTO_COMPLEMENTAR,
+      descricao: `Pagamento complementar de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorAdicional)} para ${updated.mes}/${updated.ano} do aluno ${getFirstAndSecondName(cobranca.passageiro?.nome || cobranca.passageiros?.nome)} registrado. Total acumulado: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(updated.valor_pago)}.`,
+      meta: {
+        valor_adicional: valorAdicional,
+        valor_pago_anterior: valorAnterior,
+        valor_pago_acumulado: updated.valor_pago,
+        tipo_pagamento: updated.tipo_pagamento,
+        data_pagamento: updated.data_pagamento,
+        passageiro: cobranca.passageiro?.nome || cobranca.passageiros?.nome
+      }
+    });
+
+    try {
+      const reciboUrl = await receiptService.generateForCobranca(cobrancaId);
+      if (!reciboUrl) {
+        throw new Error("Não foi possível gerar o recibo atualizado.");
+      }
+      updated.recibo_url = reciboUrl;
+    } catch (receiptError: unknown) {
+      const msg = receiptError instanceof Error ? receiptError.message : String(receiptError);
+      logger.error({ error: msg, cobrancaId }, "Erro ao gerar recibo atualizado");
+      throw new AppError(msg || "Erro ao gerar recibo atualizado.", 500);
+    }
+
+    if (updated.recibo_url) {
+      try {
+        const { data: cobrancaCompleta } = await cobrancaRepository.getByIdWithPassageiroAndMotorista(cobrancaId);
+        const passageiroInfo = cobrancaCompleta?.passageiro as (Record<string, unknown> & { responsaveis?: ResponsavelLinkItem[] }) | undefined;
+        const motoristaInfo = cobrancaCompleta?.motorista as { nome?: string; apelido?: string; razao_social?: string } | undefined;
+        const links = passageiroInfo?.responsaveis || [];
+        const respLink = links.find((r) => r.tipo === TipoResponsavel.PRINCIPAL) || links[0];
+        const respObj = Array.isArray(respLink?.responsavel) ? respLink.responsavel[0] : (respLink?.responsavel || {});
+        const phoneResp = respObj?.telefone;
+        const nameResp = respObj?.nome || (passageiroInfo?.nome as string | undefined) || "";
+
+        if (phoneResp) {
+          const { notificationService } = await import("./notifications/notification.service.js");
+          const { EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO } = await import("../config/constants.js");
+          const { getDriverDisplayName } = await import("../utils/format.js");
+          await notificationService.notifyPassenger(
+            phoneResp,
+            EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO,
+            {
+              nomeResponsavel: nameResp,
+              nomePassageiro: (passageiroInfo?.nome as string | undefined) || "",
+              nomeMotorista: getDriverDisplayName(motoristaInfo),
+              apelidoMotorista: motoristaInfo?.apelido,
+              valor: Number(updated.valor_pago || updated.valor),
+              dataPagamento: updated.data_pagamento || undefined,
+              mes: updated.mes,
+              ano: updated.ano,
+              reciboUrl: updated.recibo_url,
+              usuarioId: updated.usuario_id,
+              passageiroId: updated.passageiro_id
+            },
+            {
+              channels: [NotificationChannelEnum.FIREBASE],
+              usuarioId: updated.usuario_id,
+              passageiroId: updated.passageiro_id || undefined
+            }
+          );
+        }
+      } catch (notifErr: unknown) {
+        const msg = notifErr instanceof Error ? notifErr.message : String(notifErr);
+        logger.error({ error: msg, cobrancaId }, "Erro ao enviar recibo pós-complementação de pagamento");
+      }
+    }
+
+    return updated;
   },
 };

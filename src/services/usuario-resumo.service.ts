@@ -108,7 +108,7 @@ export const usuarioResumoService = {
     const gastos = gastosRes.data || [];
 
     const cobrancasPagas = cobrancas.filter((c: Record<string, any>) => c.status === CobrancaStatus.PAGO);
-    const receitaRealizada = cobrancasPagas.reduce((acc: number, c: Record<string, any>) => acc + Number(c.valor || 0), 0);
+    const receitaRealizada = cobrancasPagas.reduce((acc: number, c: Record<string, any>) => acc + Number(c.valor_pago || 0), 0);
 
     const hoje = toLocalDateString(getNowBR());
     const isPastPeriod = targetAno < now.getFullYear() || (targetAno === now.getFullYear() && targetMes < (now.getMonth() + 1));

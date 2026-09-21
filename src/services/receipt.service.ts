@@ -32,6 +32,7 @@ export interface ReceiptData {
     descricao?: string; // Ex: Parcela
     vencimento?: string;
     metodoPagamento: string;
+    isPagamentoParcial?: boolean;
     tipo: 'PASSAGEIRO' | 'ASSINATURA';
     logoMotoristaUrl?: string | null;
 }
@@ -151,7 +152,10 @@ class ReceiptService {
 
             const pagadorFormatado = capitalize(data.pagadorNome);
             const passageiroFormatado = data.passageiroNome ? capitalize(data.passageiroNome) : null;
-            const metodoPagamentoFormatado = formatPaymentMethod(data.metodoPagamento);
+            const baseMetodoFormatado = formatPaymentMethod(data.metodoPagamento);
+            const metodoPagamentoFormatado = data.isPagamentoParcial
+                ? `${baseMetodoFormatado} • Pagamento Parcial`
+                : baseMetodoFormatado;
 
             const headerMarginBottom = headerLogo ? "24px" : "50px";
             const subtitleMarginBottom = headerLogo ? "28px" : "40px";
@@ -329,6 +333,8 @@ class ReceiptService {
             const respNome = respObj?.nome || "";
             const respCpf = respObj?.cpf || "";
 
+            const isParcial = cobranca.valor_pago !== null && cobranca.valor_pago !== undefined && Number(cobranca.valor_pago) < Number(cobranca.valor);
+
             const receiptData: ReceiptData = {
                 id: cobranca.id,
                 titulo: "Recibo de Pagamento",
@@ -336,7 +342,7 @@ class ReceiptService {
                 motoristaNome: motoristaInfo?.nome,
                 motoristaRazaoSocial: motoristaInfo?.razao_social,
                 motoristaDocumento: motoristaInfo?.cpfcnpj,
-                valor: cobranca.valor_pago || cobranca.valor,
+                valor: Number(cobranca.valor_pago || cobranca.valor),
                 data: cobranca.data_pagamento ? formatToBrazilianDate(cobranca.data_pagamento) : formatToBrazilianDate(getNowBR()),
                 pagadorNome: respNome,
                 passageiroNome: passageiroInfo?.nome,
@@ -345,6 +351,7 @@ class ReceiptService {
                 pagadorDocumento: respCpf,
                 descricao: cobranca.mes ? "Parcela" : "Cobrança Avulsa",
                 metodoPagamento: cobranca.tipo_pagamento,
+                isPagamentoParcial: isParcial,
                 tipo: 'PASSAGEIRO',
                 logoMotoristaUrl: motoristaInfo?.logo_url || null,
             };

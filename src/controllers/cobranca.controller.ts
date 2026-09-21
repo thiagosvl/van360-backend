@@ -1,22 +1,19 @@
-import { NotificationChannelEnum } from '../types/enums.js';
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
-import { z } from "zod";
 import { cobrancaPagamentoService } from "../services/cobranca-pagamento.service.js";
 import { cobrancaService } from "../services/cobranca.service.js";
 import { receiptService } from "../services/receipt.service.js";
 import { reciboAnualService } from "../services/recibo-anual.service.js";
-import { historicoService } from "../services/historico.service.js";
 import {
   createCobrancaSchema,
   listCobrancasFiltersSchema,
   obterReciboAnualParamsSchema,
   obterReciboAnualQuerySchema,
   registrarPagamentoManualSchema,
+  complementarPagamentoManualSchema,
   toggleNotificacoesSchema,
   updateCobrancaSchema
 } from "../types/dtos/cobranca.dto.js";
-import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 
 export const cobrancaController = {
   create: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -99,6 +96,14 @@ export const cobrancaController = {
     logger.info({ cobrancaId: id }, "CobrancaController.registrarPagamentoManual - Starting");
     const data = registrarPagamentoManualSchema.parse(request.body);
     const cobranca = await cobrancaPagamentoService.registrarPagamentoManual(id, data);
+    return reply.status(200).send(cobranca);
+  },
+
+  complementarPagamentoManual: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    logger.info({ cobrancaId: id }, "CobrancaController.complementarPagamentoManual - Starting");
+    const data = complementarPagamentoManualSchema.parse(request.body);
+    const cobranca = await cobrancaPagamentoService.complementarPagamentoManual(id, data);
     return reply.status(200).send(cobranca);
   },
 

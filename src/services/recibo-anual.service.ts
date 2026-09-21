@@ -63,7 +63,12 @@ export const reciboAnualService = {
             }
         }
 
-        const todosMesesPagos = mesesEsperados.every((m) => mesesPagosMap.has(m));
+        const todosMesesPagos = mesesEsperados.every((m) => {
+            const cob = mesesPagosMap.get(m);
+            if (!cob) return false;
+            const isParcial = cob.valor_pago !== null && Number(cob.valor_pago) < Number(cob.valor);
+            return !isParcial;
+        });
         if (!todosMesesPagos) {
             logger.warn({ passageiroId, ano, esperados: mesesEsperados.length, pagos: mesesPagosMap.size }, "[reciboAnualService] Ano ainda não quitado");
             await this.removerReciboAnualSeExistir(passageiroId, ano);

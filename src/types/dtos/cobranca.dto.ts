@@ -77,6 +77,16 @@ export const registrarPagamentoManualSchema = z.object({
 
 export type RegistrarPagamentoManualDTO = z.infer<typeof registrarPagamentoManualSchema>;
 
+export const complementarPagamentoManualSchema = z.object({
+    valor_adicional: z.union([z.number(), z.string()])
+        .transform(v => typeof v === 'string' ? moneyToNumber(v) : v)
+        .refine(v => typeof v === 'number' && !isNaN(v) && v > 0, "Valor adicional deve ser maior que zero"),
+    data_pagamento: z.string().optional(),
+    tipo_pagamento: z.nativeEnum(CobrancaTipoPagamento).optional(),
+});
+
+export type ComplementarPagamentoManualDTO = z.infer<typeof complementarPagamentoManualSchema>;
+
 export const obterReciboAnualParamsSchema = z.object({
     passageiroId: z.string().uuid("ID do passageiro inválido")
 });

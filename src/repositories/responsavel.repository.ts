@@ -192,7 +192,7 @@ export const responsavelRepository = {
 
     const { data: cobrancas } = await supabaseAdmin
       .from("cobrancas")
-      .select("id, mes, ano, ano_letivo, valor, status, data_vencimento, recibo_url, desativar_lembretes")
+      .select("id, mes, ano, ano_letivo, valor, valor_pago, status, data_vencimento, data_pagamento, tipo_pagamento, recibo_url, desativar_lembretes")
       .eq("passageiro_id", passageiroId)
       .order("ano", { ascending: false })
       .order("mes", { ascending: false });
