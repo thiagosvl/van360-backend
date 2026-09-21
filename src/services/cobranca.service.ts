@@ -186,6 +186,7 @@ export const cobrancaService = {
         valor_pago: statusVal === CobrancaStatus.PAGO ? valorNumerico : null,
         pagamento_manual: statusVal === CobrancaStatus.PAGO,
         desativar_lembretes: data.desativar_lembretes ?? false,
+        observacao: data.observacao !== undefined ? data.observacao : null,
       };
 
       const { data: created, error: insertError } = await cobrancaRepository.insert(cobrancaData);
@@ -299,6 +300,7 @@ export const cobrancaService = {
     if (data.tipo_pagamento !== undefined) cobrancaData.tipo_pagamento = data.tipo_pagamento;
     if (data.data_pagamento !== undefined) cobrancaData.data_pagamento = data.data_pagamento;
     if (data.valor_pago !== undefined) cobrancaData.valor_pago = moneyToNumber(data.valor_pago);
+    if (data.observacao !== undefined) cobrancaData.observacao = data.observacao;
 
     const { data: updated, error } = await cobrancaRepository.update(id, cobrancaData);
 

@@ -303,6 +303,7 @@ export type Database = {
           desativar_lembretes: boolean
           id: string
           mes: number
+          observacao: string | null
           pagamento_manual: boolean | null
           passageiro_id: string
           recibo_url: string | null
@@ -324,6 +325,7 @@ export type Database = {
           desativar_lembretes?: boolean
           id?: string
           mes: number
+          observacao?: string | null
           pagamento_manual?: boolean | null
           passageiro_id: string
           recibo_url?: string | null
@@ -345,6 +347,7 @@ export type Database = {
           desativar_lembretes?: boolean
           id?: string
           mes?: number
+          observacao?: string | null
           pagamento_manual?: boolean | null
           passageiro_id?: string
           recibo_url?: string | null

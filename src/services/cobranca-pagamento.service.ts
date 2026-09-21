@@ -36,6 +36,7 @@ export const cobrancaPagamentoService = {
       tipo_pagamento: data.tipo_pagamento || CobrancaTipoPagamento.DINHEIRO,
       data_pagamento: dataPagamentoStr,
       valor_pago: data.valor_pago || cobranca.valor,
+      ...(data.observacao !== undefined ? { observacao: data.observacao } : {}),
     });
 
     if (error) throw new AppError(`Erro ao registrar pagamento: ${error.message}`, 500);
@@ -203,6 +204,7 @@ export const cobrancaPagamentoService = {
       tipo_pagamento: data.tipo_pagamento || cobranca.tipo_pagamento || CobrancaTipoPagamento.DINHEIRO,
       pagamento_manual: true,
       recibo_url: null,
+      ...(data.observacao !== undefined ? { observacao: data.observacao } : {}),
     });
 
     if (error) throw new AppError(`Erro ao atualizar pagamento: ${error.message}`, 500);

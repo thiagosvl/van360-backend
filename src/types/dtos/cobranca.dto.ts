@@ -24,6 +24,7 @@ export const createCobrancaSchema = z.object({
     valor_pago: z.union([z.number(), z.string()]).transform(v => typeof v === 'string' ? moneyToNumber(v) : v).optional(),
     recibo_url: z.string().nullable().optional(),
     desativar_lembretes: z.boolean().optional(),
+    observacao: z.string().trim().max(1000, "Observação não pode exceder 1000 caracteres").nullable().optional(),
 });
 
 export type CreateCobrancaDTO = z.infer<typeof createCobrancaSchema>;
@@ -73,6 +74,7 @@ export const registrarPagamentoManualSchema = z.object({
     valor_pago: z.union([z.number(), z.string()]).transform(v => typeof v === 'string' ? moneyToNumber(v) : v).optional(),
     data_pagamento: z.string().optional(),
     tipo_pagamento: z.nativeEnum(CobrancaTipoPagamento).optional(),
+    observacao: z.string().trim().max(1000, "Observação não pode exceder 1000 caracteres").nullable().optional(),
 });
 
 export type RegistrarPagamentoManualDTO = z.infer<typeof registrarPagamentoManualSchema>;
@@ -83,6 +85,7 @@ export const complementarPagamentoManualSchema = z.object({
         .refine(v => typeof v === 'number' && !isNaN(v) && v > 0, "Valor adicional deve ser maior que zero"),
     data_pagamento: z.string().optional(),
     tipo_pagamento: z.nativeEnum(CobrancaTipoPagamento).optional(),
+    observacao: z.string().trim().max(1000, "Observação não pode exceder 1000 caracteres").nullable().optional(),
 });
 
 export type ComplementarPagamentoManualDTO = z.infer<typeof complementarPagamentoManualSchema>;
