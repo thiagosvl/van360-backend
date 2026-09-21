@@ -276,7 +276,7 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO, targetOwn
         });
     }
 
-    return enriched;
+    return getPassageiro(id, targetOwnerId, assignedVeiculoId);
 };
 
 const deletePassageiro = async (id: string, targetOwnerId?: string, assignedVeiculoId?: string): Promise<void> => {
