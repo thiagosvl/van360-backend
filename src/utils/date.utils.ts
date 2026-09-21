@@ -117,6 +117,15 @@ export const getMonthNameBR = (monthNumber?: number): string => {
   return names[monthNumber - 1];
 };
 
+export const getMonthShortBR = (monthNumber?: number): string => {
+  if (!monthNumber || monthNumber < 1 || monthNumber > 12) return "";
+  const names = [
+    "jan", "fev", "mar", "abr", "mai", "jun",
+    "jul", "ago", "set", "out", "nov", "dez"
+  ];
+  return names[monthNumber - 1];
+};
+
 export const getShortWeekDayBR = (date: Date): string => {
   const days = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
   return days[date.getDay()];

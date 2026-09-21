@@ -23,6 +23,7 @@ import { historicoService } from "./historico.service.js";
 import { receiptService } from "./receipt.service.js";
 import { getConfigNumber } from "./configuracao.service.js";
 import { notificationService } from "./notifications/notification.service.js";
+import { NotificationContextFormatter } from "./notifications/utils/notification-context.formatter.js";
 import { addToGenerationQueue } from "../queues/generation.queue.js";
 import { calculateAuditDiff } from "../utils/audit-diff.util.js";
 
@@ -918,8 +919,7 @@ export const cobrancaService = {
 
       let mesOrigemStr: string | undefined = undefined;
       if (c.mes !== (now.getMonth() + 1) || c.ano !== now.getFullYear()) {
-        const nomeMes = getMonthNameBR(c.mes);
-        mesOrigemStr = `${nomeMes}/${c.ano}`;
+        mesOrigemStr = NotificationContextFormatter.formatMonthYearShort(c.mes, c.ano) || undefined;
       }
 
       const respInfo = _getResponsavelFromPassageiro(passageiroInfo);

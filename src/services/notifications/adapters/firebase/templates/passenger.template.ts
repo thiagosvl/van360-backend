@@ -190,10 +190,8 @@ export class FirebasePassengerTemplates {
         const mes = ctx.mes as number | undefined;
         const ano = ctx.ano as number | undefined;
 
-        let mesAnoStr = "";
-        if (mes && ano) {
-            mesAnoStr = ` referente a ${String(mes).padStart(2, '0')}/${ano}`;
-        }
+        const mesAno = NotificationContextFormatter.formatMonthYearShort(mes, ano);
+        const mesAnoStr = mesAno ? ` referente a ${mesAno}` : "";
 
         return {
             title: "Recibo de Pagamento 🧾",
