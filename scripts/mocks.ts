@@ -165,6 +165,10 @@ export const generatePhone = (): string => {
     return "11951186951";
 };
 
+export const generateEmail = (): string => {
+    return "thiago-svl@hotmail.com";
+};
+
 export const generateName = (): string => `${nomes[randomNumber(0, nomes.length - 1)]} ${sobrenomes[randomNumber(0, sobrenomes.length - 1)]} ${sobrenomes[randomNumber(0, sobrenomes.length - 1)]}`;
 
 export const generateAddress = () => {
