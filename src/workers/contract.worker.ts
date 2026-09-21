@@ -34,13 +34,20 @@ export const contractWorker = new Worker<ContractJobData>(
                 }
             }
 
-            const provider = (contractService as any).getProvider(providerName);
+            let safeProviderName = providerName;
+            if (safeProviderName === ContratoProvider.IMPORTADO || !safeProviderName) {
+                safeProviderName = ContratoProvider.INHOUSE;
+                await contractRepository.updateStatus(contratoId, {
+                    provider: ContratoProvider.INHOUSE
+                });
+            }
+
+            const provider = (contractService as any).getProvider(safeProviderName);
             const response = await provider.gerarContrato({
                 contratoId,
                 dadosContrato,
             });
 
-            // 3. Atualizar contrato no Supabase com a URL da minuta
             await contractRepository.updateStatus(contratoId, {
                 minuta_url: response.documentUrl,
                 provider_document_id: response.providerDocumentId,
@@ -49,7 +56,6 @@ export const contractWorker = new Worker<ContractJobData>(
 
             logger.info({ jobId: job.id, contratoId }, "[Worker] Contrato atualizado com minuta URL.");
 
-            // 4. Notificar Responsável via NotificationService
             const respLink = Array.isArray(passageiro.responsaveis) ? (passageiro.responsaveis.find((r: any) => r.tipo === TipoResponsavel.PRINCIPAL) || passageiro.responsaveis[0]) : null;
             const rawRespPrincipal = passageiro.responsavel_principal || (respLink ? (Array.isArray(respLink.responsavel) ? respLink.responsavel[0] : respLink.responsavel) : null);
             const respPrincipal = Array.isArray(rawRespPrincipal) ? rawRespPrincipal[0] : rawRespPrincipal;
@@ -62,7 +68,7 @@ export const contractWorker = new Worker<ContractJobData>(
             }
 
             if (telefoneResponsavel || hasValidEmail) {
-                const linkAssinatura = providerName === ContratoProvider.INHOUSE
+                const linkAssinatura = safeProviderName === ContratoProvider.INHOUSE
                     ? `${env.FRONTEND_URL}/assinar/${tokenAcesso}`
                     : response.providerSignatureLink;
 

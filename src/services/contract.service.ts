@@ -95,9 +95,10 @@ class ContractService {
   }
 
   async criarContrato(authId: string, data: CreateContractDTO) {
-    const { passageiroId, provider: providerName = ContratoProvider.INHOUSE, ...customTerms } = data;
+    const { passageiroId, ...customTerms } = data;
+    const rawProvider = data.provider || ContratoProvider.INHOUSE;
+    const providerName = rawProvider === ContratoProvider.IMPORTADO ? ContratoProvider.INHOUSE : rawProvider;
 
-    // 1. Resolver usuário (condutor)
     const usuario = await this.getUsuarioByAuthId(authId);
     const usuarioId = usuario.id;
 
@@ -585,9 +586,13 @@ class ContractService {
 
     await contractRepository.aposentarContratosPassageiro(contratoOriginal.passageiro_id, true);
 
+    const providerAlvo = contratoOriginal.provider === ContratoProvider.IMPORTADO
+      ? ContratoProvider.INHOUSE
+      : (contratoOriginal.provider as ContratoProvider || ContratoProvider.INHOUSE);
+
     return this.criarContrato(authId, {
       passageiroId: contratoOriginal.passageiro_id,
-      provider: contratoOriginal.provider as ContratoProvider
+      provider: providerAlvo
     });
   }
 
@@ -604,7 +609,7 @@ class ContractService {
 
     await contractRepository.delete(contratoId, usuarioId);
 
-    if (contrato.provider === ContratoProvider.IMPORTADO || contrato.token_acesso) {
+    if (contrato.provider === ContratoProvider.IMPORTADO && contrato.token_acesso) {
       const storagePath = `imported/${usuarioId}/${contrato.token_acesso}.pdf`;
       await storageProvider.remove('contratos', [storagePath]).catch((err) => {
         logger.warn({ err, storagePath }, 'Falha não bloqueante ao remover PDF importado do storage');
