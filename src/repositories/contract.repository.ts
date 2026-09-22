@@ -3,7 +3,7 @@ import { ContratoStatus } from "../types/enums.js";
 import { isValidFilterValue } from "../utils/filter.utils.js";
 
 const CONTRACT_PASSAGEIRO_SELECT = `
-  id, nome, ativo, valor_cobranca, dia_vencimento,
+  id, nome, ativo, valor_cobranca, dia_vencimento, data_inicio_transporte, data_fim_transporte,
   responsaveis:passageiro_responsaveis(
     tipo, parentesco,
     responsavel:responsaveis(id, nome, cpf, email, telefone)

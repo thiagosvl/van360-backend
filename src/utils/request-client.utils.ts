@@ -106,7 +106,25 @@ export function extractClientAccessData(
   const ip = getClientIp(request);
   const rawUserAgent = typeof request.headers["user-agent"] === "string" ? request.headers["user-agent"] : null;
   const parsedUa = parseUserAgent(rawUserAgent);
-  const referrer = typeof request.headers["referer"] === "string" ? request.headers["referer"] : typeof request.headers["referrer"] === "string" ? request.headers["referrer"] : null;
+  const rawHeaderReferrer = typeof request.headers["referer"] === "string"
+    ? request.headers["referer"]
+    : typeof request.headers["referrer"] === "string"
+    ? request.headers["referrer"]
+    : null;
+
+  const isInternalReferrer = Boolean(
+    rawHeaderReferrer && (
+      rawHeaderReferrer.includes("app.van360.com.br") ||
+      rawHeaderReferrer.includes("localhost") ||
+      rawHeaderReferrer.includes("capacitor://")
+    )
+  );
+
+  const cleanHeaderReferrer = isInternalReferrer ? null : rawHeaderReferrer;
+  const clientReferrer = typeof extraMetadata?.referrer === "string" && !extraMetadata.referrer.includes("app.van360.com.br")
+    ? extraMetadata.referrer
+    : null;
+  const finalReferrer = clientReferrer || cleanHeaderReferrer || undefined;
 
   const dispositivoCadastro = resolveDispositivoCadastro(clientDispositivo, rawUserAgent);
 
@@ -114,7 +132,7 @@ export function extractClientAccessData(
     ...(extraMetadata || {}),
     ip: ip || (extraMetadata?.ip as string | undefined),
     user_agent: rawUserAgent || (extraMetadata?.user_agent as string | undefined),
-    referrer: referrer || (extraMetadata?.referrer as string | undefined),
+    referrer: finalReferrer,
     dispositivo_resumo: parsedUa.resumo,
     so: parsedUa.so,
     navegador: parsedUa.navegador,

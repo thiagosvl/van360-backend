@@ -10,6 +10,7 @@ export const env = {
   CRON_SECRET: process.env.CRON_SECRET || "super_secret_cron_key",
   BACKEND_URL: process.env.BACKEND_URL || "http://host.docker.internal:3000",
   FRONTEND_URL: process.env.FRONTEND_URL || "",
+  SITE_URL: process.env.SITE_URL || "https://van360.com.br",
   
   // Observability
   SENTRY_DSN: process.env.SENTRY_DSN,

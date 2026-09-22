@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
-import { atualizarUsuario, atualizarPixUsuario, validarAcessoUsuario, atualizarCanalAquisicao } from "../services/usuario.service.js";
+import { atualizarUsuario, atualizarPixUsuario, validarAcessoUsuario, atualizarCanalAquisicao, excluirMinhaConta } from "../services/usuario.service.js";
 import { TipoChavePix } from "../types/enums.js";
 import { atualizarUsuarioSchema } from "../schemas/usuario.schema.js";
 
@@ -72,6 +72,22 @@ export const UsuarioController = {
         } catch (err: unknown) {
             const error = err as Error;
             logger.error({ error: error.message, usuarioId }, "Falha ao atualizar canal de aquisição do usuário.");
+            return reply.status(400).send({ error: error.message });
+        }
+    },
+
+    async excluirMinhaConta(request: FastifyRequest, reply: FastifyReply) {
+        const authUid = request.user?.id;
+        if (!authUid) {
+            return reply.status(401).send({ error: "Não autenticado." });
+        }
+
+        try {
+            await excluirMinhaConta(authUid);
+            return reply.status(200).send({ success: true });
+        } catch (err: unknown) {
+            const error = err as Error;
+            logger.error({ error: error.message, authUid }, "Falha ao excluir conta do usuário.");
             return reply.status(400).send({ error: error.message });
         }
     },

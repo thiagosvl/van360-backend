@@ -7,6 +7,7 @@ import {
   updateUserAdminSchema,
   updateSubscriptionAdminSchema,
   listUsersQuerySchema,
+  listAcquisitionStatsQuerySchema,
   createUserAdminSchema,
   dispatchDriverNotificationSchema,
   listUsersLatestActivityQuerySchema,
@@ -25,6 +26,18 @@ export const adminUserController = {
       const error = err as Error;
       logger.error({ error: error.message }, "[AdminUserController] Erro no dashboard.");
       return reply.status(500).send({ error: "Erro ao buscar estatísticas." });
+    }
+  },
+
+  async getAcquisitionStats(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const query = listAcquisitionStatsQuerySchema.parse(request.query);
+      const result = await adminUserService.getAcquisitionStats(query);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao buscar estatísticas de aquisição.");
+      return reply.status(500).send({ error: "Erro ao buscar estatísticas de aquisição." });
     }
   },
 

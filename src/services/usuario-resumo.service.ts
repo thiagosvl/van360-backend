@@ -54,7 +54,7 @@ interface SystemSummary {
 }
 
 export const usuarioResumoService = {
-  getResumo: async (usuarioId: string, mes?: number, ano?: number, veiculoId?: string): Promise<SystemSummary> => {
+  getResumo: async (usuarioId: string, mes?: number, ano?: number, veiculoId?: string, canViewFinancials: boolean = true): Promise<SystemSummary> => {
     // 1. Fetch User
     const usuario = await getUsuarioData(usuarioId);
     if (!usuario) throw new Error("Usuário não encontrado");
@@ -89,6 +89,36 @@ export const usuarioResumoService = {
     const escTotal = escolasCount.data?.length || 0;
     const escAtivos = escolasCount.data?.filter((e: Record<string, any>) => e.ativo).length || 0;
     const escInativos = escTotal - escAtivos;
+
+    if (!canViewFinancials || isSubAccount) {
+      return {
+        usuario: {
+          ativo: (usuario as Record<string, any>).ativo,
+          flags: {
+            usar_contratos: !!usuario.config_contrato?.usar_contratos,
+          }
+        },
+        contadores: {
+          passageiros: {
+            total: passTotal,
+            ativos: passAtivos,
+            inativos: passInativos,
+            solicitacoes_pendentes: prePassageirosCount.count || 0
+          },
+          veiculos: {
+            total: veicTotal,
+            ativos: veicAtivos,
+            inativos: veicInativos
+          },
+          escolas: {
+            total: escTotal,
+            ativos: escAtivos,
+            inativos: escInativos
+          }
+        },
+        financeiro: undefined
+      };
+    }
 
     // 3. Financial Summary
     const now = getNowBR();

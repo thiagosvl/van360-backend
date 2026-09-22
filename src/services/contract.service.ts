@@ -488,6 +488,10 @@ class ContractService {
             passageiro: {
               id: p.id,
               nome: p.nome,
+              data_inicio_transporte: p.data_inicio_transporte,
+              data_fim_transporte: p.data_fim_transporte,
+              valor_cobranca: p.valor_cobranca,
+              dia_vencimento: p.dia_vencimento,
               responsavel_principal: respInfo.nome ? {
                 id: respInfo.id,
                 nome: respInfo.nome,

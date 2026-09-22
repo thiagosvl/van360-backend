@@ -110,7 +110,7 @@ export class NotificationUrlBuilder {
      */
     static getPassengerRequestsUrl(): string {
         const baseUrl = this.getBaseAppUrl();
-        return `${baseUrl}/passageiros?tab=solicitacoes`;
+        return `${baseUrl}/alunos?tab=solicitacoes`;
     }
 
     /**

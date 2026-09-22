@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
-import { PDFDocument, PDFImage, rgb, StandardFonts } from 'pdf-lib';
+import { PDFDocument, PDFImage, rgb, StandardFonts, PDFFont } from 'pdf-lib';
 import { formatToBrazilianDate, getNowBR, parseLocalDate } from '../../utils/date.utils.js';
 import { formatModalidade, formatParentesco, formatPeriodo, maskCnpj, maskCpf, maskPhone } from '../../utils/format.js';
 
@@ -209,25 +209,34 @@ export class InHouseContractProvider implements ContractProvider {
     return Buffer.from(await pdfBuffer.arrayBuffer());
   }
 
-  private async splitTextToLines(text: string, font: any, size: number, maxWidth: number): Promise<string[]> {
+  private splitTextToLines(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
+    if (!text || typeof text !== 'string') return [];
     const lines: string[] = [];
     const paragraphs = text.split('\n');
     for (const paragraph of paragraphs) {
       const words = paragraph.split(' ');
       let currentLine = '';
       for (const word of words) {
+        if (!word) continue;
         const testLine = currentLine ? `${currentLine} ${word}` : word;
-        const width = font.widthOfTextAtSize(testLine, size);
-        if (width > maxWidth) {
-          lines.push(currentLine);
-          currentLine = word;
+        const textWidth = font.widthOfTextAtSize(testLine, size);
+        if (textWidth > maxWidth) {
+          if (currentLine) {
+            lines.push(currentLine);
+            currentLine = word;
+          } else {
+            lines.push(word);
+            currentLine = '';
+          }
         } else {
           currentLine = testLine;
         }
       }
-      lines.push(currentLine);
+      if (currentLine) {
+        lines.push(currentLine);
+      }
     }
-    return lines;
+    return lines.length > 0 ? lines : [''];
   }
 
 
@@ -316,59 +325,98 @@ export class InHouseContractProvider implements ContractProvider {
       currentY = 730;
     }
 
-    // Helper de Header com cor preta (removendo azul)
     const drawHeader = (title: string, y: number) => {
-      // Cor removida (default black)
       page.drawText(title, { x: margin, y, size: fontSizeHeader, font: fontBold });
       page.drawLine({ start: { x: margin, y: y - 5 }, end: { x: 545, y: y - 5 }, thickness: 0.5, color: rgb(0, 0, 0) });
-      return y - 26;
+      return y - 20;
     };
 
-    // ...
-
-    // Helper para mascarar doc genérico
     const maskDoc = (doc?: string | null) => {
       if (!doc) return '';
       const clean = doc.replace(/\D/g, '');
       return clean.length > 11 ? maskCnpj(clean) : maskCpf(clean);
     };
 
+    const smallTextSize = 10;
+    const rowLineHeight = 13.5;
+    const itemSpacing = 2;
+    const sectionSpacing = 14;
+
+    const drawFullWidthRow = (text: string, y: number, isBold = false) => {
+      const fontToUse = isBold ? fontBold : font;
+      const lines = this.splitTextToLines(text, fontToUse, smallTextSize, width);
+      let localY = y;
+      for (const line of lines) {
+        page.drawText(line, { x: margin, y: localY, size: smallTextSize, font: fontToUse });
+        localY -= rowLineHeight;
+      }
+      return localY - itemSpacing;
+    };
+
+    const drawTwoColumnRow = (leftText: string, rightText: string, y: number) => {
+      const leftLines = leftText ? this.splitTextToLines(leftText, font, smallTextSize, 240) : [];
+      const rightLines = rightText ? this.splitTextToLines(rightText, font, smallTextSize, 245) : [];
+      const maxLines = Math.max(leftLines.length, rightLines.length, 1);
+
+      for (let i = 0; i < leftLines.length; i++) {
+        page.drawText(leftLines[i], { x: margin, y: y - (i * rowLineHeight), size: smallTextSize, font });
+      }
+
+      for (let i = 0; i < rightLines.length; i++) {
+        page.drawText(rightLines[i], { x: 300, y: y - (i * rowLineHeight), size: smallTextSize, font });
+      }
+
+      return y - (maxLines * rowLineHeight) - itemSpacing;
+    };
+
     currentY = drawHeader('DAS PARTES', currentY);
 
-    const smallTextSize = 10;
-
     // CONTRATANTE
-    page.drawText('CONTRATANTE (Responsável)', { x: margin, y: currentY, size: smallTextSize, font: fontBold });
-    page.drawText(`Nome: ${dados.nomeResponsavel}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
-    page.drawText(`Documento: ${maskCpf(dados.cpfResponsavel)}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
-    page.drawText(`Telefone: ${maskPhone(dados.telefoneResponsavel)}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
-    page.drawText(`Parentesco: ${formatParentesco(dados.parentescoResponsavel || '')}`, { x: margin, y: currentY - 42, size: smallTextSize, font });
+    currentY = drawFullWidthRow('CONTRATANTE (Responsável)', currentY, true);
+    currentY = drawFullWidthRow(`Nome: ${dados.nomeResponsavel || ''}`, currentY);
+    currentY = drawTwoColumnRow(
+      `Documento: ${maskCpf(dados.cpfResponsavel)}`,
+      `Telefone: ${maskPhone(dados.telefoneResponsavel)}`,
+      currentY
+    );
+    currentY = drawFullWidthRow(`Parentesco: ${formatParentesco(dados.parentescoResponsavel || '')}`, currentY);
 
-    currentY -= 68;
+    currentY -= (sectionSpacing - 4);
 
-    // CONTRATADA
-    page.drawText('PRESTADOR(A) DE SERVIÇOS DE TRANSPORTE', { x: margin, y: currentY, size: smallTextSize, font: fontBold });
-    page.drawText(`Nome: ${dados.nomeCondutor}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
-    page.drawText(`Documento: ${maskDoc(dados.cpfCnpjCondutor)}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
-    page.drawText(`Telefone: ${maskPhone(dados.telefoneCondutor)}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
+    // PRESTADOR(A)
+    currentY = drawFullWidthRow('PRESTADOR(A) DE SERVIÇOS DE TRANSPORTE', currentY, true);
+    currentY = drawFullWidthRow(`Nome: ${dados.nomeCondutor || ''}`, currentY);
+    currentY = drawTwoColumnRow(
+      `Documento: ${maskDoc(dados.cpfCnpjCondutor)}`,
+      `Telefone: ${maskPhone(dados.telefoneCondutor)}`,
+      currentY
+    );
 
-    currentY -= 56;
+    currentY -= sectionSpacing;
 
     currentY = drawHeader('ALUNO(A)', currentY);
-    page.drawText(`Nome: ${dados.nomePassageiro}`, { x: margin, y: currentY, size: smallTextSize, font });
-    page.drawText(`Escola: ${dados.nomeEscola}`, { x: 300, y: currentY, size: smallTextSize, font });
+    currentY = drawTwoColumnRow(
+      `Nome: ${dados.nomePassageiro || ''}`,
+      `Escola: ${dados.nomeEscola || ''}`,
+      currentY
+    );
+    currentY = drawTwoColumnRow(
+      `Período: ${formatPeriodo(dados.periodo)}`,
+      `Modalidade: ${formatModalidade(dados.modalidade)}`,
+      currentY
+    );
+    currentY = drawFullWidthRow(`Endereço: ${dados.enderecoCompleto || ''}`, currentY);
 
-    page.drawText(`Período: ${formatPeriodo(dados.periodo)}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
-    page.drawText(`Modalidade: ${formatModalidade(dados.modalidade)}`, { x: 300, y: currentY - 14, size: smallTextSize, font });
-
-    page.drawText(`Endereço: ${dados.enderecoCompleto}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
-
-    currentY -= 56;
+    currentY -= sectionSpacing;
 
     currentY = drawHeader('VEÍCULO', currentY);
-    page.drawText(`Modelo: ${dados.modeloVeiculo}`, { x: margin, y: currentY, size: smallTextSize, font });
-    page.drawText(`Placa: ${dados.placaVeiculo}`, { x: 300, y: currentY, size: smallTextSize, font });
-    currentY -= 32;
+    currentY = drawTwoColumnRow(
+      `Modelo: ${dados.modeloVeiculo || ''}`,
+      `Placa: ${dados.placaVeiculo || ''}`,
+      currentY
+    );
+
+    currentY -= sectionSpacing;
 
     currentY = drawHeader('DO PERÍODO DO CONTRATO', currentY);
     const currentYear = getNowBR().getFullYear();
@@ -380,28 +428,43 @@ export class InHouseContractProvider implements ContractProvider {
       return `${parts[1].padStart(2, '0')}/${parts[0]}`;
     };
 
-    page.drawText(`Ano Letivo: ${dados.ano || currentYear}`, { x: margin, y: currentY, size: smallTextSize, font });
-    page.drawText(`Início do Transporte: ${formatToBrazilianDate(dados.dataInicio)}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
-    page.drawText(`Término do Transporte: ${formatToBrazilianDate(dados.dataFim)}`, { x: 300, y: currentY - 14, size: smallTextSize, font });
-    page.drawText(`Horário de Entrada: ${dados.horarioEntrada || ''}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
-    page.drawText(`Horário de Saída: ${dados.horarioSaida || ''}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
-    page.drawText(`Primeira Parcela: ${formatMonthYear(dados.dataInicioCobranca)}`, { x: margin, y: currentY - 42, size: smallTextSize, font });
-    page.drawText(`Última Parcela: ${formatMonthYear(dados.dataFimCobranca)}`, { x: 300, y: currentY - 42, size: smallTextSize, font });
-    currentY -= 70;
+    currentY = drawFullWidthRow(`Ano Letivo: ${dados.ano || currentYear}`, currentY);
+    currentY = drawTwoColumnRow(
+      `Início do Transporte: ${formatToBrazilianDate(dados.dataInicio)}`,
+      `Término do Transporte: ${formatToBrazilianDate(dados.dataFim)}`,
+      currentY
+    );
+    currentY = drawTwoColumnRow(
+      `Horário de Entrada: ${dados.horarioEntrada || ''}`,
+      `Horário de Saída: ${dados.horarioSaida || ''}`,
+      currentY
+    );
+    currentY = drawTwoColumnRow(
+      `Primeira Parcela: ${formatMonthYear(dados.dataInicioCobranca)}`,
+      `Última Parcela: ${formatMonthYear(dados.dataFimCobranca)}`,
+      currentY
+    );
+
+    currentY -= sectionSpacing;
 
     currentY = drawHeader('DAS CONDIÇÕES DE VALOR', currentY);
-    page.drawText(`Valor total do contrato (R$): ${dados.valorTotal.toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    })}`, { x: margin, y: currentY, size: smallTextSize, font });
-    page.drawText(`Quantidade de parcelas: ${dados.qtdParcelas}`, { x: 300, y: currentY, size: smallTextSize, font });
-    page.drawText(`Valor das parcelas (R$): ${dados.valorParcela.toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    })}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
-    page.drawText(`Dia do vencimento: ${dados.diaVencimento}`, { x: 300, y: currentY - 14, size: smallTextSize, font });
+    currentY = drawTwoColumnRow(
+      `Valor total do contrato (R$): ${(dados.valorTotal ?? 0).toLocaleString("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+      })}`,
+      `Quantidade de parcelas: ${dados.qtdParcelas ?? 0}`,
+      currentY
+    );
+    currentY = drawTwoColumnRow(
+      `Valor das parcelas (R$): ${(dados.valorParcela ?? 0).toLocaleString("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+      })}`,
+      `Dia do vencimento: ${dados.diaVencimento ?? '-'}`,
+      currentY
+    );
 
-    // Lógica para formatação de valores de multas
     const formatMulta = (tipo: ContractMultaTipo, valor: number) => {
       if (tipo === ContractMultaTipo.PERCENTUAL) {
         return valor.toLocaleString("pt-BR", {
@@ -412,25 +475,26 @@ export class InHouseContractProvider implements ContractProvider {
       return valor.toLocaleString("pt-BR", {
         style: "currency",
         currency: "BRL",
-      }); // Com decimais se R$
+      });
     };
 
     const multaAtrasoTexto = (dados.multaAtraso && dados.multaAtraso.valor > 0)
       ? `Multa por atraso de pagamento (${dados.multaAtraso.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}): ${formatMulta(dados.multaAtraso.tipo, dados.multaAtraso.valor)}`
       : 'Multa por atraso de pagamento:';
-    page.drawText(multaAtrasoTexto, { x: margin, y: currentY - 28, size: smallTextSize, font });
 
     const multaRescisaoTexto = (dados.multaRescisao && dados.multaRescisao.valor > 0)
       ? `Multa por rescisão de contrato (${dados.multaRescisao.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}): ${formatMulta(dados.multaRescisao.tipo, dados.multaRescisao.valor)}`
       : 'Multa por rescisão de contrato:';
-    page.drawText(multaRescisaoTexto, { x: 300, y: currentY - 28, size: smallTextSize, font });
+
+    currentY = drawTwoColumnRow(multaAtrasoTexto, multaRescisaoTexto, currentY);
 
     const jurosAtrasoTexto = (dados.jurosAtraso && dados.jurosAtraso.valor > 0)
       ? `${dados.jurosAtraso.tipo === ContractMultaTipo.PERCENTUAL ? 'Juros de mora (atraso):' : 'Juros de mora diário:'} ${formatMulta(dados.jurosAtraso.tipo, dados.jurosAtraso.valor)}${dados.jurosAtraso.tipo === ContractMultaTipo.PERCENTUAL ? ' ao mês' : ' / dia'}`
       : 'Juros de mora (atraso):';
-    page.drawText(jurosAtrasoTexto, { x: margin, y: currentY - 42, size: smallTextSize, font });
 
-    currentY -= 62;
+    currentY = drawFullWidthRow(jurosAtrasoTexto, currentY);
+
+    currentY -= sectionSpacing;
 
     const intro = "As partes acima identificadas têm, entre si, justo e acertado o presente Contrato de Prestação de Serviços de Transportes Escolares, sob as cláusulas e as seguintes condições.";
     const introLines = await this.splitTextToLines(intro, fontItalic, fontSizeBody, width);

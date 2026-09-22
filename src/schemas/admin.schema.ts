@@ -43,7 +43,16 @@ export const listUsersQuerySchema = z.object({
   search: z.string().optional(),
   status: z.string().optional(),
   tipo: z.string().optional().default(UserType.MOTORISTA),
+  data_inicio: z.string().optional(),
+  data_fim: z.string().optional(),
 });
+
+export const listAcquisitionStatsQuerySchema = z.object({
+  data_inicio: z.string().optional(),
+  data_fim: z.string().optional(),
+});
+
+export type ListAcquisitionStatsQuery = z.infer<typeof listAcquisitionStatsQuerySchema>;
 
 export const listUserLogsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),

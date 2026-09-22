@@ -21,3 +21,14 @@ export const updateConfiguracoesSchema = z.object({
 
 export type UpdateConfiguracoesInput = z.infer<typeof updateConfiguracoesSchema>;
 
+export const FINANCIAL_CONFIGURACAO_KEYS: readonly (keyof UpdateConfiguracoesInput)[] = [
+  "notificar_pais_cobrancas",
+  "cobranca_aviso_previo_ativo",
+  "cobranca_dias_aviso_previo",
+  "cobranca_vencimento_hoje_ativo",
+  "cobranca_atraso_3_dias_ativo",
+  "cobranca_atraso_5_dias_ativo",
+  "cobranca_atraso_7_dias_ativo",
+  "notificar_motorista_parcelas",
+] as const;
+

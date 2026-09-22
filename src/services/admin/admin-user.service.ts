@@ -47,7 +47,10 @@ import type {
   MotoristasLatestActivityResponseDTO,
   MotoristasRadarStatsDTO,
   GetMotoristasRadarStatsQuery,
+  ListAcquisitionStatsQuery,
 } from "../../schemas/admin.schema.js";
+import type { AdminAcquisitionStatsDTO, CanalAquisicaoAgrupadoDTO, CampanhaAquisicaoDTO, DispositivoAquisicaoDTO } from "../../types/dtos/admin-acquisition.dto.js";
+import { resolveLeadAttribution } from "../../utils/acquisition-channel.utils.js";
 
 
 import { adminPassageiroService } from "./admin-passageiro.service.js";
@@ -198,6 +201,8 @@ export const adminUserService = {
       isId,
       status: status?.trim() || undefined,
       tipo: query.tipo?.trim() || undefined,
+      dataInicio: query.data_inicio?.trim() || undefined,
+      dataFim: query.data_fim?.trim() || undefined,
     });
 
     if (error) {
@@ -1541,6 +1546,164 @@ export const adminUserService = {
     });
 
     return { success: true, message: "Fatura excluída com sucesso." };
+  },
+
+  async getAcquisitionStats(query: ListAcquisitionStatsQuery): Promise<AdminAcquisitionStatsDTO> {
+    const dataInicio = query.data_inicio?.trim() || undefined;
+    const dataFim = query.data_fim?.trim() || undefined;
+
+    const { data: users, error } = await adminUserRepository.getAcquisitionUsersData(dataInicio, dataFim);
+    if (error) {
+      logger.error({ error }, "[AdminUserService] Erro ao buscar dados de aquisição.");
+      throw error;
+    }
+
+    const totalLeads = users?.length || 0;
+    let totalEmTrial = 0;
+    let totalAtivosPagantes = 0;
+    let totalComAlunos = 0;
+
+    const canaisMap = new Map<string, {
+      origem: string;
+      categoria: "meta_ads" | "google_ads" | "tiktok_ads" | "play_store" | "site_organico" | "indicacao" | "direto";
+      quantidade: number;
+      em_trial: number;
+      ativos_pagantes: number;
+    }>();
+
+    const campanhasMap = new Map<string, {
+      nome: string;
+      origem: string;
+      criativo?: string;
+      conjunto?: string;
+      quantidade: number;
+      em_trial: number;
+      ativos_pagantes: number;
+      taxa_conversao: number;
+    }>();
+
+    const dispositivosMap = new Map<string, number>();
+    const canaisAutodeclaradosMap = new Map<string, number>();
+
+    const dispositivoLabels: Record<string, string> = {
+      WEB_MOBILE_ANDROID: "Web Mobile (Android)",
+      WEB_MOBILE_IOS: "Web Mobile (iOS)",
+      WEB_DESKTOP: "Web Desktop",
+      APP_ANDROID: "App Nativo (Android)",
+      APP_IOS: "App Nativo (iOS)",
+      web_mobile_android: "Web Mobile (Android)",
+      web_mobile_ios: "Web Mobile (iOS)",
+      web_desktop: "Web Desktop",
+      app_android: "App Nativo (Android)",
+      app_ios: "App Nativo (iOS)",
+    };
+
+    (users || []).forEach((u) => {
+      const assinaturas = (u.assinaturas as Array<{ id: string; status: string }> | null) || [];
+      const passageiros = (u.passageiros as Array<{ id: string }> | null) || [];
+
+      const isAtivo = assinaturas.some((a) => a.status === SubscriptionStatus.ACTIVE);
+      const isTrial = assinaturas.some((a) => a.status === SubscriptionStatus.TRIAL);
+      const temAlunos = passageiros.length > 0;
+
+      if (isAtivo) totalAtivosPagantes++;
+      if (isTrial) totalEmTrial++;
+      if (temAlunos) totalComAlunos++;
+
+      const rawMetadados = u.metadados_cadastro as Record<string, unknown> | null;
+      const utm = (rawMetadados?.utm as Record<string, string | undefined> | null) || undefined;
+      const dispositivo = (u.dispositivo_cadastro as string) || "OUTRO";
+      const canalAuto = (u.canal_aquisicao as string) || "NAO_INFORMADO";
+
+      dispositivosMap.set(dispositivo, (dispositivosMap.get(dispositivo) || 0) + 1);
+      canaisAutodeclaradosMap.set(canalAuto, (canaisAutodeclaradosMap.get(canalAuto) || 0) + 1);
+
+      const { origem: canalOrigem, categoria } = resolveLeadAttribution(rawMetadados, dispositivo, canalAuto);
+
+      const campaign = utm?.campaign;
+      const content = utm?.content;
+      const term = utm?.term;
+
+      const canalItem = canaisMap.get(canalOrigem) || {
+        origem: canalOrigem,
+        categoria,
+        quantidade: 0,
+        em_trial: 0,
+        ativos_pagantes: 0,
+      };
+      canalItem.quantidade++;
+      if (isTrial) canalItem.em_trial++;
+      if (isAtivo) canalItem.ativos_pagantes++;
+      canaisMap.set(canalOrigem, canalItem);
+
+      if (campaign || content || term) {
+        const campKey = `${campaign || "Sem Campanha"}||${content || ""}||${term || ""}`;
+        const campItem = campanhasMap.get(campKey) || {
+          nome: campaign || "Campanha não nomeada",
+          origem: canalOrigem,
+          criativo: content,
+          conjunto: term,
+          quantidade: 0,
+          em_trial: 0,
+          ativos_pagantes: 0,
+          taxa_conversao: 0,
+        };
+        campItem.quantidade++;
+        if (isTrial) campItem.em_trial++;
+        if (isAtivo) campItem.ativos_pagantes++;
+        campItem.taxa_conversao = campItem.quantidade > 0
+          ? Math.round((campItem.ativos_pagantes / campItem.quantidade) * 100)
+          : 0;
+        campanhasMap.set(campKey, campItem);
+      }
+    });
+
+    const canais: CanalAquisicaoAgrupadoDTO[] = Array.from(canaisMap.values())
+      .map((c) => ({
+        ...c,
+        porcentagem: totalLeads > 0 ? Math.round((c.quantidade / totalLeads) * 100) : 0,
+        taxa_conversao: c.quantidade > 0 ? Math.round((c.ativos_pagantes / c.quantidade) * 100) : 0,
+      }))
+      .sort((a, b) => b.quantidade - a.quantidade);
+
+    const campanhas: CampanhaAquisicaoDTO[] = Array.from(campanhasMap.values())
+      .sort((a, b) => b.quantidade - a.quantidade);
+
+    const dispositivos: DispositivoAquisicaoDTO[] = Array.from(dispositivosMap.entries())
+      .map(([disp, qtd]) => ({
+        dispositivo: disp,
+        label: dispositivoLabels[disp] || disp,
+        quantidade: qtd,
+        porcentagem: totalLeads > 0 ? Math.round((qtd / totalLeads) * 100) : 0,
+      }))
+      .sort((a, b) => b.quantidade - a.quantidade);
+
+    const canaisAutodeclaradosObj: Record<string, number> = {};
+    canaisAutodeclaradosMap.forEach((qtd, key) => {
+      canaisAutodeclaradosObj[key] = qtd;
+    });
+
+    const taxaConversaoGeral = totalLeads > 0
+      ? Math.round((totalAtivosPagantes / totalLeads) * 100)
+      : 0;
+
+    return {
+      periodo: {
+        data_inicio: dataInicio,
+        data_fim: dataFim,
+      },
+      resumo: {
+        total_leads: totalLeads,
+        em_trial: totalEmTrial,
+        ativos_pagantes: totalAtivosPagantes,
+        taxa_conversao: taxaConversaoGeral,
+        com_alunos_cadastrados: totalComAlunos,
+      },
+      canais,
+      campanhas,
+      dispositivos,
+      canais_autodeclarados: canaisAutodeclaradosObj,
+    };
   },
 };
 

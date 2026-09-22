@@ -19,6 +19,8 @@ export const adminUserRepository = {
     isId?: boolean;
     status?: string;
     tipo?: string;
+    dataInicio?: string;
+    dataFim?: string;
   }) {
     const isFilteredByStatus = Boolean(query.status);
     const assinaturasRelation = isFilteredByStatus ? "assinaturas!inner" : "assinaturas";
@@ -26,13 +28,20 @@ export const adminUserRepository = {
     let q = supabaseAdmin
       .from("usuarios")
       .select(
-        `id, nome, apelido, email, cpfcnpj, telefone, ativo, tipo, created_at, data_nascimento, canal_aquisicao, dispositivo_cadastro, logo_url, ${assinaturasRelation}(id, status, plano_id, data_vencimento, trial_ends_at, planos(id, nome, identificador))`,
+        `id, nome, apelido, email, cpfcnpj, telefone, ativo, tipo, created_at, data_nascimento, canal_aquisicao, dispositivo_cadastro, metadados_cadastro, logo_url, ${assinaturasRelation}(id, status, plano_id, data_vencimento, trial_ends_at, planos(id, nome, identificador))`,
         { count: "exact" }
       )
       .order("created_at", { ascending: false });
 
     const tipo = query.tipo?.trim() || UserType.MOTORISTA;
     q = q.eq("tipo", tipo);
+
+    if (query.dataInicio) {
+      q = q.gte("created_at", query.dataInicio);
+    }
+    if (query.dataFim) {
+      q = q.lte("created_at", query.dataFim);
+    }
 
     if (query.status === SUBSCRIPTION_VITALICIO_FILTER) {
       q = q
@@ -55,6 +64,25 @@ export const adminUserRepository = {
     }
 
     return q.range(query.from, query.to);
+  },
+
+  async getAcquisitionUsersData(dataInicio?: string, dataFim?: string) {
+    let q = supabaseAdmin
+      .from("usuarios")
+      .select(
+        `id, nome, apelido, email, created_at, dispositivo_cadastro, canal_aquisicao, metadados_cadastro, assinaturas(id, status), passageiros(id)`
+      )
+      .eq("tipo", UserType.MOTORISTA)
+      .order("created_at", { ascending: false });
+
+    if (dataInicio) {
+      q = q.gte("created_at", dataInicio);
+    }
+    if (dataFim) {
+      q = q.lte("created_at", dataFim);
+    }
+
+    return q;
   },
 
   async getUserDetails(userId: string) {

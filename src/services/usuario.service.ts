@@ -8,6 +8,10 @@ import { isValidPixKey, isValidCPF, isValidCNPJ } from "../utils/validators.js";
 import { calculateAuditDiff } from "../utils/audit-diff.util.js";
 import { authProvider } from "./providers/auth.provider.js";
 import { logger } from "../config/logger.js";
+import { env } from "../config/env.js";
+import { formatDateTime, maskCpf, maskCnpj, maskPhone } from "../utils/format.js";
+import { telegramService } from "./telegram.service.js";
+import { adminService } from "./admin.service.js";
 
 export async function getUsuarioData(usuarioId: string) {
   const { data: usuario, error } = await userRepository.getProfileData(usuarioId);
@@ -34,6 +38,22 @@ export async function atualizarUsuario(usuarioId: string, payload: AtualizarUsua
 
   const { data: usuarioAnterior } = await userRepository.getById(usuarioId);
   if (!usuarioAnterior) throw new AppError("Usuário não encontrado.", 404);
+
+  const isSubAccount = Boolean(usuarioAnterior.conta_pai_id);
+  if (isSubAccount) {
+    if (payload.logo_url !== undefined || payload.config_contrato !== undefined || payload.assinatura_digital_url !== undefined) {
+      throw new AppError("Subcontas não têm permissão para alterar configurações ou marca da empresa.", 403);
+    }
+    if (payload.cpfcnpj !== undefined && payload.cpfcnpj !== usuarioAnterior.cpfcnpj) {
+      const doc = onlyDigits(payload.cpfcnpj);
+      if (doc.length > 11) {
+        throw new AppError("Subcontas não têm permissão para cadastrar CNPJ.", 403);
+      }
+    }
+    if (payload.razao_social !== undefined && payload.razao_social !== null && payload.razao_social.trim() !== "") {
+      throw new AppError("Subcontas não possuem razão social.", 403);
+    }
+  }
 
   const updates: Record<string, unknown> = { updated_at: getNowBR().toISOString() };
 
@@ -388,4 +408,46 @@ export async function listarMotoristasParaLembreteAniversario() {
     throw new AppError("Erro ao buscar motoristas ativos para aniversário", 500);
   }
   return data || [];
+}
+
+export async function excluirMinhaConta(userId: string) {
+  if (!userId) {
+    throw new AppError("ID do usuário é obrigatório.", 400);
+  }
+
+  const { data: usuario, error: fetchError } = await userRepository.getById(userId);
+  if (fetchError || !usuario) {
+    throw new AppError("Usuário não encontrado.", 404);
+  }
+
+  if (usuario.conta_pai_id) {
+    throw new AppError("Subcontas não podem solicitar a exclusão da conta. O encerramento do vínculo deve ser realizado pelo motorista titular.", 403);
+  }
+
+  const cpfcnpjClean = usuario.cpfcnpj?.replace(/\D/g, "") || "";
+  const docFormatado = cpfcnpjClean ? (cpfcnpjClean.length > 11 ? maskCnpj(cpfcnpjClean) : maskCpf(cpfcnpjClean)) : "";
+  const nomeExibicao = `${usuario.nome || "Não informado"}${usuario.apelido ? ` (${usuario.apelido})` : ""}`;
+  const telLine = usuario.telefone ? `<b>Telefone:</b> ${maskPhone(usuario.telefone)}\n` : "";
+  const docLine = docFormatado ? `<b>CPF/CNPJ:</b> ${docFormatado}\n` : "";
+  const dataHoraBR = formatDateTime(getNowBR());
+
+  let telegramMessage = `🚨 <b>Exclusão de Conta Solicitada pelo Usuário!</b>\n\n` +
+    `<b>Nome:</b> ${nomeExibicao}\n` +
+    `<b>Email:</b> ${usuario.email || "Não informado"}\n` +
+    telLine +
+    docLine +
+    `<b>Data:</b> ${dataHoraBR}\n` +
+    `<b>ID:</b> ${userId}`;
+
+  if (env.NODE_ENV !== "production") {
+    telegramMessage = `[DEV]\n${telegramMessage}`;
+  }
+
+  await telegramService.sendMessage(telegramMessage).catch((err: unknown) => {
+    logger.warn({ err, userId }, "Falha ao enviar alerta de exclusão no Telegram");
+  });
+
+  await adminService.deleteUser(userId);
+
+  return { success: true };
 }
