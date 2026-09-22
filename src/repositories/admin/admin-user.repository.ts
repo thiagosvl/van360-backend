@@ -70,7 +70,7 @@ export const adminUserRepository = {
     let q = supabaseAdmin
       .from("usuarios")
       .select(
-        `id, nome, apelido, email, created_at, dispositivo_cadastro, canal_aquisicao, metadados_cadastro, assinaturas(id, status), passageiros(id)`
+        `id, nome, apelido, email, created_at, dispositivo_cadastro, canal_aquisicao, metadados_cadastro, assinaturas(id, status, data_vencimento), passageiros(id)`
       )
       .eq("tipo", UserType.MOTORISTA)
       .order("created_at", { ascending: false });

@@ -1,4 +1,4 @@
-﻿export interface CanalAquisicaoAgrupadoDTO {
+export interface CanalAquisicaoAgrupadoDTO {
   origem: string;
   categoria: "meta_ads" | "google_ads" | "tiktok_ads" | "play_store" | "site_organico" | "indicacao" | "direto";
   quantidade: number;
@@ -35,6 +35,7 @@ export interface AdminAcquisitionStatsDTO {
     total_leads: number;
     em_trial: number;
     ativos_pagantes: number;
+    vitalicios: number;
     taxa_conversao: number;
     com_alunos_cadastrados: number;
   };

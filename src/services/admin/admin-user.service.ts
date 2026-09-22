@@ -1561,6 +1561,7 @@ export const adminUserService = {
     const totalLeads = users?.length || 0;
     let totalEmTrial = 0;
     let totalAtivosPagantes = 0;
+    let totalVitalicios = 0;
     let totalComAlunos = 0;
 
     const canaisMap = new Map<string, {
@@ -1599,14 +1600,16 @@ export const adminUserService = {
     };
 
     (users || []).forEach((u) => {
-      const assinaturas = (u.assinaturas as Array<{ id: string; status: string }> | null) || [];
+      const assinaturas = (u.assinaturas as Array<{ id: string; status: string; data_vencimento?: string | null }> | null) || [];
       const passageiros = (u.passageiros as Array<{ id: string }> | null) || [];
 
-      const isAtivo = assinaturas.some((a) => a.status === SubscriptionStatus.ACTIVE);
+      const isAtivo = assinaturas.some((a) => a.status === SubscriptionStatus.ACTIVE && Boolean(a.data_vencimento));
+      const isVitalicio = assinaturas.some((a) => a.status === SubscriptionStatus.ACTIVE && !a.data_vencimento);
       const isTrial = assinaturas.some((a) => a.status === SubscriptionStatus.TRIAL);
       const temAlunos = passageiros.length > 0;
 
       if (isAtivo) totalAtivosPagantes++;
+      if (isVitalicio) totalVitalicios++;
       if (isTrial) totalEmTrial++;
       if (temAlunos) totalComAlunos++;
 
@@ -1696,6 +1699,7 @@ export const adminUserService = {
         total_leads: totalLeads,
         em_trial: totalEmTrial,
         ativos_pagantes: totalAtivosPagantes,
+        vitalicios: totalVitalicios,
         taxa_conversao: taxaConversaoGeral,
         com_alunos_cadastrados: totalComAlunos,
       },
