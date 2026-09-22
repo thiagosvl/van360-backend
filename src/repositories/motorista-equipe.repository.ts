@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "../config/supabase.js";
-import { CreateMembroEquipeDTO, UpdateMembroEquipeDTO } from "../types/dtos/motorista-equipe.dto.js";
+import { UpdateMembroEquipeDTO } from "../types/dtos/motorista-equipe.dto.js";
 import { isValidFilterValue } from "../utils/filter.utils.js";
+import { authCacheService } from "../services/auth-cache.service.js";
 
 export const motoristaEquipeRepository = {
   async listByGestor(gestorId: string, veiculoIdFilter?: string) {
@@ -71,23 +72,29 @@ export const motoristaEquipeRepository = {
     if (data.ativo !== undefined) payload.ativo = data.ativo;
     payload.updated_at = new Date().toISOString();
 
-    return supabaseAdmin
+    const result = await supabaseAdmin
       .from("usuarios")
       .update(payload)
       .eq("id", id)
       .eq("conta_pai_id", gestorId)
       .select()
       .single();
+
+    await authCacheService.invalidateUserAuth(id);
+    return result;
   },
 
   async softDelete(id: string, gestorId: string) {
-    return supabaseAdmin
+    const result = await supabaseAdmin
       .from("usuarios")
       .update({ ativo: false, updated_at: new Date().toISOString() })
       .eq("id", id)
       .eq("conta_pai_id", gestorId)
       .select()
       .single();
+
+    await authCacheService.invalidateUserAuth(id);
+    return result;
   },
 
   async reassignRecordsToGestor(memberId: string, gestorId: string) {
@@ -117,10 +124,13 @@ export const motoristaEquipeRepository = {
   },
 
   async hardDeleteProfile(id: string, gestorId: string) {
-    return supabaseAdmin
+    const result = await supabaseAdmin
       .from("usuarios")
       .delete()
       .eq("id", id)
       .eq("conta_pai_id", gestorId);
+
+    await authCacheService.invalidateUserAuth(id);
+    return result;
   }
 };

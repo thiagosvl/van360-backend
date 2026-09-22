@@ -20,6 +20,7 @@ import { loginAttemptsRepository } from "../repositories/login-attempts.reposito
 import { usuarioPushTokenRepository } from "../repositories/usuario-push-token.repository.js";
 import { withRetry } from "../utils/retry.utils.js";
 import { MetaCapiService } from "./meta-capi.service.js";
+import { authCacheService } from "./auth-cache.service.js";
 
 // ... (interfaces remain unchanged)
 
@@ -434,6 +435,8 @@ export async function updatePassword(token: string, newPassword: string, oldPass
     throw new AppError("Não foi possível atualizar a senha.", 500);
   }
 
+  await authCacheService.invalidateUserAuth(user.id);
+
   const { data: profile } = await userRepository.getById(user.id);
 
   if (profile) {
@@ -552,6 +555,8 @@ export async function resetarSenhaComCodigo(recoveryId: string, novaSenha: strin
     throw new AppError("Erro ao atualizar senha.", 500);
   }
 
+  await authCacheService.invalidateUserAuth(rec.usuario_id);
+
   // Realizar login automático logo após o reset
   if (!rec.usuarios) throw new AppError("Perfil de usuário não encontrado para auto-login.", 500);
 
@@ -591,6 +596,11 @@ export async function resetarSenhaComCodigo(recoveryId: string, novaSenha: strin
 }
 
 export async function logout(token: string, usuarioId?: string): Promise<void> {
+  await authCacheService.invalidateToken(token);
+  if (usuarioId) {
+    await authCacheService.invalidateUserAuth(usuarioId);
+  }
+
   const { error } = await authProvider.signOut(token);
   if (error) logger.warn({ error: error.message }, "Erro ao realizar logout no Supabase.");
 

@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { STATUS_ASSINATURA_LIBERADA, UserType } from "../types/enums.js";
+import { authCacheService } from "../services/auth-cache.service.js";
 
 export const userRepository = {
     async getById(id: string) {
@@ -36,10 +37,12 @@ export const userRepository = {
     },
 
     async update(id: string, updates: Record<string, unknown>) {
-        return supabaseAdmin
+        const result = await supabaseAdmin
             .from("usuarios")
             .update(updates)
             .eq("id", id);
+        await authCacheService.invalidateUserAuth(id);
+        return result;
     },
 
     async getPixKey(id: string) {

@@ -32,6 +32,21 @@ function resolveDescricaoTelemetria(acao: AtividadeAcao, meta?: Record<string, u
         }
     }
 
+    if (acao === AtividadeAcao.RECIBO_MENSAL_COMPARTILHADO) {
+        const mes = meta?.mes;
+        const ano = meta?.ano;
+        return mes && ano
+            ? `Recibo mensal de ${mes}/${ano} compartilhado.`
+            : "Recibo mensal compartilhado.";
+    }
+
+    if (acao === AtividadeAcao.RECIBO_ANUAL_COMPARTILHADO) {
+        const ano = meta?.ano;
+        return ano
+            ? `Recibo anual de ${ano} compartilhado.`
+            : "Recibo anual compartilhado.";
+    }
+
     return `Ação de telemetria registrada: ${acao}`;
 }
 

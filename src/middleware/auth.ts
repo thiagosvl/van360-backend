@@ -1,6 +1,8 @@
 import { FastifyReply, FastifyRequest } from "fastify";
+import type { User } from "@supabase/supabase-js";
 import { authProvider } from "../services/providers/auth.provider.js";
 import { authRepository } from "../repositories/auth.repository.js";
+import { authCacheService, type AuthProfileData } from "../services/auth-cache.service.js";
 
 import { UserType } from "../types/enums.js";
 
@@ -16,35 +18,51 @@ export async function verifySupabaseJWT(
 
     const token = authHeader.split(" ")[1];
 
-    const { data: { user }, error: authError } = await authProvider.getUser(token);
+    let user: User | null = null;
+    let profile: AuthProfileData | null = null;
 
-    if (authError || !user) {
-      const isUserNotFound = authError?.message?.toLowerCase().includes("user not found");
+    const cached = await authCacheService.getCachedAuth(token);
+    if (cached) {
+      user = cached.user;
+      profile = cached.profile;
+    } else {
+      const { data: { user: fetchedUser }, error: authError } = await authProvider.getUser(token);
 
-      return reply.status(401).send({
-        error: isUserNotFound ? "Usuário não encontrado no sistema de autenticação" : "Sessão inválida ou expirada",
-        code: isUserNotFound ? "AUTH_USER_NOT_FOUND" : "AUTH_JWT_INVALID"
-      });
+      if (authError || !fetchedUser) {
+        const isUserNotFound = authError?.message?.toLowerCase().includes("user not found");
+
+        return reply.status(401).send({
+          error: isUserNotFound ? "Usuário não encontrado no sistema de autenticação" : "Sessão inválida ou expirada",
+          code: isUserNotFound ? "AUTH_USER_NOT_FOUND" : "AUTH_JWT_INVALID"
+        });
+      }
+
+      user = fetchedUser;
+
+      const { data: fetchedProfile, error: profileError } = await authRepository.getAuthProfile(user.id);
+
+      if (profileError) {
+        throw profileError;
+      }
+
+      if (!fetchedProfile) {
+        return reply.status(401).send({
+          error: "Perfil não registrado no sistema",
+          code: "AUTH_PROFILE_NOT_FOUND"
+        });
+      }
+
+      profile = fetchedProfile as AuthProfileData;
+
+      if (profile.ativo !== false) {
+        await authCacheService.setCachedAuth(token, user, profile);
+      }
     }
 
-    const userId = user.id;
-    request.user = {
-      ...user,
-      id: user.id,
-      email: user.email,
-    };
-    request.usuario_id = userId;
-
-    const { data: profile, error: profileError } = await authRepository.getAuthProfile(userId);
-
-    if (profileError) {
-      throw profileError;
-    }
-
-    if (!profile) {
+    if (!user || !profile) {
       return reply.status(401).send({
-        error: "Perfil não registrado no sistema",
-        code: "AUTH_PROFILE_NOT_FOUND"
+        error: "Falha na autenticação do usuário",
+        code: "AUTH_UNEXPECTED_ERROR",
       });
     }
 

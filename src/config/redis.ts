@@ -1,6 +1,7 @@
 import { ConnectionOptions } from 'bullmq';
 import { Redis } from 'ioredis';
 import { env } from 'process';
+import { logger } from './logger.js';
 
 export const redisConfig: ConnectionOptions = {
     host: env.REDIS_HOST || 'localhost',
@@ -24,4 +25,8 @@ export const redisClient = new Redis({
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
     family: redisConfig.family,
+});
+
+redisClient.on('error', (err) => {
+    logger.warn({ error: err instanceof Error ? err.message : String(err) }, '[Redis] Erro na conexão do cliente Redis');
 });
