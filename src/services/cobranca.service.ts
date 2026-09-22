@@ -165,6 +165,9 @@ export const cobrancaService = {
       if (data.ano_letivo !== undefined) {
         updateData.ano_letivo = Number(data.ano_letivo);
       }
+      if (data.observacao !== undefined) {
+        updateData.observacao = (data.observacao && data.observacao.trim()) ? data.observacao.trim() : null;
+      }
 
       const { data: updated, error: updateError } = await cobrancaRepository.update(existingCobranca.id, updateData);
       if (updateError || !updated) throw new AppError(`Erro ao atualizar cobrança no banco: ${updateError?.message}`, 500);
@@ -186,7 +189,7 @@ export const cobrancaService = {
         valor_pago: statusVal === CobrancaStatus.PAGO ? valorNumerico : null,
         pagamento_manual: statusVal === CobrancaStatus.PAGO,
         desativar_lembretes: data.desativar_lembretes ?? false,
-        observacao: data.observacao !== undefined ? data.observacao : null,
+        observacao: (data.observacao && data.observacao.trim()) ? data.observacao.trim() : null,
       };
 
       const { data: created, error: insertError } = await cobrancaRepository.insert(cobrancaData);
@@ -300,7 +303,7 @@ export const cobrancaService = {
     if (data.tipo_pagamento !== undefined) cobrancaData.tipo_pagamento = data.tipo_pagamento;
     if (data.data_pagamento !== undefined) cobrancaData.data_pagamento = data.data_pagamento;
     if (data.valor_pago !== undefined) cobrancaData.valor_pago = moneyToNumber(data.valor_pago);
-    if (data.observacao !== undefined) cobrancaData.observacao = data.observacao;
+    if (data.observacao !== undefined) cobrancaData.observacao = (data.observacao && data.observacao.trim()) ? data.observacao.trim() : null;
 
     const { data: updated, error } = await cobrancaRepository.update(id, cobrancaData);
 
