@@ -11,7 +11,8 @@ import {
   EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
   EVENTO_PASSAGEIRO_ATRASADO,
   EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO,
-  EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS
+  EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS,
+  EVENTO_MOTORISTA_COBRANCAS_HOJE
 } from "../config/constants.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { getNowBR, getSafeDueDateString, toPersistenceString, diffInDays, getMonthNameBR, getShortWeekDayBR, parseLocalDate, parseMonthYearFromDateString, createLocalDateBR } from "../utils/date.utils.js";
@@ -1009,6 +1010,146 @@ export const cobrancaService = {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error({ err: msg }, "[CobrancaService] Erro no envio do resumo semanal de cobrança para motoristas");
+    }
+  },
+
+  async dispararPushAlertaHojeParaMotorista(
+    motorista: { id: string; nome: string; telefone: string | null; email?: string | null },
+    listaCobrancas: Array<{ valor: unknown; passageiro?: unknown }>,
+    temAlunos: boolean
+  ): Promise<boolean> {
+    const totalValor = listaCobrancas.reduce((acc, curr) => acc + (Number(curr.valor) || 0), 0);
+    const primeiroPassageiro = listaCobrancas[0]?.passageiro;
+    const passageiroObj = Array.isArray(primeiroPassageiro) ? primeiroPassageiro[0] : primeiroPassageiro;
+    const nomePassageiro = (passageiroObj as { nome?: string } | null)?.nome || "Aluno";
+
+    return await notificationService.notifyDriver(
+      motorista.telefone || "",
+      EVENTO_MOTORISTA_COBRANCAS_HOJE,
+      {
+        nomeMotorista: motorista.nome,
+        qtdCobrancas: listaCobrancas.length,
+        valorTotal: totalValor,
+        nomePassageiro,
+        temAlunos,
+        usuarioId: motorista.id
+      },
+      {
+        channels: [NotificationChannelEnum.FIREBASE],
+        usuarioId: motorista.id,
+        email: motorista.email ?? undefined
+      }
+    );
+  },
+
+  async processarAlertaVencimentoHojeMotorista(
+    motorista: { id: string; nome: string; telefone: string | null; email?: string | null } | string
+  ): Promise<{ sent: boolean; qtdCobrancas: number; valorTotal: number; temAlunos: boolean }> {
+    let motoristaObj: { id: string; nome: string; telefone: string | null; email?: string | null } | null = null;
+
+    if (typeof motorista === "string") {
+      const { data: user } = await userRepository.getById(motorista);
+      if (user) {
+        motoristaObj = {
+          id: user.id,
+          nome: user.nome,
+          telefone: user.telefone || null,
+          email: user.email ?? undefined
+        };
+      }
+    } else {
+      motoristaObj = motorista;
+    }
+
+    if (!motoristaObj) {
+      return { sent: false, qtdCobrancas: 0, valorTotal: 0, temAlunos: false };
+    }
+
+    const now = getNowBR();
+    const hojeStr = toPersistenceString(now);
+
+    const [cobrancasResult, motoristasComAlunosSet] = await Promise.all([
+      cobrancaRepository.getPendentesVencendoHojeParaMotoristas(hojeStr, motoristaObj.id),
+      passageiroRepository.getMotoristasComPassageirosAtivos([motoristaObj.id])
+    ]);
+
+    const lista = cobrancasResult.data || [];
+    const temAlunos = motoristasComAlunosSet.has(motoristaObj.id);
+    const totalValor = lista.reduce((acc, curr) => acc + (Number(curr.valor) || 0), 0);
+
+    const sent = await this.dispararPushAlertaHojeParaMotorista(motoristaObj, lista, temAlunos);
+
+    return {
+      sent,
+      qtdCobrancas: lista.length,
+      valorTotal: totalValor,
+      temAlunos
+    };
+  },
+
+  async enviarAlertaVencimentoHojeParaMotoristas(): Promise<void> {
+    logger.info("[CobrancaService] Iniciando envio do alerta de parcelas de hoje para motoristas...");
+
+    try {
+      const now = getNowBR();
+      const hojeStr = toPersistenceString(now);
+
+      const { data: motoristas } = await userRepository.listMotoristasAtivosParaAlertaDiario();
+
+      if (!motoristas || motoristas.length === 0) {
+        logger.info("[CobrancaService] Nenhum motorista ativo elegível para o alerta diário de parcelas.");
+        return;
+      }
+
+      const motoristaIds = motoristas.map(m => m.id);
+
+      const [cobrancasResult, motoristasComAlunosSet] = await Promise.all([
+        cobrancaRepository.getPendentesVencendoHojeParaMotoristas(hojeStr, motoristaIds),
+        passageiroRepository.getMotoristasComPassageirosAtivos(motoristaIds)
+      ]);
+
+      if (cobrancasResult.error) {
+        logger.error({ error: cobrancasResult.error.message }, "[CobrancaService] Erro ao buscar cobranças pendentes de hoje");
+        return;
+      }
+
+      type CobrancaItem = NonNullable<typeof cobrancasResult.data>[number];
+      const cobrancasPorMotorista = new Map<string, CobrancaItem[]>();
+
+      for (const c of cobrancasResult.data || []) {
+        if (!c.usuario_id) continue;
+        if (!cobrancasPorMotorista.has(c.usuario_id)) {
+          cobrancasPorMotorista.set(c.usuario_id, []);
+        }
+        cobrancasPorMotorista.get(c.usuario_id)!.push(c);
+      }
+
+      let sentCount = 0;
+      const BATCH_SIZE = 10;
+
+      for (let i = 0; i < motoristas.length; i += BATCH_SIZE) {
+        const chunk = motoristas.slice(i, i + BATCH_SIZE);
+
+        await Promise.all(
+          chunk.map(async (m) => {
+            const lista = cobrancasPorMotorista.get(m.id) || [];
+            const temAlunos = motoristasComAlunosSet.has(m.id);
+
+            try {
+              const sent = await this.dispararPushAlertaHojeParaMotorista(m, lista, temAlunos);
+              if (sent) sentCount++;
+            } catch (notifErr: unknown) {
+              const errorMsg = notifErr instanceof Error ? notifErr.message : String(notifErr);
+              logger.error({ error: errorMsg, usuarioId: m.id }, "[CobrancaService] Erro ao enviar alerta de parcelas de hoje para motorista");
+            }
+          })
+        );
+      }
+
+      logger.info({ sentCount }, "[CobrancaService] Processamento do alerta diário de parcelas concluído.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error({ err: msg }, "[CobrancaService] Erro geral no alerta diário de parcelas para motoristas");
     }
   }
 };

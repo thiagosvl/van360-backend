@@ -2,6 +2,7 @@ import { z } from "zod";
 import { SubscriptionStatus, ConfigKey, UserType } from "../types/enums.js";
 import {
   EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS,
+  EVENTO_MOTORISTA_COBRANCAS_HOJE,
   EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA,
   EVENTO_MOTORISTA_ASSINATURA_VENCENDO,
   EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO,
@@ -109,6 +110,7 @@ export type CreateUserAdminDTO = z.infer<typeof createUserAdminSchema>;
 export const dispatchDriverNotificationSchema = z.object({
   evento: z.enum([
     EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS,
+    EVENTO_MOTORISTA_COBRANCAS_HOJE,
     EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA,
     EVENTO_MOTORISTA_ASSINATURA_VENCENDO,
     EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO,

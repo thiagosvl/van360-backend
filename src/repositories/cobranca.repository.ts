@@ -272,5 +272,69 @@ export const cobrancaRepository = {
             .eq("ano", ano)
             .neq("status", CobrancaStatus.CANCELADA)
             .order("mes", { ascending: true });
+    },
+
+    async getPendentesVencendoHojeParaMotoristas(hojeStr: string, usuarioIdOuIds?: string | string[]) {
+        if (Array.isArray(usuarioIdOuIds) && usuarioIdOuIds.length === 0) {
+            return { data: [], error: null };
+        }
+
+        if (Array.isArray(usuarioIdOuIds)) {
+            const BATCH_SIZE = 100;
+            const cobrancasTotais: Array<{
+                id: string;
+                valor: number | string | null;
+                data_vencimento: string;
+                status: string;
+                usuario_id: string;
+                passageiro: { nome: string } | { nome: string }[] | null;
+            }> = [];
+
+            for (let i = 0; i < usuarioIdOuIds.length; i += BATCH_SIZE) {
+                const chunk = usuarioIdOuIds.slice(i, i + BATCH_SIZE);
+                const { data, error } = await supabaseAdmin
+                    .from("cobrancas")
+                    .select(`
+                        id,
+                        valor,
+                        data_vencimento,
+                        status,
+                        usuario_id,
+                        passageiro:passageiros(nome)
+                    `)
+                    .eq("status", CobrancaStatus.PENDENTE)
+                    .eq("data_vencimento", hojeStr)
+                    .in("usuario_id", chunk);
+
+                if (error) {
+                    return { data: null, error };
+                }
+
+                if (data) {
+                    cobrancasTotais.push(...(data as unknown as typeof cobrancasTotais));
+                }
+            }
+
+            return { data: cobrancasTotais, error: null };
+        }
+
+        let query = supabaseAdmin
+            .from("cobrancas")
+            .select(`
+                id,
+                valor,
+                data_vencimento,
+                status,
+                usuario_id,
+                passageiro:passageiros(nome)
+            `)
+            .eq("status", CobrancaStatus.PENDENTE)
+            .eq("data_vencimento", hojeStr);
+
+        if (usuarioIdOuIds) {
+            query = query.eq("usuario_id", usuarioIdOuIds);
+        }
+
+        return query;
     }
 };

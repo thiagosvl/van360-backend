@@ -341,4 +341,59 @@ export class FirebaseDriverTemplates {
             }
         };
     }
+
+    static dueTodayDriver(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        const qtdCobrancas = typeof ctx.qtdCobrancas === "number" ? ctx.qtdCobrancas : Number(ctx.qtdCobrancas) || 0;
+        const valorTotal = typeof ctx.valorTotal === "number" ? ctx.valorTotal : Number(ctx.valorTotal) || 0;
+        const temAlunos = Boolean(ctx.temAlunos);
+        const userId = (ctx.usuarioId || ctx.userId || "") as string;
+
+        if (qtdCobrancas === 0) {
+            if (!temAlunos) {
+                return {
+                    title: "Nenhuma Parcela Agendada 💡",
+                    body: "Você não tem parcelas de alunos cadastradas para hoje. Cadastre as carteirinhas dos seus alunos para o Van360 controlar os vencimentos para você!",
+                    data: {
+                        action: PushNotificationAction.OPEN_PASSENGERS,
+                        userId
+                    }
+                };
+            }
+
+            return {
+                title: "Nenhuma Parcela Vencendo Hoje 🟢",
+                body: "Nenhuma parcela de aluno vence hoje. Seu controle financeiro está em dia!",
+                data: {
+                    action: PushNotificationAction.OPEN_BILLING,
+                    userId
+                }
+            };
+        }
+
+        const formattedTotal = NotificationContextFormatter.formatValue(valorTotal);
+
+        if (qtdCobrancas === 1) {
+            const studentName = NotificationContextFormatter.getFirstName(
+                (ctx.nomePassageiro || ctx.nomeAluno || "Aluno") as string,
+                "Aluno"
+            );
+            return {
+                title: "Parcela Vencendo Hoje 💵",
+                body: `A parcela do(a) ${studentName} (${formattedTotal}) vence hoje. Se o responsável já pagou, confirme no app para enviar o recibo.`,
+                data: {
+                    action: PushNotificationAction.OPEN_BILLING,
+                    userId
+                }
+            };
+        }
+
+        return {
+            title: "Parcelas Vencendo Hoje 💵",
+            body: `Você tem ${qtdCobrancas} parcelas de alunos vencendo hoje (total de ${formattedTotal}). Se algum responsável já pagou, dê baixa no app para emitir o recibo.`,
+            data: {
+                action: PushNotificationAction.OPEN_BILLING,
+                userId
+            }
+        };
+    }
 }

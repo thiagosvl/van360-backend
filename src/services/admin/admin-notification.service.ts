@@ -3,6 +3,7 @@ import { adminNotificationRepository } from "../../repositories/admin/admin-noti
 import type { ListUserNotificationsQuery, DispatchDriverNotificationDTO, RetryBulkNotificationsDTO } from "../../schemas/admin.schema.js";
 import {
   EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS,
+  EVENTO_MOTORISTA_COBRANCAS_HOJE,
   EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA,
   EVENTO_MOTORISTA_ASSINATURA_VENCENDO,
   EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO,
@@ -120,6 +121,11 @@ export const adminNotificationService = {
       case EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS: {
         const processed = await cobrancaService.processarResumoSemanalMotorista(driverId);
         return { success: true, processed };
+      }
+
+      case EVENTO_MOTORISTA_COBRANCAS_HOJE: {
+        const result = await cobrancaService.processarAlertaVencimentoHojeMotorista(driverId);
+        return { success: true, ...result };
       }
 
       case EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA: {

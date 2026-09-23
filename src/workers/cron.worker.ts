@@ -46,6 +46,10 @@ export const cronWorker = new Worker(
                     await cobrancaService.enviarResumoSemanalMotoristas();
                     break;
 
+                case CronJob.DAILY_DRIVER_DUE_TODAY_ALERT:
+                    await cobrancaService.enviarAlertaVencimentoHojeParaMotoristas();
+                    break;
+
                 case CronJob.NOTIFICATION_RETRY: {
                     const { notificationRetryWorker } = await import('../services/notifications/notification-retry.worker.js');
                     await notificationRetryWorker.processPendingRetries();

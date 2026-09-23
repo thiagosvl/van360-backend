@@ -16,11 +16,12 @@ const TIMEZONE_BR = 'America/Sao_Paulo';
 
 const CRON_DEFINITIONS: CronDefinition[] = [
     { name: CronJob.CHARGE_GENERATOR, pattern: '10 6 * * *' },
-    { name: CronJob.SUBSCRIPTION_GENERATOR, pattern: '20 6 * * *' },
-    { name: CronJob.DAILY_SUBSCRIPTION_MONITOR, pattern: '10 13 * * *' },
+    { name: CronJob.SUBSCRIPTION_GENERATOR, pattern: '0 9 * * *' },
+    { name: CronJob.DAILY_SUBSCRIPTION_MONITOR, pattern: '40 9 * * *' },
+    { name: CronJob.WEEKLY_DRIVER_CHARGE_SUMMARY, pattern: '30 10 * * 1' },
+    { name: CronJob.DAILY_DRIVER_DUE_TODAY_ALERT, pattern: '30 10 * * 2-5' },
     { name: CronJob.DAILY_CHARGE_MONITOR, pattern: '30 13 * * *' },
-    { name: CronJob.BIRTHDAY_REMINDER, pattern: '0 14 * * 0' },
-    { name: CronJob.WEEKLY_DRIVER_CHARGE_SUMMARY, pattern: '30 14 * * 1' },
+    { name: CronJob.BIRTHDAY_REMINDER, pattern: '30 19 * * 0' },
     { name: CronJob.NOTIFICATION_RETRY, every: 2 * 60 * 1000 }
 ];
 

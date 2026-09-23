@@ -35,7 +35,8 @@ import {
     EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2,
     EVENTO_MOTORISTA_NOVO_PRE_CADASTRO,
     EVENTO_MOTORISTA_AUSENCIA_REGISTRADA,
-    EVENTO_MOTORISTA_AUSENCIA_REMOVIDA
+    EVENTO_MOTORISTA_AUSENCIA_REMOVIDA,
+    EVENTO_MOTORISTA_COBRANCAS_HOJE
 } from "../../../../config/constants.js";
 import { FirebaseDriverTemplates, FirebasePassengerTemplates, FirebaseMessagePayload } from "./firebase.template.js";
 
@@ -62,6 +63,7 @@ export class FirebaseMapper {
                 case EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_1: return FirebaseDriverTemplates.renewalRecovery1(contextData);
                 case EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_FINAL: return FirebaseDriverTemplates.renewalRecoveryFinal(contextData);
                 case EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS: return FirebaseDriverTemplates.weeklySummary(contextData);
+                case EVENTO_MOTORISTA_COBRANCAS_HOJE: return FirebaseDriverTemplates.dueTodayDriver(contextData);
                 case EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA: return FirebaseDriverTemplates.birthdayReminder(contextData);
                 case EVENTO_MOTORISTA_INDICACAO_BONUS: return FirebaseDriverTemplates.referralBonus(contextData);
                 case EVENTO_MOTORISTA_INDICACAO_CADASTRO: return FirebaseDriverTemplates.referralRegistered(contextData);

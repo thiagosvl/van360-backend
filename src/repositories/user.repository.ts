@@ -127,6 +127,33 @@ export const userRepository = {
         return { data, error: null };
     },
 
+    async listMotoristasAtivosParaAlertaDiario() {
+        const { data, error } = await supabaseAdmin
+            .from("usuarios")
+            .select(`
+                id, 
+                telefone, 
+                nome,
+                email,
+                assinaturas!inner(status),
+                usuario_configuracoes(notificar_motorista_parcelas)
+            `)
+            .eq("ativo", true)
+            .eq("tipo", UserType.MOTORISTA)
+            .in("assinaturas.status", STATUS_ASSINATURA_LIBERADA);
+
+        if (error) {
+            throw error;
+        }
+
+        const filtrados = (data || []).filter(u => {
+            const config = Array.isArray(u.usuario_configuracoes) ? u.usuario_configuracoes[0] : u.usuario_configuracoes;
+            return config?.notificar_motorista_parcelas ?? true;
+        });
+
+        return { data: filtrados, error: null };
+    },
+
 
     async getByEmail(email: string) {
         return supabaseAdmin

@@ -536,6 +536,30 @@ export const passageiroRepository = {
       .eq("id", id)
       .single();
     return { data, error };
+  },
+
+  async getMotoristasComPassageirosAtivos(usuarioIds: string[]): Promise<Set<string>> {
+    if (!usuarioIds.length) return new Set();
+
+    const BATCH_SIZE = 100;
+    const activeDriverIds = new Set<string>();
+
+    for (let i = 0; i < usuarioIds.length; i += BATCH_SIZE) {
+      const chunk = usuarioIds.slice(i, i + BATCH_SIZE);
+      const { data, error } = await supabaseAdmin
+        .from("passageiros")
+        .select("usuario_id")
+        .in("usuario_id", chunk)
+        .eq("ativo", true);
+
+      if (error) {
+        throw error;
+      }
+
+      (data || []).forEach(p => activeDriverIds.add(p.usuario_id));
+    }
+
+    return activeDriverIds;
   }
 };
 
