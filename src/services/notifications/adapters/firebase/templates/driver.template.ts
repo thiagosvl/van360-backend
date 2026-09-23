@@ -351,8 +351,8 @@ export class FirebaseDriverTemplates {
         if (qtdCobrancas === 0) {
             if (!temAlunos) {
                 return {
-                    title: "Nenhuma Parcela Agendada 💡",
-                    body: "Você não tem parcelas de alunos cadastradas para hoje. Cadastre as carteirinhas dos seus alunos para o Van360 controlar os vencimentos para você!",
+                    title: "Nenhuma parcela vence hoje!",
+                    body: "Cadastre seus alunos para o app te avisar dos vencimentos todo dia. Diga adeus ao caderno e às planilhas!",
                     data: {
                         action: PushNotificationAction.OPEN_PASSENGERS,
                         userId
@@ -361,8 +361,8 @@ export class FirebaseDriverTemplates {
             }
 
             return {
-                title: "Nenhuma Parcela Vencendo Hoje 🟢",
-                body: "Nenhuma parcela de aluno vence hoje. Seu controle financeiro está em dia!",
+                title: "Sem Vencimentos Hoje 🟢",
+                body: "Não há parcelas de alunos vencendo nesta data. Seu controle financeiro segue organizado!",
                 data: {
                     action: PushNotificationAction.OPEN_BILLING,
                     userId
@@ -373,13 +373,20 @@ export class FirebaseDriverTemplates {
         const formattedTotal = NotificationContextFormatter.formatValue(valorTotal);
 
         if (qtdCobrancas === 1) {
-            const studentName = NotificationContextFormatter.getFirstName(
+            const studentFirstName = NotificationContextFormatter.getFirstName(
                 (ctx.nomePassageiro || ctx.nomeAluno || "Aluno") as string,
                 "Aluno"
             );
+            const prep = NotificationContextFormatter.getStudentPreposition(
+                ctx.generoPassageiro as string | null | undefined
+            );
+            const rawRespNome = (ctx.nomeResponsavel || "") as string;
+            const respFirstName = rawRespNome ? NotificationContextFormatter.getFirstName(rawRespNome) : "";
+            const condicaoPagamento = respFirstName ? `Se ${respFirstName} já pagou` : "Se o responsável já pagou";
+
             return {
-                title: "Parcela Vencendo Hoje 💵",
-                body: `A parcela do(a) ${studentName} (${formattedTotal}) vence hoje. Se o responsável já pagou, confirme no app para enviar o recibo.`,
+                title: "Vencimento de Hoje 💵",
+                body: `A parcela ${prep} ${studentFirstName} (${formattedTotal}) vence hoje. ${condicaoPagamento}, dê baixa no app para emitir o recibo.`,
                 data: {
                     action: PushNotificationAction.OPEN_BILLING,
                     userId
@@ -388,8 +395,8 @@ export class FirebaseDriverTemplates {
         }
 
         return {
-            title: "Parcelas Vencendo Hoje 💵",
-            body: `Você tem ${qtdCobrancas} parcelas de alunos vencendo hoje (total de ${formattedTotal}). Se algum responsável já pagou, dê baixa no app para emitir o recibo.`,
+            title: "Vencimentos de Hoje 💵",
+            body: `Você tem ${qtdCobrancas} parcelas (${formattedTotal}) para hoje. Se algum responsável já pagou, dê baixa no app para emitir o recibo.`,
             data: {
                 action: PushNotificationAction.OPEN_BILLING,
                 userId

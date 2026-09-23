@@ -1019,9 +1019,15 @@ export const cobrancaService = {
     temAlunos: boolean
   ): Promise<boolean> {
     const totalValor = listaCobrancas.reduce((acc, curr) => acc + (Number(curr.valor) || 0), 0);
-    const primeiroPassageiro = listaCobrancas[0]?.passageiro;
+    const primeiraCobranca = listaCobrancas[0];
+    const primeiroPassageiro = primeiraCobranca?.passageiro;
     const passageiroObj = Array.isArray(primeiroPassageiro) ? primeiroPassageiro[0] : primeiroPassageiro;
+
     const nomePassageiro = (passageiroObj as { nome?: string } | null)?.nome || "Aluno";
+    const generoPassageiro = (passageiroObj as { genero?: string | null } | null)?.genero || null;
+
+    const respInfo = _getResponsavelFromPassageiro(passageiroObj as PassageiroCobrancaInfo);
+    const nomeResponsavel = respInfo?.nome || "";
 
     return await notificationService.notifyDriver(
       motorista.telefone || "",
@@ -1031,6 +1037,8 @@ export const cobrancaService = {
         qtdCobrancas: listaCobrancas.length,
         valorTotal: totalValor,
         nomePassageiro,
+        generoPassageiro,
+        nomeResponsavel,
         temAlunos,
         usuarioId: motorista.id
       },
@@ -1068,13 +1076,14 @@ export const cobrancaService = {
     const now = getNowBR();
     const hojeStr = toPersistenceString(now);
 
-    const [cobrancasResult, motoristasComAlunosSet] = await Promise.all([
+    const [cobrancasResult, contagemMap] = await Promise.all([
       cobrancaRepository.getPendentesVencendoHojeParaMotoristas(hojeStr, motoristaObj.id),
-      passageiroRepository.getMotoristasComPassageirosAtivos([motoristaObj.id])
+      passageiroRepository.getContagemPassageirosAtivosPorMotorista([motoristaObj.id])
     ]);
 
     const lista = cobrancasResult.data || [];
-    const temAlunos = motoristasComAlunosSet.has(motoristaObj.id);
+    const contagemAlunos = contagemMap.get(motoristaObj.id) || 0;
+    const temAlunos = contagemAlunos >= 2;
     const totalValor = lista.reduce((acc, curr) => acc + (Number(curr.valor) || 0), 0);
 
     const sent = await this.dispararPushAlertaHojeParaMotorista(motoristaObj, lista, temAlunos);
@@ -1103,9 +1112,9 @@ export const cobrancaService = {
 
       const motoristaIds = motoristas.map(m => m.id);
 
-      const [cobrancasResult, motoristasComAlunosSet] = await Promise.all([
+      const [cobrancasResult, contagemMap] = await Promise.all([
         cobrancaRepository.getPendentesVencendoHojeParaMotoristas(hojeStr, motoristaIds),
-        passageiroRepository.getMotoristasComPassageirosAtivos(motoristaIds)
+        passageiroRepository.getContagemPassageirosAtivosPorMotorista(motoristaIds)
       ]);
 
       if (cobrancasResult.error) {
@@ -1133,7 +1142,8 @@ export const cobrancaService = {
         await Promise.all(
           chunk.map(async (m) => {
             const lista = cobrancasPorMotorista.get(m.id) || [];
-            const temAlunos = motoristasComAlunosSet.has(m.id);
+            const contagemAlunos = contagemMap.get(m.id) || 0;
+            const temAlunos = contagemAlunos >= 2;
 
             try {
               const sent = await this.dispararPushAlertaHojeParaMotorista(m, lista, temAlunos);

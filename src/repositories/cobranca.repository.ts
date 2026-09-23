@@ -279,6 +279,22 @@ export const cobrancaRepository = {
             return { data: [], error: null };
         }
 
+        const SELECT_FIELDS = `
+            id,
+            valor,
+            data_vencimento,
+            status,
+            usuario_id,
+            passageiro:passageiros(
+                nome,
+                genero,
+                responsaveis:passageiro_responsaveis(
+                    tipo,
+                    responsavel:responsaveis(nome)
+                )
+            )
+        `;
+
         if (Array.isArray(usuarioIdOuIds)) {
             const BATCH_SIZE = 100;
             const cobrancasTotais: Array<{
@@ -287,21 +303,14 @@ export const cobrancaRepository = {
                 data_vencimento: string;
                 status: string;
                 usuario_id: string;
-                passageiro: { nome: string } | { nome: string }[] | null;
+                passageiro: unknown;
             }> = [];
 
             for (let i = 0; i < usuarioIdOuIds.length; i += BATCH_SIZE) {
                 const chunk = usuarioIdOuIds.slice(i, i + BATCH_SIZE);
                 const { data, error } = await supabaseAdmin
                     .from("cobrancas")
-                    .select(`
-                        id,
-                        valor,
-                        data_vencimento,
-                        status,
-                        usuario_id,
-                        passageiro:passageiros(nome)
-                    `)
+                    .select(SELECT_FIELDS)
                     .eq("status", CobrancaStatus.PENDENTE)
                     .eq("data_vencimento", hojeStr)
                     .in("usuario_id", chunk);
@@ -320,14 +329,7 @@ export const cobrancaRepository = {
 
         let query = supabaseAdmin
             .from("cobrancas")
-            .select(`
-                id,
-                valor,
-                data_vencimento,
-                status,
-                usuario_id,
-                passageiro:passageiros(nome)
-            `)
+            .select(SELECT_FIELDS)
             .eq("status", CobrancaStatus.PENDENTE)
             .eq("data_vencimento", hojeStr);
 

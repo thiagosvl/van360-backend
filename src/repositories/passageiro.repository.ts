@@ -538,11 +538,11 @@ export const passageiroRepository = {
     return { data, error };
   },
 
-  async getMotoristasComPassageirosAtivos(usuarioIds: string[]): Promise<Set<string>> {
-    if (!usuarioIds.length) return new Set();
+  async getContagemPassageirosAtivosPorMotorista(usuarioIds: string[]): Promise<Map<string, number>> {
+    if (!usuarioIds.length) return new Map();
 
     const BATCH_SIZE = 100;
-    const activeDriverIds = new Set<string>();
+    const contagemPorMotorista = new Map<string, number>();
 
     for (let i = 0; i < usuarioIds.length; i += BATCH_SIZE) {
       const chunk = usuarioIds.slice(i, i + BATCH_SIZE);
@@ -556,10 +556,22 @@ export const passageiroRepository = {
         throw error;
       }
 
-      (data || []).forEach(p => activeDriverIds.add(p.usuario_id));
+      for (const p of data || []) {
+        if (!p.usuario_id) continue;
+        contagemPorMotorista.set(p.usuario_id, (contagemPorMotorista.get(p.usuario_id) || 0) + 1);
+      }
     }
 
-    return activeDriverIds;
+    return contagemPorMotorista;
+  },
+
+  async getMotoristasComPassageirosAtivos(usuarioIds: string[]): Promise<Set<string>> {
+    const contagem = await this.getContagemPassageirosAtivosPorMotorista(usuarioIds);
+    const ativos = new Set<string>();
+    for (const [id, count] of contagem.entries()) {
+      if (count > 0) ativos.add(id);
+    }
+    return ativos;
   }
 };
 

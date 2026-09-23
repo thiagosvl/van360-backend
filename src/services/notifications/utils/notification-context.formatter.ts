@@ -115,6 +115,12 @@ export class NotificationContextFormatter {
         return isFeminino ? "a" : "o";
     }
 
+    static getStudentPreposition(genero?: PassageiroGenero | string | null): string {
+        if (genero === PassageiroGenero.FEMININO) return "da";
+        if (genero === PassageiroGenero.MASCULINO) return "do";
+        return "do(a)";
+    }
+
     static formatTime(timeOrDate?: string | Date | null): string {
         if (!timeOrDate) {
             return new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
