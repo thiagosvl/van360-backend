@@ -58,6 +58,10 @@ function resolveErrorStack(error: unknown): string {
 export const errorAlertService = {
   async notifyHttpError(ctx: HttpErrorAlertContext): Promise<void> {
     try {
+      if (ctx.statusCode < 500) {
+        return;
+      }
+
       if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_ADMIN_CHAT_ID) {
         return;
       }
