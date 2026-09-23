@@ -556,7 +556,7 @@ async function seedCobrancas(usuarioId: string, passageirosInseridos: any[], cfg
             const formatVenc = dataVenc.toISOString().split("T")[0];
 
             let status = CobrancaStatus.PENDENTE;
-            let pagamento_manual = false;
+            let pagamento_manual = true;
             let data_pagamento: string | null = null;
             let valor_pago: number | null = null;
             let tipo_pagamento: string | null = null;

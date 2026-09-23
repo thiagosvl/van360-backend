@@ -131,10 +131,6 @@ export const cobrancaPagamentoService = {
       throw new AppError("Cobrança não encontrada.", 404);
     }
 
-    if (!cobranca.pagamento_manual) {
-      throw new AppError("Não é permitido desfazer este pagamento: apenas recebimentos marcados manualmente pelo motorista podem ser revertidos.", 400);
-    }
-
     const { data, error } = await cobrancaRepository.desfazerPagamento(cobrancaId);
 
     if (error) {
