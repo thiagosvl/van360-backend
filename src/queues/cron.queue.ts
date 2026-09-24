@@ -22,7 +22,8 @@ const CRON_DEFINITIONS: CronDefinition[] = [
     { name: CronJob.DAILY_DRIVER_DUE_TODAY_ALERT, pattern: '30 10 * * 2-5' },
     { name: CronJob.DAILY_CHARGE_MONITOR, pattern: '30 13 * * *' },
     { name: CronJob.BIRTHDAY_REMINDER, pattern: '30 19 * * 0' },
-    { name: CronJob.NOTIFICATION_RETRY, every: 2 * 60 * 1000 }
+    { name: CronJob.NOTIFICATION_RETRY, every: 2 * 60 * 1000 },
+    { name: CronJob.LOGS_CLEANUP, pattern: '0 3 * * *' }
 ];
 
 export const setupCronJobs = async (maxAttempts = 3, delayMs = 3000): Promise<void> => {

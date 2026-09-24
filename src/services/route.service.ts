@@ -13,6 +13,7 @@ import { historicoService } from "./historico.service.js";
 import { logger } from "../config/logger.js";
 import { getNowBR, toPersistenceString } from "../utils/date.utils.js";
 import { calculateAuditDiff } from "../utils/audit-diff.util.js";
+import { getDonoContaId, isSubConta } from "../utils/user.utils.js";
 
 import { supabaseAdmin } from "../config/supabase.js";
 
@@ -20,12 +21,12 @@ const resolveDataOwnerId = async (usuarioId: string): Promise<{ dataOwnerId: str
   if (!usuarioId) return { dataOwnerId: usuarioId };
   try {
     const { data: userProfile } = await userRepository.getProfileData(usuarioId);
-    let dataOwnerId = userProfile?.conta_pai_id || usuarioId;
+    let dataOwnerId = getDonoContaId(userProfile) || usuarioId;
     const veiculoId = userProfile?.veiculo_id || undefined;
     const tipo = userProfile?.tipo || undefined;
     const contaPaiId = userProfile?.conta_pai_id || undefined;
 
-    if (!userProfile?.conta_pai_id && veiculoId) {
+    if (!isSubConta(userProfile) && veiculoId) {
       const { data: veiculo } = await veiculoRepository.getUsuarioIdAndPlaca(veiculoId);
       if (veiculo?.usuario_id) {
         dataOwnerId = veiculo.usuario_id;

@@ -8,6 +8,7 @@ import { userRepository } from "../repositories/user.repository.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { AppError } from "../errors/AppError.js";
 import { getFirstName, getFirstAndSecondName } from "../utils/format.js";
+import { getDonoContaId } from "../utils/user.utils.js";
 
 export const prePassageiroService = {
   async listPrePassageiros(usuarioId: string, search?: string) {
@@ -35,7 +36,7 @@ export const prePassageiroService = {
     }
 
     const { data: targetUser } = await userRepository.getById(payload.usuario_id);
-    const targetOwnerId = targetUser?.conta_pai_id || payload.usuario_id;
+    const targetOwnerId = getDonoContaId(targetUser) || payload.usuario_id;
 
     if (payload.horario_entrada && payload.horario_saida && payload.horario_saida <= payload.horario_entrada) {
       throw new AppError("Horário de saída deve ser maior que o horário de entrada", 400);

@@ -21,6 +21,8 @@ import { usuarioPushTokenRepository } from "../repositories/usuario-push-token.r
 import { withRetry } from "../utils/retry.utils.js";
 import { MetaCapiService } from "./meta-capi.service.js";
 import { authCacheService } from "./auth-cache.service.js";
+import { isMotoristaTitular } from "../utils/user.utils.js";
+import { resolveOrigemAtribuicao } from "../utils/acquisition-channel.utils.js";
 
 // ... (interfaces remain unchanged)
 
@@ -319,12 +321,20 @@ export async function registrarUsuario(
       ).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar notificação de boas-vindas ao motorista"));
     }
 
+    const atribuicao = resolveOrigemAtribuicao(
+      payload.metadados_cadastro,
+      payload.dispositivo_cadastro,
+      resolvedIndicadorId ? CanalAquisicao.INDICACAO : undefined
+    );
+
     // 5. Notificação para o Admin (Telegram)
     notificationService.notifyAdmin(EVENTO_ADMIN_NOVO_CADASTRO, {
       nome: payload.apelido?.trim() ? `${payload.nome} (${payload.apelido.trim()})` : payload.nome,
       email: payload.email,
       telefone: payload.telefone,
       cpfcnpj: payload.cpfcnpj,
+      origem: atribuicao.label,
+      campanha: atribuicao.detalhe,
       dataRegistro: getNowBR().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }),
       usuarioId: usuarioId as string
     }, {
@@ -374,13 +384,15 @@ export async function login(
 
     if (authError || !data.session) throw new AppError("Credenciais inválidas.", 401);
 
-    historicoService.log({
-      usuario_id: user.id,
-      entidade_tipo: AtividadeEntidadeTipo.USUARIO,
-      entidade_id: user.id,
-      acao: AtividadeAcao.LOGIN,
-      descricao: `Usuário realizou login com sucesso.`
-    });
+    if (isMotoristaTitular(user)) {
+      historicoService.log({
+        usuario_id: user.id,
+        entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+        entidade_id: user.id,
+        acao: AtividadeAcao.LOGIN,
+        descricao: `Usuário realizou login com sucesso.`
+      });
+    }
 
     // Auditoria de Sucesso
     loginAttemptsRepository.logAttempt({

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { motoristaEquipeService } from "../services/motorista-equipe.service.js";
 import { UserType } from "../types/enums.js";
 import { AppError } from "../errors/AppError.js";
+import { isMotoristaAuxiliar } from "../utils/user.utils.js";
 import {
   createMembroEquipeSchema,
   updateMembroEquipeSchema,
@@ -41,7 +42,7 @@ export const motoristaEquipeController = {
 
     let body = createMembroEquipeSchema.parse(request.body);
 
-    if (callerTipo === UserType.MOTORISTA_AUXILIAR) {
+    if (isMotoristaAuxiliar(request.profile)) {
       if (!assignedVeiculoId) {
         throw new AppError("Motorista auxiliar sem veículo atribuído", 400);
       }
@@ -71,7 +72,7 @@ export const motoristaEquipeController = {
 
     let body = updateMembroEquipeSchema.parse(request.body);
 
-    if (callerTipo === UserType.MOTORISTA_AUXILIAR) {
+    if (isMotoristaAuxiliar(request.profile)) {
       body = {
         ...body,
         tipo: UserType.MONITOR,

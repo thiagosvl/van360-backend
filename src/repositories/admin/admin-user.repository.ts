@@ -185,6 +185,32 @@ export const adminUserRepository = {
     });
   },
 
+  async getUsersDailyPulse(params: {
+    date?: string;
+    search?: string;
+    tipoUsuario: string;
+    subscriptionStatus: string;
+    limit: number;
+    offset: number;
+  }) {
+    return supabaseAdmin.rpc("get_motoristas_daily_pulse", {
+      p_date: params.date || undefined,
+      p_tz: "America/Sao_Paulo",
+      p_search: params.search || null,
+      p_tipo_usuario: params.tipoUsuario,
+      p_subscription_status: params.subscriptionStatus,
+      p_limit: params.limit,
+      p_offset: params.offset,
+    });
+  },
+
+  async getUsersDailyPulseStats(date?: string) {
+    return supabaseAdmin.rpc("get_motoristas_daily_pulse_stats", {
+      p_date: date || undefined,
+      p_tz: "America/Sao_Paulo",
+    });
+  },
+
   async getPassageirosAtivosComVencimento() {
     return supabaseAdmin
       .from("passageiros")

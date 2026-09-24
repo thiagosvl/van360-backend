@@ -185,6 +185,8 @@ export const updatePassageiroBatchItemSchema = z.object({
   escola_id: z.string().uuid().optional().nullable().or(z.literal("")).transform(v => (v === "" || v === "none") ? null : v),
   veiculo_id: z.string().uuid().optional().nullable().or(z.literal("")).transform(v => (v === "" || v === "none") ? null : v),
   turma: optionalString,
+  sala: optionalString,
+  nome_professor: optionalString,
   periodo: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
     if (v === undefined) return undefined;
     if (v === null || v === "") return null;

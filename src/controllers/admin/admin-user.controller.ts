@@ -13,6 +13,8 @@ import {
   listUsersLatestActivityQuerySchema,
   getMotoristasRadarStatsQuerySchema,
   setReferralAdminSchema,
+  listUsersDailyPulseQuerySchema,
+  getUsersDailyPulseStatsQuerySchema,
 } from "../../schemas/admin.schema.js";
 import { AppError } from "../../errors/AppError.js";
 
@@ -244,6 +246,30 @@ export const adminUserController = {
       const error = err as Error;
       logger.error({ error: error.message }, "[AdminUserController] Erro ao buscar estatísticas do radar dos usuários.");
       return reply.status(500).send({ error: "Erro ao buscar estatísticas do radar dos usuários." });
+    }
+  },
+
+  async getUsersDailyPulse(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const query = listUsersDailyPulseQuerySchema.parse(request.query);
+      const result = await adminUserService.getUsersDailyPulse(query);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao buscar pulso diário dos usuários.");
+      return reply.status(500).send({ error: "Erro ao buscar pulso diário dos usuários." });
+    }
+  },
+
+  async getUsersDailyPulseStats(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const query = getUsersDailyPulseStatsQuerySchema.parse(request.query);
+      const result = await adminUserService.getUsersDailyPulseStats(query);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao buscar estatísticas do pulso diário dos usuários.");
+      return reply.status(500).send({ error: "Erro ao buscar estatísticas do pulso diário dos usuários." });
     }
   },
 

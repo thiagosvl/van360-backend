@@ -15,6 +15,7 @@ import {
   AtividadeEntidadeTipo,
   CanalAquisicao,
   DispositivoCadastro,
+  AtribuicaoCategoria,
   EvolutionConnectionStatus,
   DriverContractConfigStatus,
   CobrancaStatus,
@@ -48,6 +49,11 @@ import type {
   MotoristasRadarStatsDTO,
   GetMotoristasRadarStatsQuery,
   ListAcquisitionStatsQuery,
+  ListUsersDailyPulseQuery,
+  GetUsersDailyPulseStatsQuery,
+  MotoristaDailyPulseDTO,
+  MotoristasDailyPulseResponseDTO,
+  MotoristasDailyPulseStatsDTO,
 } from "../../schemas/admin.schema.js";
 import type { AdminAcquisitionStatsDTO, CanalAquisicaoAgrupadoDTO, CampanhaAquisicaoDTO, DispositivoAquisicaoDTO } from "../../types/dtos/admin-acquisition.dto.js";
 import { resolveLeadAttribution } from "../../utils/acquisition-channel.utils.js";
@@ -833,6 +839,86 @@ export const adminUserService = {
     };
   },
 
+  async getUsersDailyPulse(query: ListUsersDailyPulseQuery): Promise<MotoristasDailyPulseResponseDTO> {
+    const { date, search, tipoUsuario, subscriptionStatus, page, limit } = query;
+    const offset = (page - 1) * limit;
+
+    const { data, error } = await adminUserRepository.getUsersDailyPulse({
+      date,
+      search,
+      tipoUsuario,
+      subscriptionStatus,
+      limit,
+      offset,
+    });
+
+    if (error) {
+      logger.error({ error }, "[AdminUserService] Erro ao buscar pulso diário dos motoristas.");
+      throw error;
+    }
+
+    const rows = (data || []) as (MotoristaDailyPulseDTO & { total_count: number | string })[];
+    const total = rows.length > 0 ? Number(rows[0].total_count) : 0;
+
+    const items: MotoristaDailyPulseDTO[] = rows.map((r) => ({
+      id: r.id,
+      nome: r.nome,
+      apelido: r.apelido,
+      telefone: r.telefone,
+      email: r.email,
+      cadastrado_em: r.cadastrado_em,
+      tipo_usuario_dia: r.tipo_usuario_dia,
+      reengajou_no_dia: Boolean(r.reengajou_no_dia),
+      total_atividades_dia: Number(r.total_atividades_dia),
+      primeiro_acesso_dia: r.primeiro_acesso_dia,
+      ultimo_acesso_dia: r.ultimo_acesso_dia,
+      ultima_acao_dia: r.ultima_acao_dia,
+      ultima_descricao_dia: r.ultima_descricao_dia,
+      assinatura_status: r.assinatura_status,
+      assinatura_vencimento: r.assinatura_vencimento,
+      is_vitalicio: Boolean(r.is_vitalicio),
+    }));
+
+    return {
+      data: items,
+      total,
+      page,
+      limit,
+    };
+  },
+
+  async getUsersDailyPulseStats(query: GetUsersDailyPulseStatsQuery): Promise<MotoristasDailyPulseStatsDTO> {
+    const { date } = query;
+    const { data, error } = await adminUserRepository.getUsersDailyPulseStats(date);
+
+    if (error) {
+      logger.error({ error }, "[AdminUserService] Erro ao buscar estatísticas do pulso diário.");
+      throw error;
+    }
+
+    const row = ((data || []) as Array<{
+      total_acessos_unicos: number | string;
+      total_recorrentes: number | string;
+      total_novos: number | string;
+      total_novos_reengajados: number | string;
+      total_trial: number | string;
+      total_ativos: number | string;
+      total_vitalicios: number | string;
+      total_vencidos_expirados: number | string;
+    }>)[0];
+
+    return {
+      totalAcessosUnicos: row ? Number(row.total_acessos_unicos) : 0,
+      totalRecorrentes: row ? Number(row.total_recorrentes) : 0,
+      totalNovos: row ? Number(row.total_novos) : 0,
+      totalNovosReengajados: row ? Number(row.total_novos_reengajados) : 0,
+      totalTrial: row ? Number(row.total_trial) : 0,
+      totalAtivos: row ? Number(row.total_ativos) : 0,
+      totalVitalicios: row ? Number(row.total_vitalicios) : 0,
+      totalVencidosExpirados: row ? Number(row.total_vencidos_expirados) : 0,
+    };
+  },
+
   async getVencimentosPassageirosPorDia(): Promise<VencimentosPassageirosResponseDTO> {
     const [passageirosRes, motoristasRes] = await Promise.all([
       adminUserRepository.getPassageirosAtivosComVencimento(),
@@ -1566,7 +1652,7 @@ export const adminUserService = {
 
     const canaisMap = new Map<string, {
       origem: string;
-      categoria: "meta_ads" | "google_ads" | "tiktok_ads" | "play_store" | "site_organico" | "indicacao" | "direto";
+      categoria: AtribuicaoCategoria;
       quantidade: number;
       em_trial: number;
       ativos_pagantes: number;

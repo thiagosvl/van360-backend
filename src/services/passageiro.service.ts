@@ -821,6 +821,8 @@ const updatePassageirosBatch = async (
             if (item.escola_id !== undefined) payload.escola_id = (item.escola_id === "none" || item.escola_id === "") ? null : item.escola_id;
             if (item.veiculo_id !== undefined) payload.veiculo_id = (item.veiculo_id === "none" || item.veiculo_id === "") ? null : item.veiculo_id;
             if (item.turma !== undefined) payload.turma = item.turma ? cleanString(item.turma, true) : null;
+            if (item.sala !== undefined) payload.sala = item.sala ? cleanString(item.sala, true) : null;
+            if (item.nome_professor !== undefined) payload.nome_professor = item.nome_professor ? cleanString(item.nome_professor, true) : null;
             if (item.periodo !== undefined) payload.periodo = item.periodo ? cleanString(item.periodo.toLowerCase()) : null;
             if (item.valor_cobranca !== undefined) payload.valor_cobranca = typeof item.valor_cobranca === "string" ? moneyToNumber(item.valor_cobranca) : item.valor_cobranca;
             if (item.dia_vencimento !== undefined) payload.dia_vencimento = item.dia_vencimento;

@@ -434,6 +434,7 @@ export enum CronJob {
   WEEKLY_DRIVER_CHARGE_SUMMARY = "weekly-driver-charge-summary",
   DAILY_DRIVER_DUE_TODAY_ALERT = "daily-driver-due-today-alert",
   NOTIFICATION_RETRY = "notification-retry",
+  LOGS_CLEANUP = "logs-cleanup",
 }
 
 export enum RouteExecutionStatus {
@@ -470,6 +471,16 @@ export enum CanalAquisicao {
   YOUTUBE = "YOUTUBE",
   GOOGLE = "GOOGLE",
   OUTROS = "OUTROS"
+}
+
+export enum AtribuicaoCategoria {
+  META_ADS = "meta_ads",
+  GOOGLE_ADS = "google_ads",
+  TIKTOK_ADS = "tiktok_ads",
+  PLAY_STORE = "play_store",
+  SITE_ORGANICO = "site_organico",
+  INDICACAO = "indicacao",
+  DIRETO = "direto",
 }
 
 export enum BlogPostStatus {

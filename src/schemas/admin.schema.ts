@@ -214,3 +214,55 @@ export const setReferralAdminSchema = z.object({
   indicadorId: z.string().uuid("ID do indicador inválido"),
 });
 export type SetReferralAdminDTO = z.infer<typeof setReferralAdminSchema>;
+
+export const listUsersDailyPulseQuerySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve estar no formato YYYY-MM-DD").optional(),
+  search: z.string().optional(),
+  tipoUsuario: z.enum(["all", "novo", "recorrente"]).default("all"),
+  subscriptionStatus: z.string().default("all"),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+});
+export type ListUsersDailyPulseQuery = z.infer<typeof listUsersDailyPulseQuerySchema>;
+
+export const getUsersDailyPulseStatsQuerySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve estar no formato YYYY-MM-DD").optional(),
+});
+export type GetUsersDailyPulseStatsQuery = z.infer<typeof getUsersDailyPulseStatsQuerySchema>;
+
+export interface MotoristaDailyPulseDTO {
+  id: string;
+  nome: string;
+  apelido: string | null;
+  telefone: string | null;
+  email: string | null;
+  cadastrado_em: string;
+  tipo_usuario_dia: "novo" | "recorrente";
+  reengajou_no_dia: boolean;
+  total_atividades_dia: number;
+  primeiro_acesso_dia: string;
+  ultimo_acesso_dia: string;
+  ultima_acao_dia: string | null;
+  ultima_descricao_dia: string | null;
+  assinatura_status: string | null;
+  assinatura_vencimento: string | null;
+  is_vitalicio: boolean;
+}
+
+export interface MotoristasDailyPulseResponseDTO {
+  data: MotoristaDailyPulseDTO[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface MotoristasDailyPulseStatsDTO {
+  totalAcessosUnicos: number;
+  totalRecorrentes: number;
+  totalNovos: number;
+  totalNovosReengajados: number;
+  totalTrial: number;
+  totalAtivos: number;
+  totalVitalicios: number;
+  totalVencidosExpirados: number;
+}

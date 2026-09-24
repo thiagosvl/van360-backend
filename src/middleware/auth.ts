@@ -5,6 +5,7 @@ import { authRepository } from "../repositories/auth.repository.js";
 import { authCacheService, type AuthProfileData } from "../services/auth-cache.service.js";
 
 import { UserType } from "../types/enums.js";
+import { isSubConta, getDonoContaId } from "../utils/user.utils.js";
 
 export async function verifySupabaseJWT(
   request: FastifyRequest,
@@ -73,7 +74,7 @@ export async function verifySupabaseJWT(
       });
     }
 
-    const isSubAccount = !!profile.conta_pai_id || profile.tipo === UserType.MOTORISTA_AUXILIAR || profile.tipo === UserType.MONITOR;
+    const isSubAccount = isSubConta(profile);
 
     request.user = {
       ...user,
@@ -84,7 +85,7 @@ export async function verifySupabaseJWT(
     };
     request.profile = profile;
     request.usuario_id = profile.id;
-    request.data_owner_id = profile.conta_pai_id || profile.id;
+    request.data_owner_id = getDonoContaId(profile) || profile.id;
     request.assigned_veiculo_id = isSubAccount ? (profile.veiculo_id || null) : null;
 
     if (isSubAccount && profile.conta_pai_id) {

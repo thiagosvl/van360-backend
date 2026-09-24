@@ -7,6 +7,7 @@ import { gastoRepository } from "../repositories/gasto.repository.js";
 import { CobrancaStatus, GastoCategoria } from "../types/enums.js";
 import { getNowBR, toLocalDateString, getLastDayOfMonth, getSafeDueDateString } from "../utils/date.utils.js";
 import { getUsuarioData } from "./usuario.service.js";
+import { isSubConta, getDonoContaId } from "../utils/user.utils.js";
 
 interface SystemSummary {
   usuario: {
@@ -59,8 +60,8 @@ export const usuarioResumoService = {
     const usuario = await getUsuarioData(usuarioId);
     if (!usuario) throw new Error("Usuário não encontrado");
 
-    const isSubAccount = Boolean(usuario.conta_pai_id);
-    const dataOwnerId = usuario.conta_pai_id || usuarioId;
+    const isSubAccount = isSubConta(usuario);
+    const dataOwnerId = getDonoContaId(usuario) || usuarioId;
     const targetVeiculoId = veiculoId || usuario.veiculo_id;
 
     // 2. Parallel Fetching for Counters & Status

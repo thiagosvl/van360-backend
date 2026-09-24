@@ -2137,6 +2137,52 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_motoristas_daily_pulse_stats: {
+        Args: {
+          p_date?: string
+          p_tz?: string
+        }
+        Returns: {
+          total_acessos_unicos: number
+          total_recorrentes: number
+          total_novos: number
+          total_novos_reengajados: number
+          total_trial: number
+          total_ativos: number
+          total_vitalicios: number
+          total_vencidos_expirados: number
+        }[]
+      }
+      get_motoristas_daily_pulse: {
+        Args: {
+          p_date?: string
+          p_tz?: string
+          p_search?: string | null
+          p_tipo_usuario?: string
+          p_subscription_status?: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          id: string
+          nome: string
+          apelido: string | null
+          telefone: string | null
+          email: string | null
+          cadastrado_em: string
+          tipo_usuario_dia: string
+          reengajou_no_dia: boolean
+          total_atividades_dia: number
+          primeiro_acesso_dia: string
+          ultimo_acesso_dia: string
+          ultima_acao_dia: string | null
+          ultima_descricao_dia: string | null
+          assinatura_status: string | null
+          assinatura_vencimento: string | null
+          is_vitalicio: boolean
+          total_count: number
+        }[]
+      }
       bytea_to_text: { Args: { data: string }; Returns: string }
       confirm_invoice_payment: { Args: { p_fatura_id: string }; Returns: Json }
       http: {

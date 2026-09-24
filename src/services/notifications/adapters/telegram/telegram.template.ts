@@ -7,6 +7,8 @@ export interface AdminRegistrationContext {
     email: string;
     telefone?: string;
     cpfcnpj?: string;
+    origem?: string;
+    campanha?: string;
     dataRegistro: string;
     usuarioId: string;
 }
@@ -42,6 +44,7 @@ export class TelegramTemplates {
 
         const telLine = ctx.telefone ? `<b>Telefone:</b> ${maskPhone(ctx.telefone)}\n` : "";
         const docLine = docFormatado ? `<b>CPF/CNPJ:</b> ${docFormatado}\n` : "";
+        const origemLine = ctx.origem ? `<b>Origem:</b> ${ctx.origem}${ctx.campanha ? ` • ${ctx.campanha}` : ""}\n` : "";
 
         return [
             {
@@ -51,6 +54,7 @@ export class TelegramTemplates {
                     `<b>Email:</b> ${ctx.email}\n` +
                     telLine +
                     docLine +
+                    origemLine +
                     `<b>Data:</b> ${ctx.dataRegistro}\n` +
                     `<b>ID:</b> ${ctx.usuarioId}`
             }

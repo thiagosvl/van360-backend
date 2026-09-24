@@ -3,6 +3,7 @@ import { subscriptionService } from "../services/subscriptions/subscription.serv
 import { logger } from "../config/logger.js";
 
 import { UserType } from "../types/enums.js";
+import { isSubConta } from "../utils/user.utils.js";
 
 const EXEMPTED_ROUTES = [
   "/api/auth",
@@ -38,7 +39,7 @@ export async function checkSubscriptionAccess(
   if (!userId) return;
 
   const targetUserId = (request as any).data_owner_id || userId;
-  const isSubAccount = Boolean((request as any).profile?.conta_pai_id);
+  const isSubAccount = isSubConta(request.profile);
 
   try {
     const isBlocked = await subscriptionService.isBlocked(targetUserId);

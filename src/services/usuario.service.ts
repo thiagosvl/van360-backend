@@ -12,6 +12,7 @@ import { env } from "../config/env.js";
 import { formatDateTime, maskCpf, maskCnpj, maskPhone } from "../utils/format.js";
 import { telegramService } from "./telegram.service.js";
 import { adminService } from "./admin.service.js";
+import { isSubConta } from "../utils/user.utils.js";
 
 export async function getUsuarioData(usuarioId: string) {
   const { data: usuario, error } = await userRepository.getProfileData(usuarioId);
@@ -39,7 +40,7 @@ export async function atualizarUsuario(usuarioId: string, payload: AtualizarUsua
   const { data: usuarioAnterior } = await userRepository.getById(usuarioId);
   if (!usuarioAnterior) throw new AppError("Usuário não encontrado.", 404);
 
-  const isSubAccount = Boolean(usuarioAnterior.conta_pai_id);
+  const isSubAccount = isSubConta(usuarioAnterior);
   if (isSubAccount) {
     if (payload.logo_url !== undefined || payload.config_contrato !== undefined || payload.assinatura_digital_url !== undefined) {
       throw new AppError("Subcontas não têm permissão para alterar configurações ou marca da empresa.", 403);
@@ -420,7 +421,7 @@ export async function excluirMinhaConta(userId: string) {
     throw new AppError("Usuário não encontrado.", 404);
   }
 
-  if (usuario.conta_pai_id) {
+  if (isSubConta(usuario)) {
     throw new AppError("Subcontas não podem solicitar a exclusão da conta. O encerramento do vínculo deve ser realizado pelo motorista titular.", 403);
   }
 

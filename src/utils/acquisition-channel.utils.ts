@@ -1,25 +1,61 @@
-import { CanalAquisicao, DispositivoCadastro } from "../types/enums.js";
+import { CanalAquisicao, DispositivoCadastro, AtribuicaoCategoria } from "../types/enums.js";
 
-export type CategoriaOrigemAquisicao =
-  | "meta_ads"
-  | "google_ads"
-  | "tiktok_ads"
-  | "play_store"
-  | "site_organico"
-  | "indicacao"
-  | "direto";
+export const ORIGEM_ATRIBUICAO_LABELS = {
+  INSTAGRAM_ADS: "Instagram Ads",
+  FACEBOOK_ADS: "Facebook Ads",
+  GOOGLE_ADS: "Google Ads",
+  TIKTOK_ADS: "TikTok Ads",
+  PLAY_STORE: "Play Store",
+  APP_STORE: "App Store",
+  INDICACAO: "Indicação",
+  BLOG: "Blog Van360",
+  SITE_INSTITUCIONAL: "Site Institucional",
+  INSTAGRAM_ORGANICO: "Instagram",
+  FACEBOOK_ORGANICO: "Facebook",
+  GOOGLE_ORGANICO: "Google",
+  DIRETO: "Direto / Orgânico",
+} as const;
+
+export const CAMPANHA_FALLBACK_LABELS = {
+  META_ADS: "Meta Ads",
+  CAMPANHA_GOOGLE: "Campanha Google",
+  CAMPANHA_TIKTOK: "Campanha TikTok",
+  APP_ANDROID: "App Nativo Android",
+  APP_IOS: "App Nativo iOS",
+  OUTRO_MOTORISTA: "Outro Motorista",
+  ORGANICO: "Orgânico",
+  DIRETO: "Direto",
+  LINK_BIO: "Orgânico / Link Bio",
+  BUSCA_ORGANICA: "Busca Orgânica",
+  SEM_UTMS: "Sem UTMs",
+} as const;
+
+export type CategoriaOrigemAquisicao = AtribuicaoCategoria;
 
 export interface ResolvedLeadAttribution {
   origem: string;
-  categoria: CategoriaOrigemAquisicao;
+  categoria: AtribuicaoCategoria;
 }
 
-export function resolveLeadAttribution(
+export interface ResolvedOrigemAtribuicao {
+  label: string;
+  detalhe?: string;
+  categoria: AtribuicaoCategoria;
+}
+
+export function resolveOrigemAtribuicao(
   rawMetadados?: Record<string, unknown> | null,
   dispositivo?: string | null,
   canalAuto?: string | null
-): ResolvedLeadAttribution {
+): ResolvedOrigemAtribuicao {
   const utm = (rawMetadados?.utm as Record<string, string | undefined> | null) || undefined;
+  const source = utm?.source?.toLowerCase();
+  const fbclid = utm?.fbclid;
+  const gclid = utm?.gclid;
+  const gbraid = utm?.gbraid;
+  const ttclid = utm?.ttclid;
+  const campaign = utm?.campaign;
+  const content = utm?.content;
   const referrer = typeof rawMetadados?.referrer === "string" ? rawMetadados.referrer : undefined;
 
   const isInternalReferrer = Boolean(
@@ -30,66 +66,120 @@ export function resolveLeadAttribution(
     )
   );
   const cleanReferrer = isInternalReferrer ? undefined : referrer;
-
-  const source = utm?.source?.toLowerCase();
-  const fbclid = utm?.fbclid;
-  const gclid = utm?.gclid;
-  const gbraid = utm?.gbraid;
-  const ttclid = utm?.ttclid;
-
-  const hasUtmParams = Boolean(
-    utm && Object.values(utm).some((val) => typeof val === "string" && val.trim().length > 0)
-  );
-
   const dispUpper = dispositivo?.toUpperCase();
 
   if (source === "ig" || (source === "lp" && fbclid) || source === "instagram") {
-    return { origem: "Instagram Ads (Meta)", categoria: "meta_ads" };
+    return {
+      label: ORIGEM_ATRIBUICAO_LABELS.INSTAGRAM_ADS,
+      detalhe: content || campaign || CAMPANHA_FALLBACK_LABELS.META_ADS,
+      categoria: AtribuicaoCategoria.META_ADS,
+    };
   }
 
   if (source === "fb" || source === "facebook" || fbclid) {
-    return { origem: "Facebook Ads (Meta)", categoria: "meta_ads" };
+    return {
+      label: ORIGEM_ATRIBUICAO_LABELS.FACEBOOK_ADS,
+      detalhe: content || campaign || CAMPANHA_FALLBACK_LABELS.META_ADS,
+      categoria: AtribuicaoCategoria.META_ADS,
+    };
   }
 
   if (source === "google" || gclid || gbraid) {
-    return { origem: "Google Ads", categoria: "google_ads" };
+    return {
+      label: ORIGEM_ATRIBUICAO_LABELS.GOOGLE_ADS,
+      detalhe: campaign || CAMPANHA_FALLBACK_LABELS.CAMPANHA_GOOGLE,
+      categoria: AtribuicaoCategoria.GOOGLE_ADS,
+    };
   }
 
   if (source === "tiktok" || ttclid) {
-    return { origem: "TikTok Ads", categoria: "tiktok_ads" };
+    return {
+      label: ORIGEM_ATRIBUICAO_LABELS.TIKTOK_ADS,
+      detalhe: campaign || CAMPANHA_FALLBACK_LABELS.CAMPANHA_TIKTOK,
+      categoria: AtribuicaoCategoria.TIKTOK_ADS,
+    };
   }
 
-  if (dispUpper === DispositivoCadastro.APP_ANDROID && !hasUtmParams) {
-    return { origem: "Play Store (App Android Nativo)", categoria: "play_store" };
+  if (dispUpper === DispositivoCadastro.APP_ANDROID || dispUpper === "APP_ANDROID") {
+    return {
+      label: ORIGEM_ATRIBUICAO_LABELS.PLAY_STORE,
+      detalhe: CAMPANHA_FALLBACK_LABELS.APP_ANDROID,
+      categoria: AtribuicaoCategoria.PLAY_STORE,
+    };
   }
 
-  if (dispUpper === DispositivoCadastro.APP_IOS && !hasUtmParams) {
-    return { origem: "App Store (App iOS Nativo)", categoria: "play_store" };
+  if (dispUpper === DispositivoCadastro.APP_IOS || dispUpper === "APP_IOS") {
+    return {
+      label: ORIGEM_ATRIBUICAO_LABELS.APP_STORE,
+      detalhe: CAMPANHA_FALLBACK_LABELS.APP_IOS,
+      categoria: AtribuicaoCategoria.PLAY_STORE,
+    };
   }
 
   if (canalAuto === CanalAquisicao.INDICACAO) {
-    return { origem: "Indicação", categoria: "indicacao" };
+    return {
+      label: ORIGEM_ATRIBUICAO_LABELS.INDICACAO,
+      detalhe: CAMPANHA_FALLBACK_LABELS.OUTRO_MOTORISTA,
+      categoria: AtribuicaoCategoria.INDICACAO,
+    };
   }
 
   if (source === "blog" || cleanReferrer?.includes("van360.com.br/blog")) {
-    return { origem: "Blog Van360", categoria: "site_organico" };
+    return {
+      label: ORIGEM_ATRIBUICAO_LABELS.BLOG,
+      detalhe: CAMPANHA_FALLBACK_LABELS.ORGANICO,
+      categoria: AtribuicaoCategoria.SITE_ORGANICO,
+    };
   }
 
   if (source === "lp" || cleanReferrer?.includes("van360.com.br")) {
-    return { origem: "Site Institucional", categoria: "site_organico" };
+    return {
+      label: ORIGEM_ATRIBUICAO_LABELS.SITE_INSTITUCIONAL,
+      detalhe: CAMPANHA_FALLBACK_LABELS.DIRETO,
+      categoria: AtribuicaoCategoria.SITE_ORGANICO,
+    };
   }
 
   if (cleanReferrer?.includes("instagram.com")) {
-    return { origem: "Instagram (Orgânico)", categoria: "site_organico" };
+    return {
+      label: ORIGEM_ATRIBUICAO_LABELS.INSTAGRAM_ORGANICO,
+      detalhe: CAMPANHA_FALLBACK_LABELS.LINK_BIO,
+      categoria: AtribuicaoCategoria.SITE_ORGANICO,
+    };
   }
 
   if (cleanReferrer?.includes("facebook.com")) {
-    return { origem: "Facebook (Orgânico)", categoria: "site_organico" };
+    return {
+      label: ORIGEM_ATRIBUICAO_LABELS.FACEBOOK_ORGANICO,
+      detalhe: CAMPANHA_FALLBACK_LABELS.ORGANICO,
+      categoria: AtribuicaoCategoria.SITE_ORGANICO,
+    };
   }
 
   if (cleanReferrer?.includes("google.")) {
-    return { origem: "Google (Busca Orgânica)", categoria: "site_organico" };
+    return {
+      label: ORIGEM_ATRIBUICAO_LABELS.GOOGLE_ORGANICO,
+      detalhe: CAMPANHA_FALLBACK_LABELS.BUSCA_ORGANICA,
+      categoria: AtribuicaoCategoria.SITE_ORGANICO,
+    };
   }
 
-  return { origem: "Acesso Direto / Orgânico", categoria: "direto" };
+  return {
+    label: ORIGEM_ATRIBUICAO_LABELS.DIRETO,
+    detalhe: CAMPANHA_FALLBACK_LABELS.SEM_UTMS,
+    categoria: AtribuicaoCategoria.DIRETO,
+  };
 }
+
+export function resolveLeadAttribution(
+  rawMetadados?: Record<string, unknown> | null,
+  dispositivo?: string | null,
+  canalAuto?: string | null
+): ResolvedLeadAttribution {
+  const resolved = resolveOrigemAtribuicao(rawMetadados, dispositivo, canalAuto);
+  return {
+    origem: resolved.label,
+    categoria: resolved.categoria,
+  };
+}
+

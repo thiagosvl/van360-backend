@@ -26,6 +26,8 @@ const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get("/users", adminUserController.getUsers);
   app.get("/users/latest-activity", adminUserController.getUsersLatestActivity);
   app.get("/users/latest-activity/stats", adminUserController.getUsersRadarStats);
+  app.get("/users/daily-pulse", adminUserController.getUsersDailyPulse);
+  app.get("/users/daily-pulse/stats", adminUserController.getUsersDailyPulseStats);
   app.post("/users", adminUserController.createUser);
   app.get("/users/:id", adminUserController.getUserDetails);
   app.get("/users/:id/contratos", adminUserController.getUserContratos);

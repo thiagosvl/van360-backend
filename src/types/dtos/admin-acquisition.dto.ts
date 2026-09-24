@@ -1,6 +1,8 @@
+import { AtribuicaoCategoria } from "../enums.js";
+
 export interface CanalAquisicaoAgrupadoDTO {
   origem: string;
-  categoria: "meta_ads" | "google_ads" | "tiktok_ads" | "play_store" | "site_organico" | "indicacao" | "direto";
+  categoria: AtribuicaoCategoria;
   quantidade: number;
   porcentagem: number;
   em_trial: number;

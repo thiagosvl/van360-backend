@@ -3,6 +3,7 @@ import { logger } from '../config/logger.js';
 import { redisConfig } from '../config/redis.js';
 import { QUEUE_NAME_CRON } from '../queues/cron.queue.js';
 import { birthdayReminderJob } from '../services/jobs/birthday-reminder.job.js';
+import { logsCleanupJob } from '../services/jobs/logs-cleanup.job.js';
 
 import { subscriptionMonitorService } from '../services/subscriptions/subscription-monitor.service.js';
 import { cobrancaService } from '../services/cobranca.service.js';
@@ -55,6 +56,10 @@ export const cronWorker = new Worker(
                     await notificationRetryWorker.processPendingRetries();
                     break;
                 }
+
+                case CronJob.LOGS_CLEANUP:
+                    await logsCleanupJob.run();
+                    break;
 
                 default:
                     logger.warn({ jobName: job.name }, "[CronWorker] Job DESATIVADO ou desconhecido recebido.");
