@@ -5,6 +5,7 @@ import {
     EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
     EVENTO_PASSAGEIRO_ATRASADO,
     EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL,
+    EVENTO_PASSAGEIRO_RENOVACAO_DISPONIVEL,
     EVENTO_MOTORISTA_ASSINATURA_VENCENDO,
     EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO
 } from "../../../../config/constants.js";
@@ -28,6 +29,9 @@ export class WabaMapper {
 
                 case EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL:
                     return WabaTemplates.contratoDisponivel(contextData);
+
+                case EVENTO_PASSAGEIRO_RENOVACAO_DISPONIVEL:
+                    return WabaTemplates.renovacaoDisponivel(contextData);
 
                 case EVENTO_MOTORISTA_ASSINATURA_VENCENDO:
                     return await WabaTemplates.subscriptionDueSoon(contextData);

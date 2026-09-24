@@ -89,6 +89,7 @@ export enum WabaTemplateNameEnum {
   PAIS_ATRASADO_SEM_PIX = "van360_pais_atrasado_sem_pix",
   PAIS_RECIBO = "van360_pais_recibo",
   PAIS_CONTRATO = "van360_pais_contrato",
+  PAIS_RENOVACAO = "van360_pais_renovacao",
   MOTORISTA_RENOVACAO_PIX = "van360_motorista_renovacao_pix",
   MOTORISTA_FALHA_CARTAO = "van360_motorista_falha_cartao",
 }
@@ -414,6 +415,7 @@ export enum AtividadeAcao {
   LINK_INDICACAO_COMPARTILHADO = "LINK_INDICACAO_COMPARTILHADO",
   RECIBO_MENSAL_COMPARTILHADO = "RECIBO_MENSAL_COMPARTILHADO",
   RECIBO_ANUAL_COMPARTILHADO = "RECIBO_ANUAL_COMPARTILHADO",
+  FLOATING_BUTTON_CLICADO = "FLOATING_BUTTON_CLICADO",
 }
 
 export enum TipoChavePix {
@@ -470,6 +472,7 @@ export enum CanalAquisicao {
   TIKTOK = "TIKTOK",
   YOUTUBE = "YOUTUBE",
   GOOGLE = "GOOGLE",
+  IA = "IA",
   OUTROS = "OUTROS"
 }
 

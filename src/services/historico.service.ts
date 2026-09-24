@@ -47,6 +47,22 @@ function resolveDescricaoTelemetria(acao: AtividadeAcao, meta?: Record<string, u
             : "Recibo anual compartilhado.";
     }
 
+    if (acao === AtividadeAcao.FLOATING_BUTTON_CLICADO) {
+        const tela = meta?.tela as string | undefined;
+        const nomesTelas: Record<string, string> = {
+            parcelas: "tela de Parcelas",
+            gastos: "tela de Gastos",
+            contratos: "tela de Contratos",
+            relatorios: "tela de Relatórios",
+            alunos: "tela de Alunos",
+            carteirinha: "carteirinha do aluno",
+        };
+        const local = tela && nomesTelas[tela] ? nomesTelas[tela] : (tela ? `tela de ${tela}` : undefined);
+        return local
+            ? `Botão flutuante (tutorial) clicado na ${local}.`
+            : "Botão flutuante (tutorial) clicado.";
+    }
+
     return `Ação de telemetria registrada: ${acao}`;
 }
 

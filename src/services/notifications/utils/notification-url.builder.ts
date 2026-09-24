@@ -106,6 +106,21 @@ export class NotificationUrlBuilder {
     }
 
     /**
+     * Gera a URL para a confirmação de renovação do Passageiro
+     * @param tokenOrLink Token de renovação do passageiro ou link completo
+     */
+    static getRenewalUrl(tokenOrLink?: string): string {
+        const baseUrl = this.getBaseAppUrl();
+        if (!tokenOrLink) return `${baseUrl}/renovacao`;
+
+        if (tokenOrLink.startsWith("http://") || tokenOrLink.startsWith("https://")) {
+            return tokenOrLink;
+        }
+
+        return `${baseUrl}/renovacao/${tokenOrLink}`;
+    }
+
+    /**
      * Gera a URL para a lista de Pré-Cadastros / Solicitações de Passageiros no App
      */
     static getPassengerRequestsUrl(): string {
@@ -142,6 +157,27 @@ export class NotificationUrlBuilder {
             const parts = clean.split("/assinar/");
             const afterAssinar = parts[parts.length - 1] || "";
             return afterAssinar.split("?")[0].replace(/^\//, "");
+        }
+        if (clean.startsWith("http://") || clean.startsWith("https://")) {
+            try {
+                const urlObj = new URL(clean);
+                const pathParts = urlObj.pathname.split("/").filter(Boolean);
+                return pathParts[pathParts.length - 1] || "";
+            } catch {
+                const parts = clean.split("/").filter(Boolean);
+                return parts[parts.length - 1] || clean;
+            }
+        }
+        return clean.replace(/^\//, "");
+    }
+
+    static extractRenewalToken(tokenOrUrl?: string): string {
+        if (!tokenOrUrl) return "";
+        const clean = tokenOrUrl.trim();
+        if (clean.includes("/renovacao/")) {
+            const parts = clean.split("/renovacao/");
+            const afterRenovacao = parts[parts.length - 1] || "";
+            return afterRenovacao.split("?")[0].replace(/^\//, "");
         }
         if (clean.startsWith("http://") || clean.startsWith("https://")) {
             try {

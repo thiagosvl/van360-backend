@@ -6,7 +6,8 @@ import {
     WabaButtonSubTypeEnum,
     WabaParameterTypeEnum,
     WabaPaymentTypeEnum,
-    WabaPixKeyTypeEnum
+    WabaPixKeyTypeEnum,
+    PassageiroGenero
 } from "../../../../types/enums.js";
 
 export interface WabaParameter {
@@ -281,6 +282,49 @@ export class WabaTemplates {
                     parameters: [
                         { type: WabaParameterTypeEnum.TEXT, text: respName },
                         { type: WabaParameterTypeEnum.TEXT, text: passName }
+                    ]
+                },
+                {
+                    type: WabaComponentTypeEnum.BUTTON,
+                    sub_type: WabaButtonSubTypeEnum.URL,
+                    index: "0",
+                    parameters: [
+                        { type: WabaParameterTypeEnum.TEXT, text: token }
+                    ]
+                }
+            ]
+        };
+    }
+
+    static renovacaoDisponivel(ctx: Record<string, unknown>): WabaTemplatePayload {
+        const driverName = (ctx.apelidoMotorista || NotificationContextFormatter.getFirstAndLastName(ctx.nomeMotorista as string, "Motorista")) as string;
+        const respName = NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string, "Responsável");
+        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
+        const prep = NotificationContextFormatter.getStudentPreposition(ctx.generoPassageiro as PassageiroGenero | string | null);
+        const alunoComPreposicao = `${prep} ${passName}`;
+        const anoLetivo = String(ctx.anoLetivo || (new Date().getFullYear() + 1));
+
+        const rawTokenOrLink = (ctx.linkRenovacao || ctx.tokenRenovacao || ctx.token || "") as string;
+        const token = NotificationUrlBuilder.extractRenewalToken(rawTokenOrLink);
+
+        const headerComponent: WabaComponent = {
+            type: WabaComponentTypeEnum.HEADER,
+            parameters: [
+                { type: WabaParameterTypeEnum.TEXT, text: driverName }
+            ]
+        };
+
+        return {
+            templateName: WabaTemplateNameEnum.PAIS_RENOVACAO,
+            languageCode: "pt_BR",
+            components: [
+                headerComponent,
+                {
+                    type: WabaComponentTypeEnum.BODY,
+                    parameters: [
+                        { type: WabaParameterTypeEnum.TEXT, text: respName },
+                        { type: WabaParameterTypeEnum.TEXT, text: alunoComPreposicao },
+                        { type: WabaParameterTypeEnum.TEXT, text: anoLetivo }
                     ]
                 },
                 {
