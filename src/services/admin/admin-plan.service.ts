@@ -1,6 +1,7 @@
 import { logger } from "../../config/logger.js";
 import { adminPlanRepository } from "../../repositories/admin/admin-plan.repository.js";
 import type { UpdatePlanDTO } from "../../schemas/admin.schema.js";
+import { triggerDeployWebhook } from "../../utils/deploy.utils.js";
 
 export const adminPlanService = {
   async listPlans() {
@@ -22,6 +23,9 @@ export const adminPlanService = {
       logger.error({ error, id }, "[AdminPlanService] Erro ao atualizar plano.");
       throw error;
     }
+
+    await triggerDeployWebhook();
+
     return data;
   },
 };
