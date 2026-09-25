@@ -18,6 +18,7 @@ import { planRepository } from "../../repositories/plan.repository.js";
 import { invoiceRepository } from "../../repositories/invoice.repository.js";
 import { subscriptionReferralService } from "./subscription-referral.service.js";
 import { MetaCapiService } from "../meta-capi.service.js";
+import { AppError } from "../../errors/AppError.js";
 
 export const subscriptionService = {
 
@@ -51,7 +52,7 @@ export const subscriptionService = {
 
         if (!planoMensal || !planoAnual) {
             logger.error({ identificador: SubscriptionIdentifer.MONTHLY }, "[SubscriptionService] Plano inicial não encontrado para criar Trial.");
-            throw new Error(`Planos '${SubscriptionIdentifer.MONTHLY}' ou '${SubscriptionIdentifer.YEARLY}' não encontrados.`);
+            throw new AppError(`Planos '${SubscriptionIdentifer.MONTHLY}' ou '${SubscriptionIdentifer.YEARLY}' não encontrados.`, 404);
         }
 
         const trialEndsAtIso = getEndOfDayBR(addDays(getNowBR(), TRIAL_DURATION_DAYS)).toISOString();
@@ -152,10 +153,10 @@ export const subscriptionService = {
         logger.info({ userId }, "[SubscriptionService] Cancelando assinatura do usuário...");
 
         const sub = await this.getOrCreateSubscription(userId);
-        if (!sub) throw new Error("Assinatura não encontrada.");
+        if (!sub) throw new AppError("Assinatura não encontrada.", 404);
 
         if (sub.status !== SubscriptionStatus.ACTIVE) {
-            throw new Error("Apenas assinaturas ativas podem ser canceladas.");
+            throw new AppError("Apenas assinaturas ativas podem ser canceladas.", 400);
         }
 
         await this.updateStatus(sub.id, SubscriptionStatus.CANCELED, "Assinatura cancelada manualmente.");

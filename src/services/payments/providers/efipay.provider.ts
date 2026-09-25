@@ -178,12 +178,22 @@ export class EfipayProvider implements PaymentProviderAdapter {
             }
         } catch (error: unknown) {
             const errorDetail = extractErrorMessage(error, "Erro desconhecido na Efí Pay");
-            const isUserFacing = Boolean((error as any)?.isUserFacing) || (
+            const isUserFacing = Boolean((error as { isUserFacing?: boolean })?.isUserFacing) || (
                 typeof errorDetail === "string" && (
                     errorDetail.toLowerCase().includes("recusado") ||
                     errorDetail.toLowerCase().includes("saldo") ||
                     errorDetail.toLowerCase().includes("expirado") ||
-                    errorDetail.toLowerCase().includes("bloqueado")
+                    errorDetail.toLowerCase().includes("bloqueado") ||
+                    errorDetail.toLowerCase().includes("autorizada") ||
+                    errorDetail.toLowerCase().includes("excedido") ||
+                    errorDetail.toLowerCase().includes("segurança") ||
+                    errorDetail.toLowerCase().includes("seguranca") ||
+                    errorDetail.toLowerCase().includes("inválid") ||
+                    errorDetail.toLowerCase().includes("invalid") ||
+                    errorDetail.toLowerCase().includes("limite") ||
+                    errorDetail.toLowerCase().includes("tentativa") ||
+                    errorDetail.toLowerCase().includes("cartão") ||
+                    errorDetail.toLowerCase().includes("cartao")
                 )
             );
 

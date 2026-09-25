@@ -13,6 +13,7 @@ import { historicoService } from "../historico.service.js";
 import { getNowBR, toPersistenceString, addDays, parseLocalDate } from "../../utils/date.utils.js";
 import { extractErrorMessage, onlyDigits } from "../../utils/string.utils.js";
 import type { CreateInvoiceDTO } from "../../types/dtos/subscription.dto.js";
+import { AppError } from "../../errors/AppError.js";
 import { subscriptionService } from "./subscription.service.js";
 import { subscriptionPricingService } from "./subscription-pricing.service.js";
 import { planRepository } from "../../repositories/plan.repository.js";
@@ -90,15 +91,15 @@ export const subscriptionBillingService = {
             planRepository.getById(planId)
         ]);
 
-        if (userRes.error || !userRes.data) throw new Error("Usuário não encontrado.");
-        if (planRes.error || !planRes.data) throw new Error("Plano não encontrado.");
+        if (userRes.error || !userRes.data) throw new AppError("Usuário não encontrado.", 404);
+        if (planRes.error || !planRes.data) throw new AppError("Plano não encontrado.", 404);
 
         const user = userRes.data;
         const plano = planRes.data;
         const valor = await this.calculatePrice(userId, plano.identificador);
 
         const sub = await subscriptionService.getOrCreateSubscription(userId);
-        if (!sub) throw new Error("Erro ao obter assinatura.");
+        if (!sub) throw new AppError("Erro ao obter assinatura.", 500);
 
         let currentPaymentToken = paymentToken;
         let preferredMethodId: string | null = sub.metodo_pagamento_preferencial_id;
@@ -115,7 +116,7 @@ export const subscriptionBillingService = {
             }
 
             if (!currentPaymentToken) {
-                throw new Error("Token de pagamento não fornecido ou método salvo não encontrado.");
+                throw new AppError("Token de pagamento não fornecido ou método salvo não encontrado.", 400);
             }
 
             if (preferredMethodId) {
@@ -226,7 +227,7 @@ export const subscriptionBillingService = {
                 logger.error({ userId, dbError }, "[SubscriptionBillingService] Erro ao gravar fatura falha no banco.");
             }
 
-            throw gatewayErr instanceof Error ? gatewayErr : new Error(errMsg);
+            throw new AppError(errMsg, 400);
         }
 
         if (!chargeRes.success) {
@@ -287,7 +288,7 @@ export const subscriptionBillingService = {
                 ? errorString
                 : "Não foi possível processar o pagamento com cartão no momento. Por favor, tente novamente ou entre em contato com o suporte.";
 
-            throw new Error(userFacingMessage);
+            throw new AppError(userFacingMessage, 400);
         }
 
         if (paymentMethod === CheckoutPaymentMethod.CREDIT_CARD && currentPaymentToken && saveCard && cardLast4 && cardBrand) {
@@ -351,7 +352,7 @@ export const subscriptionBillingService = {
             valor_total: valor
         });
 
-        if (fError || !fatura) throw fError || new Error("Erro ao criar fatura");
+        if (fError || !fatura) throw new AppError("Erro ao criar fatura.", 500);
 
         if (isApprovedCard) {
             try {
