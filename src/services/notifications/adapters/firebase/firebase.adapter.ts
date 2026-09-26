@@ -3,7 +3,6 @@ import { getFirebaseAdmin } from "../../../../config/firebase.js";
 import { usuarioPushTokenRepository } from "../../../../repositories/usuario-push-token.repository.js";
 import { NotificationProviderPort, NotificationSendResult } from "../../ports/notification-provider.port.js";
 import { FirebaseMapper } from "./firebase.mapper.js";
-import { env } from "../../../../config/env.js";
 import { onlyDigits } from "../../../../utils/string.utils.js";
 
 import { NotificationOptions } from "../../notification.service.js";
@@ -60,8 +59,7 @@ export class FirebasePushAdapter implements NotificationProviderPort {
             }
 
             const admin = getFirebaseAdmin();
-            const isDev = env.NODE_ENV !== 'production';
-            const title = isDev ? `[DEV] ${payload.title}` : payload.title;
+            const title = payload.title;
 
             const message = {
                 tokens: tokenStrings,
