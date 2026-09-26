@@ -9,7 +9,9 @@
     "start:worker": "tsx watch src/worker.ts",
     "build:worker": "tsc",
     "build": "echo \"[INIT] Compilando Backend...\" && tsc && echo \"[SUCCESS] Backend Compilado!\"",
-    "seed:scenario": "tsx --env-file=.env scripts/seed-scenario.ts"
+    "seed:scenario": "tsx --env-file=.env scripts/seed-scenario.ts",
+    "trigger:driver-due-today": "tsx --env-file=.env scripts/trigger-driver-due-today.ts",
+    "trigger:driver-due-today:execute": "tsx --env-file=.env scripts/trigger-driver-due-today.ts --execute"
   },
   "keywords": [],
   "author": "",
