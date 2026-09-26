@@ -6,7 +6,6 @@ import { evolutionService } from "../../../evolution.service.js";
 import { NotificationProviderPort, NotificationSendResult } from "../../ports/notification-provider.port.js";
 import { NotificationOptions } from "../../notification.service.js";
 import { EvolutionMapper } from "./evolution.mapper.js";
-import { env } from "../../../../config/env.js";
 import { extractErrorMessage } from "../../../../utils/error.utils.js";
 
 export class EvolutionQueueAdapter implements NotificationProviderPort {
@@ -19,14 +18,6 @@ export class EvolutionQueueAdapter implements NotificationProviderPort {
             const err = `[EvolutionQueueAdapter] Nenhum template gerado para o evento '${eventName}'.`;
             logger.debug({ eventName }, err);
             return { success: false, error: err };
-        }
-
-        if (env.NODE_ENV !== 'production') {
-            parts.forEach((part: CompositeMessagePart) => {
-                if (part.type === "text" && part.content && !part.content.startsWith("[DEV]")) {
-                    part.content = `[DEV]\n${part.content}`;
-                }
-            });
         }
 
         const targetPhone = (to || (contextData?.to as string) || "") as string;

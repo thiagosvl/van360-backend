@@ -1,6 +1,5 @@
 import { logger } from "../../config/logger.js";
 import { getFirebaseAdmin } from "../../config/firebase.js";
-import { env } from "../../config/env.js";
 import { usuarioPushTokenRepository } from "../../repositories/usuario-push-token.repository.js";
 import { adminBroadcastRepository } from "../../repositories/admin/admin-broadcast.repository.js";
 import { AppError } from "../../errors/AppError.js";
@@ -75,8 +74,7 @@ export const adminBroadcastService = {
     }
 
     const admin = getFirebaseAdmin();
-    const isDev = env.NODE_ENV !== "production";
-    const formattedTitle: string = isDev ? `[DEV] ${data.titulo}` : data.titulo;
+    const formattedTitle: string = data.titulo;
     const action: string = data.action || PushNotificationAction.OPEN_HOME;
 
     let totalEnviados = 0;

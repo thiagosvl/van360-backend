@@ -1,7 +1,6 @@
 import { NotificationProviderPort, NotificationSendResult } from "../../ports/notification-provider.port.js";
 import { addToTelegramQueue } from "../../../../queues/telegram.queue.js";
 import { TelegramMapper } from "./telegram.mapper.js";
-import { env } from "../../../../config/env.js";
 import { logger } from "../../../../config/logger.js";
 import { NotificationOptions } from "../../notification.service.js";
 import { extractErrorMessage } from "../../../../utils/error.utils.js";
@@ -31,10 +30,6 @@ export class TelegramAdapter implements NotificationProviderPort {
 
         if (!fullMessage) {
             return { success: false, error: "[TelegramAdapter] Conteúdo da mensagem está vazio" };
-        }
-
-        if (env.NODE_ENV !== 'production') {
-            fullMessage = `[DEV]\n${fullMessage}`;
         }
 
         try {

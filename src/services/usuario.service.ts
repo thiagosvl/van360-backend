@@ -8,7 +8,6 @@ import { isValidPixKey, isValidCPF, isValidCNPJ } from "../utils/validators.js";
 import { calculateAuditDiff } from "../utils/audit-diff.util.js";
 import { authProvider } from "./providers/auth.provider.js";
 import { logger } from "../config/logger.js";
-import { env } from "../config/env.js";
 import { formatDateTime, maskCpf, maskCnpj, maskPhone } from "../utils/format.js";
 import { telegramService } from "./telegram.service.js";
 import { adminService } from "./admin.service.js";
@@ -439,10 +438,6 @@ export async function excluirMinhaConta(userId: string) {
     docLine +
     `<b>Data:</b> ${dataHoraBR}\n` +
     `<b>ID:</b> ${userId}`;
-
-  if (env.NODE_ENV !== "production") {
-    telegramMessage = `[DEV]\n${telegramMessage}`;
-  }
 
   await telegramService.sendMessage(telegramMessage).catch((err: unknown) => {
     logger.warn({ err, userId }, "Falha ao enviar alerta de exclusão no Telegram");

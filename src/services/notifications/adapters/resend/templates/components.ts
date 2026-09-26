@@ -26,10 +26,6 @@ export interface ResendTemplateContext {
 }
 
 export function formatSubject(subject: string): string {
-    const isDev = process.env.NODE_ENV !== "production";
-    if (isDev && !subject.startsWith("[DEV]")) {
-        return `[DEV] ${subject}`;
-    }
     return subject;
 }
 
