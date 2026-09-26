@@ -63,6 +63,17 @@ function resolveDescricaoTelemetria(acao: AtividadeAcao, meta?: Record<string, u
             : "Botão flutuante (tutorial) clicado.";
     }
 
+    if (acao === AtividadeAcao.CHAMADA_RAPIDA_CONFIRMADA) {
+        const rotaNome = meta?.rota_nome as string | undefined;
+        const presentes = meta?.total_presentes;
+        const ausentes = meta?.total_ausentes;
+        const prefix = rotaNome ? `Chamada rápida da rota "${rotaNome}" confirmada` : "Chamada rápida confirmada";
+        if (presentes !== undefined && ausentes !== undefined) {
+            return `${prefix}: ${presentes} presentes, ${ausentes} ausentes.`;
+        }
+        return `${prefix}.`;
+    }
+
     return `Ação de telemetria registrada: ${acao}`;
 }
 
