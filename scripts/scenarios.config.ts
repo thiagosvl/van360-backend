@@ -67,14 +67,14 @@ export const cenarios: Record<string, ScenarioConfig> = {
             quantidadeSemVeiculo: 3,
         },
         prePassageiros: {
-            quantidade: 2,
+            quantidade: 0,
         },
         rotas: {
             quantidade: 2,
             criarAusencias: true,
         },
         cobrancas: {
-            taxaInadimplencia: 7,
+            taxaInadimplencia: 17,
         },
     },
     "cenario-vazio": {

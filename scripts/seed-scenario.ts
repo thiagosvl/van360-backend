@@ -242,7 +242,10 @@ async function seedPassageiros(
         const dia = randomNumber(1, 28).toString().padStart(2, '0');
         const data_nascimento = `${ano}-${mes}-${dia}`;
 
-        const hojeStr = new Date().toISOString().split("T")[0];
+        const anoAtual = hoje.getFullYear();
+        const mesAtualStr = (hoje.getMonth() + 1).toString().padStart(2, '0');
+        const dataInicio = `${anoAtual}-${mesAtualStr}-01`;
+        const dataFim = `${anoAtual}-12-31`;
 
         const { data: pData, error: pError } = await supabaseAdmin
             .from("passageiros")
@@ -259,12 +262,13 @@ async function seedPassageiros(
                 turma: `${randomNumber(1, 9)}º ano`,
                 nome_professor: `Prof. ${nomes[randomNumber(0, nomes.length - 1)]}`,
                 data_nascimento,
-                dia_vencimento: [5, 10, 15, 20][randomNumber(0, 3)],
+                dia_vencimento: [5, 7, 10, 12, 15, 18, 20, 25, 28, 30][randomNumber(0, 7)],
                 valor_cobranca: generateValorCobranca(),
-                data_inicio_cobranca: hojeStr,
-                data_fim_cobranca: "2028-12-31",
-                data_inicio_transporte: hojeStr,
-                data_fim_transporte: "2028-12-31",
+                data_inicio_cobranca: dataInicio,
+                data_fim_cobranca: dataFim,
+                data_inicio_transporte: dataInicio,
+                data_fim_transporte: dataFim,
+                ano_letivo: anoAtual,
                 enviar_notificacoes: true,
             })
             .select()
@@ -530,7 +534,7 @@ async function seedPrePassageiros(usuarioId: string, cfg: ScenarioConfig) {
         periodo: periodos[randomNumber(0, periodos.length - 1)],
         genero: generos[randomNumber(0, generos.length - 1)],
         valor_cobranca: generateValorCobranca(),
-        dia_vencimento: 10,
+        dia_vencimento: [5, 7, 10, 12, 15, 18, 20, 25, 28, 30][randomNumber(0, 7)],
     }));
 
     const { error } = await supabaseAdmin.from("pre_passageiros").insert(prePassageirosToInsert);
@@ -674,7 +678,12 @@ async function seedSantaMariaRoute(usuarioId: string, cfg: ScenarioConfig) {
                 responsaveisMap.set(stop.responsavel.telefone, respId);
             }
 
-            const targetEscolaId = escolasMap.get(stop.passageiro.escola_id) || Array.from(escolasMap.values())[0];
+            const hoje = new Date();
+            const anoAtual = hoje.getFullYear();
+            const mesAtualStr = (hoje.getMonth() + 1).toString().padStart(2, '0');
+            const dataInicio = `${anoAtual}-${mesAtualStr}-01`;
+            const dataFim = `${anoAtual}-12-31`;
+
             const { data: pass, error: passErr } = await supabaseAdmin.from("passageiros").insert({
                 usuario_id: usuarioId,
                 escola_id: targetEscolaId,
@@ -686,6 +695,11 @@ async function seedSantaMariaRoute(usuarioId: string, cfg: ScenarioConfig) {
                 periodo: stop.passageiro.periodo,
                 valor_cobranca: stop.passageiro.valor_cobranca,
                 dia_vencimento: stop.passageiro.dia_vencimento,
+                data_inicio_cobranca: dataInicio,
+                data_fim_cobranca: dataFim,
+                data_inicio_transporte: dataInicio,
+                data_fim_transporte: dataFim,
+                ano_letivo: anoAtual,
                 ativo: true,
             }).select("id, nome, valor_cobranca, dia_vencimento").single();
             if (passErr) throw passErr;
