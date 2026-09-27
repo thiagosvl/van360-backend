@@ -6,6 +6,7 @@ import {
   reorderExecucaoSchema,
   createAusenciaSchema,
   chamadaEscolaSchema,
+  buscarAlunosQuerySchema,
   DELETE_AUSENCIA_BY_QUERY_PARAM
 } from "../../schemas/route.schema.js";
 
@@ -17,6 +18,7 @@ export {
   reorderExecucaoSchema,
   createAusenciaSchema,
   chamadaEscolaSchema,
+  buscarAlunosQuerySchema,
   DELETE_AUSENCIA_BY_QUERY_PARAM
 } from "../../schemas/route.schema.js";
 
@@ -26,6 +28,7 @@ export type StepRouteExecutionDTO = z.infer<typeof stepRouteExecutionSchema>;
 export type ReorderExecucaoDTO = z.infer<typeof reorderExecucaoSchema>;
 export type CreateAusenciaDTO = z.infer<typeof createAusenciaSchema>;
 export type ChamadaEscolaDTO = z.infer<typeof chamadaEscolaSchema>;
+export type BuscarAlunosQueryDTO = z.infer<typeof buscarAlunosQuerySchema>;
 
 import { RouteExecutionStatus, RouteStopStatus, RouteNodeType, RouteSentido } from "../enums.js";
 

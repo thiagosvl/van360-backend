@@ -28,9 +28,11 @@ const routeRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   // Ausências Antecipadas
   app.post("/ausencias", { preHandler: [requirePermission(RoutePermission.EXECUTAR_PARADAS)] }, routeController.createAusencia);
   app.delete("/ausencias/:id", { preHandler: [requirePermission(RoutePermission.EXECUTAR_PARADAS)] }, routeController.deleteAusencia);
+  app.get("/ausencias/futuras", { preHandler: [requirePermission(RoutePermission.VISUALIZAR)] }, routeController.listAusenciasFuturas);
   app.get("/:id/ausencias", { preHandler: [requirePermission(RoutePermission.VISUALIZAR)] }, routeController.listAusencias);
   app.get("/passageiros/:id/ausencias", { preHandler: [requirePermission(RoutePermission.VISUALIZAR)] }, routeController.listAusenciasByPassageiro);
   app.get("/passageiros/:id/rotas", { preHandler: [requirePermission(RoutePermission.VISUALIZAR)] }, routeController.listRotasByPassageiro);
+  app.get("/alunos/buscar", { preHandler: [requirePermission(RoutePermission.VISUALIZAR)] }, routeController.buscarAlunos);
 };
 
 export default routeRoutes;

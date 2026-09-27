@@ -67,4 +67,9 @@ export const chamadaEscolaSchema = z.object({
   )
 });
 
+export const buscarAlunosQuerySchema = z.object({
+  search: z.string().trim().min(3, "Mínimo de 3 caracteres para busca"),
+  rota_id: z.string().uuid("ID de rota inválido").optional(),
+});
+
 export const DELETE_AUSENCIA_BY_QUERY_PARAM = "by-query";

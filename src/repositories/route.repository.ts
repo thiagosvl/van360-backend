@@ -501,6 +501,35 @@ export const routeRepository = {
     return query;
   },
 
+  async getAusenciasFuturas(usuarioId: string, dataInicio: string, rotaId?: string) {
+    let query = supabaseAdmin
+      .from("rota_ausencias")
+      .select(`
+        id,
+        data_ausencia,
+        sentido,
+        created_at,
+        passageiro:passageiros (
+          id,
+          nome
+        ),
+        rota:rotas!inner (
+          id,
+          nome,
+          usuario_id
+        )
+      `)
+      .gte("data_ausencia", dataInicio);
+
+    if (rotaId) {
+      query = query.eq("rota_id", rotaId);
+    } else if (isValidFilterValue(usuarioId)) {
+      query = query.eq("rota.usuario_id", usuarioId);
+    }
+
+    return query.order("data_ausencia", { ascending: true });
+  },
+
   async insertAusencia(record: Record<string, unknown>) {
     return supabaseAdmin
       .from("rota_ausencias")
@@ -586,5 +615,53 @@ export const routeRepository = {
       .select("id, rota_id, data_ausencia, rota:rotas(nome)")
       .eq("id", ausenciaId)
       .single();
+  },
+
+  async buscarAlunos(usuarioId: string, search: string, rotaId?: string) {
+    const sanitizedSearch = search.replace(/[,()%\\]/g, "").trim();
+    if (!sanitizedSearch) return { data: [], error: null };
+
+    if (rotaId) {
+      const { data, error } = await supabaseAdmin
+        .from("rota_passageiros")
+        .select(`
+          passageiro:passageiros!inner (
+            id,
+            nome,
+            turma,
+            ativo
+          )
+        `)
+        .eq("rota_id", rotaId)
+        .eq("passageiro.ativo", true)
+        .ilike("passageiro.nome", `%${sanitizedSearch}%`);
+
+      if (error) return { data: null, error };
+
+      const map = new Map<string, { id: string; nome: string; turma?: string | null }>();
+      (data || []).forEach((item: any) => {
+        if (item.passageiro && item.passageiro.id && item.passageiro.nome) {
+          map.set(item.passageiro.id, {
+            id: item.passageiro.id,
+            nome: item.passageiro.nome,
+            turma: item.passageiro.turma || null
+          });
+        }
+      });
+
+      const alunos = Array.from(map.values()).sort((a, b) => a.nome.localeCompare(b.nome));
+      return { data: alunos, error: null };
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("passageiros")
+      .select("id, nome, turma")
+      .eq("usuario_id", usuarioId)
+      .eq("ativo", true)
+      .ilike("nome", `%${sanitizedSearch}%`)
+      .order("nome", { ascending: true })
+      .limit(25);
+
+    return { data, error };
   }
 };

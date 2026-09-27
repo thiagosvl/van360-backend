@@ -77,8 +77,36 @@ function resolveDescricaoTelemetria(acao: AtividadeAcao, meta?: Record<string, u
     return `Ação de telemetria registrada: ${acao}`;
 }
 
+const appOpenThrottleMap = new Map<string, number>();
+const APP_OPEN_BACKEND_THROTTLE_MS = 5 * 60 * 1000;
+
+function shouldThrottleAppOpen(usuarioId: string): boolean {
+    const now = Date.now();
+    const lastTime = appOpenThrottleMap.get(usuarioId);
+
+    if (lastTime && now - lastTime < APP_OPEN_BACKEND_THROTTLE_MS) {
+        return true;
+    }
+
+    appOpenThrottleMap.set(usuarioId, now);
+
+    if (appOpenThrottleMap.size > 5000) {
+        for (const [key, timestamp] of appOpenThrottleMap.entries()) {
+            if (now - timestamp > APP_OPEN_BACKEND_THROTTLE_MS) {
+                appOpenThrottleMap.delete(key);
+            }
+        }
+    }
+
+    return false;
+}
+
 export const historicoService = {
     async registrarEventoTelemetria(usuarioId: string, payload: RegistrarEventoInput): Promise<void> {
+        if (payload.acao === AtividadeAcao.APP_ABERTO && shouldThrottleAppOpen(usuarioId)) {
+            return;
+        }
+
         const entidadeTipo = payload.entidade_tipo || AtividadeEntidadeTipo.USUARIO;
         const entidadeId = payload.entidade_id || usuarioId;
         const descricao = payload.descricao || resolveDescricaoTelemetria(payload.acao, payload.meta);

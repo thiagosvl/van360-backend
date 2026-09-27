@@ -1159,6 +1159,36 @@ const getExecucaoAtivaByVeiculoId = async (veiculoId: string): Promise<any> => {
   return data || null;
 };
 
+const listAusenciasFuturas = async (usuarioId: string, rotaId?: string, dataInicio?: string): Promise<any[]> => {
+  if (!usuarioId) throw new AppError("ID do usuário é obrigatório", 400);
+
+  const { dataOwnerId } = await resolveDataOwnerId(usuarioId);
+  const targetDate = dataInicio || toPersistenceString(getNowBR());
+
+  const { data: ausencias, error } = await routeRepository.getAusenciasFuturas(dataOwnerId, targetDate, rotaId);
+  if (error) {
+    logger.error({ error: error.message, usuarioId, dataOwnerId, rotaId }, "[RouteService] Erro ao buscar ausências futuras");
+    throw new AppError("Erro ao buscar ausências futuras", 500);
+  }
+
+  return ausencias || [];
+};
+
+const buscarAlunos = async (usuarioId: string, search: string, rotaId?: string): Promise<{ id: string; nome: string; turma?: string | null }[]> => {
+  if (!usuarioId) throw new AppError("ID do usuário é obrigatório", 400);
+  if (!search || search.trim().length < 3) throw new AppError("O termo de busca deve conter pelo menos 3 caracteres", 400);
+
+  const { dataOwnerId } = await resolveDataOwnerId(usuarioId);
+  const { data, error } = await routeRepository.buscarAlunos(dataOwnerId, search, rotaId);
+
+  if (error) {
+    logger.error({ error: error.message, usuarioId, dataOwnerId, search, rotaId }, "[RouteService] Erro ao buscar alunos para rota/ausência");
+    throw new AppError("Erro ao buscar alunos", 500);
+  }
+
+  return (data || []) as { id: string; nome: string; turma?: string | null }[];
+};
+
 export const routeService = {
   createRoute,
   updateRoute,
@@ -1178,5 +1208,7 @@ export const routeService = {
   removerAusenciaAntecipada,
   listAusenciasByRota,
   listAusenciasByPassageiro,
-  listRotasByPassageiro
+  listRotasByPassageiro,
+  listAusenciasFuturas,
+  buscarAlunos
 };
