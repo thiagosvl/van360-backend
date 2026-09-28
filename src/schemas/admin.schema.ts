@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SubscriptionStatus, ConfigKey, UserType } from "../types/enums.js";
+import { SubscriptionStatus, ConfigKey, UserType, IndicacaoStatus } from "../types/enums.js";
 import {
   EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS,
   EVENTO_MOTORISTA_COBRANCAS_HOJE,
@@ -265,4 +265,51 @@ export interface MotoristasDailyPulseStatsDTO {
   totalAtivos: number;
   totalVitalicios: number;
   totalVencidosExpirados: number;
+}
+
+export const listReferralsAdminSchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().optional(),
+  status: z.nativeEnum(IndicacaoStatus).optional(),
+  data_inicio: z.string().optional(),
+  data_fim: z.string().optional(),
+});
+export type ListReferralsAdminQuery = z.infer<typeof listReferralsAdminSchema>;
+
+export interface ReferralUserSummaryDTO {
+  id: string;
+  nome: string;
+  telefone: string;
+  email: string;
+  logo_url?: string | null;
+  assinatura_status?: string | null;
+  assinatura_data_vencimento?: string | null;
+}
+
+export interface ReferralListItemDTO {
+  id: string;
+  status: IndicacaoStatus;
+  created_at: string;
+  updated_at: string | null;
+  fatura_origem_id: string | null;
+  indicador: ReferralUserSummaryDTO | null;
+  indicado: ReferralUserSummaryDTO | null;
+}
+
+export interface ReferralsListStatsDTO {
+  total: number;
+  concluidas: number;
+  pendentes: number;
+  taxaConversao: number;
+  diasBonusConcedidos: number;
+}
+
+export interface ReferralsListResponseDTO {
+  data: ReferralListItemDTO[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  stats: ReferralsListStatsDTO;
 }

@@ -15,6 +15,7 @@ import {
   setReferralAdminSchema,
   listUsersDailyPulseQuerySchema,
   getUsersDailyPulseStatsQuerySchema,
+  listReferralsAdminSchema,
 } from "../../schemas/admin.schema.js";
 import { AppError } from "../../errors/AppError.js";
 
@@ -336,6 +337,18 @@ export const adminUserController = {
       logger.error({ error: error.message }, "[AdminUserController] Erro ao excluir fatura.");
       const status = error.message?.includes("não encontrada") ? 404 : 400;
       return reply.status(status).send({ error: error.message || "Erro ao excluir fatura." });
+    }
+  },
+
+  async listReferrals(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const query = listReferralsAdminSchema.parse(request.query);
+      const result = await adminUserService.listReferralsAdmin(query);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao listar indicações.");
+      return reply.status(400).send({ error: error.message || "Erro ao listar indicações." });
     }
   },
 };

@@ -86,7 +86,7 @@ export const escolas = [
         complemento: "",
     },
     {
-        nome: "Escola Municipal Menino Jesus De Praga",
+        nome: "Menino Jesus De Praga",
         cep: "01310-100",
         logradouro: "Avenida Paulista",
         numero: "1578",

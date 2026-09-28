@@ -57,3 +57,29 @@ export interface ExecucaoParadaLeveDTO {
   notificacao_a_caminho_enviada: boolean;
   notificacao_concluido_enviada: boolean;
 }
+
+export interface AlunoBuscaDTO {
+  id: string;
+  nome: string;
+  turma?: string | null;
+  escola_nome?: string | null;
+  responsavel_nome?: string | null;
+}
+
+export interface AusenciaFuturaDTO {
+  id: string;
+  data_ausencia: string;
+  sentido?: string | null;
+  created_at?: string;
+  passageiro: {
+    id: string;
+    nome: string;
+    turma?: string | null;
+    escola_nome?: string | null;
+    responsavel_nome?: string | null;
+  } | null;
+  rota?: {
+    id: string;
+    nome: string;
+  } | null;
+}

@@ -1171,10 +1171,37 @@ const listAusenciasFuturas = async (usuarioId: string, rotaId?: string, dataInic
     throw new AppError("Erro ao buscar ausências futuras", 500);
   }
 
-  return ausencias || [];
+  return (ausencias || []).map((item: any) => {
+    const p = item.passageiro;
+    const responsaveis = p?.responsaveis || [];
+    const principalLink = Array.isArray(responsaveis)
+      ? responsaveis.find((l: any) => l.tipo === TipoResponsavel.PRINCIPAL) || responsaveis[0]
+      : null;
+    const resp = Array.isArray(principalLink?.responsavel) ? principalLink.responsavel[0] : principalLink?.responsavel;
+    const escola = Array.isArray(p?.escola) ? p.escola[0] : p?.escola;
+
+    return {
+      id: item.id,
+      data_ausencia: item.data_ausencia,
+      sentido: item.sentido,
+      created_at: item.created_at,
+      passageiro: p ? {
+        id: p.id,
+        nome: p.nome,
+        turma: p.turma || null,
+        escola_nome: escola?.nome || null,
+        responsavel_nome: resp?.nome || null,
+      } : null,
+      rota: item.rota,
+    };
+  });
 };
 
-const buscarAlunos = async (usuarioId: string, search: string, rotaId?: string): Promise<{ id: string; nome: string; turma?: string | null }[]> => {
+const buscarAlunos = async (
+  usuarioId: string,
+  search: string,
+  rotaId?: string
+): Promise<{ id: string; nome: string; turma?: string | null; escola_nome?: string | null; responsavel_nome?: string | null }[]> => {
   if (!usuarioId) throw new AppError("ID do usuário é obrigatório", 400);
   if (!search || search.trim().length < 3) throw new AppError("O termo de busca deve conter pelo menos 3 caracteres", 400);
 
@@ -1186,7 +1213,7 @@ const buscarAlunos = async (usuarioId: string, search: string, rotaId?: string):
     throw new AppError("Erro ao buscar alunos", 500);
   }
 
-  return (data || []) as { id: string; nome: string; turma?: string | null }[];
+  return (data || []) as { id: string; nome: string; turma?: string | null; escola_nome?: string | null; responsavel_nome?: string | null }[];
 };
 
 export const routeService = {

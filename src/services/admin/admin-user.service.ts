@@ -21,6 +21,7 @@ import {
   CobrancaStatus,
   TipoResponsavel,
   NotificationQueueStatus,
+  IndicacaoStatus,
 } from "../../types/enums.js";
 import {
   EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
@@ -54,6 +55,9 @@ import type {
   MotoristaDailyPulseDTO,
   MotoristasDailyPulseResponseDTO,
   MotoristasDailyPulseStatsDTO,
+  ListReferralsAdminQuery,
+  ReferralsListResponseDTO,
+  ReferralListItemDTO,
 } from "../../schemas/admin.schema.js";
 import type { AdminAcquisitionStatsDTO, CanalAquisicaoAgrupadoDTO, CampanhaAquisicaoDTO, DispositivoAquisicaoDTO } from "../../types/dtos/admin-acquisition.dto.js";
 import { resolveLeadAttribution } from "../../utils/acquisition-channel.utils.js";
@@ -471,6 +475,137 @@ export const adminUserService = {
     return { success: true };
   },
 
+  async listReferralsAdmin(query: ListReferralsAdminQuery): Promise<ReferralsListResponseDTO> {
+    const page = query.page || 1;
+    const limit = query.limit || 20;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    let searchUserIds: string[] | undefined;
+    if (query.search && query.search.trim().length > 0) {
+      const term = cleanString(query.search);
+      const digits = onlyDigits(query.search);
+
+      let userQuery = supabaseAdmin
+        .from("usuarios")
+        .select("id")
+        .eq("tipo", UserType.MOTORISTA);
+
+      if (digits.length >= 4) {
+        userQuery = userQuery.or(`nome.ilike.%${term}%,telefone.ilike.%${digits}%,email.ilike.%${term}%`);
+      } else {
+        userQuery = userQuery.or(`nome.ilike.%${term}%,email.ilike.%${term}%`);
+      }
+
+      const { data: matchedUsers, error: searchError } = await userQuery.limit(50);
+      if (searchError) {
+        logger.error({ searchError }, "[AdminUserService] Erro ao buscar usuários pelo termo de busca em indicações.");
+      }
+
+      if (!matchedUsers || matchedUsers.length === 0) {
+        const stats = await referralRepository.getReferralGlobalStats();
+        return {
+          data: [],
+          total: 0,
+          page,
+          limit,
+          totalPages: 0,
+          stats,
+        };
+      }
+
+      searchUserIds = matchedUsers.map((u) => u.id);
+    }
+
+    const [referralsRes, stats] = await Promise.all([
+      referralRepository.listAllReferrals({
+        from,
+        to,
+        searchUserIds,
+        status: query.status,
+        data_inicio: query.data_inicio,
+        data_fim: query.data_fim,
+      }),
+      referralRepository.getReferralGlobalStats(),
+    ]);
+
+    if (referralsRes.error) {
+      logger.error({ error: referralsRes.error }, "[AdminUserService] Erro ao listar indicações.");
+      throw new AppError("Erro ao listar indicações.", 500);
+    }
+
+    const total = referralsRes.count ?? 0;
+    const totalPages = Math.ceil(total / limit);
+
+    type RawReferralRecord = {
+      id: string;
+      status: IndicacaoStatus;
+      created_at: string;
+      updated_at: string | null;
+      fatura_origem_id: string | null;
+      indicador: {
+        id: string;
+        nome: string;
+        telefone: string;
+        email: string;
+        logo_url?: string | null;
+      } | null;
+      indicado: {
+        id: string;
+        nome: string;
+        telefone: string;
+        email: string;
+        logo_url?: string | null;
+        assinaturas?: Array<{
+          id: string;
+          status: string;
+          data_vencimento: string | null;
+        }>;
+      } | null;
+    };
+
+    const rawData = (referralsRes.data || []) as unknown as RawReferralRecord[];
+
+    const data: ReferralListItemDTO[] = rawData.map((item) => {
+      const sub = item.indicado?.assinaturas?.[0];
+      return {
+        id: item.id,
+        status: item.status,
+        created_at: item.created_at,
+        updated_at: item.updated_at,
+        fatura_origem_id: item.fatura_origem_id,
+        indicador: item.indicador
+          ? {
+              id: item.indicador.id,
+              nome: item.indicador.nome,
+              telefone: item.indicador.telefone,
+              email: item.indicador.email,
+              logo_url: item.indicador.logo_url,
+            }
+          : null,
+        indicado: item.indicado
+          ? {
+              id: item.indicado.id,
+              nome: item.indicado.nome,
+              telefone: item.indicado.telefone,
+              email: item.indicado.email,
+              logo_url: item.indicado.logo_url,
+              assinatura_status: sub?.status || null,
+              assinatura_data_vencimento: sub?.data_vencimento || null,
+            }
+          : null,
+      };
+    });
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages,
+      stats,
+    };
+  },
 
   async updateUser(userId: string, data: UpdateUserAdminDTO) {
     const updatePayload: Record<string, unknown> = {};

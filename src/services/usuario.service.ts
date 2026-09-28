@@ -151,6 +151,14 @@ export async function atualizarUsuario(usuarioId: string, payload: AtualizarUsua
     updates.data_nascimento = payload.data_nascimento ? parseBrazilianDateToISO(payload.data_nascimento) : null;
   }
 
+  if (payload.cpf_responsavel !== undefined) {
+    const cleanCpfResp = payload.cpf_responsavel ? onlyDigits(payload.cpf_responsavel) : null;
+    if (cleanCpfResp && !isValidCPF(cleanCpfResp)) {
+      throw new AppError("O CPF do responsável informado é inválido.", 400);
+    }
+    updates.cpf_responsavel = cleanCpfResp;
+  }
+
   const { error } = await userRepository.update(usuarioId, updates);
 
   if (error) {

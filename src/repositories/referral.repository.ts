@@ -137,6 +137,95 @@ export const referralRepository = {
             .from("indicacoes")
             .update({ fatura_origem_id: null })
             .eq("fatura_origem_id", faturaId);
+    },
+
+    async listAllReferrals(params: {
+        from: number;
+        to: number;
+        searchUserIds?: string[];
+        status?: IndicacaoStatus;
+        data_inicio?: string;
+        data_fim?: string;
+    }) {
+        let q = supabaseAdmin
+            .from("indicacoes")
+            .select(`
+                id,
+                status,
+                created_at,
+                updated_at,
+                fatura_origem_id,
+                indicador:indicador_id (
+                    id,
+                    nome,
+                    telefone,
+                    email,
+                    logo_url
+                ),
+                indicado:indicado_id (
+                    id,
+                    nome,
+                    telefone,
+                    email,
+                    logo_url,
+                    assinaturas (
+                        id,
+                        status,
+                        data_vencimento
+                    )
+                )
+            `, { count: "exact" });
+
+        if (params.status) {
+            q = q.eq("status", params.status);
+        }
+
+        if (params.data_inicio) {
+            q = q.gte("created_at", params.data_inicio);
+        }
+
+        if (params.data_fim) {
+            q = q.lte("created_at", params.data_fim);
+        }
+
+        if (params.searchUserIds && params.searchUserIds.length > 0) {
+            const idsList = params.searchUserIds.join(",");
+            q = q.or(`indicador_id.in.(${idsList}),indicado_id.in.(${idsList})`);
+        }
+
+        return q
+            .order("created_at", { ascending: false })
+            .range(params.from, params.to);
+    },
+
+    async getReferralGlobalStats() {
+        const { data, error } = await supabaseAdmin
+            .from("indicacoes")
+            .select("id, status");
+
+        if (error || !data) {
+            return {
+                total: 0,
+                concluidas: 0,
+                pendentes: 0,
+                taxaConversao: 0,
+                diasBonusConcedidos: 0,
+            };
+        }
+
+        const total = data.length;
+        const concluidas = data.filter((i) => i.status === IndicacaoStatus.COMPLETED).length;
+        const pendentes = data.filter((i) => i.status === IndicacaoStatus.PENDING).length;
+        const taxaConversao = total > 0 ? Math.round((concluidas / total) * 100) : 0;
+        const diasBonusConcedidos = concluidas * 30;
+
+        return {
+            total,
+            concluidas,
+            pendentes,
+            taxaConversao,
+            diasBonusConcedidos,
+        };
     }
 };
 

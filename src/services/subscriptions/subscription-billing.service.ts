@@ -83,7 +83,8 @@ export const subscriptionBillingService = {
     async createInvoice(userId: string, requestData: CreateInvoiceDTO) {
         const {
             planId, paymentMethod, installments, paymentToken, savedCardId, saveCard, cardBrand, cardLast4, expireMonth, expireYear,
-            birth, street, number, neighborhood, zipcode, city, state, origem = "MANUAL"
+            birth, street, number, neighborhood, zipcode, city, state, origem = "MANUAL",
+            holderDocument, holderName
         } = requestData;
 
         const [userRes, planRes] = await Promise.all([
@@ -103,6 +104,8 @@ export const subscriptionBillingService = {
 
         let currentPaymentToken = paymentToken;
         let preferredMethodId: string | null = sub.metodo_pagamento_preferencial_id;
+        let activeCardHolderDoc: string | null = holderDocument ? onlyDigits(holderDocument) : null;
+        let activeCardHolderName: string | null = holderName ? holderName.trim().toUpperCase() : null;
 
         if (paymentMethod === CheckoutPaymentMethod.CREDIT_CARD) {
             const cardIdToUse = savedCardId || preferredMethodId;
@@ -112,6 +115,8 @@ export const subscriptionBillingService = {
                 if (savedCard) {
                     currentPaymentToken = savedCard.payment_token;
                     preferredMethodId = savedCard.id;
+                    if (savedCard.holder_document) activeCardHolderDoc = onlyDigits(savedCard.holder_document);
+                    if (savedCard.holder_name) activeCardHolderName = savedCard.holder_name;
                 }
             }
 
@@ -145,6 +150,16 @@ export const subscriptionBillingService = {
         const invoiceDays = await getConfigNumber(ConfigKey.SAAS_DIAS_VENCIMENTO, 30);
         const dataVencimentoFatura = toPersistenceString(addDays(new Date(getNowBR().getTime()), invoiceDays));
 
+        const isUserCnpj = onlyDigits(user.cpfcnpj).length > 11;
+        const isCardHolderCpf = paymentMethod === CheckoutPaymentMethod.CREDIT_CARD
+            ? (activeCardHolderDoc ? activeCardHolderDoc.length === 11 : !isUserCnpj)
+            : !isUserCnpj;
+
+        const effectiveCustomerDoc = activeCardHolderDoc || (isUserCnpj && user.cpf_responsavel ? onlyDigits(user.cpf_responsavel) : onlyDigits(user.cpfcnpj));
+        const effectiveCustomerName = isCardHolderCpf
+            ? (activeCardHolderName || user.nome)
+            : (user.razao_social || user.nome);
+
         const { paymentService } = await import("../payments/payment.service.js");
 
         let chargeRes;
@@ -158,11 +173,11 @@ export const subscriptionBillingService = {
                 installments: installments,
                 paymentToken: currentPaymentToken,
                 customer: {
-                    name: user.nome,
-                    document: user.cpfcnpj,
+                    name: effectiveCustomerName,
+                    document: effectiveCustomerDoc,
                     email: user.email,
                     phone: user.telefone || "11999999999",
-                    birth: birth || "1980-01-01"
+                    birth: birth || user.data_nascimento || "1985-01-01"
                 },
                 billingAddress: (paymentMethod === CheckoutPaymentMethod.CREDIT_CARD && street) ? {
                     street: street,
@@ -299,7 +314,7 @@ export const subscriptionBillingService = {
             await paymentMethodRepository.clearDefaults(userId);
 
             if (existingCard) {
-                await paymentMethodRepository.updateTokenAndDefault(existingCard.id, currentPaymentToken);
+                await paymentMethodRepository.updateTokenAndDefault(existingCard.id, currentPaymentToken, activeCardHolderName, activeCardHolderDoc);
                 preferredMethodId = existingCard.id;
             } else {
                 const { data: newMethod } = await paymentMethodRepository.createMethod({
@@ -309,7 +324,9 @@ export const subscriptionBillingService = {
                     expire_month: expireMonth ?? "",
                     expire_year: expireYear ?? "",
                     payment_token: currentPaymentToken,
-                    is_default: true
+                    is_default: true,
+                    holder_name: activeCardHolderName,
+                    holder_document: activeCardHolderDoc
                 });
                 if (newMethod) preferredMethodId = newMethod.id;
             }

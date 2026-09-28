@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "../config/supabase.js";
-import { RouteExecutionStatus, RouteStopStatus } from "../types/enums.js";
+import { RouteExecutionStatus, RouteStopStatus, TipoResponsavel } from "../types/enums.js";
 import { isValidFilterValue } from "../utils/filter.utils.js";
 import { toPersistenceString, getNowBR } from "../utils/date.utils.js";
 
@@ -511,7 +511,20 @@ export const routeRepository = {
         created_at,
         passageiro:passageiros (
           id,
-          nome
+          nome,
+          turma,
+          escola:escolas (
+            id,
+            nome
+          ),
+          responsaveis:passageiro_responsaveis (
+            id,
+            tipo,
+            responsavel:responsaveis (
+              id,
+              nome
+            )
+          )
         ),
         rota:rotas!inner (
           id,
@@ -621,6 +634,23 @@ export const routeRepository = {
     const sanitizedSearch = search.replace(/[,()%\\]/g, "").trim();
     if (!sanitizedSearch) return { data: [], error: null };
 
+    const formatAlunoItem = (p: any) => {
+      const responsaveis = p?.responsaveis || [];
+      const principalLink = Array.isArray(responsaveis)
+        ? responsaveis.find((l: any) => l.tipo === TipoResponsavel.PRINCIPAL) || responsaveis[0]
+        : null;
+      const resp = Array.isArray(principalLink?.responsavel) ? principalLink.responsavel[0] : principalLink?.responsavel;
+      const escola = Array.isArray(p?.escola) ? p.escola[0] : p?.escola;
+
+      return {
+        id: p.id,
+        nome: p.nome,
+        turma: p.turma || null,
+        escola_nome: escola?.nome || null,
+        responsavel_nome: resp?.nome || null,
+      };
+    };
+
     if (rotaId) {
       const { data, error } = await supabaseAdmin
         .from("rota_passageiros")
@@ -629,7 +659,19 @@ export const routeRepository = {
             id,
             nome,
             turma,
-            ativo
+            ativo,
+            escola:escolas (
+              id,
+              nome
+            ),
+            responsaveis:passageiro_responsaveis (
+              id,
+              tipo,
+              responsavel:responsaveis (
+                id,
+                nome
+              )
+            )
           )
         `)
         .eq("rota_id", rotaId)
@@ -638,14 +680,10 @@ export const routeRepository = {
 
       if (error) return { data: null, error };
 
-      const map = new Map<string, { id: string; nome: string; turma?: string | null }>();
+      const map = new Map<string, { id: string; nome: string; turma?: string | null; escola_nome?: string | null; responsavel_nome?: string | null }>();
       (data || []).forEach((item: any) => {
         if (item.passageiro && item.passageiro.id && item.passageiro.nome) {
-          map.set(item.passageiro.id, {
-            id: item.passageiro.id,
-            nome: item.passageiro.nome,
-            turma: item.passageiro.turma || null
-          });
+          map.set(item.passageiro.id, formatAlunoItem(item.passageiro));
         }
       });
 
@@ -655,13 +693,32 @@ export const routeRepository = {
 
     const { data, error } = await supabaseAdmin
       .from("passageiros")
-      .select("id, nome, turma")
+      .select(`
+        id,
+        nome,
+        turma,
+        escola:escolas (
+          id,
+          nome
+        ),
+        responsaveis:passageiro_responsaveis (
+          id,
+          tipo,
+          responsavel:responsaveis (
+            id,
+            nome
+          )
+        )
+      `)
       .eq("usuario_id", usuarioId)
       .eq("ativo", true)
       .ilike("nome", `%${sanitizedSearch}%`)
       .order("nome", { ascending: true })
       .limit(25);
 
-    return { data, error };
+    if (error) return { data: null, error };
+
+    const alunos = (data || []).map(formatAlunoItem);
+    return { data: alunos, error: null };
   }
 };

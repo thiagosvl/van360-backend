@@ -10,6 +10,7 @@ export const atualizarUsuarioSchema = z.object({
   config_contrato: z.record(z.string(), z.unknown()).nullable().optional(),
   data_nascimento: z.string().nullable().optional(),
   cpfcnpj: z.string().optional(),
+  cpf_responsavel: z.string().nullable().optional(),
   email: z.string().email().optional(),
 });
 

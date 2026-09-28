@@ -960,6 +960,8 @@ export type Database = {
           created_at: string
           expire_month: string
           expire_year: string
+          holder_document: string | null
+          holder_name: string | null
           id: string
           is_default: boolean | null
           last_4_digits: string
@@ -972,6 +974,8 @@ export type Database = {
           created_at?: string
           expire_month: string
           expire_year: string
+          holder_document?: string | null
+          holder_name?: string | null
           id?: string
           is_default?: boolean | null
           last_4_digits: string
@@ -984,6 +988,8 @@ export type Database = {
           created_at?: string
           expire_month?: string
           expire_year?: string
+          holder_document?: string | null
+          holder_name?: string | null
           id?: string
           is_default?: boolean | null
           last_4_digits?: string
@@ -1950,6 +1956,7 @@ export type Database = {
           cidade: string | null
           config_contrato: Json | null
           conta_pai_id: string | null
+          cpf_responsavel: string | null
           cpfcnpj: string
           created_at: string
           data_nascimento: string | null
@@ -1982,6 +1989,7 @@ export type Database = {
           cidade?: string | null
           config_contrato?: Json | null
           conta_pai_id?: string | null
+          cpf_responsavel?: string | null
           cpfcnpj: string
           created_at?: string
           data_nascimento?: string | null
@@ -2014,6 +2022,7 @@ export type Database = {
           cidade?: string | null
           config_contrato?: Json | null
           conta_pai_id?: string | null
+          cpf_responsavel?: string | null
           cpfcnpj?: string
           created_at?: string
           data_nascimento?: string | null
