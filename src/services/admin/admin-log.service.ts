@@ -87,12 +87,14 @@ export const adminLogService = {
       ultima_atividade_em: string | null;
       ultimas_atividades: AdminLogItemDTO[];
       total_usuarios: number | string;
+      total_novos: number | string;
       total_trial: number | string;
       total_ativos: number | string;
       total_recorrentes: number | string;
     }>;
 
     const total = rows.length > 0 ? Number(rows[0].total_usuarios) : 0;
+    const total_novos = rows.length > 0 ? Number(rows[0].total_novos) : 0;
     const total_trial = rows.length > 0 ? Number(rows[0].total_trial) : 0;
     const total_ativos = rows.length > 0 ? Number(rows[0].total_ativos) : 0;
     const total_recorrentes = rows.length > 0 ? Number(rows[0].total_recorrentes) : 0;
@@ -116,6 +118,7 @@ export const adminLogService = {
     return {
       data: mappedData,
       total,
+      total_novos,
       total_trial,
       total_ativos,
       total_recorrentes,
