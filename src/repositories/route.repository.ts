@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "../config/supabase.js";
-import { RouteExecutionStatus, RouteStopStatus } from "../types/enums.js";
+import { RouteExecutionStatus, RouteStopStatus, TipoResponsavel } from "../types/enums.js";
 import { isValidFilterValue } from "../utils/filter.utils.js";
 import { toPersistenceString, getNowBR } from "../utils/date.utils.js";
 
@@ -66,6 +66,7 @@ export const routeRepository = {
             id,
             nome,
             turma,
+            sala,
             ativo,
             escola:escolas (
               id,
@@ -237,6 +238,7 @@ export const routeRepository = {
             id,
             nome,
             turma,
+            sala,
             ativo,
             escola:escolas (
               id,
@@ -323,9 +325,9 @@ export const routeRepository = {
         usuario_id: usuarioId,
         status: RouteExecutionStatus.INICIADA,
         notificar_pais: notificarPais,
-        notificar_inicio_rota: snapshotConfig?.notificar_inicio_rota ?? true,
-        notificar_proxima_parada: snapshotConfig?.notificar_proxima_parada ?? true,
-        notificar_conclusao_parada: snapshotConfig?.notificar_conclusao_parada ?? true,
+        notificar_inicio_rota: snapshotConfig?.notificar_inicio_rota ?? false,
+        notificar_proxima_parada: snapshotConfig?.notificar_proxima_parada ?? false,
+        notificar_conclusao_parada: snapshotConfig?.notificar_conclusao_parada ?? false,
         rastreamento_ativo: snapshotConfig?.rastreamento_ativo ?? true,
         rastreamento_modo: snapshotConfig?.rastreamento_modo ?? "completo",
       }])
@@ -499,6 +501,48 @@ export const routeRepository = {
     return query;
   },
 
+  async getAusenciasFuturas(usuarioId: string, dataInicio: string, rotaId?: string) {
+    let query = supabaseAdmin
+      .from("rota_ausencias")
+      .select(`
+        id,
+        data_ausencia,
+        sentido,
+        created_at,
+        passageiro:passageiros (
+          id,
+          nome,
+          turma,
+          escola:escolas (
+            id,
+            nome
+          ),
+          responsaveis:passageiro_responsaveis (
+            id,
+            tipo,
+            responsavel:responsaveis (
+              id,
+              nome
+            )
+          )
+        ),
+        rota:rotas!inner (
+          id,
+          nome,
+          usuario_id
+        )
+      `)
+      .gte("data_ausencia", dataInicio);
+
+    if (rotaId) {
+      query = query.eq("rota_id", rotaId);
+    } else if (isValidFilterValue(usuarioId)) {
+      query = query.eq("rota.usuario_id", usuarioId);
+    }
+
+    return query.order("data_ausencia", { ascending: true });
+  },
+
   async insertAusencia(record: Record<string, unknown>) {
     return supabaseAdmin
       .from("rota_ausencias")
@@ -584,5 +628,97 @@ export const routeRepository = {
       .select("id, rota_id, data_ausencia, rota:rotas(nome)")
       .eq("id", ausenciaId)
       .single();
+  },
+
+  async buscarAlunos(usuarioId: string, search: string, rotaId?: string) {
+    const sanitizedSearch = search.replace(/[,()%\\]/g, "").trim();
+    if (!sanitizedSearch) return { data: [], error: null };
+
+    const formatAlunoItem = (p: any) => {
+      const responsaveis = p?.responsaveis || [];
+      const principalLink = Array.isArray(responsaveis)
+        ? responsaveis.find((l: any) => l.tipo === TipoResponsavel.PRINCIPAL) || responsaveis[0]
+        : null;
+      const resp = Array.isArray(principalLink?.responsavel) ? principalLink.responsavel[0] : principalLink?.responsavel;
+      const escola = Array.isArray(p?.escola) ? p.escola[0] : p?.escola;
+
+      return {
+        id: p.id,
+        nome: p.nome,
+        turma: p.turma || null,
+        escola_nome: escola?.nome || null,
+        responsavel_nome: resp?.nome || null,
+      };
+    };
+
+    if (rotaId) {
+      const { data, error } = await supabaseAdmin
+        .from("rota_passageiros")
+        .select(`
+          passageiro:passageiros!inner (
+            id,
+            nome,
+            turma,
+            ativo,
+            escola:escolas (
+              id,
+              nome
+            ),
+            responsaveis:passageiro_responsaveis (
+              id,
+              tipo,
+              responsavel:responsaveis (
+                id,
+                nome
+              )
+            )
+          )
+        `)
+        .eq("rota_id", rotaId)
+        .eq("passageiro.ativo", true)
+        .ilike("passageiro.nome", `%${sanitizedSearch}%`);
+
+      if (error) return { data: null, error };
+
+      const map = new Map<string, { id: string; nome: string; turma?: string | null; escola_nome?: string | null; responsavel_nome?: string | null }>();
+      (data || []).forEach((item: any) => {
+        if (item.passageiro && item.passageiro.id && item.passageiro.nome) {
+          map.set(item.passageiro.id, formatAlunoItem(item.passageiro));
+        }
+      });
+
+      const alunos = Array.from(map.values()).sort((a, b) => a.nome.localeCompare(b.nome));
+      return { data: alunos, error: null };
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("passageiros")
+      .select(`
+        id,
+        nome,
+        turma,
+        escola:escolas (
+          id,
+          nome
+        ),
+        responsaveis:passageiro_responsaveis (
+          id,
+          tipo,
+          responsavel:responsaveis (
+            id,
+            nome
+          )
+        )
+      `)
+      .eq("usuario_id", usuarioId)
+      .eq("ativo", true)
+      .ilike("nome", `%${sanitizedSearch}%`)
+      .order("nome", { ascending: true })
+      .limit(25);
+
+    if (error) return { data: null, error };
+
+    const alunos = (data || []).map(formatAlunoItem);
+    return { data: alunos, error: null };
   }
 };

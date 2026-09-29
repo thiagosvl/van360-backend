@@ -4,9 +4,11 @@ import { veiculoRepository } from "../repositories/veiculo.repository.js";
 import { authRepository } from "../repositories/auth.repository.js";
 import { CreateMembroEquipeDTO, UpdateMembroEquipeDTO } from "../types/dtos/motorista-equipe.dto.js";
 import { AppError } from "../errors/AppError.js";
-import { NotificationChannelEnum } from "../types/enums.js";
+import { NotificationChannelEnum, AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { logger } from "../config/logger.js";
 import { notificationService } from "./notifications/notification.service.js";
+import { historicoService } from "./historico.service.js";
+import { calculateAuditDiff } from "../utils/audit-diff.util.js";
 import {
   EVENTO_MOTORISTA_EQUIPE_CADASTRO,
   EVENTO_MOTORISTA_EQUIPE_RESET_SENHA,
@@ -142,6 +144,11 @@ export const motoristaEquipeService = {
   },
 
   async updateMembro(id: string, gestorId: string, dto: UpdateMembroEquipeDTO) {
+    const membroAnterior = await motoristaEquipeRepository.getById(id, gestorId);
+    if (membroAnterior.error || !membroAnterior.data) {
+      throw new AppError("Membro da equipe não encontrado", 404);
+    }
+
     if (dto.veiculo_id) {
       const veiculo = await veiculoRepository.getById(dto.veiculo_id);
       if (!veiculo.data || veiculo.data.usuario_id !== gestorId) {
@@ -154,12 +161,29 @@ export const motoristaEquipeService = {
       throw new AppError("Membro da equipe não encontrado ou falha ao atualizar", 404);
     }
 
-    // Se o nome ou tipo foi atualizado, sincronizar no app_metadata do Auth
     if (dto.nome || dto.tipo) {
       await authProvider.updateUserById(id, {
         user_metadata: {
           ...(dto.nome ? { nome: dto.nome } : {}),
           ...(dto.tipo ? { role: dto.tipo } : {}),
+        }
+      });
+    }
+
+    const diff = calculateAuditDiff(membroAnterior.data, dto);
+
+    if (diff.hasChanges) {
+      historicoService.log({
+        usuario_id: gestorId,
+        entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+        entidade_id: id,
+        acao: AtividadeAcao.PERFIL_EDITADO,
+        descricao: `Dados do membro da equipe ${data.nome} foram atualizados.`,
+        meta: {
+          nome: data.nome,
+          campos_alterados: diff.campos,
+          campos: diff.campos,
+          alteracoes: diff.alteracoes
         }
       });
     }
@@ -207,6 +231,23 @@ export const motoristaEquipeService = {
     if (error || !data) {
       throw new AppError("Falha ao atualizar status do membro da equipe", 500);
     }
+
+    historicoService.log({
+      usuario_id: gestorId,
+      entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+      entidade_id: id,
+      acao: AtividadeAcao.USUARIO_SUSPENSO,
+      descricao: `Membro da equipe ${data.nome} foi ${novoStatus ? "ativado" : "desativado"}.`,
+      meta: {
+        ativo: novoStatus,
+        alteracoes: [{
+          campo: "ativo",
+          de: membro.data.ativo,
+          para: novoStatus
+        }],
+        campos: ["ativo"]
+      }
+    });
 
     const recipientPhone = data.telefone || membro.data.telefone;
     const recipientEmail = data.email || membro.data.email;

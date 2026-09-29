@@ -8,6 +8,7 @@ import {
     generateName,
     generateCPF,
     generatePhone,
+    generateEmail,
     generateAddress,
     generateValorCobranca,
     bairros,
@@ -20,7 +21,6 @@ import {
     ParentescoResponsavel,
     GastoCategoria,
     CobrancaStatus,
-    CobrancaOrigem,
     CobrancaTipoPagamento,
     TipoResponsavel,
     RouteSentido,
@@ -125,6 +125,8 @@ async function clearData(usuarioId: string) {
         "pre_passageiros",
         "execucoes_rota",
         "rotas",
+        "passageiro_renovacoes",
+        "fila_notificacoes",
         "passageiros",
         "escolas",
         "veiculos",
@@ -139,6 +141,10 @@ async function clearData(usuarioId: string) {
             .eq("usuario_id", usuarioId);
 
         if (error) {
+            if (error.code === "PGRST205" || error.message?.includes("Could not find the table")) {
+                console.log(`- Tabela '${table}' não existe no ambiente (ignorando).`);
+                continue;
+            }
             console.error(`Erro ao limpar tabela ${table}:`, error);
             throw error;
         }
@@ -216,7 +222,6 @@ async function seedPassageiros(
     for (let index = 0; index < cfg.passageiros.quantidade; index++) {
         const escola = escolasInseridas[randomNumber(0, escolasInseridas.length - 1)];
         const veiculo = veiculosInseridos[randomNumber(0, veiculosInseridos.length - 1)];
-        const coords = generateCoordinates();
 
         const semEndereco = cfg.passageiros.percentualSemEndereco
             ? randomNumber(1, 100) <= cfg.passageiros.percentualSemEndereco
@@ -237,7 +242,10 @@ async function seedPassageiros(
         const dia = randomNumber(1, 28).toString().padStart(2, '0');
         const data_nascimento = `${ano}-${mes}-${dia}`;
 
-        const hojeStr = new Date().toISOString().split("T")[0];
+        const anoAtual = hoje.getFullYear();
+        const mesAtualStr = (hoje.getMonth() + 1).toString().padStart(2, '0');
+        const dataInicio = `${anoAtual}-${mesAtualStr}-01`;
+        const dataFim = `${anoAtual}-12-31`;
 
         const { data: pData, error: pError } = await supabaseAdmin
             .from("passageiros")
@@ -254,12 +262,13 @@ async function seedPassageiros(
                 turma: `${randomNumber(1, 9)}º ano`,
                 nome_professor: `Prof. ${nomes[randomNumber(0, nomes.length - 1)]}`,
                 data_nascimento,
-                dia_vencimento: [5, 10, 15, 20][randomNumber(0, 3)],
+                dia_vencimento: [5, 7, 10, 12, 15, 18, 20, 25, 28, 30][randomNumber(0, 7)],
                 valor_cobranca: generateValorCobranca(),
-                data_inicio_cobranca: hojeStr,
-                data_fim_cobranca: "2028-12-31",
-                data_inicio_transporte: hojeStr,
-                data_fim_transporte: "2028-12-31",
+                data_inicio_cobranca: dataInicio,
+                data_fim_cobranca: dataFim,
+                data_inicio_transporte: dataInicio,
+                data_fim_transporte: dataFim,
+                ano_letivo: anoAtual,
                 enviar_notificacoes: true,
             })
             .select()
@@ -274,7 +283,7 @@ async function seedPassageiros(
             telefone: respTelefone,
             nome: generateName(),
             cpf: generateCPF(),
-            email: `responsavel${index + 1}@exemplo.com`,
+            email: generateEmail(),
             logradouro: endereco ? endereco.logradouro : null,
             numero: endereco ? endereco.numero : null,
             bairro: endereco ? endereco.bairro : null,
@@ -298,6 +307,7 @@ async function seedPassageiros(
             responsavel_id: rData.id,
             tipo: TipoResponsavel.PRINCIPAL,
             parentesco: respParentesco,
+            notificacoes_rota_habilitadas: true,
         });
 
         const deveTerAdicional = cfg.passageiros.percentualComResponsaveisAdicionais
@@ -312,7 +322,7 @@ async function seedPassageiros(
                     telefone: generatePhone(),
                     nome: generateName(),
                     cpf: generateCPF(),
-                    email: `adicional${index + 1}@exemplo.com`,
+                    email: generateEmail(),
                     logradouro: endAdicional.logradouro,
                     numero: endAdicional.numero,
                     bairro: endAdicional.bairro,
@@ -325,12 +335,13 @@ async function seedPassageiros(
                 .select()
                 .single();
 
-            if (!errAdicional && rAdicional) {
+            if (!errAdicional && rAdicional && rAdicional.id !== rData.id) {
                 await supabaseAdmin.from("passageiro_responsaveis").insert({
                     passageiro_id: pData.id,
                     responsavel_id: rAdicional.id,
                     tipo: TipoResponsavel.ADICIONAL,
                     parentesco: parentescos[randomNumber(0, parentescos.length - 1)],
+                    notificacoes_rota_habilitadas: true,
                 });
             }
         }
@@ -384,7 +395,12 @@ async function seedRotas(
 
         const startIdx = rIdx * passageirosPorRota;
         const rotaPassageirosSlice = passageirosInseridos.slice(startIdx, startIdx + passageirosPorRota);
-        const escolaPrincipal = escolasInseridas[rIdx % escolasInseridas.length];
+        const escolasIdsDaRota = Array.from(
+            new Set(rotaPassageirosSlice.map((p) => p.escola_id).filter(Boolean))
+        );
+        const escolasDaRota = escolasIdsDaRota.length > 0
+            ? escolasIdsDaRota
+            : [escolasInseridas[rIdx % escolasInseridas.length].id];
 
         const paradasToInsert: any[] = [];
         let ordemAtual = 1;
@@ -400,23 +416,27 @@ async function seedRotas(
                     sentido: RouteSentido.INDO,
                 });
             }
-            paradasToInsert.push({
-                rota_id: rota.id,
-                tipo_no: RouteNodeType.ESCOLA,
-                passageiro_id: null,
-                escola_id: escolaPrincipal.id,
-                ordem: ordemAtual++,
-                sentido: RouteSentido.INDO,
-            });
+            for (const escId of escolasDaRota) {
+                paradasToInsert.push({
+                    rota_id: rota.id,
+                    tipo_no: RouteNodeType.ESCOLA,
+                    passageiro_id: null,
+                    escola_id: escId,
+                    ordem: ordemAtual++,
+                    sentido: RouteSentido.INDO,
+                });
+            }
         } else {
-            paradasToInsert.push({
-                rota_id: rota.id,
-                tipo_no: RouteNodeType.ESCOLA,
-                passageiro_id: null,
-                escola_id: escolaPrincipal.id,
-                ordem: ordemAtual++,
-                sentido: RouteSentido.VOLTANDO,
-            });
+            for (const escId of escolasDaRota) {
+                paradasToInsert.push({
+                    rota_id: rota.id,
+                    tipo_no: RouteNodeType.ESCOLA,
+                    passageiro_id: null,
+                    escola_id: escId,
+                    ordem: ordemAtual++,
+                    sentido: RouteSentido.VOLTANDO,
+                });
+            }
             for (const pass of rotaPassageirosSlice) {
                 paradasToInsert.push({
                     rota_id: rota.id,
@@ -443,6 +463,15 @@ async function seedRotas(
                 passageiro_id: passageiroAusente.id,
                 data_ausencia: dataHoje,
                 sentido,
+                registrado_por: usuarioId,
+            });
+
+            await supabaseAdmin.from("passageiro_ausencias").insert({
+                passageiro_id: passageiroAusente.id,
+                data_ausencia: dataHoje,
+                turno: passageiroAusente.periodo || PeriodoEnum.MANHA,
+                sentido,
+                motivo: "Ausência registrada via seed de teste",
                 registrado_por: usuarioId,
             });
         }
@@ -499,12 +528,13 @@ async function seedPrePassageiros(usuarioId: string, cfg: ScenarioConfig) {
         nome: generateName(),
         nome_responsavel: generateName(),
         telefone_responsavel: TARGET_PHONE,
+        email_responsavel: generateEmail(),
         bairro: bairros[randomNumber(0, bairros.length - 1)],
         cidade: "São Paulo",
         periodo: periodos[randomNumber(0, periodos.length - 1)],
         genero: generos[randomNumber(0, generos.length - 1)],
         valor_cobranca: generateValorCobranca(),
-        dia_vencimento: 10,
+        dia_vencimento: [5, 7, 10, 12, 15, 18, 20, 25, 28, 30][randomNumber(0, 7)],
     }));
 
     const { error } = await supabaseAdmin.from("pre_passageiros").insert(prePassageirosToInsert);
@@ -530,7 +560,7 @@ async function seedCobrancas(usuarioId: string, passageirosInseridos: any[], cfg
             const formatVenc = dataVenc.toISOString().split("T")[0];
 
             let status = CobrancaStatus.PENDENTE;
-            let pagamento_manual = false;
+            let pagamento_manual = true;
             let data_pagamento: string | null = null;
             let valor_pago: number | null = null;
             let tipo_pagamento: string | null = null;
@@ -573,7 +603,6 @@ async function seedCobrancas(usuarioId: string, passageirosInseridos: any[], cfg
                 mes: dataVenc.getMonth() + 1,
                 ano: dataVenc.getFullYear(),
                 status,
-                origem: CobrancaOrigem.AUTOMATICA,
                 pagamento_manual,
                 data_pagamento,
                 valor_pago,
@@ -631,7 +660,7 @@ async function seedSantaMariaRoute(usuarioId: string, cfg: ScenarioConfig) {
                 const isFirst = respIndex === 1;
                 const phoneToUse = isFirst ? TARGET_PHONE : generatePhone();
 
-                const { data: resp, error: respErr } = await supabaseAdmin.from("responsaveis").insert({
+                const { data: resp, error: respErr } = await supabaseAdmin.from("responsaveis").upsert({
                     nome: stop.responsavel.nome,
                     telefone: phoneToUse,
                     cpf: "39542391838",
@@ -643,13 +672,18 @@ async function seedSantaMariaRoute(usuarioId: string, cfg: ScenarioConfig) {
                     estado: stop.responsavel.estado,
                     cep: stop.responsavel.cep,
                     complemento: stop.responsavel.complemento,
-                }).select("id").single();
+                }, { onConflict: "telefone" }).select("id").single();
                 if (respErr) throw respErr;
                 respId = resp.id;
                 responsaveisMap.set(stop.responsavel.telefone, respId);
             }
 
-            const targetEscolaId = escolasMap.get(stop.passageiro.escola_id) || Array.from(escolasMap.values())[0];
+            const hoje = new Date();
+            const anoAtual = hoje.getFullYear();
+            const mesAtualStr = (hoje.getMonth() + 1).toString().padStart(2, '0');
+            const dataInicio = `${anoAtual}-${mesAtualStr}-01`;
+            const dataFim = `${anoAtual}-12-31`;
+
             const { data: pass, error: passErr } = await supabaseAdmin.from("passageiros").insert({
                 usuario_id: usuarioId,
                 escola_id: targetEscolaId,
@@ -661,6 +695,11 @@ async function seedSantaMariaRoute(usuarioId: string, cfg: ScenarioConfig) {
                 periodo: stop.passageiro.periodo,
                 valor_cobranca: stop.passageiro.valor_cobranca,
                 dia_vencimento: stop.passageiro.dia_vencimento,
+                data_inicio_cobranca: dataInicio,
+                data_fim_cobranca: dataFim,
+                data_inicio_transporte: dataInicio,
+                data_fim_transporte: dataFim,
+                ano_letivo: anoAtual,
                 ativo: true,
             }).select("id, nome, valor_cobranca, dia_vencimento").single();
             if (passErr) throw passErr;
@@ -670,6 +709,7 @@ async function seedSantaMariaRoute(usuarioId: string, cfg: ScenarioConfig) {
                 responsavel_id: respId,
                 parentesco: stop.responsavel.parentesco,
                 tipo: TipoResponsavel.PRINCIPAL,
+                notificacoes_rota_habilitadas: true,
             });
 
             passageirosMap.set(passOriginalId, pass.id);

@@ -13,7 +13,7 @@ export const monitorRepository = {
     async getExpiringTrials(windowStart: string, windowEnd: string) {
         return supabaseAdmin
             .from("assinaturas")
-            .select("id, usuario_id, trial_ends_at, usuarios(nome, telefone)")
+            .select("id, usuario_id, trial_ends_at, trial_estendido, usuarios(nome, telefone, email)")
             .eq("status", SubscriptionStatus.TRIAL)
             .gte("trial_ends_at", windowStart)
             .lte("trial_ends_at", windowEnd);
@@ -38,7 +38,7 @@ export const monitorRepository = {
     async getExpiredTrials(now: string) {
         return supabaseAdmin
             .from("assinaturas")
-            .select("id, status, trial_ends_at, usuario_id, usuarios(nome, telefone)")
+            .select("id, status, trial_ends_at, trial_estendido, usuario_id, usuarios(nome, telefone, email)")
             .eq("status", SubscriptionStatus.TRIAL)
             .lte("trial_ends_at", now);
     },

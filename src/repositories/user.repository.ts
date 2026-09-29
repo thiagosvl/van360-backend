@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { STATUS_ASSINATURA_LIBERADA, UserType } from "../types/enums.js";
+import { authCacheService } from "../services/auth-cache.service.js";
 
 export const userRepository = {
     async getById(id: string) {
@@ -30,22 +31,24 @@ export const userRepository = {
     async getProfileData(id: string) {
         return supabaseAdmin
             .from("usuarios")
-            .select("id, nome, razao_social, cpfcnpj, telefone, tipo, conta_pai_id, veiculo_id, config_contrato, chave_pix, tipo_chave_pix, data_nascimento, logradouro, numero, bairro, cidade, estado, cep, canal_aquisicao, dispositivo_cadastro, metadados_cadastro, created_at, veiculos:veiculo_id(id, modelo, placa, marca)")
+            .select("id, nome, apelido, razao_social, cpfcnpj, telefone, tipo, conta_pai_id, veiculo_id, config_contrato, chave_pix, tipo_chave_pix, data_nascimento, assinatura_digital_url, logradouro, numero, bairro, cidade, estado, cep, canal_aquisicao, dispositivo_cadastro, metadados_cadastro, created_at, veiculos:veiculo_id(id, modelo, placa, marca)")
             .eq("id", id)
             .single();
     },
 
     async update(id: string, updates: Record<string, unknown>) {
-        return supabaseAdmin
+        const result = await supabaseAdmin
             .from("usuarios")
             .update(updates)
             .eq("id", id);
+        await authCacheService.invalidateUserAuth(id);
+        return result;
     },
 
     async getPixKey(id: string) {
         return supabaseAdmin
             .from("usuarios")
-            .select("chave_pix")
+            .select("chave_pix, tipo_chave_pix")
             .eq("id", id)
             .single();
     },
@@ -124,6 +127,33 @@ export const userRepository = {
         return { data, error: null };
     },
 
+    async listMotoristasAtivosParaAlertaDiario() {
+        const { data, error } = await supabaseAdmin
+            .from("usuarios")
+            .select(`
+                id, 
+                telefone, 
+                nome,
+                email,
+                assinaturas!inner(status),
+                usuario_configuracoes(notificar_motorista_parcelas)
+            `)
+            .eq("ativo", true)
+            .eq("tipo", UserType.MOTORISTA)
+            .in("assinaturas.status", STATUS_ASSINATURA_LIBERADA);
+
+        if (error) {
+            throw error;
+        }
+
+        const filtrados = (data || []).filter(u => {
+            const config = Array.isArray(u.usuario_configuracoes) ? u.usuario_configuracoes[0] : u.usuario_configuracoes;
+            return config?.notificar_motorista_parcelas ?? true;
+        });
+
+        return { data: filtrados, error: null };
+    },
+
 
     async getByEmail(email: string) {
         return supabaseAdmin
@@ -133,11 +163,29 @@ export const userRepository = {
             .maybeSingle();
     },
 
+    async getByEmailExcludingId(email: string, excludeId: string) {
+        return supabaseAdmin
+            .from("usuarios")
+            .select("id")
+            .eq("email", email)
+            .neq("id", excludeId)
+            .maybeSingle();
+    },
+
     async getByCpfcnpj(cpfcnpj: string) {
         return supabaseAdmin
             .from("usuarios")
             .select("id")
             .eq("cpfcnpj", cpfcnpj)
+            .maybeSingle();
+    },
+
+    async getByCpfcnpjExcludingId(cpfcnpj: string, excludeId: string) {
+        return supabaseAdmin
+            .from("usuarios")
+            .select("id")
+            .eq("cpfcnpj", cpfcnpj)
+            .neq("id", excludeId)
             .maybeSingle();
     },
 
@@ -157,7 +205,7 @@ export const userRepository = {
     async getPublicData(id: string) {
         return supabaseAdmin
             .from("usuarios")
-            .select("id, nome, apelido")
+            .select("id, nome, apelido, razao_social, cpfcnpj, logo_url")
             .eq("id", id)
             .single();
     }

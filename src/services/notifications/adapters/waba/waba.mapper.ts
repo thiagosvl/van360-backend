@@ -5,13 +5,14 @@ import {
     EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
     EVENTO_PASSAGEIRO_ATRASADO,
     EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL,
+    EVENTO_PASSAGEIRO_RENOVACAO_DISPONIVEL,
     EVENTO_MOTORISTA_ASSINATURA_VENCENDO,
     EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO
 } from "../../../../config/constants.js";
 import { WabaTemplates, WabaTemplatePayload } from "./waba.template.js";
 
 export class WabaMapper {
-    static getTemplate(eventName: string, contextData: Record<string, unknown>): WabaTemplatePayload | null {
+    static async getTemplate(eventName: string, contextData: Record<string, unknown>): Promise<WabaTemplatePayload | null> {
         try {
             switch (eventName) {
                 case EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO:
@@ -29,11 +30,14 @@ export class WabaMapper {
                 case EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL:
                     return WabaTemplates.contratoDisponivel(contextData);
 
+                case EVENTO_PASSAGEIRO_RENOVACAO_DISPONIVEL:
+                    return WabaTemplates.renovacaoDisponivel(contextData);
+
                 case EVENTO_MOTORISTA_ASSINATURA_VENCENDO:
-                    return WabaTemplates.subscriptionDueSoon(contextData);
+                    return await WabaTemplates.subscriptionDueSoon(contextData);
 
                 case EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO:
-                    return WabaTemplates.subscriptionFailedCC(contextData);
+                    return await WabaTemplates.subscriptionFailedCC(contextData);
 
                 default:
                     logger.warn({ eventName }, "[WabaMapper] Template não encontrado para o evento.");

@@ -3,6 +3,7 @@ import { CreateBlogPostDTO, UpdateBlogPostDTO } from "../schemas/blog.schema.js"
 import { BlogPostStatus } from "../types/enums.js";
 import { triggerDeployWebhook } from "../utils/deploy.utils.js";
 import { storageProvider } from "./providers/storage.provider.js";
+import { AppError } from "../errors/AppError.js";
 
 const _generateSlug = (title: string): string => {
     return title
@@ -100,13 +101,15 @@ export const blogService = {
 
     async getPost(id: string) {
         const { data, error } = await blogRepository.getById(id);
-        if (error || !data) throw new Error("Post não encontrado");
+        if (error) throw error;
+        if (!data) throw new AppError("Post não encontrado", 404);
         return data;
     },
 
     async getPublicPost(slug: string) {
         const { data, error } = await blogRepository.getPublishedBySlug(slug);
-        if (error || !data) throw new Error("Artigo não encontrado");
+        if (error) throw error;
+        if (!data) throw new AppError("Artigo não encontrado", 404);
 
         return data;
     },

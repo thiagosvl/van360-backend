@@ -1,8 +1,89 @@
 import fs from 'fs';
 import path from 'path';
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import zlib from 'zlib';
+import { PDFDocument, PDFImage, rgb, StandardFonts, PDFFont } from 'pdf-lib';
 import { formatToBrazilianDate, getNowBR, parseLocalDate } from '../../utils/date.utils.js';
 import { formatModalidade, formatParentesco, formatPeriodo, maskCnpj, maskCpf, maskPhone } from '../../utils/format.js';
+
+function isValidPng(buf: Buffer | Uint8Array): boolean {
+  if (!buf || buf.length < 8) return false;
+  const pngSig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  for (let i = 0; i < 8; i++) {
+    if (buf[i] !== pngSig[i]) return false;
+  }
+  let offset = 8;
+  let hasIend = false;
+  const idatChunks: Buffer[] = [];
+
+  while (offset + 8 <= buf.length) {
+    const len = ((buf[offset] << 24) | (buf[offset + 1] << 16) | (buf[offset + 2] << 8) | buf[offset + 3]) >>> 0;
+    const type = String.fromCharCode(buf[offset + 4], buf[offset + 5], buf[offset + 6], buf[offset + 7]);
+    offset += 8;
+
+    if (offset + len + 4 > buf.length) {
+      return false;
+    }
+
+    if (type === 'IDAT') {
+      idatChunks.push(Buffer.from(buf.buffer, buf.byteOffset + offset, len));
+    } else if (type === 'IEND') {
+      hasIend = true;
+      break;
+    }
+
+    offset += len + 4;
+  }
+
+  if (!hasIend || idatChunks.length === 0) return false;
+
+  try {
+    const totalIdat = Buffer.concat(idatChunks);
+    zlib.inflateSync(totalIdat);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isJpeg(buf: Buffer | Uint8Array): boolean {
+  return !!buf && buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+}
+
+async function resolveImageBuffer(imageSource?: string | null): Promise<Buffer | null> {
+  if (!imageSource) return null;
+
+  if (imageSource.startsWith('data:')) {
+    const commaIdx = imageSource.indexOf(',');
+    if (commaIdx !== -1) {
+      return Buffer.from(imageSource.slice(commaIdx + 1), 'base64');
+    }
+    return null;
+  }
+
+  if (imageSource.startsWith('http://') || imageSource.startsWith('https://')) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    try {
+      const resp = await fetch(imageSource, { signal: controller.signal });
+      if (!resp.ok) return null;
+      return Buffer.from(await resp.arrayBuffer());
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  return null;
+}
+
+async function embedImageSafely(pdfDoc: PDFDocument, imageBuffer: Buffer): Promise<PDFImage | null> {
+  if (isValidPng(imageBuffer)) {
+    return await pdfDoc.embedPng(imageBuffer);
+  }
+  if (isJpeg(imageBuffer)) {
+    return await pdfDoc.embedJpg(imageBuffer);
+  }
+  return null;
+}
 
 import { storageProvider } from './storage.provider.js';
 import { contractRepository } from '../../repositories/contract.repository.js';
@@ -69,23 +150,22 @@ export class InHouseContractProvider implements ContractProvider {
 
     if (params.assinaturaBase64) {
       try {
-        const resp = await fetch(params.assinaturaBase64);
-        const signatureBytes = await resp.arrayBuffer();
-        const signatureImage = await pdfDoc.embedPng(signatureBytes);
-        const pages = pdfDoc.getPages();
-        const ultimaPagina = pages[pages.length - 1];
+        const imageBuffer = await resolveImageBuffer(params.assinaturaBase64);
+        if (imageBuffer) {
+          const signatureImage = await embedImageSafely(pdfDoc, imageBuffer);
+          if (signatureImage) {
+            const pages = pdfDoc.getPages();
+            const ultimaPagina = pages[pages.length - 1];
+            const imageY = signatureY + 2;
 
-        // Ajuste fino: A imagem deve ficar um pouco acima da linha (y)
-        // Se signatureY é a linha, a imagem começa um pouco acima.
-        // drawImage usa y como canto inferior esquerdo.
-        const imageY = signatureY + 2;
-
-        ultimaPagina.drawImage(signatureImage, {
-          x: 350,
-          y: imageY,
-          width: 150,
-          height: 50,
-        });
+            ultimaPagina.drawImage(signatureImage, {
+              x: 350,
+              y: imageY,
+              width: 150,
+              height: 50,
+            });
+          }
+        }
       } catch (e) {
         console.error('Error embedding parent signature', e);
       }
@@ -129,25 +209,34 @@ export class InHouseContractProvider implements ContractProvider {
     return Buffer.from(await pdfBuffer.arrayBuffer());
   }
 
-  private async splitTextToLines(text: string, font: any, size: number, maxWidth: number): Promise<string[]> {
+  private splitTextToLines(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
+    if (!text || typeof text !== 'string') return [];
     const lines: string[] = [];
     const paragraphs = text.split('\n');
     for (const paragraph of paragraphs) {
       const words = paragraph.split(' ');
       let currentLine = '';
       for (const word of words) {
+        if (!word) continue;
         const testLine = currentLine ? `${currentLine} ${word}` : word;
-        const width = font.widthOfTextAtSize(testLine, size);
-        if (width > maxWidth) {
-          lines.push(currentLine);
-          currentLine = word;
+        const textWidth = font.widthOfTextAtSize(testLine, size);
+        if (textWidth > maxWidth) {
+          if (currentLine) {
+            lines.push(currentLine);
+            currentLine = word;
+          } else {
+            lines.push(word);
+            currentLine = '';
+          }
         } else {
           currentLine = testLine;
         }
       }
-      lines.push(currentLine);
+      if (currentLine) {
+        lines.push(currentLine);
+      }
     }
-    return lines;
+    return lines.length > 0 ? lines : [''];
   }
 
 
@@ -168,64 +257,166 @@ export class InHouseContractProvider implements ContractProvider {
 
     let currentY = 800;
     const margin = 50;
-    const width = 495; // Largura útil
+    const width = 495;
 
-    page.drawText('CONTRATO DE PRESTAÇÃO DE SERVIÇO DE TRANSPORTE', { x: margin, y: 770, size: fontSizeTitle, font: fontBold });
-    currentY = 730;
+    if (dados.logoCondutorUrl) {
+      try {
+        const imageBuffer = await resolveImageBuffer(dados.logoCondutorUrl);
+        if (imageBuffer) {
+          const logoImage = await embedImageSafely(pdfDoc, imageBuffer);
+          if (logoImage) {
+            const { width: imgW, height: imgH } = logoImage;
+            const maxWidth = 110;
+            const maxHeight = 65;
+            const scale = Math.min(maxWidth / imgW, maxHeight / imgH, 1);
+            const finalWidth = imgW * scale;
+            const finalHeight = imgH * scale;
 
-    // Helper de Header com cor preta (removendo azul)
+            const headerTopY = 795;
+            const headerHeight = Math.max(finalHeight, 50);
+            const headerBottomY = headerTopY - headerHeight;
+
+            const logoY = headerBottomY + (headerHeight - finalHeight) / 2;
+            page.drawImage(logoImage, {
+              x: margin,
+              y: logoY,
+              width: finalWidth,
+              height: finalHeight,
+            });
+
+            const titleStartX = margin + finalWidth + 18;
+            const line1 = 'CONTRATO DE PRESTAÇÃO DE';
+            const line2 = 'SERVIÇO DE TRANSPORTE';
+            const titleFontSize = 13;
+            const headerCenterY = headerBottomY + headerHeight / 2;
+
+            page.drawText(line1, {
+              x: titleStartX,
+              y: headerCenterY + 3,
+              size: titleFontSize,
+              font: fontBold,
+            });
+
+            page.drawText(line2, {
+              x: titleStartX,
+              y: headerCenterY - 12,
+              size: titleFontSize,
+              font: fontBold,
+            });
+
+            const dividerY = headerBottomY - 8;
+            page.drawLine({
+              start: { x: margin, y: dividerY },
+              end: { x: 545, y: dividerY },
+              thickness: 0.5,
+              color: rgb(0.8, 0.8, 0.8),
+            });
+
+            currentY = dividerY - 18;
+          }
+        }
+      } catch (e) {
+        console.error('Error embedding driver logo', e);
+      }
+    }
+
+    if (currentY === 800) {
+      page.drawText('CONTRATO DE PRESTAÇÃO DE SERVIÇO DE TRANSPORTE', { x: margin, y: 770, size: fontSizeTitle, font: fontBold });
+      currentY = 730;
+    }
+
     const drawHeader = (title: string, y: number) => {
-      // Cor removida (default black)
       page.drawText(title, { x: margin, y, size: fontSizeHeader, font: fontBold });
       page.drawLine({ start: { x: margin, y: y - 5 }, end: { x: 545, y: y - 5 }, thickness: 0.5, color: rgb(0, 0, 0) });
-      return y - 30; // Espaçamento um pouco maior
+      return y - 20;
     };
 
-    // ...
-
-    // Helper para mascarar doc genérico
     const maskDoc = (doc?: string | null) => {
       if (!doc) return '';
       const clean = doc.replace(/\D/g, '');
       return clean.length > 11 ? maskCnpj(clean) : maskCpf(clean);
     };
 
+    const smallTextSize = 10;
+    const rowLineHeight = 13.5;
+    const itemSpacing = 2;
+    const sectionSpacing = 14;
+
+    const drawFullWidthRow = (text: string, y: number, isBold = false) => {
+      const fontToUse = isBold ? fontBold : font;
+      const lines = this.splitTextToLines(text, fontToUse, smallTextSize, width);
+      let localY = y;
+      for (const line of lines) {
+        page.drawText(line, { x: margin, y: localY, size: smallTextSize, font: fontToUse });
+        localY -= rowLineHeight;
+      }
+      return localY - itemSpacing;
+    };
+
+    const drawTwoColumnRow = (leftText: string, rightText: string, y: number) => {
+      const leftLines = leftText ? this.splitTextToLines(leftText, font, smallTextSize, 240) : [];
+      const rightLines = rightText ? this.splitTextToLines(rightText, font, smallTextSize, 245) : [];
+      const maxLines = Math.max(leftLines.length, rightLines.length, 1);
+
+      for (let i = 0; i < leftLines.length; i++) {
+        page.drawText(leftLines[i], { x: margin, y: y - (i * rowLineHeight), size: smallTextSize, font });
+      }
+
+      for (let i = 0; i < rightLines.length; i++) {
+        page.drawText(rightLines[i], { x: 300, y: y - (i * rowLineHeight), size: smallTextSize, font });
+      }
+
+      return y - (maxLines * rowLineHeight) - itemSpacing;
+    };
+
     currentY = drawHeader('DAS PARTES', currentY);
 
-    const smallTextSize = 10;
-
     // CONTRATANTE
-    page.drawText('CONTRATANTE (Responsável)', { x: margin, y: currentY, size: smallTextSize, font: fontBold });
-    page.drawText(`Nome: ${dados.nomeResponsavel}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
-    page.drawText(`Documento: ${maskCpf(dados.cpfResponsavel)}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
-    page.drawText(`Telefone: ${maskPhone(dados.telefoneResponsavel)}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
-    page.drawText(`Parentesco: ${formatParentesco(dados.parentescoResponsavel || '')}`, { x: margin, y: currentY - 42, size: smallTextSize, font });
+    currentY = drawFullWidthRow('CONTRATANTE (Responsável)', currentY, true);
+    currentY = drawFullWidthRow(`Nome: ${dados.nomeResponsavel || ''}`, currentY);
+    currentY = drawTwoColumnRow(
+      `Documento: ${maskCpf(dados.cpfResponsavel)}`,
+      `Telefone: ${maskPhone(dados.telefoneResponsavel)}`,
+      currentY
+    );
+    currentY = drawFullWidthRow(`Parentesco: ${formatParentesco(dados.parentescoResponsavel || '')}`, currentY);
 
-    currentY -= 80;
+    currentY -= (sectionSpacing - 4);
 
-    // CONTRATADA
-    page.drawText('PRESTADOR(A) DE SERVIÇOS DE TRANSPORTE', { x: margin, y: currentY, size: smallTextSize, font: fontBold });
-    page.drawText(`Nome: ${dados.nomeCondutor}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
-    page.drawText(`Documento: ${maskDoc(dados.cpfCnpjCondutor)}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
-    page.drawText(`Telefone: ${maskPhone(dados.telefoneCondutor)}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
+    // PRESTADOR(A)
+    currentY = drawFullWidthRow('PRESTADOR(A) DE SERVIÇOS DE TRANSPORTE', currentY, true);
+    currentY = drawFullWidthRow(`Nome: ${dados.nomeCondutor || ''}`, currentY);
+    currentY = drawTwoColumnRow(
+      `Documento: ${maskDoc(dados.cpfCnpjCondutor)}`,
+      `Telefone: ${maskPhone(dados.telefoneCondutor)}`,
+      currentY
+    );
 
-    currentY -= 70;
+    currentY -= sectionSpacing;
 
-    currentY = drawHeader('PASSAGEIRO(A)', currentY);
-    page.drawText(`Nome: ${dados.nomePassageiro}`, { x: margin, y: currentY, size: smallTextSize, font });
-    page.drawText(`Escola: ${dados.nomeEscola}`, { x: 300, y: currentY, size: smallTextSize, font });
+    currentY = drawHeader('ALUNO(A)', currentY);
+    currentY = drawTwoColumnRow(
+      `Nome: ${dados.nomePassageiro || ''}`,
+      `Escola: ${dados.nomeEscola || ''}`,
+      currentY
+    );
+    currentY = drawTwoColumnRow(
+      `Período: ${formatPeriodo(dados.periodo)}`,
+      `Modalidade: ${formatModalidade(dados.modalidade)}`,
+      currentY
+    );
+    currentY = drawFullWidthRow(`Endereço: ${dados.enderecoCompleto || ''}`, currentY);
 
-    page.drawText(`Período: ${formatPeriodo(dados.periodo)}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
-    page.drawText(`Modalidade: ${formatModalidade(dados.modalidade)}`, { x: 300, y: currentY - 14, size: smallTextSize, font });
-
-    page.drawText(`Endereço: ${dados.enderecoCompleto}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
-
-    currentY -= 70;
+    currentY -= sectionSpacing;
 
     currentY = drawHeader('VEÍCULO', currentY);
-    page.drawText(`Modelo: ${dados.modeloVeiculo}`, { x: margin, y: currentY, size: smallTextSize, font });
-    page.drawText(`Placa: ${dados.placaVeiculo}`, { x: 300, y: currentY, size: smallTextSize, font });
-    currentY -= 45;
+    currentY = drawTwoColumnRow(
+      `Modelo: ${dados.modeloVeiculo || ''}`,
+      `Placa: ${dados.placaVeiculo || ''}`,
+      currentY
+    );
+
+    currentY -= sectionSpacing;
 
     currentY = drawHeader('DO PERÍODO DO CONTRATO', currentY);
     const currentYear = getNowBR().getFullYear();
@@ -237,26 +428,43 @@ export class InHouseContractProvider implements ContractProvider {
       return `${parts[1].padStart(2, '0')}/${parts[0]}`;
     };
 
-    page.drawText(`Ano Letivo: ${dados.ano || currentYear}`, { x: margin, y: currentY, size: smallTextSize, font });
-    page.drawText(`Início do Transporte: ${formatToBrazilianDate(dados.dataInicio)}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
-    page.drawText(`Término do Transporte: ${formatToBrazilianDate(dados.dataFim)}`, { x: 300, y: currentY - 14, size: smallTextSize, font });
-    page.drawText(`Primeira Parcela: ${formatMonthYear(dados.dataInicioCobranca)}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
-    page.drawText(`Última Parcela: ${formatMonthYear(dados.dataFimCobranca)}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
-    currentY -= 68;
+    currentY = drawFullWidthRow(`Ano Letivo: ${dados.ano || currentYear}`, currentY);
+    currentY = drawTwoColumnRow(
+      `Início do Transporte: ${formatToBrazilianDate(dados.dataInicio)}`,
+      `Término do Transporte: ${formatToBrazilianDate(dados.dataFim)}`,
+      currentY
+    );
+    currentY = drawTwoColumnRow(
+      `Horário de Entrada: ${dados.horarioEntrada || ''}`,
+      `Horário de Saída: ${dados.horarioSaida || ''}`,
+      currentY
+    );
+    currentY = drawTwoColumnRow(
+      `Primeira Parcela: ${formatMonthYear(dados.dataInicioCobranca)}`,
+      `Última Parcela: ${formatMonthYear(dados.dataFimCobranca)}`,
+      currentY
+    );
+
+    currentY -= sectionSpacing;
 
     currentY = drawHeader('DAS CONDIÇÕES DE VALOR', currentY);
-    page.drawText(`Valor total do contrato (R$): ${dados.valorTotal.toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    })}`, { x: margin, y: currentY, size: smallTextSize, font });
-    page.drawText(`Quantidade de parcelas: ${dados.qtdParcelas}`, { x: 300, y: currentY, size: smallTextSize, font });
-    page.drawText(`Valor das parcelas (R$): ${dados.valorParcela.toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    })}`, { x: margin, y: currentY - 14, size: smallTextSize, font });
-    page.drawText(`Dia do vencimento: ${dados.diaVencimento}`, { x: 300, y: currentY - 14, size: smallTextSize, font });
+    currentY = drawTwoColumnRow(
+      `Valor total do contrato (R$): ${(dados.valorTotal ?? 0).toLocaleString("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+      })}`,
+      `Quantidade de parcelas: ${dados.qtdParcelas ?? 0}`,
+      currentY
+    );
+    currentY = drawTwoColumnRow(
+      `Valor das parcelas (R$): ${(dados.valorParcela ?? 0).toLocaleString("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+      })}`,
+      `Dia do vencimento: ${dados.diaVencimento ?? '-'}`,
+      currentY
+    );
 
-    // Lógica para formatação de valores de multas
     const formatMulta = (tipo: ContractMultaTipo, valor: number) => {
       if (tipo === ContractMultaTipo.PERCENTUAL) {
         return valor.toLocaleString("pt-BR", {
@@ -267,23 +475,26 @@ export class InHouseContractProvider implements ContractProvider {
       return valor.toLocaleString("pt-BR", {
         style: "currency",
         currency: "BRL",
-      }); // Com decimais se R$
+      });
     };
 
-    const multaAtrasoLabel = `Multa por atraso de pagamento (${dados.multaAtraso.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}):`;
-    const multaAtrasoValor = formatMulta(dados.multaAtraso.tipo, dados.multaAtraso.valor);
-    page.drawText(`${multaAtrasoLabel} ${multaAtrasoValor}`, { x: margin, y: currentY - 28, size: smallTextSize, font });
+    const multaAtrasoTexto = (dados.multaAtraso && dados.multaAtraso.valor > 0)
+      ? `Multa por atraso de pagamento (${dados.multaAtraso.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}): ${formatMulta(dados.multaAtraso.tipo, dados.multaAtraso.valor)}`
+      : 'Multa por atraso de pagamento:';
 
-    const multaRescisaoLabel = `Multa por rescisão de contrato (${dados.multaRescisao.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}):`;
-    const multaRescisaoValor = formatMulta(dados.multaRescisao.tipo, dados.multaRescisao.valor);
-    page.drawText(`${multaRescisaoLabel} ${multaRescisaoValor}`, { x: 300, y: currentY - 28, size: smallTextSize, font });
+    const multaRescisaoTexto = (dados.multaRescisao && dados.multaRescisao.valor > 0)
+      ? `Multa por rescisão de contrato (${dados.multaRescisao.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}): ${formatMulta(dados.multaRescisao.tipo, dados.multaRescisao.valor)}`
+      : 'Multa por rescisão de contrato:';
 
-    const jurosAtrasoLabel = dados.jurosAtraso.tipo === ContractMultaTipo.PERCENTUAL ? `Juros de mora (atraso):` : `Juros de mora diário:`;
-    const jurosAtrasoFormat = dados.jurosAtraso.tipo === ContractMultaTipo.PERCENTUAL ? ' ao mês' : ' / dia';
-    const jurosAtrasoValor = formatMulta(dados.jurosAtraso.tipo, dados.jurosAtraso.valor);
-    page.drawText(`${jurosAtrasoLabel} ${jurosAtrasoValor}${jurosAtrasoFormat}`, { x: margin, y: currentY - 42, size: smallTextSize, font });
+    currentY = drawTwoColumnRow(multaAtrasoTexto, multaRescisaoTexto, currentY);
 
-    currentY -= 74;
+    const jurosAtrasoTexto = (dados.jurosAtraso && dados.jurosAtraso.valor > 0)
+      ? `${dados.jurosAtraso.tipo === ContractMultaTipo.PERCENTUAL ? 'Juros de mora (atraso):' : 'Juros de mora diário:'} ${formatMulta(dados.jurosAtraso.tipo, dados.jurosAtraso.valor)}${dados.jurosAtraso.tipo === ContractMultaTipo.PERCENTUAL ? ' ao mês' : ' / dia'}`
+      : 'Juros de mora (atraso):';
+
+    currentY = drawFullWidthRow(jurosAtrasoTexto, currentY);
+
+    currentY -= sectionSpacing;
 
     const intro = "As partes acima identificadas têm, entre si, justo e acertado o presente Contrato de Prestação de Serviços de Transportes Escolares, sob as cláusulas e as seguintes condições.";
     const introLines = await this.splitTextToLines(intro, fontItalic, fontSizeBody, width);
@@ -296,7 +507,7 @@ export class InHouseContractProvider implements ContractProvider {
       currentY -= lineHeight;
     }
 
-    currentY -= 15;
+    currentY -= 10;
 
     // Processamento Dinâmico de Seções e Cláusulas
     let sections: { title: string; clauses: string[] }[] = [];
@@ -321,9 +532,8 @@ export class InHouseContractProvider implements ContractProvider {
     let clauseCounter = 1;
 
     for (const section of sections) {
-      currentY -= 20;
+      currentY -= 14;
 
-      // Calcular altura necessária para o Título da Seção + 1ª Cláusula da Seção (Evitar cabeçalho órfão)
       let firstClauseHeight = 60;
       if (section.clauses.length > 0) {
         const firstClauseText = `Cláusula ${clauseCounter}ª - ${section.clauses[0]}`;
@@ -331,9 +541,9 @@ export class InHouseContractProvider implements ContractProvider {
         firstClauseHeight = firstClauseLines.length * lineHeight + (lineHeight / 2);
       }
 
-      const totalSectionHeaderSpace = (headerSpacing + 6) + firstClauseHeight + 20;
+      const totalSectionHeaderSpace = (headerSpacing + 6) + firstClauseHeight + 12;
 
-      if (currentY - totalSectionHeaderSpace < 50) {
+      if (currentY - totalSectionHeaderSpace < 45) {
         page = pdfDoc.addPage([595, 842]);
         currentY = 800;
       }
@@ -361,25 +571,23 @@ export class InHouseContractProvider implements ContractProvider {
           }
           currentY -= lineHeight;
         }
-        currentY -= (lineHeight / 2); // Espaço extra entre cláusulas
+        currentY -= (lineHeight / 2);
         clauseCounter++;
       }
 
-      // Espaçamento adicional após cada seção completa
-      currentY -= 16;
+      currentY -= 14;
     }
 
-    if (currentY < 200) { // Garantir espaço para assinaturas
+    if (currentY < 155) {
       page = pdfDoc.addPage([595, 842]);
       currentY = 800;
     }
 
-    currentY -= 40;
+    currentY -= 30;
     const today = getNowBR().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
 
-
     page.drawText(`${today}`, { x: margin, y: currentY, size: smallTextSize, font });
-    currentY -= 80; // Mais espaço para assinar
+    currentY -= 68;
 
     // Linhas de Assinatura
     const signatureLineY = currentY;
@@ -396,12 +604,27 @@ export class InHouseContractProvider implements ContractProvider {
 
     if (dados.assinaturaCondutorUrl) {
       try {
-        const resp = await fetch(dados.assinaturaCondutorUrl);
-        const signatureBytes = await resp.arrayBuffer();
-        const signatureImage = await pdfDoc.embedPng(signatureBytes);
-        // Melhor posicionamento da assinatura do motorista (usando a mesma referência Y da linha)
-        page.drawImage(signatureImage, { x: margin, y: signatureLineY + 2, width: 150, height: 50 });
-      } catch (e) { console.error('Error signature', e); }
+        const imageBuffer = await resolveImageBuffer(dados.assinaturaCondutorUrl);
+        if (imageBuffer) {
+          const signatureImage = await embedImageSafely(pdfDoc, imageBuffer);
+          if (signatureImage) {
+            const { width: imgW, height: imgH } = signatureImage;
+            const targetWidth = 150;
+            const targetHeight = (imgH / imgW) * targetWidth;
+            const maxHeight = 50;
+            const finalHeight = Math.min(targetHeight, maxHeight);
+            const finalWidth = (imgW / imgH) * finalHeight;
+            page.drawImage(signatureImage, {
+              x: margin,
+              y: signatureLineY + 2,
+              width: finalWidth,
+              height: finalHeight,
+            });
+          }
+        }
+      } catch (e) {
+        console.error('Error signature', e);
+      }
     }
 
     // ADICIONAR LOGO NO FIM DA PÁGINA (CENTRALIZADO)

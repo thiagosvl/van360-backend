@@ -4,9 +4,11 @@ import {
     EVENTO_ROTA_INICIADA_IDA,
     EVENTO_ROTA_A_CAMINHO_IDA,
     EVENTO_ROTA_EMBARCOU_IDA,
+    EVENTO_ROTA_DESFEITO_EMBARQUE_IDA,
     EVENTO_ROTA_INICIADA_VOLTA,
     EVENTO_ROTA_A_CAMINHO_VOLTA,
     EVENTO_ROTA_DESEMBARCOU_VOLTA,
+    EVENTO_ROTA_DESFEITO_DESEMBARQUE_VOLTA,
     EVENTO_ROTA_REORDENADA,
     EVENTO_PASSAGEIRO_CONTRATO_ASSINADO,
     EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
@@ -28,11 +30,13 @@ import {
     EVENTO_MOTORISTA_INDICACAO_BONUS,
     EVENTO_MOTORISTA_INDICACAO_CADASTRO,
     EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO,
+    EVENTO_MOTORISTA_TRIAL_BONUS_INATIVO,
     EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1,
     EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2,
     EVENTO_MOTORISTA_NOVO_PRE_CADASTRO,
     EVENTO_MOTORISTA_AUSENCIA_REGISTRADA,
-    EVENTO_MOTORISTA_AUSENCIA_REMOVIDA
+    EVENTO_MOTORISTA_AUSENCIA_REMOVIDA,
+    EVENTO_MOTORISTA_COBRANCAS_HOJE
 } from "../../../../config/constants.js";
 import { FirebaseDriverTemplates, FirebasePassengerTemplates, FirebaseMessagePayload } from "./firebase.template.js";
 
@@ -44,6 +48,7 @@ export class FirebaseMapper {
                 case EVENTO_MOTORISTA_TESTE_BOAS_VINDAS: return FirebaseDriverTemplates.welcomeTrial(contextData);
                 case EVENTO_MOTORISTA_TESTE_ENCERRADO: return FirebaseDriverTemplates.trialEnded(contextData);
                 case EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO: return FirebaseDriverTemplates.trialLastCall(contextData);
+                case EVENTO_MOTORISTA_TRIAL_BONUS_INATIVO: return FirebaseDriverTemplates.trialBonusInactive(contextData);
                 case EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1: return FirebaseDriverTemplates.trialRecovery1(contextData);
                 case EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2: return FirebaseDriverTemplates.trialRecovery2(contextData);
                 case EVENTO_MOTORISTA_NOVO_PRE_CADASTRO: return FirebaseDriverTemplates.newPassengerPreRegistration(contextData);
@@ -58,6 +63,7 @@ export class FirebaseMapper {
                 case EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_1: return FirebaseDriverTemplates.renewalRecovery1(contextData);
                 case EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_FINAL: return FirebaseDriverTemplates.renewalRecoveryFinal(contextData);
                 case EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS: return FirebaseDriverTemplates.weeklySummary(contextData);
+                case EVENTO_MOTORISTA_COBRANCAS_HOJE: return FirebaseDriverTemplates.dueTodayDriver(contextData);
                 case EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA: return FirebaseDriverTemplates.birthdayReminder(contextData);
                 case EVENTO_MOTORISTA_INDICACAO_BONUS: return FirebaseDriverTemplates.referralBonus(contextData);
                 case EVENTO_MOTORISTA_INDICACAO_CADASTRO: return FirebaseDriverTemplates.referralRegistered(contextData);
@@ -71,9 +77,11 @@ export class FirebaseMapper {
                 case EVENTO_ROTA_INICIADA_IDA: return FirebasePassengerTemplates.routeStartedIda(contextData);
                 case EVENTO_ROTA_A_CAMINHO_IDA: return FirebasePassengerTemplates.routeEnRouteIda(contextData);
                 case EVENTO_ROTA_EMBARCOU_IDA: return FirebasePassengerTemplates.routeBoardedIda(contextData);
+                case EVENTO_ROTA_DESFEITO_EMBARQUE_IDA: return FirebasePassengerTemplates.routeBoardingCancelledIda(contextData);
                 case EVENTO_ROTA_INICIADA_VOLTA: return FirebasePassengerTemplates.routeStartedVolta(contextData);
                 case EVENTO_ROTA_A_CAMINHO_VOLTA: return FirebasePassengerTemplates.routeEnRouteVolta(contextData);
                 case EVENTO_ROTA_DESEMBARCOU_VOLTA: return FirebasePassengerTemplates.routeDisembarkedVolta(contextData);
+                case EVENTO_ROTA_DESFEITO_DESEMBARQUE_VOLTA: return FirebasePassengerTemplates.routeDisembarkingCancelledVolta(contextData);
                 case EVENTO_ROTA_REORDENADA: return FirebasePassengerTemplates.routeReordered(contextData);
                 
                 default:

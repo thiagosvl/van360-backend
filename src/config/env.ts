@@ -10,6 +10,7 @@ export const env = {
   CRON_SECRET: process.env.CRON_SECRET || "super_secret_cron_key",
   BACKEND_URL: process.env.BACKEND_URL || "http://host.docker.internal:3000",
   FRONTEND_URL: process.env.FRONTEND_URL || "",
+  SITE_URL: process.env.SITE_URL || "https://van360.com.br",
   
   // Observability
   SENTRY_DSN: process.env.SENTRY_DSN,
@@ -18,6 +19,9 @@ export const env = {
   SENTRY_PROFILES_SAMPLE_RATE: process.env.SENTRY_PROFILES_SAMPLE_RATE || "0.1",
   LOGTAIL_TOKEN: process.env.LOGTAIL_TOKEN,
   LOG_LEVEL: process.env.LOG_LEVEL || "info",
+
+  TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || "",
+  TELEGRAM_ADMIN_CHAT_ID: process.env.TELEGRAM_ADMIN_CHAT_ID || "",
 
   // C6 Bank
   C6_CLIENT_ID: process.env.C6_CLIENT_ID!,
@@ -45,4 +49,12 @@ export const env = {
   WABA_PHONE_NUMBER_ID: process.env.WABA_PHONE_NUMBER_ID || "",
   WABA_ACCESS_TOKEN: process.env.WABA_ACCESS_TOKEN || "",
   WABA_WEBHOOK_VERIFY_TOKEN: process.env.WABA_WEBHOOK_VERIFY_TOKEN || "",
+
+  // Meta Conversions API (CAPI) & Pixel
+  META_PIXEL_ID: process.env.META_PIXEL_ID || "1084978180612741",
+  META_CAPI_ACCESS_TOKEN: process.env.META_CAPI_ACCESS_TOKEN || "EAAccnPVbFswBSdvXRYFidco8uHypPJ5p1pBAjtjft2X69tXU5igUDXtMMhcX1atYtIddZCkkLgOizAvor45EPV1XkPLB2ZCMFSsRiMAqduXLy6X2ee513unHdxxGo8BPdE8Foaf6l9wfvCMMFUPl3OGSirRFbrkqbYxpDum9jqz7ch0EikabyNT1Gq3VQtugZDZD",
+  META_TEST_EVENT_CODE: process.env.META_TEST_EVENT_CODE || "",
+
+  PORTAL_DEPLOY_WEBHOOK: process.env.PORTAL_DEPLOY_WEBHOOK || "",
+  BLOG_DEPLOY_WEBHOOK: process.env.BLOG_DEPLOY_WEBHOOK || "",
 };

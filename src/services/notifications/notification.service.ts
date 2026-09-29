@@ -2,6 +2,7 @@ import { EVENTO_MOTORISTA_TESTE_BOAS_VINDAS } from "../../config/constants.js";
 import { NotificationChannelEnum, UserType } from "../../types/enums.js";
 import { logger } from "../../config/logger.js";
 import { usuarioPushTokenRepository } from "../../repositories/usuario-push-token.repository.js";
+import { supabaseAdmin } from "../../config/supabase.js";
 
 import { onlyDigits } from "../../utils/string.utils.js";
 
@@ -12,6 +13,7 @@ import { WabaAdapter } from "./adapters/waba/waba.adapter.js";
 import { ResendAdapter } from "./adapters/resend/resend.adapter.js";
 import { TelegramAdapter } from "./adapters/telegram/telegram.adapter.js";
 import { FirebasePushAdapter } from "./adapters/firebase/firebase.adapter.js";
+import { extractErrorMessage } from "../../utils/error.utils.js";
 
 export type NotificationChannel = "EVOLUTION" | "SMS" | "RESEND" | "TELEGRAM" | "FIREBASE" | "WABA";
 
@@ -22,6 +24,7 @@ export interface NotificationOptions {
     };
     jobId?: string;
     usuarioId?: string;
+    passageiroId?: string;
     email?: string;
     metadata?: Record<string, unknown>;
 }
@@ -60,7 +63,7 @@ class NotificationService {
         try {
             return await adapter.send(eventName, enrichedContext, enrichedOptions);
         } catch (error: unknown) {
-            const msg = error instanceof Error ? error.message : String(error);
+            const msg = extractErrorMessage(error);
             return { success: false, error: msg };
         }
     }
@@ -203,10 +206,22 @@ class NotificationService {
             );
             return false;
         }
-        const usuarioId = options?.usuarioId || (contextData?.usuarioId as string);
+        let usuarioId = options?.usuarioId || (contextData?.usuarioId as string);
+        const passageiroId = options?.passageiroId || (contextData?.passageiroId as string) || (contextData?.passageiro_id as string);
 
-        const enrichedOptions = { ...options, usuarioId };
-        const enrichedContext = { ...contextData, to, usuarioId };
+        if (!usuarioId && passageiroId) {
+            const { data: pass } = await supabaseAdmin
+                .from("passageiros")
+                .select("usuario_id")
+                .eq("id", passageiroId)
+                .maybeSingle();
+            if (pass?.usuario_id) {
+                usuarioId = pass.usuario_id;
+            }
+        }
+
+        const enrichedOptions = { ...options, usuarioId, passageiroId };
+        const enrichedContext = { ...contextData, to, usuarioId, passageiroId };
 
         try {
             const { notificationQueueService } = await import("./notification-queue.service.js");
@@ -229,10 +244,6 @@ class NotificationService {
                 );
 
                 if (!isDeliverable) {
-                    logger.debug(
-                        { channel, eventName, to },
-                        "[NotificationService] Canal ignorado por ausência de destinatário/token válido (Short-Circuit)."
-                    );
                     continue;
                 }
 
@@ -243,23 +254,20 @@ class NotificationService {
                         destinatario: targetAddress,
                         payload: enrichedContext,
                         options: enrichedOptions,
-                        usuarioId
+                        usuarioId,
+                        passageiroId
                     })
                 );
             }
 
             if (results.length === 0) {
-                logger.info(
-                    { eventName, to, channels },
-                    "[NotificationService] Nenhum canal elegível para envio (Short-Circuit)."
-                );
                 return false;
             }
 
             const outcomes = await Promise.allSettled(results);
             return outcomes.some(o => o.status === "fulfilled" && o.value === true);
         } catch (error: unknown) {
-            const msg = error instanceof Error ? error.message : String(error);
+            const msg = extractErrorMessage(error);
             logger.error({ error: msg, eventName }, "[NotificationService] Erro ao orquestrar notificações.");
             return false;
         }
@@ -312,7 +320,7 @@ class NotificationService {
         const userTokenCount = await usuarioPushTokenRepository.countTokensByUsuarioId(userId);
         const isFirstToken = userTokenCount === 0;
 
-        await usuarioPushTokenRepository.insertToken(userId, token, platform);
+        await usuarioPushTokenRepository.upsertToken(userId, token, platform);
         logger.info({ userId, isFirstToken, count: userTokenCount + 1 }, "[NotificationService.registerPushToken] Token salvo com sucesso na tabela usuario_push_tokens");
 
         if (isFirstToken) {

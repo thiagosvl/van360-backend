@@ -53,17 +53,18 @@ export const subscriptionRepository = {
             .single();
     },
 
+    async getSubscriptionWithPlanByUserId(userId: string) {
+        return supabaseAdmin
+            .from("assinaturas")
+            .select("*, planos(*)")
+            .eq("usuario_id", userId)
+            .maybeSingle();
+    },
+
     async updateStatus(id: string, status: string) {
         return supabaseAdmin
             .from("assinaturas")
             .update({ status })
-            .eq("id", id);
-    },
-
-    async updatePreferredMethod(id: string, preferredMethodId: string) {
-        return supabaseAdmin
-            .from("assinaturas")
-            .update({ metodo_pagamento_preferencial_id: preferredMethodId })
             .eq("id", id);
     },
 
@@ -98,6 +99,13 @@ export const subscriptionRepository = {
         return supabaseAdmin
             .from("assinaturas")
             .update({ trial_ends_at: newTrialEnd, updated_at: new Date().toISOString() })
+            .eq("id", id);
+    },
+
+    async extendTrialBonus(id: string, newTrialEnd: string) {
+        return supabaseAdmin
+            .from("assinaturas")
+            .update({ trial_ends_at: newTrialEnd, trial_estendido: true, updated_at: new Date().toISOString() })
             .eq("id", id);
     },
 

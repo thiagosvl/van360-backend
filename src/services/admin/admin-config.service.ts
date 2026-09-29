@@ -1,5 +1,7 @@
 import { logger } from "../../config/logger.js";
 import { adminConfigRepository } from "../../repositories/admin/admin-config.repository.js";
+import { triggerDeployWebhook } from "../../utils/deploy.utils.js";
+import { ConfigKey } from "../../types/enums.js";
 
 export const adminConfigService = {
   async listConfigs() {
@@ -17,6 +19,11 @@ export const adminConfigService = {
       logger.error({ error, chave }, "[AdminConfigService] Erro ao atualizar configuração.");
       throw error;
     }
+
+    if (chave === ConfigKey.SAAS_PROMOCAO_ATIVA) {
+      await triggerDeployWebhook();
+    }
+
     return data;
   },
 };

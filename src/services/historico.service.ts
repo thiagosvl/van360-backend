@@ -1,7 +1,8 @@
 import { logger } from "../config/logger.js";
 import { historicoRepository } from "../repositories/historico.repository.js";
-import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, DispositivoCadastro } from "../types/enums.js";
 import { getContextIp } from "../utils/context.js";
+import { RegistrarEventoInput } from "../schemas/telemetria.schema.js";
 
 interface LogAtividadeParams {
     usuario_id: string;
@@ -9,11 +10,117 @@ interface LogAtividadeParams {
     entidade_id: string;
     acao: AtividadeAcao;
     descricao: string;
-    meta?: Record<string, any>;
+    meta?: Record<string, unknown>;
     ip_address?: string;
 }
 
+function resolveDescricaoTelemetria(acao: AtividadeAcao, meta?: Record<string, unknown>): string {
+    if (acao === AtividadeAcao.APP_ABERTO) {
+        const disp = meta?.dispositivo as DispositivoCadastro | undefined;
+        switch (disp) {
+            case DispositivoCadastro.APP_ANDROID:
+                return "Acesso registrado via App Android.";
+            case DispositivoCadastro.APP_IOS:
+                return "Acesso registrado via App Iphone (iOS).";
+            case DispositivoCadastro.WEB_DESKTOP:
+                return "Acesso registrado via navegador (computador).";
+            case DispositivoCadastro.WEB_MOBILE_ANDROID:
+            case DispositivoCadastro.WEB_MOBILE_IOS:
+                return "Acesso registrado via navegador (celular).";
+            default:
+                return "Acesso ao sistema registrado.";
+        }
+    }
+
+    if (acao === AtividadeAcao.RECIBO_MENSAL_COMPARTILHADO) {
+        const mes = meta?.mes;
+        const ano = meta?.ano;
+        return mes && ano
+            ? `Recibo mensal de ${mes}/${ano} compartilhado.`
+            : "Recibo mensal compartilhado.";
+    }
+
+    if (acao === AtividadeAcao.RECIBO_ANUAL_COMPARTILHADO) {
+        const ano = meta?.ano;
+        return ano
+            ? `Recibo anual de ${ano} compartilhado.`
+            : "Recibo anual compartilhado.";
+    }
+
+    if (acao === AtividadeAcao.FLOATING_BUTTON_CLICADO) {
+        const tela = meta?.tela as string | undefined;
+        const nomesTelas: Record<string, string> = {
+            parcelas: "tela de Parcelas",
+            gastos: "tela de Gastos",
+            contratos: "tela de Contratos",
+            relatorios: "tela de Relatórios",
+            alunos: "tela de Alunos",
+            carteirinha: "carteirinha do aluno",
+        };
+        const local = tela && nomesTelas[tela] ? nomesTelas[tela] : (tela ? `tela de ${tela}` : undefined);
+        return local
+            ? `Botão flutuante (tutorial) clicado na ${local}.`
+            : "Botão flutuante (tutorial) clicado.";
+    }
+
+    if (acao === AtividadeAcao.CHAMADA_RAPIDA_CONFIRMADA) {
+        const rotaNome = meta?.rota_nome as string | undefined;
+        const presentes = meta?.total_presentes;
+        const ausentes = meta?.total_ausentes;
+        const prefix = rotaNome ? `Chamada rápida da rota "${rotaNome}" confirmada` : "Chamada rápida confirmada";
+        if (presentes !== undefined && ausentes !== undefined) {
+            return `${prefix}: ${presentes} presentes, ${ausentes} ausentes.`;
+        }
+        return `${prefix}.`;
+    }
+
+    return `Ação de telemetria registrada: ${acao}`;
+}
+
+const appOpenThrottleMap = new Map<string, number>();
+const APP_OPEN_BACKEND_THROTTLE_MS = 5 * 60 * 1000;
+
+function shouldThrottleAppOpen(usuarioId: string): boolean {
+    const now = Date.now();
+    const lastTime = appOpenThrottleMap.get(usuarioId);
+
+    if (lastTime && now - lastTime < APP_OPEN_BACKEND_THROTTLE_MS) {
+        return true;
+    }
+
+    appOpenThrottleMap.set(usuarioId, now);
+
+    if (appOpenThrottleMap.size > 5000) {
+        for (const [key, timestamp] of appOpenThrottleMap.entries()) {
+            if (now - timestamp > APP_OPEN_BACKEND_THROTTLE_MS) {
+                appOpenThrottleMap.delete(key);
+            }
+        }
+    }
+
+    return false;
+}
+
 export const historicoService = {
+    async registrarEventoTelemetria(usuarioId: string, payload: RegistrarEventoInput): Promise<void> {
+        if (payload.acao === AtividadeAcao.APP_ABERTO && shouldThrottleAppOpen(usuarioId)) {
+            return;
+        }
+
+        const entidadeTipo = payload.entidade_tipo || AtividadeEntidadeTipo.USUARIO;
+        const entidadeId = payload.entidade_id || usuarioId;
+        const descricao = payload.descricao || resolveDescricaoTelemetria(payload.acao, payload.meta);
+
+        await this.log({
+            usuario_id: usuarioId,
+            entidade_tipo: entidadeTipo,
+            entidade_id: entidadeId,
+            acao: payload.acao,
+            descricao,
+            meta: payload.meta || {},
+        });
+    },
+
     /**
      * Registra uma nova atividade no log de auditoria.
      */

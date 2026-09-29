@@ -1,10 +1,14 @@
 import { moneyToNumber } from "../utils/currency.utils.js";
-import { cleanString, onlyDigits } from "../utils/string.utils.js";
+import { cleanString, onlyDigits, normalizePhone, isSamePerson } from "../utils/string.utils.js";
 import { toPersistenceString } from "../utils/date.utils.js";
 import { CreatePrePassageiroDTO } from "../types/dtos/pre-passageiro.dto.js";
 import { prePassageiroRepository } from "../repositories/pre-passageiro.repository.js";
 
 import { userRepository } from "../repositories/user.repository.js";
+import { supabaseAdmin } from "../config/supabase.js";
+import { AppError } from "../errors/AppError.js";
+import { getFirstName, getFirstAndSecondName } from "../utils/format.js";
+import { getDonoContaId } from "../utils/user.utils.js";
 
 export const prePassageiroService = {
   async listPrePassageiros(usuarioId: string, search?: string) {
@@ -32,7 +36,11 @@ export const prePassageiroService = {
     }
 
     const { data: targetUser } = await userRepository.getById(payload.usuario_id);
-    const targetOwnerId = targetUser?.conta_pai_id || payload.usuario_id;
+    const targetOwnerId = getDonoContaId(targetUser) || payload.usuario_id;
+
+    if (payload.horario_entrada && payload.horario_saida && payload.horario_saida <= payload.horario_entrada) {
+      throw new AppError("Horário de saída deve ser maior que o horário de entrada", 400);
+    }
 
     const prePassageiroData = {
       usuario_id: targetOwnerId,
@@ -40,7 +48,7 @@ export const prePassageiroService = {
       nome_responsavel: cleanString(payload.nome_responsavel, true),
 
       cpf_responsavel: payload.cpf_responsavel ? onlyDigits(payload.cpf_responsavel) : null,
-      telefone_responsavel: payload.telefone_responsavel ? onlyDigits(payload.telefone_responsavel) : null,
+      telefone_responsavel: payload.telefone_responsavel ? normalizePhone(payload.telefone_responsavel) : null,
       email_responsavel: payload.email_responsavel ? payload.email_responsavel.trim().toLowerCase() : null,
       escola_id: payload.escola_id || null,
       periodo: payload.periodo || null,
@@ -57,12 +65,44 @@ export const prePassageiroService = {
       observacoes: payload.observacoes || null,
       modalidade: payload.modalidade || null,
       turma: payload.turma || null,
+      sala: payload.sala || null,
       nome_professor: payload.nome_professor || null,
       genero: payload.genero || null,
       parentesco_responsavel: payload.parentesco_responsavel || null,
       data_inicio_transporte: payload.data_inicio_transporte ? toPersistenceString(payload.data_inicio_transporte) : null,
-      data_nascimento: payload.data_nascimento ? toPersistenceString(payload.data_nascimento) : null
+      data_fim_transporte: payload.data_fim_transporte ? toPersistenceString(payload.data_fim_transporte) : null,
+      horario_entrada: payload.horario_entrada || null,
+      horario_saida: payload.horario_saida || null,
+      data_nascimento: payload.data_nascimento ? toPersistenceString(payload.data_nascimento) : null,
+      dispositivo_cadastro: payload.dispositivo_cadastro || null,
+      metadados_cadastro: payload.metadados_cadastro || {},
+      ano_letivo: payload.ano_letivo ? Number(payload.ano_letivo) : new Date().getFullYear(),
     };
+
+    if (prePassageiroData.telefone_responsavel) {
+      const { data: existingResp } = await supabaseAdmin
+        .from("responsaveis")
+        .select("cpf, nome")
+        .eq("telefone", prePassageiroData.telefone_responsavel)
+        .maybeSingle();
+
+      if (existingResp) {
+        if (existingResp.cpf && prePassageiroData.cpf_responsavel && existingResp.cpf !== prePassageiroData.cpf_responsavel) {
+          throw new AppError("Este telefone já está cadastrado com outro CPF. Verifique os dados.", 409);
+        }
+
+        const isSame = isSamePerson(existingResp.nome, prePassageiroData.nome_responsavel);
+
+        if (
+          existingResp.nome &&
+          prePassageiroData.nome_responsavel &&
+          !isSame &&
+          (!prePassageiroData.cpf_responsavel || !existingResp.cpf || prePassageiroData.cpf_responsavel !== existingResp.cpf)
+        ) {
+          throw new AppError("Este telefone já está cadastrado para outro responsável.", 409);
+        }
+      }
+    }
 
     const inserted = await prePassageiroRepository.insert(prePassageiroData);
 
@@ -78,7 +118,7 @@ export const prePassageiroService = {
       {
         nomeResponsavel: inserted.nome_responsavel,
         nomePassageiro: inserted.nome,
-        passageiroId: inserted.id,
+        prePassageiroId: inserted.id,
       },
       {
         channels: [NotificationChannelEnum.FIREBASE],
@@ -98,7 +138,7 @@ export const prePassageiroService = {
       entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
       entidade_id: inserted.id,
       acao: AtividadeAcao.PRE_CADASTRO_CRIADO,
-      descricao: `Cadastro de solicitação de passageiro preenchido para ${inserted.nome}.`,
+      descricao: `Responsável de ${getFirstAndSecondName(inserted.nome)} (${getFirstName(inserted.nome_responsavel)}) realizou a solicitação de cadastro.`,
       meta: { nome: inserted.nome, responsavel: inserted.nome_responsavel }
     });
 

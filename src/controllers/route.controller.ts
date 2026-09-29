@@ -10,7 +10,8 @@ import {
   stepRouteExecutionSchema,
   reorderExecucaoSchema,
   createAusenciaSchema,
-  chamadaEscolaSchema
+  chamadaEscolaSchema,
+  buscarAlunosQuerySchema
 } from "../types/dtos/route.dto.js";
 
 export const routeController = {
@@ -161,7 +162,7 @@ export const routeController = {
     const authUid = request.user?.id;
     const result = await routeService.registrarAusenciaAntecipada({
       ...data,
-      registrado_por: authUid
+      registrado_por: request.data_owner_id || authUid
     });
     return reply.status(201).send(result);
   },
@@ -194,5 +195,27 @@ export const routeController = {
     logger.info({ passageiroId: id }, "RouteController.listRotasByPassageiro");
     const rotas = await routeService.listRotasByPassageiro(id);
     return reply.status(200).send(rotas);
+  },
+
+  listAusenciasFuturas: async (request: FastifyRequest, reply: FastifyReply) => {
+    const usuarioId = request.data_owner_id || request.user?.id;
+    if (!usuarioId) {
+      throw new AppError("Usuário não autenticado", 401);
+    }
+    const { rota_id, data_inicio } = request.query as { rota_id?: string; data_inicio?: string };
+    logger.info({ usuarioId, rota_id, data_inicio }, "RouteController.listAusenciasFuturas");
+    const ausencias = await routeService.listAusenciasFuturas(usuarioId, rota_id, data_inicio);
+    return reply.status(200).send(ausencias);
+  },
+
+  buscarAlunos: async (request: FastifyRequest, reply: FastifyReply) => {
+    const usuarioId = request.data_owner_id || request.user?.id;
+    if (!usuarioId) {
+      throw new AppError("Usuário não autenticado", 401);
+    }
+    const { search, rota_id } = buscarAlunosQuerySchema.parse(request.query);
+    logger.info({ usuarioId, rota_id, search }, "RouteController.buscarAlunos");
+    const alunos = await routeService.buscarAlunos(usuarioId, search, rota_id);
+    return reply.status(200).send(alunos);
   }
 };

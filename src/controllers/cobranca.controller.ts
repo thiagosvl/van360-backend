@@ -1,17 +1,19 @@
-import { NotificationChannelEnum } from '../types/enums.js';
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
 import { cobrancaPagamentoService } from "../services/cobranca-pagamento.service.js";
 import { cobrancaService } from "../services/cobranca.service.js";
-import { historicoService } from "../services/historico.service.js";
+import { receiptService } from "../services/receipt.service.js";
+import { reciboAnualService } from "../services/recibo-anual.service.js";
 import {
   createCobrancaSchema,
   listCobrancasFiltersSchema,
+  obterReciboAnualParamsSchema,
+  obterReciboAnualQuerySchema,
   registrarPagamentoManualSchema,
+  complementarPagamentoManualSchema,
   toggleNotificacoesSchema,
   updateCobrancaSchema
 } from "../types/dtos/cobranca.dto.js";
-import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 
 export const cobrancaController = {
   create: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -95,5 +97,38 @@ export const cobrancaController = {
     const data = registrarPagamentoManualSchema.parse(request.body);
     const cobranca = await cobrancaPagamentoService.registrarPagamentoManual(id, data);
     return reply.status(200).send(cobranca);
+  },
+
+  complementarPagamentoManual: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    logger.info({ cobrancaId: id }, "CobrancaController.complementarPagamentoManual - Starting");
+    const data = complementarPagamentoManualSchema.parse(request.body);
+    const cobranca = await cobrancaPagamentoService.complementarPagamentoManual(id, data);
+    return reply.status(200).send(cobranca);
+  },
+
+  restaurar: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    logger.info({ cobrancaId: id }, "CobrancaController.restaurar - Starting");
+    const cobranca = await cobrancaService.restaurarCobranca(id);
+    return reply.status(200).send(cobranca);
+  },
+
+  gerarRecibo: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    logger.info({ cobrancaId: id }, "CobrancaController.gerarRecibo - Starting");
+    const reciboUrl = await receiptService.generateForCobranca(id);
+    if (!reciboUrl) {
+      return reply.status(500).send({ error: "Erro ao gerar recibo." });
+    }
+    return reply.status(200).send({ recibo_url: reciboUrl });
+  },
+
+  obterReciboAnual: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { passageiroId } = obterReciboAnualParamsSchema.parse(request.params);
+    const { ano } = obterReciboAnualQuerySchema.parse(request.query);
+    logger.info({ passageiroId, ano }, "CobrancaController.obterReciboAnual - Starting");
+    const recibo = await reciboAnualService.obterOuGerarReciboAnual(passageiroId, ano, request.data_owner_id);
+    return reply.status(200).send(recibo);
   }
 };

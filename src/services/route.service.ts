@@ -1,16 +1,19 @@
 import { AppError } from "../errors/AppError.js";
 import { CreateRouteDTO, UpdateRouteDTO, StepRouteExecutionDTO, ReorderExecucaoDTO, CreateAusenciaDTO, ChamadaEscolaDTO, DELETE_AUSENCIA_BY_QUERY_PARAM, ExecucaoResumidaDTO, ExecucaoParadaLeveDTO } from "../types/dtos/route.dto.js";
 import { RouteExecutionStatus, RouteStopStatus, RouteNodeType, RouteSentido, AtividadeAcao, AtividadeEntidadeTipo, UserType, RouteBroadcastEvent, NotificationChannelEnum, TipoResponsavel, RastreamentoModo } from "../types/enums.js";
-import { EVENTO_ROTA_INICIADA_IDA, EVENTO_ROTA_A_CAMINHO_IDA, EVENTO_ROTA_EMBARCOU_IDA, EVENTO_ROTA_INICIADA_VOLTA, EVENTO_ROTA_A_CAMINHO_VOLTA, EVENTO_ROTA_DESEMBARCOU_VOLTA, EVENTO_ROTA_REORDENADA } from "../config/constants.js";
+import { EVENTO_ROTA_INICIADA_IDA, EVENTO_ROTA_A_CAMINHO_IDA, EVENTO_ROTA_EMBARCOU_IDA, EVENTO_ROTA_DESFEITO_EMBARQUE_IDA, EVENTO_ROTA_INICIADA_VOLTA, EVENTO_ROTA_A_CAMINHO_VOLTA, EVENTO_ROTA_DESEMBARCOU_VOLTA, EVENTO_ROTA_DESFEITO_DESEMBARQUE_VOLTA, EVENTO_ROTA_REORDENADA } from "../config/constants.js";
 import { routeRepository } from "../repositories/route.repository.js";
 import { userRepository } from "../repositories/user.repository.js";
 import { veiculoRepository } from "../repositories/veiculo.repository.js";
 import { passageiroRepository } from "../repositories/passageiro.repository.js";
 import { usuarioConfiguracoesRepository } from "../repositories/usuario-configuracoes.repository.js";
 import { notificationService } from "./notifications/notification.service.js";
+import { NotificationContextFormatter } from "./notifications/utils/notification-context.formatter.js";
 import { historicoService } from "./historico.service.js";
 import { logger } from "../config/logger.js";
 import { getNowBR, toPersistenceString } from "../utils/date.utils.js";
+import { calculateAuditDiff } from "../utils/audit-diff.util.js";
+import { getDonoContaId, isSubConta } from "../utils/user.utils.js";
 
 import { supabaseAdmin } from "../config/supabase.js";
 
@@ -18,12 +21,12 @@ const resolveDataOwnerId = async (usuarioId: string): Promise<{ dataOwnerId: str
   if (!usuarioId) return { dataOwnerId: usuarioId };
   try {
     const { data: userProfile } = await userRepository.getProfileData(usuarioId);
-    let dataOwnerId = userProfile?.conta_pai_id || usuarioId;
+    let dataOwnerId = getDonoContaId(userProfile) || usuarioId;
     const veiculoId = userProfile?.veiculo_id || undefined;
     const tipo = userProfile?.tipo || undefined;
     const contaPaiId = userProfile?.conta_pai_id || undefined;
 
-    if (!userProfile?.conta_pai_id && veiculoId) {
+    if (!isSubConta(userProfile) && veiculoId) {
       const { data: veiculo } = await veiculoRepository.getUsuarioIdAndPlaca(veiculoId);
       if (veiculo?.usuario_id) {
         dataOwnerId = veiculo.usuario_id;
@@ -150,6 +153,37 @@ const updateRoute = async (id: string, data: UpdateRouteDTO): Promise<any> => {
     veiculoId: updatedRoute?.veiculo_id,
     previousVeiculoId: oldRouteData?.veiculo_id
   });
+
+  const diff = calculateAuditDiff(oldRouteData, updatePayload);
+  if (data.paradas !== undefined) {
+    const totalParadasAntigas = oldRouteData?.paradas?.length || 0;
+    const totalParadasNovas = data.paradas.length;
+    if (totalParadasAntigas !== totalParadasNovas) {
+      diff.alteracoes.push({
+        campo: "total_paradas",
+        de: totalParadasAntigas,
+        para: totalParadasNovas
+      });
+      diff.campos.push("total_paradas");
+      diff.hasChanges = true;
+    }
+  }
+
+  if (diff.hasChanges && updatedRoute?.usuario_id) {
+    historicoService.log({
+      usuario_id: updatedRoute.usuario_id,
+      entidade_tipo: AtividadeEntidadeTipo.ROTA,
+      entidade_id: id,
+      acao: AtividadeAcao.ROTA_EDITADA,
+      descricao: `Rota "${updatedRoute.nome || 'Rota'}" atualizada.`,
+      meta: {
+        nome: updatedRoute.nome,
+        campos_alterados: diff.campos,
+        campos: diff.campos,
+        alteracoes: diff.alteracoes
+      }
+    });
+  }
 
   return updatedRoute;
 };
@@ -445,20 +479,21 @@ const iniciarRota = async (rotaId: string, usuarioId: string, notificarPais: boo
   });
 
   if (paradasValidas.length === 0) {
-    throw new AppError("Não há passageiros ativos cadastrados nesta rota.", 400);
+    throw new AppError("Não há alunos ativos cadastrados nesta rota.", 400);
   }
 
   const { dataOwnerId } = await resolveDataOwnerId(usuarioId);
-  const userConfig = await usuarioConfiguracoesRepository.getByUsuarioId(dataOwnerId);
+  const targetOwnerId = dataOwnerId || route.usuario_id || usuarioId;
+  const userConfig = await usuarioConfiguracoesRepository.getByUsuarioId(targetOwnerId);
   const snapshotConfig = {
-    notificar_inicio_rota: userConfig?.notificar_inicio_rota ?? true,
-    notificar_proxima_parada: userConfig?.notificar_proxima_parada ?? true,
-    notificar_conclusao_parada: userConfig?.notificar_conclusao_parada ?? true,
+    notificar_inicio_rota: userConfig?.notificar_inicio_rota ?? false,
+    notificar_proxima_parada: userConfig?.notificar_proxima_parada ?? false,
+    notificar_conclusao_parada: userConfig?.notificar_conclusao_parada ?? false,
     rastreamento_ativo: userConfig?.rastreamento_ativo ?? true,
     rastreamento_modo: userConfig?.rastreamento_modo ?? RastreamentoModo.COMPLETO,
   };
 
-  const { data: exec, error: execError } = await routeRepository.insertExecucao(rotaId, usuarioId, notificarPais, snapshotConfig);
+  const { data: exec, error: execError } = await routeRepository.insertExecucao(rotaId, targetOwnerId, notificarPais, snapshotConfig);
 
   if (execError) throw execError;
 
@@ -490,7 +525,7 @@ const iniciarRota = async (rotaId: string, usuarioId: string, notificarPais: boo
       logger.error({ err, execId: exec.id }, "Erro ao disparar notificação de rota iniciada")
     );
     notifyNextPendingPassengerStop(exec.id).catch((err) =>
-      logger.error({ err, execId: exec.id }, "Erro ao notificar próximo passageiro na inicialização da rota")
+      logger.error({ err, execId: exec.id }, "Erro ao notificar próximo aluno na inicialização da rota")
     );
   }
 
@@ -498,10 +533,9 @@ const iniciarRota = async (rotaId: string, usuarioId: string, notificarPais: boo
 
   const result = await getExecucaoDetail(exec.id);
 
-  // --- LOG DE AUDITORIA ---
-  if (usuarioId) {
+  if (targetOwnerId) {
     historicoService.log({
-      usuario_id: usuarioId,
+      usuario_id: targetOwnerId,
       entidade_tipo: AtividadeEntidadeTipo.ROTA,
       entidade_id: rotaId,
       acao: AtividadeAcao.ROTA_INICIADA,
@@ -520,7 +554,7 @@ const iniciarRota = async (rotaId: string, usuarioId: string, notificarPais: boo
 
   return {
     ...result,
-    alertaInativos: inativosContador > 0 ? `${inativosContador} passageiro(s) inativo(s) foram desconsiderados nesta corrida.` : null
+    alertaInativos: inativosContador > 0 ? `${inativosContador} aluno(s) inativo(s) foram desconsiderados nesta corrida.` : null
   };
 };
 
@@ -608,15 +642,27 @@ const atualizarParadaStatus = async (
         if (paradaObj?.passageiro_id) {
           let routeEvent: string | null = null;
           const sentido = (paradaObj as any)?.sentido;
+          const statusAnterior = paradaObj?.status;
+          const sentidaConclusaoAnterior = paradaObj?.notificacao_concluido_enviada ||
+            statusAnterior === RouteStopStatus.EMBARCADO ||
+            statusAnterior === RouteStopStatus.DESEMBARCADO;
 
           if (novoStatus === RouteStopStatus.EMBARCADO || novoStatus === RouteStopStatus.DESEMBARCADO) {
             routeEvent = sentido === RouteSentido.VOLTANDO ? EVENTO_ROTA_DESEMBARCOU_VOLTA : EVENTO_ROTA_EMBARCOU_IDA;
+          } else if (novoStatus === RouteStopStatus.PENDENTE && sentidaConclusaoAnterior) {
+            routeEvent = sentido === RouteSentido.VOLTANDO ? EVENTO_ROTA_DESFEITO_DESEMBARQUE_VOLTA : EVENTO_ROTA_DESFEITO_EMBARQUE_IDA;
           }
 
           const notificarConclusao = (exec as any)?.notificar_conclusao_parada !== false;
-          if (routeEvent && notificarConclusao && !paradaObj.notificacao_concluido_enviada) {
-            await routeRepository.updateNotificacaoConcluidoEnviada(paradaId, true);
-            await notifyParentRouteEvent(paradaObj.passageiro_id, routeEvent, exec);
+          if (routeEvent && notificarConclusao) {
+            if (novoStatus === RouteStopStatus.EMBARCADO || novoStatus === RouteStopStatus.DESEMBARCADO) {
+              if (!paradaObj.notificacao_concluido_enviada) {
+                await routeRepository.updateNotificacaoConcluidoEnviada(paradaId, true);
+                await notifyParentRouteEvent(paradaObj.passageiro_id, routeEvent, exec);
+              }
+            } else if (novoStatus === RouteStopStatus.PENDENTE) {
+              await notifyParentRouteEvent(paradaObj.passageiro_id, routeEvent, exec);
+            }
           }
         } else if (paradaObj?.tipo_no === RouteNodeType.ESCOLA && (novoStatus === RouteStopStatus.EMBARCADO || novoStatus === RouteStopStatus.DESEMBARCADO)) {
           await notifySchoolDepartureVolta(execucaoId, paradaId);
@@ -768,22 +814,31 @@ const notifyParentRouteEvent = async (passageiroId: string, eventType: string, e
   try {
     const passageiroInfo = await passageiroRepository.getResponsavelInfo(passageiroId);
     if (!passageiroInfo) return;
-    const resp = passageiroInfo.responsavel_principal;
-    if (resp?.telefone) {
-      await notificationService.notifyPassenger(
-        resp.telefone,
-        eventType,
-        {
-          nomePassageiro: passageiroInfo.nome,
-          passageiroId: passageiroInfo.id,
-          rotaId: execData.rota_id,
-          ...extraContext
-        },
-        { channels: [NotificationChannelEnum.FIREBASE], usuarioId: execData.usuario_id }
-      ).catch(err => logger.error({ err }, "[routeService] Erro ao enviar Push de rota ao responsável"));
-    }
+
+    const responsaveisHabilitados = await passageiroRepository.getResponsaveisNotificacaoRota(passageiroId);
+    if (!responsaveisHabilitados || responsaveisHabilitados.length === 0) return;
+
+    const payload = {
+      nomePassageiro: passageiroInfo.nome,
+      passageiroId: passageiroInfo.id,
+      rotaId: execData.rota_id,
+      genero: passageiroInfo.genero || null,
+      horario: NotificationContextFormatter.formatTime(new Date()),
+      ...extraContext
+    };
+
+    await Promise.allSettled(
+      responsaveisHabilitados.map(resp =>
+        notificationService.notifyPassenger(
+          resp.telefone,
+          eventType,
+          payload,
+          { channels: [NotificationChannelEnum.FIREBASE], usuarioId: execData.usuario_id, passageiroId: passageiroInfo.id }
+        ).catch(err => logger.error({ err, responsavelId: resp.id }, "[routeService] Erro ao enviar Push de rota ao responsável"))
+      )
+    );
   } catch (err) {
-    logger.error({ err }, "[routeService] Falha ao notificar responsável sobre status da rota");
+    logger.error({ err, passageiroId }, "[routeService] Falha ao notificar responsáveis sobre status da rota");
   }
 };
 
@@ -829,17 +884,6 @@ const processarChamadaEscola = async (execucaoId: string, data: ChamadaEscolaDTO
   }
 
   notifyFleetRealtime(RouteBroadcastEvent.STOP_STATUS_CHANGED, { execucaoId });
-
-  if ((exec as any)?.notificar_pais !== false) {
-    if (data.escola_parada_id) {
-      notifySchoolDepartureVolta(execucaoId, data.escola_parada_id).catch((bgErr) =>
-        logger.error({ bgErr, execucaoId }, "[routeService] Erro ao notificar saída da escola após chamada escola")
-      );
-    }
-    notifyNextPendingPassengerStop(execucaoId).catch((bgErr) =>
-      logger.error({ bgErr, execucaoId }, "[routeService] Erro ao notificar próximo após chamada escola")
-    );
-  }
 
   return await getExecucaoDetail(execucaoId);
 };
@@ -905,11 +949,11 @@ const cancelarExecucao = async (execucaoId: string): Promise<any> => {
   if (error) throw error;
 
   const execDetail = await getExecucaoDetail(execucaoId);
+  const targetOwnerId = execDetail?.rota?.usuario_id || execDetail?.usuario_id;
 
-  // --- LOG DE AUDITORIA ---
-  if (execDetail?.usuario_id) {
+  if (targetOwnerId) {
     historicoService.log({
-      usuario_id: execDetail.usuario_id,
+      usuario_id: targetOwnerId,
       entidade_tipo: AtividadeEntidadeTipo.ROTA,
       entidade_id: execDetail.rota_id || execucaoId,
       acao: AtividadeAcao.ROTA_CANCELADA,
@@ -950,11 +994,11 @@ const finalizarExecucao = async (execucaoId: string): Promise<any> => {
   });
 
   const execDetail = await getExecucaoDetail(execucaoId);
+  const targetOwnerId = execDetail?.rota?.usuario_id || execDetail?.usuario_id;
 
-  // --- LOG DE AUDITORIA ---
-  if (execDetail?.usuario_id) {
+  if (targetOwnerId) {
     historicoService.log({
-      usuario_id: execDetail.usuario_id,
+      usuario_id: targetOwnerId,
       entidade_tipo: AtividadeEntidadeTipo.ROTA,
       entidade_id: execDetail.rota_id || execucaoId,
       acao: AtividadeAcao.ROTA_CONCLUIDA,
@@ -976,7 +1020,7 @@ const checkEFinalizarSeTodasParadasConcluidas = async (execucaoId: string): Prom
 };
 
 const registrarAusenciaAntecipada = async (data: CreateAusenciaDTO & { registrado_por?: string }): Promise<any> => {
-  if (!data.passageiro_id) throw new AppError("Passageiro é obrigatório", 400);
+  if (!data.passageiro_id) throw new AppError("Aluno é obrigatório", 400);
   if (!data.rota_id) throw new AppError("Rota é obrigatória", 400);
   if (!data.data_ausencia) throw new AppError("Data da ausência é obrigatória", 400);
 
@@ -996,14 +1040,21 @@ const registrarAusenciaAntecipada = async (data: CreateAusenciaDTO & { registrad
 
   if (error) throw error;
 
-  // --- LOG DE AUDITORIA ---
-  if (data.registrado_por) {
+  let targetOwnerId = data.registrado_por;
+  if (targetOwnerId) {
+    const { dataOwnerId } = await resolveDataOwnerId(targetOwnerId);
+    if (dataOwnerId) {
+      targetOwnerId = dataOwnerId;
+    }
+  }
+
+  if (targetOwnerId) {
     historicoService.log({
-      usuario_id: data.registrado_por,
+      usuario_id: targetOwnerId,
       entidade_tipo: AtividadeEntidadeTipo.ROTA,
       entidade_id: data.rota_id,
       acao: AtividadeAcao.PASSAGEIRO_STATUS,
-      descricao: `Registrou ausência antecipada para o passageiro "${inserted?.passageiro?.nome || 'Passageiro'}" na data ${data.data_ausencia}.`,
+      descricao: `Registrou ausência antecipada para o aluno "${inserted?.passageiro?.nome || 'Aluno'}" na data ${data.data_ausencia}.`,
       meta: { passageiro_id: data.passageiro_id, rota_id: data.rota_id, data_ausencia: data.data_ausencia }
     });
   }
@@ -1084,7 +1135,7 @@ const listAusenciasByRota = async (rotaId: string, dataAusencia?: string): Promi
 };
 
 const listAusenciasByPassageiro = async (passageiroId: string): Promise<any[]> => {
-  if (!passageiroId) throw new AppError("ID do passageiro é obrigatório", 400);
+  if (!passageiroId) throw new AppError("ID do aluno é obrigatório", 400);
 
   const { data: ausencias, error } = await routeRepository.getAusenciasByPassageiro(passageiroId);
   if (error) throw error;
@@ -1093,7 +1144,7 @@ const listAusenciasByPassageiro = async (passageiroId: string): Promise<any[]> =
 };
 
 const listRotasByPassageiro = async (passageiroId: string): Promise<any[]> => {
-  if (!passageiroId) throw new AppError("ID do passageiro é obrigatório", 400);
+  if (!passageiroId) throw new AppError("ID do aluno é obrigatório", 400);
 
   const { data, error } = await routeRepository.getRotasByPassageiro(passageiroId);
   if (error) throw error;
@@ -1106,6 +1157,63 @@ const getExecucaoAtivaByVeiculoId = async (veiculoId: string): Promise<any> => {
   const { data, error } = await routeRepository.getExecucaoAtivaByVeiculoId(veiculoId);
   if (error) return null;
   return data || null;
+};
+
+const listAusenciasFuturas = async (usuarioId: string, rotaId?: string, dataInicio?: string): Promise<any[]> => {
+  if (!usuarioId) throw new AppError("ID do usuário é obrigatório", 400);
+
+  const { dataOwnerId } = await resolveDataOwnerId(usuarioId);
+  const targetDate = dataInicio || toPersistenceString(getNowBR());
+
+  const { data: ausencias, error } = await routeRepository.getAusenciasFuturas(dataOwnerId, targetDate, rotaId);
+  if (error) {
+    logger.error({ error: error.message, usuarioId, dataOwnerId, rotaId }, "[RouteService] Erro ao buscar ausências futuras");
+    throw new AppError("Erro ao buscar ausências futuras", 500);
+  }
+
+  return (ausencias || []).map((item: any) => {
+    const p = item.passageiro;
+    const responsaveis = p?.responsaveis || [];
+    const principalLink = Array.isArray(responsaveis)
+      ? responsaveis.find((l: any) => l.tipo === TipoResponsavel.PRINCIPAL) || responsaveis[0]
+      : null;
+    const resp = Array.isArray(principalLink?.responsavel) ? principalLink.responsavel[0] : principalLink?.responsavel;
+    const escola = Array.isArray(p?.escola) ? p.escola[0] : p?.escola;
+
+    return {
+      id: item.id,
+      data_ausencia: item.data_ausencia,
+      sentido: item.sentido,
+      created_at: item.created_at,
+      passageiro: p ? {
+        id: p.id,
+        nome: p.nome,
+        turma: p.turma || null,
+        escola_nome: escola?.nome || null,
+        responsavel_nome: resp?.nome || null,
+      } : null,
+      rota: item.rota,
+    };
+  });
+};
+
+const buscarAlunos = async (
+  usuarioId: string,
+  search: string,
+  rotaId?: string
+): Promise<{ id: string; nome: string; turma?: string | null; escola_nome?: string | null; responsavel_nome?: string | null }[]> => {
+  if (!usuarioId) throw new AppError("ID do usuário é obrigatório", 400);
+  if (!search || search.trim().length < 3) throw new AppError("O termo de busca deve conter pelo menos 3 caracteres", 400);
+
+  const { dataOwnerId } = await resolveDataOwnerId(usuarioId);
+  const { data, error } = await routeRepository.buscarAlunos(dataOwnerId, search, rotaId);
+
+  if (error) {
+    logger.error({ error: error.message, usuarioId, dataOwnerId, search, rotaId }, "[RouteService] Erro ao buscar alunos para rota/ausência");
+    throw new AppError("Erro ao buscar alunos", 500);
+  }
+
+  return (data || []) as { id: string; nome: string; turma?: string | null; escola_nome?: string | null; responsavel_nome?: string | null }[];
 };
 
 export const routeService = {
@@ -1127,5 +1235,7 @@ export const routeService = {
   removerAusenciaAntecipada,
   listAusenciasByRota,
   listAusenciasByPassageiro,
-  listRotasByPassageiro
+  listRotasByPassageiro,
+  listAusenciasFuturas,
+  buscarAlunos
 };

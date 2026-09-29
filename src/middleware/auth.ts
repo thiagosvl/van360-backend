@@ -1,8 +1,11 @@
 import { FastifyReply, FastifyRequest } from "fastify";
+import type { User } from "@supabase/supabase-js";
 import { authProvider } from "../services/providers/auth.provider.js";
 import { authRepository } from "../repositories/auth.repository.js";
+import { authCacheService, type AuthProfileData } from "../services/auth-cache.service.js";
 
 import { UserType } from "../types/enums.js";
+import { isSubConta, getDonoContaId } from "../utils/user.utils.js";
 
 export async function verifySupabaseJWT(
   request: FastifyRequest,
@@ -16,30 +19,51 @@ export async function verifySupabaseJWT(
 
     const token = authHeader.split(" ")[1];
 
-    const { data: { user }, error: authError } = await authProvider.getUser(token);
+    let user: User | null = null;
+    let profile: AuthProfileData | null = null;
 
-    if (authError || !user) {
-      const isUserNotFound = authError?.message?.toLowerCase().includes("user not found");
+    const cached = await authCacheService.getCachedAuth(token);
+    if (cached) {
+      user = cached.user;
+      profile = cached.profile;
+    } else {
+      const { data: { user: fetchedUser }, error: authError } = await authProvider.getUser(token);
 
-      return reply.status(401).send({
-        error: isUserNotFound ? "Usuário não encontrado no sistema de autenticação" : "Sessão inválida ou expirada",
-        code: isUserNotFound ? "AUTH_USER_NOT_FOUND" : "AUTH_JWT_INVALID"
-      });
+      if (authError || !fetchedUser) {
+        const isUserNotFound = authError?.message?.toLowerCase().includes("user not found");
+
+        return reply.status(401).send({
+          error: isUserNotFound ? "Usuário não encontrado no sistema de autenticação" : "Sessão inválida ou expirada",
+          code: isUserNotFound ? "AUTH_USER_NOT_FOUND" : "AUTH_JWT_INVALID"
+        });
+      }
+
+      user = fetchedUser;
+
+      const { data: fetchedProfile, error: profileError } = await authRepository.getAuthProfile(user.id);
+
+      if (profileError) {
+        throw profileError;
+      }
+
+      if (!fetchedProfile) {
+        return reply.status(401).send({
+          error: "Perfil não registrado no sistema",
+          code: "AUTH_PROFILE_NOT_FOUND"
+        });
+      }
+
+      profile = fetchedProfile as AuthProfileData;
+
+      if (profile.ativo !== false) {
+        await authCacheService.setCachedAuth(token, user, profile);
+      }
     }
 
-    const userId = user.id;
-
-    const { data: profile, error: profileError } = await authRepository.getAuthProfile(userId);
-
-    if (profileError) {
-      console.error("[Auth] Database error during verification:", profileError.message);
-      return reply.status(500).send({ error: "Erro interno ao validar perfil", code: "AUTH_DB_ERROR" });
-    }
-
-    if (!profile) {
+    if (!user || !profile) {
       return reply.status(401).send({
-        error: "Perfil não registrado no sistema",
-        code: "AUTH_PROFILE_NOT_FOUND"
+        error: "Falha na autenticação do usuário",
+        code: "AUTH_UNEXPECTED_ERROR",
       });
     }
 
@@ -50,7 +74,7 @@ export async function verifySupabaseJWT(
       });
     }
 
-    const isSubAccount = !!profile.conta_pai_id || profile.tipo === UserType.MOTORISTA_AUXILIAR || profile.tipo === UserType.MONITOR;
+    const isSubAccount = isSubConta(profile);
 
     request.user = {
       ...user,
@@ -61,7 +85,7 @@ export async function verifySupabaseJWT(
     };
     request.profile = profile;
     request.usuario_id = profile.id;
-    request.data_owner_id = profile.conta_pai_id || profile.id;
+    request.data_owner_id = getDonoContaId(profile) || profile.id;
     request.assigned_veiculo_id = isSubAccount ? (profile.veiculo_id || null) : null;
 
     if (isSubAccount && profile.conta_pai_id) {

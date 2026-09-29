@@ -12,7 +12,7 @@ export const authRepository = {
     async getUserLogin(cpfcnpj: string) {
         return supabaseAdmin
             .from("usuarios")
-            .select("id, email, ativo")
+            .select("id, email, ativo, tipo, conta_pai_id")
             .eq("cpfcnpj", cpfcnpj)
             .single();
     },

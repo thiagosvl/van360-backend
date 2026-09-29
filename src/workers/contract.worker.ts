@@ -13,7 +13,7 @@ import { ContratoProvider, TipoResponsavel } from '../types/enums.js';
 export const contractWorker = new Worker<ContractJobData>(
     QUEUE_NAME_CONTRACT,
     async (job: Job<ContractJobData>) => {
-        const { contratoId, providerName, dadosContrato, passageiro, tokenAcesso } = job.data;
+        const { contratoId, usuarioId, providerName, dadosContrato, passageiro, tokenAcesso } = job.data;
 
         logger.info({ jobId: job.id, contratoId }, "[Worker] Iniciando processamento de contrato...");
 
@@ -21,15 +21,33 @@ export const contractWorker = new Worker<ContractJobData>(
             // 1. Import dinâmico do serviço para evitar circular dependency
             const { contractService } = await import('../services/contract.service.js');
 
-            // 2. Gerar PDF usando o provider correspondente
-            // Nota: O provider deve ser obtido via service para garantir consistência
-            const provider = (contractService as any).getProvider(providerName);
+            if ((!dadosContrato.assinaturaCondutorUrl || !dadosContrato.logoCondutorUrl) && usuarioId) {
+                const { userRepository } = await import('../repositories/user.repository.js');
+                const { data: usuario } = await userRepository.getById(usuarioId);
+                if (usuario) {
+                    if (!dadosContrato.assinaturaCondutorUrl && usuario.assinatura_digital_url) {
+                        dadosContrato.assinaturaCondutorUrl = usuario.assinatura_digital_url;
+                    }
+                    if (!dadosContrato.logoCondutorUrl && usuario.logo_url) {
+                        dadosContrato.logoCondutorUrl = usuario.logo_url;
+                    }
+                }
+            }
+
+            let safeProviderName = providerName;
+            if (safeProviderName === ContratoProvider.IMPORTADO || !safeProviderName) {
+                safeProviderName = ContratoProvider.INHOUSE;
+                await contractRepository.updateStatus(contratoId, {
+                    provider: ContratoProvider.INHOUSE
+                });
+            }
+
+            const provider = (contractService as any).getProvider(safeProviderName);
             const response = await provider.gerarContrato({
                 contratoId,
                 dadosContrato,
             });
 
-            // 3. Atualizar contrato no Supabase com a URL da minuta
             await contractRepository.updateStatus(contratoId, {
                 minuta_url: response.documentUrl,
                 provider_document_id: response.providerDocumentId,
@@ -38,7 +56,6 @@ export const contractWorker = new Worker<ContractJobData>(
 
             logger.info({ jobId: job.id, contratoId }, "[Worker] Contrato atualizado com minuta URL.");
 
-            // 4. Notificar Responsável via NotificationService
             const respLink = Array.isArray(passageiro.responsaveis) ? (passageiro.responsaveis.find((r: any) => r.tipo === TipoResponsavel.PRINCIPAL) || passageiro.responsaveis[0]) : null;
             const rawRespPrincipal = passageiro.responsavel_principal || (respLink ? (Array.isArray(respLink.responsavel) ? respLink.responsavel[0] : respLink.responsavel) : null);
             const respPrincipal = Array.isArray(rawRespPrincipal) ? rawRespPrincipal[0] : rawRespPrincipal;
@@ -51,7 +68,7 @@ export const contractWorker = new Worker<ContractJobData>(
             }
 
             if (telefoneResponsavel || hasValidEmail) {
-                const linkAssinatura = providerName === ContratoProvider.INHOUSE
+                const linkAssinatura = safeProviderName === ContratoProvider.INHOUSE
                     ? `${env.FRONTEND_URL}/assinar/${tokenAcesso}`
                     : response.providerSignatureLink;
 
@@ -73,11 +90,15 @@ export const contractWorker = new Worker<ContractJobData>(
                         }),
                         apelidoMotorista: dadosContrato.apelidoCondutor,
                         linkAssinatura,
-                        email: hasValidEmail ? emailResponsavel : undefined
+                        email: hasValidEmail ? emailResponsavel : undefined,
+                        passageiroId: passageiro.id,
+                        usuarioId
                     },
                     {
                         channels,
-                        email: hasValidEmail ? emailResponsavel : undefined
+                        email: hasValidEmail ? emailResponsavel : undefined,
+                        passageiroId: passageiro.id,
+                        usuarioId
                     }
                 );
 

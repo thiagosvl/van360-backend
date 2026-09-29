@@ -19,6 +19,58 @@ export const createInvoiceSchema = z.object({
     zipcode: z.string().optional(),
     city: z.string().optional(),
     state: z.string().optional(),
+    origem: z.enum(["MANUAL", "AUTOMATICO"]).optional(),
+    holderDocument: z.string().optional(),
+    holderName: z.string().optional(),
 });
 
 export type CreateInvoiceDTO = z.infer<typeof createInvoiceSchema>;
+
+export interface PlanPricingDTO {
+    basePrice: number;
+    regularPrice: number;
+    finalPrice: number;
+    monthlyEquivalent: number;
+    totalAnnualSavings: number;
+    freeMonths: number;
+    discountPercent: number;
+    hasPromo: boolean;
+    hasOverride: boolean;
+    hasReferralDiscount: boolean;
+    referralDiscountPct: number;
+    referralDiscountAmount: number;
+}
+
+export interface SubscriptionPricingSummaryDTO {
+    monthlyPrice: number;
+    annualPrice: number;
+    baseMonthlyPrice: number;
+    baseAnnualPrice: number;
+    regularMonthlyPrice: number;
+    regularAnnualPrice: number;
+    annualMonthlyEquivalent: number;
+    totalAnnualSavings: number;
+    freeMonths: number;
+    discountPercent: number;
+    hasPromoMonthly: boolean;
+    hasPromoAnnual: boolean;
+    hasOverride: boolean;
+    hasReferralDiscount: boolean;
+    referralDiscountPct: number;
+}
+
+export interface SaaSPlanWithPricingDTO {
+    id: string;
+    nome: string;
+    identificador: string;
+    valor: number;
+    valor_promocional: number | null;
+    ativo: boolean;
+    pricing: PlanPricingDTO;
+}
+
+export interface PlansResponseDTO {
+    plans: SaaSPlanWithPricingDTO[];
+    isPromotionActive: boolean;
+    pricingSummary: SubscriptionPricingSummaryDTO;
+}

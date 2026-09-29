@@ -7,13 +7,20 @@ import { usuarioPushTokenRepository } from "../repositories/usuario-push-token.r
 import { maskEmail, onlyDigits } from "../utils/string.utils.js";
 import { notificationService } from "./notifications/notification.service.js";
 import { routeService } from "./route.service.js";
-import { NotificationChannelEnum, TipoResponsavel } from "../types/enums.js";
+import { NotificationChannelEnum, TipoResponsavel, AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { EVENTO_PASSAGEIRO_PIN_RESET, EVENTO_MOTORISTA_AUSENCIA_REGISTRADA, EVENTO_MOTORISTA_AUSENCIA_REMOVIDA } from "../config/constants.js";
 import { CreateResponsavelAusenciaDTO } from "../types/dtos/responsavel-ausencia.dto.js";
 import { UpdateDadosComplementaresDTO } from "../types/dtos/responsavel.dto.js";
+import { historicoService } from "./historico.service.js";
+import { calculateAuditDiff } from "../utils/audit-diff.util.js";
+import { getFirstAndSecondName } from "../utils/format.js";
+
+import { redisClient } from "../config/redis.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "van360_responsavel_secret_key_2026";
 const TOKEN_EXPIRATION = "30d";
+const OTP_KEY_PREFIX = "otp:responsavel:";
+const OTP_TTL_SECONDS = 15 * 60;
 
 export interface ResponsavelTokenPayload {
   phone: string;
@@ -24,10 +31,7 @@ interface OtpStoreItem {
   phone: string;
   email: string;
   code: string;
-  expiresAt: number;
 }
-
-const otpStore = new Map<string, OtpStoreItem>();
 
 export const portalResponsavelService = {
   async checkPhone(phoneRaw: string) {
@@ -93,7 +97,7 @@ export const portalResponsavelService = {
 
     const isValid = await bcrypt.compare(pin, recordWithPin.pin_acesso);
     if (!isValid) {
-      throw new AppError("PIN incorreto. Tente novamente.", 401);
+      throw new AppError("Senha incorreta. Tente novamente.", 401);
     }
 
     const passageiroIds = passageiros.map(p => p.id);
@@ -142,7 +146,7 @@ export const portalResponsavelService = {
     const target = passageiros.find(p => p.id === passageiroId);
 
     if (!target) {
-      throw new AppError("Acesso não autorizado para este passageiro.", 403);
+      throw new AppError("Acesso não autorizado para este aluno.", 403);
     }
 
     return target;
@@ -158,11 +162,14 @@ export const portalResponsavelService = {
     const payload = await this.verifyResponsavelToken(token);
     const target = await this._authorizePassageiroAccess(payload.phone, passageiroId);
 
-    const updatePayload: Record<string, unknown> = {
-      cpf: onlyDigits(data.cpf),
-      email: data.email.trim().toLowerCase(),
-    };
+    const updatePayload: Record<string, unknown> = {};
 
+    if (data.cpf !== undefined && data.cpf !== null) {
+      updatePayload.cpf = onlyDigits(data.cpf);
+    }
+    if (data.email !== undefined && data.email !== null) {
+      updatePayload.email = data.email.trim().toLowerCase();
+    }
     if (data.logradouro !== undefined) updatePayload.logradouro = data.logradouro ? data.logradouro.trim() : null;
     if (data.numero !== undefined) updatePayload.numero = data.numero ? String(data.numero).trim() : null;
     if (data.bairro !== undefined) updatePayload.bairro = data.bairro ? data.bairro.trim() : null;
@@ -172,10 +179,31 @@ export const portalResponsavelService = {
     if (data.referencia !== undefined) updatePayload.referencia = data.referencia ? data.referencia.trim() : null;
     if (data.complemento !== undefined) updatePayload.complemento = data.complemento ? data.complemento.trim() : null;
 
+    const { data: respAnterior } = await responsavelRepository.getById(target.responsavel_id);
+
     if (target.tipo_responsavel === TipoResponsavel.PRINCIPAL) {
       await responsavelRepository.updateDadosComplementaresPrincipal(passageiroId, updatePayload);
     } else {
       await responsavelRepository.updateDadosComplementaresAdicional(target.responsavel_id, updatePayload);
+    }
+
+    const diff = calculateAuditDiff(respAnterior, updatePayload);
+    if (diff.hasChanges) {
+      historicoService.log({
+        usuario_id: target.motorista_id,
+        entidade_tipo: AtividadeEntidadeTipo.RESPONSAVEL,
+        entidade_id: target.responsavel_id,
+        acao: AtividadeAcao.RESPONSAVEL_EDITADO,
+        descricao: `Dados do responsável do aluno ${getFirstAndSecondName(target.nome)} atualizados pelo portal do responsável.`,
+        meta: {
+          passageiro_id: passageiroId,
+          passageiro_nome: target.nome,
+          responsavel_id: target.responsavel_id,
+          campos_alterados: diff.campos,
+          campos: diff.campos,
+          alteracoes: diff.alteracoes
+        }
+      });
     }
 
     return { success: true };
@@ -197,7 +225,7 @@ export const portalResponsavelService = {
       if (rotasDisponiveis.length === 1) {
         rotaId = rotasDisponiveis[0].id;
       } else if (rotasDisponiveis.length === 0) {
-        throw new AppError("O passageiro não está vinculado a nenhuma rota para registrar ausência.", 400);
+        throw new AppError("O aluno não está vinculado a nenhuma rota para registrar ausência.", 400);
       } else {
         throw new AppError("Selecione a qual rota a ausência se refere.", 400);
       }
@@ -230,8 +258,8 @@ export const portalResponsavelService = {
           usuarioId: target.motorista_id
         },
         { usuarioId: target.motorista_id }
-      ).catch(() => {});
-    } catch {}
+      ).catch(() => { });
+    } catch { }
 
     return ausencia;
   },
@@ -268,8 +296,8 @@ export const portalResponsavelService = {
             usuarioId: target.motorista_id
           },
           { usuarioId: target.motorista_id }
-        ).catch(() => {});
-      } catch {}
+        ).catch(() => { });
+      } catch { }
     }
 
     return { success: true };
@@ -293,9 +321,30 @@ export const portalResponsavelService = {
 
   async updateResponsavel(token: string, passageiroId: string, responsavelId: string, data: Record<string, unknown>) {
     const payload = await this.verifyResponsavelToken(token);
-    await this._authorizePassageiroAccess(payload.phone, passageiroId);
+    const target = await this._authorizePassageiroAccess(payload.phone, passageiroId);
 
+    const { data: respAnterior } = await responsavelRepository.getById(responsavelId);
     const updated = await responsavelRepository.updateResponsavelAdicional(responsavelId, data, passageiroId);
+
+    const diff = calculateAuditDiff(respAnterior, data);
+    if (diff.hasChanges) {
+      historicoService.log({
+        usuario_id: target.motorista_id,
+        entidade_tipo: AtividadeEntidadeTipo.RESPONSAVEL,
+        entidade_id: responsavelId,
+        acao: AtividadeAcao.RESPONSAVEL_EDITADO,
+        descricao: `Dados do responsável adicional do aluno ${getFirstAndSecondName(target.nome)} atualizados pelo portal do responsável.`,
+        meta: {
+          passageiro_id: passageiroId,
+          passageiro_nome: target.nome,
+          responsavel_id: responsavelId,
+          campos_alterados: diff.campos,
+          campos: diff.campos,
+          alteracoes: diff.alteracoes
+        }
+      });
+    }
+
     return updated;
   },
 
@@ -347,14 +396,16 @@ export const portalResponsavelService = {
     const emailTarget = emails[selectedIndex];
 
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = Date.now() + 15 * 60 * 1000;
 
-    otpStore.set(phoneDigits, {
-      phone: phoneDigits,
-      email: emailTarget,
-      code: otpCode,
-      expiresAt
-    });
+    await redisClient.setex(
+      `${OTP_KEY_PREFIX}${phoneDigits}`,
+      OTP_TTL_SECONDS,
+      JSON.stringify({
+        phone: phoneDigits,
+        email: emailTarget,
+        code: otpCode,
+      })
+    );
 
     await notificationService.sendDirect(
       NotificationChannelEnum.RESEND,
@@ -371,20 +422,19 @@ export const portalResponsavelService = {
 
   async validateResetOtp(phoneRaw: string, code: string) {
     const phoneDigits = onlyDigits(phoneRaw);
-    const stored = otpStore.get(phoneDigits);
+    const storedRaw = await redisClient.get(`${OTP_KEY_PREFIX}${phoneDigits}`);
 
-    if (!stored) {
+    if (!storedRaw) {
       throw new AppError("Código de verificação expirado ou não encontrado. Solicite um novo código.", 400);
     }
 
-    if (Date.now() > stored.expiresAt) {
-      otpStore.delete(phoneDigits);
-      throw new AppError("O código expirou. Solicite um novo código.", 400);
-    }
+    const stored: OtpStoreItem = JSON.parse(storedRaw);
 
     if (stored.code !== code.trim()) {
       throw new AppError("Código de verificação incorreto.", 400);
     }
+
+    await redisClient.del(`${OTP_KEY_PREFIX}${phoneDigits}`);
 
     const resetToken = jwt.sign(
       { phone: phoneDigits, scope: "pin_reset" },
@@ -412,7 +462,7 @@ export const portalResponsavelService = {
       const pinHash = await bcrypt.hash(newPin, 10);
       await responsavelRepository.updatePinByPhone(phoneDigits, pinHash);
 
-      otpStore.delete(phoneDigits);
+      await redisClient.del(`${OTP_KEY_PREFIX}${phoneDigits}`);
 
       return { success: true };
     } catch {

@@ -49,49 +49,46 @@ export const getNowBR = (): Date => {
   return parseLocalDate(new Date());
 };
 
-/**
- * Retorna o objeto Date representando o final do dia (23:59:59.999) no fuso de Brasília.
- */
+export const createLocalDateBR = (year: number, month: number, day: number, hour = 12, minute = 0, second = 0, ms = 0): Date => {
+  const m = String(month).padStart(2, "0");
+  const d = String(day).padStart(2, "0");
+  const h = String(hour).padStart(2, "0");
+  const min = String(minute).padStart(2, "0");
+  const s = String(second).padStart(2, "0");
+  const mill = String(ms).padStart(3, "0");
+  return new Date(`${year}-${m}-${d}T${h}:${min}:${s}.${mill}-03:00`);
+};
+
 export const getEndOfDayBR = (date?: Date | string): Date => {
   const d = date ? parseLocalDate(date) : getNowBR();
-  d.setHours(23, 59, 59, 999);
-  return d;
+  const dateStr = toPersistenceString(d);
+  return new Date(`${dateStr}T23:59:59.999-03:00`);
 };
 
-/**
- * Retorna o objeto Date representando o início do dia (00:00:00.000) no fuso de Brasília.
- */
 export const getStartOfDayBR = (date?: Date | string): Date => {
   const d = date ? parseLocalDate(date) : getNowBR();
-  d.setHours(0, 0, 0, 0);
-  return d;
+  const dateStr = toPersistenceString(d);
+  return new Date(`${dateStr}T00:00:00.000-03:00`);
 };
 
-/**
- * Formata um objeto Date (ou string) como YYYY-MM-DD para persistência no banco (colunas DATE).
- * ESSENCIAL para evitar o bug de pular um dia ao usar .toISOString() perto da meia-noite.
- */
 export const toPersistenceString = (date: Date | string): string => {
   const d = typeof date === 'string' ? parseLocalDate(date) : date;
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(d);
 };
 
-/**
- * Alias para compatibilidade legada.
- */
 export const toLocalDateString = (date: Date | string): string => {
   return toPersistenceString(date);
 };
 
-/**
- * Formata para DD/MM/YYYY HH:mm.
- */
 export const formatDateTime = (date: string | Date): string => {
   const d = typeof date === 'string' ? parseLocalDate(date) : date;
   return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -101,15 +98,14 @@ export const formatDateTime = (date: string | Date): string => {
   }).format(d);
 };
 
-/**
- * Formata para DD/MM/YYYY.
- */
 export const formatToBrazilianDate = (date: Date | string): string => {
   const d = typeof date === 'string' ? parseLocalDate(date) : date;
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = d.getFullYear();
-  return `${day}/${month}/${year}`;
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  }).format(d);
 };
 
 export const getMonthNameBR = (monthNumber?: number): string => {
@@ -117,6 +113,15 @@ export const getMonthNameBR = (monthNumber?: number): string => {
   const names = [
     "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
     "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+  ];
+  return names[monthNumber - 1];
+};
+
+export const getMonthShortBR = (monthNumber?: number): string => {
+  if (!monthNumber || monthNumber < 1 || monthNumber > 12) return "";
+  const names = [
+    "jan", "fev", "mar", "abr", "mai", "jun",
+    "jul", "ago", "set", "out", "nov", "dez"
   ];
   return names[monthNumber - 1];
 };
@@ -195,4 +200,27 @@ export const parseBrazilianDateToISO = (dateStr: string | null | undefined): str
   }
 
   return null;
+};
+
+export const parseMonthYearFromDateString = (dateStr?: string | null): { year: number; month: number } | null => {
+  if (!dateStr) return null;
+
+  if (typeof dateStr === "string" && dateStr.includes("-")) {
+    const parts = dateStr.split("-");
+    if (parts.length >= 2) {
+      const year = Number(parts[0]);
+      const month = Number(parts[1]);
+      if (!isNaN(year) && !isNaN(month) && month >= 1 && month <= 12) {
+        return { year, month };
+      }
+    }
+  }
+
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+
+  return {
+    year: d.getFullYear(),
+    month: d.getMonth() + 1,
+  };
 };

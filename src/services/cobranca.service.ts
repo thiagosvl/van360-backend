@@ -11,19 +11,22 @@ import {
   EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
   EVENTO_PASSAGEIRO_ATRASADO,
   EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO,
-  EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS
+  EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS,
+  EVENTO_MOTORISTA_COBRANCAS_HOJE
 } from "../config/constants.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
-import { getNowBR, getLastDayOfMonth, getSafeDueDateString, toPersistenceString, diffInDays, formatToBrazilianDate, getMonthNameBR, getShortWeekDayBR, parseLocalDate } from "../utils/date.utils.js";
-import { getDriverDisplayName } from "../utils/format.js";
+import { getNowBR, getSafeDueDateString, toPersistenceString, diffInDays, getMonthNameBR, getShortWeekDayBR, parseLocalDate, parseMonthYearFromDateString, createLocalDateBR } from "../utils/date.utils.js";
+import { getDriverDisplayName, getFirstAndSecondName } from "../utils/format.js";
 
 import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
-import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaOrigem, CobrancaStatus, ConfigKey } from "../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaStatus, CobrancaTipoPagamento, ConfigKey } from "../types/enums.js";
 import { historicoService } from "./historico.service.js";
 import { receiptService } from "./receipt.service.js";
 import { getConfigNumber } from "./configuracao.service.js";
 import { notificationService } from "./notifications/notification.service.js";
+import { NotificationContextFormatter } from "./notifications/utils/notification-context.formatter.js";
 import { addToGenerationQueue } from "../queues/generation.queue.js";
+import { calculateAuditDiff } from "../utils/audit-diff.util.js";
 
 interface ResponsavelLinkInfo {
   id?: string;
@@ -56,47 +59,62 @@ interface PassageiroCobrancaInfo {
 }
 
 const _getResponsavelFromPassageiro = (passageiroInfo?: PassageiroCobrancaInfo | null) => {
-    if (!passageiroInfo) return { nome: "", telefone: "", email: "", cpf: "" };
-    const respLink = Array.isArray(passageiroInfo.responsaveis)
-      ? (passageiroInfo.responsaveis.find((r) => r.tipo === TipoResponsavel.PRINCIPAL) || passageiroInfo.responsaveis[0])
-      : null;
-    const rawResp = passageiroInfo.responsavel_principal || (respLink ? (Array.isArray(respLink.responsavel) ? respLink.responsavel[0] : respLink.responsavel) : null);
-    const resp = Array.isArray(rawResp) ? rawResp[0] : rawResp;
-    return {
-        nome: resp?.nome || "",
-        telefone: resp?.telefone || "",
-        email: resp?.email || "",
-        cpf: resp?.cpf || ""
-    };
+  if (!passageiroInfo) return { nome: "", telefone: "", email: "", cpf: "" };
+  const respLink = Array.isArray(passageiroInfo.responsaveis)
+    ? (passageiroInfo.responsaveis.find((r) => r.tipo === TipoResponsavel.PRINCIPAL) || passageiroInfo.responsaveis[0])
+    : null;
+  const rawResp = passageiroInfo.responsavel_principal || (respLink ? (Array.isArray(respLink.responsavel) ? respLink.responsavel[0] : respLink.responsavel) : null);
+  const resp = Array.isArray(rawResp) ? rawResp[0] : rawResp;
+  return {
+    nome: resp?.nome || "",
+    telefone: resp?.telefone || "",
+    email: resp?.email || "",
+    cpf: resp?.cpf || ""
+  };
 };
 
 const _enrichCobrancaWithResponsavelPrincipal = (cobranca: Record<string, any>) => {
-    if (!cobranca || !cobranca.passageiro) return cobranca;
+  if (!cobranca || !cobranca.passageiro) return cobranca;
 
-    const p = cobranca.passageiro;
-    const links = (p.responsaveis as ResponsavelLinkInfo[]) || [];
-    const principalLink = links.find((l) => l.tipo === TipoResponsavel.PRINCIPAL) || links[0];
-    const rawResp = p.responsavel_principal || principalLink?.responsavel;
-    const resp = Array.isArray(rawResp) ? rawResp[0] : rawResp;
+  const p = cobranca.passageiro;
+  const links = (p.responsaveis as ResponsavelLinkInfo[]) || [];
+  const principalLink = links.find((l) => l.tipo === TipoResponsavel.PRINCIPAL) || links[0];
+  const rawResp = p.responsavel_principal || principalLink?.responsavel;
+  const resp = Array.isArray(rawResp) ? rawResp[0] : rawResp;
 
-    const enrichedPassageiro = {
-        ...p,
-        responsavel_principal: (principalLink && resp) || p.responsavel_principal ? {
-            id: resp?.id || null,
-            nome: resp?.nome || null,
-            telefone: resp?.telefone || null,
-            cpf: resp?.cpf || null,
-            email: resp?.email || null,
-            parentesco: principalLink?.parentesco || (p.responsavel_principal as Record<string, any>)?.parentesco || null
-        } : null
-    };
+  const enrichedPassageiro = {
+    ...p,
+    responsavel_principal: (principalLink && resp) || p.responsavel_principal ? {
+      id: resp?.id || null,
+      nome: resp?.nome || null,
+      telefone: resp?.telefone || null,
+      cpf: resp?.cpf || null,
+      email: resp?.email || null,
+      parentesco: principalLink?.parentesco || (p.responsavel_principal as Record<string, any>)?.parentesco || null
+    } : null
+  };
 
-    delete enrichedPassageiro.responsaveis;
+  delete enrichedPassageiro.responsaveis;
 
-    return {
-        ...cobranca,
-        passageiro: enrichedPassageiro
-    };
+  return {
+    ...cobranca,
+    passageiro: enrichedPassageiro
+  };
+};
+
+const _normalizeText = (text?: string | null): string => {
+  if (!text) return "";
+  return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+};
+
+const _filterBySearchTerm = <T extends Record<string, any>>(cobrancas: T[], searchTerm?: string): T[] => {
+  if (!searchTerm || !searchTerm.trim()) return cobrancas;
+  const term = _normalizeText(searchTerm);
+  return cobrancas.filter((c) => {
+    const nomePassageiro = _normalizeText(c.passageiro?.nome);
+    const nomeRespPrincipal = _normalizeText(c.passageiro?.responsavel_principal?.nome);
+    return nomePassageiro.includes(term) || nomeRespPrincipal.includes(term);
+  });
 };
 
 interface CreateCobrancaOptions {
@@ -116,42 +134,94 @@ export const cobrancaService = {
 
     const passageiro = await passageiroRepository.getResponsavelInfo(data.passageiro_id);
 
-    if (!passageiro) throw new AppError("Passageiro não encontrado para gerar cobrança.", 404);
-    if ((passageiro as any).isento === true) throw new AppError("Passageiro é isento de pagamento e não possui cobranças.", 400);
+    if (!passageiro) throw new AppError("Aluno não encontrado para gerar cobrança.", 404);
+    if (passageiro.isento === true) throw new AppError("Aluno é isento de pagamento e não possui cobranças.", 400);
 
-    const cobrancaId = crypto.randomUUID();
     const valorNumerico = typeof data.valor === "string" ? moneyToNumber(data.valor) : data.valor;
 
     const statusVal = data.status || CobrancaStatus.PENDENTE;
 
-    const cobrancaData = {
-      id: cobrancaId,
-      passageiro_id: data.passageiro_id,
-      usuario_id: data.usuario_id,
-      mes: Number(data.mes),
-      ano: Number(data.ano),
-      valor: valorNumerico,
-      data_vencimento: data.data_vencimento,
-      status: statusVal,
-      data_pagamento: statusVal === CobrancaStatus.PAGO ? (data.data_pagamento || getNowBR().toISOString()) : null,
-      tipo_pagamento: statusVal === CobrancaStatus.PAGO ? (data.tipo_pagamento || 'PIX') : null,
-      valor_pago: statusVal === CobrancaStatus.PAGO ? valorNumerico : null,
-      pagamento_manual: statusVal === CobrancaStatus.PAGO,
-      origem: CobrancaOrigem.MANUAL,
-    };
+    const { data: existingCobranca } = await cobrancaRepository.getByPassageiroMesAno(
+      data.passageiro_id,
+      Number(data.mes),
+      Number(data.ano)
+    );
 
-    const { data: inserted, error: insertError } = await cobrancaRepository.insert(cobrancaData);
-    if (insertError || !inserted) throw new AppError(`Erro ao criar cobrança no banco: ${insertError?.message}`, 500);
+    let inserted: any;
 
-    // --- LOG DE AUDITORIA ---
+    if (existingCobranca) {
+      const updateData: Record<string, any> = {
+        valor: valorNumerico,
+        data_vencimento: data.data_vencimento,
+        status: statusVal,
+        data_pagamento: statusVal === CobrancaStatus.PAGO ? (data.data_pagamento || getNowBR().toISOString()) : null,
+        tipo_pagamento: statusVal === CobrancaStatus.PAGO ? (data.tipo_pagamento || CobrancaTipoPagamento.PIX) : null,
+        valor_pago: statusVal === CobrancaStatus.PAGO ? valorNumerico : null,
+        pagamento_manual: statusVal === CobrancaStatus.PAGO,
+      };
+
+      if (data.desativar_lembretes !== undefined) {
+        updateData.desativar_lembretes = data.desativar_lembretes;
+      }
+      if (data.ano_letivo !== undefined) {
+        updateData.ano_letivo = Number(data.ano_letivo);
+      }
+      if (data.observacao !== undefined) {
+        updateData.observacao = (data.observacao && data.observacao.trim()) ? data.observacao.trim() : null;
+      }
+
+      const { data: updated, error: updateError } = await cobrancaRepository.update(existingCobranca.id, updateData);
+      if (updateError || !updated) throw new AppError(`Erro ao atualizar cobrança no banco: ${updateError?.message}`, 500);
+      inserted = updated;
+    } else {
+      const cobrancaId = crypto.randomUUID();
+      const cobrancaData = {
+        id: cobrancaId,
+        passageiro_id: data.passageiro_id,
+        usuario_id: data.usuario_id,
+        mes: Number(data.mes),
+        ano: Number(data.ano),
+        ano_letivo: data.ano_letivo !== undefined ? Number(data.ano_letivo) : (passageiro.ano_letivo || Number(data.ano)),
+        valor: valorNumerico,
+        data_vencimento: data.data_vencimento,
+        status: statusVal,
+        data_pagamento: statusVal === CobrancaStatus.PAGO ? (data.data_pagamento || getNowBR().toISOString()) : null,
+        tipo_pagamento: statusVal === CobrancaStatus.PAGO ? (data.tipo_pagamento || CobrancaTipoPagamento.PIX) : null,
+        valor_pago: statusVal === CobrancaStatus.PAGO ? valorNumerico : null,
+        pagamento_manual: statusVal === CobrancaStatus.PAGO,
+        desativar_lembretes: data.desativar_lembretes ?? false,
+        observacao: (data.observacao && data.observacao.trim()) ? data.observacao.trim() : null,
+      };
+
+      const { data: created, error: insertError } = await cobrancaRepository.insert(cobrancaData);
+      if (insertError || !created) throw new AppError(`Erro ao criar cobrança no banco: ${insertError?.message}`, 500);
+      inserted = created;
+    }
+
     if (!options.skipLog) {
+      const isPago = statusVal === CobrancaStatus.PAGO;
+      const statusDescricao = isPago
+        ? `paga${inserted.tipo_pagamento ? ` (${inserted.tipo_pagamento})` : ""}`
+        : "pendente";
+
       historicoService.log({
         usuario_id: data.usuario_id,
         entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
         entidade_id: inserted.id,
         acao: AtividadeAcao.COBRANCA_CRIADA,
-        descricao: `Cobrança de R$ ${valorNumerico.toFixed(2)} (${data.mes}/${data.ano}) gerada para ${passageiro.nome}.`,
-        meta: { passageiro_id: data.passageiro_id, mes: data.mes, ano: data.ano, valor: valorNumerico }
+        descricao: `Cobrança de R$ ${valorNumerico.toFixed(2)} (${data.mes}/${data.ano}) gerada como ${statusDescricao} para ${getFirstAndSecondName(passageiro.nome)}.`,
+        meta: {
+          passageiro_id: data.passageiro_id,
+          mes: data.mes,
+          ano: data.ano,
+          valor: valorNumerico,
+          status: inserted.status,
+          ...(isPago ? {
+            tipo_pagamento: inserted.tipo_pagamento,
+            data_pagamento: inserted.data_pagamento,
+            valor_pago: inserted.valor_pago
+          } : {})
+        }
       });
     }
 
@@ -185,11 +255,13 @@ export const cobrancaService = {
                   mes: inserted.mes,
                   ano: inserted.ano,
                   reciboUrl: inserted.recibo_url,
-                  usuarioId: inserted.usuario_id
+                  usuarioId: inserted.usuario_id,
+                  passageiroId: inserted.passageiro_id
                 },
                 {
                   channels: [NotificationChannelEnum.FIREBASE],
                   usuarioId: inserted.usuario_id,
+                  passageiroId: inserted.passageiro_id || undefined,
                   email: respInfo.email
                 }
               );
@@ -232,25 +304,32 @@ export const cobrancaService = {
     if (data.tipo_pagamento !== undefined) cobrancaData.tipo_pagamento = data.tipo_pagamento;
     if (data.data_pagamento !== undefined) cobrancaData.data_pagamento = data.data_pagamento;
     if (data.valor_pago !== undefined) cobrancaData.valor_pago = moneyToNumber(data.valor_pago);
+    if (data.observacao !== undefined) cobrancaData.observacao = (data.observacao && data.observacao.trim()) ? data.observacao.trim() : null;
 
     const { data: updated, error } = await cobrancaRepository.update(id, cobrancaData);
 
     if (error) throw new AppError(`Erro ao atualizar cobrança: ${error.message}`, 500);
 
-    // --- LOG DE AUDITORIA ---
-    const passageiroNomeUpdate = cobrancaOriginal?.passageiros?.nome || cobrancaOriginal?.passageiro?.nome;
-    historicoService.log({
-      usuario_id: cobrancaOriginal?.usuario_id,
-      entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
-      entidade_id: id,
-      acao: AtividadeAcao.COBRANCA_EDITADA,
-      descricao: `Cobrança de ${cobrancaOriginal?.mes}/${cobrancaOriginal?.ano} do passageiro ${passageiroNomeUpdate} editada pelo motorista.`,
-      meta: {
-        antes: { valor: cobrancaOriginal?.valor, vencimento: cobrancaOriginal?.data_vencimento },
-        depois: { valor: updated.valor, vencimento: updated.data_vencimento },
-        passageiro: passageiroNomeUpdate
-      }
-    });
+    const diff = calculateAuditDiff(cobrancaOriginal, cobrancaData);
+
+    if (diff.hasChanges) {
+      const passageiroNomeUpdate = cobrancaOriginal?.passageiros?.nome || cobrancaOriginal?.passageiro?.nome;
+      historicoService.log({
+        usuario_id: cobrancaOriginal?.usuario_id,
+        entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
+        entidade_id: id,
+        acao: AtividadeAcao.COBRANCA_EDITADA,
+        descricao: `Cobrança de ${cobrancaOriginal?.mes}/${cobrancaOriginal?.ano} do aluno ${getFirstAndSecondName(passageiroNomeUpdate)} editada pelo motorista.`,
+        meta: {
+          antes: { valor: cobrancaOriginal?.valor, vencimento: cobrancaOriginal?.data_vencimento },
+          depois: { valor: updated.valor, vencimento: updated.data_vencimento },
+          passageiro: passageiroNomeUpdate,
+          campos_alterados: diff.campos,
+          campos: diff.campos,
+          alteracoes: diff.alteracoes
+        }
+      });
+    }
 
     return updated;
   },
@@ -266,7 +345,6 @@ export const cobrancaService = {
   },
 
   async deleteCobranca(id: string): Promise<void> {
-    // 1. Buscar dados antes de deletar (p/ log e cancelamento)
     const { data: cobranca, error: fetchError } = await cobrancaRepository.getByIdBasic(id);
 
     if (fetchError || !cobranca) {
@@ -274,41 +352,79 @@ export const cobrancaService = {
       throw new AppError("Erro ao buscar cobrança para exclusão.", 500);
     }
 
-    // Cancelamento de PIX removido conforme diretrizes do plano base.
-
-    // 3. Deletar do Banco e do Storage
-    if (cobranca.recibo_url) {
-      await receiptService.deleteReceipt(cobranca.recibo_url);
+    if (cobranca.status === CobrancaStatus.PAGO) {
+      throw new AppError("Não é possível cancelar uma parcela com pagamento confirmado.", 400);
     }
 
-    const { error } = await cobrancaRepository.delete(id);
-    if (error) throw new AppError("Erro ao excluir cobrança no banco de dados.", 500);
+    const { error: updateError } = await cobrancaRepository.update(id, { status: CobrancaStatus.CANCELADA });
+    if (updateError) throw new AppError("Erro ao cancelar cobrança no banco de dados.", 500);
 
-    // --- LOG DE AUDITORIA ---
     const passageiroNomeDelete = (cobranca as Record<string, any>).passageiros?.nome || (cobranca as Record<string, any>).passageiro?.nome;
     historicoService.log({
       usuario_id: cobranca.usuario_id,
       entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
       entidade_id: id,
       acao: AtividadeAcao.COBRANCA_EXCLUIDA,
-      descricao: `Parcela de ${cobranca.mes}/${cobranca.ano} do passageiro ${passageiroNomeDelete} foi removida.`,
+      descricao: `Parcela de ${cobranca.mes}/${cobranca.ano} do aluno ${getFirstAndSecondName(passageiroNomeDelete)} foi cancelada.`,
       meta: {
         valor: cobranca.valor,
         mes: cobranca.mes,
         ano: cobranca.ano,
-        backup: cobranca // Guarda o estado final antes da deleção física
+        backup: cobranca
       }
     });
   },
 
+  async restaurarCobranca(id: string): Promise<any> {
+    const { data: cobranca, error: fetchError } = await cobrancaRepository.getByIdBasic(id);
+
+    if (fetchError || !cobranca) {
+      logger.error({ error: fetchError?.message, cobrancaId: id }, "Erro ao buscar cobrança para restauração.");
+      throw new AppError("Erro ao buscar cobrança para restauração.", 500);
+    }
+
+    if (cobranca.status !== CobrancaStatus.CANCELADA) {
+      throw new AppError("Apenas cobranças canceladas podem ser reativadas.", 400);
+    }
+
+    const { data: updated, error: updateError } = await cobrancaRepository.update(id, {
+      status: CobrancaStatus.PENDENTE,
+      updated_at: new Date().toISOString()
+    });
+
+    if (updateError) throw new AppError("Erro ao reativar cobrança no banco de dados.", 500);
+
+    const passageiroNomeRestore = (cobranca as Record<string, any>).passageiros?.nome || (cobranca as Record<string, any>).passageiro?.nome;
+    historicoService.log({
+      usuario_id: cobranca.usuario_id,
+      entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
+      entidade_id: id,
+      acao: AtividadeAcao.COBRANCA_CRIADA,
+      descricao: `Parcela de ${cobranca.mes}/${cobranca.ano} do aluno ${getFirstAndSecondName(passageiroNomeRestore)} foi reativada para pendente.`,
+      meta: {
+        valor: cobranca.valor,
+        mes: cobranca.mes,
+        ano: cobranca.ano,
+        status: CobrancaStatus.PENDENTE
+      }
+    });
+
+    return updated;
+  },
+
   async listCobrancasWithFilters(filtros: Record<string, any>): Promise<any[]> {
-    const { data: cobrancasReais, error } = await cobrancaRepository.listWithFilters(filtros);
+    const hasPeriodoMesAno = Boolean(filtros.mes && filtros.ano && filtros.usuarioId);
+    const repoFiltros = hasPeriodoMesAno ? { ...filtros, search: undefined } : filtros;
+
+    const { data: cobrancasReais, error } = await cobrancaRepository.listWithFilters(repoFiltros);
     if (error) throw error;
 
-    const listReal = (cobrancasReais || []).map(_enrichCobrancaWithResponsavelPrincipal);
+    const listRealAtivas = (cobrancasReais || [])
+      .filter((c: any) => c.status !== CobrancaStatus.CANCELADA)
+      .map(_enrichCobrancaWithResponsavelPrincipal);
 
-    if (!filtros.mes || !filtros.ano || !filtros.usuarioId || filtros.passageiroId || (filtros.status && filtros.status !== CobrancaStatus.PENDENTE)) {
-      return listReal;
+    if (!hasPeriodoMesAno || filtros.passageiroId || (filtros.status && filtros.status !== CobrancaStatus.PENDENTE)) {
+      return _filterBySearchTerm(listRealAtivas, filtros.search);
     }
 
     const now = getNowBR();
@@ -318,9 +434,8 @@ export const cobrancaService = {
     const targetYear = Number(filtros.ano);
 
     const isPastPeriod = targetYear < currentYear || (targetYear === currentYear && targetMonth < currentMonth);
-
     if (isPastPeriod) {
-      return listReal;
+      return _filterBySearchTerm(listRealAtivas, filtros.search);
     }
 
     const { data: passageirosAtivos, error: passError } = await passageiroRepository.listAtivosParaProjecao(
@@ -329,28 +444,10 @@ export const cobrancaService = {
     );
 
     if (passError || !passageirosAtivos) {
-      return listReal;
+      return _filterBySearchTerm(listRealAtivas, filtros.search);
     }
 
-    const passageirosComCobranca = new Set(listReal.map((c: any) => c.passageiro_id));
-
-    const parseYearMonth = (dateStr?: string | null) => {
-      if (!dateStr) return null;
-      if (typeof dateStr === "string" && dateStr.includes("-")) {
-        const parts = dateStr.split("-");
-        if (parts.length >= 2) {
-          const year = Number(parts[0]);
-          const month = Number(parts[1]);
-          if (!isNaN(year) && !isNaN(month) && month >= 1 && month <= 12) {
-            return { year, month };
-          }
-        }
-      }
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return null;
-      return { year: d.getFullYear(), month: d.getMonth() + 1 };
-    };
-
+    const passageirosComCobranca = new Set((cobrancasReais || []).map((c: any) => c.passageiro_id));
     const projList: any[] = [];
 
     for (const p of passageirosAtivos) {
@@ -358,7 +455,7 @@ export const cobrancaService = {
       if (!p.valor_cobranca || Number(p.valor_cobranca) <= 0) continue;
 
       const inicioStr = p.data_inicio_cobranca || p.created_at;
-      const inicio = parseYearMonth(inicioStr);
+      const inicio = parseMonthYearFromDateString(inicioStr);
       if (inicio) {
         if (targetYear < inicio.year || (targetYear === inicio.year && targetMonth < inicio.month)) {
           continue;
@@ -366,7 +463,7 @@ export const cobrancaService = {
       }
 
       if (p.data_fim_cobranca) {
-        const fim = parseYearMonth(p.data_fim_cobranca);
+        const fim = parseMonthYearFromDateString(p.data_fim_cobranca);
         if (fim) {
           if (targetYear > fim.year || (targetYear === fim.year && targetMonth > fim.month)) {
             continue;
@@ -383,26 +480,17 @@ export const cobrancaService = {
         usuario_id: filtros.usuarioId,
         mes: targetMonth,
         ano: targetYear,
+        ano_letivo: p.ano_letivo || targetYear,
         valor: Number(p.valor_cobranca),
         status: CobrancaStatus.PENDENTE,
         data_vencimento: dataVenc,
-        origem: CobrancaOrigem.AUTOMATICA,
         isProjection: true,
         passageiro: enrichedPassageiro
       });
     }
 
-    let combined = [...listReal, ...projList];
-
-    if (filtros.search && filtros.search.trim()) {
-      const term = filtros.search.trim().toLowerCase();
-      combined = combined.filter((c: any) =>
-        c.passageiro?.nome?.toLowerCase().includes(term) ||
-        c.passageiro?.responsavel_principal?.nome?.toLowerCase().includes(term)
-      );
-    }
-
-    return combined;
+    const combined = [...listRealAtivas, ...projList];
+    return _filterBySearchTerm(combined, filtros.search);
   },
 
   async listCobrancasByPassageiro(passageiroId: string, ano?: string): Promise<any[]> {
@@ -473,7 +561,7 @@ export const cobrancaService = {
       // Repescagem (antes do dia 23): Ignora passageiros cadastrados neste mesmo mês
       if (!isNextMonthWindow && passageiro.created_at) {
         const passageiroCreatedAt = new Date(passageiro.created_at);
-        const startOfCurrentMonth = new Date(targetYear, targetMonth - 1, 1);
+        const startOfCurrentMonth = createLocalDateBR(targetYear, targetMonth, 1, 0, 0, 0, 0);
         if (passageiroCreatedAt >= startOfCurrentMonth) {
           skipped++;
           continue;
@@ -532,9 +620,9 @@ export const cobrancaService = {
           passageiro_id: passageiro.id,
           valor: valorFinal,
           data_vencimento: dataVencimentoStr,
-          origem: CobrancaOrigem.AUTOMATICA,
           mes: targetMonth,
-          ano: targetYear
+          ano: targetYear,
+          ano_letivo: passageiro.ano_letivo || targetYear,
         }, { skipLog: true });
 
         created++;
@@ -554,7 +642,7 @@ export const cobrancaService = {
       const todayStr = toPersistenceString(now);
 
       const globalThresholdDays = await getConfigNumber(ConfigKey.PASSAGEIRO_DIAS_AVISO_VENCIMENTO, 2);
-      
+
       const targetDates = [todayStr];
 
       // Dias futuros de 1 a 5 para cobrir qualquer preferência de motorista
@@ -588,7 +676,7 @@ export const cobrancaService = {
 
       let sentCount = 0;
 
-      const BATCH_SIZE = 15;
+      const BATCH_SIZE = 8;
       for (let i = 0; i < cobrancas.length; i += BATCH_SIZE) {
         const chunk = cobrancas.slice(i, i + BATCH_SIZE);
         const successfulIdsInChunk: string[] = [];
@@ -619,6 +707,7 @@ export const cobrancaService = {
           const atraso3DiasAtivo = motoristaConfig?.cobranca_atraso_3_dias_ativo ?? true;
           const atraso5DiasAtivo = motoristaConfig?.cobranca_atraso_5_dias_ativo ?? true;
           const atraso7DiasAtivo = motoristaConfig?.cobranca_atraso_7_dias_ativo ?? true;
+          const avisoPrevioWhatsappAtivo = motoristaConfig?.cobranca_aviso_previo_whatsapp_ativo ?? false;
 
           let eventType:
             | typeof EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO
@@ -633,7 +722,9 @@ export const cobrancaService = {
               const diasAntecedencia = diffInDays(todayStr, dataVencimentoStr);
               if (diasAntecedencia === driverThresholdDays) {
                 eventType = EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO;
-                baseChannels = [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND];
+                baseChannels = avisoPrevioWhatsappAtivo
+                  ? [NotificationChannelEnum.WABA, NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND]
+                  : [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND];
                 shouldSend = true;
               }
             }
@@ -687,6 +778,7 @@ export const cobrancaService = {
               diasAntecedencia,
               diasAtraso: eventType === EVENTO_PASSAGEIRO_ATRASADO ? diffInDays(dataVencimentoStr, todayStr) : undefined,
               usuarioId: c.usuario_id,
+              passageiroId: passageiro.id,
               chavePix: motorista.chave_pix,
               tipoChavePix: motorista.tipo_chave_pix,
               mes: c.mes,
@@ -701,6 +793,7 @@ export const cobrancaService = {
               {
                 channels: activeChannels,
                 usuarioId: c.usuario_id,
+                passageiroId: passageiro.id,
                 email: resp.email || undefined,
                 metadata: { cobrancaId: c.id }
               }
@@ -727,6 +820,10 @@ export const cobrancaService = {
         if (successfulIdsInChunk.length > 0) {
           sentCount += successfulIdsInChunk.length;
           await cobrancaRepository.updateBulkUltimaNotificacao(successfulIdsInChunk, todayStr);
+        }
+
+        if (i + BATCH_SIZE < cobrancas.length) {
+          await new Promise((resolve) => setTimeout(resolve, 600));
         }
       }
 
@@ -766,31 +863,130 @@ export const cobrancaService = {
     return { totalMotoristas: motoristas.length, queued: true };
   },
 
-  async enviarResumoSemanalMotoristas() {
+  async processarResumoSemanalMotorista(
+    motorista: { id: string; nome: string; telefone: string; email?: string } | string
+  ): Promise<boolean> {
+    let motoristaObj: { id: string; nome: string; telefone: string; email?: string } | null = null;
+
+    if (typeof motorista === "string") {
+      const { data: user } = await userRepository.getById(motorista);
+      if (user) {
+        motoristaObj = {
+          id: user.id,
+          nome: user.nome,
+          telefone: user.telefone || "",
+          email: user.email ?? undefined
+        };
+      }
+    } else {
+      motoristaObj = motorista;
+    }
+
+    if (!motoristaObj || !motoristaObj.telefone) {
+      return false;
+    }
+
+    const now = getNowBR();
+    const day = String(now.getDate()).padStart(2, "0");
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const dataRefStr = `${day}/${month}`;
+    const hojeStr = toPersistenceString(now);
+
+    const ontem = new Date(now);
+    ontem.setDate(now.getDate() - 1);
+    const ontemStr = toPersistenceString(ontem);
+
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+    const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+    const prevMonthStr = String(prevMonth + 1).padStart(2, "0");
+    const primeiroDiaMesAnteriorStr = `${prevYear}-${prevMonthStr}-01`;
+
+    const proximos7Dias = new Date(now);
+    proximos7Dias.setDate(now.getDate() + 7);
+    const proximos7DiasStr = toPersistenceString(proximos7Dias);
+
+    const { data: cobrancasAtrasadas } = await cobrancaRepository.getCobrancasPendentesPorPeriodo(
+      motoristaObj.id,
+      primeiroDiaMesAnteriorStr,
+      ontemStr
+    );
+
+    const { data: cobrancasProximos } = await cobrancaRepository.getCobrancasPendentesPorPeriodo(
+      motoristaObj.id,
+      hojeStr,
+      proximos7DiasStr
+    );
+
+    const atrasadosList = (cobrancasAtrasadas || []).map((c: any) => {
+      const passageiroInfo = c.passageiro as Record<string, any> | undefined;
+      const diasAtraso = diffInDays(c.data_vencimento, now);
+
+      let mesOrigemStr: string | undefined = undefined;
+      if (c.mes !== (now.getMonth() + 1) || c.ano !== now.getFullYear()) {
+        mesOrigemStr = NotificationContextFormatter.formatMonthYearShort(c.mes, c.ano) || undefined;
+      }
+
+      const respInfo = _getResponsavelFromPassageiro(passageiroInfo);
+      return {
+        passageiroNome: passageiroInfo?.nome || "Aluno",
+        responsavelNome: respInfo.nome,
+        telefoneResponsavel: respInfo.telefone,
+        valor: Number(c.valor) || 0,
+        diasAtraso,
+        mesOrigemStr
+      };
+    });
+
+    atrasadosList.sort((a, b) => b.diasAtraso - a.diasAtraso);
+
+    const proximosList = (cobrancasProximos || []).map((c: any) => {
+      const passageiroInfo = c.passageiro as Record<string, any> | undefined;
+      const respInfo = _getResponsavelFromPassageiro(passageiroInfo);
+      const dt = parseLocalDate(c.data_vencimento);
+      const diaSemanaStr = getShortWeekDayBR(dt);
+      const dataVencimentoStr = `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}`;
+
+      return {
+        passageiroNome: passageiroInfo?.nome,
+        responsavelNome: respInfo.nome,
+        dataVencimentoStr,
+        diaSemanaStr,
+        valor: Number(c.valor) || 0
+      };
+    });
+
+    if (atrasadosList.length === 0 && proximosList.length === 0) {
+      return false;
+    }
+
+    const totalAtrasado = atrasadosList.reduce((acc, curr) => acc + curr.valor, 0);
+    const totalProximos = proximosList.reduce((acc, curr) => acc + curr.valor, 0);
+
+    await notificationService.notifyDriver(
+      motoristaObj.telefone,
+      EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS,
+      {
+        nomeMotorista: motoristaObj.nome,
+        dataRefStr,
+        cobrancasAtrasadasList: atrasadosList,
+        cobrancasProximos7DiasList: proximosList,
+        totalAtrasado,
+        totalProximos,
+        qtdAtrasados: atrasadosList.length,
+        qtdProximos: proximosList.length
+      },
+      { channels: [NotificationChannelEnum.FIREBASE], usuarioId: motoristaObj.id, email: motoristaObj.email }
+    );
+
+    return true;
+  },
+
+  async enviarResumoSemanalMotoristas(): Promise<void> {
     logger.info("[CobrancaService] Iniciando envio do resumo semanal de cobrança para motoristas...");
 
     try {
-      const now = getNowBR();
-      const day = String(now.getDate()).padStart(2, "0");
-      const month = String(now.getMonth() + 1).padStart(2, "0");
-      const dataRefStr = `${day}/${month}`;
-      const hojeStr = toPersistenceString(now);
-
-      const ontem = new Date(now);
-      ontem.setDate(now.getDate() - 1);
-      const ontemStr = toPersistenceString(ontem);
-
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth();
-      const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
-      const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-      const primeiroDiaMesAnterior = new Date(prevYear, prevMonth, 1);
-      const primeiroDiaMesAnteriorStr = toPersistenceString(primeiroDiaMesAnterior);
-
-      const proximos7Dias = new Date(now);
-      proximos7Dias.setDate(now.getDate() + 7);
-      const proximos7DiasStr = toPersistenceString(proximos7Dias);
-
       const { data: motoristas } = await userRepository.listMotoristasAtivosParaResumoCobranca();
 
       if (!motoristas || motoristas.length === 0) {
@@ -801,78 +997,9 @@ export const cobrancaService = {
       let sentCount = 0;
 
       for (const m of motoristas) {
-        if (!m.telefone) continue;
-
-        const { data: cobrancasAtrasadas } = await cobrancaRepository.getCobrancasPendentesPorPeriodo(
-          m.id,
-          primeiroDiaMesAnteriorStr,
-          ontemStr
-        );
-
-        const { data: cobrancasProximos } = await cobrancaRepository.getCobrancasPendentesPorPeriodo(
-          m.id,
-          hojeStr,
-          proximos7DiasStr
-        );
-
-        const atrasadosList = (cobrancasAtrasadas || []).map((c: any) => {
-          const passageiroInfo = c.passageiro as Record<string, any> | undefined;
-          const diasAtraso = diffInDays(c.data_vencimento, now);
-
-          let mesOrigemStr: string | undefined = undefined;
-          if (c.mes !== (now.getMonth() + 1) || c.ano !== now.getFullYear()) {
-            const nomeMes = getMonthNameBR(c.mes);
-            mesOrigemStr = `${nomeMes}/${c.ano}`;
-          }
-
-          const respInfo = _getResponsavelFromPassageiro(passageiroInfo);
-          return {
-            passageiroNome: passageiroInfo?.nome || "Passageiro",
-            responsavelNome: respInfo.nome,
-            telefoneResponsavel: respInfo.telefone,
-            valor: Number(c.valor) || 0,
-            diasAtraso,
-            mesOrigemStr
-          };
-        });
-
-        // Ordenar do maior tempo de atraso para o menor
-        atrasadosList.sort((a, b) => b.diasAtraso - a.diasAtraso);
-
-        const proximosList = (cobrancasProximos || []).map((c: any) => {
-          const passageiroInfo = c.passageiro as Record<string, any> | undefined;
-          const respInfo = _getResponsavelFromPassageiro(passageiroInfo);
-          const dt = parseLocalDate(c.data_vencimento);
-          const diaSemanaStr = getShortWeekDayBR(dt);
-          const dataVencimentoStr = `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}`;
-
-          return {
-            passageiroNome: passageiroInfo?.nome || "Passageiro",
-            responsavelNome: respInfo.nome,
-            dataVencimentoStr,
-            diaSemanaStr,
-            valor: Number(c.valor) || 0
-          };
-        });
-
-        const totalAtrasado = atrasadosList.reduce((acc, curr) => acc + curr.valor, 0);
-        const totalProximos = proximosList.reduce((acc, curr) => acc + curr.valor, 0);
-
         try {
-          await notificationService.notifyDriver(
-            m.telefone,
-            EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS,
-            {
-              nomeMotorista: m.nome,
-              dataRefStr,
-              cobrancasAtrasadasList: atrasadosList,
-              cobrancasProximos7DiasList: proximosList,
-              totalAtrasado,
-              totalProximos
-            },
-            { channels: [NotificationChannelEnum.FIREBASE], usuarioId: m.id, email: (m as Record<string, unknown>).email as string | undefined }
-          );
-          sentCount++;
+          const sent = await this.processarResumoSemanalMotorista(m);
+          if (sent) sentCount++;
         } catch (notifErr: unknown) {
           const errorMsg = notifErr instanceof Error ? notifErr.message : String(notifErr);
           logger.error({ error: errorMsg, motoristaId: m.id }, "[CobrancaService] Erro ao enviar resumo de cobrança para motorista");
@@ -883,6 +1010,156 @@ export const cobrancaService = {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error({ err: msg }, "[CobrancaService] Erro no envio do resumo semanal de cobrança para motoristas");
+    }
+  },
+
+  async dispararPushAlertaHojeParaMotorista(
+    motorista: { id: string; nome: string; telefone: string | null; email?: string | null },
+    listaCobrancas: Array<{ valor: unknown; passageiro?: unknown }>,
+    temAlunos: boolean
+  ): Promise<boolean> {
+    const totalValor = listaCobrancas.reduce((acc, curr) => acc + (Number(curr.valor) || 0), 0);
+    const primeiraCobranca = listaCobrancas[0];
+    const primeiroPassageiro = primeiraCobranca?.passageiro;
+    const passageiroObj = Array.isArray(primeiroPassageiro) ? primeiroPassageiro[0] : primeiroPassageiro;
+
+    const nomePassageiro = (passageiroObj as { nome?: string } | null)?.nome || "Aluno";
+    const generoPassageiro = (passageiroObj as { genero?: string | null } | null)?.genero || null;
+
+    const respInfo = _getResponsavelFromPassageiro(passageiroObj as PassageiroCobrancaInfo);
+    const nomeResponsavel = respInfo?.nome || "";
+
+    return await notificationService.notifyDriver(
+      motorista.telefone || "",
+      EVENTO_MOTORISTA_COBRANCAS_HOJE,
+      {
+        nomeMotorista: motorista.nome,
+        qtdCobrancas: listaCobrancas.length,
+        valorTotal: totalValor,
+        nomePassageiro,
+        generoPassageiro,
+        nomeResponsavel,
+        temAlunos,
+        usuarioId: motorista.id
+      },
+      {
+        channels: [NotificationChannelEnum.FIREBASE],
+        usuarioId: motorista.id,
+        email: motorista.email ?? undefined
+      }
+    );
+  },
+
+  async processarAlertaVencimentoHojeMotorista(
+    motorista: { id: string; nome: string; telefone: string | null; email?: string | null } | string
+  ): Promise<{ sent: boolean; qtdCobrancas: number; valorTotal: number; temAlunos: boolean }> {
+    let motoristaObj: { id: string; nome: string; telefone: string | null; email?: string | null } | null = null;
+
+    if (typeof motorista === "string") {
+      const { data: user } = await userRepository.getById(motorista);
+      if (user) {
+        motoristaObj = {
+          id: user.id,
+          nome: user.nome,
+          telefone: user.telefone || null,
+          email: user.email ?? undefined
+        };
+      }
+    } else {
+      motoristaObj = motorista;
+    }
+
+    if (!motoristaObj) {
+      return { sent: false, qtdCobrancas: 0, valorTotal: 0, temAlunos: false };
+    }
+
+    const now = getNowBR();
+    const hojeStr = toPersistenceString(now);
+
+    const [cobrancasResult, contagemMap] = await Promise.all([
+      cobrancaRepository.getPendentesVencendoHojeParaMotoristas(hojeStr, motoristaObj.id),
+      passageiroRepository.getContagemPassageirosAtivosPorMotorista([motoristaObj.id])
+    ]);
+
+    const lista = cobrancasResult.data || [];
+    const contagemAlunos = contagemMap.get(motoristaObj.id) || 0;
+    const temAlunos = contagemAlunos >= 2;
+    const totalValor = lista.reduce((acc, curr) => acc + (Number(curr.valor) || 0), 0);
+
+    const sent = await this.dispararPushAlertaHojeParaMotorista(motoristaObj, lista, temAlunos);
+
+    return {
+      sent,
+      qtdCobrancas: lista.length,
+      valorTotal: totalValor,
+      temAlunos
+    };
+  },
+
+  async enviarAlertaVencimentoHojeParaMotoristas(): Promise<void> {
+    logger.info("[CobrancaService] Iniciando envio do alerta de parcelas de hoje para motoristas...");
+
+    try {
+      const now = getNowBR();
+      const hojeStr = toPersistenceString(now);
+
+      const { data: motoristas } = await userRepository.listMotoristasAtivosParaAlertaDiario();
+
+      if (!motoristas || motoristas.length === 0) {
+        logger.info("[CobrancaService] Nenhum motorista ativo elegível para o alerta diário de parcelas.");
+        return;
+      }
+
+      const motoristaIds = motoristas.map(m => m.id);
+
+      const [cobrancasResult, contagemMap] = await Promise.all([
+        cobrancaRepository.getPendentesVencendoHojeParaMotoristas(hojeStr, motoristaIds),
+        passageiroRepository.getContagemPassageirosAtivosPorMotorista(motoristaIds)
+      ]);
+
+      if (cobrancasResult.error) {
+        logger.error({ error: cobrancasResult.error.message }, "[CobrancaService] Erro ao buscar cobranças pendentes de hoje");
+        return;
+      }
+
+      type CobrancaItem = NonNullable<typeof cobrancasResult.data>[number];
+      const cobrancasPorMotorista = new Map<string, CobrancaItem[]>();
+
+      for (const c of cobrancasResult.data || []) {
+        if (!c.usuario_id) continue;
+        if (!cobrancasPorMotorista.has(c.usuario_id)) {
+          cobrancasPorMotorista.set(c.usuario_id, []);
+        }
+        cobrancasPorMotorista.get(c.usuario_id)!.push(c);
+      }
+
+      let sentCount = 0;
+      const BATCH_SIZE = 10;
+
+      for (let i = 0; i < motoristas.length; i += BATCH_SIZE) {
+        const chunk = motoristas.slice(i, i + BATCH_SIZE);
+
+        await Promise.all(
+          chunk.map(async (m) => {
+            const lista = cobrancasPorMotorista.get(m.id) || [];
+            const contagemAlunos = contagemMap.get(m.id) || 0;
+            const temAlunos = contagemAlunos >= 2;
+
+            try {
+              const sent = await this.dispararPushAlertaHojeParaMotorista(m, lista, temAlunos);
+              if (sent) sentCount++;
+            } catch (notifErr: unknown) {
+              const errorMsg = notifErr instanceof Error ? notifErr.message : String(notifErr);
+              logger.error({ error: errorMsg, usuarioId: m.id }, "[CobrancaService] Erro ao enviar alerta de parcelas de hoje para motorista");
+            }
+          })
+        );
+      }
+
+      logger.info({ sentCount }, "[CobrancaService] Processamento do alerta diário de parcelas concluído.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error({ err: msg }, "[CobrancaService] Erro geral no alerta diário de parcelas para motoristas");
     }
   }
 };

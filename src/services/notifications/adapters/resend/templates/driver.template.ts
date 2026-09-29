@@ -1,7 +1,7 @@
 import { NotificationUrlBuilder } from "../../../utils/notification-url.builder.js";
 import { NotificationContextFormatter } from "../../../utils/notification-context.formatter.js";
 import { EmailComponents, ResendTemplateContext, ResendTemplatePayload, formatSubject } from "./components.js";
-import { TRIAL_DURATION_DAYS } from "../../../../../config/constants.js";
+import { TRIAL_DURATION_DAYS, TRIAL_BONUS_INACTIVE_DAYS } from "../../../../../config/constants.js";
 
 /**
  * Templates de E-mail para Motoristas (SaaS, Assinatura e Autenticação)
@@ -80,16 +80,19 @@ export class ResendDriverTemplates {
         const nome = NotificationContextFormatter.getFirstName(ctx.nomeMotorista || ctx.nome, "Motorista");
         const email = (ctx.email || ctx.emailMotorista) as string | undefined;
         const fullUrl = await NotificationUrlBuilder.getSubscriptionCheckoutUrl({ autoOpen: false, email });
+        const pixCode = (ctx.pixCopiaECola || ctx.chavePix) as string | undefined;
 
         const subject = formatSubject("Lembrete de Vencimento da Assinatura");
         const preheader = "Sua assinatura do Van360 está próxima do vencimento. Acesse o sistema para renovar via Pix ou cartão.";
-        const text = `Olá, ${nome}!\n\nSua assinatura do Van360 está próxima do vencimento. Acesse o sistema para renovar via Pix ou cartão.\n\nAcesse: ${fullUrl}\n\nAtenciosamente,\nEquipe Van360`;
+        const text = `Olá, ${nome}!\n\nSua assinatura do Van360 está próxima do vencimento.${pixCode ? `\n\nPix Copia e Cola:\n${pixCode}` : ""}\n\nAcesse: ${fullUrl}\n\nAtenciosamente,\nEquipe Van360`;
 
         const contentHtml = `
             ${EmailComponents.greeting(nome)}
             ${EmailComponents.paragraph("Sua assinatura do Van360 está próxima do vencimento. Acesse a tela de pagamento para concluir a renovação via Pix ou cartão.")}
 
-            ${EmailComponents.button("Acessar Minha Assinatura", fullUrl)}
+            ${pixCode ? EmailComponents.pixCopyPasteCard(pixCode.trim()) : ""}
+
+            ${EmailComponents.button(pixCode ? "Ver Detalhes da Assinatura" : "Acessar Minha Assinatura", fullUrl)}
         `;
 
         const html = EmailComponents.layout({ subject, preheader, contentHtml });
@@ -103,16 +106,19 @@ export class ResendDriverTemplates {
         const nome = NotificationContextFormatter.getFirstName(ctx.nomeMotorista || ctx.nome, "Motorista");
         const email = (ctx.email || ctx.emailMotorista) as string | undefined;
         const fullUrl = await NotificationUrlBuilder.getSubscriptionCheckoutUrl({ autoOpen: true, email });
+        const pixCode = (ctx.pixCopiaECola || ctx.chavePix) as string | undefined;
 
         const subject = formatSubject("Assinatura Vence Hoje");
         const preheader = "Sua assinatura do Van360 vence hoje. Realize o pagamento para evitar interrupções no sistema.";
-        const text = `Olá, ${nome}!\n\nSua assinatura do Van360 vence hoje. Realize o pagamento para evitar interrupções no sistema.\n\nAcesse: ${fullUrl}\n\nAtenciosamente,\nEquipe Van360`;
+        const text = `Olá, ${nome}!\n\nSua assinatura do Van360 vence hoje. Realize o pagamento para evitar interrupções no sistema.${pixCode ? `\n\nPix Copia e Cola:\n${pixCode}` : ""}\n\nAcesse: ${fullUrl}\n\nAtenciosamente,\nEquipe Van360`;
 
         const contentHtml = `
             ${EmailComponents.greeting(nome)}
             ${EmailComponents.paragraph("Sua assinatura do Van360 vence hoje. Clique no botão abaixo para acessar a tela de renovação e pagar via Pix ou cartão.")}
 
-            ${EmailComponents.button("Pagar Assinatura", fullUrl)}
+            ${pixCode ? EmailComponents.pixCopyPasteCard(pixCode.trim()) : ""}
+
+            ${EmailComponents.button(pixCode ? "Pagar com Cartão / Outras Opções" : "Pagar Assinatura", fullUrl)}
         `;
 
         const html = EmailComponents.layout({ subject, preheader, contentHtml });
@@ -175,15 +181,17 @@ export class ResendDriverTemplates {
         const email = (ctx.email || ctx.emailMotorista) as string | undefined;
         const fullUrl = await NotificationUrlBuilder.getSubscriptionCheckoutUrl({ autoOpen: true, email });
 
-        const subject = formatSubject("Seu Teste Grátis Encerrou");
-        const preheader = `Seu período de teste grátis de ${TRIAL_DURATION_DAYS} dias chegou ao fim. Assine um de nossos planos e continue gerenciando sua frota.`;
-        const text = `Olá, ${nome}!\n\nSeu período de teste grátis de ${TRIAL_DURATION_DAYS} dias chegou ao fim. Assine um de nossos planos e continue gerenciando sua frota sem interrupções.\n\nAcesse: ${fullUrl}\n\nAtenciosamente,\nEquipe Van360`;
+        const subject = formatSubject("Seu teste grátis encerrou");
+        const preheader = "Assine agora para reativar o envio de lembretes aos responsáveis e gerenciar seus alunos sem interrupções.";
+        const text = `Olá, ${nome}!\n\nSeu período de teste grátis de ${TRIAL_DURATION_DAYS} dias chegou ao fim.\n\nTodos os alunos e cadastros que você realizou continuam salvos com segurança. Para continuar com os lembretes automáticos de cobrança aos responsáveis e o controle diário das suas rotas e mensalidades, escolha o plano ideal para você.\n\nAcesse: ${fullUrl}\n\nAtenciosamente,\nEquipe Van360`;
 
         const contentHtml = `
             ${EmailComponents.greeting(nome)}
-            ${EmailComponents.paragraph(`Seu período de teste grátis de ${TRIAL_DURATION_DAYS} dias chegou ao fim. Assine um de nossos planos e continue gerenciando sua frota sem interrupções.`)}
+            ${EmailComponents.paragraph(`Seu período de teste grátis de <strong>${TRIAL_DURATION_DAYS} dias</strong> chegou ao fim.`)}
+            ${EmailComponents.paragraph("Todos os alunos e cadastros que você realizou continuam salvos com segurança.")}
+            ${EmailComponents.paragraph("Para continuar com os <strong>lembretes automáticos de cobrança aos responsáveis</strong> e o controle diário das suas mensalidades e rotas, escolha o plano ideal para a sua van.")}
 
-            ${EmailComponents.button("Assinar Agora", fullUrl)}
+            ${EmailComponents.button("Reativar e Assinar Agora", fullUrl)}
         `;
 
         const html = EmailComponents.layout({ subject, preheader, contentHtml });
@@ -198,15 +206,22 @@ export class ResendDriverTemplates {
         const email = (ctx.email || ctx.emailMotorista) as string | undefined;
         const fullUrl = await NotificationUrlBuilder.getSubscriptionCheckoutUrl({ autoOpen: true, email });
 
-        const subject = formatSubject("Último Dia do Teste Grátis");
-        const preheader = "Seu período de teste grátis encerra hoje. Garanta sua assinatura para não perder o acesso às suas rotas.";
-        const text = `Olá, ${nome}!\n\nSeu período de teste grátis encerra hoje. Garanta sua assinatura para não perder o acesso às suas rotas e passageiros.\n\nAcesse: ${fullUrl}\n\nAtenciosamente,\nEquipe Van360`;
+        const subject = formatSubject("Último dia do seu teste grátis");
+        const preheader = "Garanta sua assinatura para continuar enviando lembretes aos pais, recebendo mensalidades em dia e mantendo seus alunos organizados.";
+        const text = `Olá, ${nome}!\n\nSeu período de teste grátis está chegando ao fim.\n\nGaranta sua assinatura para continuar aproveitando a tranquilidade do Van360:\n• Lembretes automáticos para os pais: Sem precisar cobrar ninguém no particular.\n• Controle de mensalidades e Pix: Acompanhe em tempo real quem pagou e quem está pendente.\n• Seus alunos e rotas protegidos: Todos os dados cadastrados continuam prontos para o dia a dia.\n\nAcesse: ${fullUrl}\n\nAtenciosamente,\nEquipe Van360`;
 
         const contentHtml = `
             ${EmailComponents.greeting(nome)}
-            ${EmailComponents.paragraph("Seu período de teste grátis encerra hoje. Garanta sua assinatura para não perder o acesso às suas rotas e passageiros.")}
+            ${EmailComponents.paragraph("Seu período de teste grátis está chegando ao fim.")}
+            ${EmailComponents.paragraph("Garanta sua assinatura para continuar aproveitando a tranquilidade de uma gestão no automático:")}
 
-            ${EmailComponents.button("Garantir Assinatura", fullUrl)}
+            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px 18px; margin: 20px 0;">
+                <div style="font-size: 14px; color: #0f172a; margin-bottom: 8px;"><strong>• Lembretes automáticos para os pais:</strong> Sem precisar cobrar ninguém no particular.</div>
+                <div style="font-size: 14px; color: #0f172a; margin-bottom: 8px;"><strong>• Controle de mensalidades e Pix:</strong> Acompanhe quem pagou e quem está pendente.</div>
+                <div style="font-size: 14px; color: #0f172a;"><strong>• Seus alunos e dados protegidos:</strong> Tudo o que você já cadastrou continua pronto para uso.</div>
+            </div>
+
+            ${EmailComponents.button("Garantir Minha Assinatura", fullUrl)}
         `;
 
         const html = EmailComponents.layout({ subject, preheader, contentHtml });
@@ -221,15 +236,17 @@ export class ResendDriverTemplates {
         const email = (ctx.email || ctx.emailMotorista) as string | undefined;
         const fullUrl = await NotificationUrlBuilder.getSubscriptionCheckoutUrl({ autoOpen: false, email });
 
-        const subject = formatSubject("Sentimos sua falta!");
-        const preheader = "Seu teste expirou, mas todos os seus dados e rotas continuam salvos com segurança. Escolha um plano!";
-        const text = `Olá, ${nome}!\n\nSeu teste expirou, mas todos os seus dados e rotas continuam salvos com segurança. Escolha um plano e volte a usar o sistema!\n\nAcesse: ${fullUrl}\n\nAtenciosamente,\nEquipe Van360`;
+        const subject = formatSubject("Seus alunos continuam salvos");
+        const preheader = "Seus alunos continuam salvos. Volte a enviar lembretes automáticos aos pais e facilite o recebimento das suas mensalidades.";
+        const text = `Olá, ${nome}!\n\nSabemos como a correria do transporte escolar toma conta do dia a dia.\n\nLembramos que o cadastro dos seus alunos e todas as suas informações continuam salvos com total segurança.\n\nVolte a economizar tempo com lembretes automáticos para os pais e o controle financeiro na palma da mão!\n\nAcesse: ${fullUrl}\n\nAtenciosamente,\nEquipe Van360`;
 
         const contentHtml = `
             ${EmailComponents.greeting(nome)}
-            ${EmailComponents.paragraph("Seu teste expirou, mas todos os seus dados e rotas continuam salvos com segurança. Escolha um plano e volte a usar o sistema!")}
+            ${EmailComponents.paragraph("Sabemos como a correria do transporte escolar toma conta da rotina.")}
+            ${EmailComponents.paragraph("Lembramos que o cadastro dos seus alunos e todas as suas informações continuam salvos com total segurança.")}
+            ${EmailComponents.paragraph("Volte a economizar tempo com <strong>lembretes automáticos de cobrança para os pais</strong> e o controle completo das suas mensalidades e rotas.")}
 
-            ${EmailComponents.button("Ver Planos e Assinar", fullUrl)}
+            ${EmailComponents.button("Ver Planos e Reativar Conta", fullUrl)}
         `;
 
         const html = EmailComponents.layout({ subject, preheader, contentHtml });
@@ -251,7 +268,7 @@ export class ResendDriverTemplates {
 
         const subject = formatSubject("Seu teste grátis do Van360 começou");
         const preheader = `Seu cadastro no Van360 foi concluído com sucesso. Você já tem ${TRIAL_DURATION_DAYS} dias grátis para conhecer a plataforma.`;
-        const text = `Olá, ${nome}!\n\nSeu cadastro no Van360 foi concluído com sucesso.\n\nVocê já tem ${TRIAL_DURATION_DAYS} dias grátis para conhecer a plataforma e organizar a gestão do seu transporte escolar.\n\nComece pelo que mais importa:\nComece cadastrando seus passageiros e organizando suas parcelas. Depois, explore as ferramentas que podem simplificar sua rotina.\n\n• Passageiros: Tenha seus alunos organizados em um só lugar.\n• Financeiro: Controle pagamentos, gastos e cobranças em um só lugar.\n• Rotas: Organize seus trajetos e passageiros com mais praticidade.\n\nQuer conhecer tudo o que o Van360 pode fazer por você?\nEntre na plataforma e explore as outras funcionalidades.\n\nEntrar no Van360: ${fullUrl}\n\nDurante os próximos ${TRIAL_DURATION_DAYS} dias:\nVocê terá acesso às funcionalidades do Van360 para conhecer a plataforma e testar como ela pode facilitar sua rotina.\n\nA ideia é simples: use o Van360 na sua rotina e veja, na prática, o que ele pode organizar para você.\n\nSe precisar de ajuda durante o teste, fale com a gente. Estamos à disposição.`;
+        const text = `Olá, ${nome}!\n\nSeu cadastro no Van360 foi concluído com sucesso.\n\nVocê já tem ${TRIAL_DURATION_DAYS} dias grátis para conhecer a plataforma e organizar a gestão do seu transporte escolar.\n\nComece pelo que mais importa:\nComece cadastrando seus alunos e organizando suas parcelas. Depois, explore as ferramentas que podem simplificar sua rotina.\n\n• Alunos: Tenha seus alunos organizados em um só lugar.\n• Financeiro: Controle pagamentos, gastos e cobranças em um só lugar.\n• Rotas: Organize seus trajetos e alunos com mais praticidade.\n\nQuer conhecer tudo o que o Van360 pode fazer por você?\nEntre na plataforma e explore as outras funcionalidades.\n\nEntrar no Van360: ${fullUrl}\n\nDurante os próximos ${TRIAL_DURATION_DAYS} dias:\nVocê terá acesso às funcionalidades do Van360 para conhecer a plataforma e testar como ela pode facilitar sua rotina.\n\nA ideia é simples: use o Van360 na sua rotina e veja, na prática, o que ele pode organizar para você.\n\nSe precisar de ajuda durante o teste, fale com a gente. Estamos à disposição.`;
 
         const contentHtml = `
             ${EmailComponents.greeting(nome)}
@@ -260,13 +277,13 @@ export class ResendDriverTemplates {
 
             <div style="margin: 28px 0 20px 0;">
                 <div style="font-size: 16px; font-weight: 700; color: #0f172a; margin-bottom: 6px;">Comece pelo que mais importa</div>
-                ${EmailComponents.paragraph("Comece cadastrando seus passageiros e organizando suas parcelas. Depois, explore as ferramentas que podem simplificar sua rotina.", 16)}
+                ${EmailComponents.paragraph("Comece cadastrando seus alunos e organizando suas parcelas. Depois, explore as ferramentas que podem simplificar sua rotina.", 16)}
 
-                <!-- Card 1: Passageiros -->
+                <!-- Card 1: Alunos -->
                 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);">
                     <div style="font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 4px; display: flex; align-items: center;">
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1a3a5c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-                        <span>Passageiros</span>
+                        <span>Alunos</span>
                     </div>
                     <div style="font-size: 13px; color: #475569; line-height: 1.45;">Tenha seus alunos organizados em um só lugar.</div>
                 </div>
@@ -286,7 +303,7 @@ export class ResendDriverTemplates {
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1a3a5c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;"><circle cx="6" cy="19" r="3"></circle><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"></path><circle cx="18" cy="5" r="3"></circle></svg>
                         <span>Rotas</span>
                     </div>
-                    <div style="font-size: 13px; color: #475569; line-height: 1.45;">Organize seus trajetos e passageiros com mais praticidade.</div>
+                    <div style="font-size: 13px; color: #475569; line-height: 1.45;">Organize seus trajetos e alunos com mais praticidade.</div>
                 </div>
             </div>
 
@@ -318,7 +335,7 @@ export class ResendDriverTemplates {
         const nome = NotificationContextFormatter.getFirstName(ctx.nomeMotorista || ctx.nome, "Motorista");
         const bonusDays = (ctx.trialDays || 30) as number;
 
-        const subject = formatSubject("Você ganhou 1 mês grátis no Van360! 🎁");
+        const subject = formatSubject("Você ganhou 1 mês grátis no Van360!");
         const preheader = `Seu indicado concluiu a assinatura do Van360. Adicionamos +${bonusDays} dias de acesso gratuito na sua conta.`;
         const text = `Olá, ${nome}!\n\nÓtimas notícias! O motorista que você indicou concluiu a assinatura do Van360.\n\nComo recompensa por indicar a nossa plataforma, adicionamos +${bonusDays} dias de acesso gratuito à sua conta!\n\nObrigado por ajudar a comunidade do Van360 a crescer.\n\nAtenciosamente,\nEquipe Van360`;
 
@@ -328,11 +345,42 @@ export class ResendDriverTemplates {
             ${EmailComponents.paragraph(`Como recompensa pela sua indicação, adicionamos <strong>+${bonusDays} dias de acesso gratuito</strong> à sua conta!`)}
             
             <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 18px 20px; margin: 24px 0;">
-                <div style="font-size: 15px; font-weight: 700; color: #166534; margin-bottom: 4px;">🎉 Bônus Aplicado com Sucesso</div>
+                <div style="font-size: 15px; font-weight: 700; color: #166534; margin-bottom: 4px;">Bônus Aplicado com Sucesso</div>
                 <div style="font-size: 13.5px; color: #15803d; line-height: 1.45;">Seu prazo de vencimento foi automaticamente estendido. Continue aproveitando todas as ferramentas do Van360 sem custos adicionais neste período.</div>
             </div>
 
             ${EmailComponents.paragraph("Obrigado por confiar no Van360 e fazer a nossa comunidade de transporte escolar crescer!")}
+        `;
+
+        const html = EmailComponents.layout({ subject, preheader, contentHtml });
+        return { subject, html, text };
+    }
+
+    /**
+     * 13. Extensão de Trial para Usuário Inativo
+     */
+    static trialBonusInactive(ctx: ResendTemplateContext): ResendTemplatePayload {
+        const nome = NotificationContextFormatter.getFirstName(ctx.nomeMotorista || ctx.nome, "Motorista");
+        const bonusDays = (ctx.bonusDays || TRIAL_BONUS_INACTIVE_DAYS) as number;
+        const fullUrl = NotificationUrlBuilder.getBaseAppUrl();
+
+        const subject = formatSubject("Liberamos +7 dias grátis para você");
+        const preheader = `Vimos que a rotina foi corrida! Liberamos mais ${bonusDays} dias grátis para você testar o Van360 com calma.`;
+        const text = `Olá, ${nome}!\n\nSabemos como a rotina no transporte escolar é corrida. Vimos que você ainda não conseguiu cadastrar seus alunos e aproveitar as facilidades do Van360.\n\nComo queremos que você realmente veja como a plataforma simplifica o seu dia a dia, liberamos mais ${bonusDays} dias de teste gratuito para a sua conta!\n\nCadastre seus primeiros alunos e organize suas rotas e mensalidades com tranquilidade.\n\nAcessar Van360: ${fullUrl}\n\nAtenciosamente,\nEquipe Van360`;
+
+        const contentHtml = `
+            ${EmailComponents.greeting(nome)}
+            ${EmailComponents.paragraph("Sabemos como a rotina no transporte escolar é corrida no dia a dia.")}
+            ${EmailComponents.paragraph(`Vimos que você ainda não conseguiu cadastrar seus alunos e testar o <strong>Van360</strong> na prática. Como queremos que você realmente sinta a facilidade de organizar suas rotas e mensalidades, <strong>liberamos mais ${bonusDays} dias gratuitos</strong> para a sua conta!`)}
+
+            <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 18px 20px; margin: 24px 0;">
+                <div style="font-size: 15px; font-weight: 700; color: #166534; margin-bottom: 4px;">+${bonusDays} Dias de Teste Liberados</div>
+                <div style="font-size: 13.5px; color: #15803d; line-height: 1.45;">Seu período gratuito foi automaticamente prorrogado. Aproveite este tempo extra para cadastrar seus primeiros alunos e organizar seu fluxo de trabalho.</div>
+            </div>
+
+            ${EmailComponents.button("Acessar o Van360 e Começar", fullUrl)}
+
+            ${EmailComponents.paragraph("Se precisar de qualquer ajuda durante a configuração inicial, nossa equipe está sempre à disposição.")}
         `;
 
         const html = EmailComponents.layout({ subject, preheader, contentHtml });

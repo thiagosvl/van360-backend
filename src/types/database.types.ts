@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "13.0.5"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -168,6 +168,7 @@ export type Database = {
           plano_id: string
           status: string
           trial_ends_at: string | null
+          trial_estendido: boolean
           updated_at: string | null
           usuario_id: string
           valor_base_anual: number | null
@@ -187,6 +188,7 @@ export type Database = {
           plano_id: string
           status?: string
           trial_ends_at?: string | null
+          trial_estendido?: boolean
           updated_at?: string | null
           usuario_id: string
           valor_base_anual?: number | null
@@ -206,6 +208,7 @@ export type Database = {
           plano_id?: string
           status?: string
           trial_ends_at?: string | null
+          trial_estendido?: boolean
           updated_at?: string | null
           usuario_id?: string
           valor_base_anual?: number | null
@@ -300,7 +303,7 @@ export type Database = {
           desativar_lembretes: boolean
           id: string
           mes: number
-          origem: string
+          observacao: string | null
           pagamento_manual: boolean | null
           passageiro_id: string
           recibo_url: string | null
@@ -322,7 +325,7 @@ export type Database = {
           desativar_lembretes?: boolean
           id?: string
           mes: number
-          origem?: string
+          observacao?: string | null
           pagamento_manual?: boolean | null
           passageiro_id: string
           recibo_url?: string | null
@@ -344,7 +347,7 @@ export type Database = {
           desativar_lembretes?: boolean
           id?: string
           mes?: number
-          origem?: string
+          observacao?: string | null
           pagamento_manual?: boolean | null
           passageiro_id?: string
           recibo_url?: string | null
@@ -714,6 +717,7 @@ export type Database = {
           tentativas: number
           updated_at: string | null
           usuario_id: string | null
+          passageiro_id: string | null
         }
         Insert: {
           canal: string
@@ -730,6 +734,7 @@ export type Database = {
           tentativas?: number
           updated_at?: string | null
           usuario_id?: string | null
+          passageiro_id?: string | null
         }
         Update: {
           canal?: string
@@ -746,6 +751,7 @@ export type Database = {
           tentativas?: number
           updated_at?: string | null
           usuario_id?: string | null
+          passageiro_id?: string | null
         }
         Relationships: [
           {
@@ -753,6 +759,13 @@ export type Database = {
             columns: ["usuario_id"]
             isOneToOne: false
             referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fila_notificacoes_passageiro_id_fkey"
+            columns: ["passageiro_id"]
+            isOneToOne: false
+            referencedRelation: "passageiros"
             referencedColumns: ["id"]
           },
         ]
@@ -947,6 +960,8 @@ export type Database = {
           created_at: string
           expire_month: string
           expire_year: string
+          holder_document: string | null
+          holder_name: string | null
           id: string
           is_default: boolean | null
           last_4_digits: string
@@ -959,6 +974,8 @@ export type Database = {
           created_at?: string
           expire_month: string
           expire_year: string
+          holder_document?: string | null
+          holder_name?: string | null
           id?: string
           is_default?: boolean | null
           last_4_digits: string
@@ -971,6 +988,8 @@ export type Database = {
           created_at?: string
           expire_month?: string
           expire_year?: string
+          holder_document?: string | null
+          holder_name?: string | null
           id?: string
           is_default?: boolean | null
           last_4_digits?: string
@@ -1036,10 +1055,146 @@ export type Database = {
           },
         ]
       }
+      passageiro_renovacoes: {
+        Row: {
+          ano_destino: number
+          ano_origem: number
+          confirmado_em: string | null
+          created_at: string
+          id: string
+          ip_confirmacao: string | null
+          justificativa_recusa: string | null
+          motivo_recusa: string | null
+          notificacao_enviada_em: string | null
+          nova_data_fim_cobranca: string | null
+          nova_data_fim_transporte: string | null
+          nova_data_inicio_cobranca: string | null
+          nova_data_inicio_transporte: string | null
+          nova_escola_id: string | null
+          nova_modalidade: Database["public"]["Enums"]["modalidade_enum"] | null
+          nova_turma: string | null
+          novo_dia_vencimento: number | null
+          novo_isento: boolean
+          novo_nome_professor: string | null
+          novo_periodo: string | null
+          novo_valor_cobranca: number | null
+          novo_veiculo_id: string | null
+          observacoes_pais: string | null
+          passageiro_id: string
+          quem_recusou: string | null
+          recusado_em: string | null
+          status: Database["public"]["Enums"]["renovacao_status_enum"]
+          token_publico: string | null
+          updated_at: string
+          user_agent_confirmacao: string | null
+          usuario_id: string
+        }
+        Insert: {
+          ano_destino?: number
+          ano_origem?: number
+          confirmado_em?: string | null
+          created_at?: string
+          id?: string
+          ip_confirmacao?: string | null
+          justificativa_recusa?: string | null
+          motivo_recusa?: string | null
+          notificacao_enviada_em?: string | null
+          nova_data_fim_cobranca?: string | null
+          nova_data_fim_transporte?: string | null
+          nova_data_inicio_cobranca?: string | null
+          nova_data_inicio_transporte?: string | null
+          nova_escola_id?: string | null
+          nova_modalidade?:
+            | Database["public"]["Enums"]["modalidade_enum"]
+            | null
+          nova_turma?: string | null
+          novo_dia_vencimento?: number | null
+          novo_isento?: boolean
+          novo_nome_professor?: string | null
+          novo_periodo?: string | null
+          novo_valor_cobranca?: number | null
+          novo_veiculo_id?: string | null
+          observacoes_pais?: string | null
+          passageiro_id: string
+          quem_recusou?: string | null
+          recusado_em?: string | null
+          status?: Database["public"]["Enums"]["renovacao_status_enum"]
+          token_publico?: string | null
+          updated_at?: string
+          user_agent_confirmacao?: string | null
+          usuario_id: string
+        }
+        Update: {
+          ano_destino?: number
+          ano_origem?: number
+          confirmado_em?: string | null
+          created_at?: string
+          id?: string
+          ip_confirmacao?: string | null
+          justificativa_recusa?: string | null
+          motivo_recusa?: string | null
+          notificacao_enviada_em?: string | null
+          nova_data_fim_cobranca?: string | null
+          nova_data_fim_transporte?: string | null
+          nova_data_inicio_cobranca?: string | null
+          nova_data_inicio_transporte?: string | null
+          nova_escola_id?: string | null
+          nova_modalidade?:
+            | Database["public"]["Enums"]["modalidade_enum"]
+            | null
+          nova_turma?: string | null
+          novo_dia_vencimento?: number | null
+          novo_isento?: boolean
+          novo_nome_professor?: string | null
+          novo_periodo?: string | null
+          novo_valor_cobranca?: number | null
+          novo_veiculo_id?: string | null
+          observacoes_pais?: string | null
+          passageiro_id?: string
+          quem_recusou?: string | null
+          recusado_em?: string | null
+          status?: Database["public"]["Enums"]["renovacao_status_enum"]
+          token_publico?: string | null
+          updated_at?: string
+          user_agent_confirmacao?: string | null
+          usuario_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "passageiro_renovacoes_nova_escola_id_fkey"
+            columns: ["nova_escola_id"]
+            isOneToOne: false
+            referencedRelation: "escolas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passageiro_renovacoes_novo_veiculo_id_fkey"
+            columns: ["novo_veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passageiro_renovacoes_passageiro_id_fkey"
+            columns: ["passageiro_id"]
+            isOneToOne: false
+            referencedRelation: "passageiros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passageiro_renovacoes_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       passageiro_responsaveis: {
         Row: {
           created_at: string | null
           id: string
+          notificacoes_rota_habilitadas: boolean
           parentesco: string | null
           passageiro_id: string
           responsavel_id: string
@@ -1049,6 +1204,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           id?: string
+          notificacoes_rota_habilitadas?: boolean
           parentesco?: string | null
           passageiro_id: string
           responsavel_id: string
@@ -1058,6 +1214,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           id?: string
+          notificacoes_rota_habilitadas?: boolean
           parentesco?: string | null
           passageiro_id?: string
           responsavel_id?: string
@@ -1083,6 +1240,7 @@ export type Database = {
       }
       passageiros: {
         Row: {
+          ano_letivo: number
           ativo: boolean
           created_at: string
           data_fim_cobranca: string | null
@@ -1094,6 +1252,8 @@ export type Database = {
           enviar_notificacoes: boolean
           escola_id: string
           genero: Database["public"]["Enums"]["genero_enum"] | null
+          horario_entrada: string | null
+          horario_saida: string | null
           id: string
           isento: boolean
           modalidade: Database["public"]["Enums"]["modalidade_enum"] | null
@@ -1101,6 +1261,7 @@ export type Database = {
           nome_professor: string | null
           observacoes: string | null
           periodo: string | null
+          sala: string | null
           turma: string | null
           updated_at: string
           usuario_id: string
@@ -1108,6 +1269,7 @@ export type Database = {
           veiculo_id: string
         }
         Insert: {
+          ano_letivo?: number
           ativo?: boolean
           created_at?: string
           data_fim_cobranca?: string | null
@@ -1119,6 +1281,8 @@ export type Database = {
           enviar_notificacoes?: boolean
           escola_id: string
           genero?: Database["public"]["Enums"]["genero_enum"] | null
+          horario_entrada?: string | null
+          horario_saida?: string | null
           id?: string
           isento?: boolean
           modalidade?: Database["public"]["Enums"]["modalidade_enum"] | null
@@ -1126,6 +1290,7 @@ export type Database = {
           nome_professor?: string | null
           observacoes?: string | null
           periodo?: string | null
+          sala?: string | null
           turma?: string | null
           updated_at?: string
           usuario_id: string
@@ -1133,6 +1298,7 @@ export type Database = {
           veiculo_id: string
         }
         Update: {
+          ano_letivo?: number
           ativo?: boolean
           created_at?: string
           data_fim_cobranca?: string | null
@@ -1144,6 +1310,8 @@ export type Database = {
           enviar_notificacoes?: boolean
           escola_id?: string
           genero?: Database["public"]["Enums"]["genero_enum"] | null
+          horario_entrada?: string | null
+          horario_saida?: string | null
           id?: string
           isento?: boolean
           modalidade?: Database["public"]["Enums"]["modalidade_enum"] | null
@@ -1151,6 +1319,7 @@ export type Database = {
           nome_professor?: string | null
           observacoes?: string | null
           periodo?: string | null
+          sala?: string | null
           turma?: string | null
           updated_at?: string
           usuario_id?: string
@@ -1216,6 +1385,7 @@ export type Database = {
       }
       pre_passageiros: {
         Row: {
+          ano_letivo: number
           bairro: string | null
           cep: string | null
           cidade: string | null
@@ -1230,6 +1400,8 @@ export type Database = {
           escola_id: string | null
           estado: string | null
           genero: Database["public"]["Enums"]["genero_enum"] | null
+          horario_entrada: string | null
+          horario_saida: string | null
           id: string
           logradouro: string | null
           modalidade: Database["public"]["Enums"]["modalidade_enum"] | null
@@ -1243,13 +1415,17 @@ export type Database = {
             | null
           periodo: string | null
           referencia: string | null
+          sala: string | null
           telefone_responsavel: string
           turma: string | null
           updated_at: string
           usuario_id: string
           valor_cobranca: number | null
+          dispositivo_cadastro: string | null
+          metadados_cadastro: Json | null
         }
         Insert: {
+          ano_letivo?: number
           bairro?: string | null
           cep?: string | null
           cidade?: string | null
@@ -1264,6 +1440,8 @@ export type Database = {
           escola_id?: string | null
           estado?: string | null
           genero?: Database["public"]["Enums"]["genero_enum"] | null
+          horario_entrada?: string | null
+          horario_saida?: string | null
           id?: string
           logradouro?: string | null
           modalidade?: Database["public"]["Enums"]["modalidade_enum"] | null
@@ -1277,13 +1455,17 @@ export type Database = {
             | null
           periodo?: string | null
           referencia?: string | null
+          sala?: string | null
           telefone_responsavel: string
           turma?: string | null
           updated_at?: string
           usuario_id: string
           valor_cobranca?: number | null
+          dispositivo_cadastro?: string | null
+          metadados_cadastro?: Json | null
         }
         Update: {
+          ano_letivo?: number
           bairro?: string | null
           cep?: string | null
           cidade?: string | null
@@ -1298,6 +1480,8 @@ export type Database = {
           escola_id?: string | null
           estado?: string | null
           genero?: Database["public"]["Enums"]["genero_enum"] | null
+          horario_entrada?: string | null
+          horario_saida?: string | null
           id?: string
           logradouro?: string | null
           modalidade?: Database["public"]["Enums"]["modalidade_enum"] | null
@@ -1311,11 +1495,14 @@ export type Database = {
             | null
           periodo?: string | null
           referencia?: string | null
+          sala?: string | null
           telefone_responsavel?: string
           turma?: string | null
           updated_at?: string
           usuario_id?: string
           valor_cobranca?: number | null
+          dispositivo_cadastro?: string | null
+          metadados_cadastro?: Json | null
         }
         Relationships: [
           {
@@ -1425,6 +1612,57 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      recibos_anuais: {
+        Row: {
+          ano: number
+          created_at: string
+          id: string
+          motorista_id: string
+          passageiro_id: string
+          quantidade_meses: number
+          recibo_url: string
+          total_pago: number
+          updated_at: string
+        }
+        Insert: {
+          ano: number
+          created_at?: string
+          id?: string
+          motorista_id: string
+          passageiro_id: string
+          quantidade_meses: number
+          recibo_url: string
+          total_pago: number
+          updated_at?: string
+        }
+        Update: {
+          ano?: number
+          created_at?: string
+          id?: string
+          motorista_id?: string
+          passageiro_id?: string
+          quantidade_meses?: number
+          recibo_url?: string
+          total_pago?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recibos_anuais_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recibos_anuais_passageiro_id_fkey"
+            columns: ["passageiro_id"]
+            isOneToOne: false
+            referencedRelation: "passageiros"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       rota_ausencias: {
         Row: {
@@ -1614,6 +1852,7 @@ export type Database = {
           cobranca_atraso_5_dias_ativo: boolean
           cobranca_atraso_7_dias_ativo: boolean
           cobranca_aviso_previo_ativo: boolean
+          cobranca_aviso_previo_whatsapp_ativo: boolean
           cobranca_dias_aviso_previo: number | null
           cobranca_vencimento_hoje_ativo: boolean
           created_at: string
@@ -1633,6 +1872,7 @@ export type Database = {
           cobranca_atraso_5_dias_ativo?: boolean
           cobranca_atraso_7_dias_ativo?: boolean
           cobranca_aviso_previo_ativo?: boolean
+          cobranca_aviso_previo_whatsapp_ativo?: boolean
           cobranca_dias_aviso_previo?: number | null
           cobranca_vencimento_hoje_ativo?: boolean
           created_at?: string
@@ -1652,6 +1892,7 @@ export type Database = {
           cobranca_atraso_5_dias_ativo?: boolean
           cobranca_atraso_7_dias_ativo?: boolean
           cobranca_aviso_previo_ativo?: boolean
+          cobranca_aviso_previo_whatsapp_ativo?: boolean
           cobranca_dias_aviso_previo?: number | null
           cobranca_vencimento_hoje_ativo?: boolean
           created_at?: string
@@ -1715,6 +1956,7 @@ export type Database = {
           cidade: string | null
           config_contrato: Json | null
           conta_pai_id: string | null
+          cpf_responsavel: string | null
           cpfcnpj: string
           created_at: string
           data_nascimento: string | null
@@ -1723,6 +1965,7 @@ export type Database = {
           estado: string | null
           id: string
           logradouro: string | null
+          logo_url: string | null
           metadados_cadastro: Json | null
           nome: string
           numero: string | null
@@ -1746,6 +1989,7 @@ export type Database = {
           cidade?: string | null
           config_contrato?: Json | null
           conta_pai_id?: string | null
+          cpf_responsavel?: string | null
           cpfcnpj: string
           created_at?: string
           data_nascimento?: string | null
@@ -1754,6 +1998,7 @@ export type Database = {
           estado?: string | null
           id: string
           logradouro?: string | null
+          logo_url?: string | null
           metadados_cadastro?: Json | null
           nome: string
           numero?: string | null
@@ -1777,6 +2022,7 @@ export type Database = {
           cidade?: string | null
           config_contrato?: Json | null
           conta_pai_id?: string | null
+          cpf_responsavel?: string | null
           cpfcnpj?: string
           created_at?: string
           data_nascimento?: string | null
@@ -1785,6 +2031,7 @@ export type Database = {
           estado?: string | null
           id?: string
           logradouro?: string | null
+          logo_url?: string | null
           metadados_cadastro?: Json | null
           nome?: string
           numero?: string | null
@@ -1899,6 +2146,52 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_motoristas_daily_pulse_stats: {
+        Args: {
+          p_date?: string
+          p_tz?: string
+        }
+        Returns: {
+          total_acessos_unicos: number
+          total_recorrentes: number
+          total_novos: number
+          total_novos_reengajados: number
+          total_trial: number
+          total_ativos: number
+          total_vitalicios: number
+          total_vencidos_expirados: number
+        }[]
+      }
+      get_motoristas_daily_pulse: {
+        Args: {
+          p_date?: string
+          p_tz?: string
+          p_search?: string | null
+          p_tipo_usuario?: string
+          p_subscription_status?: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          id: string
+          nome: string
+          apelido: string | null
+          telefone: string | null
+          email: string | null
+          cadastrado_em: string
+          tipo_usuario_dia: string
+          reengajou_no_dia: boolean
+          total_atividades_dia: number
+          primeiro_acesso_dia: string
+          ultimo_acesso_dia: string
+          ultima_acao_dia: string | null
+          ultima_descricao_dia: string | null
+          assinatura_status: string | null
+          assinatura_vencimento: string | null
+          is_vitalicio: boolean
+          total_count: number
+        }[]
+      }
       bytea_to_text: { Args: { data: string }; Returns: string }
       confirm_invoice_payment: { Args: { p_fatura_id: string }; Returns: Json }
       http: {
@@ -2058,6 +2351,11 @@ export type Database = {
         | "madrasta"
         | "responsavel_legal"
         | "outro"
+      renovacao_status_enum:
+        | "pendente"
+        | "confirmado"
+        | "recusado"
+        | "concluido"
       tipo_no_rota_enum: "passageiro" | "escola"
       tipo_pagamento_enum:
         | "dinheiro"
@@ -2238,6 +2536,14 @@ export const Constants = {
         "responsavel_legal",
         "outro",
       ],
+      renovacao_status_enum: [
+        "pendente",
+        "confirmado_manual",
+        "confirmado_online",
+        "recusado_motorista",
+        "recusado_pais",
+        "concluido",
+      ],
       tipo_no_rota_enum: ["passageiro", "escola"],
       tipo_pagamento_enum: [
         "dinheiro",
@@ -2265,3 +2571,4 @@ export const Constants = {
     },
   },
 } as const
+

@@ -21,6 +21,7 @@ import {
     EVENTO_MOTORISTA_TESTE_BOAS_VINDAS,
     EVENTO_MOTORISTA_TESTE_ENCERRADO,
     EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO,
+    EVENTO_MOTORISTA_TRIAL_BONUS_INATIVO,
     EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1,
     EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2,
     EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_1,
@@ -108,6 +109,9 @@ export class ResendMapper {
 
                 case EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO:
                     return await ResendDriverTemplates.trialLastCall(contextData);
+
+                case EVENTO_MOTORISTA_TRIAL_BONUS_INATIVO:
+                    return ResendDriverTemplates.trialBonusInactive(contextData);
 
                 case EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1:
                 case EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2:

@@ -3,7 +3,7 @@ import { PassageiroGenero, PassageiroModalidade, PeriodoEnum } from '../enums.js
 
 export const createPrePassageiroSchema = z.object({
   usuario_id: z.string().uuid('ID do motorista inválido'),
-  nome: z.string().min(2, 'Nome do passageiro é obrigatório'),
+  nome: z.string().min(2, 'Nome do aluno é obrigatório'),
   nome_responsavel: z.string().min(2, 'Nome do responsável é obrigatório'),
 
   cpf_responsavel: z.string().optional().or(z.literal('')),
@@ -26,11 +26,16 @@ export const createPrePassageiroSchema = z.object({
   genero: z.nativeEnum(PassageiroGenero).optional().nullable().or(z.literal('')),
   parentesco_responsavel: z.string().optional().nullable().or(z.literal('')),
   turma: z.string().optional().nullable().or(z.literal('')),
+  sala: z.string().optional().nullable().or(z.literal('')),
   nome_professor: z.string().optional().nullable().or(z.literal('')),
   data_inicio_transporte: z.string().optional().nullable().or(z.literal('')),
   data_fim_transporte: z.string().optional().nullable().or(z.literal('')),
+  horario_entrada: z.string().optional().nullable().or(z.literal('')),
+  horario_saida: z.string().optional().nullable().or(z.literal('')),
   data_nascimento: z.string().optional().nullable().or(z.literal('')),
-  ano_letivo: z.union([z.number(), z.string().transform(v => Number(v))]).optional().default(2026),
+  dispositivo_cadastro: z.string().optional().nullable(),
+  metadados_cadastro: z.record(z.string(), z.unknown()).optional().nullable(),
+  ano_letivo: z.union([z.number(), z.string().transform(v => parseInt(v, 10))]).optional().default(2026),
 });
 
 export type CreatePrePassageiroDTO = z.infer<typeof createPrePassageiroSchema>;

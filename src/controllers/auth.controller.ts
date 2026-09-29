@@ -2,6 +2,8 @@ import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
 import { registrarUsuario, login as loginService, logout as logoutService, refreshToken as refreshTokenService, updatePassword as updatePasswordService, solicitarRecuperacao, validarCodigo, resetarSenhaComCodigo } from "../services/auth.service.js";
 import { RegistrarUsuarioBodyDTO, LoginBodyDTO, UpdatePasswordBodyDTO, ConfirmarResetBodyDTO, ValidarCodigoBodyDTO, RefreshTokenBodyDTO, SolicitarRecuperacaoBodyDTO, } from "../types/dtos/auth.dto.js";
+import { extractClientAccessData } from "../utils/request-client.utils.js";
+import { errorAlertService } from "../services/error-alert.service.js";
 
 
 export const AuthController = {
@@ -19,31 +21,42 @@ export const AuthController = {
         }
 
         try {
-            const ip = request.ip;
-            const userAgent = (request.headers['user-agent'] as string) || undefined;
-
-            const metadados_cadastro = {
-                ...(payload.metadados_cadastro || {}),
-                ip: ip || payload.metadados_cadastro?.ip,
-                user_agent: userAgent || payload.metadados_cadastro?.user_agent,
-            };
+            const clientAccess = extractClientAccessData(
+                request,
+                payload.metadados_cadastro,
+                payload.dispositivo_cadastro
+            );
 
             const result = await registrarUsuario({
                 ...payload,
-                metadados_cadastro,
+                dispositivo_cadastro: clientAccess.dispositivoCadastro,
+                metadados_cadastro: clientAccess.metadados,
             });
             return reply.status(200).send({
                 success: true,
                 session: result.session,
             });
 
-        } catch (err: any) {
+        } catch (err: unknown) {
+            const errorObj = err as { message?: string; statusCode?: number; field?: string };
+            const message = errorObj?.message || "Erro interno no cadastro.";
+            const status = errorObj?.statusCode || (message.includes("já está em uso") ? 409 : 400);
+
             logger.error(
-                { error: err.message, payload: { email: payload.email } },
+                { error: message, payload: { email: payload.email }, status },
                 "Falha no Endpoint de Cadastro."
             );
-            const status = err.statusCode || (err.message.includes("já está em uso") ? 409 : 400);
-            return reply.status(status).send({ error: err.message, field: err.field });
+
+            if (status >= 500) {
+                void errorAlertService.notifyHttpError({
+                    error: err,
+                    method: request.method,
+                    url: request.url,
+                    statusCode: status,
+                });
+            }
+
+            return reply.status(status).send({ error: message, field: errorObj?.field });
         }
     },
 
@@ -56,16 +69,13 @@ export const AuthController = {
         }
 
         try {
-            const ip = request.ip;
-            const userAgent = request.headers['user-agent'] || null;
-            let dispositivo = 'Desconhecido';
-            if (userAgent) {
-                if (/mobile/i.test(userAgent)) dispositivo = 'Mobile';
-                else if (/tablet/i.test(userAgent)) dispositivo = 'Tablet';
-                else dispositivo = 'Desktop';
-            }
+            const clientAccess = extractClientAccessData(request);
 
-            const result = await loginService(identifier, password, { ip, userAgent, dispositivo });
+            const result = await loginService(identifier, password, {
+                ip: clientAccess.ip,
+                userAgent: clientAccess.userAgent,
+                dispositivo: clientAccess.dispositivo,
+            });
             return reply.status(200).send(result);
         } catch (err: any) {
             logger.warn({ error: err.message, identifier }, "Falha no Login.");

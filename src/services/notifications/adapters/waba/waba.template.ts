@@ -6,7 +6,8 @@ import {
     WabaButtonSubTypeEnum,
     WabaParameterTypeEnum,
     WabaPaymentTypeEnum,
-    WabaPixKeyTypeEnum
+    WabaPixKeyTypeEnum,
+    PassageiroGenero
 } from "../../../../types/enums.js";
 
 export interface WabaParameter {
@@ -63,10 +64,18 @@ export class WabaTemplates {
     }
 
     static vencimentoProximo(ctx: Record<string, unknown>): WabaTemplatePayload {
+        const driverName = (ctx.apelidoMotorista || NotificationContextFormatter.getFirstAndLastName(ctx.nomeMotorista as string, "Motorista")) as string;
         const respName = NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string, "Responsável");
-        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Passageiro");
+        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
         const dataStr = NotificationContextFormatter.formatDate(ctx.dataVencimento as string);
+
+        const headerComponent: WabaComponent = {
+            type: WabaComponentTypeEnum.HEADER,
+            parameters: [
+                { type: WabaParameterTypeEnum.TEXT, text: driverName }
+            ]
+        };
         
         const pixButton = this.buildPixButtonComponent(ctx);
 
@@ -75,13 +84,14 @@ export class WabaTemplates {
                 templateName: WabaTemplateNameEnum.PAIS_VENCIMENTO_PROXIMO_SEM_PIX,
                 languageCode: "pt_BR",
                 components: [
+                    headerComponent,
                     {
                         type: WabaComponentTypeEnum.BODY,
                         parameters: [
                             { type: WabaParameterTypeEnum.TEXT, text: respName },
                             { type: WabaParameterTypeEnum.TEXT, text: passName },
-                            { type: WabaParameterTypeEnum.TEXT, text: dataStr },
-                            { type: WabaParameterTypeEnum.TEXT, text: valorStr }
+                            { type: WabaParameterTypeEnum.TEXT, text: valorStr },
+                            { type: WabaParameterTypeEnum.TEXT, text: dataStr }
                         ]
                     }
                 ]
@@ -92,13 +102,14 @@ export class WabaTemplates {
             templateName: WabaTemplateNameEnum.PAIS_VENCIMENTO_PROXIMO_PIX,
             languageCode: "pt_BR",
             components: [
+                headerComponent,
                 {
                     type: WabaComponentTypeEnum.BODY,
                     parameters: [
                         { type: WabaParameterTypeEnum.TEXT, text: respName },
                         { type: WabaParameterTypeEnum.TEXT, text: passName },
-                        { type: WabaParameterTypeEnum.TEXT, text: dataStr },
-                        { type: WabaParameterTypeEnum.TEXT, text: valorStr }
+                        { type: WabaParameterTypeEnum.TEXT, text: valorStr },
+                        { type: WabaParameterTypeEnum.TEXT, text: dataStr }
                     ]
                 },
                 pixButton
@@ -107,10 +118,18 @@ export class WabaTemplates {
     }
 
     static vencimentoHoje(ctx: Record<string, unknown>): WabaTemplatePayload {
+        const driverName = (ctx.apelidoMotorista || NotificationContextFormatter.getFirstAndLastName(ctx.nomeMotorista as string, "Motorista")) as string;
         const respName = NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string, "Responsável");
-        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Passageiro");
+        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
         
+        const headerComponent: WabaComponent = {
+            type: WabaComponentTypeEnum.HEADER,
+            parameters: [
+                { type: WabaParameterTypeEnum.TEXT, text: driverName }
+            ]
+        };
+
         const pixButton = this.buildPixButtonComponent(ctx);
 
         if (!pixButton) {
@@ -118,6 +137,7 @@ export class WabaTemplates {
                 templateName: WabaTemplateNameEnum.PAIS_VENCIMENTO_HOJE_SEM_PIX,
                 languageCode: "pt_BR",
                 components: [
+                    headerComponent,
                     {
                         type: WabaComponentTypeEnum.BODY,
                         parameters: [
@@ -134,6 +154,7 @@ export class WabaTemplates {
             templateName: WabaTemplateNameEnum.PAIS_VENCIMENTO_HOJE_PIX,
             languageCode: "pt_BR",
             components: [
+                headerComponent,
                 {
                     type: WabaComponentTypeEnum.BODY,
                     parameters: [
@@ -148,11 +169,19 @@ export class WabaTemplates {
     }
 
     static cobrancaAtrasado(ctx: Record<string, unknown>): WabaTemplatePayload {
+        const driverName = (ctx.apelidoMotorista || NotificationContextFormatter.getFirstAndLastName(ctx.nomeMotorista as string, "Motorista")) as string;
         const respName = NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string, "Responsável");
-        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Passageiro");
+        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
         const mesLabel = NotificationContextFormatter.getMonthLabel(ctx.mes as number | string);
         
+        const headerComponent: WabaComponent = {
+            type: WabaComponentTypeEnum.HEADER,
+            parameters: [
+                { type: WabaParameterTypeEnum.TEXT, text: driverName }
+            ]
+        };
+
         const pixButton = this.buildPixButtonComponent(ctx);
 
         if (!pixButton) {
@@ -160,6 +189,7 @@ export class WabaTemplates {
                 templateName: WabaTemplateNameEnum.PAIS_ATRASADO_SEM_PIX,
                 languageCode: "pt_BR",
                 components: [
+                    headerComponent,
                     {
                         type: WabaComponentTypeEnum.BODY,
                         parameters: [
@@ -177,6 +207,7 @@ export class WabaTemplates {
             templateName: WabaTemplateNameEnum.PAIS_ATRASADO_PIX,
             languageCode: "pt_BR",
             components: [
+                headerComponent,
                 {
                     type: WabaComponentTypeEnum.BODY,
                     parameters: [
@@ -193,7 +224,7 @@ export class WabaTemplates {
 
     static paymentReceipt(ctx: Record<string, unknown>): WabaTemplatePayload {
         const respName = NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string, "Responsável");
-        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Passageiro");
+        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
         const mesLabel = NotificationContextFormatter.getMonthLabel(ctx.mes as number | string);
         const reciboUrl = (ctx.reciboUrl || ctx.mediaUrl || "") as string;
@@ -227,17 +258,25 @@ export class WabaTemplates {
     }
 
     static contratoDisponivel(ctx: Record<string, unknown>): WabaTemplatePayload {
+        const driverName = (ctx.apelidoMotorista || NotificationContextFormatter.getFirstAndLastName(ctx.nomeMotorista as string, "Motorista")) as string;
         const respName = NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string, "Responsável");
-        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Passageiro");
+        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         
         const rawTokenOrLink = (ctx.linkAssinatura || ctx.linkContrato || ctx.contratoUrl || ctx.tokenAssinatura || ctx.token || "") as string;
-        const fullContractUrl = NotificationUrlBuilder.getContractSignatureUrl(rawTokenOrLink);
-        const tokenOrLink = NotificationUrlBuilder.extractWabaDynamicToken(fullContractUrl);
+        const token = NotificationUrlBuilder.extractContractToken(rawTokenOrLink);
+
+        const headerComponent: WabaComponent = {
+            type: WabaComponentTypeEnum.HEADER,
+            parameters: [
+                { type: WabaParameterTypeEnum.TEXT, text: driverName }
+            ]
+        };
 
         return {
             templateName: WabaTemplateNameEnum.PAIS_CONTRATO,
             languageCode: "pt_BR",
             components: [
+                headerComponent,
                 {
                     type: WabaComponentTypeEnum.BODY,
                     parameters: [
@@ -250,21 +289,66 @@ export class WabaTemplates {
                     sub_type: WabaButtonSubTypeEnum.URL,
                     index: "0",
                     parameters: [
-                        { type: WabaParameterTypeEnum.TEXT, text: tokenOrLink }
+                        { type: WabaParameterTypeEnum.TEXT, text: token }
                     ]
                 }
             ]
         };
     }
 
-    static subscriptionDueSoon(ctx: Record<string, unknown>): WabaTemplatePayload {
+    static renovacaoDisponivel(ctx: Record<string, unknown>): WabaTemplatePayload {
+        const driverName = (ctx.apelidoMotorista || NotificationContextFormatter.getFirstAndLastName(ctx.nomeMotorista as string, "Motorista")) as string;
+        const respName = NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string, "Responsável");
+        const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
+        const prep = NotificationContextFormatter.getStudentPreposition(ctx.generoPassageiro as PassageiroGenero | string | null);
+        const alunoComPreposicao = `${prep} ${passName}`;
+        const anoLetivo = String(ctx.anoLetivo || (new Date().getFullYear() + 1));
+
+        const rawTokenOrLink = (ctx.linkRenovacao || ctx.tokenRenovacao || ctx.token || "") as string;
+        const token = NotificationUrlBuilder.extractRenewalToken(rawTokenOrLink);
+
+        const headerComponent: WabaComponent = {
+            type: WabaComponentTypeEnum.HEADER,
+            parameters: [
+                { type: WabaParameterTypeEnum.TEXT, text: driverName }
+            ]
+        };
+
+        return {
+            templateName: WabaTemplateNameEnum.PAIS_RENOVACAO,
+            languageCode: "pt_BR",
+            components: [
+                headerComponent,
+                {
+                    type: WabaComponentTypeEnum.BODY,
+                    parameters: [
+                        { type: WabaParameterTypeEnum.TEXT, text: respName },
+                        { type: WabaParameterTypeEnum.TEXT, text: alunoComPreposicao },
+                        { type: WabaParameterTypeEnum.TEXT, text: anoLetivo }
+                    ]
+                },
+                {
+                    type: WabaComponentTypeEnum.BUTTON,
+                    sub_type: WabaButtonSubTypeEnum.URL,
+                    index: "0",
+                    parameters: [
+                        { type: WabaParameterTypeEnum.TEXT, text: token }
+                    ]
+                }
+            ]
+        };
+    }
+
+    static async subscriptionDueSoon(ctx: Record<string, unknown>): Promise<WabaTemplatePayload> {
         const driverName = NotificationContextFormatter.getFirstName(ctx.nomeMotorista as string, "Motorista");
-        const valorStr = NotificationContextFormatter.formatValue(ctx.valor as number | string);
+        const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
         const dataStr = NotificationContextFormatter.formatDate(ctx.dataVencimento as string);
         const planoStr = (ctx.planoNome as string) || "Plano Mensal";
+        const email = (ctx.email || ctx.emailMotorista) as string | undefined;
 
         const pixButton = this.buildPixButtonComponent(ctx, "0");
-        const dynamicSuffix = "assinatura?open_checkout=true";
+        const fullCheckoutUrl = await NotificationUrlBuilder.getSubscriptionCheckoutUrl({ autoOpen: true, email });
+        const dynamicSuffix = NotificationUrlBuilder.extractWabaDynamicToken(fullCheckoutUrl);
 
         const components: WabaComponent[] = [
             {
@@ -306,9 +390,11 @@ export class WabaTemplates {
         };
     }
 
-    static subscriptionFailedCC(ctx: Record<string, unknown>): WabaTemplatePayload {
+    static async subscriptionFailedCC(ctx: Record<string, unknown>): Promise<WabaTemplatePayload> {
         const driverName = NotificationContextFormatter.getFirstName(ctx.nomeMotorista as string, "Motorista");
-        const dynamicSuffix = "assinatura?open_checkout=true";
+        const email = (ctx.email || ctx.emailMotorista) as string | undefined;
+        const fullCheckoutUrl = await NotificationUrlBuilder.getSubscriptionCheckoutUrl({ autoOpen: true, email });
+        const dynamicSuffix = NotificationUrlBuilder.extractWabaDynamicToken(fullCheckoutUrl);
 
         return {
             templateName: WabaTemplateNameEnum.MOTORISTA_FALHA_CARTAO,

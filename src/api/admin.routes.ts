@@ -1,10 +1,14 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { adminUserController } from "../controllers/admin/admin-user.controller.js";
 import { adminLogController } from "../controllers/admin/admin-log.controller.js";
+import { adminNotificationController } from "../controllers/admin/admin-notification.controller.js";
+import { adminBroadcastController } from "../controllers/admin/admin-broadcast.controller.js";
 import { adminLoginAttemptsController } from "../controllers/admin/admin-login-attempts.controller.js";
 import { adminConfigController } from "../controllers/admin/admin-config.controller.js";
 import { adminPlanController } from "../controllers/admin/admin-plan.controller.js";
 import { adminEvolutionController } from "../controllers/admin/admin-evolution.controller.js";
+import { adminCalculatorController } from "../controllers/admin/admin-calculator.controller.js";
+import { adminFinancialController } from "../controllers/admin/admin-financial.controller.js";
 import { adminBlogController } from "../controllers/blog.controller.js";
 import { verifySupabaseJWT } from "../middleware/auth.js";
 import { verifyAdmin } from "../middleware/admin.js";
@@ -13,26 +17,57 @@ const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.addHook("onRequest", verifySupabaseJWT);
   app.addHook("onRequest", verifyAdmin);
 
-  // Dashboard & Usuários / Motoristas
   app.get("/dashboard", adminUserController.getDashboard);
+  app.get("/stats/financial", adminFinancialController.getFinancialStats);
+  app.get("/stats/demographics", adminFinancialController.getDemographicsStats);
+  app.get("/stats/acquisition", adminUserController.getAcquisitionStats);
+  app.get("/vencimentos-por-dia", adminUserController.getVencimentosPorDia);
+  app.get("/vencimentos-por-dia/:dia/detalhes", adminUserController.getVencimentoDetalhes);
   app.get("/users", adminUserController.getUsers);
+  app.get("/users/latest-activity", adminUserController.getUsersLatestActivity);
+  app.get("/users/latest-activity/stats", adminUserController.getUsersRadarStats);
+  app.get("/users/daily-pulse", adminUserController.getUsersDailyPulse);
+  app.get("/users/daily-pulse/stats", adminUserController.getUsersDailyPulseStats);
   app.post("/users", adminUserController.createUser);
   app.get("/users/:id", adminUserController.getUserDetails);
+  app.get("/users/:id/contratos", adminUserController.getUserContratos);
+  app.get("/users/:id/passageiros", adminUserController.getUserPassageiros);
+  app.get("/users/:id/pre-passageiros", adminUserController.getUserPrePassageiros);
+  app.get("/users/:id/veiculos", adminUserController.getUserVeiculos);
+  app.get("/users/:id/escolas", adminUserController.getUserEscolas);
+  app.get("/referrals", adminUserController.listReferrals);
+  app.get("/users/:id/referral", adminUserController.getUserReferral);
+
   app.patch("/users/:id", adminUserController.updateUser);
   app.patch("/users/:id/subscription", adminUserController.updateSubscription);
+  app.put("/users/:id/referral", adminUserController.setReferral);
+  app.delete("/users/:id/referral", adminUserController.removeReferral);
   app.post("/users/:id/reset-password", adminUserController.resetUserPassword);
+  app.post("/users/:id/impersonate", adminUserController.impersonateUser);
+  app.post("/users/:id/dispatch-notification", adminUserController.dispatchNotification);
+  app.post("/users/:id/dispatch-cobranca-demo", adminUserController.dispatchDriverCobrancaDemo);
   app.delete("/users/:id", adminUserController.deleteUser);
+  app.delete("/invoices/:id", adminUserController.deleteInvoice);
 
-  // Logs & Atividades & Tentativas de Login
+  // Logs & Atividades & Notificações & Tentativas de Login
   app.get("/login-attempts", adminLoginAttemptsController.getLoginAttempts);
   app.get("/logs", adminLogController.getGlobalLogs);
   app.get("/users/:id/logs", adminLogController.getUserLogs);
+  app.get("/notifications", adminNotificationController.getGlobalNotifications);
+  app.get("/notifications/broadcast/estimate", adminBroadcastController.estimate);
+  app.post("/notifications/broadcast/send", adminBroadcastController.send);
+  app.post("/notifications/:id/retry", adminNotificationController.retryNotification);
+  app.post("/notifications/retry-bulk", adminNotificationController.retryBulkNotifications);
+  app.get("/users/:id/notifications", adminNotificationController.getUserNotifications);
+  app.get("/passengers/:id/notifications", adminNotificationController.getPassengerNotifications);
+  app.post("/passengers/:id/dispatch-cobranca", adminUserController.dispatchPassengerCobranca);
 
-  // Configurações Internas & Planos SaaS
+  // Configurações Internas & Planos SaaS & Calculadora
   app.get("/configs", adminConfigController.getConfigs);
   app.put("/configs", adminConfigController.updateConfig);
   app.get("/plans", adminPlanController.getPlans);
   app.patch("/plans/:id", adminPlanController.updatePlan);
+  app.get("/calculator/baseline", adminCalculatorController.getBaseline);
 
   // Evolution Instâncias
   app.get("/evolution-instances", adminEvolutionController.getEvolutionInstances);

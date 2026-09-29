@@ -10,11 +10,22 @@ const optionalString = z.union([z.string(), z.null(), z.undefined()]).transform(
 });
 const optionalNumber = z.union([z.number(), z.string().length(0).transform(() => undefined), z.string().min(1).transform(val => Number(val))]).optional();
 
+const optionalEmail = z.union([
+  z.string().email("E-mail inválido"),
+  z.literal(""),
+  z.null(),
+  z.undefined()
+]).transform(v => {
+  if (v === undefined) return undefined;
+  if (v === null || v === "") return null;
+  return v;
+});
+
 export const responsavelPrincipalInputSchema = z.object({
   nome: z.string().min(1, "Nome do responsável é obrigatório"),
   telefone: z.string().min(8, "Telefone do responsável é obrigatório"),
   cpf: optionalString,
-  email: z.string().email().optional().or(z.literal("")).transform(v => v === "" ? undefined : v),
+  email: optionalEmail,
   parentesco: z.union([z.nativeEnum(ParentescoResponsavel), z.string(), z.null(), z.undefined()]).optional().nullable(),
   logradouro: optionalString,
   numero: optionalString,
@@ -24,6 +35,7 @@ export const responsavelPrincipalInputSchema = z.object({
   cep: optionalString,
   referencia: optionalString,
   complemento: optionalString,
+  notificacoes_rota_habilitadas: z.boolean().optional().default(true),
 });
 
 export const createPassageiroSchema = z.object({
@@ -74,7 +86,10 @@ export const createPassageiroSchema = z.object({
     return v.getTime() <= getNowBR().getTime();
   }, { message: "Data de nascimento não pode ser no futuro" }),
   turma: optionalString,
+  sala: optionalString,
   nome_professor: optionalString,
+  horario_entrada: optionalString,
+  horario_saida: optionalString,
   data_inicio_transporte: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
     if (v === undefined) return undefined;
     if (v === null || v === "") return null;
@@ -95,7 +110,7 @@ export const createPassageiroSchema = z.object({
     if (v === null || v === "") return null;
     return parseLocalDate(v);
   }),
-  ano_letivo: z.union([z.number(), z.string().transform(v => Number(v))]).optional().default(2026),
+  ano_letivo: z.union([z.number(), z.string().transform(v => parseInt(v, 10))]).optional().default(2026),
 }).passthrough();
 
 export type CreatePassageiroDTO = z.infer<typeof createPassageiroSchema>;
@@ -140,7 +155,7 @@ export const createResponsavelAdicionalSchema = z.object({
   nome: z.string().min(2, "Nome é obrigatório"),
   telefone: z.string().min(8, "Telefone é obrigatório"),
   cpf: optionalString,
-  email: optionalString,
+  email: optionalEmail,
   parentesco: z.nativeEnum(ParentescoResponsavel, { message: "Parentesco é obrigatório" }),
   logradouro: optionalString,
   numero: optionalString,
@@ -152,6 +167,7 @@ export const createResponsavelAdicionalSchema = z.object({
   complemento: optionalString,
   passageiroId: optionalString,
   tornar_principal: z.boolean().optional(),
+  notificacoes_rota_habilitadas: z.boolean().optional().default(true),
 });
 
 export type CreateResponsavelAdicionalDTO = z.infer<typeof createResponsavelAdicionalSchema>;
@@ -159,3 +175,39 @@ export type CreateResponsavelAdicionalDTO = z.infer<typeof createResponsavelAdic
 export const updateResponsavelAdicionalSchema = createResponsavelAdicionalSchema.partial();
 export type UpdateResponsavelAdicionalDTO = z.infer<typeof updateResponsavelAdicionalSchema>;
 
+export const toggleNotificacoesRotaResponsavelSchema = z.object({
+  status: z.boolean().optional(),
+});
+export type ToggleNotificacoesRotaResponsavelDTO = z.infer<typeof toggleNotificacoesRotaResponsavelSchema>;
+
+export const updatePassageiroBatchItemSchema = z.object({
+  id: z.string().uuid("ID do passageiro inválido"),
+  escola_id: z.string().uuid().optional().nullable().or(z.literal("")).transform(v => (v === "" || v === "none") ? null : v),
+  veiculo_id: z.string().uuid().optional().nullable().or(z.literal("")).transform(v => (v === "" || v === "none") ? null : v),
+  turma: optionalString,
+  sala: optionalString,
+  nome_professor: optionalString,
+  periodo: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
+    if (v === undefined) return undefined;
+    if (v === null || v === "") return null;
+    return v.toLowerCase();
+  }),
+  valor_cobranca: z.union([z.number(), z.string(), z.null(), z.undefined()]).transform(val => {
+    if (val === undefined) return undefined;
+    if (val === "" || val === null) return null;
+    return typeof val === 'string' ? moneyToNumber(val) : val;
+  }).optional().nullable(),
+  dia_vencimento: z.union([z.number(), z.string(), z.null(), z.undefined()]).transform(val => {
+    if (val === undefined) return undefined;
+    if (val === "" || val === null || val === "none") return null;
+    return typeof val === 'string' ? Number(val) : val;
+  }).optional().nullable(),
+  ativo: z.boolean().optional(),
+});
+
+export const updatePassageirosBatchSchema = z.object({
+  passageiros: z.array(updatePassageiroBatchItemSchema).min(1, "Ao menos um passageiro deve ser informado"),
+});
+
+export type UpdatePassageiroBatchItemDTO = z.infer<typeof updatePassageiroBatchItemSchema>;
+export type UpdatePassageirosBatchDTO = z.infer<typeof updatePassageirosBatchSchema>;

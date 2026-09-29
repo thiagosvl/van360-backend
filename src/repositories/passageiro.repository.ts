@@ -3,12 +3,14 @@ import { isValidFilterValue } from "../utils/filter.utils.js";
 import { TipoResponsavel } from "../types/enums.js";
 import { ListPassageirosFiltersDTO } from "../types/dtos/passageiro.dto.js";
 import { AppError } from "../errors/AppError.js";
+import { isSamePerson, normalizePhone } from "../utils/string.utils.js";
 
 const PASSAGEIRO_RESPONSAVEIS_SELECT = `
   responsaveis:passageiro_responsaveis(
     id,
     tipo,
     parentesco,
+    notificacoes_rota_habilitadas,
     created_at,
     responsavel:responsaveis(
       id,
@@ -78,8 +80,15 @@ export const passageiroRepository = {
     return supabaseAdmin.from("passageiros").delete().eq("id", id);
   },
 
+  async findByIds(ids: string[]) {
+    return supabaseAdmin
+      .from("passageiros")
+      .select("id, usuario_id, veiculo_id")
+      .in("id", ids);
+  },
+
   async getSummaryForDashboard(usuarioId: string, veiculoId?: string) {
-    let query = supabaseAdmin.from("passageiros").select("id, ativo, isento, valor_cobranca, dia_vencimento, data_inicio_cobranca, data_fim_cobranca, created_at").eq("usuario_id", usuarioId);
+    let query = supabaseAdmin.from("passageiros").select("id, ativo, isento, valor_cobranca, dia_vencimento, data_inicio_cobranca, data_fim_cobranca, created_at, ano_letivo").eq("usuario_id", usuarioId);
     if (isValidFilterValue(veiculoId)) {
       query = query.eq("veiculo_id", veiculoId);
     }
@@ -116,7 +125,7 @@ export const passageiroRepository = {
     let query = supabaseAdmin
       .from("passageiros")
       .select(`
-        id, usuario_id, nome, ativo, isento, data_nascimento, genero, modalidade, periodo, turma, nome_professor, observacoes, valor_cobranca, dia_vencimento, data_inicio_cobranca, data_fim_cobranca, data_inicio_transporte, data_fim_transporte, enviar_notificacoes, escola_id, veiculo_id, ano_letivo, created_at, updated_at,
+        id, usuario_id, nome, ativo, isento, data_nascimento, genero, modalidade, periodo, turma, sala, nome_professor, observacoes, valor_cobranca, dia_vencimento, data_inicio_cobranca, data_fim_cobranca, data_inicio_transporte, data_fim_transporte, horario_entrada, horario_saida, enviar_notificacoes, escola_id, veiculo_id, ano_letivo, created_at, updated_at,
         escola:escolas(id, nome),
         veiculo:veiculos(id, placa, modelo),
         contratos(id, status, provider, token_acesso),
@@ -188,10 +197,12 @@ export const passageiroRepository = {
       .from("responsaveis")
       .select("id, nome, telefone, email, cpf, logradouro, numero, bairro, cidade, estado, cep, referencia, complemento");
 
-    if (termoLimpo.length === 11) {
-      query = query.or(`cpf.eq.${termoLimpo},telefone.eq.${termoLimpo}`);
-    } else if (termoLimpo.length === 10) {
-      query = query.eq("telefone", termoLimpo);
+    const clean = normalizePhone(termoLimpo) || termoLimpo;
+
+    if (clean.length === 11) {
+      query = query.or(`cpf.eq.${clean},telefone.eq.${clean}`);
+    } else if (clean.length === 10) {
+      query = query.eq("telefone", clean);
     } else {
       return { data: null, error: null };
     }
@@ -223,7 +234,7 @@ export const passageiroRepository = {
     const { data, error } = await supabaseAdmin
       .from("passageiros")
       .select(`
-        id, nome, isento,
+        id, nome, isento, genero, ano_letivo,
         ${PASSAGEIRO_RESPONSAVEIS_SELECT}
       `)
       .eq("id", id)
@@ -238,6 +249,8 @@ export const passageiroRepository = {
       id: data.id,
       nome: data.nome,
       isento: data.isento,
+      genero: (data.genero as string | null) || null,
+      ano_letivo: data.ano_letivo ?? null,
       responsavel_principal: resp?.id ? {
         id: resp.id,
         nome: resp.nome || null,
@@ -253,15 +266,51 @@ export const passageiroRepository = {
         cep: resp.cep || null,
         referencia: resp.referencia || null,
         complemento: resp.complemento || null,
+        notificacoes_rota_habilitadas: respLink?.notificacoes_rota_habilitadas ?? true,
       } : null
     };
+  },
+
+  async getResponsaveisNotificacaoRota(passageiroId: string): Promise<Array<{ id: string; nome: string; telefone: string; tipo: string; parentesco: string | null }>> {
+    const { data, error } = await supabaseAdmin
+      .from("passageiros")
+      .select(`
+        id,
+        enviar_notificacoes,
+        ${PASSAGEIRO_RESPONSAVEIS_SELECT}
+      `)
+      .eq("id", passageiroId)
+      .single();
+
+    if (error || !data) return [];
+    if (data.enviar_notificacoes === false) return [];
+
+    const rawLinks = (data.responsaveis as any[]) || [];
+    const habilitados = rawLinks.filter((l: any) => l.notificacoes_rota_habilitadas !== false);
+
+    const result: Array<{ id: string; nome: string; telefone: string; tipo: string; parentesco: string | null }> = [];
+
+    for (const link of habilitados) {
+      const resp = Array.isArray(link.responsavel) ? link.responsavel[0] : link.responsavel;
+      if (resp?.telefone && resp.telefone.trim() !== "") {
+        result.push({
+          id: resp.id,
+          nome: resp.nome || "Responsável",
+          telefone: resp.telefone.trim(),
+          tipo: link.tipo,
+          parentesco: link.parentesco || null,
+        });
+      }
+    }
+
+    return result;
   },
 
   async listParaCobrancaAutomatica(usuarioId: string) {
     return supabaseAdmin
       .from("passageiros")
       .select(`
-        id, nome, valor_cobranca, dia_vencimento, created_at, data_inicio_cobranca, data_fim_cobranca, isento,
+        id, nome, valor_cobranca, dia_vencimento, created_at, data_inicio_cobranca, data_fim_cobranca, isento, ano_letivo,
         ${PASSAGEIRO_RESPONSAVEIS_SELECT}
       `)
       .eq("usuario_id", usuarioId)
@@ -274,7 +323,7 @@ export const passageiroRepository = {
     let query = supabaseAdmin
       .from("passageiros")
       .select(`
-        id, nome, valor_cobranca, dia_vencimento, created_at, data_inicio_cobranca, data_fim_cobranca, isento, ativo, veiculo_id,
+        id, nome, valor_cobranca, dia_vencimento, created_at, data_inicio_cobranca, data_fim_cobranca, isento, ativo, veiculo_id, ano_letivo,
         responsaveis:passageiro_responsaveis(
           id, tipo, parentesco,
           responsavel:responsaveis(id, nome, telefone, cpf, email)
@@ -329,26 +378,38 @@ export const passageiroRepository = {
     referencia?: string | null;
     complemento?: string | null;
   }) {
+    const targetPhone = normalizePhone(data.telefone) || data.telefone;
+
     const { data: existing } = await supabaseAdmin
       .from("responsaveis")
       .select("*")
-      .eq("telefone", data.telefone)
+      .eq("telefone", targetPhone)
       .maybeSingle();
 
     if (existing) {
       if (existing.cpf && data.cpf && data.cpf !== existing.cpf) {
-        const cpfDigits = String(existing.cpf);
-        const cpfMasked = cpfDigits.length >= 11
-          ? `***.***.${cpfDigits.slice(6, 9)}-${cpfDigits.slice(9)}`
-          : `final ***-${cpfDigits.slice(-2)}`;
         throw new AppError(
-          `Este telefone já está cadastrado para ${existing.nome} (CPF ${cpfMasked}). Verifique se o telefone digitado está correto.`,
+          "Este telefone já está cadastrado com outro CPF. Verifique os dados.",
+          409
+        );
+      }
+
+      const isSame = isSamePerson(existing.nome, data.nome);
+
+      if (
+        data.nome &&
+        existing.nome &&
+        !isSame &&
+        (!data.cpf || !existing.cpf || data.cpf !== existing.cpf)
+      ) {
+        throw new AppError(
+          "Este telefone já está cadastrado para outro responsável.",
           409
         );
       }
 
       const updatePayload: Record<string, any> = { updated_at: new Date().toISOString() };
-      if (data.nome && (!existing.cpf || data.cpf === existing.cpf)) updatePayload.nome = data.nome;
+      if (data.nome && (!existing.cpf || data.cpf === existing.cpf || isSame)) updatePayload.nome = data.nome;
       if (data.cpf !== undefined && (!existing.cpf || data.cpf === existing.cpf)) updatePayload.cpf = data.cpf;
       if (data.email !== undefined) updatePayload.email = data.email;
       if (data.pin_acesso !== undefined) updatePayload.pin_acesso = data.pin_acesso;
@@ -398,7 +459,7 @@ export const passageiroRepository = {
   /**
    * Vincula responsável a um passageiro na pivô passageiro_responsaveis
    */
-  async linkPassageiroResponsavel(passageiroId: string, responsavelId: string, tipo: string = TipoResponsavel.PRINCIPAL, parentesco?: string | null) {
+  async linkPassageiroResponsavel(passageiroId: string, responsavelId: string, tipo: string = TipoResponsavel.PRINCIPAL, parentesco?: string | null, notificacoes_rota_habilitadas?: boolean) {
     if (tipo === TipoResponsavel.PRINCIPAL) {
       await supabaseAdmin
         .from("passageiro_responsaveis")
@@ -414,6 +475,7 @@ export const passageiroRepository = {
         responsavel_id: responsavelId,
         tipo,
         parentesco: parentesco !== undefined ? (parentesco || null) : undefined,
+        notificacoes_rota_habilitadas: notificacoes_rota_habilitadas !== undefined ? notificacoes_rota_habilitadas : true,
         updated_at: new Date().toISOString()
       }, { onConflict: "passageiro_id,responsavel_id" })
       .select()
@@ -474,6 +536,42 @@ export const passageiroRepository = {
       .eq("id", id)
       .single();
     return { data, error };
+  },
+
+  async getContagemPassageirosAtivosPorMotorista(usuarioIds: string[]): Promise<Map<string, number>> {
+    if (!usuarioIds.length) return new Map();
+
+    const BATCH_SIZE = 100;
+    const contagemPorMotorista = new Map<string, number>();
+
+    for (let i = 0; i < usuarioIds.length; i += BATCH_SIZE) {
+      const chunk = usuarioIds.slice(i, i + BATCH_SIZE);
+      const { data, error } = await supabaseAdmin
+        .from("passageiros")
+        .select("usuario_id")
+        .in("usuario_id", chunk)
+        .eq("ativo", true);
+
+      if (error) {
+        throw error;
+      }
+
+      for (const p of data || []) {
+        if (!p.usuario_id) continue;
+        contagemPorMotorista.set(p.usuario_id, (contagemPorMotorista.get(p.usuario_id) || 0) + 1);
+      }
+    }
+
+    return contagemPorMotorista;
+  },
+
+  async getMotoristasComPassageirosAtivos(usuarioIds: string[]): Promise<Set<string>> {
+    const contagem = await this.getContagemPassageirosAtivosPorMotorista(usuarioIds);
+    const ativos = new Set<string>();
+    for (const [id, count] of contagem.entries()) {
+      if (count > 0) ativos.add(id);
+    }
+    return ativos;
   }
 };
 

@@ -33,12 +33,14 @@ export const subscriptionReferralService = {
         const hasActiveDiscount = indicacaoComoConvidado?.status === IndicacaoStatus.PENDING;
         const hasIndicator = !!indicacaoComoConvidado;
 
+        const siteBase = (env.SITE_URL || "https://van360.com.br").replace(/\/+$/, "");
+
         return {
             total,
             completed,
             pending,
             referralCode: userId,
-            referralLink: `${env.FRONTEND_URL}/cadastro?ref=${userId}`,
+            referralLink: `${siteBase}/?ref=${userId}`,
             bonusDays,
             discountPct,
             hasActiveDiscount,

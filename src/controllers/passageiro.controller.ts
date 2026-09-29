@@ -11,7 +11,9 @@ import {
     updatePassageiroSchema,
     getAniversariantesQuerySchema,
     createResponsavelAdicionalSchema,
-    updateResponsavelAdicionalSchema
+    updateResponsavelAdicionalSchema,
+    toggleNotificacoesRotaResponsavelSchema,
+    updatePassageirosBatchSchema
 } from "../types/dtos/passageiro.dto.js";
 
 
@@ -36,9 +38,20 @@ export const passageiroController = {
 
     const data = updatePassageiroSchema.parse(request.body);
     
-    await passageiroService.updatePassageiro(id, data, targetOwnerId, assignedVeiculoId);
+    const result = await passageiroService.updatePassageiro(id, data, targetOwnerId, assignedVeiculoId);
     
-    return reply.status(200).send({ success: true });
+    return reply.status(200).send(result);
+  },
+
+  updateBatch: async (request: FastifyRequest, reply: FastifyReply) => {
+    const targetOwnerId = request.data_owner_id || request.user?.id;
+    const assignedVeiculoId = request.assigned_veiculo_id || undefined;
+    logger.info({ targetOwnerId }, "PassageiroController.updateBatch - Starting");
+
+    const data = updatePassageirosBatchSchema.parse(request.body);
+    const result = await passageiroService.updatePassageirosBatch(data.passageiros, targetOwnerId, assignedVeiculoId);
+
+    return reply.status(200).send(result);
   },
 
   delete: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -97,7 +110,7 @@ export const passageiroController = {
     const { prePassageiroId } = request.params as { prePassageiroId: string };
     const { data, usuarioId } = finalizePreCadastroSchema.parse(request.body);
     const result = await passageiroService.finalizePreCadastro(prePassageiroId, data, usuarioId);
-    return reply.status(200).send(result);
+    return reply.status(200).send({ success: true, passageiro: result });
   },
 
   lookupResponsavel: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -152,6 +165,14 @@ export const passageiroController = {
   setPrincipalResponsavel: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id: passageiroId, responsavelId } = request.params as { id: string; responsavelId: string };
     const result = await passageiroService.setPrincipalResponsavel(passageiroId, responsavelId);
+    return reply.status(200).send(result);
+  },
+
+  toggleNotificacoesRota: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id: passageiroId, responsavelId } = request.params as { id: string; responsavelId: string };
+    const parsedBody = toggleNotificacoesRotaResponsavelSchema.safeParse(request.body || {});
+    const status = parsedBody.success ? parsedBody.data.status : undefined;
+    const result = await passageiroService.toggleNotificacoesRota(passageiroId, responsavelId, status);
     return reply.status(200).send(result);
   }
 };

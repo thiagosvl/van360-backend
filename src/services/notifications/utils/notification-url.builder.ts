@@ -54,12 +54,21 @@ export class NotificationUrlBuilder {
                 },
             });
 
-            if (error || !data?.properties?.action_link) {
+            if (error || !data?.properties) {
                 logger.warn({ email, error: error?.message }, "[NotificationUrlBuilder] Falha ao gerar Magic Link, utilizando Smart Fallback");
                 return fallbackUrl;
             }
 
-            return data.properties.action_link;
+            if (data.properties.hashed_token) {
+                const autoOpenParam = autoOpen ? "&auto_open=true" : "";
+                return `${baseUrl}/checkout-externo?token_hash=${data.properties.hashed_token}&type=magiclink${autoOpenParam}`;
+            }
+
+            if (data.properties.action_link) {
+                return data.properties.action_link;
+            }
+
+            return fallbackUrl;
         } catch (err: unknown) {
             const errorMessage = err instanceof Error ? err.message : String(err);
             logger.error({ error: errorMessage, email }, "[NotificationUrlBuilder] Exceção ao gerar Magic Link para checkout");
@@ -97,21 +106,90 @@ export class NotificationUrlBuilder {
     }
 
     /**
+     * Gera a URL para a confirmação de renovação do Passageiro
+     * @param tokenOrLink Token de renovação do passageiro ou link completo
+     */
+    static getRenewalUrl(tokenOrLink?: string): string {
+        const baseUrl = this.getBaseAppUrl();
+        if (!tokenOrLink) return `${baseUrl}/renovacao`;
+
+        if (tokenOrLink.startsWith("http://") || tokenOrLink.startsWith("https://")) {
+            return tokenOrLink;
+        }
+
+        return `${baseUrl}/renovacao/${tokenOrLink}`;
+    }
+
+    /**
      * Gera a URL para a lista de Pré-Cadastros / Solicitações de Passageiros no App
      */
     static getPassengerRequestsUrl(): string {
         const baseUrl = this.getBaseAppUrl();
-        return `${baseUrl}/passageiros?tab=solicitacoes`;
+        return `${baseUrl}/alunos?tab=solicitacoes`;
     }
 
     /**
      * Extrai apenas o sufixo/token de uma URL para uso em botões de URL Dinâmica da Meta (WABA)
      */
     static extractWabaDynamicToken(urlOrToken?: string): string {
-        if (!urlOrToken) return "assinatura";
+        if (!urlOrToken) return "assinatura?open_checkout=true";
         const clean = urlOrToken.trim();
-        const lastPart = clean.split("/").pop() || clean;
-        return lastPart.replace(/^\//, "");
+        const baseUrl = this.getBaseAppUrl();
+        if (clean.startsWith(baseUrl)) {
+            return clean.slice(baseUrl.length).replace(/^\//, "");
+        }
+        if (clean.startsWith("http://") || clean.startsWith("https://")) {
+            try {
+                const urlObj = new URL(clean);
+                return (urlObj.pathname + urlObj.search).replace(/^\//, "");
+            } catch {
+                const lastPart = clean.split("/").pop() || clean;
+                return lastPart.replace(/^\//, "");
+            }
+        }
+        return clean.replace(/^\//, "");
+    }
+
+    static extractContractToken(tokenOrUrl?: string): string {
+        if (!tokenOrUrl) return "";
+        const clean = tokenOrUrl.trim();
+        if (clean.includes("/assinar/")) {
+            const parts = clean.split("/assinar/");
+            const afterAssinar = parts[parts.length - 1] || "";
+            return afterAssinar.split("?")[0].replace(/^\//, "");
+        }
+        if (clean.startsWith("http://") || clean.startsWith("https://")) {
+            try {
+                const urlObj = new URL(clean);
+                const pathParts = urlObj.pathname.split("/").filter(Boolean);
+                return pathParts[pathParts.length - 1] || "";
+            } catch {
+                const parts = clean.split("/").filter(Boolean);
+                return parts[parts.length - 1] || clean;
+            }
+        }
+        return clean.replace(/^\//, "");
+    }
+
+    static extractRenewalToken(tokenOrUrl?: string): string {
+        if (!tokenOrUrl) return "";
+        const clean = tokenOrUrl.trim();
+        if (clean.includes("/renovacao/")) {
+            const parts = clean.split("/renovacao/");
+            const afterRenovacao = parts[parts.length - 1] || "";
+            return afterRenovacao.split("?")[0].replace(/^\//, "");
+        }
+        if (clean.startsWith("http://") || clean.startsWith("https://")) {
+            try {
+                const urlObj = new URL(clean);
+                const pathParts = urlObj.pathname.split("/").filter(Boolean);
+                return pathParts[pathParts.length - 1] || "";
+            } catch {
+                const parts = clean.split("/").filter(Boolean);
+                return parts[parts.length - 1] || clean;
+            }
+        }
+        return clean.replace(/^\//, "");
     }
 
     /**

@@ -1,5 +1,13 @@
 import { z } from "zod";
-import { SubscriptionStatus, ConfigKey } from "../types/enums.js";
+import { SubscriptionStatus, ConfigKey, UserType, IndicacaoStatus } from "../types/enums.js";
+import {
+  EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS,
+  EVENTO_MOTORISTA_COBRANCAS_HOJE,
+  EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA,
+  EVENTO_MOTORISTA_ASSINATURA_VENCENDO,
+  EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO,
+  EVENTO_MOTORISTA_TESTE_ENCERRADO,
+} from "../config/constants.js";
 
 export const updateUserAdminSchema = z.object({
   nome: z.string().min(2).max(120).optional(),
@@ -10,6 +18,7 @@ export const updateUserAdminSchema = z.object({
   cpfcnpj: z.string().min(11).max(14).optional(),
   ativo: z.boolean().optional(),
   data_nascimento: z.string().optional().nullable(),
+  cobranca_aviso_previo_whatsapp_ativo: z.boolean().optional(),
 });
 
 export const updateSubscriptionAdminSchema = z.object({
@@ -34,7 +43,17 @@ export const listUsersQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   search: z.string().optional(),
   status: z.string().optional(),
+  tipo: z.string().optional().default(UserType.MOTORISTA),
+  data_inicio: z.string().optional(),
+  data_fim: z.string().optional(),
 });
+
+export const listAcquisitionStatsQuerySchema = z.object({
+  data_inicio: z.string().optional(),
+  data_fim: z.string().optional(),
+});
+
+export type ListAcquisitionStatsQuery = z.infer<typeof listAcquisitionStatsQuerySchema>;
 
 export const listUserLogsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -88,3 +107,209 @@ export const createUserAdminSchema = z.object({
 });
 export type CreateUserAdminDTO = z.infer<typeof createUserAdminSchema>;
 
+export const dispatchDriverNotificationSchema = z.object({
+  evento: z.enum([
+    EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS,
+    EVENTO_MOTORISTA_COBRANCAS_HOJE,
+    EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA,
+    EVENTO_MOTORISTA_ASSINATURA_VENCENDO,
+    EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO,
+    EVENTO_MOTORISTA_TESTE_ENCERRADO,
+  ]),
+});
+export type DispatchDriverNotificationDTO = z.infer<typeof dispatchDriverNotificationSchema>;
+
+export const listUserNotificationsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(500).default(25),
+  canal: z.string().optional(),
+  status: z.string().optional(),
+  categoria: z.string().optional(),
+  evento: z.string().optional(),
+  search: z.string().optional(),
+  searchMotorista: z.string().optional(),
+  dataInicio: z.string().optional(),
+  dataFim: z.string().optional(),
+});
+export type ListUserNotificationsQuery = z.infer<typeof listUserNotificationsQuerySchema>;
+
+export const retrySingleNotificationSchema = z.object({
+  executeImmediately: z.boolean().optional().default(true),
+});
+export type RetrySingleNotificationDTO = z.infer<typeof retrySingleNotificationSchema>;
+
+export const retryBulkNotificationsSchema = z.object({
+  ids: z.array(z.string().uuid()).optional(),
+  filters: listUserNotificationsQuerySchema.omit({ page: true, limit: true }).optional(),
+}).refine(data => (data.ids && data.ids.length > 0) || (data.filters && Object.keys(data.filters).length > 0), {
+  message: "É necessário informar uma lista de IDs ou filtros válidos para retentativa em lote.",
+});
+export type RetryBulkNotificationsDTO = z.infer<typeof retryBulkNotificationsSchema>;
+
+export interface NotificationKpisDTO {
+  total: number;
+  sent: number;
+  failed: number;
+  cancelled: number;
+  wabaSent: number;
+  wabaFailed: number;
+  custoEstimadoWaba: number;
+  taxaSucesso: number;
+  canais: {
+    waba: number;
+    firebase: number;
+    resend: number;
+    telegram: number;
+    evolution: number;
+    sms: number;
+  };
+}
+
+export const listUsersLatestActivityQuerySchema = z.object({
+  search: z.string().optional(),
+  sort: z.enum(["inactive_first", "recent_first", "oldest_first", "newest_first", "name_asc"]).default("recent_first"),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(10),
+  healthStatus: z.enum(["all", "active", "alert", "risk", "inactive"]).default("all"),
+  subscriptionStatus: z.string().default("active_trial"),
+});
+export type ListUsersLatestActivityQuery = z.infer<typeof listUsersLatestActivityQuerySchema>;
+
+export const getMotoristasRadarStatsQuerySchema = z.object({
+  subscriptionStatus: z.string().default("active_trial"),
+});
+export type GetMotoristasRadarStatsQuery = z.infer<typeof getMotoristasRadarStatsQuerySchema>;
+
+export interface MotoristaLatestActivityDTO {
+  id: string;
+  nome: string;
+  apelido: string | null;
+  telefone: string;
+  email: string;
+  cadastrado_em: string;
+  ultima_acao: string | null;
+  ultima_descricao: string | null;
+  ultima_atividade_at: string | null;
+  assinatura_status: string | null;
+  assinatura_vencimento: string | null;
+  dias_inativo: number;
+}
+
+export interface MotoristasLatestActivityResponseDTO {
+  data: MotoristaLatestActivityDTO[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface MotoristasRadarStatsDTO {
+  totalMotoristas: number;
+  totalAtivos: number;
+  totalAlerta: number;
+  totalEmRisco: number;
+  totalSemAtividade: number;
+}
+
+export const setReferralAdminSchema = z.object({
+  indicadorId: z.string().uuid("ID do indicador inválido"),
+});
+export type SetReferralAdminDTO = z.infer<typeof setReferralAdminSchema>;
+
+export const listUsersDailyPulseQuerySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve estar no formato YYYY-MM-DD").optional(),
+  search: z.string().optional(),
+  tipoUsuario: z.enum(["all", "novo", "recorrente"]).default("all"),
+  subscriptionStatus: z.string().default("all"),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+});
+export type ListUsersDailyPulseQuery = z.infer<typeof listUsersDailyPulseQuerySchema>;
+
+export const getUsersDailyPulseStatsQuerySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve estar no formato YYYY-MM-DD").optional(),
+});
+export type GetUsersDailyPulseStatsQuery = z.infer<typeof getUsersDailyPulseStatsQuerySchema>;
+
+export interface MotoristaDailyPulseDTO {
+  id: string;
+  nome: string;
+  apelido: string | null;
+  telefone: string | null;
+  email: string | null;
+  cadastrado_em: string;
+  tipo_usuario_dia: "novo" | "recorrente";
+  reengajou_no_dia: boolean;
+  total_atividades_dia: number;
+  primeiro_acesso_dia: string;
+  ultimo_acesso_dia: string;
+  ultima_acao_dia: string | null;
+  ultima_descricao_dia: string | null;
+  assinatura_status: string | null;
+  assinatura_vencimento: string | null;
+  is_vitalicio: boolean;
+}
+
+export interface MotoristasDailyPulseResponseDTO {
+  data: MotoristaDailyPulseDTO[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface MotoristasDailyPulseStatsDTO {
+  totalAcessosUnicos: number;
+  totalRecorrentes: number;
+  totalNovos: number;
+  totalNovosReengajados: number;
+  totalTrial: number;
+  totalAtivos: number;
+  totalVitalicios: number;
+  totalVencidosExpirados: number;
+}
+
+export const listReferralsAdminSchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().optional(),
+  status: z.nativeEnum(IndicacaoStatus).optional(),
+  data_inicio: z.string().optional(),
+  data_fim: z.string().optional(),
+});
+export type ListReferralsAdminQuery = z.infer<typeof listReferralsAdminSchema>;
+
+export interface ReferralUserSummaryDTO {
+  id: string;
+  nome: string;
+  telefone: string;
+  email: string;
+  logo_url?: string | null;
+  assinatura_status?: string | null;
+  assinatura_data_vencimento?: string | null;
+}
+
+export interface ReferralListItemDTO {
+  id: string;
+  status: IndicacaoStatus;
+  created_at: string;
+  updated_at: string | null;
+  fatura_origem_id: string | null;
+  indicador: ReferralUserSummaryDTO | null;
+  indicado: ReferralUserSummaryDTO | null;
+}
+
+export interface ReferralsListStatsDTO {
+  total: number;
+  concluidas: number;
+  pendentes: number;
+  taxaConversao: number;
+  diasBonusConcedidos: number;
+}
+
+export interface ReferralsListResponseDTO {
+  data: ReferralListItemDTO[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  stats: ReferralsListStatsDTO;
+}

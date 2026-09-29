@@ -4,7 +4,7 @@ export const paymentMethodRepository = {
     async getByUserId(userId: string) {
         return supabaseAdmin
             .from("metodos_pagamento")
-            .select("id, brand, last_4_digits, expire_month, expire_year, is_default, created_at")
+            .select("id, brand, last_4_digits, expire_month, expire_year, is_default, created_at, holder_name, holder_document")
             .eq("usuario_id", userId)
             .order("is_default", { ascending: false })
             .order("created_at", { ascending: false });
@@ -54,10 +54,17 @@ export const paymentMethodRepository = {
             .maybeSingle();
     },
 
-    async updateTokenAndDefault(id: string, token: string) {
+    async updateTokenAndDefault(id: string, token: string, holderName?: string | null, holderDocument?: string | null) {
+        const updateData: { payment_token: string; is_default: boolean; holder_name?: string | null; holder_document?: string | null } = {
+            payment_token: token,
+            is_default: true
+        };
+        if (holderName !== undefined) updateData.holder_name = holderName;
+        if (holderDocument !== undefined) updateData.holder_document = holderDocument;
+
         return supabaseAdmin
             .from("metodos_pagamento")
-            .update({ payment_token: token, is_default: true })
+            .update(updateData)
             .eq("id", id);
     },
 
@@ -69,6 +76,8 @@ export const paymentMethodRepository = {
         expire_year: string;
         payment_token: string;
         is_default: boolean;
+        holder_name?: string | null;
+        holder_document?: string | null;
     }) {
         return supabaseAdmin
             .from("metodos_pagamento")

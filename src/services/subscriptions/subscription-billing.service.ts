@@ -1,19 +1,22 @@
 import { logger } from "../../config/logger.js";
-import { SubscriptionInvoiceStatus,
+import {
+    SubscriptionInvoiceStatus,
     CheckoutPaymentMethod,
     ConfigKey,
     AtividadeAcao,
     AtividadeEntidadeTipo,
     PaymentProvider,
-    SubscriptionIdentifer, NotificationChannelEnum } from '../../types/enums.js';
-import { getConfig, getConfigNumber } from "../configuracao.service.js";
+    NotificationChannelEnum
+} from '../../types/enums.js';
+import { getConfigNumber } from "../configuracao.service.js";
 import { historicoService } from "../historico.service.js";
-import { getNowBR, toPersistenceString, addDays } from "../../utils/date.utils.js";
+import { getNowBR, toPersistenceString, addDays, parseLocalDate } from "../../utils/date.utils.js";
 import { extractErrorMessage, onlyDigits } from "../../utils/string.utils.js";
 import type { CreateInvoiceDTO } from "../../types/dtos/subscription.dto.js";
+import { AppError } from "../../errors/AppError.js";
 import { subscriptionService } from "./subscription.service.js";
+import { subscriptionPricingService } from "./subscription-pricing.service.js";
 import { planRepository } from "../../repositories/plan.repository.js";
-import { referralRepository } from "../../repositories/referral.repository.js";
 import { paymentMethodRepository } from "../../repositories/payment-method.repository.js";
 import { invoiceRepository } from "../../repositories/invoice.repository.js";
 import { subscriptionRepository } from "../../repositories/subscription.repository.js";
@@ -21,59 +24,13 @@ import { userRepository } from "../../repositories/user.repository.js";
 
 export const subscriptionBillingService = {
     async calculatePrice(userId: string, planIdentificador: string): Promise<number> {
-        const { data: plano } = await planRepository.getByIdentifier(planIdentificador);
-
-        if (!plano) throw new Error(`Plano '${planIdentificador}' não encontrado.`);
-
-        const sub = await subscriptionService.getOrCreateSubscription(userId);
-        if (!sub) throw new Error("Erro ao obter assinatura do usuário.");
-
-        let valorFinal = Number(plano.valor);
-
-        // Define which base/promo values to look at based on the requested plan
-        const isAnual = planIdentificador === SubscriptionIdentifer.YEARLY;
-        const subValorBase = isAnual ? sub.valor_base_anual : sub.valor_base_mensal;
-        const subValorPromo = isAnual ? sub.valor_promocional_anual : sub.valor_promocional_mensal;
-
-        if (subValorBase !== null && subValorBase !== undefined) {
-            valorFinal = Number(subValorBase);
-        }
-
-        const isPromotionActive = await getConfig(ConfigKey.SAAS_PROMOCAO_ATIVA, "false") === "true";
-
-        if (isPromotionActive && plano.valor_promocional) {
-            valorFinal = Number(plano.valor_promocional);
-        }
-
-        if (subValorPromo !== null && subValorPromo !== undefined) {
-            if (!sub.data_fim_promocao) {
-                // Definitivo
-                valorFinal = Number(subValorPromo);
-            } else {
-                const fim = new Date(sub.data_fim_promocao).getTime();
-                const agora = getNowBR().getTime();
-                if (fim >= agora) {
-                    valorFinal = Number(subValorPromo);
-                }
-            }
-        }
-
-        const { data: indicacao } = await referralRepository.getPendingReferralByIndicadoId(userId);
-
-        if (indicacao) {
-            const descontoPct = await getConfigNumber(ConfigKey.SAAS_REFERRAL_DISCOUNT_PCT, 10);
-            if (descontoPct > 0) {
-                valorFinal = valorFinal * (1 - descontoPct / 100);
-            }
-        }
-
-        return Number(valorFinal.toFixed(2));
+        return subscriptionPricingService.calculatePlanPrice(userId, planIdentificador);
     },
 
     async getInvoices(userId: string, page?: number, limit?: number) {
         const { data: invoices, error, count } = await invoiceRepository.getInvoicesByUserId(userId, page, limit);
         if (error) throw error;
-        
+
         const total = count ?? (invoices?.length || 0);
         return {
             list: invoices || [],
@@ -126,7 +83,8 @@ export const subscriptionBillingService = {
     async createInvoice(userId: string, requestData: CreateInvoiceDTO) {
         const {
             planId, paymentMethod, installments, paymentToken, savedCardId, saveCard, cardBrand, cardLast4, expireMonth, expireYear,
-            birth, street, number, neighborhood, zipcode, city, state
+            birth, street, number, neighborhood, zipcode, city, state, origem = "MANUAL",
+            holderDocument, holderName
         } = requestData;
 
         const [userRes, planRes] = await Promise.all([
@@ -134,18 +92,20 @@ export const subscriptionBillingService = {
             planRepository.getById(planId)
         ]);
 
-        if (userRes.error || !userRes.data) throw new Error("Usuário não encontrado.");
-        if (planRes.error || !planRes.data) throw new Error("Plano não encontrado.");
+        if (userRes.error || !userRes.data) throw new AppError("Usuário não encontrado.", 404);
+        if (planRes.error || !planRes.data) throw new AppError("Plano não encontrado.", 404);
 
         const user = userRes.data;
         const plano = planRes.data;
         const valor = await this.calculatePrice(userId, plano.identificador);
 
         const sub = await subscriptionService.getOrCreateSubscription(userId);
-        if (!sub) throw new Error("Erro ao obter assinatura.");
+        if (!sub) throw new AppError("Erro ao obter assinatura.", 500);
 
         let currentPaymentToken = paymentToken;
         let preferredMethodId: string | null = sub.metodo_pagamento_preferencial_id;
+        let activeCardHolderDoc: string | null = holderDocument ? onlyDigits(holderDocument) : null;
+        let activeCardHolderName: string | null = holderName ? holderName.trim().toUpperCase() : null;
 
         if (paymentMethod === CheckoutPaymentMethod.CREDIT_CARD) {
             const cardIdToUse = savedCardId || preferredMethodId;
@@ -155,11 +115,13 @@ export const subscriptionBillingService = {
                 if (savedCard) {
                     currentPaymentToken = savedCard.payment_token;
                     preferredMethodId = savedCard.id;
+                    if (savedCard.holder_document) activeCardHolderDoc = onlyDigits(savedCard.holder_document);
+                    if (savedCard.holder_name) activeCardHolderName = savedCard.holder_name;
                 }
             }
 
             if (!currentPaymentToken) {
-                throw new Error("Token de pagamento não fornecido ou método salvo não encontrado.");
+                throw new AppError("Token de pagamento não fornecido ou método salvo não encontrado.", 400);
             }
 
             if (preferredMethodId) {
@@ -188,6 +150,16 @@ export const subscriptionBillingService = {
         const invoiceDays = await getConfigNumber(ConfigKey.SAAS_DIAS_VENCIMENTO, 30);
         const dataVencimentoFatura = toPersistenceString(addDays(new Date(getNowBR().getTime()), invoiceDays));
 
+        const isUserCnpj = onlyDigits(user.cpfcnpj).length > 11;
+        const isCardHolderCpf = paymentMethod === CheckoutPaymentMethod.CREDIT_CARD
+            ? (activeCardHolderDoc ? activeCardHolderDoc.length === 11 : !isUserCnpj)
+            : !isUserCnpj;
+
+        const effectiveCustomerDoc = activeCardHolderDoc || (isUserCnpj && user.cpf_responsavel ? onlyDigits(user.cpf_responsavel) : onlyDigits(user.cpfcnpj));
+        const effectiveCustomerName = isCardHolderCpf
+            ? (activeCardHolderName || user.nome)
+            : (user.razao_social || user.nome);
+
         const { paymentService } = await import("../payments/payment.service.js");
 
         let chargeRes;
@@ -201,11 +173,11 @@ export const subscriptionBillingService = {
                 installments: installments,
                 paymentToken: currentPaymentToken,
                 customer: {
-                    name: user.nome,
-                    document: user.cpfcnpj,
+                    name: effectiveCustomerName,
+                    document: effectiveCustomerDoc,
                     email: user.email,
                     phone: user.telefone || "11999999999",
-                    birth: birth || "1980-01-01"
+                    birth: birth || user.data_nascimento || "1985-01-01"
                 },
                 billingAddress: (paymentMethod === CheckoutPaymentMethod.CREDIT_CARD && street) ? {
                     street: street,
@@ -249,7 +221,7 @@ export const subscriptionBillingService = {
                     }
                 }
 
-                if (paymentMethod === CheckoutPaymentMethod.CREDIT_CARD) {
+                if (paymentMethod === CheckoutPaymentMethod.CREDIT_CARD && origem !== "AUTOMATICO") {
                     const { notificationService } = await import("../notifications/notification.service.js");
                     const { EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO } = await import("../../config/constants.js");
                     notificationService.notifyAdmin(EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO, {
@@ -270,7 +242,7 @@ export const subscriptionBillingService = {
                 logger.error({ userId, dbError }, "[SubscriptionBillingService] Erro ao gravar fatura falha no banco.");
             }
 
-            throw gatewayErr instanceof Error ? gatewayErr : new Error(errMsg);
+            throw new AppError(errMsg, 400);
         }
 
         if (!chargeRes.success) {
@@ -306,7 +278,7 @@ export const subscriptionBillingService = {
                     }
                 }
 
-                if (paymentMethod === CheckoutPaymentMethod.CREDIT_CARD) {
+                if (paymentMethod === CheckoutPaymentMethod.CREDIT_CARD && origem !== "AUTOMATICO") {
                     const { notificationService } = await import("../notifications/notification.service.js");
                     const { EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO } = await import("../../config/constants.js");
                     notificationService.notifyAdmin(EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO, {
@@ -331,7 +303,7 @@ export const subscriptionBillingService = {
                 ? errorString
                 : "Não foi possível processar o pagamento com cartão no momento. Por favor, tente novamente ou entre em contato com o suporte.";
 
-            throw new Error(userFacingMessage);
+            throw new AppError(userFacingMessage, 400);
         }
 
         if (paymentMethod === CheckoutPaymentMethod.CREDIT_CARD && currentPaymentToken && saveCard && cardLast4 && cardBrand) {
@@ -342,7 +314,7 @@ export const subscriptionBillingService = {
             await paymentMethodRepository.clearDefaults(userId);
 
             if (existingCard) {
-                await paymentMethodRepository.updateTokenAndDefault(existingCard.id, currentPaymentToken);
+                await paymentMethodRepository.updateTokenAndDefault(existingCard.id, currentPaymentToken, activeCardHolderName, activeCardHolderDoc);
                 preferredMethodId = existingCard.id;
             } else {
                 const { data: newMethod } = await paymentMethodRepository.createMethod({
@@ -352,13 +324,15 @@ export const subscriptionBillingService = {
                     expire_month: expireMonth ?? "",
                     expire_year: expireYear ?? "",
                     payment_token: currentPaymentToken,
-                    is_default: true
+                    is_default: true,
+                    holder_name: activeCardHolderName,
+                    holder_document: activeCardHolderDoc
                 });
                 if (newMethod) preferredMethodId = newMethod.id;
             }
 
             if (preferredMethodId) {
-                await subscriptionRepository.updatePreferredMethod(sub.id, preferredMethodId);
+                await subscriptionRepository.updatePaymentMethod(userId, preferredMethodId, CheckoutPaymentMethod.CREDIT_CARD);
             }
 
             if (street) {
@@ -395,7 +369,7 @@ export const subscriptionBillingService = {
             valor_total: valor
         });
 
-        if (fError || !fatura) throw fError || new Error("Erro ao criar fatura");
+        if (fError || !fatura) throw new AppError("Erro ao criar fatura.", 500);
 
         if (isApprovedCard) {
             try {

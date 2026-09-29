@@ -1,20 +1,20 @@
 import { z } from "zod";
 import { moneyToNumber } from "../../utils/currency.utils.js";
-import { CobrancaOrigem, CobrancaTipoPagamento } from "../enums.js";
+import { CobrancaTipoPagamento } from "../enums.js";
 
 export const createCobrancaSchema = z.object({
     usuario_id: z.string().uuid(),
     passageiro_id: z.string().uuid().optional(),
     valor: z.union([z.number(), z.string()])
-      .transform(v => typeof v === 'string' ? moneyToNumber(v) : v)
-      .refine(v => typeof v === 'number' && !isNaN(v) && v > 0, "Valor da cobrança deve ser maior que zero"),
+        .transform(v => typeof v === 'string' ? moneyToNumber(v) : v)
+        .refine(v => typeof v === 'number' && !isNaN(v) && v > 0, "Valor da cobrança deve ser maior que zero"),
     data_vencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve estar no formato YYYY-MM-DD"),
 
     mes: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),
     ano: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),
+    ano_letivo: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),
 
     status: z.string().optional(),
-    origem: z.nativeEnum(CobrancaOrigem).optional(),
     parcelas: z.number().int().positive("Número de parcelas deve ser maior que zero").optional(),
     qtd_parcelas: z.number().int().positive("Número de parcelas deve ser maior que zero").optional(),
 
@@ -24,6 +24,7 @@ export const createCobrancaSchema = z.object({
     valor_pago: z.union([z.number(), z.string()]).transform(v => typeof v === 'string' ? moneyToNumber(v) : v).optional(),
     recibo_url: z.string().nullable().optional(),
     desativar_lembretes: z.boolean().optional(),
+    observacao: z.string().trim().max(1000, "Observação não pode exceder 1000 caracteres").nullable().optional(),
 });
 
 export type CreateCobrancaDTO = z.infer<typeof createCobrancaSchema>;
@@ -51,6 +52,7 @@ export const listCobrancasFiltersSchema = z.object({
     veiculoId: z.string().optional(),
     mes: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),
     ano: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),
+    ano_letivo: z.union([z.number(), z.string()]).transform(v => Number(v)).optional(),
 });
 
 export type ListCobrancasFiltersDTO = z.infer<typeof listCobrancasFiltersSchema>;
@@ -72,6 +74,31 @@ export const registrarPagamentoManualSchema = z.object({
     valor_pago: z.union([z.number(), z.string()]).transform(v => typeof v === 'string' ? moneyToNumber(v) : v).optional(),
     data_pagamento: z.string().optional(),
     tipo_pagamento: z.nativeEnum(CobrancaTipoPagamento).optional(),
+    observacao: z.string().trim().max(1000, "Observação não pode exceder 1000 caracteres").nullable().optional(),
 });
 
 export type RegistrarPagamentoManualDTO = z.infer<typeof registrarPagamentoManualSchema>;
+
+export const complementarPagamentoManualSchema = z.object({
+    valor_adicional: z.union([z.number(), z.string()])
+        .transform(v => typeof v === 'string' ? moneyToNumber(v) : v)
+        .refine(v => typeof v === 'number' && !isNaN(v) && v > 0, "Valor adicional deve ser maior que zero"),
+    data_pagamento: z.string().optional(),
+    tipo_pagamento: z.nativeEnum(CobrancaTipoPagamento).optional(),
+    observacao: z.string().trim().max(1000, "Observação não pode exceder 1000 caracteres").nullable().optional(),
+});
+
+export type ComplementarPagamentoManualDTO = z.infer<typeof complementarPagamentoManualSchema>;
+
+export const obterReciboAnualParamsSchema = z.object({
+    passageiroId: z.string().uuid("ID do passageiro inválido")
+});
+
+export type ObterReciboAnualParamsDTO = z.infer<typeof obterReciboAnualParamsSchema>;
+
+export const obterReciboAnualQuerySchema = z.object({
+    ano: z.coerce.number().int().positive("Ano inválido")
+});
+
+export type ObterReciboAnualQueryDTO = z.infer<typeof obterReciboAnualQuerySchema>;
+

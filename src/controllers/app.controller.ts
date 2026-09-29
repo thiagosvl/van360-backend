@@ -1,5 +1,5 @@
 import { FastifyReply, FastifyRequest } from "fastify";
-import { logger } from "../config/logger.js";
+import { AppError } from "../errors/AppError.js";
 import { checkAppUpdates } from "../services/app.service.js";
 
 export const AppController = {
@@ -11,16 +11,10 @@ export const AppController = {
     };
 
     if (!platform) {
-      return reply.status(400).send({ error: "Platform query param is required." });
+      throw new AppError("Platform query param is required.", 400);
     }
 
-    try {
-      const update = await checkAppUpdates(platform, current_version, native_version);
-      return reply.status(200).send(update || null);
-    } catch (err: unknown) {
-      const error = err as Error;
-      logger.error({ error: error.message, platform }, "Erro ao buscar updates.");
-      return reply.status(500).send({ error: "Erro interno." });
-    }
+    const update = await checkAppUpdates(platform, current_version, native_version);
+    return reply.status(200).send(update || null);
   }
 };

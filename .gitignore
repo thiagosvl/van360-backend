@@ -9,3 +9,9 @@ ideias
 documentacoes
 # Firebase credentials
 firebase-service-account.json
+
+# Assinaturas de teste locais
+assinatura_*
+
+# TypeScript build cache
+*.tsbuildinfo

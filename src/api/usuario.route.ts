@@ -11,10 +11,11 @@ export default async function usuarioRoute(app: FastifyInstance) {
     app.post("/registrar", AuthController.registrar);
 
     // --- Rotas de Usuário ---
-    app.patch("/:id", { onRequest: [verifySupabaseJWT], preHandler: [requirePermission("financeiro.visualizar")] }, UsuarioController.atualizarUsuario);
+    app.patch("/:id", { onRequest: [verifySupabaseJWT] }, UsuarioController.atualizarUsuario);
     app.patch("/:id/pix", { onRequest: [verifySupabaseJWT], preHandler: [requirePermission("financeiro.visualizar")] }, UsuarioController.atualizarPixUsuario);
     app.patch("/:id/canal-aquisicao", { onRequest: [verifySupabaseJWT], preHandler: [requirePermission("financeiro.visualizar")] }, UsuarioController.atualizarCanalAquisicao);
     app.get("/:usuarioId/resumo", { onRequest: [verifySupabaseJWT] }, usuarioResumoController.getResumo);
+    app.delete("/minha-conta", { onRequest: [verifySupabaseJWT] }, UsuarioController.excluirMinhaConta);
 
 }
 

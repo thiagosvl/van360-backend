@@ -181,14 +181,15 @@ export const usuarioPushTokenRepository = {
     return null;
   },
 
-  async insertToken(userId: string, token: string, platform: string): Promise<void> {
+  async upsertToken(userId: string, token: string, platform: string): Promise<void> {
     const { error } = await supabase
       .from('usuario_push_tokens')
-      .insert({
+      .upsert({
         user_id: userId,
         token,
-        platform
-      });
+        platform,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'token' });
 
     if (error) throw error;
   },

@@ -26,10 +26,6 @@ export interface ResendTemplateContext {
 }
 
 export function formatSubject(subject: string): string {
-    const isDev = process.env.NODE_ENV !== "production";
-    if (isDev && !subject.startsWith("[DEV]")) {
-        return `[DEV] ${subject}`;
-    }
     return subject;
 }
 
@@ -191,6 +187,22 @@ export class EmailComponents {
         return `
         <div style="text-align: center; margin: 24px 0;">
             <a href="${url}" target="_blank" style="display: inline-block; background-color: #1a3a5c; color: #ffffff !important; font-weight: 600; font-size: 14px; padding: 13px 28px; border-radius: 10px; text-decoration: none;">${text}</a>
+        </div>
+        `;
+    }
+
+    static pixCopyPasteCard(pixCode: string): string {
+        return `
+        <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 14px; padding: 22px 20px; text-align: center; margin: 24px 0;">
+            <div style="font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">
+                Pix Copia e Cola
+            </div>
+            <div style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 14px; font-weight: 700; color: #1a3a5c; background-color: #ffffff; border: 1px dashed #94a3b8; border-radius: 8px; padding: 12px 16px; display: inline-block; max-width: 100%; word-break: break-all; margin-bottom: 10px; user-select: all;">
+                ${pixCode}
+            </div>
+            <div style="font-size: 12px; color: #64748b; font-weight: 500;">
+                Copie o código Pix acima e cole no aplicativo do seu banco para pagar.
+            </div>
         </div>
         `;
     }

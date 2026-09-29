@@ -1,12 +1,24 @@
 import { FastifyReply, FastifyRequest } from "fastify";
+import { z } from "zod";
 import { logger } from "../../config/logger.js";
 import { adminUserService } from "../../services/admin/admin-user.service.js";
+import { adminNotificationService } from "../../services/admin/admin-notification.service.js";
 import {
   updateUserAdminSchema,
   updateSubscriptionAdminSchema,
   listUsersQuerySchema,
+  listAcquisitionStatsQuerySchema,
   createUserAdminSchema,
+  dispatchDriverNotificationSchema,
+  listUsersLatestActivityQuerySchema,
+  getMotoristasRadarStatsQuerySchema,
+  setReferralAdminSchema,
+  listUsersDailyPulseQuerySchema,
+  getUsersDailyPulseStatsQuerySchema,
+  listReferralsAdminSchema,
 } from "../../schemas/admin.schema.js";
+import { AppError } from "../../errors/AppError.js";
+
 
 export const adminUserController = {
   async getDashboard(_request: FastifyRequest, reply: FastifyReply) {
@@ -17,6 +29,18 @@ export const adminUserController = {
       const error = err as Error;
       logger.error({ error: error.message }, "[AdminUserController] Erro no dashboard.");
       return reply.status(500).send({ error: "Erro ao buscar estatísticas." });
+    }
+  },
+
+  async getAcquisitionStats(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const query = listAcquisitionStatsQuerySchema.parse(request.query);
+      const result = await adminUserService.getAcquisitionStats(query);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao buscar estatísticas de aquisição.");
+      return reply.status(500).send({ error: "Erro ao buscar estatísticas de aquisição." });
     }
   },
 
@@ -33,16 +57,45 @@ export const adminUserController = {
   },
 
   async getUserDetails(request: FastifyRequest, reply: FastifyReply) {
-    try {
-      const { id } = request.params as { id: string };
-      const result = await adminUserService.getUserDetails(id);
-      return reply.status(200).send(result);
-    } catch (err: unknown) {
-      const error = err as Error;
-      logger.error({ error: error.message }, "[AdminUserController] Erro ao buscar detalhes.");
-      const status = error.message?.includes("não encontrado") ? 404 : 500;
-      return reply.status(status).send({ error: error.message });
-    }
+    const { id } = request.params as { id: string };
+    const result = await adminUserService.getUserDetails(id);
+    return reply.status(200).send(result);
+  },
+
+  async getUserContratos(request: FastifyRequest, reply: FastifyReply) {
+    const { id } = request.params as { id: string };
+    const result = await adminUserService.getUserContratos(id);
+    return reply.status(200).send(result);
+  },
+
+  async getUserPassageiros(request: FastifyRequest, reply: FastifyReply) {
+    const { id } = request.params as { id: string };
+    const result = await adminUserService.getUserPassageiros(id);
+    return reply.status(200).send(result);
+  },
+
+  async getUserPrePassageiros(request: FastifyRequest, reply: FastifyReply) {
+    const { id } = request.params as { id: string };
+    const result = await adminUserService.getUserPrePassageiros(id);
+    return reply.status(200).send(result);
+  },
+
+  async getUserVeiculos(request: FastifyRequest, reply: FastifyReply) {
+    const { id } = request.params as { id: string };
+    const result = await adminUserService.getUserVeiculos(id);
+    return reply.status(200).send(result);
+  },
+
+  async getUserEscolas(request: FastifyRequest, reply: FastifyReply) {
+    const { id } = request.params as { id: string };
+    const result = await adminUserService.getUserEscolas(id);
+    return reply.status(200).send(result);
+  },
+
+  async getUserReferral(request: FastifyRequest, reply: FastifyReply) {
+    const { id } = request.params as { id: string };
+    const result = await adminUserService.getUserReferral(id);
+    return reply.status(200).send(result);
   },
 
   async updateUser(request: FastifyRequest, reply: FastifyReply) {
@@ -98,6 +151,19 @@ export const adminUserController = {
     }
   },
 
+  async impersonateUser(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { id } = request.params as { id: string };
+      const result = await adminUserService.impersonateUser(id);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao gerar link de impersonation.");
+      const status = err instanceof AppError ? err.statusCode : 400;
+      return reply.status(status).send({ error: error.message });
+    }
+  },
+
   async deleteUser(request: FastifyRequest, reply: FastifyReply) {
     try {
       const { id } = request.params as { id: string };
@@ -109,4 +175,183 @@ export const adminUserController = {
       return reply.status(400).send({ error: error.message });
     }
   },
+
+  async dispatchNotification(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { id } = request.params as { id: string };
+      const body = dispatchDriverNotificationSchema.parse(request.body);
+      const adminId = (request as any).user?.id;
+      const result = await adminNotificationService.dispatchToDriver(id, body, adminId);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao disparar notificação.");
+      const status = error.message?.includes("não encontrado") ? 404 : 400;
+      return reply.status(status).send({ error: error.message });
+    }
+  },
+
+  async dispatchPassengerCobranca(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+      const adminId = (request as { user?: { id?: string } }).user?.id;
+      const body = z
+        .object({
+          cobrancaId: z.string().uuid().optional(),
+          force: z.boolean().optional(),
+        })
+        .optional()
+        .parse(request.body);
+      const result = await adminNotificationService.dispatchPassengerCobranca(id, adminId, body);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao disparar cobrança do aluno.");
+      const status = error.message?.includes("não encontrado") ? 404 : 400;
+      return reply.status(status).send({ error: error.message });
+    }
+  },
+
+  async dispatchDriverCobrancaDemo(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+      const adminId = (request as { user?: { id?: string } }).user?.id;
+      const result = await adminNotificationService.dispatchDriverCobrancaDemo(id, adminId);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao disparar demonstração de cobrança.");
+      const status = error.message?.includes("não encontrado") ? 404 : 400;
+      return reply.status(status).send({ error: error.message });
+    }
+  },
+
+  async getUsersLatestActivity(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const query = listUsersLatestActivityQuerySchema.parse(request.query);
+      const result = await adminUserService.getUsersLatestActivity(query);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao buscar última atividade dos usuários.");
+      return reply.status(500).send({ error: "Erro ao buscar última atividade dos usuários." });
+    }
+  },
+
+  async getUsersRadarStats(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const query = getMotoristasRadarStatsQuerySchema.parse(request.query);
+      const result = await adminUserService.getUsersRadarStats(query);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao buscar estatísticas do radar dos usuários.");
+      return reply.status(500).send({ error: "Erro ao buscar estatísticas do radar dos usuários." });
+    }
+  },
+
+  async getUsersDailyPulse(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const query = listUsersDailyPulseQuerySchema.parse(request.query);
+      const result = await adminUserService.getUsersDailyPulse(query);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao buscar pulso diário dos usuários.");
+      return reply.status(500).send({ error: "Erro ao buscar pulso diário dos usuários." });
+    }
+  },
+
+  async getUsersDailyPulseStats(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const query = getUsersDailyPulseStatsQuerySchema.parse(request.query);
+      const result = await adminUserService.getUsersDailyPulseStats(query);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao buscar estatísticas do pulso diário dos usuários.");
+      return reply.status(500).send({ error: "Erro ao buscar estatísticas do pulso diário dos usuários." });
+    }
+  },
+
+  async getVencimentosPorDia(_request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const result = await adminUserService.getVencimentosPassageirosPorDia();
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao buscar vencimentos dos passageiros por dia.");
+      return reply.status(500).send({ error: "Erro ao buscar vencimentos dos passageiros por dia." });
+    }
+  },
+
+  async getVencimentoDetalhes(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { dia } = request.params as { dia: string };
+      const { mes, ano } = (request.query as { mes?: string; ano?: string }) || {};
+      const result = await adminUserService.getVencimentoDetalhes(
+        Number(dia),
+        mes ? Number(mes) : undefined,
+        ano ? Number(ano) : undefined
+      );
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao buscar detalhes do vencimento.");
+      return reply.status(500).send({ error: "Erro ao buscar detalhes do vencimento." });
+    }
+  },
+
+  async setReferral(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { id } = request.params as { id: string };
+      const body = setReferralAdminSchema.parse(request.body);
+      const result = await adminUserService.setReferralAdmin(id, body.indicadorId);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao atribuir indicação.");
+      return reply.status(400).send({ error: error.message || "Erro ao atribuir indicação." });
+    }
+  },
+
+  async removeReferral(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { id } = request.params as { id: string };
+      const result = await adminUserService.removeReferralAdmin(id);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao remover indicação.");
+      return reply.status(400).send({ error: error.message || "Erro ao remover indicação." });
+    }
+  },
+
+  async deleteInvoice(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+      const result = await adminUserService.deleteInvoice(id);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao excluir fatura.");
+      const status = error.message?.includes("não encontrada") ? 404 : 400;
+      return reply.status(status).send({ error: error.message || "Erro ao excluir fatura." });
+    }
+  },
+
+  async listReferrals(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const query = listReferralsAdminSchema.parse(request.query);
+      const result = await adminUserService.listReferralsAdmin(query);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao listar indicações.");
+      return reply.status(400).send({ error: error.message || "Erro ao listar indicações." });
+    }
+  },
 };
+
+
+

@@ -1,12 +1,12 @@
 import { addToQueue, EvolutionJobData } from "../../../../queues/evolution.queue.js";
-import { EvolutionConnectionStatus, NotificationChannelEnum, EvolutionPurpose } from "../../../../types/enums.js";
+import { EvolutionConnectionStatus, EvolutionPurpose } from "../../../../types/enums.js";
 import { CompositeMessagePart } from "../../../../types/dtos/evolution.dto.js";
 import { logger } from "../../../../config/logger.js";
 import { evolutionService } from "../../../evolution.service.js";
 import { NotificationProviderPort, NotificationSendResult } from "../../ports/notification-provider.port.js";
 import { NotificationOptions } from "../../notification.service.js";
 import { EvolutionMapper } from "./evolution.mapper.js";
-import { env } from "../../../../config/env.js";
+import { extractErrorMessage } from "../../../../utils/error.utils.js";
 
 export class EvolutionQueueAdapter implements NotificationProviderPort {
 
@@ -18,14 +18,6 @@ export class EvolutionQueueAdapter implements NotificationProviderPort {
             const err = `[EvolutionQueueAdapter] Nenhum template gerado para o evento '${eventName}'.`;
             logger.debug({ eventName }, err);
             return { success: false, error: err };
-        }
-
-        if (env.NODE_ENV !== 'production') {
-            parts.forEach((part: CompositeMessagePart) => {
-                if (part.type === "text" && part.content && !part.content.startsWith("[DEV]")) {
-                    part.content = `[DEV]\n${part.content}`;
-                }
-            });
         }
 
         const targetPhone = (to || (contextData?.to as string) || "") as string;
@@ -78,7 +70,7 @@ export class EvolutionQueueAdapter implements NotificationProviderPort {
 
             return true;
         } catch (error: unknown) {
-            const msg = error instanceof Error ? error.message : String(error);
+            const msg = extractErrorMessage(error);
             logger.error({ error: msg, to, instanceName }, "[EvolutionQueueAdapter] Falha ao enfileirar");
             return false;
         }

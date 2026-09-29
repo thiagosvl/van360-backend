@@ -1,28 +1,33 @@
-// Servidor local para desenvolvimento
-// Para produção na Vercel, use api/index.ts
 import "dotenv/config";
 
-// Garantir que o Node.js rode no fuso horário de Brasília
 process.env.TZ = "America/Sao_Paulo";
-
-// IMPORTANTE: Sentry deve ser inicializado ANTES de qualquer outro import
 
 import { initSentry } from "./config/sentry.js";
 initSentry();
 
 import { createApp } from "./app.js";
-import { queueService } from "./services/queue.service.js";
+import { errorAlertService } from "./services/error-alert.service.js";
+
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled Rejection:", reason);
+  void errorAlertService.notifyFatalError({
+    error: reason,
+    origin: "unhandledRejection"
+  });
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught Exception:", error);
+  void errorAlertService.notifyFatalError({
+    error,
+    origin: "uncaughtException"
+  });
+});
 
 const start = async () => {
   try {
     const app = await createApp();
     const port = Number(process.env.PORT) || 3000;
-
-    // Inicializa filas e serviços
-    await Promise.all([
-      queueService.initialize(),
-      // paymentService.initialize()
-    ]);
 
     await app.listen({ port, host: "0.0.0.0" });
     console.log(`🚀 Servidor rodando em http://localhost:${port}`);

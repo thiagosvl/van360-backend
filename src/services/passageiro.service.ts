@@ -2,12 +2,19 @@ import { passageiroRepository } from "../repositories/passageiro.repository.js";
 import { responsavelRepository } from "../repositories/responsavel.repository.js";
 import { prePassageiroRepository } from "../repositories/pre-passageiro.repository.js";
 import { AppError } from "../errors/AppError.js";
-import { CreatePassageiroDTO, ListPassageirosFiltersDTO, UpdatePassageiroDTO, CreateResponsavelAdicionalDTO, UpdateResponsavelAdicionalDTO } from "../types/dtos/passageiro.dto.js";
-import { AtividadeAcao, AtividadeEntidadeTipo, ParentescoResponsavel, TipoResponsavel } from "../types/enums.js";
+import { CreatePassageiroDTO, ListPassageirosFiltersDTO, UpdatePassageiroDTO, CreateResponsavelAdicionalDTO, UpdateResponsavelAdicionalDTO, UpdatePassageiroBatchItemDTO } from "../types/dtos/passageiro.dto.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, TipoResponsavel } from "../types/enums.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
-import { cleanString, onlyDigits } from "../utils/string.utils.js";
+import { cleanString, onlyDigits, normalizePhone } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
 import { parseLocalDate, toPersistenceString, getNowBR } from "../utils/date.utils.js";
+import { notificationService } from "./notifications/notification.service.js";
+import { EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA } from "../config/constants.js";
+import { NotificationChannelEnum } from "../types/enums.js";
+import { formatarPlacaExibicao } from "../utils/placa.utils.js";
+import { userRepository } from "../repositories/user.repository.js";
+import { calculateAuditDiff } from "../utils/audit-diff.util.js";
+import { getFirstAndSecondName, getFirstName } from "../utils/format.js";
 
 const _enrichPassageiroWithResponsavel = (p: Record<string, any>, isListMode: boolean = false) => {
     if (!p) return p;
@@ -15,7 +22,7 @@ const _enrichPassageiroWithResponsavel = (p: Record<string, any>, isListMode: bo
     const principalLink = links.find((l: any) => l.tipo === TipoResponsavel.PRINCIPAL) || links[0];
     const rawResp = principalLink?.responsavel;
     const resp = Array.isArray(rawResp) ? rawResp[0] : rawResp;
-    
+
     const enriched: Record<string, any> = {
         ...p,
         responsavel_principal: principalLink && resp ? {
@@ -32,7 +39,8 @@ const _enrichPassageiroWithResponsavel = (p: Record<string, any>, isListMode: bo
             estado: resp.estado || null,
             cep: resp.cep || null,
             referencia: resp.referencia || null,
-            complemento: resp.complemento || null
+            complemento: resp.complemento || null,
+            notificacoes_rota_habilitadas: principalLink?.notificacoes_rota_habilitadas !== false,
         } : null
     };
 
@@ -54,6 +62,7 @@ const _enrichPassageiroWithResponsavel = (p: Record<string, any>, isListMode: bo
                 email: lResp?.email || null,
                 parentesco: l.parentesco || null,
                 tipo: l.tipo,
+                notificacoes_rota_habilitadas: l.notificacoes_rota_habilitadas !== false,
                 created_at: l.created_at,
                 logradouro: lResp?.logradouro || null,
                 numero: lResp?.numero || null,
@@ -97,6 +106,7 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO> | UpdatePassa
     // Novos Campos
     if (data.modalidade !== undefined) prepared.modalidade = data.modalidade;
     if (data.turma !== undefined) prepared.turma = data.turma ? cleanString(data.turma, true) : null;
+    if (data.sala !== undefined) prepared.sala = data.sala ? cleanString(data.sala, true) : null;
     if (data.nome_professor !== undefined) prepared.nome_professor = data.nome_professor ? cleanString(data.nome_professor, true) : null;
     if (data.data_nascimento !== undefined && data.data_nascimento) {
         if (data.data_nascimento.getTime() > getNowBR().getTime()) {
@@ -108,15 +118,25 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO> | UpdatePassa
     }
     if (data.data_inicio_transporte !== undefined) prepared.data_inicio_transporte = data.data_inicio_transporte ? toPersistenceString(data.data_inicio_transporte) : null;
     if (data.data_fim_transporte !== undefined) prepared.data_fim_transporte = data.data_fim_transporte ? toPersistenceString(data.data_fim_transporte) : null;
+    if (data.horario_entrada !== undefined) prepared.horario_entrada = data.horario_entrada ? cleanString(data.horario_entrada, true) : null;
+    if (data.horario_saida !== undefined) prepared.horario_saida = data.horario_saida ? cleanString(data.horario_saida, true) : null;
     if (data.data_inicio_cobranca !== undefined) prepared.data_inicio_cobranca = data.data_inicio_cobranca ? toPersistenceString(data.data_inicio_cobranca) : null;
     if (data.data_fim_cobranca !== undefined) prepared.data_fim_cobranca = data.data_fim_cobranca ? toPersistenceString(data.data_fim_cobranca) : null;
+    if (data.ano_letivo !== undefined) {
+        prepared.ano_letivo = data.ano_letivo;
+    } else if (data.data_inicio_cobranca) {
+        prepared.ano_letivo = data.data_inicio_cobranca.getFullYear();
+    }
     if (data.enviar_notificacoes !== undefined) prepared.enviar_notificacoes = data.enviar_notificacoes;
 
     // Controle
     if (data.ativo !== undefined) prepared.ativo = data.ativo;
     if (data.isento !== undefined) prepared.isento = data.isento;
 
-    // Regra de Negócio: Se o passageiro for isento, zera/anula todos os campos de cobrança
+    if (prepared.horario_entrada && prepared.horario_saida && prepared.horario_saida <= prepared.horario_entrada) {
+        throw new AppError("Horário de saída deve ser maior que o horário de entrada", 400);
+    }
+
     if (prepared.isento === true) {
         prepared.valor_cobranca = null;
         prepared.dia_vencimento = null;
@@ -135,7 +155,7 @@ const _syncResponsavelPrincipal = async (
     const rawPhone = respData.telefone || currentResp?.telefone;
     if (!rawPhone) return null;
 
-    const targetPhone = onlyDigits(String(rawPhone));
+    const targetPhone = normalizePhone(String(rawPhone));
     if (!targetPhone) return null;
 
     const respObj = await passageiroRepository.upsertResponsavel({
@@ -154,12 +174,16 @@ const _syncResponsavelPrincipal = async (
     });
 
     const parentesco = respData.parentesco !== undefined ? respData.parentesco : (currentResp?.parentesco || null);
+    const notificacoesRota = respData.notificacoes_rota_habilitadas !== undefined
+        ? respData.notificacoes_rota_habilitadas
+        : (currentResp?.notificacoes_rota_habilitadas !== undefined ? currentResp.notificacoes_rota_habilitadas : true);
 
     await passageiroRepository.linkPassageiroResponsavel(
         passageiroId,
         respObj.id,
         TipoResponsavel.PRINCIPAL,
-        parentesco
+        parentesco,
+        notificacoesRota
     );
 
     return respObj;
@@ -167,7 +191,7 @@ const _syncResponsavelPrincipal = async (
 
 const createPassageiro = async (data: CreatePassageiroDTO, isPreCadastro: boolean = false): Promise<any> => {
     if (!data.usuario_id) throw new Error("Usuário obrigatório");
-    if (!data.nome) throw new Error("Nome do passageiro é obrigatório");
+    if (!data.nome) throw new Error("Nome do aluno é obrigatório");
 
     const passageiroData = _preparePassageiroData(data, data.usuario_id, false);
 
@@ -177,7 +201,12 @@ const createPassageiro = async (data: CreatePassageiroDTO, isPreCadastro: boolea
 
     const respPrincipalData = data.responsavel_principal;
     if (respPrincipalData) {
-        await _syncResponsavelPrincipal(inserted.id, respPrincipalData);
+        try {
+            await _syncResponsavelPrincipal(inserted.id, respPrincipalData);
+        } catch (syncErr) {
+            await passageiroRepository.delete(inserted.id);
+            throw syncErr;
+        }
     }
 
     if (!isPreCadastro) {
@@ -186,7 +215,7 @@ const createPassageiro = async (data: CreatePassageiroDTO, isPreCadastro: boolea
             entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
             entidade_id: inserted.id,
             acao: AtividadeAcao.PASSAGEIRO_CRIADO,
-            descricao: `Novo passageiro ${inserted.nome} cadastrado.`,
+            descricao: `Novo aluno ${getFirstAndSecondName(inserted.nome)} cadastrado.`,
             meta: {
                 nome: inserted.nome,
                 responsavel: respPrincipalData?.nome || null,
@@ -200,12 +229,19 @@ const createPassageiro = async (data: CreatePassageiroDTO, isPreCadastro: boolea
 };
 
 const updatePassageiro = async (id: string, data: UpdatePassageiroDTO, targetOwnerId?: string, assignedVeiculoId?: string): Promise<any> => {
-    if (!id) throw new Error("ID do passageiro é obrigatório");
+    if (!id) throw new Error("ID do aluno é obrigatório");
 
     const estadoAnterior = await getPassageiro(id, targetOwnerId, assignedVeiculoId);
-    if (!estadoAnterior) throw new AppError("Passageiro não encontrado", 404);
+    if (!estadoAnterior) throw new AppError("Aluno não encontrado", 404);
 
     const passageiroData = _preparePassageiroData(data, undefined, true);
+
+    const entradaFinal = passageiroData.horario_entrada !== undefined ? passageiroData.horario_entrada : estadoAnterior.horario_entrada;
+    const saidaFinal = passageiroData.horario_saida !== undefined ? passageiroData.horario_saida : estadoAnterior.horario_saida;
+
+    if (entradaFinal && saidaFinal && saidaFinal <= entradaFinal) {
+        throw new AppError("Horário de saída deve ser maior que o horário de entrada", 400);
+    }
 
     if (Object.keys(passageiroData).length > 0) {
         const { error } = await passageiroRepository.update(id, passageiroData);
@@ -217,11 +253,34 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO, targetOwn
     }
 
     const fullPassageiro = await passageiroRepository.getByIdCompleto(id);
-    return _enrichPassageiroWithResponsavel(fullPassageiro);
+    const enriched = _enrichPassageiroWithResponsavel(fullPassageiro);
+
+    const diff = calculateAuditDiff(estadoAnterior, passageiroData);
+
+    if (diff.hasChanges) {
+        historicoService.log({
+            usuario_id: fullPassageiro.usuario_id,
+            entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
+            entidade_id: id,
+            acao: AtividadeAcao.PASSAGEIRO_EDITADO,
+            descricao: `Cadastro do aluno ${getFirstAndSecondName(fullPassageiro.nome)} atualizado.`,
+            meta: {
+                nome: fullPassageiro.nome,
+                campos_alterados: diff.campos,
+                campos: diff.campos,
+                alteracoes: diff.alteracoes,
+                responsavel: enriched.responsavel_principal?.nome || null,
+                valor_cobranca: fullPassageiro.valor_cobranca,
+                dia_vencimento: fullPassageiro.dia_vencimento
+            }
+        });
+    }
+
+    return getPassageiro(id, targetOwnerId, assignedVeiculoId);
 };
 
 const deletePassageiro = async (id: string, targetOwnerId?: string, assignedVeiculoId?: string): Promise<void> => {
-    if (!id) throw new Error("ID do passageiro é obrigatório");
+    if (!id) throw new Error("ID do aluno é obrigatório");
 
     const passageiro = await getPassageiro(id, targetOwnerId, assignedVeiculoId);
 
@@ -234,7 +293,7 @@ const deletePassageiro = async (id: string, targetOwnerId?: string, assignedVeic
             entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
             entidade_id: id,
             acao: AtividadeAcao.PASSAGEIRO_EXCLUIDO,
-            descricao: `Passageiro ${passageiro.nome} removido permanentemente.`,
+            descricao: `Aluno ${getFirstAndSecondName(passageiro.nome)} removido permanentemente.`,
             meta: {
                 backup: passageiro
             }
@@ -246,7 +305,7 @@ const getPassageiro = async (id: string, targetOwnerId?: string, assignedVeiculo
     const { data, error } = await passageiroRepository.getById(id);
 
     if (error) throw error;
-    if (!data) throw new AppError("Passageiro não encontrado", 404);
+    if (!data) throw new AppError("Aluno não encontrado", 404);
 
     if (targetOwnerId && data.usuario_id !== targetOwnerId) {
         throw new AppError("Acesso negado", 403);
@@ -321,17 +380,24 @@ const toggleAtivo = async (passageiroId: string, novoStatus: boolean, targetOwne
     const pass = await getPassageiro(passageiroId, targetOwnerId, assignedVeiculoId);
     const { error } = await passageiroRepository.updateAtivo(passageiroId, novoStatus);
 
-    if (error) throw new Error(`Falha ao alterar status do passageiro: ${error.message}`);
+    if (error) throw new Error(`Falha ao alterar status do aluno: ${error.message}`);
 
-    // --- LOG DE AUDITORIA ---
-    if (pass) {
+    if (pass && pass.ativo !== novoStatus) {
         historicoService.log({
             usuario_id: pass.usuario_id,
             entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
             entidade_id: passageiroId,
             acao: AtividadeAcao.PASSAGEIRO_STATUS,
-            descricao: `Cadastro de ${pass.nome} foi ${novoStatus ? 'ATIVADO' : 'DESATIVADO'}.`,
-            meta: { ativo: novoStatus }
+            descricao: `Cadastro de ${getFirstAndSecondName(pass.nome)} foi ${novoStatus ? 'ATIVADO' : 'DESATIVADO'}.`,
+            meta: {
+                ativo: novoStatus,
+                alteracoes: [{
+                    campo: "ativo",
+                    de: pass.ativo,
+                    para: novoStatus
+                }],
+                campos: ["ativo"]
+            }
         });
     }
 
@@ -346,7 +412,7 @@ const countListPassageirosByUsuario = async (
 ): Promise<number> => {
     const { count, error } = await passageiroRepository.countByUsuario(usuarioId, filtros);
 
-    if (error) throw new Error(error.message || "Erro ao contar passageiros");
+    if (error) throw new Error(error.message || "Erro ao contar alunos");
     return count || 0;
 };
 
@@ -358,7 +424,8 @@ const finalizePreCadastro = async (
     // 1. Buscar Pré-Cadastro
     const { data: pre, error } = await prePassageiroRepository.getById(prePassageiroId, usuarioId);
 
-    if (error || !pre) throw new AppError("Pré-cadastro não encontrado.", 404);
+    if (error) throw error;
+    if (!pre) throw new AppError("Pré-cadastro não encontrado.", 404);
 
     const responsavelPrincipal = {
         nome: data.responsavel_principal?.nome || pre.nome_responsavel || "",
@@ -380,7 +447,7 @@ const finalizePreCadastro = async (
     const payload: CreatePassageiroDTO = {
         ...pre,
         ...data,
-        nome: data.nome || pre.nome_aluno || "Aluno",
+        nome: data.nome || pre.nome || pre.nome_aluno || "Aluno",
         usuario_id: usuarioId,
         responsavel_principal: responsavelPrincipal,
         // Garantir que valor_cobranca e dia_vencimento do pre sejam mantidos se não vierem no data
@@ -408,7 +475,7 @@ const finalizePreCadastro = async (
         entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
         entidade_id: novoPassageiro.id,
         acao: AtividadeAcao.PRE_CADASTRO_CONCLUIDO,
-        descricao: `Cadastro Pendente de (${novoPassageiro.nome}) aprovado como passageiro.`,
+        descricao: `Cadastro Pendente de (${getFirstAndSecondName(novoPassageiro.nome)}) aprovado como aluno.`,
         meta: { pre_id: prePassageiroId }
     });
 
@@ -419,7 +486,7 @@ const lookupResponsavelByCpf = async (usuarioId: string, searchVal: string): Pro
     if (!usuarioId) throw new AppError("Usuário não identificado", 401);
     if (!searchVal) throw new AppError("Termo de busca obrigatório", 400);
 
-    const termClean = onlyDigits(searchVal);
+    const termClean = normalizePhone(searchVal);
 
     const { data, error } = await passageiroRepository.lookupResponsavel(usuarioId, termClean);
 
@@ -435,7 +502,7 @@ const listarAniversariantesDoMes = async (usuarioId: string, mes: number, veicul
     if (mes < 1 || mes > 12) throw new AppError("Mês inválido", 400);
 
     const { data: todosAtivos, error } = await passageiroRepository.listAniversariantesInfo(usuarioId, veiculoId);
-    if (error) throw new AppError("Erro ao buscar passageiros para aniversários", 500);
+    if (error) throw new AppError("Erro ao buscar alunos para aniversários", 500);
 
     let passageirosSemData = 0;
     const passageirosSemDataList: any[] = [];
@@ -498,9 +565,9 @@ const listarAniversariantesDoMes = async (usuarioId: string, mes: number, veicul
 };
 
 const addResponsavelAdicional = async (passageiroId: string, data: CreateResponsavelAdicionalDTO) => {
-    return responsavelRepository.addResponsavelAdicional(passageiroId, {
+    const result = await responsavelRepository.addResponsavelAdicional(passageiroId, {
         nome: cleanString(data.nome, true),
-        telefone: onlyDigits(data.telefone),
+        telefone: normalizePhone(data.telefone),
         cpf: data.cpf ? onlyDigits(data.cpf) : null,
         email: data.email ? cleanString(data.email.trim().toLowerCase()) : null,
         parentesco: data.parentesco,
@@ -513,13 +580,33 @@ const addResponsavelAdicional = async (passageiroId: string, data: CreateRespons
         referencia: data.referencia ? cleanString(data.referencia, true) : null,
         complemento: data.complemento ? cleanString(data.complemento, true) : null,
         tornar_principal: data.tornar_principal,
+        notificacoes_rota_habilitadas: data.notificacoes_rota_habilitadas,
     });
+
+    const { data: passageiro } = await passageiroRepository.getById(passageiroId);
+    if (passageiro) {
+        historicoService.log({
+            usuario_id: passageiro.usuario_id,
+            entidade_tipo: AtividadeEntidadeTipo.RESPONSAVEL,
+            entidade_id: result.id,
+            acao: AtividadeAcao.RESPONSAVEL_CADASTRADO,
+            descricao: `Responsável ${getFirstName(data.nome)} cadastrado para o aluno ${getFirstAndSecondName(passageiro.nome)}.`,
+            meta: {
+                passageiro_id: passageiroId,
+                passageiro_nome: passageiro.nome,
+                responsavel_nome: data.nome,
+                parentesco: data.parentesco
+            }
+        });
+    }
+
+    return result;
 };
 
 const updateResponsavelAdicional = async (responsavelId: string, data: UpdateResponsavelAdicionalDTO, passageiroId?: string) => {
     const prepared: Record<string, unknown> = {};
     if (data.nome !== undefined) prepared.nome = data.nome ? cleanString(data.nome, true) : null;
-    if (data.telefone !== undefined) prepared.telefone = data.telefone ? onlyDigits(data.telefone) : null;
+    if (data.telefone !== undefined) prepared.telefone = data.telefone ? normalizePhone(data.telefone) : null;
     if (data.cpf !== undefined) prepared.cpf = data.cpf ? onlyDigits(data.cpf) : null;
     if (data.email !== undefined) prepared.email = data.email ? cleanString(data.email.trim().toLowerCase()) : null;
     if (data.parentesco !== undefined) prepared.parentesco = data.parentesco;
@@ -532,24 +619,244 @@ const updateResponsavelAdicional = async (responsavelId: string, data: UpdateRes
     if (data.referencia !== undefined) prepared.referencia = data.referencia ? cleanString(data.referencia, true) : null;
     if (data.complemento !== undefined) prepared.complemento = data.complemento ? cleanString(data.complemento, true) : null;
     if (data.tornar_principal !== undefined) prepared.tornar_principal = data.tornar_principal;
+    if (data.notificacoes_rota_habilitadas !== undefined) prepared.notificacoes_rota_habilitadas = data.notificacoes_rota_habilitadas;
 
-    return responsavelRepository.updateResponsavelAdicional(responsavelId, prepared, passageiroId);
+    const { data: respAnterior } = await responsavelRepository.getById(responsavelId);
+    const result = await responsavelRepository.updateResponsavelAdicional(responsavelId, prepared, passageiroId);
+
+    if (passageiroId) {
+        const { data: passageiro } = await passageiroRepository.getById(passageiroId);
+        const diff = calculateAuditDiff(respAnterior, prepared);
+
+        if (passageiro && diff.hasChanges) {
+            historicoService.log({
+                usuario_id: passageiro.usuario_id,
+                entidade_tipo: AtividadeEntidadeTipo.RESPONSAVEL,
+                entidade_id: responsavelId,
+                acao: AtividadeAcao.RESPONSAVEL_EDITADO,
+                descricao: `Dados do responsável do aluno ${getFirstAndSecondName(passageiro.nome)} foram atualizados.`,
+                meta: {
+                    passageiro_id: passageiroId,
+                    passageiro_nome: passageiro.nome,
+                    responsavel_id: responsavelId,
+                    campos_alterados: diff.campos,
+                    campos: diff.campos,
+                    alteracoes: diff.alteracoes
+                }
+            });
+        }
+    }
+
+    return result;
 };
 
 const deleteResponsavelAdicional = async (responsavelId: string, passageiroId?: string) => {
     await responsavelRepository.deleteResponsavelAdicional(responsavelId, passageiroId);
+
+    if (passageiroId) {
+        const { data: passageiro } = await passageiroRepository.getById(passageiroId);
+        if (passageiro) {
+            historicoService.log({
+                usuario_id: passageiro.usuario_id,
+                entidade_tipo: AtividadeEntidadeTipo.RESPONSAVEL,
+                entidade_id: responsavelId,
+                acao: AtividadeAcao.RESPONSAVEL_EXCLUIDO,
+                descricao: `Responsável removido do cadastro do aluno ${getFirstAndSecondName(passageiro.nome)}.`,
+                meta: {
+                    passageiro_id: passageiroId,
+                    passageiro_nome: passageiro.nome,
+                    responsavel_id: responsavelId
+                }
+            });
+        }
+    }
+
     return { success: true };
 };
 
 const setPrincipalResponsavel = async (passageiroId: string, responsavelId: string) => {
     await responsavelRepository.setPrincipalResponsavel(passageiroId, responsavelId);
+
+    const { data: passageiro } = await passageiroRepository.getById(passageiroId);
+    if (passageiro) {
+        historicoService.log({
+            usuario_id: passageiro.usuario_id,
+            entidade_tipo: AtividadeEntidadeTipo.RESPONSAVEL,
+            entidade_id: responsavelId,
+            acao: AtividadeAcao.RESPONSAVEL_PRINCIPAL,
+            descricao: `Responsável principal alterado para o aluno ${getFirstAndSecondName(passageiro.nome)}.`,
+            meta: {
+                passageiro_id: passageiroId,
+                passageiro_nome: passageiro.nome,
+                responsavel_id: responsavelId,
+                alteracoes: [{
+                    campo: "responsavel_principal",
+                    de: "adicional",
+                    para: "principal"
+                }],
+                campos: ["responsavel_principal"]
+            }
+        });
+    }
+
     return { success: true };
 };
 
-// Exportar objeto unificado no final
+const toggleNotificacoesRota = async (passageiroId: string, responsavelId: string, status?: boolean) => {
+    const updated = await responsavelRepository.toggleNotificacoesRota(passageiroId, responsavelId, status);
+
+    const { data: passageiro } = await passageiroRepository.getById(passageiroId);
+    if (passageiro) {
+        const novoStatus = status !== false;
+        historicoService.log({
+            usuario_id: passageiro.usuario_id,
+            entidade_tipo: AtividadeEntidadeTipo.RESPONSAVEL,
+            entidade_id: responsavelId,
+            acao: AtividadeAcao.RESPONSAVEL_NOTIFICACAO,
+            descricao: `Notificações de rota ${novoStatus ? "ativadas" : "desativadas"} para responsável do aluno ${getFirstAndSecondName(passageiro.nome)}.`,
+            meta: {
+                passageiro_id: passageiroId,
+                passageiro_nome: passageiro.nome,
+                responsavel_id: responsavelId,
+                status: novoStatus,
+                alteracoes: [{
+                    campo: "notificacoes_rota_habilitadas",
+                    de: !novoStatus,
+                    para: novoStatus
+                }],
+                campos: ["notificacoes_rota_habilitadas"]
+            }
+        });
+    }
+
+    return updated;
+};
+
+const processarLembreteAniversarioMotorista = async (params: {
+    motoristaId: string;
+    telefone?: string;
+    nomeMotorista?: string;
+    mesAtual?: number;
+    diaAtual?: number;
+}): Promise<{ sent: boolean; reason?: string }> => {
+    let { motoristaId, telefone, nomeMotorista, mesAtual, diaAtual } = params;
+
+    if (!telefone || !nomeMotorista) {
+        const { data: user } = await userRepository.getById(motoristaId);
+        if (!user) return { sent: false, reason: "Motorista não encontrado" };
+        telefone = user.telefone || "";
+        nomeMotorista = user.nome || "Motorista";
+    }
+
+    if (!telefone) return { sent: false, reason: "Telefone não cadastrado" };
+
+    const hoje = getNowBR();
+    const mes = mesAtual || (hoje.getMonth() + 1);
+    const dia = diaAtual || hoje.getDate();
+
+    const { semanas, passageirosSemData, totalPassageiros } = await listarAniversariantesDoMes(motoristaId, mes);
+
+    if (totalPassageiros === 0) {
+        return { sent: false, reason: "Sem alunos cadastrados" };
+    }
+
+    const semanaAtualNoMes = Math.ceil(dia / 7);
+    const semanaGarantida = semanaAtualNoMes > 5 ? 5 : semanaAtualNoMes;
+
+    const dadosDaSemana = semanas.find(s => s.semana === semanaGarantida);
+    const aniversariantesList = dadosDaSemana?.aniversariantes || [];
+
+    await notificationService.notifyDriver(telefone, EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA, {
+        nomeMotorista,
+        aniversariantesList: aniversariantesList.map((p: any) => ({
+            veiculo: p.veiculo?.placa ? formatarPlacaExibicao(p.veiculo.placa) : undefined,
+            escola: p.escola?.nome,
+            nome: p.nome,
+            dia: p.dia,
+            mes
+        })),
+        passageirosSemData
+    }, { channels: [NotificationChannelEnum.FIREBASE], usuarioId: motoristaId });
+
+    return { sent: true };
+};
+
+const updatePassageirosBatch = async (
+    items: UpdatePassageiroBatchItemDTO[],
+    targetOwnerId?: string,
+    assignedVeiculoId?: string
+): Promise<{ success: boolean; updatedCount: number }> => {
+    if (!targetOwnerId) {
+        throw new AppError("Usuário não autenticado", 401);
+    }
+
+    if (!items || items.length === 0) {
+        return { success: true, updatedCount: 0 };
+    }
+
+    const ids = items.map(i => i.id);
+    const { data: passageirosExistentes, error } = await passageiroRepository.findByIds(ids);
+
+    if (error) throw error;
+
+    const existentesMap = new Map((passageirosExistentes || []).map(p => [p.id, p]));
+
+    for (const item of items) {
+        const existente = existentesMap.get(item.id);
+        if (!existente || existente.usuario_id !== targetOwnerId) {
+            throw new AppError(`Acesso negado para o aluno ${item.id}`, 403);
+        }
+        if (assignedVeiculoId && existente.veiculo_id && existente.veiculo_id !== assignedVeiculoId) {
+            throw new AppError(`Acesso negado para o veículo do aluno ${item.id}`, 403);
+        }
+    }
+
+    let updatedCount = 0;
+    const CHUNK_SIZE = 10;
+    for (let i = 0; i < items.length; i += CHUNK_SIZE) {
+        const chunk = items.slice(i, i + CHUNK_SIZE);
+        await Promise.all(chunk.map(async (item) => {
+            const payload: Record<string, unknown> = {};
+
+            if (item.escola_id !== undefined) payload.escola_id = (item.escola_id === "none" || item.escola_id === "") ? null : item.escola_id;
+            if (item.veiculo_id !== undefined) payload.veiculo_id = (item.veiculo_id === "none" || item.veiculo_id === "") ? null : item.veiculo_id;
+            if (item.turma !== undefined) payload.turma = item.turma ? cleanString(item.turma, true) : null;
+            if (item.sala !== undefined) payload.sala = item.sala ? cleanString(item.sala, true) : null;
+            if (item.nome_professor !== undefined) payload.nome_professor = item.nome_professor ? cleanString(item.nome_professor, true) : null;
+            if (item.periodo !== undefined) payload.periodo = item.periodo ? cleanString(item.periodo.toLowerCase()) : null;
+            if (item.valor_cobranca !== undefined) payload.valor_cobranca = typeof item.valor_cobranca === "string" ? moneyToNumber(item.valor_cobranca) : item.valor_cobranca;
+            if (item.dia_vencimento !== undefined) payload.dia_vencimento = item.dia_vencimento;
+            if (item.ativo !== undefined) payload.ativo = item.ativo;
+
+            if (Object.keys(payload).length > 0) {
+                const { error: updateError } = await passageiroRepository.update(item.id, payload);
+                if (updateError) throw updateError;
+                updatedCount++;
+            }
+        }));
+    }
+
+    if (updatedCount > 0) {
+        historicoService.log({
+            usuario_id: targetOwnerId,
+            entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
+            entidade_id: targetOwnerId,
+            acao: AtividadeAcao.PASSAGEIRO_EDITADO,
+            descricao: `Atualização rápida realizada em ${updatedCount} aluno(s).`,
+            meta: {
+                total_atualizados: updatedCount,
+                ids: items.map(i => i.id)
+            }
+        });
+    }
+
+    return { success: true, updatedCount };
+};
+
 export const passageiroService = {
     createPassageiro,
     updatePassageiro,
+    updatePassageirosBatch,
     deletePassageiro,
     getPassageiro,
     listPassageiros,
@@ -558,8 +865,10 @@ export const passageiroService = {
     finalizePreCadastro,
     lookupResponsavelByCpf,
     listarAniversariantesDoMes,
+    processarLembreteAniversarioMotorista,
     addResponsavelAdicional,
     updateResponsavelAdicional,
     deleteResponsavelAdicional,
-    setPrincipalResponsavel
+    setPrincipalResponsavel,
+    toggleNotificacoesRota
 };

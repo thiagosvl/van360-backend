@@ -5,6 +5,7 @@ import { cleanString } from "../utils/string.utils.js";
 import { limparPlaca } from "../utils/placa.utils.js";
 import { historicoService } from "./historico.service.js";
 import { AppError } from "../errors/AppError.js";
+import { calculateAuditDiff } from "../utils/audit-diff.util.js";
 
 // Helper Methods
 const _prepareVeiculoData = (data: Partial<CreateVeiculoDTO>, usuarioId?: string, isUpdate: boolean = false): Record<string, unknown> => {
@@ -49,20 +50,29 @@ export const veiculoService = {
     async updateVeiculo(id: string, data: UpdateVeiculoDTO): Promise<Veiculo> {
         if (!id) throw new AppError("ID do veículo é obrigatório", 400);
 
+        const veiculoAnterior = await this.getVeiculo(id);
         const veiculoData = _prepareVeiculoData(data, undefined, true);
 
         const { data: updated, error } = await veiculoRepository.update(id, veiculoData);
         if (error) throw error;
 
-        // --- LOG DE AUDITORIA ---
-        historicoService.log({
-            usuario_id: updated.usuario_id,
-            entidade_tipo: AtividadeEntidadeTipo.VEICULO,
-            entidade_id: id,
-            acao: AtividadeAcao.VEICULO_EDITADO,
-            descricao: `Dados do veículo ${updated.placa} foram atualizados.`,
-            meta: { placa: updated.placa, campos: Object.keys(data) }
-        });
+        const diff = calculateAuditDiff(veiculoAnterior, veiculoData);
+
+        if (diff.hasChanges) {
+            historicoService.log({
+                usuario_id: updated.usuario_id,
+                entidade_tipo: AtividadeEntidadeTipo.VEICULO,
+                entidade_id: id,
+                acao: AtividadeAcao.VEICULO_EDITADO,
+                descricao: `Dados do veículo ${updated.placa} foram atualizados.`,
+                meta: {
+                    placa: updated.placa,
+                    campos_alterados: diff.campos,
+                    campos: diff.campos,
+                    alteracoes: diff.alteracoes
+                }
+            });
+        }
 
         return updated as Veiculo;
     },
@@ -129,7 +139,6 @@ export const veiculoService = {
             throw new Error(`Falha ao ${novoStatus ? "ativar" : "desativar"} o veículo.`);
         }
 
-        // --- LOG DE AUDITORIA ---
         const { data: v } = await veiculoRepository.getUsuarioIdAndPlaca(veiculoId);
         if (v) {
             historicoService.log({
@@ -138,7 +147,15 @@ export const veiculoService = {
                 entidade_id: veiculoId,
                 acao: AtividadeAcao.VEICULO_STATUS,
                 descricao: `Veículo ${v.placa} foi ${novoStatus ? 'ATIVADO' : 'DESATIVADO'}.`,
-                meta: { ativo: novoStatus }
+                meta: {
+                    ativo: novoStatus,
+                    alteracoes: [{
+                        campo: "ativo",
+                        de: !novoStatus,
+                        para: novoStatus
+                    }],
+                    campos: ["ativo"]
+                }
             });
         }
 

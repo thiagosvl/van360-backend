@@ -3,7 +3,7 @@ import { TipoResponsavel, RouteSentido } from "../types/enums.js";
 import { AppError } from "../errors/AppError.js";
 import { toPersistenceString, getNowBR } from "../utils/date.utils.js";
 import { usuarioPushTokenRepository } from "./usuario-push-token.repository.js";
-import { onlyDigits, getPhoneVariants } from "../utils/string.utils.js";
+import { onlyDigits, normalizePhone, getPhoneVariants, isSamePerson } from "../utils/string.utils.js";
 
 export interface ResponsavelPassageiroRecord {
   id: string; // passageiro_id
@@ -155,9 +155,9 @@ export const responsavelRepository = {
     const { data: passageiro, error: errPass } = await supabaseAdmin
       .from("passageiros")
       .select(`
-        id, usuario_id, nome, genero, data_nascimento, periodo, modalidade, turma, nome_professor,
-        data_inicio_transporte, data_fim_transporte,
-        valor_cobranca, dia_vencimento, data_inicio_cobranca, data_fim_cobranca, created_at,
+        id, usuario_id, nome, genero, data_nascimento, periodo, modalidade, turma, sala, nome_professor,
+        data_inicio_transporte, data_fim_transporte, horario_entrada, horario_saida,
+        valor_cobranca, dia_vencimento, data_inicio_cobranca, data_fim_cobranca, created_at, ano_letivo,
         observacoes,
         ativo, isento,
         escola_id, veiculo_id,
@@ -165,7 +165,7 @@ export const responsavelRepository = {
         veiculo:veiculos (id, placa, modelo),
         usuario:usuarios (id, nome, apelido, telefone),
         responsaveis_links:passageiro_responsaveis (
-          id, tipo, parentesco,
+          id, tipo, parentesco, notificacoes_rota_habilitadas,
           responsavel:responsaveis (id, nome, telefone, cpf, email, logradouro, numero, bairro, cidade, estado, cep, referencia, complemento)
         )
       `)
@@ -192,10 +192,15 @@ export const responsavelRepository = {
 
     const { data: cobrancas } = await supabaseAdmin
       .from("cobrancas")
-      .select("id, mes, ano, valor, status, data_vencimento, recibo_url, desativar_lembretes")
+      .select("id, mes, ano, ano_letivo, valor, valor_pago, status, data_vencimento, data_pagamento, tipo_pagamento, recibo_url, desativar_lembretes")
       .eq("passageiro_id", passageiroId)
       .order("ano", { ascending: false })
       .order("mes", { ascending: false });
+
+    const { data: recibosAnuais } = await supabaseAdmin
+      .from("recibos_anuais")
+      .select("id, ano, recibo_url, total_pago, quantidade_meses, created_at")
+      .eq("passageiro_id", passageiroId);
 
     const todayStr = toPersistenceString(getNowBR());
     const { data: ausencias } = await supabaseAdmin
@@ -239,6 +244,8 @@ export const responsavelRepository = {
           cpf: r?.cpf || null,
           email: r?.email || null,
           parentesco: l.parentesco || null,
+          tipo: l.tipo || TipoResponsavel.ADICIONAL,
+          notificacoes_rota_habilitadas: l.notificacoes_rota_habilitadas !== false,
           logradouro: r?.logradouro || null,
           numero: r?.numero || null,
           bairro: r?.bairro || null,
@@ -284,6 +291,8 @@ export const responsavelRepository = {
         cpf: principalResp.cpf || null,
         email: principalResp.email || null,
         parentesco: principalLink?.parentesco || null,
+        tipo: TipoResponsavel.PRINCIPAL,
+        notificacoes_rota_habilitadas: principalLink?.notificacoes_rota_habilitadas !== false,
         logradouro: principalResp.logradouro || null,
         numero: principalResp.numero || null,
         bairro: principalResp.bairro || null,
@@ -300,6 +309,7 @@ export const responsavelRepository = {
       veiculo_placa: veic?.placa || null,
       veiculo_modelo: veic?.modelo || null,
       cobrancas: cobrancas || [],
+      recibos_anuais: recibosAnuais || [],
       ausencias: ausenciasMapeadas || [],
       contrato: contrato || null,
       responsaveis: responsaveisAdicionais || [],
@@ -390,7 +400,7 @@ export const responsavelRepository = {
   },
 
   async addResponsavelAdicional(passageiroId: string, data: Record<string, any>) {
-    const phoneDigits = String(data.telefone || "").replace(/\D/g, "");
+    const phoneDigits = normalizePhone(data.telefone);
     let responsavelId: string;
 
     const { data: existing } = await supabaseAdmin
@@ -407,6 +417,27 @@ export const responsavelRepository = {
     }
 
     if (existing) {
+      if (existing.cpf && data.cpf && data.cpf !== existing.cpf) {
+        throw new AppError(
+          "Este telefone já está cadastrado com outro CPF. Verifique os dados.",
+          409
+        );
+      }
+
+      const isSame = isSamePerson(existing.nome, data.nome);
+
+      if (
+        data.nome &&
+        existing.nome &&
+        !isSame &&
+        (!data.cpf || !existing.cpf || data.cpf !== existing.cpf)
+      ) {
+        throw new AppError(
+          "Este telefone já está cadastrado para outro responsável.",
+          409
+        );
+      }
+
       responsavelId = existing.id;
       const updatePayload: Record<string, any> = { updated_at: new Date().toISOString() };
       // Só preenche se o campo estivesse nulo anteriormente para não sobrescrever dados existentes
@@ -460,7 +491,7 @@ export const responsavelRepository = {
       .maybeSingle();
 
     if (existingLink) {
-      throw new AppError("Este responsável já está vinculado a este passageiro.", 400);
+      throw new AppError("Este responsável já está vinculado a este aluno.", 400);
     }
 
     if (data.tornar_principal === true) {
@@ -488,6 +519,7 @@ export const responsavelRepository = {
         responsavel_id: responsavelId,
         tipo: tipoLink,
         parentesco: data.parentesco || null,
+        notificacoes_rota_habilitadas: data.notificacoes_rota_habilitadas !== undefined ? data.notificacoes_rota_habilitadas : true,
         updated_at: new Date().toISOString()
       })
       .select()
@@ -529,7 +561,7 @@ export const responsavelRepository = {
     }
 
     const phoneDigits = data.telefone !== undefined && data.telefone !== null
-      ? String(data.telefone).replace(/\D/g, "")
+      ? normalizePhone(data.telefone)
       : undefined;
 
     if (phoneDigits) {
@@ -540,7 +572,7 @@ export const responsavelRepository = {
         .maybeSingle();
 
       if (existingResp && existingResp.id !== responsavelId) {
-        throw new AppError("Já existe outro responsável cadastrado com este número de telefone.", 409);
+        throw new AppError("Este telefone já está cadastrado para outro responsável.", 409);
       }
     }
 
@@ -567,29 +599,56 @@ export const responsavelRepository = {
 
     if (error) throw error;
 
-    if (data.tornar_principal === true && effectivePassageiroId) {
-      await supabaseAdmin
-        .from("passageiro_responsaveis")
-        .update({ tipo: TipoResponsavel.ADICIONAL, updated_at: new Date().toISOString() })
-        .eq("passageiro_id", effectivePassageiroId);
+    if (effectivePassageiroId) {
+      const linkPayload: Record<string, any> = { updated_at: new Date().toISOString() };
+      if (data.parentesco !== undefined) linkPayload.parentesco = data.parentesco || null;
+      if (data.notificacoes_rota_habilitadas !== undefined) linkPayload.notificacoes_rota_habilitadas = data.notificacoes_rota_habilitadas;
+
+      if (data.tornar_principal === true) {
+        await supabaseAdmin
+          .from("passageiro_responsaveis")
+          .update({ tipo: TipoResponsavel.ADICIONAL, updated_at: new Date().toISOString() })
+          .eq("passageiro_id", effectivePassageiroId);
+
+        linkPayload.tipo = TipoResponsavel.PRINCIPAL;
+      }
 
       await supabaseAdmin
         .from("passageiro_responsaveis")
-        .update({
-          tipo: TipoResponsavel.PRINCIPAL,
-          ...(data.parentesco !== undefined ? { parentesco: data.parentesco || null } : {}),
-          updated_at: new Date().toISOString()
-        })
-        .eq("passageiro_id", effectivePassageiroId)
-        .eq("responsavel_id", responsavelId);
-    } else if (data.parentesco !== undefined && effectivePassageiroId) {
-      await supabaseAdmin
-        .from("passageiro_responsaveis")
-        .update({ parentesco: data.parentesco || null, updated_at: new Date().toISOString() })
+        .update(linkPayload)
         .eq("passageiro_id", effectivePassageiroId)
         .eq("responsavel_id", responsavelId);
     }
 
+    return updated;
+  },
+
+  async toggleNotificacoesRota(passageiroId: string, responsavelId: string, novoStatus?: boolean) {
+    let finalStatus = novoStatus;
+
+    if (finalStatus === undefined) {
+      const { data: currentLink } = await supabaseAdmin
+        .from("passageiro_responsaveis")
+        .select("notificacoes_rota_habilitadas")
+        .eq("passageiro_id", passageiroId)
+        .eq("responsavel_id", responsavelId)
+        .single();
+
+      finalStatus = !(currentLink?.notificacoes_rota_habilitadas ?? true);
+    }
+
+    const { data: updated, error } = await supabaseAdmin
+      .from("passageiro_responsaveis")
+      .update({
+        notificacoes_rota_habilitadas: finalStatus,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("passageiro_id", passageiroId)
+      .eq("responsavel_id", responsavelId)
+      .select()
+      .single();
+
+    if (error) throw error;
     return updated;
   },
 
@@ -635,6 +694,14 @@ export const responsavelRepository = {
 
     if (errSet) throw errSet;
     return true;
+  },
+
+  async getById(id: string) {
+    return await supabaseAdmin
+      .from("responsaveis")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
   }
 };
 

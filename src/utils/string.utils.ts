@@ -3,9 +3,40 @@ export function cleanString(str: string, capitalize = false): string {
   return str.trim().replace(/\s+/g, " ");
 }
 
+export function buildAccentInsensitiveRegex(term: string): string {
+  if (!term) return "";
+  const cleaned = term.trim().replace(/\s+/g, " ");
+  const escaped = cleaned.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const charMap: Record<string, string> = {
+    a: "[aáàâãä]",
+    e: "[eéèêë]",
+    i: "[iíìîï]",
+    o: "[oóòôõö]",
+    u: "[uúùûü]",
+    c: "[cç]",
+  };
+
+  return escaped
+    .split("")
+    .map((char) => {
+      const base = char.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      return charMap[base] || char;
+    })
+    .join("");
+}
+
 export const onlyDigits = (value: string | null | undefined): string => {
   if (!value) return "";
   return String(value).replace(/\D/g, "");
+};
+
+export const normalizePhone = (value: string | null | undefined): string => {
+  if (!value) return "";
+  let digits = String(value).replace(/\D/g, "");
+  if (digits.length > 11 && digits.startsWith("55")) {
+    digits = digits.substring(2);
+  }
+  return digits;
 };
 
 export function maskEmail(email: string): string {
@@ -80,4 +111,38 @@ export function extractErrorMessage(error: unknown, fallback = "Erro desconhecid
     }
   }
   return String(error);
+}
+
+function normalizePersonName(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+export function isSamePerson(nameA?: string | null, nameB?: string | null): boolean {
+  if (!nameA || !nameB) return false;
+  const a = normalizePersonName(nameA);
+  const b = normalizePersonName(nameB);
+  if (!a || !b) return false;
+
+  if (a === b) return true;
+
+  const stopwords = new Set(["da", "de", "do", "das", "dos", "e"]);
+  const tokensA = a.split(" ").filter((t) => !stopwords.has(t));
+  const tokensB = b.split(" ").filter((t) => !stopwords.has(t));
+
+  if (tokensA.length === 0 || tokensB.length === 0) return false;
+
+  const firstA = tokensA[0];
+  const firstB = tokensB[0];
+
+  if (firstA !== firstB) return false;
+
+  if (tokensA.length === 1 || tokensB.length === 1) return true;
+
+  const setB = new Set(tokensB.slice(1));
+  return tokensA.slice(1).some((t) => setB.has(t));
 }

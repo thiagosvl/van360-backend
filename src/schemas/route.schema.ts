@@ -51,7 +51,7 @@ export const reorderExecucaoSchema = z.object({
 });
 
 export const createAusenciaSchema = z.object({
-  passageiro_id: z.string().uuid("ID do passageiro é obrigatório"),
+  passageiro_id: z.string().uuid("ID do aluno é obrigatório"),
   rota_id: z.string().uuid("ID da rota é obrigatório"),
   data_ausencia: z.string().min(1, "Data é obrigatória"),
   sentido: z.nativeEnum(RouteSentido).optional().nullable()
@@ -65,6 +65,11 @@ export const chamadaEscolaSchema = z.object({
       status: z.nativeEnum(RouteStopStatus)
     })
   )
+});
+
+export const buscarAlunosQuerySchema = z.object({
+  search: z.string().trim().min(3, "Mínimo de 3 caracteres para busca"),
+  rota_id: z.string().uuid("ID de rota inválido").optional(),
 });
 
 export const DELETE_AUSENCIA_BY_QUERY_PARAM = "by-query";

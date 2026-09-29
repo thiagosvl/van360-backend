@@ -9,7 +9,7 @@ import { userRepository } from "../repositories/user.repository.js";
 import { authRepository } from "../repositories/auth.repository.js";
 import { authProvider } from "./providers/auth.provider.js";
 import { AppError } from "../errors/AppError.js";
-import { AtividadeAcao, AtividadeEntidadeTipo, UserType, DispositivoCadastro } from "../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, UserType, DispositivoCadastro, CanalAquisicao } from "../types/enums.js";
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
 import { getNowBR, addMinutes, isBeforeNowBR, parseLocalDate, parseBrazilianDateToISO } from "../utils/date.utils.js";
@@ -18,6 +18,11 @@ import { notificationService } from "./notifications/notification.service.js";
 import { EVENTO_AUTH_RECUPERACAO_SENHA, EVENTO_AUTH_SENHA_ALTERADA } from "../config/constants.js";
 import { loginAttemptsRepository } from "../repositories/login-attempts.repository.js";
 import { usuarioPushTokenRepository } from "../repositories/usuario-push-token.repository.js";
+import { withRetry } from "../utils/retry.utils.js";
+import { MetaCapiService } from "./meta-capi.service.js";
+import { authCacheService } from "./auth-cache.service.js";
+import { isMotoristaTitular } from "../utils/user.utils.js";
+import { resolveOrigemAtribuicao } from "../utils/acquisition-channel.utils.js";
 
 // ... (interfaces remain unchanged)
 
@@ -36,6 +41,7 @@ export interface UsuarioPayload {
   data_nascimento?: string;
   dispositivo_cadastro?: DispositivoCadastro;
   metadados_cadastro?: Record<string, unknown>;
+  canal_aquisicao?: string;
 }
 
 export interface CheckUserStatusResult {
@@ -97,13 +103,18 @@ export async function checkUserStatus(
   telefone: string
 ): Promise<CheckUserStatusResult> {
 
-  // Normalizar valores para comparação
   const cpfcnpjNormalizado = onlyDigits(cpfcnpj);
   const emailNormalizado = email.toLowerCase().trim();
   const telefoneNormalizado = onlyDigits(telefone);
 
-  // Uma única query para buscar usuário que corresponda a qualquer um dos campos
-  const { data: usuarios, error: findUserError } = await authRepository.checkUserStatus(cpfcnpjNormalizado, emailNormalizado, telefoneNormalizado);
+  const { data: usuarios, error: findUserError } = await withRetry(
+    async () => authRepository.checkUserStatus(cpfcnpjNormalizado, emailNormalizado, telefoneNormalizado),
+    {
+      maxRetries: 2,
+      initialDelayMs: 400,
+      backoffFactor: 1.5,
+    }
+  );
 
   if (findUserError) {
     logger.error({ error: findUserError.message }, "Erro DB ao verificar status.");
@@ -130,7 +141,7 @@ export async function checkUserStatus(
 }
 
 export async function criarUsuario(data: UsuarioPayload & { tipo?: UserType, id: string }) {
-  const { id, nome, razao_social, apelido, email, cpfcnpj, telefone, ativo = false, tipo, termos_aceitos, data_nascimento, dispositivo_cadastro, metadados_cadastro } = data;
+  const { id, nome, razao_social, apelido, email, cpfcnpj, telefone, ativo = false, tipo, termos_aceitos, data_nascimento, dispositivo_cadastro, metadados_cadastro, canal_aquisicao } = data;
 
   const { data: usuario, error } = await userRepository.insert({
     id,
@@ -142,6 +153,7 @@ export async function criarUsuario(data: UsuarioPayload & { tipo?: UserType, id:
     telefone: onlyDigits(telefone),
     ativo,
     tipo: tipo || UserType.MOTORISTA,
+    canal_aquisicao: canal_aquisicao || null,
     termos_aceitos_em: termos_aceitos ? getNowBR().toISOString() : null,
     termos_versao: termos_aceitos ? TERMOS_VERSAO_ATUAL : null,
     created_at: getNowBR().toISOString(),
@@ -264,7 +276,11 @@ export async function registrarUsuario(
 
     if (!usuarioId || !authUid) throw new AppError("Falha ao gerar identificador único.", 500);
 
-    const usuario = await criarUsuario({ ...payload, id: authUid });
+    const usuario = await criarUsuario({
+      ...payload,
+      id: authUid,
+      ...(resolvedIndicadorId ? { canal_aquisicao: CanalAquisicao.INDICACAO } : {}),
+    });
 
     // --- SETUP SAAS SUBSCRIPTION ---
     const { subscriptionService } = await import("./subscriptions/subscription.service.js");
@@ -293,7 +309,7 @@ export async function registrarUsuario(
         payload.telefone || "",
         EVENTO_MOTORISTA_TESTE_BOAS_VINDAS,
         {
-          nomeMotorista: payload.nome,
+          nomeMotorista: payload.apelido?.trim() || payload.nome,
           email: payload.email,
           usuarioId: usuarioId as string
         },
@@ -305,12 +321,20 @@ export async function registrarUsuario(
       ).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar notificação de boas-vindas ao motorista"));
     }
 
+    const atribuicao = resolveOrigemAtribuicao(
+      payload.metadados_cadastro,
+      payload.dispositivo_cadastro,
+      resolvedIndicadorId ? CanalAquisicao.INDICACAO : undefined
+    );
+
     // 5. Notificação para o Admin (Telegram)
     notificationService.notifyAdmin(EVENTO_ADMIN_NOVO_CADASTRO, {
-      nome: payload.nome,
+      nome: payload.apelido?.trim() ? `${payload.nome} (${payload.apelido.trim()})` : payload.nome,
       email: payload.email,
       telefone: payload.telefone,
       cpfcnpj: payload.cpfcnpj,
+      origem: atribuicao.label,
+      campanha: atribuicao.detalhe,
       dataRegistro: getNowBR().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }),
       usuarioId: usuarioId as string
     }, {
@@ -319,6 +343,13 @@ export async function registrarUsuario(
       usuarioId: usuarioId as string,
       email: payload.email
     }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao notificar admin sobre cadastro"));
+
+    void MetaCapiService.sendRegistrationLead({
+      userId: usuarioId as string,
+      email: payload.email,
+      phone: payload.telefone,
+      sourceUrl: "https://van360.com.br",
+    }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar evento CAPI à Meta"));
 
     return { success: true, session };
   } catch (err: unknown) {
@@ -353,13 +384,15 @@ export async function login(
 
     if (authError || !data.session) throw new AppError("Credenciais inválidas.", 401);
 
-    historicoService.log({
-      usuario_id: user.id,
-      entidade_tipo: AtividadeEntidadeTipo.USUARIO,
-      entidade_id: user.id,
-      acao: AtividadeAcao.LOGIN,
-      descricao: `Usuário realizou login com sucesso.`
-    });
+    if (isMotoristaTitular(user)) {
+      historicoService.log({
+        usuario_id: user.id,
+        entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+        entidade_id: user.id,
+        acao: AtividadeAcao.LOGIN,
+        descricao: `Usuário realizou login com sucesso.`
+      });
+    }
 
     // Auditoria de Sucesso
     loginAttemptsRepository.logAttempt({
@@ -413,6 +446,8 @@ export async function updatePassword(token: string, newPassword: string, oldPass
     logger.error({ error: error.message, userId: user.id }, "Erro ao atualizar senha.");
     throw new AppError("Não foi possível atualizar a senha.", 500);
   }
+
+  await authCacheService.invalidateUserAuth(user.id);
 
   const { data: profile } = await userRepository.getById(user.id);
 
@@ -532,6 +567,8 @@ export async function resetarSenhaComCodigo(recoveryId: string, novaSenha: strin
     throw new AppError("Erro ao atualizar senha.", 500);
   }
 
+  await authCacheService.invalidateUserAuth(rec.usuario_id);
+
   // Realizar login automático logo após o reset
   if (!rec.usuarios) throw new AppError("Perfil de usuário não encontrado para auto-login.", 500);
 
@@ -571,6 +608,11 @@ export async function resetarSenhaComCodigo(recoveryId: string, novaSenha: strin
 }
 
 export async function logout(token: string, usuarioId?: string): Promise<void> {
+  await authCacheService.invalidateToken(token);
+  if (usuarioId) {
+    await authCacheService.invalidateUserAuth(usuarioId);
+  }
+
   const { error } = await authProvider.signOut(token);
   if (error) logger.warn({ error: error.message }, "Erro ao realizar logout no Supabase.");
 

@@ -17,6 +17,8 @@ import { subscriptionRepository } from "../../repositories/subscription.reposito
 import { planRepository } from "../../repositories/plan.repository.js";
 import { invoiceRepository } from "../../repositories/invoice.repository.js";
 import { subscriptionReferralService } from "./subscription-referral.service.js";
+import { MetaCapiService } from "../meta-capi.service.js";
+import { AppError } from "../../errors/AppError.js";
 
 export const subscriptionService = {
 
@@ -50,7 +52,7 @@ export const subscriptionService = {
 
         if (!planoMensal || !planoAnual) {
             logger.error({ identificador: SubscriptionIdentifer.MONTHLY }, "[SubscriptionService] Plano inicial não encontrado para criar Trial.");
-            throw new Error(`Planos '${SubscriptionIdentifer.MONTHLY}' ou '${SubscriptionIdentifer.YEARLY}' não encontrados.`);
+            throw new AppError(`Planos '${SubscriptionIdentifer.MONTHLY}' ou '${SubscriptionIdentifer.YEARLY}' não encontrados.`, 404);
         }
 
         const trialEndsAtIso = getEndOfDayBR(addDays(getNowBR(), TRIAL_DURATION_DAYS)).toISOString();
@@ -151,14 +153,12 @@ export const subscriptionService = {
         logger.info({ userId }, "[SubscriptionService] Cancelando assinatura do usuário...");
 
         const sub = await this.getOrCreateSubscription(userId);
-        if (!sub) throw new Error("Assinatura não encontrada.");
+        if (!sub) throw new AppError("Assinatura não encontrada.", 404);
 
-        if (sub.status === SubscriptionStatus.CANCELED) {
-            logger.info({ subId: sub.id }, "Assinatura já estava cancelada.");
-            return true;
+        if (sub.status !== SubscriptionStatus.ACTIVE) {
+            throw new AppError("Apenas assinaturas ativas podem ser canceladas.", 400);
         }
 
-        // 1. Atualizar status da assinatura
         await this.updateStatus(sub.id, SubscriptionStatus.CANCELED, "Assinatura cancelada manualmente.");
 
         // 2. Cancelar faturas pendentes/com erro
@@ -287,5 +287,14 @@ export const subscriptionService = {
             jobId: `admin-nova-assinatura-${res.usuario_id}-${res.fatura_id}`,
             usuarioId: res.usuario_id!
         }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "[SubscriptionService] Falha ao notificar admin sobre assinatura paga"));
+
+        void MetaCapiService.sendPurchaseEvent({
+            userId: res.usuario_id!,
+            email: "",
+            phone: res.usuario_telefone,
+            value: valorNumerico,
+            planName: res.plano_nome,
+            transactionId: res.fatura_id || faturaId,
+        }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "[SubscriptionService] Falha ao enviar evento Purchase para Meta CAPI"));
     }
 };

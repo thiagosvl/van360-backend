@@ -7,6 +7,7 @@ import { gastoRepository } from "../repositories/gasto.repository.js";
 import { CobrancaStatus, GastoCategoria } from "../types/enums.js";
 import { getNowBR, toLocalDateString, getLastDayOfMonth, getSafeDueDateString } from "../utils/date.utils.js";
 import { getUsuarioData } from "./usuario.service.js";
+import { isSubConta, getDonoContaId } from "../utils/user.utils.js";
 
 interface SystemSummary {
   usuario: {
@@ -54,13 +55,13 @@ interface SystemSummary {
 }
 
 export const usuarioResumoService = {
-  getResumo: async (usuarioId: string, mes?: number, ano?: number, veiculoId?: string): Promise<SystemSummary> => {
+  getResumo: async (usuarioId: string, mes?: number, ano?: number, veiculoId?: string, canViewFinancials: boolean = true): Promise<SystemSummary> => {
     // 1. Fetch User
     const usuario = await getUsuarioData(usuarioId);
     if (!usuario) throw new Error("Usuário não encontrado");
 
-    const isSubAccount = Boolean(usuario.conta_pai_id);
-    const dataOwnerId = usuario.conta_pai_id || usuarioId;
+    const isSubAccount = isSubConta(usuario);
+    const dataOwnerId = getDonoContaId(usuario) || usuarioId;
     const targetVeiculoId = veiculoId || usuario.veiculo_id;
 
     // 2. Parallel Fetching for Counters & Status
@@ -90,6 +91,36 @@ export const usuarioResumoService = {
     const escAtivos = escolasCount.data?.filter((e: Record<string, any>) => e.ativo).length || 0;
     const escInativos = escTotal - escAtivos;
 
+    if (!canViewFinancials || isSubAccount) {
+      return {
+        usuario: {
+          ativo: (usuario as Record<string, any>).ativo,
+          flags: {
+            usar_contratos: !!usuario.config_contrato?.usar_contratos,
+          }
+        },
+        contadores: {
+          passageiros: {
+            total: passTotal,
+            ativos: passAtivos,
+            inativos: passInativos,
+            solicitacoes_pendentes: prePassageirosCount.count || 0
+          },
+          veiculos: {
+            total: veicTotal,
+            ativos: veicAtivos,
+            inativos: veicInativos
+          },
+          escolas: {
+            total: escTotal,
+            ativos: escAtivos,
+            inativos: escInativos
+          }
+        },
+        financeiro: undefined
+      };
+    }
+
     // 3. Financial Summary
     const now = getNowBR();
     const targetMes = mes ?? (now.getMonth() + 1);
@@ -108,7 +139,7 @@ export const usuarioResumoService = {
     const gastos = gastosRes.data || [];
 
     const cobrancasPagas = cobrancas.filter((c: Record<string, any>) => c.status === CobrancaStatus.PAGO);
-    const receitaRealizada = cobrancasPagas.reduce((acc: number, c: Record<string, any>) => acc + Number(c.valor || 0), 0);
+    const receitaRealizada = cobrancasPagas.reduce((acc: number, c: Record<string, any>) => acc + Number(c.valor_pago ?? c.valor ?? 0), 0);
 
     const hoje = toLocalDateString(getNowBR());
     const isPastPeriod = targetAno < now.getFullYear() || (targetAno === now.getFullYear() && targetMes < (now.getMonth() + 1));
@@ -170,7 +201,8 @@ export const usuarioResumoService = {
       });
     }
 
-    const receitaPrevista = cobrancas.reduce((acc: number, c: Record<string, any>) => acc + Number(c.valor || 0), 0) + receitaProjetada;
+    const cobrancasAtivas = cobrancas.filter((c: Record<string, any>) => c.status !== CobrancaStatus.CANCELADA);
+    const receitaPrevista = cobrancasAtivas.reduce((acc: number, c: Record<string, any>) => acc + Number(c.valor || 0), 0) + receitaProjetada;
     const taxaRecebimento = receitaPrevista > 0 ? (receitaRealizada / receitaPrevista) * 100 : 0;
 
     const totalDespesas = gastos.reduce((acc: number, g: Record<string, any>) => acc + Number(g.valor || 0), 0);
@@ -183,11 +215,27 @@ export const usuarioResumoService = {
 
     const margemOperacional = receitaRealizada > 0 ? ((receitaRealizada - totalDespesas) / receitaRealizada) * 100 : 0;
 
-    const atrasosReais = cobrancas.filter((c: Record<string, any>) => c.status === CobrancaStatus.PENDENTE && c.data_vencimento < hoje);
-    const valorAtrasosReais = atrasosReais.reduce((acc: number, c: Record<string, any>) => acc + Number(c.valor || 0), 0);
+    const cobrancasAtrasadas = cobrancas.filter((c: Record<string, any>) => {
+      if (c.status === CobrancaStatus.CANCELADA) return false;
+      if (c.data_vencimento >= hoje) return false;
+      if (c.status === CobrancaStatus.PENDENTE) return true;
+      if (c.status === CobrancaStatus.PAGO) {
+        const pago = Number(c.valor_pago ?? c.valor ?? 0);
+        const total = Number(c.valor || 0);
+        return pago < total;
+      }
+      return false;
+    });
+
+    const valorAtrasosReais = cobrancasAtrasadas.reduce((acc: number, c: Record<string, any>) => {
+      if (c.status === CobrancaStatus.PENDENTE) return acc + Number(c.valor || 0);
+      const pago = Number(c.valor_pago ?? c.valor ?? 0);
+      const total = Number(c.valor || 0);
+      return acc + (total - pago);
+    }, 0);
 
     const valorAtrasos = valorAtrasosReais + atrasosProjetadosValor;
-    const countAtrasos = atrasosReais.length + atrasosProjetadosCount;
+    const countAtrasos = cobrancasAtrasadas.length + atrasosProjetadosCount;
 
     const passageirosPagos = new Set(cobrancasPagas.map((c: Record<string, any>) => c.passageiro_id)).size;
     const ticketMedio = passageirosPagos > 0 ? receitaRealizada / passageirosPagos : 0;
@@ -196,7 +244,7 @@ export const usuarioResumoService = {
       receita: {
         realizada: receitaRealizada,
         prevista: receitaPrevista,
-        pendente: receitaPrevista - receitaRealizada,
+        pendente: Math.max(0, receitaPrevista - receitaRealizada),
         taxa_recebimento: Math.round(taxaRecebimento)
       },
       saidas: {

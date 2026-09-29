@@ -1,31 +1,22 @@
-import { formatToBrazilianDate, getMonthNameBR } from "../../../utils/date.utils.js";
+import { formatToBrazilianDate, getMonthNameBR, getMonthShortBR } from "../../../utils/date.utils.js";
 import { formatCurrency, maskCpf, maskCnpj, maskPhone, formatCpfCnpj, getFirstName, getFirstAndSecondName } from "../../../utils/format.js";
-import { TipoChavePix } from "../../../types/enums.js";
+import { TipoChavePix, PassageiroGenero } from "../../../types/enums.js";
 
-/**
- * NotificationContextFormatter (SSOT - Formatação Unificada para Notificações)
- * Centraliza a sanitização e formatação de nomes, valores monetários, datas e chaves Pix.
- */
 export class NotificationContextFormatter {
-    /**
-     * Extrai apenas o primeiro nome da pessoa para uma comunicação amigável
-     */
     static getFirstName(fullName?: string, fallback = "Usuário"): string {
+        if (fullName && /^TESTE\s+/i.test(fullName.trim())) {
+            const parts = fullName.trim().split(/\s+/);
+            return parts.slice(0, 2).join(" ");
+        }
         const formatted = getFirstName(fullName);
         return formatted || fallback;
     }
 
-    /**
-     * Extrai o nome e o primeiro sobrenome (2 primeiros nomes) reutilizando o utilitário central getFirstAndSecondName
-     */
-    static getFirstAndLastName(fullName?: string, fallback = "Passageiro"): string {
+    static getFirstAndLastName(fullName?: string, fallback = "Aluno"): string {
         const formatted = getFirstAndSecondName(fullName);
         return formatted || fallback;
     }
 
-    /**
-     * Formata um valor monetário numérico para a representação em BRL R$ X,XX (ex: "R$ 250,00")
-     */
     static formatValue(value?: number | string): string {
         if (typeof value === "number") {
             return formatCurrency(value);
@@ -33,26 +24,16 @@ export class NotificationContextFormatter {
         return value || "0,00";
     }
 
-    /**
-     * Formata um valor monetário sem o prefixo 'R$' (ex: "250,00"),
-     * ideal para templates do WhatsApp (WABA) que já possuem 'R$' impresso no texto estático da Meta.
-     */
     static formatRawValue(value?: number | string): string {
         const formatted = this.formatValue(value);
         return formatted.replace(/^R\$\s*/i, "").replace(/^R\$\xa0/i, "").trim();
     }
 
-    /**
-     * Formata uma string de data para o padrão brasileiro DD/MM/AAAA
-     */
     static formatDate(dateStr?: string): string {
         if (!dateStr) return "";
         return formatToBrazilianDate(dateStr);
     }
 
-    /**
-     * Retorna o nome do mês por extenso em Português
-     */
     static getMonthLabel(month?: number | string): string {
         if (typeof month === "number") {
             return getMonthNameBR(month);
@@ -61,6 +42,18 @@ export class NotificationContextFormatter {
             return getMonthNameBR(Number(month));
         }
         return month || "Mensalidade";
+    }
+
+    static formatMonthYearShort(month?: number | string, year?: number | string): string {
+        const m = typeof month === "string" ? Number(month) : month;
+        const monthStr = getMonthShortBR(m);
+        if (!monthStr) return "";
+
+        if (!year) return monthStr;
+
+        const y = String(year).trim();
+        const shortYear = y.length >= 2 ? y.slice(-2) : y;
+        return `${monthStr}/${shortYear}`;
     }
 
     /**
@@ -104,5 +97,44 @@ export class NotificationContextFormatter {
         }
 
         return { key: formattedKey, typeLabel: label };
+    }
+
+    static getStudentTitle(genero?: PassageiroGenero | string | null): string {
+        return genero === PassageiroGenero.FEMININO ? "A aluna" : "O aluno";
+    }
+
+    static getStudentNoun(genero?: PassageiroGenero | string | null): string {
+        return genero === PassageiroGenero.FEMININO ? "aluna" : "aluno";
+    }
+
+    static getStudentArticle(genero?: PassageiroGenero | string | null, uppercase: boolean = false): string {
+        const isFeminino = genero === PassageiroGenero.FEMININO;
+        if (uppercase) {
+            return isFeminino ? "A" : "O";
+        }
+        return isFeminino ? "a" : "o";
+    }
+
+    static getStudentPreposition(genero?: PassageiroGenero | string | null): string {
+        if (genero === PassageiroGenero.FEMININO) return "da";
+        if (genero === PassageiroGenero.MASCULINO) return "do";
+        return "do(a)";
+    }
+
+    static formatTime(timeOrDate?: string | Date | null): string {
+        if (!timeOrDate) {
+            return new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+        }
+        if (timeOrDate instanceof Date) {
+            return timeOrDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+        }
+        if (typeof timeOrDate === "string") {
+            if (/^\d{2}:\d{2}$/.test(timeOrDate)) return timeOrDate;
+            const parsed = new Date(timeOrDate);
+            if (!isNaN(parsed.getTime())) {
+                return parsed.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+            }
+        }
+        return new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
     }
 }

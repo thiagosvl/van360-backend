@@ -17,11 +17,15 @@ const cobrancaRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     // Contexto de Passageiro
     app.get("/passageiro/:passageiroId", cobrancaController.listByPassageiro);
     app.get("/passageiro/:passageiroId/count", cobrancaController.countByPassageiro);
+    app.get("/passageiro/:passageiroId/recibo-anual", cobrancaController.obterReciboAnual);
 
     // Notificações e Baixa Manual
     app.patch("/:id/toggle-notificacoes", cobrancaController.toggleNotificacoes);
     app.post("/:id/desfazer-pagamento-manual", cobrancaController.desfazerPagamentoManual);
     app.post("/:id/registrar-pagamento-manual", cobrancaController.registrarPagamentoManual);
+    app.post("/:id/complementar-pagamento-manual", cobrancaController.complementarPagamentoManual);
+    app.post("/:id/restaurar", cobrancaController.restaurar);
+    app.post("/:id/gerar-recibo", cobrancaController.gerarRecibo);
 };
 
 export default cobrancaRoute;

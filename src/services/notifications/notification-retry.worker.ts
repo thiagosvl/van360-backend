@@ -2,6 +2,7 @@ import { logger } from "../../config/logger.js";
 import { notificationQueueRepository, NotificationQueueItemPayload } from "../../repositories/notification-queue.repository.js";
 import { notificationService } from "./notification.service.js";
 import { NotificationQueueService, notificationQueueService } from "./notification-queue.service.js";
+import { extractErrorMessage } from "../../utils/error.utils.js";
 
 export class NotificationRetryWorker {
 
@@ -53,12 +54,12 @@ export class NotificationRetryWorker {
                         await this.handleFailedAttempt(item, currentAttempts, maxAttempts, errorMsg);
                     }
                 } catch (error: unknown) {
-                    const errorMsg = error instanceof Error ? error.message : String(error);
+                    const errorMsg = extractErrorMessage(error);
                     await this.handleFailedAttempt(item, currentAttempts, maxAttempts, errorMsg);
                 }
             }
         } catch (error: unknown) {
-            const msg = error instanceof Error ? error.message : String(error);
+            const msg = extractErrorMessage(error);
             logger.error({ error: msg }, "[NotificationRetryWorker] Falha durante o ciclo de retentativas.");
         }
 

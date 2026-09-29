@@ -3,12 +3,14 @@ import { subscriptionService } from "../services/subscriptions/subscription.serv
 import { logger } from "../config/logger.js";
 
 import { UserType } from "../types/enums.js";
+import { isSubConta } from "../utils/user.utils.js";
 
 const EXEMPTED_ROUTES = [
+  "/api/auth",
   "/api/admin",
   "/api/subscriptions",
   "/api/payments",
-  "/api/usuarios" // Permite atualizar dados do próprio perfil (canal aquisição, pix, etc)
+  "/api/usuarios"
 ];
 
 /**
@@ -37,7 +39,7 @@ export async function checkSubscriptionAccess(
   if (!userId) return;
 
   const targetUserId = (request as any).data_owner_id || userId;
-  const isSubAccount = Boolean((request as any).profile?.conta_pai_id);
+  const isSubAccount = isSubConta(request.profile);
 
   try {
     const isBlocked = await subscriptionService.isBlocked(targetUserId);
@@ -52,7 +54,7 @@ export async function checkSubscriptionAccess(
         code: "SAAS_EXPIRED",
         message: isSubAccount
           ? "O acesso à sua frota está temporariamente suspenso. Por favor, entre em contato com o seu gestor."
-          : "Sua conta está em modo leitura. Regularize seu pagamento para continuar criando cobranças e gerenciando passageiros."
+          : "Sua conta está em modo leitura. Regularize seu pagamento para continuar criando cobranças e gerenciando alunos."
       });
     }
   } catch (err) {

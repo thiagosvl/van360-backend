@@ -31,6 +31,8 @@ export interface DadosContrato {
   ano: number;
   dataInicio: string; // YYYY-MM-DD
   dataFim: string; // YYYY-MM-DD
+  horarioEntrada?: string | null;
+  horarioSaida?: string | null;
   dataInicioCobranca?: string; // YYYY-MM-DD
   dataFimCobranca?: string; // YYYY-MM-DD
   valorTotal: number;
@@ -38,18 +40,18 @@ export interface DadosContrato {
   valorParcela: number;
 
   // Multas
-  multaAtraso: {
+  multaAtraso?: {
     valor: number;
     tipo: ContractMultaTipo;
-  };
-  jurosAtraso: {
+  } | null;
+  jurosAtraso?: {
     valor: number;
     tipo: ContractMultaTipo;
-  };
-  multaRescisao: {
+  } | null;
+  multaRescisao?: {
     valor: number;
     tipo: ContractMultaTipo;
-  };
+  } | null;
   
   // Dados do condutor
   nomeCondutor: string;
@@ -65,6 +67,7 @@ export interface DadosContrato {
   clausulas?: string[];
   secoes?: ContractSectionDto[];
   assinaturaCondutorUrl?: string;
+  logoCondutorUrl?: string | null;
 }
 
 export interface ContractSectionDto {

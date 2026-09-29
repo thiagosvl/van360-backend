@@ -7,6 +7,7 @@ import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 
 import { getConfigNumber } from "./configuracao.service.js";
 import { ConfigKey } from "../types/enums.js";
+import { calculateAuditDiff } from "../utils/audit-diff.util.js";
 
 export async function obterConfiguracoesUsuario(usuarioId: string): Promise<ConfiguracoesUsuarioDTO> {
   const { data: usuario, error: userError } = await userRepository.getById(usuarioId);
@@ -21,6 +22,7 @@ export async function obterConfiguracoesUsuario(usuarioId: string): Promise<Conf
   return {
     notificar_pais_cobrancas: config?.notificar_pais_cobrancas ?? true,
     cobranca_aviso_previo_ativo: config?.cobranca_aviso_previo_ativo ?? true,
+    cobranca_aviso_previo_whatsapp_ativo: config?.cobranca_aviso_previo_whatsapp_ativo ?? false,
     cobranca_dias_aviso_previo: config?.cobranca_dias_aviso_previo ?? null,
     cobranca_vencimento_hoje_ativo: config?.cobranca_vencimento_hoje_ativo ?? true,
     cobranca_atraso_3_dias_ativo: config?.cobranca_atraso_3_dias_ativo ?? true,
@@ -29,9 +31,9 @@ export async function obterConfiguracoesUsuario(usuarioId: string): Promise<Conf
     dias_aviso_vencimento_padrao_sistema: diasPadrao,
     notificar_motorista_parcelas: config?.notificar_motorista_parcelas ?? true,
     notificar_motorista_aniversarios: config?.notificar_motorista_aniversarios ?? true,
-    notificar_inicio_rota: config?.notificar_inicio_rota ?? true,
-    notificar_proxima_parada: config?.notificar_proxima_parada ?? true,
-    notificar_conclusao_parada: config?.notificar_conclusao_parada ?? true,
+    notificar_inicio_rota: config?.notificar_inicio_rota ?? false,
+    notificar_proxima_parada: config?.notificar_proxima_parada ?? false,
+    notificar_conclusao_parada: config?.notificar_conclusao_parada ?? false,
     rastreamento_ativo: config?.rastreamento_ativo ?? true,
     rastreamento_modo: config?.rastreamento_modo ?? "completo",
     chave_pix: usuario.chave_pix ?? null,
@@ -44,16 +46,29 @@ export async function atualizarConfiguracoesUsuario(
   payload: UpdateConfiguracoesDTO
 ): Promise<ConfiguracoesUsuarioDTO> {
   try {
+    const configAnterior = await usuarioConfiguracoesRepository.getByUsuarioId(usuarioId);
     await usuarioConfiguracoesRepository.update(usuarioId, payload);
 
-    historicoService.log({
-      usuario_id: usuarioId,
-      entidade_tipo: AtividadeEntidadeTipo.USUARIO,
-      entidade_id: usuarioId,
-      acao: AtividadeAcao.CONFIGURACES_EDITADAS,
-      descricao: "Preferências de notificação do motorista alteradas.",
-      meta: payload,
-    });
+    const diff = calculateAuditDiff(
+      configAnterior as Record<string, unknown> | null,
+      payload as Record<string, unknown>
+    );
+
+    if (diff.hasChanges) {
+      historicoService.log({
+        usuario_id: usuarioId,
+        entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+        entidade_id: usuarioId,
+        acao: AtividadeAcao.CONFIGURACES_EDITADAS,
+        descricao: "Preferências de notificação do motorista alteradas.",
+        meta: {
+          campos_alterados: diff.campos,
+          campos: diff.campos,
+          alteracoes: diff.alteracoes,
+          ...payload,
+        },
+      });
+    }
 
     return await obterConfiguracoesUsuario(usuarioId);
   } catch (err: unknown) {

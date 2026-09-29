@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "../../config/supabase.js";
 import { usuarioPushTokenRepository } from "../../repositories/usuario-push-token.repository.js";
+import { usuarioConfiguracoesRepository } from "../../repositories/usuario-configuracoes.repository.js";
 import { motoristaEquipeRepository } from "../../repositories/motorista-equipe.repository.js";
 import { NotificationChannelEnum } from '../../types/enums.js';
 import { logger } from "../../config/logger.js";
@@ -14,30 +15,67 @@ import {
   AtividadeEntidadeTipo,
   CanalAquisicao,
   DispositivoCadastro,
+  AtribuicaoCategoria,
   EvolutionConnectionStatus,
-  ContratoStatus,
   DriverContractConfigStatus,
+  CobrancaStatus,
+  TipoResponsavel,
+  NotificationQueueStatus,
   IndicacaoStatus,
 } from "../../types/enums.js";
+import {
+  EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
+  EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
+  EVENTO_PASSAGEIRO_ATRASADO,
+  CUSTO_ESTIMADO_WABA_UNITARIO,
+} from "../../config/constants.js";
 import { historicoService } from "../historico.service.js";
-import { getNowBR, parseBrazilianDateToISO } from "../../utils/date.utils.js";
-import { onlyDigits, cleanString } from "../../utils/string.utils.js";
-import type { UpdateUserAdminDTO, UpdateSubscriptionAdminDTO, ListUsersQuery, CreateUserAdminDTO } from "../../schemas/admin.schema.js";
+import { getNowBR, parseLocalDate, parseBrazilianDateToISO, toPersistenceString, addDays, diffInDays } from "../../utils/date.utils.js";
+import type { VencimentoDiaItemDTO, VencimentosPassageirosResponseDTO } from "../../types/dtos/admin-vencimento.dto.js";
+import type {
+  VencimentoDetalhesResponseDTO,
+  CarteiraDiaResumoDTO,
+  DisparosHojeResumoDTO,
+} from "../../types/dtos/admin-vencimento-detalhes.dto.js";
+import { onlyDigits, cleanString, buildAccentInsensitiveRegex } from "../../utils/string.utils.js";
 import { subscriptionService } from "../subscriptions/subscription.service.js";
-import { notificationService } from "../notifications/notification.service.js";
-import { EVENTO_MOTORISTA_CADASTRO_ADMIN, EVENTO_MOTORISTA_RESET_SENHA_ADMIN } from "../../config/constants.js";
+import type {
+  UpdateUserAdminDTO,
+  UpdateSubscriptionAdminDTO,
+  ListUsersQuery,
+  CreateUserAdminDTO,
+  ListUsersLatestActivityQuery,
+  MotoristaLatestActivityDTO,
+  MotoristasLatestActivityResponseDTO,
+  MotoristasRadarStatsDTO,
+  GetMotoristasRadarStatsQuery,
+  ListAcquisitionStatsQuery,
+  ListUsersDailyPulseQuery,
+  GetUsersDailyPulseStatsQuery,
+  MotoristaDailyPulseDTO,
+  MotoristasDailyPulseResponseDTO,
+  MotoristasDailyPulseStatsDTO,
+  ListReferralsAdminQuery,
+  ReferralsListResponseDTO,
+  ReferralListItemDTO,
+} from "../../schemas/admin.schema.js";
+import type { AdminAcquisitionStatsDTO, CanalAquisicaoAgrupadoDTO, CampanhaAquisicaoDTO, DispositivoAquisicaoDTO } from "../../types/dtos/admin-acquisition.dto.js";
+import { resolveLeadAttribution } from "../../utils/acquisition-channel.utils.js";
+
+
 import { adminPassageiroService } from "./admin-passageiro.service.js";
 import { adminVeiculoService } from "./admin-veiculo.service.js";
 import { adminEscolaService } from "./admin-escola.service.js";
 import { subscriptionReferralService } from "../subscriptions/subscription-referral.service.js";
-
-function maskCpfCnpjHidden(cpfcnpj: string): string {
-  const cleaned = cpfcnpj.replace(/\D/g, "");
-  if (cleaned.length <= 11) {
-    return `${cleaned.slice(0, 3)}.${cleaned.slice(3, 4)}**.***-${cleaned.slice(9, 11)}`;
-  }
-  return `${cleaned.slice(0, 2)}.${cleaned.slice(2, 3)}**.***/****-${cleaned.slice(12, 14)}`;
-}
+import {
+  referralRepository,
+  type ReferralWithIndicadorRow,
+  type ReferredUserRow,
+} from "../../repositories/referral.repository.js";
+import { AppError } from "../../errors/AppError.js";
+import { NotificationUrlBuilder } from "../notifications/utils/notification-url.builder.js";
+import type { ImpersonateUserResponseDto } from "../../types/dtos/admin-impersonate.dto.js";
+import type { DispositivosUsuarioResumoDTO, UltimoAcessoResumoDTO } from "../../types/dtos/admin-user-details.dto.js";
 
 function generateTempPassword(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
@@ -67,39 +105,9 @@ export function resolveDriverContractConfigStatus(
 
 export const adminUserService = {
   async getDashboardStats() {
-    const [
-      motoristasRes,
-      passageirosRes,
-      assinaturasRes,
-      receitaRes,
-      recentUsersRes,
-      canaisRes,
-      contratosRes,
-      motoristasConfigsRes,
-      indicacoesRes,
-    ] = await adminUserRepository.getDashboardStats();
-
-    const totalMotoristas = motoristasRes.count ?? 0;
-    const totalPassageiros = passageirosRes.count ?? 0;
-
-    const statusCounts: Record<string, number> = {};
-    let vitalicios = 0;
-    if (assinaturasRes.data) {
-      for (const sub of assinaturasRes.data) {
-        if (sub.status === SubscriptionStatus.ACTIVE && !sub.data_vencimento) {
-          vitalicios++;
-        } else {
-          statusCounts[sub.status] = (statusCounts[sub.status] || 0) + 1;
-        }
-      }
-    }
-
-    let receitaTotal = 0;
-    if (receitaRes.data) {
-      for (const f of receitaRes.data) {
-        receitaTotal += Number(f.valor) || 0;
-      }
-    }
+    const kpisRpcRes = await adminUserRepository.getDashboardStats();
+    if (kpisRpcRes.error) throw kpisRpcRes.error;
+    const kpis = (kpisRpcRes.data as any) || {};
 
     const canaisAquisicao: Record<string, number> = {
       [CanalAquisicao.PLAY_STORE]: 0,
@@ -113,6 +121,7 @@ export const adminUserService = {
       [CanalAquisicao.GOOGLE]: 0,
       [CanalAquisicao.OUTROS]: 0,
       NAO_INFORMADO: 0,
+      ...(kpis.canaisAquisicao || {}),
     };
 
     const dispositivosCadastro: Record<string, number> = {
@@ -122,108 +131,7 @@ export const adminUserService = {
       [DispositivoCadastro.WEB_MOBILE_IOS]: 0,
       [DispositivoCadastro.WEB_DESKTOP]: 0,
       NAO_INFORMADO: 0,
-    };
-
-    if (canaisRes.data) {
-      for (const row of canaisRes.data) {
-        const canal = row.canal_aquisicao;
-        if (canal && canaisAquisicao[canal] !== undefined) {
-          canaisAquisicao[canal]++;
-        } else {
-          canaisAquisicao.NAO_INFORMADO++;
-        }
-
-        const disp = (row as any).dispositivo_cadastro;
-        if (disp && dispositivosCadastro[disp] !== undefined) {
-          dispositivosCadastro[disp]++;
-        } else {
-          dispositivosCadastro.NAO_INFORMADO++;
-        }
-      }
-    }
-
-    // PROCESSAMENTO DE STATS DE CONTRATOS DIGITAIS
-    let totalContratos = 0;
-    let contratosAssinados = 0;
-    let contratosPendentes = 0;
-    let contratosSubstituidos = 0;
-    let valorTotalContratos = 0;
-
-    if (contratosRes?.data) {
-      totalContratos = contratosRes.data.length;
-      for (const c of contratosRes.data) {
-        if (c.status === ContratoStatus.ASSINADO) {
-          contratosAssinados++;
-          valorTotalContratos += Number(c.valor_total) || 0;
-        } else if (c.status === ContratoStatus.PENDENTE) {
-          contratosPendentes++;
-        } else if (c.status === ContratoStatus.SUBSTITUIDO) {
-          contratosSubstituidos++;
-        }
-      }
-    }
-
-    const motoristasConfigContrato = {
-      ativo: 0,
-      inativo: 0,
-      nao_configurado: 0,
-    };
-
-    if (motoristasConfigsRes?.data) {
-      for (const m of motoristasConfigsRes.data) {
-        const statusConfig = resolveDriverContractConfigStatus(m.assinatura_digital_url, m.config_contrato);
-
-        if (statusConfig === DriverContractConfigStatus.NAO_CONFIGURADO) {
-          motoristasConfigContrato.nao_configurado++;
-        } else if (statusConfig === DriverContractConfigStatus.ATIVO) {
-          motoristasConfigContrato.ativo++;
-        } else {
-          motoristasConfigContrato.inativo++;
-        }
-      }
-    }
-
-    let totalIndicacoes = 0;
-    let indicacoesConcluidas = 0;
-    let indicacoesPendentes = 0;
-
-    if (indicacoesRes?.data) {
-      totalIndicacoes = indicacoesRes.data.length;
-      for (const ind of indicacoesRes.data) {
-        if (ind.status === IndicacaoStatus.COMPLETED) {
-          indicacoesConcluidas++;
-        } else if (ind.status === IndicacaoStatus.PENDING) {
-          indicacoesPendentes++;
-        }
-      }
-    }
-
-    const taxaConversaoIndicacao = totalIndicacoes > 0 ? Math.round((indicacoesConcluidas / totalIndicacoes) * 100) : 0;
-    const diasBonusConcedidos = indicacoesConcluidas * 30;
-    const motoristasIndicadosCount = canaisAquisicao[CanalAquisicao.INDICACAO] || totalIndicacoes;
-
-    const indicacoesStats = {
-      total: totalIndicacoes,
-      concluidas: indicacoesConcluidas,
-      pendentes: indicacoesPendentes,
-      taxaConversao: taxaConversaoIndicacao,
-      diasBonusConcedidos,
-      motoristasIndicados: motoristasIndicadosCount,
-    };
-
-    const motoristasConfiguradosCount = motoristasConfigContrato.ativo + motoristasConfigContrato.inativo;
-
-    const contratosStats = {
-      totalContratos,
-      contratosAssinados,
-      contratosPendentes,
-      contratosSubstituidos,
-      valorTotalContratos,
-      motoristasConfigurados: motoristasConfiguradosCount,
-      motoristasAtivos: motoristasConfigContrato.ativo,
-      motoristasPausados: motoristasConfigContrato.inativo,
-      motoristasNaoConfigurados: motoristasConfigContrato.nao_configurado,
-      motoristasConfig: motoristasConfigContrato,
+      ...(kpis.dispositivosCadastro || {}),
     };
 
     let evolutionStatus: string = EvolutionConnectionStatus.UNKNOWN;
@@ -237,20 +145,38 @@ export const adminUserService = {
     }
 
     return {
-      totalMotoristas,
-      totalPassageiros,
-      receitaTotal,
-      assinaturas: {
-        trial: statusCounts[SubscriptionStatus.TRIAL] || 0,
-        active: statusCounts[SubscriptionStatus.ACTIVE] || 0,
-        vitalicio: vitalicios,
-        past_due: statusCounts[SubscriptionStatus.PAST_DUE] || 0,
-        expired: statusCounts[SubscriptionStatus.EXPIRED] || 0,
-        canceled: statusCounts[SubscriptionStatus.CANCELED] || 0,
+      totalMotoristas: kpis.totalMotoristas || 0,
+      totalPassageiros: kpis.totalPassageiros || 0,
+      receitaTotal: Number(kpis.receitaTotal) || 0,
+      assinaturas: kpis.assinaturas || {
+        trial: 0,
+        active: 0,
+        vitalicio: 0,
+        past_due: 0,
+        expired: 0,
+        canceled: 0,
       },
-      contratosStats,
-      indicacoesStats,
-      recentUsers: recentUsersRes.data || [],
+      contratosStats: kpis.contratosStats || {
+        totalContratos: 0,
+        contratosAssinados: 0,
+        contratosPendentes: 0,
+        contratosSubstituidos: 0,
+        valorTotalContratos: 0,
+        motoristasConfigurados: 0,
+        motoristasAtivos: 0,
+        motoristasPausados: 0,
+        motoristasNaoConfigurados: 0,
+        motoristasConfig: { ativo: 0, inativo: 0, nao_configurado: 0 },
+      },
+      indicacoesStats: kpis.indicacoesStats || {
+        total: 0,
+        concluidas: 0,
+        pendentes: 0,
+        taxaConversao: 0,
+        diasBonusConcedidos: 0,
+        motoristasIndicados: 0,
+      },
+      recentUsers: [],
       canaisAquisicao,
       dispositivosCadastro,
       evolutionStatus,
@@ -262,37 +188,40 @@ export const adminUserService = {
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
-    let digits: string | undefined = undefined;
     let searchClean: string | undefined = undefined;
+    let regexPattern: string | undefined = undefined;
     let isId = false;
 
     if (search) {
-      searchClean = search.trim();
-      digits = onlyDigits(searchClean);
+      searchClean = cleanString(search);
 
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (uuidRegex.test(searchClean)) {
         isId = true;
+      } else {
+        regexPattern = buildAccentInsensitiveRegex(searchClean);
       }
     }
 
-    const { data, error, count } = await adminUserRepository.listUsers({ from, to, searchClean, digits, isId });
+    const { data, error, count } = await adminUserRepository.listUsers({
+      from,
+      to,
+      searchClean,
+      regexPattern,
+      isId,
+      status: status?.trim() || undefined,
+      tipo: query.tipo?.trim() || undefined,
+      dataInicio: query.data_inicio?.trim() || undefined,
+      dataFim: query.data_fim?.trim() || undefined,
+    });
+
     if (error) {
       logger.error({ error }, "[AdminUserService] Erro ao listar usuários.");
       throw error;
     }
 
-    let filtered = data || [];
-
-    if (status) {
-      filtered = filtered.filter((u: { assinaturas?: Array<{ status: string }> | { status: string } }) => {
-        const sub = Array.isArray(u.assinaturas) ? u.assinaturas[0] : u.assinaturas;
-        return sub?.status === status;
-      });
-    }
-
     return {
-      data: filtered,
+      data: data || [],
       total: count ?? 0,
       page,
       limit,
@@ -301,18 +230,160 @@ export const adminUserService = {
 
   async getUserDetails(userId: string) {
     const [
-      [userReq, assinaturaReq, faturasReq, planosReq, veiculosReq, escolasReq, passageirosReq, prePassageirosReq, contratosReq],
-      passageirosList,
-      prePassageirosList,
-      veiculosList,
-      escolasList,
-      referralSummary,
+      [
+        userReq,
+        assinaturaReq,
+        faturasReq,
+        kpisRpcRes,
+        pushTokensReq,
+        configReq,
+        acessosReq,
+      ],
+      referralWithIndicadorRes,
     ] = await Promise.all([
       adminUserRepository.getUserDetails(userId),
-      adminPassageiroService.getPassageirosByUserId(userId),
-      adminPassageiroService.getPrePassageirosByUserId(userId),
-      adminVeiculoService.getVeiculosByUserId(userId),
-      adminEscolaService.getEscolasByUserId(userId),
+      referralRepository.getReferralWithIndicador(userId).catch(() => ({ data: null })),
+    ]);
+
+    if (userReq.error || !userReq.data) throw new Error("Usuário não encontrado.");
+
+    const userData = userReq.data;
+    const statusConfiguracaoContrato = resolveDriverContractConfigStatus(
+      userData.assinatura_digital_url,
+      userData.config_contrato
+    );
+
+    const kpisData = (kpisRpcRes?.data as any) || {};
+
+    const tokensList = pushTokensReq?.data || [];
+    const dispositivos: DispositivosUsuarioResumoDTO = {
+      total: tokensList.length,
+      itens: tokensList.map((t: any) => ({
+        id: t.id,
+        plataforma: t.platform,
+        criado_em: t.created_at,
+        atualizado_em: t.updated_at,
+      })),
+    };
+
+    const acessosList = (acessosReq?.data as Array<{ acao: string; meta: Record<string, unknown> | null; created_at: string }>) || [];
+    let ultimoAcessoGeral: UltimoAcessoResumoDTO | null = null;
+
+    if (acessosList.length > 0) {
+      const mapaPorDispositivo = new Map<DispositivoCadastro, string>();
+      const validDispositivos = Object.values(DispositivoCadastro);
+
+      for (const item of acessosList) {
+        const meta = item.meta || {};
+        let disp: DispositivoCadastro = DispositivoCadastro.WEB_DESKTOP;
+
+        if (typeof meta.dispositivo === "string" && validDispositivos.includes(meta.dispositivo as DispositivoCadastro)) {
+          disp = meta.dispositivo as DispositivoCadastro;
+        } else if (typeof meta.plataforma === "string") {
+          if (meta.plataforma === "android") disp = DispositivoCadastro.APP_ANDROID;
+          else if (meta.plataforma === "ios") disp = DispositivoCadastro.APP_IOS;
+        }
+
+        if (!mapaPorDispositivo.has(disp)) {
+          mapaPorDispositivo.set(disp, item.created_at);
+        }
+      }
+
+      const primeiro = acessosList[0];
+      const primeiroMeta = primeiro.meta || {};
+      let primeiroDisp: DispositivoCadastro = DispositivoCadastro.WEB_DESKTOP;
+      if (typeof primeiroMeta.dispositivo === "string" && validDispositivos.includes(primeiroMeta.dispositivo as DispositivoCadastro)) {
+        primeiroDisp = primeiroMeta.dispositivo as DispositivoCadastro;
+      } else if (typeof primeiroMeta.plataforma === "string") {
+        if (primeiroMeta.plataforma === "android") primeiroDisp = DispositivoCadastro.APP_ANDROID;
+        else if (primeiroMeta.plataforma === "ios") primeiroDisp = DispositivoCadastro.APP_IOS;
+      }
+
+      const porDispositivo = Array.from(mapaPorDispositivo.entries()).map(([dispositivo, data_hora]) => ({
+        dispositivo,
+        data_hora,
+      }));
+
+      ultimoAcessoGeral = {
+        data_hora: primeiro.created_at,
+        dispositivo: primeiroDisp,
+        por_dispositivo: porDispositivo,
+      };
+    }
+
+    const planos = await adminUserRepository.getPlanos();
+
+    const referralData = referralWithIndicadorRes?.data as unknown as ReferralWithIndicadorRow | null;
+    const indicadorData = referralData?.indicador;
+    const indicador = (referralData && indicadorData) ? {
+      id: indicadorData.id,
+      nome: indicadorData.nome,
+      telefone: indicadorData.telefone,
+      email: indicadorData.email,
+      cpfcnpj: indicadorData.cpfcnpj,
+      status: referralData.status,
+      created_at: referralData.created_at,
+      fatura_origem_id: referralData.fatura_origem_id,
+    } : null;
+
+    if (indicador && (!userData.canal_aquisicao || userData.canal_aquisicao.trim() === "")) {
+      userData.canal_aquisicao = CanalAquisicao.INDICACAO;
+    }
+
+    return {
+      user: userData,
+      assinatura: assinaturaReq.data,
+      faturas: faturasReq.data || [],
+      planos: planos.data || [],
+      kpis: {
+        veiculosCount: kpisData.veiculosCount ?? 0,
+        escolasCount: kpisData.escolasCount ?? 0,
+        passageirosCount: kpisData.passageirosCount ?? 0,
+        solicitacoesPendentesCount: kpisData.solicitacoesPendentesCount ?? 0,
+        contratosCount: kpisData.contratosCount ?? 0,
+        contratosAssinadosCount: kpisData.contratosAssinadosCount ?? 0,
+        contratosPendentesCount: kpisData.contratosPendentesCount ?? 0,
+        valorTotalContratos: Number(kpisData.valorTotalContratos) || 0,
+        statusConfiguracaoContrato,
+      },
+      referralSummary: null,
+      indicador,
+      referredUsers: [],
+      passageiros: [],
+      prePassageiros: [],
+      veiculos: [],
+      escolas: [],
+      contratos: [],
+      dispositivos,
+      ultimo_acesso: ultimoAcessoGeral,
+      configuracoes: configReq?.data || null,
+    };
+  },
+
+  async getUserContratos(userId: string) {
+    const { data, error } = await adminUserRepository.getUserContratos(userId);
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getUserPassageiros(userId: string) {
+    return adminPassageiroService.getPassageirosByUserId(userId);
+  },
+
+  async getUserPrePassageiros(userId: string) {
+    return adminPassageiroService.getPrePassageirosByUserId(userId);
+  },
+
+  async getUserVeiculos(userId: string) {
+    return adminVeiculoService.getVeiculosByUserId(userId);
+  },
+
+  async getUserEscolas(userId: string) {
+    return adminEscolaService.getEscolasByUserId(userId);
+  },
+
+  async getUserReferral(userId: string) {
+    const [referralSummary, referralWithIndicadorRes, referredUsersRes] = await Promise.all([
       subscriptionReferralService.getReferralSummary(userId).catch(() => ({
         total: 0,
         completed: 0,
@@ -324,45 +395,215 @@ export const adminUserService = {
         hasActiveDiscount: false,
         hasIndicator: false,
       })),
+      referralRepository.getReferralWithIndicador(userId).catch(() => ({ data: null })),
+      referralRepository.getReferredUsersByIndicadorId(userId).catch(() => ({ data: [] })),
     ]);
 
-    if (userReq.error || !userReq.data) throw new Error("Usuário não encontrado.");
-
-    const userData = userReq.data;
-    const statusConfiguracaoContrato = resolveDriverContractConfigStatus(
-      userData.assinatura_digital_url,
-      userData.config_contrato
-    );
-
-    const contratosList = contratosReq.data || [];
-    const contratosAssinadosCount = contratosList.filter((c: any) => c.status === ContratoStatus.ASSINADO).length;
-    const contratosPendentesCount = contratosList.filter((c: any) => c.status === ContratoStatus.PENDENTE).length;
-    const valorTotalContratos = contratosList
-      .filter((c: any) => c.status === ContratoStatus.ASSINADO)
-      .reduce((acc: number, c: any) => acc + (Number(c.valor_total) || 0), 0);
+    const referralData = referralWithIndicadorRes?.data as unknown as ReferralWithIndicadorRow | null;
+    const indicadorData = referralData?.indicador;
+    const referredUsersList = (referredUsersRes?.data || []) as unknown as ReferredUserRow[];
 
     return {
-      user: userData,
-      assinatura: assinaturaReq.data,
-      faturas: faturasReq.data || [],
-      planos: planosReq.data || [],
-      kpis: {
-        veiculosCount: veiculosReq.count ?? 0,
-        escolasCount: escolasReq.count ?? 0,
-        passageirosCount: passageirosReq.count ?? 0,
-        solicitacoesPendentesCount: prePassageirosReq.count ?? 0,
-        contratosCount: contratosList.length,
-        contratosAssinadosCount,
-        contratosPendentesCount,
-        valorTotalContratos,
-        statusConfiguracaoContrato,
-      },
       referralSummary,
-      passageiros: passageirosList,
-      prePassageiros: prePassageirosList,
-      veiculos: veiculosList,
-      escolas: escolasList,
-      contratos: contratosList,
+      indicador: (referralData && indicadorData) ? {
+        id: indicadorData.id,
+        nome: indicadorData.nome,
+        telefone: indicadorData.telefone,
+        email: indicadorData.email,
+        cpfcnpj: indicadorData.cpfcnpj,
+        status: referralData.status,
+        created_at: referralData.created_at,
+        fatura_origem_id: referralData.fatura_origem_id,
+      } : null,
+      referredUsers: referredUsersList.map((r) => ({
+        id: r.id,
+        status: r.status,
+        created_at: r.created_at,
+        indicado: r.indicado,
+      })),
+    };
+  },
+
+  async setReferralAdmin(indicadoId: string, indicadorId: string) {
+    if (indicadoId === indicadorId) {
+      throw new AppError("O usuário não pode indicar a si mesmo.", 400);
+    }
+
+    const { data: indicador, error: indicadorError } = await userRepository.getById(indicadorId);
+    if (indicadorError || !indicador) {
+      throw new AppError("Motorista indicador não encontrado.", 404);
+    }
+
+    if (indicador.tipo !== UserType.MOTORISTA) {
+      throw new AppError("O usuário indicador deve ser do tipo motorista.", 400);
+    }
+
+    const { data: existingReferral } = await referralRepository.getReferralByIndicadoId(indicadoId);
+    if (existingReferral) {
+      await referralRepository.updateReferralIndicador(indicadoId, indicadorId);
+    } else {
+      await subscriptionReferralService.registerReferral(indicadorId, indicadoId);
+    }
+
+    await userRepository.update(indicadoId, {
+      canal_aquisicao: CanalAquisicao.INDICACAO,
+      updated_at: getNowBR().toISOString(),
+    });
+
+    await historicoService.log({
+      usuario_id: indicadoId,
+      entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+      entidade_id: indicadoId,
+      acao: AtividadeAcao.PERFIL_EDITADO,
+      descricao: `Indicador atribuído pelo administrador: ${indicador.nome} (${indicador.telefone}).`,
+    });
+
+    return { success: true };
+  },
+
+  async removeReferralAdmin(indicadoId: string) {
+    await referralRepository.deleteReferralByIndicadoId(indicadoId);
+
+    await historicoService.log({
+      usuario_id: indicadoId,
+      entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+      entidade_id: indicadoId,
+      acao: AtividadeAcao.PERFIL_EDITADO,
+      descricao: "Vínculo de indicação removido pelo administrador.",
+    });
+
+    return { success: true };
+  },
+
+  async listReferralsAdmin(query: ListReferralsAdminQuery): Promise<ReferralsListResponseDTO> {
+    const page = query.page || 1;
+    const limit = query.limit || 20;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    let searchUserIds: string[] | undefined;
+    if (query.search && query.search.trim().length > 0) {
+      const term = cleanString(query.search);
+      const digits = onlyDigits(query.search);
+
+      let userQuery = supabaseAdmin
+        .from("usuarios")
+        .select("id")
+        .eq("tipo", UserType.MOTORISTA);
+
+      if (digits.length >= 4) {
+        userQuery = userQuery.or(`nome.ilike.%${term}%,telefone.ilike.%${digits}%,email.ilike.%${term}%`);
+      } else {
+        userQuery = userQuery.or(`nome.ilike.%${term}%,email.ilike.%${term}%`);
+      }
+
+      const { data: matchedUsers, error: searchError } = await userQuery.limit(50);
+      if (searchError) {
+        logger.error({ searchError }, "[AdminUserService] Erro ao buscar usuários pelo termo de busca em indicações.");
+      }
+
+      if (!matchedUsers || matchedUsers.length === 0) {
+        const stats = await referralRepository.getReferralGlobalStats();
+        return {
+          data: [],
+          total: 0,
+          page,
+          limit,
+          totalPages: 0,
+          stats,
+        };
+      }
+
+      searchUserIds = matchedUsers.map((u) => u.id);
+    }
+
+    const [referralsRes, stats] = await Promise.all([
+      referralRepository.listAllReferrals({
+        from,
+        to,
+        searchUserIds,
+        status: query.status,
+        data_inicio: query.data_inicio,
+        data_fim: query.data_fim,
+      }),
+      referralRepository.getReferralGlobalStats(),
+    ]);
+
+    if (referralsRes.error) {
+      logger.error({ error: referralsRes.error }, "[AdminUserService] Erro ao listar indicações.");
+      throw new AppError("Erro ao listar indicações.", 500);
+    }
+
+    const total = referralsRes.count ?? 0;
+    const totalPages = Math.ceil(total / limit);
+
+    type RawReferralRecord = {
+      id: string;
+      status: IndicacaoStatus;
+      created_at: string;
+      updated_at: string | null;
+      fatura_origem_id: string | null;
+      indicador: {
+        id: string;
+        nome: string;
+        telefone: string;
+        email: string;
+        logo_url?: string | null;
+      } | null;
+      indicado: {
+        id: string;
+        nome: string;
+        telefone: string;
+        email: string;
+        logo_url?: string | null;
+        assinaturas?: Array<{
+          id: string;
+          status: string;
+          data_vencimento: string | null;
+        }>;
+      } | null;
+    };
+
+    const rawData = (referralsRes.data || []) as unknown as RawReferralRecord[];
+
+    const data: ReferralListItemDTO[] = rawData.map((item) => {
+      const sub = item.indicado?.assinaturas?.[0];
+      return {
+        id: item.id,
+        status: item.status,
+        created_at: item.created_at,
+        updated_at: item.updated_at,
+        fatura_origem_id: item.fatura_origem_id,
+        indicador: item.indicador
+          ? {
+              id: item.indicador.id,
+              nome: item.indicador.nome,
+              telefone: item.indicador.telefone,
+              email: item.indicador.email,
+              logo_url: item.indicador.logo_url,
+            }
+          : null,
+        indicado: item.indicado
+          ? {
+              id: item.indicado.id,
+              nome: item.indicado.nome,
+              telefone: item.indicado.telefone,
+              email: item.indicado.email,
+              logo_url: item.indicado.logo_url,
+              assinatura_status: sub?.status || null,
+              assinatura_data_vencimento: sub?.data_vencimento || null,
+            }
+          : null,
+      };
+    });
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages,
+      stats,
     };
   },
 
@@ -372,9 +613,23 @@ export const adminUserService = {
     if (data.nome !== undefined) updatePayload.nome = cleanString(data.nome, true);
     if (data.razao_social !== undefined) updatePayload.razao_social = data.razao_social ? cleanString(data.razao_social, true) : null;
     if (data.apelido !== undefined) updatePayload.apelido = data.apelido ? cleanString(data.apelido, true) : null;
-    if (data.email !== undefined) updatePayload.email = data.email.toLowerCase().trim();
+    if (data.email !== undefined) {
+      const emailClean = data.email.toLowerCase().trim();
+      const { data: existingEmail } = await userRepository.getByEmailExcludingId(emailClean, userId);
+      if (existingEmail) {
+        throw new AppError("Este e-mail já está cadastrado em outra conta.", 400);
+      }
+      updatePayload.email = emailClean;
+    }
     if (data.telefone !== undefined) updatePayload.telefone = onlyDigits(data.telefone);
-    if (data.cpfcnpj !== undefined) updatePayload.cpfcnpj = onlyDigits(data.cpfcnpj);
+    if (data.cpfcnpj !== undefined) {
+      const cpfcnpjClean = onlyDigits(data.cpfcnpj);
+      const { data: existingCpf } = await userRepository.getByCpfcnpjExcludingId(cpfcnpjClean, userId);
+      if (existingCpf) {
+        throw new AppError("Este CPF/CNPJ já está cadastrado em outra conta.", 400);
+      }
+      updatePayload.cpfcnpj = cpfcnpjClean;
+    }
     if (data.ativo !== undefined) updatePayload.ativo = data.ativo;
     if (data.data_nascimento !== undefined) {
       updatePayload.data_nascimento = parseBrazilianDateToISO(data.data_nascimento);
@@ -405,6 +660,13 @@ export const adminUserService = {
     if (data.email !== undefined) {
       await authProvider.updateUserById(userId, {
         email: data.email.toLowerCase().trim(),
+        email_confirm: true,
+      });
+    }
+
+    if (data.cobranca_aviso_previo_whatsapp_ativo !== undefined) {
+      await usuarioConfiguracoesRepository.update(userId, {
+        cobranca_aviso_previo_whatsapp_ativo: data.cobranca_aviso_previo_whatsapp_ativo,
       });
     }
 
@@ -573,6 +835,42 @@ export const adminUserService = {
     return { success: true, senha: newPassword };
   },
 
+  async impersonateUser(userId: string): Promise<ImpersonateUserResponseDto> {
+    const { data: user, error: fetchError } = await userRepository.getById(userId);
+
+    if (fetchError || !user) {
+      throw new AppError("Usuário não encontrado.", 404);
+    }
+
+    if (!user.email) {
+      throw new AppError("Usuário não possui e-mail cadastrado para gerar o link de acesso.", 400);
+    }
+
+    const baseUrl = NotificationUrlBuilder.getBaseAppUrl();
+    const redirectTo = `${baseUrl}/impersonate-bridge`;
+
+    const { data, error: authError } = await authProvider.generateLink({
+      type: "magiclink",
+      email: user.email,
+      options: {
+        redirectTo,
+      },
+    });
+
+    if (authError || !data?.properties) {
+      logger.error({ authError, userId }, "[AdminUserService] Falha ao gerar link mágico de impersonation.");
+      throw new AppError("Falha ao gerar o link de acesso no serviço de autenticação.", 500);
+    }
+
+    const tokenHash = data.properties.hashed_token || "";
+    const impersonateUrl = `${baseUrl}/impersonate-bridge?token_hash=${tokenHash}`;
+
+    return {
+      tokenHash,
+      impersonateUrl,
+    };
+  },
+
   async deleteUser(userId: string) {
     const { data: user, error: fetchError } = await userRepository.getById(userId);
 
@@ -605,4 +903,1034 @@ export const adminUserService = {
 
     return { success: true };
   },
+
+  async getUsersLatestActivity(query: ListUsersLatestActivityQuery): Promise<MotoristasLatestActivityResponseDTO> {
+    const { search, sort, page, limit, healthStatus, subscriptionStatus } = query;
+    const offset = (page - 1) * limit;
+
+    const { data, error } = await adminUserRepository.getUsersLatestActivity({
+      search,
+      sort,
+      limit,
+      offset,
+      healthStatus,
+      subscriptionStatus,
+    });
+
+    if (error) {
+      logger.error({ error }, "[AdminUserService] Erro ao buscar última atividade dos motoristas.");
+      throw error;
+    }
+
+    const rows = (data || []) as (MotoristaLatestActivityDTO & { total_count: number | string })[];
+    const total = rows.length > 0 ? Number(rows[0].total_count) : 0;
+
+    const items: MotoristaLatestActivityDTO[] = rows.map((r) => ({
+      id: r.id,
+      nome: r.nome,
+      apelido: r.apelido,
+      telefone: r.telefone,
+      email: r.email,
+      cadastrado_em: r.cadastrado_em,
+      ultima_acao: r.ultima_acao,
+      ultima_descricao: r.ultima_descricao,
+      ultima_atividade_at: r.ultima_atividade_at,
+      assinatura_status: r.assinatura_status,
+      assinatura_vencimento: r.assinatura_vencimento,
+      dias_inativo: Number(r.dias_inativo),
+    }));
+
+    return {
+      data: items,
+      total,
+      page,
+      limit,
+    };
+  },
+
+  async getUsersRadarStats(query: GetMotoristasRadarStatsQuery): Promise<MotoristasRadarStatsDTO> {
+    const { subscriptionStatus } = query;
+    const { data, error } = await adminUserRepository.getUsersRadarStats(subscriptionStatus);
+
+    if (error) {
+      logger.error({ error }, "[AdminUserService] Erro ao buscar estatísticas do radar dos motoristas.");
+      throw error;
+    }
+
+    const row = ((data || []) as Array<{
+      total_motoristas: number | string;
+      total_ativos: number | string;
+      total_alerta: number | string;
+      total_em_risco: number | string;
+      total_sem_atividade: number | string;
+    }>)[0];
+
+    return {
+      totalMotoristas: row ? Number(row.total_motoristas) : 0,
+      totalAtivos: row ? Number(row.total_ativos) : 0,
+      totalAlerta: row ? Number(row.total_alerta) : 0,
+      totalEmRisco: row ? Number(row.total_em_risco) : 0,
+      totalSemAtividade: row ? Number(row.total_sem_atividade) : 0,
+    };
+  },
+
+  async getUsersDailyPulse(query: ListUsersDailyPulseQuery): Promise<MotoristasDailyPulseResponseDTO> {
+    const { date, search, tipoUsuario, subscriptionStatus, page, limit } = query;
+    const offset = (page - 1) * limit;
+
+    const { data, error } = await adminUserRepository.getUsersDailyPulse({
+      date,
+      search,
+      tipoUsuario,
+      subscriptionStatus,
+      limit,
+      offset,
+    });
+
+    if (error) {
+      logger.error({ error }, "[AdminUserService] Erro ao buscar pulso diário dos motoristas.");
+      throw error;
+    }
+
+    const rows = (data || []) as (MotoristaDailyPulseDTO & { total_count: number | string })[];
+    const total = rows.length > 0 ? Number(rows[0].total_count) : 0;
+
+    const items: MotoristaDailyPulseDTO[] = rows.map((r) => ({
+      id: r.id,
+      nome: r.nome,
+      apelido: r.apelido,
+      telefone: r.telefone,
+      email: r.email,
+      cadastrado_em: r.cadastrado_em,
+      tipo_usuario_dia: r.tipo_usuario_dia,
+      reengajou_no_dia: Boolean(r.reengajou_no_dia),
+      total_atividades_dia: Number(r.total_atividades_dia),
+      primeiro_acesso_dia: r.primeiro_acesso_dia,
+      ultimo_acesso_dia: r.ultimo_acesso_dia,
+      ultima_acao_dia: r.ultima_acao_dia,
+      ultima_descricao_dia: r.ultima_descricao_dia,
+      assinatura_status: r.assinatura_status,
+      assinatura_vencimento: r.assinatura_vencimento,
+      is_vitalicio: Boolean(r.is_vitalicio),
+    }));
+
+    return {
+      data: items,
+      total,
+      page,
+      limit,
+    };
+  },
+
+  async getUsersDailyPulseStats(query: GetUsersDailyPulseStatsQuery): Promise<MotoristasDailyPulseStatsDTO> {
+    const { date } = query;
+    const { data, error } = await adminUserRepository.getUsersDailyPulseStats(date);
+
+    if (error) {
+      logger.error({ error }, "[AdminUserService] Erro ao buscar estatísticas do pulso diário.");
+      throw error;
+    }
+
+    const row = ((data || []) as Array<{
+      total_acessos_unicos: number | string;
+      total_recorrentes: number | string;
+      total_novos: number | string;
+      total_novos_reengajados: number | string;
+      total_trial: number | string;
+      total_ativos: number | string;
+      total_vitalicios: number | string;
+      total_vencidos_expirados: number | string;
+    }>)[0];
+
+    return {
+      totalAcessosUnicos: row ? Number(row.total_acessos_unicos) : 0,
+      totalRecorrentes: row ? Number(row.total_recorrentes) : 0,
+      totalNovos: row ? Number(row.total_novos) : 0,
+      totalNovosReengajados: row ? Number(row.total_novos_reengajados) : 0,
+      totalTrial: row ? Number(row.total_trial) : 0,
+      totalAtivos: row ? Number(row.total_ativos) : 0,
+      totalVitalicios: row ? Number(row.total_vitalicios) : 0,
+      totalVencidosExpirados: row ? Number(row.total_vencidos_expirados) : 0,
+    };
+  },
+
+  async getVencimentosPassageirosPorDia(): Promise<VencimentosPassageirosResponseDTO> {
+    const [passageirosRes, motoristasRes] = await Promise.all([
+      adminUserRepository.getPassageirosAtivosComVencimento(),
+      adminUserRepository.getMotoristasComAssinaturas(),
+    ]);
+
+    if (passageirosRes.error) {
+      logger.error({ error: passageirosRes.error }, "[AdminUserService] Erro ao buscar passageiros com vencimento.");
+      throw passageirosRes.error;
+    }
+
+    if (motoristasRes.error) {
+      logger.error({ error: motoristasRes.error }, "[AdminUserService] Erro ao buscar motoristas com assinaturas.");
+      throw motoristasRes.error;
+    }
+
+    const nowBR = getNowBR();
+    const motoristasValidosIds = new Set<string>();
+
+    for (const m of (motoristasRes.data || [])) {
+      const email = (m.email || "").toLowerCase();
+      const isInternalTest = email.includes("teste-google") || email.includes("@van360.com.br") || email.includes("thiago-svl");
+      if (isInternalTest) continue;
+
+      const assinaturas = (m.assinaturas as Array<{ status: string | null; data_vencimento: string | null; trial_ends_at: string | null }>) || [];
+      const sub = assinaturas[0];
+      if (!sub) continue;
+
+      let isMotoristaAtivo = false;
+      if (sub.status === SubscriptionStatus.ACTIVE) {
+        isMotoristaAtivo = true;
+      } else if (sub.status === SubscriptionStatus.TRIAL) {
+        if (!sub.trial_ends_at) {
+          isMotoristaAtivo = true;
+        } else {
+          const trialLimit = parseLocalDate(sub.trial_ends_at);
+          if (!isNaN(trialLimit.getTime()) && trialLimit >= nowBR) {
+            isMotoristaAtivo = true;
+          }
+        }
+      }
+
+      if (isMotoristaAtivo) {
+        motoristasValidosIds.add(m.id);
+      }
+    }
+
+    const contagemPorDia: Record<number, number> = {};
+    for (let i = 1; i <= 31; i++) {
+      contagemPorDia[i] = 0;
+    }
+
+    let totalPassageirosAtivosComVencimento = 0;
+
+    for (const p of (passageirosRes.data || [])) {
+      if (!motoristasValidosIds.has(p.usuario_id)) continue;
+      if (p.isento) continue;
+
+      const dia = Number(p.dia_vencimento);
+      if (dia >= 1 && dia <= 31) {
+        contagemPorDia[dia] = (contagemPorDia[dia] || 0) + 1;
+        totalPassageirosAtivosComVencimento++;
+      }
+    }
+
+    const diaAtual = nowBR.getDate();
+    const vencimentosHoje = contagemPorDia[diaAtual] || 0;
+
+    let diaComPico: { dia: number; quantidade: number } | null = null;
+    let maxQtd = 0;
+
+    const dias: VencimentoDiaItemDTO[] = [];
+    for (let d = 1; d <= 31; d++) {
+      const qtd = contagemPorDia[d] || 0;
+      if (qtd > maxQtd) {
+        maxQtd = qtd;
+        diaComPico = { dia: d, quantidade: qtd };
+      }
+
+      const percentual = totalPassageirosAtivosComVencimento > 0
+        ? Number(((qtd / totalPassageirosAtivosComVencimento) * 100).toFixed(1))
+        : 0;
+
+      dias.push({
+        dia: d,
+        quantidade: qtd,
+        isHoje: d === diaAtual,
+        percentual,
+      });
+    }
+
+    return {
+      totalPassageirosAtivosComVencimento,
+      vencimentosHoje,
+      diaComPico,
+      diaAtual,
+      dias,
+    };
+  },
+
+  async getVencimentoDetalhes(dia: number, mes?: number, ano?: number): Promise<VencimentoDetalhesResponseDTO> {
+    const nowBR = getNowBR();
+    const diaAtual = nowBR.getDate();
+    const mesAtual = nowBR.getMonth() + 1;
+    const anoAtual = nowBR.getFullYear();
+    const mesAlvo = mes || mesAtual;
+    const anoAlvo = ano || anoAtual;
+    const isHoje = dia === diaAtual && mesAlvo === mesAtual && anoAlvo === anoAtual;
+    const todayStr = toPersistenceString(nowBR);
+
+    const isDriverEligible = (m: {
+      ativo?: boolean | null;
+      tipo?: string | null;
+      email?: string | null;
+      assinaturas?: Array<{ status: string | null; data_vencimento: string | null; trial_ends_at: string | null }> | null;
+    }) => {
+      if (!m || !m.ativo || m.tipo !== UserType.MOTORISTA) return false;
+      const email = (m.email || "").toLowerCase();
+      if (email.includes("teste-google") || email.includes("@van360.com.br") || email.includes("thiago-svl")) {
+        return false;
+      }
+      const assinaturas = m.assinaturas || [];
+      const sub = assinaturas[0];
+      if (!sub) return false;
+
+      if (sub.status === SubscriptionStatus.ACTIVE) return true;
+      if (sub.status === SubscriptionStatus.TRIAL) {
+        if (!sub.trial_ends_at) return true;
+        const trialLimit = parseLocalDate(sub.trial_ends_at);
+        return !isNaN(trialLimit.getTime()) && trialLimit >= nowBR;
+      }
+      return false;
+    };
+
+    const dataReferencia = new Date(anoAlvo, mesAlvo - 1, dia);
+    const dataRefStr = toPersistenceString(dataReferencia);
+    const isPassado = dataRefStr < todayStr;
+    const isFuturo = dataRefStr > todayStr;
+
+    const targetDates = [dataRefStr];
+    for (let adv = 1; adv <= 5; adv++) {
+      targetDates.push(toPersistenceString(addDays(dataReferencia, adv)));
+    }
+    for (const diasAtraso of [3, 5, 7]) {
+      targetDates.push(toPersistenceString(addDays(dataReferencia, -diasAtraso)));
+    }
+
+    const [passageirosDiaRes, cobrancasDiaRes, cobrancasReguasRes, historicoNotifsRes] = await Promise.all([
+      adminUserRepository.getPassageirosAtivosDoDia(dia),
+      adminUserRepository.getCobrancasDoDiaNoMes(dia, mesAlvo, anoAlvo),
+      !isPassado ? adminUserRepository.getCobrancasPendentesParaReguas(targetDates) : Promise.resolve({ data: null, error: null }),
+      isPassado ? adminUserRepository.getHistoricoNotificacoesCobrancaDoDia(dataRefStr) : Promise.resolve({ data: null, error: null }),
+    ]);
+
+    if (passageirosDiaRes.error) {
+      logger.error({ error: passageirosDiaRes.error }, "[AdminUserService] Erro ao buscar passageiros do dia.");
+      throw passageirosDiaRes.error;
+    }
+
+    if (cobrancasDiaRes.error) {
+      logger.error({ error: cobrancasDiaRes.error }, "[AdminUserService] Erro ao buscar cobranças do dia.");
+      throw cobrancasDiaRes.error;
+    }
+
+    if (cobrancasReguasRes.error) {
+      logger.error({ error: cobrancasReguasRes.error }, "[AdminUserService] Erro ao buscar cobranças para réguas.");
+      throw cobrancasReguasRes.error;
+    }
+
+    if (historicoNotifsRes.error) {
+      logger.error({ error: historicoNotifsRes.error }, "[AdminUserService] Erro ao buscar histórico de notificações do dia.");
+      throw historicoNotifsRes.error;
+    }
+
+    const passageirosDia = (passageirosDiaRes.data || []).filter((p) => isDriverEligible(p.motorista as Parameters<typeof isDriverEligible>[0]));
+    const cobrancasDia = (cobrancasDiaRes.data || []).filter((c) => isDriverEligible(c.motorista as Parameters<typeof isDriverEligible>[0]));
+
+    const cobrancasByPassageiroId = new Map<string, typeof cobrancasDia[0]>();
+    for (const c of cobrancasDia) {
+      if (c.passageiro_id) {
+        cobrancasByPassageiroId.set(c.passageiro_id, c);
+      }
+    }
+
+    let faturasPagas = 0;
+    let faturasPendentes = 0;
+    let faturasNaoGeradas = 0;
+    let valorPrevistoTotal = 0;
+    let valorPagoTotal = 0;
+    let valorPendenteTotal = 0;
+
+    let comTelefoneValido = 0;
+    let comEmailValido = 0;
+    let semResponsavelPrincipal = 0;
+    let semContato = 0;
+    let notificacoesDesativadasMotorista = 0;
+    let lembretesDesativadosAluno = 0;
+
+    let wabaCarteira = 0;
+    let resendCarteira = 0;
+    let firebaseCarteira = 0;
+
+    for (const p of passageirosDia) {
+      const c = cobrancasByPassageiroId.get(p.id);
+
+      if (c) {
+        const valor = Number(c.valor) || 0;
+        valorPrevistoTotal += valor;
+
+        if (c.status === CobrancaStatus.PAGO) {
+          faturasPagas++;
+          valorPagoTotal += Number(c.valor_pago || c.valor) || 0;
+        } else if (c.status === CobrancaStatus.PENDENTE) {
+          faturasPendentes++;
+          valorPendenteTotal += valor;
+        }
+      } else {
+        faturasNaoGeradas++;
+        valorPrevistoTotal += Number(p.valor_cobranca) || 0;
+      }
+
+      const rawResponsaveis = (p as unknown as { responsaveis?: Array<{ tipo: string; responsavel: { id: string; nome: string | null; telefone: string | null; email: string | null } | Array<{ id: string; nome: string | null; telefone: string | null; email: string | null }> | null }> })?.responsaveis || [];
+      const principalLink = rawResponsaveis.find((r) => r.tipo?.toLowerCase() === TipoResponsavel.PRINCIPAL);
+      const rawResp = principalLink?.responsavel;
+      const resp = Array.isArray(rawResp) ? rawResp[0] : rawResp;
+
+      const rawMotorista = p.motorista as unknown as { usuario_configuracoes?: Array<{ notificar_pais_cobrancas: boolean; cobranca_vencimento_hoje_ativo: boolean }> } | Array<{ usuario_configuracoes?: Array<{ notificar_pais_cobrancas: boolean; cobranca_vencimento_hoje_ativo: boolean }> }> | null;
+      const motoristaObj = Array.isArray(rawMotorista) ? rawMotorista[0] : rawMotorista;
+      const motoristaConfigs = motoristaObj?.usuario_configuracoes?.[0];
+
+      if (!principalLink || !resp) {
+        semResponsavelPrincipal++;
+        semContato++;
+      } else {
+        const hasPhone = Boolean(resp.telefone && resp.telefone.replace(/\D/g, "").length >= 8);
+        const hasEmail = Boolean(resp.email && resp.email.includes("@"));
+
+        if (hasPhone) comTelefoneValido++;
+        if (hasEmail) comEmailValido++;
+
+        if (!hasPhone && !hasEmail) {
+          semContato++;
+        }
+
+        const motoristaAtivoEnvio = motoristaConfigs?.notificar_pais_cobrancas !== false;
+        if (!motoristaAtivoEnvio) {
+          notificacoesDesativadasMotorista++;
+        }
+
+        const alunoAtivoEnvio = p.enviar_notificacoes !== false && (!c || c.desativar_lembretes !== true);
+        if (!alunoAtivoEnvio) {
+          lembretesDesativadosAluno++;
+        }
+
+        if ((!c || c.status === CobrancaStatus.PENDENTE) && motoristaAtivoEnvio && alunoAtivoEnvio) {
+          if (hasPhone) wabaCarteira++;
+          if (hasEmail) resendCarteira++;
+          firebaseCarteira++;
+        }
+      }
+    }
+
+    const totalAlunos = passageirosDia.length || cobrancasDia.length;
+
+    const carteira: CarteiraDiaResumoDTO = {
+      dia,
+      totalAlunos,
+      faturasPagas,
+      faturasPendentes,
+      faturasNaoGeradas,
+      valorPrevistoTotal: Number(valorPrevistoTotal.toFixed(2)),
+      valorPagoTotal: Number(valorPagoTotal.toFixed(2)),
+      valorPendenteTotal: Number(valorPendenteTotal.toFixed(2)),
+      canaisDisponiveis: {
+        waba: wabaCarteira,
+        resend: resendCarteira,
+        firebase: firebaseCarteira,
+        custoEstimadoWabaBrl: Number((wabaCarteira * CUSTO_ESTIMADO_WABA_UNITARIO).toFixed(2)),
+      },
+      diagnostico: {
+        comTelefoneValido,
+        comEmailValido,
+        semResponsavelPrincipal,
+        semContato,
+        notificacoesDesativadasMotorista,
+        lembretesDesativadosAluno,
+      },
+    };
+
+    let disparosHoje: DisparosHojeResumoDTO | null = null;
+
+    if (isPassado) {
+      const historicoItems = (historicoNotifsRes.data || []) as Array<{
+        id: string;
+        evento: string;
+        canal: string;
+        status: string;
+        payload: Record<string, unknown> | null;
+        created_at: string;
+      }>;
+
+      const cobrancasUnicasSet = new Set<string>();
+      let wabaSent = 0;
+      let resendSent = 0;
+      let firebaseSent = 0;
+
+      let vencendoHojeFaturas = 0;
+      let vencendoHojeWaba = 0;
+      let vencendoHojeResend = 0;
+      let vencendoHojeFirebase = 0;
+
+      let avisoPrevioFaturas = 0;
+      let avisoPrevioResend = 0;
+      let avisoPrevioFirebase = 0;
+
+      let atraso3DiasFaturas = 0;
+      let atraso3DiasWaba = 0;
+      let atraso3DiasResend = 0;
+      let atraso3DiasFirebase = 0;
+
+      const vencendoIds = new Set<string>();
+      const avisoIds = new Set<string>();
+      const atraso3Ids = new Set<string>();
+
+      for (const item of historicoItems) {
+        const cobrancaId = (item.payload?.cobrancaId || (item.payload?.metadata as Record<string, unknown> | undefined)?.cobrancaId) as string | undefined;
+        if (cobrancaId) cobrancasUnicasSet.add(cobrancaId);
+
+        const isSent = item.status === NotificationQueueStatus.SENT;
+
+        if (item.evento === EVENTO_PASSAGEIRO_VENCIMENTO_HOJE) {
+          if (cobrancaId) vencendoIds.add(cobrancaId);
+          if (item.canal === NotificationChannelEnum.WABA && isSent) {
+            wabaSent++;
+            vencendoHojeWaba++;
+          } else if (item.canal === NotificationChannelEnum.RESEND && isSent) {
+            resendSent++;
+            vencendoHojeResend++;
+          } else if (item.canal === NotificationChannelEnum.FIREBASE && isSent) {
+            firebaseSent++;
+            vencendoHojeFirebase++;
+          }
+        } else if (item.evento === EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO) {
+          if (cobrancaId) avisoIds.add(cobrancaId);
+          if (item.canal === NotificationChannelEnum.RESEND && isSent) {
+            resendSent++;
+            avisoPrevioResend++;
+          } else if (item.canal === NotificationChannelEnum.FIREBASE && isSent) {
+            firebaseSent++;
+            avisoPrevioFirebase++;
+          }
+        } else if (item.evento === EVENTO_PASSAGEIRO_ATRASADO) {
+          if (cobrancaId) atraso3Ids.add(cobrancaId);
+          if (item.canal === NotificationChannelEnum.WABA && isSent) {
+            wabaSent++;
+            atraso3DiasWaba++;
+          } else if (item.canal === NotificationChannelEnum.RESEND && isSent) {
+            resendSent++;
+            atraso3DiasResend++;
+          } else if (item.canal === NotificationChannelEnum.FIREBASE && isSent) {
+            firebaseSent++;
+            atraso3DiasFirebase++;
+          }
+        }
+      }
+
+      vencendoHojeFaturas = vencendoIds.size || vencendoHojeWaba || vencendoHojeResend || vencendoHojeFirebase;
+      avisoPrevioFaturas = avisoIds.size || avisoPrevioResend || avisoPrevioFirebase;
+      atraso3DiasFaturas = atraso3Ids.size || atraso3DiasWaba || atraso3DiasResend || atraso3DiasFirebase;
+
+      const totalFaturasProcessadas = cobrancasUnicasSet.size || (vencendoHojeFaturas + avisoPrevioFaturas + atraso3DiasFaturas);
+      const totalEnviadas = totalFaturasProcessadas;
+
+      disparosHoje = {
+        totalFaturasHoje: totalFaturasProcessadas,
+        totalNotificacoesPrevistas: totalFaturasProcessadas,
+        totalJaEnviadasHoje: totalEnviadas,
+        totalAguardandoEnvioHoje: 0,
+        canaisConsolidados: {
+          waba: wabaSent,
+          resend: resendSent,
+          firebase: firebaseSent,
+          custoEstimadoWabaBrl: Number((wabaSent * CUSTO_ESTIMADO_WABA_UNITARIO).toFixed(2)),
+        },
+        reguas: {
+          vencendoHoje: {
+            titulo: `Vencendo no Dia (${dia.toString().padStart(2, "0")}/${mesAlvo.toString().padStart(2, "0")})`,
+            descricao: `Faturas com vencimento no dia executado (${dia.toString().padStart(2, "0")}/${mesAlvo.toString().padStart(2, "0")})`,
+            totalFaturas: vencendoHojeFaturas,
+            canais: {
+              waba: vencendoHojeWaba,
+              resend: vencendoHojeResend,
+              firebase: vencendoHojeFirebase,
+              custoEstimadoWabaBrl: Number((vencendoHojeWaba * CUSTO_ESTIMADO_WABA_UNITARIO).toFixed(2)),
+            },
+          },
+          avisoPrevio: {
+            titulo: "Avisos Prévios",
+            descricao: "Faturas que vencerão nos próximos dias (D+1 a D+5)",
+            totalFaturas: avisoPrevioFaturas,
+            canais: {
+              waba: 0,
+              resend: avisoPrevioResend,
+              firebase: avisoPrevioFirebase,
+              custoEstimadoWabaBrl: 0,
+            },
+          },
+          atraso3Dias: {
+            titulo: "Cobrança 3 Dias em Atraso (D-3)",
+            descricao: "Faturas vencidas há 3 dias (com disparo de WhatsApp WABA)",
+            totalFaturas: atraso3DiasFaturas,
+            canais: {
+              waba: atraso3DiasWaba,
+              resend: atraso3DiasResend,
+              firebase: atraso3DiasFirebase,
+              custoEstimadoWabaBrl: Number((atraso3DiasWaba * CUSTO_ESTIMADO_WABA_UNITARIO).toFixed(2)),
+            },
+          },
+          atraso5Dias: {
+            titulo: "Cobrança 5 Dias em Atraso (D-5)",
+            descricao: "Faturas vencidas há 5 dias (E-mail e Push)",
+            totalFaturas: 0,
+            canais: {
+              waba: 0,
+              resend: 0,
+              firebase: 0,
+              custoEstimadoWabaBrl: 0,
+            },
+          },
+          atraso7Dias: {
+            titulo: "Cobrança 7 Dias em Atraso (D-7)",
+            descricao: "Faturas vencidas há 7 dias (E-mail e Push)",
+            totalFaturas: 0,
+            canais: {
+              waba: 0,
+              resend: 0,
+              firebase: 0,
+              custoEstimadoWabaBrl: 0,
+            },
+          },
+          atrasados: {
+            titulo: "Cobranças em Atraso",
+            descricao: "Faturas vencidas há 3, 5 ou 7 dias",
+            totalFaturas: atraso3DiasFaturas,
+            canais: {
+              waba: atraso3DiasWaba,
+              resend: atraso3DiasResend,
+              firebase: atraso3DiasFirebase,
+              custoEstimadoWabaBrl: Number((atraso3DiasWaba * CUSTO_ESTIMADO_WABA_UNITARIO).toFixed(2)),
+            },
+          },
+        },
+      };
+    } else if (cobrancasReguasRes.data) {
+      const cobrancasReguas = (cobrancasReguasRes.data || []).filter((c) => isDriverEligible(c.motorista as Parameters<typeof isDriverEligible>[0]));
+      const pushTokenIdentifiers = await adminUserRepository.getIdentificadoresComPushToken();
+
+      let vencendoHojeFaturas = 0;
+      let vencendoHojeWaba = 0;
+      let vencendoHojeResend = 0;
+      let vencendoHojeFirebase = 0;
+
+      let avisoPrevioFaturas = 0;
+      let avisoPrevioWaba = 0;
+      let avisoPrevioResend = 0;
+      let avisoPrevioFirebase = 0;
+
+      let atraso3DiasFaturas = 0;
+      let atraso3DiasWaba = 0;
+      let atraso3DiasResend = 0;
+      let atraso3DiasFirebase = 0;
+
+      let atraso5DiasFaturas = 0;
+      let atraso5DiasResend = 0;
+      let atraso5DiasFirebase = 0;
+
+      let atraso7DiasFaturas = 0;
+      let atraso7DiasResend = 0;
+      let atraso7DiasFirebase = 0;
+
+      let totalJaEnviadasHoje = 0;
+      let totalAguardandoEnvioHoje = 0;
+
+      for (const c of cobrancasReguas) {
+        if (c.desativar_lembretes || (c.passageiro as { enviar_notificacoes?: boolean })?.enviar_notificacoes === false) continue;
+
+        const responsaveisLinks = ((c.passageiro as { responsaveis?: Array<{ tipo: string; responsavel: { id: string; nome: string | null; telefone: string | null; email: string | null } | null }> })?.responsaveis || []);
+        const principalLink = responsaveisLinks.find((r) => r.tipo?.toLowerCase() === TipoResponsavel.PRINCIPAL);
+        const resp = principalLink?.responsavel;
+        if (!resp) continue;
+
+        const respPhoneClean = resp.telefone ? resp.telefone.replace(/\D/g, "") : "";
+        const hasPhone = Boolean(respPhoneClean.length >= 8);
+        const hasEmail = Boolean(resp.email && resp.email.includes("@"));
+        const hasPush = Boolean(
+          (resp.id && pushTokenIdentifiers.has(resp.id)) ||
+          (respPhoneClean && (
+            pushTokenIdentifiers.has(respPhoneClean) ||
+            pushTokenIdentifiers.has(`55${respPhoneClean}`) ||
+            (respPhoneClean.startsWith("55") && pushTokenIdentifiers.has(respPhoneClean.substring(2)))
+          )) ||
+          (resp.email && pushTokenIdentifiers.has(resp.email.trim().toLowerCase()))
+        );
+        if (!hasPhone && !hasEmail && !hasPush) continue;
+
+        const motoristaConfig = (c.motorista as {
+          usuario_configuracoes?: Array<{
+            notificar_pais_cobrancas?: boolean;
+            cobranca_aviso_previo_ativo?: boolean;
+            cobranca_aviso_previo_whatsapp_ativo?: boolean;
+            cobranca_dias_aviso_previo?: number;
+            cobranca_vencimento_hoje_ativo?: boolean;
+            cobranca_atraso_3_dias_ativo?: boolean;
+            cobranca_atraso_5_dias_ativo?: boolean;
+            cobranca_atraso_7_dias_ativo?: boolean;
+          }>;
+        })?.usuario_configuracoes?.[0];
+
+        if (motoristaConfig?.notificar_pais_cobrancas === false) continue;
+
+        const avisoPrevioAtivo = motoristaConfig?.cobranca_aviso_previo_ativo ?? true;
+        const driverThresholdDays = Number(motoristaConfig?.cobranca_dias_aviso_previo) || 2;
+        const vencimentoHojeAtivo = motoristaConfig?.cobranca_vencimento_hoje_ativo ?? true;
+        const atraso3DiasAtivo = motoristaConfig?.cobranca_atraso_3_dias_ativo ?? true;
+        const atraso5DiasAtivo = motoristaConfig?.cobranca_atraso_5_dias_ativo ?? true;
+        const atraso7DiasAtivo = motoristaConfig?.cobranca_atraso_7_dias_ativo ?? true;
+
+        const dataVencimentoStr = String(c.data_vencimento);
+        const jaEnviado = isHoje && Boolean(c.data_envio_ultima_notificacao && toPersistenceString(c.data_envio_ultima_notificacao) >= todayStr);
+
+        if (dataVencimentoStr === dataRefStr) {
+          if (vencimentoHojeAtivo) {
+            vencendoHojeFaturas++;
+            if (hasPhone) vencendoHojeWaba++;
+            if (hasEmail) vencendoHojeResend++;
+            if (hasPush) vencendoHojeFirebase++;
+
+            if (jaEnviado) totalJaEnviadasHoje++;
+            else totalAguardandoEnvioHoje++;
+          }
+        } else if (dataVencimentoStr > dataRefStr) {
+          if (avisoPrevioAtivo) {
+            const diasAntecedencia = diffInDays(dataRefStr, dataVencimentoStr);
+            if (diasAntecedencia === driverThresholdDays) {
+              avisoPrevioFaturas++;
+              if (motoristaConfig?.cobranca_aviso_previo_whatsapp_ativo && hasPhone) avisoPrevioWaba++;
+              if (hasEmail) avisoPrevioResend++;
+              if (hasPush) avisoPrevioFirebase++;
+
+              if (jaEnviado) totalJaEnviadasHoje++;
+              else totalAguardandoEnvioHoje++;
+            }
+          }
+        } else {
+          const diasAtraso = diffInDays(dataVencimentoStr, dataRefStr);
+          if (diasAtraso === 3 && atraso3DiasAtivo) {
+            atraso3DiasFaturas++;
+            if (hasPhone) atraso3DiasWaba++;
+            if (hasEmail) atraso3DiasResend++;
+            if (hasPush) atraso3DiasFirebase++;
+
+            if (jaEnviado) totalJaEnviadasHoje++;
+            else totalAguardandoEnvioHoje++;
+          } else if (diasAtraso === 5 && atraso5DiasAtivo) {
+            atraso5DiasFaturas++;
+            if (hasEmail) atraso5DiasResend++;
+            if (hasPush) atraso5DiasFirebase++;
+
+            if (jaEnviado) totalJaEnviadasHoje++;
+            else totalAguardandoEnvioHoje++;
+          } else if (diasAtraso === 7 && atraso7DiasAtivo) {
+            atraso7DiasFaturas++;
+            if (hasEmail) atraso7DiasResend++;
+            if (hasPush) atraso7DiasFirebase++;
+
+            if (jaEnviado) totalJaEnviadasHoje++;
+            else totalAguardandoEnvioHoje++;
+          }
+        }
+      }
+
+      const totalWaba = vencendoHojeWaba + atraso3DiasWaba + avisoPrevioWaba;
+      const totalResend = vencendoHojeResend + avisoPrevioResend + atraso3DiasResend + atraso5DiasResend + atraso7DiasResend;
+      const totalFirebase = vencendoHojeFirebase + avisoPrevioFirebase + atraso3DiasFirebase + atraso5DiasFirebase + atraso7DiasFirebase;
+      const totalFaturasHoje = vencendoHojeFaturas + avisoPrevioFaturas + atraso3DiasFaturas + atraso5DiasFaturas + atraso7DiasFaturas;
+      const totalNotificacoesPrevistas = totalJaEnviadasHoje + totalAguardandoEnvioHoje;
+
+      const atrasadosConsolidado = {
+        titulo: "Cobranças em Atraso",
+        descricao: "Faturas vencidas há 3, 5 ou 7 dias",
+        totalFaturas: atraso3DiasFaturas + atraso5DiasFaturas + atraso7DiasFaturas,
+        canais: {
+          waba: atraso3DiasWaba,
+          resend: atraso3DiasResend + atraso5DiasResend + atraso7DiasResend,
+          firebase: atraso3DiasFirebase + atraso5DiasFirebase + atraso7DiasFirebase,
+          custoEstimadoWabaBrl: Number((atraso3DiasWaba * CUSTO_ESTIMADO_WABA_UNITARIO).toFixed(2)),
+        },
+      };
+
+      disparosHoje = {
+        totalFaturasHoje,
+        totalNotificacoesPrevistas,
+        totalJaEnviadasHoje,
+        totalAguardandoEnvioHoje,
+        canaisConsolidados: {
+          waba: totalWaba,
+          resend: totalResend,
+          firebase: totalFirebase,
+          custoEstimadoWabaBrl: Number((totalWaba * CUSTO_ESTIMADO_WABA_UNITARIO).toFixed(2)),
+        },
+        reguas: {
+          vencendoHoje: {
+            titulo: isHoje ? "Vencendo Hoje" : `Vencendo no Dia (${dia.toString().padStart(2, "0")}/${mesAlvo.toString().padStart(2, "0")})`,
+            descricao: isHoje
+              ? `Faturas com vencimento no dia de hoje (${diaAtual}/${mesAtual})`
+              : `Faturas com vencimento no dia selecionado (${dia.toString().padStart(2, "0")}/${mesAlvo.toString().padStart(2, "0")})`,
+            totalFaturas: vencendoHojeFaturas,
+            canais: {
+              waba: vencendoHojeWaba,
+              resend: vencendoHojeResend,
+              firebase: vencendoHojeFirebase,
+              custoEstimadoWabaBrl: Number((vencendoHojeWaba * CUSTO_ESTIMADO_WABA_UNITARIO).toFixed(2)),
+            },
+          },
+          avisoPrevio: {
+            titulo: "Avisos Prévios",
+            descricao: "Faturas que vencerão nos próximos dias (D+1 a D+5)",
+            totalFaturas: avisoPrevioFaturas,
+            canais: {
+              waba: avisoPrevioWaba,
+              resend: avisoPrevioResend,
+              firebase: avisoPrevioFirebase,
+              custoEstimadoWabaBrl: Number((avisoPrevioWaba * CUSTO_ESTIMADO_WABA_UNITARIO).toFixed(2)),
+            },
+          },
+          atraso3Dias: {
+            titulo: "Cobrança 3 Dias em Atraso (D-3)",
+            descricao: "Faturas vencidas há 3 dias (com disparo de WhatsApp WABA)",
+            totalFaturas: atraso3DiasFaturas,
+            canais: {
+              waba: atraso3DiasWaba,
+              resend: atraso3DiasResend,
+              firebase: atraso3DiasFirebase,
+              custoEstimadoWabaBrl: Number((atraso3DiasWaba * CUSTO_ESTIMADO_WABA_UNITARIO).toFixed(2)),
+            },
+          },
+          atraso5Dias: {
+            titulo: "Cobrança 5 Dias em Atraso (D-5)",
+            descricao: "Faturas vencidas há 5 dias (E-mail e Push)",
+            totalFaturas: atraso5DiasFaturas,
+            canais: {
+              waba: 0,
+              resend: atraso5DiasResend,
+              firebase: atraso5DiasFirebase,
+              custoEstimadoWabaBrl: 0,
+            },
+          },
+          atraso7Dias: {
+            titulo: "Cobrança 7 Dias em Atraso (D-7)",
+            descricao: "Faturas vencidas há 7 dias (E-mail e Push)",
+            totalFaturas: atraso7DiasFaturas,
+            canais: {
+              waba: 0,
+              resend: atraso7DiasResend,
+              firebase: atraso7DiasFirebase,
+              custoEstimadoWabaBrl: 0,
+            },
+          },
+          atrasados: atrasadosConsolidado,
+        },
+      };
+    }
+
+    return {
+      dia,
+      mes: mesAlvo,
+      ano: anoAlvo,
+      isHoje,
+      isPassado,
+      isFuturo,
+      carteira,
+      disparosHoje,
+      disparosDia: disparosHoje,
+    };
+  },
+
+  async deleteInvoice(invoiceId: string) {
+    const { data: fatura, error: fetchError } = await invoiceRepository.getById(invoiceId);
+    if (fetchError || !fatura) {
+      throw new AppError("Fatura não encontrada.", 404);
+    }
+
+    await referralRepository.nullifyFaturaOrigem(invoiceId).catch((err: unknown) => {
+      logger.warn({ err, invoiceId }, "[AdminUserService] Falha não impeditiva ao desvincular fatura na indicação.");
+    });
+
+    const { error: deleteError } = await invoiceRepository.deleteInvoice(invoiceId);
+    if (deleteError) {
+      logger.error({ deleteError, invoiceId }, "[AdminUserService] Erro ao deletar fatura.");
+      throw new AppError("Erro ao excluir fatura.", 500);
+    }
+
+    await historicoService.log({
+      usuario_id: fatura.usuario_id,
+      entidade_tipo: AtividadeEntidadeTipo.SAAS_FATURA,
+      entidade_id: invoiceId,
+      acao: AtividadeAcao.SAAS_FATURA_EXCLUIDA,
+      descricao: `Fatura no valor de R$ ${Number(fatura.valor || 0).toFixed(2)} foi excluída pelo administrador.`,
+    }).catch((err: unknown) => {
+      logger.warn({ err, invoiceId }, "[AdminUserService] Falha não impeditiva ao registrar log de histórico da fatura.");
+    });
+
+    return { success: true, message: "Fatura excluída com sucesso." };
+  },
+
+  async getAcquisitionStats(query: ListAcquisitionStatsQuery): Promise<AdminAcquisitionStatsDTO> {
+    const dataInicio = query.data_inicio?.trim() || undefined;
+    const dataFim = query.data_fim?.trim() || undefined;
+
+    const { data: users, error } = await adminUserRepository.getAcquisitionUsersData(dataInicio, dataFim);
+    if (error) {
+      logger.error({ error }, "[AdminUserService] Erro ao buscar dados de aquisição.");
+      throw error;
+    }
+
+    const totalLeads = users?.length || 0;
+    let totalEmTrial = 0;
+    let totalAtivosPagantes = 0;
+    let totalVitalicios = 0;
+    let totalComAlunos = 0;
+
+    const canaisMap = new Map<string, {
+      origem: string;
+      categoria: AtribuicaoCategoria;
+      quantidade: number;
+      em_trial: number;
+      ativos_pagantes: number;
+    }>();
+
+    const campanhasMap = new Map<string, {
+      nome: string;
+      origem: string;
+      criativo?: string;
+      conjunto?: string;
+      quantidade: number;
+      em_trial: number;
+      ativos_pagantes: number;
+      taxa_conversao: number;
+    }>();
+
+    const dispositivosMap = new Map<string, number>();
+    const canaisAutodeclaradosMap = new Map<string, number>();
+
+    const dispositivoLabels: Record<string, string> = {
+      WEB_MOBILE_ANDROID: "Web Mobile (Android)",
+      WEB_MOBILE_IOS: "Web Mobile (iOS)",
+      WEB_DESKTOP: "Web Desktop",
+      APP_ANDROID: "App Nativo (Android)",
+      APP_IOS: "App Nativo (iOS)",
+      web_mobile_android: "Web Mobile (Android)",
+      web_mobile_ios: "Web Mobile (iOS)",
+      web_desktop: "Web Desktop",
+      app_android: "App Nativo (Android)",
+      app_ios: "App Nativo (iOS)",
+    };
+
+    (users || []).forEach((u) => {
+      const assinaturas = (u.assinaturas as Array<{ id: string; status: string; data_vencimento?: string | null }> | null) || [];
+      const passageiros = (u.passageiros as Array<{ id: string }> | null) || [];
+
+      const isAtivo = assinaturas.some((a) => a.status === SubscriptionStatus.ACTIVE && Boolean(a.data_vencimento));
+      const isVitalicio = assinaturas.some((a) => a.status === SubscriptionStatus.ACTIVE && !a.data_vencimento);
+      const isTrial = assinaturas.some((a) => a.status === SubscriptionStatus.TRIAL);
+      const temAlunos = passageiros.length > 0;
+
+      if (isAtivo) totalAtivosPagantes++;
+      if (isVitalicio) totalVitalicios++;
+      if (isTrial) totalEmTrial++;
+      if (temAlunos) totalComAlunos++;
+
+      const rawMetadados = u.metadados_cadastro as Record<string, unknown> | null;
+      const utm = (rawMetadados?.utm as Record<string, string | undefined> | null) || undefined;
+      const dispositivo = (u.dispositivo_cadastro as string) || "OUTRO";
+      const canalAuto = (u.canal_aquisicao as string) || "NAO_INFORMADO";
+
+      dispositivosMap.set(dispositivo, (dispositivosMap.get(dispositivo) || 0) + 1);
+      canaisAutodeclaradosMap.set(canalAuto, (canaisAutodeclaradosMap.get(canalAuto) || 0) + 1);
+
+      const { origem: canalOrigem, categoria } = resolveLeadAttribution(rawMetadados, dispositivo, canalAuto);
+
+      const campaign = utm?.campaign;
+      const content = utm?.content;
+      const term = utm?.term;
+
+      const canalItem = canaisMap.get(canalOrigem) || {
+        origem: canalOrigem,
+        categoria,
+        quantidade: 0,
+        em_trial: 0,
+        ativos_pagantes: 0,
+      };
+      canalItem.quantidade++;
+      if (isTrial) canalItem.em_trial++;
+      if (isAtivo) canalItem.ativos_pagantes++;
+      canaisMap.set(canalOrigem, canalItem);
+
+      if (campaign || content || term) {
+        const campKey = `${campaign || "Sem Campanha"}||${content || ""}||${term || ""}`;
+        const campItem = campanhasMap.get(campKey) || {
+          nome: campaign || "Campanha não nomeada",
+          origem: canalOrigem,
+          criativo: content,
+          conjunto: term,
+          quantidade: 0,
+          em_trial: 0,
+          ativos_pagantes: 0,
+          taxa_conversao: 0,
+        };
+        campItem.quantidade++;
+        if (isTrial) campItem.em_trial++;
+        if (isAtivo) campItem.ativos_pagantes++;
+        campItem.taxa_conversao = campItem.quantidade > 0
+          ? Math.round((campItem.ativos_pagantes / campItem.quantidade) * 100)
+          : 0;
+        campanhasMap.set(campKey, campItem);
+      }
+    });
+
+    const canais: CanalAquisicaoAgrupadoDTO[] = Array.from(canaisMap.values())
+      .map((c) => ({
+        ...c,
+        porcentagem: totalLeads > 0 ? Math.round((c.quantidade / totalLeads) * 100) : 0,
+        taxa_conversao: c.quantidade > 0 ? Math.round((c.ativos_pagantes / c.quantidade) * 100) : 0,
+      }))
+      .sort((a, b) => b.quantidade - a.quantidade);
+
+    const campanhas: CampanhaAquisicaoDTO[] = Array.from(campanhasMap.values())
+      .sort((a, b) => b.quantidade - a.quantidade);
+
+    const dispositivos: DispositivoAquisicaoDTO[] = Array.from(dispositivosMap.entries())
+      .map(([disp, qtd]) => ({
+        dispositivo: disp,
+        label: dispositivoLabels[disp] || disp,
+        quantidade: qtd,
+        porcentagem: totalLeads > 0 ? Math.round((qtd / totalLeads) * 100) : 0,
+      }))
+      .sort((a, b) => b.quantidade - a.quantidade);
+
+    const canaisAutodeclaradosObj: Record<string, number> = {};
+    canaisAutodeclaradosMap.forEach((qtd, key) => {
+      canaisAutodeclaradosObj[key] = qtd;
+    });
+
+    const taxaConversaoGeral = totalLeads > 0
+      ? Math.round((totalAtivosPagantes / totalLeads) * 100)
+      : 0;
+
+    return {
+      periodo: {
+        data_inicio: dataInicio,
+        data_fim: dataFim,
+      },
+      resumo: {
+        total_leads: totalLeads,
+        em_trial: totalEmTrial,
+        ativos_pagantes: totalAtivosPagantes,
+        vitalicios: totalVitalicios,
+        taxa_conversao: taxaConversaoGeral,
+        com_alunos_cadastrados: totalComAlunos,
+      },
+      canais,
+      campanhas,
+      dispositivos,
+      canais_autodeclarados: canaisAutodeclaradosObj,
+    };
+  },
 };
+
+
+

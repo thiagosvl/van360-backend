@@ -70,5 +70,20 @@ export const invoiceRepository = {
         }
 
         return query;
+    },
+
+    async getById(id: string) {
+        return supabaseAdmin
+            .from("assinatura_faturas")
+            .select("*")
+            .eq("id", id)
+            .maybeSingle();
+    },
+
+    async deleteInvoice(id: string) {
+        return supabaseAdmin
+            .from("assinatura_faturas")
+            .delete()
+            .eq("id", id);
     }
 };

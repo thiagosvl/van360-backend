@@ -2,21 +2,31 @@ import * as Sentry from "@sentry/node";
 import { FastifyError, FastifyReply, FastifyRequest } from "fastify";
 import { ZodError } from "zod";
 import { logger } from "../config/logger.js";
+import { errorAlertService } from "../services/error-alert.service.js";
 import { AppError } from "./AppError.js";
+import { extractErrorMessage, extractErrorStack } from "../utils/error.utils.js";
 
 export function globalErrorHandler(error: FastifyError, request: FastifyRequest, reply: FastifyReply) {
     const { method, url } = request;
 
-    // Reportar erro para o Sentry
-    Sentry.captureException(error);
-
-    // 1. Erro Conhecido (AppError ou validações tratadas)
-    // Check for instanceof OR duck typing (if serialized or prototype lost)
-    if (error instanceof AppError || error.name === 'AppError' || (error as any).isOperational) {
-        const statusCode = (error as any).statusCode || 500;
+    if (error instanceof AppError || error.name === 'AppError' || (error as { isOperational?: boolean }).isOperational) {
+        const statusCode = (error as { statusCode?: number }).statusCode || 500;
         const message = error.message || "Erro desconhecido";
         
         const logMethod = statusCode >= 500 ? 'error' : 'warn';
+
+        if (statusCode >= 500) {
+            Sentry.captureException(error);
+            (request as FastifyRequest & { __errorAlertDispatched?: boolean }).__errorAlertDispatched = true;
+
+            void errorAlertService.notifyHttpError({
+                error,
+                method,
+                url,
+                statusCode,
+                userId: request.user?.id
+            });
+        }
 
         logger[logMethod]({
             msg: "Erro Operacional",
@@ -31,7 +41,6 @@ export function globalErrorHandler(error: FastifyError, request: FastifyRequest,
         });
     }
 
-    // 1.5 Erro de Validação Zod
     if (error instanceof ZodError) {
         logger.warn({
             msg: "Erro de Validação (Zod)",
@@ -46,9 +55,8 @@ export function globalErrorHandler(error: FastifyError, request: FastifyRequest,
         });
     }
 
-    // 2. Erros de Validação do Fastify (Schema)
     if (error.validation) {
-         logger.warn({
+        logger.warn({
             msg: "Erro de Validação (Schema)",
             error: error.message,
             details: error.validation,
@@ -62,15 +70,26 @@ export function globalErrorHandler(error: FastifyError, request: FastifyRequest,
         });
     }
 
-    // 3. Erro Desconhecido (Bug / Infra)
-    logger.error({
-        msg: "Erro Interno (500)",
-        error: error.message,
-        stack: error.stack,
+    Sentry.captureException(error);
+    (request as FastifyRequest & { __errorAlertDispatched?: boolean }).__errorAlertDispatched = true;
+    void errorAlertService.notifyHttpError({
+        error,
         method,
         url,
-        // Adicione userId se disponível via request.user
-        userId: (request as any).user?.id
+        statusCode: 500,
+        userId: request.user?.id
+    });
+
+    const errorMessage = extractErrorMessage(error);
+    const errorStack = extractErrorStack(error);
+
+    logger.error({
+        msg: "Erro Interno (500)",
+        error: errorMessage,
+        stack: errorStack,
+        method,
+        url,
+        userId: request.user?.id
     });
 
     return reply.status(500).send({

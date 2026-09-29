@@ -1,7 +1,8 @@
 
 export enum CobrancaStatus {
   PAGO = "pago",
-  PENDENTE = "pendente"
+  PENDENTE = "pendente",
+  CANCELADA = "cancelada",
 }
 
 export enum CobrancaTipoPagamento {
@@ -13,10 +14,6 @@ export enum CobrancaTipoPagamento {
   BOLETO = "boleto"
 }
 
-export enum CobrancaOrigem {
-  MANUAL = "manual",
-  AUTOMATICA = "automatica",
-}
 
 export enum UserType {
   ADMIN = "admin",
@@ -64,8 +61,21 @@ export enum NotificationQueueStatus {
   SENT = "SENT",
   RETRY_PENDING = "RETRY_PENDING",
   FAILED = "FAILED",
-  CANCELLED = "CANCELLED"
+  CANCELLED = "CANCELLED",
+  DELIVERED = "DELIVERED"
 }
+
+export enum NotificationCategoryEnum {
+  TODOS = "TODOS",
+  ROTA = "ROTA",
+  COBRANCA = "COBRANCA",
+  CONTRATO = "CONTRATO",
+  MOTORISTA = "MOTORISTA",
+  SISTEMA = "SISTEMA",
+}
+
+export type { NotificationEvent } from "../config/constants.js";
+export type NotificationEventEnum = import("../config/constants.js").NotificationEvent;
 
 export enum WabaTemplateNameEnum {
   PAIS_VENCIMENTO_PROXIMO = "van360_pais_vencimento_proximo",
@@ -79,6 +89,7 @@ export enum WabaTemplateNameEnum {
   PAIS_ATRASADO_SEM_PIX = "van360_pais_atrasado_sem_pix",
   PAIS_RECIBO = "van360_pais_recibo",
   PAIS_CONTRATO = "van360_pais_contrato",
+  PAIS_RENOVACAO = "van360_pais_renovacao",
   MOTORISTA_RENOVACAO_PIX = "van360_motorista_renovacao_pix",
   MOTORISTA_FALHA_CARTAO = "van360_motorista_falha_cartao",
 }
@@ -238,6 +249,8 @@ export enum SubscriptionStatus {
   EXPIRED = "EXPIRED"
 }
 
+export const SUBSCRIPTION_VITALICIO_FILTER = "VITALICIO" as const;
+
 export const STATUS_ASSINATURA_LIBERADA = [
   SubscriptionStatus.TRIAL,
   SubscriptionStatus.ACTIVE,
@@ -272,6 +285,15 @@ export enum PaymentProvider {
   WOOVI = "woovi"
 }
 
+export enum NormalizedPaymentEventType {
+  PAYMENT_RECEIVED = "PAYMENT_RECEIVED",
+  PAYMENT_FAILED = "PAYMENT_FAILED",
+  PAYMENT_REFUNDED = "PAYMENT_REFUNDED",
+  SUBSCRIPTION_CREATED = "SUBSCRIPTION_CREATED",
+  SUBSCRIPTION_CANCELED = "SUBSCRIPTION_CANCELED",
+  SUBSCRIPTION_EXPIRED = "SUBSCRIPTION_EXPIRED"
+}
+
 export enum ContractMultaTipo {
   PERCENTUAL = "percentual",
   FIXO = "fixo"
@@ -298,6 +320,7 @@ export enum GastoCategoria {
 export enum AtividadeEntidadeTipo {
   COBRANCA = "COBRANCA",
   PASSAGEIRO = "PASSAGEIRO",
+  RESPONSAVEL = "RESPONSAVEL",
   USUARIO = "USUARIO",
   GASTO = "GASTO",
   VEICULO = "VEICULO",
@@ -315,6 +338,7 @@ export enum AtividadeAcao {
   COBRANCA_EDITADA = "COBRANCA_EDITADA",
   COBRANCA_EXCLUIDA = "COBRANCA_EXCLUIDA",
   PAGAMENTO_MANUAL = "PAGAMENTO_MANUAL",
+  PAGAMENTO_COMPLEMENTAR = "PAGAMENTO_COMPLEMENTAR",
   PAGAMENTO_REVERTIDO = "PAGAMENTO_REVERTIDO",
   NOTIFICACAO_EVOLUTION = "NOTIFICACAO_EVOLUTION",
   NOTIFICACAO_WABA = "NOTIFICACAO_WABA",
@@ -328,9 +352,18 @@ export enum AtividadeAcao {
   PRE_CADASTRO_CRIADO = "PRE_CADASTRO_CRIADO",
   PRE_CADASTRO_CONCLUIDO = "PRE_CADASTRO_CONCLUIDO",
 
+  // Responsavel
+  RESPONSAVEL_CADASTRADO = "RESPONSAVEL_CADASTRADO",
+  RESPONSAVEL_EDITADO = "RESPONSAVEL_EDITADO",
+  RESPONSAVEL_EXCLUIDO = "RESPONSAVEL_EXCLUIDO",
+  RESPONSAVEL_PRINCIPAL = "RESPONSAVEL_PRINCIPAL",
+  RESPONSAVEL_NOTIFICACAO = "RESPONSAVEL_NOTIFICACAO",
+
   // Perfil / Sistema
   CHAVE_PIX_ALTERADA = "CHAVE_PIX_ALTERADA",
   PERFIL_EDITADO = "PERFIL_EDITADO",
+  LOGO_ATUALIZADO = "LOGO_ATUALIZADO",
+  LOGO_REMOVIDO = "LOGO_REMOVIDO",
   CONFIGURACES_EDITADAS = "CONFIGURACES_EDITADAS",
   CONTRATO_CONFIG_EDITADA = "CONTRATO_CONFIG_EDITADA",
   CONTRATO_GERADO = "CONTRATO_GERADO",
@@ -371,7 +404,19 @@ export enum AtividadeAcao {
   SAAS_PAGAMENTO_RECEBIDO = "SAAS_PAGAMENTO_RECEBIDO",
   SAAS_REFERRAL_BONUS_RECEIVED = "SAAS_REFERRAL_BONUS_RECEIVED",
   SAAS_FATURA_GERADA = "SAAS_FATURA_GERADA",
-  SAAS_FATURA_RECUSADA = "SAAS_FATURA_RECUSADA"
+  SAAS_FATURA_RECUSADA = "SAAS_FATURA_RECUSADA",
+  SAAS_FATURA_EXCLUIDA = "SAAS_FATURA_EXCLUIDA",
+
+  // Telemetria / Engajamento
+  APP_ABERTO = "APP_ABERTO",
+  LINK_PRECADASTRO_COPIADO = "LINK_PRECADASTRO_COPIADO",
+  LINK_PRECADASTRO_COMPARTILHADO = "LINK_PRECADASTRO_COMPARTILHADO",
+  LINK_INDICACAO_COPIADO = "LINK_INDICACAO_COPIADO",
+  LINK_INDICACAO_COMPARTILHADO = "LINK_INDICACAO_COMPARTILHADO",
+  RECIBO_MENSAL_COMPARTILHADO = "RECIBO_MENSAL_COMPARTILHADO",
+  RECIBO_ANUAL_COMPARTILHADO = "RECIBO_ANUAL_COMPARTILHADO",
+  FLOATING_BUTTON_CLICADO = "FLOATING_BUTTON_CLICADO",
+  CHAMADA_RAPIDA_CONFIRMADA = "CHAMADA_RAPIDA_CONFIRMADA",
 }
 
 export enum TipoChavePix {
@@ -390,7 +435,9 @@ export enum CronJob {
   DAILY_CHARGE_MONITOR = "daily-charge-monitor",
   BIRTHDAY_REMINDER = "birthday-reminder",
   WEEKLY_DRIVER_CHARGE_SUMMARY = "weekly-driver-charge-summary",
+  DAILY_DRIVER_DUE_TODAY_ALERT = "daily-driver-due-today-alert",
   NOTIFICATION_RETRY = "notification-retry",
+  LOGS_CLEANUP = "logs-cleanup",
 }
 
 export enum RouteExecutionStatus {
@@ -426,7 +473,18 @@ export enum CanalAquisicao {
   TIKTOK = "TIKTOK",
   YOUTUBE = "YOUTUBE",
   GOOGLE = "GOOGLE",
+  IA = "IA",
   OUTROS = "OUTROS"
+}
+
+export enum AtribuicaoCategoria {
+  META_ADS = "meta_ads",
+  GOOGLE_ADS = "google_ads",
+  TIKTOK_ADS = "tiktok_ads",
+  PLAY_STORE = "play_store",
+  SITE_ORGANICO = "site_organico",
+  INDICACAO = "indicacao",
+  DIRETO = "direto",
 }
 
 export enum BlogPostStatus {

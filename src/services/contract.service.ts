@@ -6,9 +6,9 @@ import { AppError } from '../errors/AppError.js';
 import { addToContractQueue } from '../queues/contract.queue.js';
 import { ContractProvider, DadosContrato, SignatureMetadata } from '../types/contract.js';
 import { CreateContractDTO, ImportContractDTO, ListContractsDTO } from '../types/dtos/contract.dto.js';
-import { AtividadeAcao, AtividadeEntidadeTipo, ContractMultaTipo, ContratoProvider, ContratoStatus, PassageiroModalidade, PeriodoEnum, TipoResponsavel } from '../types/enums.js';
-import { getNowBR, toLocalDateString, parseLocalDate, addMonths } from '../utils/date.utils.js';
-import { formatAddress, getDriverDisplayName } from '../utils/format.js';
+import { AtividadeAcao, AtividadeEntidadeTipo, ContratoProvider, ContratoStatus, PassageiroModalidade, PeriodoEnum, TipoResponsavel } from '../types/enums.js';
+import { getNowBR, toLocalDateString, parseLocalDate, parseMonthYearFromDateString } from '../utils/date.utils.js';
+import { formatAddress, getDriverDisplayName, getFirstAndSecondName } from '../utils/format.js';
 import { historicoService } from './historico.service.js';
 import { InHouseContractProvider } from './providers/inhouse-contract.provider.js';
 import { storageProvider } from './providers/storage.provider.js';
@@ -84,17 +84,21 @@ class ContractService {
   private async getUsuarioByAuthId(authId: string) {
     const { data: usuario, error } = await userRepository.getById(authId);
 
-    if (error || !usuario) {
-      logger.error({ authId, error }, 'Usuário não encontrado');
+    if (error) {
+      throw error;
+    }
+
+    if (!usuario) {
       throw new AppError('Usuário não encontrado', 404);
     }
     return usuario;
   }
 
   async criarContrato(authId: string, data: CreateContractDTO) {
-    const { passageiroId, provider: providerName = ContratoProvider.INHOUSE, ...customTerms } = data;
+    const { passageiroId, ...customTerms } = data;
+    const rawProvider = data.provider || ContratoProvider.INHOUSE;
+    const providerName = rawProvider === ContratoProvider.IMPORTADO ? ContratoProvider.INHOUSE : rawProvider;
 
-    // 1. Resolver usuário (condutor)
     const usuario = await this.getUsuarioByAuthId(authId);
     const usuarioId = usuario.id;
 
@@ -104,11 +108,10 @@ class ContractService {
 
     logger.info({ usuarioId: usuario.id, passageiroId, providerName }, 'Criando contrato');
 
-    // 2. Buscar dados completos do passageiro no repositório
-    const passageiro = await passageiroRepository.getByIdCompleto(passageiroId, usuarioId).catch((passageiroError) => {
-      logger.error({ passageiroError }, 'Passageiro não encontrado');
-      throw new AppError('Passageiro não encontrado', 404);
-    });
+    const passageiro = await passageiroRepository.getByIdCompleto(passageiroId, usuarioId);
+    if (!passageiro) {
+      throw new AppError('Aluno não encontrado', 404);
+    }
 
     const respInfo = _getResponsavelInfoFromPassageiro(passageiro);
 
@@ -116,9 +119,9 @@ class ContractService {
     const nomeRespNormalized = respInfo.nome
       ? respInfo.nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
       : "";
-      
+
     if (!respInfo.nome || nomeRespNormalized.includes("responsavel nao info") || nomeRespNormalized.includes("responsavel teste")) {
-      throw new AppError("O nome real do responsável é obrigatório para gerar o contrato. Edite o passageiro para continuar.", 400);
+      throw new AppError("O nome real do responsável é obrigatório para gerar o contrato. Edite o aluno para continuar.", 400);
     }
 
     if (!respInfo.cpf) {
@@ -144,8 +147,16 @@ class ContractService {
 
     let qtdParcelas = customTerms.qtdParcelas;
     if (!qtdParcelas) {
-      const diffMonths = (dFim.getFullYear() - dInicio.getFullYear()) * 12 + (dFim.getMonth() - dInicio.getMonth());
-      qtdParcelas = Math.max(1, diffMonths + 1);
+      const ymInicio = parseMonthYearFromDateString(passageiro.data_inicio_cobranca);
+      const ymFim = parseMonthYearFromDateString(passageiro.data_fim_cobranca);
+
+      if (ymInicio && ymFim) {
+        const diffMonths = (ymFim.year - ymInicio.year) * 12 + (ymFim.month - ymInicio.month);
+        qtdParcelas = Math.max(1, diffMonths + 1);
+      } else {
+        const diffMonths = (dFim.getFullYear() - dInicio.getFullYear()) * 12 + (dFim.getMonth() - dInicio.getMonth());
+        qtdParcelas = Math.max(1, diffMonths + 1);
+      }
     }
 
     const valorMensal = customTerms.valorMensal || Number(passageiro.valor_cobranca) || 0;
@@ -167,17 +178,25 @@ class ContractService {
       valorMensal: valorMensal,
       diaVencimento: customTerms.diaVencimento || passageiro.dia_vencimento,
 
-      ano: dInicio.getFullYear(),
+      ano: passageiro.ano_letivo || dInicio.getFullYear(),
       dataInicio,
       dataFim,
+      horarioEntrada: passageiro.horario_entrada || null,
+      horarioSaida: passageiro.horario_saida || null,
       dataInicioCobranca: passageiro.data_inicio_cobranca,
       dataFimCobranca: passageiro.data_fim_cobranca,
       valorTotal,
       qtdParcelas,
       valorParcela: valorMensal,
-      multaAtraso: usuario.config_contrato?.multa_atraso || { valor: 10, tipo: ContractMultaTipo.FIXO },
-      jurosAtraso: usuario.config_contrato?.juros_atraso || { valor: 1, tipo: ContractMultaTipo.PERCENTUAL },
-      multaRescisao: usuario.config_contrato?.multa_rescisao || { valor: 15, tipo: ContractMultaTipo.FIXO },
+      multaAtraso: (usuario.config_contrato?.multa_atraso?.valor && usuario.config_contrato.multa_atraso.valor > 0)
+        ? usuario.config_contrato.multa_atraso
+        : null,
+      jurosAtraso: (usuario.config_contrato?.juros_atraso?.valor && usuario.config_contrato.juros_atraso.valor > 0)
+        ? usuario.config_contrato.juros_atraso
+        : null,
+      multaRescisao: (usuario.config_contrato?.multa_rescisao?.valor && usuario.config_contrato.multa_rescisao.valor > 0)
+        ? usuario.config_contrato.multa_rescisao
+        : null,
       nomeCondutor: getDriverDisplayName(usuario),
       cpfCnpjCondutor: usuario.cpfcnpj,
       telefoneCondutor: usuario.telefone,
@@ -186,35 +205,36 @@ class ContractService {
       secoes: usuario.config_contrato?.secoes,
       clausulas: usuario.config_contrato?.clausulas,
       assinaturaCondutorUrl: usuario.assinatura_digital_url,
+      logoCondutorUrl: usuario.logo_url,
       apelidoCondutor: usuario.apelido,
     };
 
-    // 5. Aposentar rascunhos PENDENTES anteriores do mesmo passageiro
     await contractRepository.aposentarContratosPassageiro(data.passageiroId, true);
 
-    // 6. Gerar token único e criar registro no banco via Repositorio
     const tokenAcesso = uuidv4();
+
+    const { assinaturaCondutorUrl: _, ...dadosContratoPersistidos } = dadosContrato;
 
     const contrato = await contractRepository.insert({
       usuario_id: usuarioId,
       passageiro_id: passageiroId,
       token_acesso: tokenAcesso,
       provider: providerName,
-      dados_contrato: dadosContrato,
+      dados_contrato: dadosContratoPersistidos,
       status: ContratoStatus.PENDENTE,
-      ano: dInicio.getFullYear(),
+      ano: passageiro.ano_letivo || dInicio.getFullYear(),
       data_inicio: dataInicio,
       data_fim: dataFim,
       valor_total: valorTotal,
       qtd_parcelas: qtdParcelas,
       valor_parcela: valorMensal,
       dia_vencimento: dadosContrato.diaVencimento,
-      multa_atraso_valor: dadosContrato.multaAtraso.valor,
-      multa_atraso_tipo: dadosContrato.multaAtraso.tipo,
-      juros_atraso_valor: dadosContrato.jurosAtraso.valor,
-      juros_atraso_tipo: dadosContrato.jurosAtraso.tipo,
-      multa_rescisao_valor: dadosContrato.multaRescisao.valor,
-      multa_rescisao_tipo: dadosContrato.multaRescisao.tipo,
+      multa_atraso_valor: (dadosContrato.multaAtraso?.valor && dadosContrato.multaAtraso.valor > 0) ? dadosContrato.multaAtraso.valor : null,
+      multa_atraso_tipo: (dadosContrato.multaAtraso?.valor && dadosContrato.multaAtraso.valor > 0) ? dadosContrato.multaAtraso.tipo : null,
+      juros_atraso_valor: (dadosContrato.jurosAtraso?.valor && dadosContrato.jurosAtraso.valor > 0) ? dadosContrato.jurosAtraso.valor : null,
+      juros_atraso_tipo: (dadosContrato.jurosAtraso?.valor && dadosContrato.jurosAtraso.valor > 0) ? dadosContrato.jurosAtraso.tipo : null,
+      multa_rescisao_valor: (dadosContrato.multaRescisao?.valor && dadosContrato.multaRescisao.valor > 0) ? dadosContrato.multaRescisao.valor : null,
+      multa_rescisao_tipo: (dadosContrato.multaRescisao?.valor && dadosContrato.multaRescisao.valor > 0) ? dadosContrato.multaRescisao.tipo : null,
     });
 
     // 6. Enfileirar para Geração de PDF e Notificações (Assíncrono via BullMQ)
@@ -243,13 +263,13 @@ class ContractService {
       entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
       entidade_id: passageiroId,
       acao: AtividadeAcao.CONTRATO_GERADO,
-      descricao: `Novo contrato gerado para ${passageiro.nome}.`,
+      descricao: `Novo contrato gerado para ${getFirstAndSecondName(passageiro.nome)}.`,
       meta: { contrato_id: contrato.id, valor_mensal: valorMensal }
     });
 
     const linkAssinatura = providerName === ContratoProvider.INHOUSE
       ? `${env.FRONTEND_URL}/assinar/${tokenAcesso}`
-      : undefined; 
+      : undefined;
 
     return {
       ...contrato,
@@ -267,7 +287,7 @@ class ContractService {
 
     const { data: passageiro, error: passageiroError } = await passageiroRepository.getById(data.passageiroId, usuarioId);
     if (passageiroError || !passageiro) {
-      throw new AppError('Passageiro não encontrado', 404);
+      throw new AppError('Aluno não encontrado', 404);
     }
 
     const cleanBase64 = data.arquivoBase64
@@ -328,7 +348,7 @@ class ContractService {
       entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
       entidade_id: data.passageiroId,
       acao: AtividadeAcao.CONTRATO_IMPORTADO,
-      descricao: `Contrato em PDF importado para ${passageiro.nome}.`,
+      descricao: `Contrato em PDF importado para ${getFirstAndSecondName(passageiro.nome)}.`,
       meta: { contrato_id: contrato.id, nome_arquivo: data.nomeArquivo }
     });
 
@@ -382,7 +402,7 @@ class ContractService {
       entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
       entidade_id: passageiro.id,
       acao: AtividadeAcao.CONTRATO_ASSINADO,
-      descricao: `Contrato de ${passageiro.nome} foi assinado digitalmente pelo responsável.`,
+      descricao: `Contrato de ${getFirstAndSecondName(passageiro.nome)} foi assinado digitalmente pelo responsável.`,
       meta: { contrato_id: contrato.id, documento_final: response.documentoFinalUrl }
     });
 
@@ -397,9 +417,10 @@ class ContractService {
           nomeMotorista: usuario.nome,
           apelidoMotorista: usuario.apelido,
           contratoUrl: response.documentoFinalUrl,
-          usuarioId: usuario.id
+          usuarioId: usuario.id,
+          passageiroId: passageiro.id
         },
-        { channels: [NotificationChannelEnum.RESEND], email: respInfo.email, usuarioId: usuario.id }
+        { channels: [NotificationChannelEnum.RESEND], email: respInfo.email, usuarioId: usuario.id, passageiroId: passageiro.id }
       ).catch(err => logger.error({ err }, 'Erro ao notificar responsável sobre assinatura'));
     }
 
@@ -426,8 +447,14 @@ class ContractService {
 
   async consultarContrato(tokenAcesso: string) {
     try {
-      return await contractRepository.getByToken(tokenAcesso);
-    } catch(err) {
+      const contrato = await contractRepository.getByToken(tokenAcesso);
+      if (contrato?.dados_contrato && typeof contrato.dados_contrato === 'object' && 'assinaturaCondutorUrl' in (contrato.dados_contrato as Record<string, unknown>)) {
+        const dados = { ...(contrato.dados_contrato as Record<string, unknown>) };
+        delete dados.assinaturaCondutorUrl;
+        contrato.dados_contrato = dados;
+      }
+      return contrato;
+    } catch (err) {
       throw new AppError('Contrato não encontrado', 404);
     }
   }
@@ -461,6 +488,10 @@ class ContractService {
             passageiro: {
               id: p.id,
               nome: p.nome,
+              data_inicio_transporte: p.data_inicio_transporte,
+              data_fim_transporte: p.data_fim_transporte,
+              valor_cobranca: p.valor_cobranca,
+              dia_vencimento: p.dia_vencimento,
               responsavel_principal: respInfo.nome ? {
                 id: respInfo.id,
                 nome: respInfo.nome,
@@ -503,8 +534,13 @@ class ContractService {
     return {
       data: data.map((c: Record<string, any>) => {
         const respInfo = _getResponsavelInfoFromPassageiro(c.passageiro);
-        return { 
-          ...c, 
+        const dadosContrato = c.dados_contrato ? { ...(c.dados_contrato as Record<string, unknown>) } : null;
+        if (dadosContrato && 'assinaturaCondutorUrl' in dadosContrato) {
+          delete dadosContrato.assinaturaCondutorUrl;
+        }
+        return {
+          ...c,
+          dados_contrato: dadosContrato,
           tipo: 'contrato',
           passageiro: c.passageiro ? {
             ...c.passageiro,
@@ -548,15 +584,19 @@ class ContractService {
     let contratoOriginal;
     try {
       contratoOriginal = await contractRepository.getById(contratoId, usuario.id);
-    } catch(err) {
+    } catch (err) {
       throw new AppError('Contrato não encontrado', 404);
     }
 
     await contractRepository.aposentarContratosPassageiro(contratoOriginal.passageiro_id, true);
 
+    const providerAlvo = contratoOriginal.provider === ContratoProvider.IMPORTADO
+      ? ContratoProvider.INHOUSE
+      : (contratoOriginal.provider as ContratoProvider || ContratoProvider.INHOUSE);
+
     return this.criarContrato(authId, {
       passageiroId: contratoOriginal.passageiro_id,
-      provider: contratoOriginal.provider as ContratoProvider
+      provider: providerAlvo
     });
   }
 
@@ -567,13 +607,13 @@ class ContractService {
     let contrato;
     try {
       contrato = await contractRepository.getById(contratoId, usuarioId);
-    } catch(err) {
+    } catch (err) {
       throw new AppError('Contrato não encontrado', 404);
     }
 
     await contractRepository.delete(contratoId, usuarioId);
 
-    if (contrato.provider === ContratoProvider.IMPORTADO || contrato.token_acesso) {
+    if (contrato.provider === ContratoProvider.IMPORTADO && contrato.token_acesso) {
       const storagePath = `imported/${usuarioId}/${contrato.token_acesso}.pdf`;
       await storageProvider.remove('contratos', [storagePath]).catch((err) => {
         logger.warn({ err, storagePath }, 'Falha não bloqueante ao remover PDF importado do storage');
@@ -605,13 +645,13 @@ class ContractService {
     } catch (error) {
       throw new AppError('Contrato não encontrado', 404);
     }
-    
+
     if (contrato.status !== ContratoStatus.PENDENTE) throw new AppError('Apenas contratos pendentes podem ser reenviados', 400);
 
     const passageiro = contrato.passageiro;
 
     const respInfo = _getResponsavelInfoFromPassageiro(passageiro);
-    if (!respInfo.telefone) throw new AppError('Passageiro sem telefone do responsável', 400);
+    if (!respInfo.telefone) throw new AppError('Aluno sem telefone do responsável', 400);
 
     await addToContractQueue({
       contratoId: contrato.id,
@@ -663,7 +703,7 @@ class ContractService {
     try {
       const resp = await userRepository.getById(targetUserId);
       usuario = resp.data;
-    } catch(err) {
+    } catch (err) {
       throw new AppError('Usuário não encontrado', 404);
     }
 
@@ -677,13 +717,18 @@ class ContractService {
     const config = draftConfig || {};
     const savedConfig = usuario.config_contrato || {};
 
-    const multaAtraso = config.multaAtraso || savedConfig.multa_atraso || { valor: 10, tipo: ContractMultaTipo.FIXO };
-    const jurosAtraso = config.jurosAtraso || savedConfig.juros_atraso || { valor: 1, tipo: ContractMultaTipo.PERCENTUAL };
-    const multaRescisao = config.multaRescisao || savedConfig.multa_rescisao || { valor: 15, tipo: ContractMultaTipo.FIXO };
+    const rawMultaAtraso = config.multaAtraso !== undefined ? config.multaAtraso : savedConfig.multa_atraso;
+    const multaAtraso = (rawMultaAtraso?.valor && rawMultaAtraso.valor > 0) ? rawMultaAtraso : null;
+
+    const rawJurosAtraso = config.jurosAtraso !== undefined ? config.jurosAtraso : savedConfig.juros_atraso;
+    const jurosAtraso = (rawJurosAtraso?.valor && rawJurosAtraso.valor > 0) ? rawJurosAtraso : null;
+
+    const rawMultaRescisao = config.multaRescisao !== undefined ? config.multaRescisao : savedConfig.multa_rescisao;
+    const multaRescisao = (rawMultaRescisao?.valor && rawMultaRescisao.valor > 0) ? rawMultaRescisao : null;
     const clausulas = config.clausulas !== undefined ? config.clausulas : (savedConfig.clausulas || []);
 
     const dadosContrato: DadosContrato = {
-      nomePassageiro: "Passageiro Exemplo da Silva",
+      nomePassageiro: "Aluno Exemplo da Silva",
       nomeResponsavel: "Responsável Exemplo da Silva",
       cpfResponsavel: "000.000.000-00",
       telefoneResponsavel: "(11) 99999-9999",
@@ -699,6 +744,8 @@ class ContractService {
       ano: anoVigente,
       dataInicio: toLocalDateString(hoje),
       dataFim: `${anoVigente}-12-31`,
+      horarioEntrada: draftConfig?.horarioEntrada || "07:00",
+      horarioSaida: draftConfig?.horarioSaida || "12:00",
       dataInicioCobranca: toLocalDateString(hoje),
       dataFimCobranca: `${anoVigente}-12-31`,
       valorTotal: 2400,
@@ -719,6 +766,7 @@ class ContractService {
       clausulas,
 
       assinaturaCondutorUrl: config.assinaturaCondutorUrl || usuario.assinatura_digital_url,
+      logoCondutorUrl: (config as Record<string, any>).logoCondutorUrl !== undefined ? (config as Record<string, any>).logoCondutorUrl : usuario.logo_url,
       apelidoCondutor: usuario.apelido,
     };
 

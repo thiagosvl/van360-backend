@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "../config/supabase.js";
-import { UpdateConfiguracoesDTO } from "../types/dtos/configuracoes.dto.js";
+import type { TablesUpdate } from "../types/database.types.js";
 
 export const usuarioConfiguracoesRepository = {
   async getByUsuarioId(usuarioId: string) {
@@ -17,7 +17,12 @@ export const usuarioConfiguracoesRepository = {
       const { data: newConfig, error: insertError } = await supabaseAdmin
         .from("usuario_configuracoes")
         .upsert(
-          { usuario_id: usuarioId },
+          {
+            usuario_id: usuarioId,
+            notificar_inicio_rota: false,
+            notificar_proxima_parada: false,
+            notificar_conclusao_parada: false,
+          },
           { onConflict: "usuario_id" }
         )
         .select("*")
@@ -33,7 +38,7 @@ export const usuarioConfiguracoesRepository = {
     return data;
   },
 
-  async update(usuarioId: string, updates: UpdateConfiguracoesDTO) {
+  async update(usuarioId: string, updates: Partial<TablesUpdate<"usuario_configuracoes">>) {
     const payload = {
       usuario_id: usuarioId,
       ...updates,

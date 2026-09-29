@@ -8,6 +8,7 @@ import { cleanString } from "../utils/string.utils.js";
 import { AppError } from "../errors/AppError.js";
 import { historicoService } from "./historico.service.js";
 import { toPersistenceString, parseLocalDate } from "../utils/date.utils.js";
+import { calculateAuditDiff } from "../utils/audit-diff.util.js";
 
 const _validarObterSlugCategoria = async (categoria: string, usuarioId: string): Promise<string> => {
     const catsRes = await gastoCategoriaRepository.list(usuarioId);
@@ -56,15 +57,14 @@ const _prepareGastoData = (data: Partial<CreateGastoDTO>, usuarioId?: string, is
 
 const addMonthsFinancial = (dateStr: string, monthsToAdd: number): string => {
     const d = parseLocalDate(dateStr);
-    const year = d.getFullYear();
-    const month = d.getMonth();
-    const day = d.getDate();
-
-    const targetDate = new Date(year, month + monthsToAdd, 1);
-    const maxDays = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0).getDate();
-    const targetDay = Math.min(day, maxDays);
-    targetDate.setDate(targetDay);
-    return toPersistenceString(targetDate);
+    const totalMonths = d.getFullYear() * 12 + d.getMonth() + monthsToAdd;
+    const targetYear = Math.floor(totalMonths / 12);
+    const targetMonth = (totalMonths % 12) + 1;
+    const maxDays = new Date(targetYear, targetMonth, 0).getDate();
+    const targetDay = Math.min(d.getDate(), maxDays);
+    const mStr = String(targetMonth).padStart(2, "0");
+    const dStr = String(targetDay).padStart(2, "0");
+    return `${targetYear}-${mStr}-${dStr}`;
 };
 
 export const gastoService = {
@@ -221,14 +221,24 @@ export const gastoService = {
                 await this._recalcularTotalParcelas(gastoExistente.parcelamento_id);
             }
 
-            historicoService.log({
-                usuario_id: updated.usuario_id,
-                entidade_tipo: AtividadeEntidadeTipo.GASTO,
-                entidade_id: id,
-                acao: AtividadeAcao.GASTO_EDITADO,
-                descricao: `Registro de gasto (${updated.categoria}) foi atualizado.`,
-                meta: { valor: updated.valor, categoria: updated.categoria, campos: Object.keys(data) }
-            });
+            const diff = calculateAuditDiff(gastoExistente, gastoData);
+
+            if (diff.hasChanges) {
+                historicoService.log({
+                    usuario_id: updated.usuario_id,
+                    entidade_tipo: AtividadeEntidadeTipo.GASTO,
+                    entidade_id: id,
+                    acao: AtividadeAcao.GASTO_EDITADO,
+                    descricao: `Registro de gasto (${updated.categoria}) foi atualizado.`,
+                    meta: {
+                        valor: updated.valor,
+                        categoria: updated.categoria,
+                        campos_alterados: diff.campos,
+                        campos: diff.campos,
+                        alteracoes: diff.alteracoes
+                    }
+                });
+            }
 
             return updated;
         }
@@ -261,15 +271,25 @@ export const gastoService = {
         }
 
         const { data: updatedMain } = await gastoRepository.getById(id);
+        const diffLote = calculateAuditDiff(gastoExistente, gastoData);
 
-        historicoService.log({
-            usuario_id: gastoExistente.usuario_id,
-            entidade_tipo: AtividadeEntidadeTipo.GASTO,
-            entidade_id: id,
-            acao: AtividadeAcao.GASTO_EDITADO,
-            descricao: `Parcelas do gasto (${gastoExistente.categoria}) foram atualizadas em lote (${escopo}).`,
-            meta: { parcelamento_id: gastoExistente.parcelamento_id, escopo, registros_afetados: parcelasAfetadas?.length || 0 }
-        });
+        if (diffLote.hasChanges) {
+            historicoService.log({
+                usuario_id: gastoExistente.usuario_id,
+                entidade_tipo: AtividadeEntidadeTipo.GASTO,
+                entidade_id: id,
+                acao: AtividadeAcao.GASTO_EDITADO,
+                descricao: `Parcelas do gasto (${gastoExistente.categoria}) foram atualizadas em lote (${escopo}).`,
+                meta: {
+                    parcelamento_id: gastoExistente.parcelamento_id,
+                    escopo,
+                    registros_afetados: parcelasAfetadas?.length || 0,
+                    campos_alterados: diffLote.campos,
+                    campos: diffLote.campos,
+                    alteracoes: diffLote.alteracoes
+                }
+            });
+        }
 
         return updatedMain || gastoExistente;
     },
