@@ -1,4 +1,4 @@
-import { CheckoutPaymentMethod } from "../enums.js";
+import { CheckoutPaymentMethod, SubscriptionStatus } from "../enums.js";
 
 export interface ProjecaoMesValorDTO {
   total: number;
@@ -64,6 +64,7 @@ export interface ProximaRenovacaoItemDTO {
   motoristaTelefone: string;
   planoNome: string;
   tipoPlano: "MONTHLY" | "YEARLY";
+  statusAssinatura: SubscriptionStatus;
   isVitalicio: boolean;
   metodoPagamento: CheckoutPaymentMethod | null;
   dataVencimento: string | null;

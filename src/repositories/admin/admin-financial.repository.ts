@@ -21,7 +21,7 @@ export const adminFinancialRepository = {
           usuarios(id, nome, telefone, email),
           planos(id, nome, identificador, valor, valor_promocional)
         `)
-        .in("status", [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIAL]),
+        .in("status", [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE, SubscriptionStatus.TRIAL]),
 
       supabaseAdmin
         .from("assinatura_faturas")

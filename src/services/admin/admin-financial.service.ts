@@ -68,7 +68,7 @@ export const adminFinancialService = {
     const assinantesPagantesAtivos: typeof assinaturasRaw = [];
 
     for (const sub of assinaturasRaw) {
-      if (sub.status !== SubscriptionStatus.ACTIVE) continue;
+      if (sub.status !== SubscriptionStatus.ACTIVE && sub.status !== SubscriptionStatus.PAST_DUE) continue;
 
       const isVitalicio = !sub.data_vencimento;
       if (isVitalicio) {
@@ -428,6 +428,7 @@ export const adminFinancialService = {
         motoristaTelefone: usuario?.telefone || "",
         planoNome: plano?.nome || (isYearly ? "Plano Anual" : "Plano Mensal"),
         tipoPlano: isYearly ? "YEARLY" : "MONTHLY",
+        statusAssinatura: sub.status as SubscriptionStatus,
         isVitalicio: false,
         metodoPagamento: (sub.metodo_pagamento as CheckoutPaymentMethod) || null,
         dataVencimento: venc.toISOString(),
