@@ -82,6 +82,16 @@ export const listGlobalLogsQuerySchema = z.object({
   search_cpf: z.string().optional(),
 });
 
+export const listLogsByUserQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  dataInicio: z.string().optional(),
+  dataFim: z.string().optional(),
+  acao: z.string().optional(),
+  entidade: z.string().optional(),
+  search_cpf: z.string().optional(),
+});
+
 export type UpdateUserAdminDTO = z.infer<typeof updateUserAdminSchema>;
 export type UpdateSubscriptionAdminDTO = z.infer<typeof updateSubscriptionAdminSchema>;
 export type UpdateConfigDTO = z.infer<typeof updateConfigSchema>;
@@ -89,6 +99,7 @@ export type ListUsersQuery = z.infer<typeof listUsersQuerySchema>;
 export type ListUserLogsQuery = z.infer<typeof listUserLogsQuerySchema>;
 export type ListLoginAttemptsQuery = z.infer<typeof listLoginAttemptsQuerySchema>;
 export type ListGlobalLogsQuery = z.infer<typeof listGlobalLogsQuerySchema>;
+export type ListLogsByUserQuery = z.infer<typeof listLogsByUserQuerySchema>;
 
 export const updatePlanSchema = z.object({
   valor: z.coerce.number().min(0).optional(),

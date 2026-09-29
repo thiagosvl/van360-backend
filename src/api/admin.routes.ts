@@ -52,6 +52,7 @@ const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   // Logs & Atividades & Notificações & Tentativas de Login
   app.get("/login-attempts", adminLoginAttemptsController.getLoginAttempts);
   app.get("/logs", adminLogController.getGlobalLogs);
+  app.get("/logs/by-user", adminLogController.getLogsByUser);
   app.get("/users/:id/logs", adminLogController.getUserLogs);
   app.get("/notifications", adminNotificationController.getGlobalNotifications);
   app.get("/notifications/broadcast/estimate", adminBroadcastController.estimate);
