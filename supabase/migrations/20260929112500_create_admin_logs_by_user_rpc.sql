@@ -14,11 +14,18 @@ RETURNS TABLE (
   usuario_apelido TEXT,
   usuario_telefone TEXT,
   usuario_email TEXT,
+  usuario_logo_url TEXT,
+  assinatura_status TEXT,
+  tipo_usuario TEXT,
+  cadastrado_em TIMESTAMPTZ,
   total_atividades BIGINT,
   primeira_atividade_em TIMESTAMPTZ,
   ultima_atividade_em TIMESTAMPTZ,
   ultimas_atividades JSONB,
-  total_usuarios BIGINT
+  total_usuarios BIGINT,
+  total_trial BIGINT,
+  total_ativos BIGINT,
+  total_recorrentes BIGINT
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -30,6 +37,9 @@ DECLARE
   v_digits TEXT;
   v_matched_user_ids UUID[];
   v_total_users BIGINT;
+  v_total_trial BIGINT;
+  v_total_ativos BIGINT;
+  v_total_recorrentes BIGINT;
 BEGIN
   IF p_data_inicio IS NOT NULL AND TRIM(p_data_inicio) <> '' THEN
     IF LENGTH(TRIM(p_data_inicio)) = 10 THEN
@@ -68,14 +78,44 @@ BEGIN
     END IF;
   END IF;
 
-  SELECT COUNT(DISTINCT act.usuario_id)::BIGINT
-  INTO v_total_users
-  FROM historico_atividades act
-  WHERE (v_start_tz IS NULL OR act.created_at >= v_start_tz)
-    AND (v_end_tz IS NULL OR act.created_at <= v_end_tz)
-    AND (p_acao IS NULL OR TRIM(p_acao) = '' OR p_acao = 'all' OR act.acao = p_acao)
-    AND (p_entidade IS NULL OR TRIM(p_entidade) = '' OR p_entidade = 'all' OR act.entidade_tipo = p_entidade)
-    AND (v_matched_user_ids IS NULL OR act.usuario_id = ANY(v_matched_user_ids));
+  WITH active_uids AS (
+    SELECT DISTINCT act.usuario_id
+    FROM historico_atividades act
+    WHERE (v_start_tz IS NULL OR act.created_at >= v_start_tz)
+      AND (v_end_tz IS NULL OR act.created_at <= v_end_tz)
+      AND (p_acao IS NULL OR TRIM(p_acao) = '' OR p_acao = 'all' OR act.acao = p_acao)
+      AND (p_entidade IS NULL OR TRIM(p_entidade) = '' OR p_entidade = 'all' OR act.entidade_tipo = p_entidade)
+      AND (v_matched_user_ids IS NULL OR act.usuario_id = ANY(v_matched_user_ids))
+  ),
+  aggregated_users AS (
+    SELECT
+      au.usuario_id,
+      CASE
+        WHEN u.created_at < COALESCE(v_start_tz, NOW()) THEN 'recorrente'
+        ELSE 'novo'
+      END AS tipo_user,
+      COALESCE(sub.status, 'TRIAL') AS sub_status
+    FROM active_uids au
+    LEFT JOIN usuarios u ON u.id = au.usuario_id
+    LEFT JOIN LATERAL (
+      SELECT s.status
+      FROM assinaturas s
+      WHERE s.usuario_id = au.usuario_id
+      ORDER BY s.created_at DESC
+      LIMIT 1
+    ) sub ON true
+  )
+  SELECT
+    COUNT(*)::BIGINT,
+    COUNT(*) FILTER (WHERE sub_status = 'TRIAL')::BIGINT,
+    COUNT(*) FILTER (WHERE sub_status = 'ACTIVE')::BIGINT,
+    COUNT(*) FILTER (WHERE tipo_user = 'recorrente')::BIGINT
+  INTO
+    v_total_users,
+    v_total_trial,
+    v_total_ativos,
+    v_total_recorrentes
+  FROM aggregated_users;
 
   IF v_total_users = 0 OR v_total_users IS NULL THEN
     RETURN;
@@ -105,13 +145,30 @@ BEGIN
     u.apelido AS usuario_apelido,
     u.telefone AS usuario_telefone,
     u.email AS usuario_email,
+    u.logo_url AS usuario_logo_url,
+    COALESCE(sub.status, 'TRIAL') AS assinatura_status,
+    CASE
+      WHEN u.created_at < COALESCE(v_start_tz, NOW()) THEN 'recorrente'
+      ELSE 'novo'
+    END AS tipo_usuario,
+    u.created_at AS cadastrado_em,
     us.total_atividades,
     us.primeira_atividade_em,
     us.ultima_atividade_em,
     COALESCE(recent_acts.acts, '[]'::JSONB) AS ultimas_atividades,
-    v_total_users AS total_usuarios
+    v_total_users AS total_usuarios,
+    v_total_trial AS total_trial,
+    v_total_ativos AS total_ativos,
+    v_total_recorrentes AS total_recorrentes
   FROM user_summary us
   LEFT JOIN usuarios u ON u.id = us.usuario_id
+  LEFT JOIN LATERAL (
+    SELECT s.status
+    FROM assinaturas s
+    WHERE s.usuario_id = us.usuario_id
+    ORDER BY s.created_at DESC
+    LIMIT 1
+  ) sub ON true
   LEFT JOIN LATERAL (
     SELECT jsonb_agg(
       jsonb_build_object(
@@ -141,7 +198,7 @@ BEGIN
         AND (p_acao IS NULL OR TRIM(p_acao) = '' OR p_acao = 'all' OR act.acao = p_acao)
         AND (p_entidade IS NULL OR TRIM(p_entidade) = '' OR p_entidade = 'all' OR act.entidade_tipo = p_entidade)
       ORDER BY act.created_at DESC
-      LIMIT 5
+      LIMIT 3
     ) a
   ) recent_acts ON true
   ORDER BY us.ultima_atividade_em DESC;
