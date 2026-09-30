@@ -2192,6 +2192,28 @@ export type Database = {
           total_count: number
         }[]
       }
+      get_admin_trials_pipeline: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          assinatura_id: string
+          usuario_id: string
+          nome: string
+          apelido: string | null
+          trial_ends_at: string
+          dias_restantes: number
+          dias_acessados: number
+          total_acoes: number
+          alunos: number
+          escolas: number
+          veiculos: number
+          rotas: number
+          contratos: number
+          solicitacoes: number
+          indicado_por: string | null
+          valor_mensal: number
+          valor_anual: number
+        }[]
+      }
       bytea_to_text: { Args: { data: string }; Returns: string }
       confirm_invoice_payment: { Args: { p_fatura_id: string }; Returns: Json }
       http: {

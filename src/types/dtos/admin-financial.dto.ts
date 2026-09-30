@@ -132,3 +132,28 @@ export interface AdminDemographicsStatsResponseDTO {
   evolucaoMensal: EvolucaoMensalUsuarioItemDTO[];
   distribuicaoEstados: AdminEstadoDemographicsDTO[];
 }
+
+export interface TrialPipelineItemDTO {
+  assinaturaId: string;
+  usuarioId: string;
+  nome: string;
+  apelido: string | null;
+  trialEndsAt: string;
+  diasRestantes: number;
+  diasAcessados: number;
+  totalAcoes: number;
+  alunos: number;
+  escolas: number;
+  veiculos: number;
+  rotas: number;
+  contratos: number;
+  solicitacoes: number;
+  indicadoPor: string | null;
+  valorMensal: number;
+  valorAnual: number;
+}
+
+export interface TrialsPipelineResponseDTO {
+  trials: TrialPipelineItemDTO[];
+  total: number;
+}

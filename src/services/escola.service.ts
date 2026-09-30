@@ -1,12 +1,15 @@
 import { escolaRepository } from "../repositories/escola.repository.js";
-import { CreateEscolaDTO, ListEscolasFiltersDTO, UpdateEscolaDTO } from "../types/dtos/escola.dto.js";
+import { CreateEscolaDTO, BatchCreateEscolasDTO, ListEscolasFiltersDTO, UpdateEscolaDTO } from "../types/dtos/escola.dto.js";
 import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 import { cleanString } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
 import { AppError } from "../errors/AppError.js";
 import { calculateAuditDiff } from "../utils/audit-diff.util.js";
+import { Tables, TablesInsert } from "../types/database.types.js";
 
-// Helper Methods
+export type EscolaRow = Tables<"escolas">;
+export type EscolaInsert = TablesInsert<"escolas">;
+
 const _prepareEscolaData = (data: Partial<CreateEscolaDTO>, usuarioId?: string, isUpdate: boolean = false): Record<string, unknown> => {
     const prepared: Record<string, unknown> = {};
 
@@ -30,7 +33,7 @@ const _prepareEscolaData = (data: Partial<CreateEscolaDTO>, usuarioId?: string, 
 };
 
 export const escolaService = {
-    async createEscola(data: CreateEscolaDTO): Promise<any> {
+    async createEscola(data: CreateEscolaDTO): Promise<EscolaRow> {
         if (!data.usuario_id) throw new AppError("Usuário obrigatório", 400);
         if (!data.nome) throw new AppError("Nome da escola é obrigatório", 400);
 
@@ -39,7 +42,6 @@ export const escolaService = {
         const { data: inserted, error } = await escolaRepository.insert(escolaData);
         if (error) throw error;
 
-        // --- LOG DE AUDITORIA ---
         historicoService.log({
             usuario_id: inserted.usuario_id,
             entidade_tipo: AtividadeEntidadeTipo.ESCOLA,
@@ -50,6 +52,59 @@ export const escolaService = {
         });
 
         return inserted;
+    },
+
+    async createBatchEscolas(data: BatchCreateEscolasDTO): Promise<EscolaRow[]> {
+        if (!data.usuario_id) throw new AppError("Usuário obrigatório", 400);
+        if (!data.nomes || data.nomes.length === 0) {
+            throw new AppError("Lista de nomes de escolas é obrigatória", 400);
+        }
+
+        const nomesUnicos = Array.from(
+            new Set(
+                data.nomes
+                    .map((n) => cleanString(n, true))
+                    .filter((n) => n.length > 0)
+            )
+        );
+
+        if (nomesUnicos.length === 0) {
+            throw new AppError("Nenhum nome válido de escola informado", 400);
+        }
+
+        const usuarioId = data.usuario_id;
+        const records: EscolaInsert[] = nomesUnicos.map((nome) => ({
+            usuario_id: usuarioId,
+            nome,
+            ativo: true,
+        }));
+
+        const { data: inserted, error } = await escolaRepository.insertBatch(records);
+        if (error) throw error;
+
+        const lista = inserted || [];
+        if (lista.length > 0) {
+            const primeiro = lista[0];
+            const nomesFormatados = lista.map((e) => e.nome).join(", ");
+            const descricao = lista.length === 1
+                ? `Nova escola ${primeiro.nome} cadastrada.`
+                : `${lista.length} novas escolas cadastradas em lote (${nomesFormatados}).`;
+
+            historicoService.log({
+                usuario_id: primeiro.usuario_id,
+                entidade_tipo: AtividadeEntidadeTipo.ESCOLA,
+                entidade_id: primeiro.id,
+                acao: AtividadeAcao.ESCOLA_CRIADA,
+                descricao,
+                meta: {
+                    total: lista.length,
+                    escola_ids: lista.map((e) => e.id),
+                    escolas: lista.map((e) => ({ id: e.id, nome: e.nome })),
+                }
+            });
+        }
+
+        return lista;
     },
 
     async updateEscola(id: string, data: UpdateEscolaDTO): Promise<any> {
@@ -91,7 +146,6 @@ export const escolaService = {
             const { error } = await escolaRepository.delete(id);
             if (error) throw error;
 
-            // --- LOG DE AUDITORIA ---
             historicoService.log({
                 usuario_id: (escola.usuario_id as string) || '',
                 entidade_tipo: AtividadeEntidadeTipo.ESCOLA,

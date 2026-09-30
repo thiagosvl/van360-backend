@@ -18,6 +18,20 @@ export const createEscolaSchema = z.object({
 
 export type CreateEscolaDTO = z.infer<typeof createEscolaSchema>;
 
+export const batchCreateEscolasSchema = z.object({
+  usuario_id: z.string().uuid().optional(),
+  nomes: z
+    .array(
+      z
+        .string()
+        .min(1, "Nome não pode ser vazio")
+        .trim(),
+    )
+    .min(1, "Informe ao menos uma escola"),
+});
+
+export type BatchCreateEscolasDTO = z.infer<typeof batchCreateEscolasSchema>;
+
 export const updateEscolaSchema = createEscolaSchema.partial();
 export type UpdateEscolaDTO = z.infer<typeof updateEscolaSchema>;
 
