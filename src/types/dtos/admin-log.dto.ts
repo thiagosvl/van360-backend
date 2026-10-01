@@ -40,6 +40,7 @@ export interface AdminLogsByUserResponseDTO {
   total_novos: number;
   total_trial: number;
   total_ativos: number;
+  total_vitalicios: number;
   total_recorrentes: number;
   page: number;
   limit: number;

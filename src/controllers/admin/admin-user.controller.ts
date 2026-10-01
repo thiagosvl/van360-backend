@@ -340,6 +340,19 @@ export const adminUserController = {
     }
   },
 
+  async confirmInvoicePayment(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+      const result = await adminUserService.confirmInvoicePayment(id);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao confirmar pagamento de fatura.");
+      const status = error.message?.includes("não encontrada") ? 404 : 400;
+      return reply.status(status).send({ error: error.message || "Erro ao confirmar pagamento de fatura." });
+    }
+  },
+
   async listReferrals(request: FastifyRequest, reply: FastifyReply) {
     try {
       const query = listReferralsAdminSchema.parse(request.query);

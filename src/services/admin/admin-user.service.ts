@@ -22,6 +22,7 @@ import {
   TipoResponsavel,
   NotificationQueueStatus,
   IndicacaoStatus,
+  SubscriptionInvoiceStatus,
 } from "../../types/enums.js";
 import {
   EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
@@ -37,7 +38,7 @@ import type {
   CarteiraDiaResumoDTO,
   DisparosHojeResumoDTO,
 } from "../../types/dtos/admin-vencimento-detalhes.dto.js";
-import { onlyDigits, cleanString, buildAccentInsensitiveRegex } from "../../utils/string.utils.js";
+import { onlyDigits, cleanString, normalizePhone } from "../../utils/string.utils.js";
 import { subscriptionService } from "../subscriptions/subscription.service.js";
 import type {
   UpdateUserAdminDTO,
@@ -189,7 +190,7 @@ export const adminUserService = {
     const to = from + limit - 1;
 
     let searchClean: string | undefined = undefined;
-    let regexPattern: string | undefined = undefined;
+    let digits: string | undefined = undefined;
     let isId = false;
 
     if (search) {
@@ -199,7 +200,10 @@ export const adminUserService = {
       if (uuidRegex.test(searchClean)) {
         isId = true;
       } else {
-        regexPattern = buildAccentInsensitiveRegex(searchClean);
+        const rawDigits = onlyDigits(searchClean);
+        if (rawDigits.length >= 3) {
+          digits = normalizePhone(rawDigits);
+        }
       }
     }
 
@@ -207,7 +211,7 @@ export const adminUserService = {
       from,
       to,
       searchClean,
-      regexPattern,
+      digits,
       isId,
       status: status?.trim() || undefined,
       tipo: query.tipo?.trim() || undefined,
@@ -1767,6 +1771,28 @@ export const adminUserService = {
     });
 
     return { success: true, message: "Fatura excluída com sucesso." };
+  },
+
+  async confirmInvoicePayment(invoiceId: string) {
+    const { data: fatura, error: fetchError } = await invoiceRepository.getById(invoiceId);
+    if (fetchError || !fatura) {
+      throw new AppError("Fatura não encontrada.", 404);
+    }
+
+    if (fatura.status === SubscriptionInvoiceStatus.PAID) {
+      throw new AppError("Esta fatura já consta como paga.", 400);
+    }
+
+    const res = await subscriptionService.activateByFatura(invoiceId);
+    if (!res || !res.success) {
+      throw new AppError(res?.message || "Não foi possível confirmar o pagamento da fatura.", 400);
+    }
+
+    return {
+      success: true,
+      message: "Pagamento confirmado e assinatura ativada com sucesso.",
+      data: res,
+    };
   },
 
   async getAcquisitionStats(query: ListAcquisitionStatsQuery): Promise<AdminAcquisitionStatsDTO> {

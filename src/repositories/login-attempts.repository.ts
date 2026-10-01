@@ -51,40 +51,51 @@ class LoginAttemptsRepository {
     }
     
     if (isValidFilterValue(filters?.search_cpf)) {
-      const cleanSearch = filters!.search_cpf.trim();
-      const digits = cleanSearch.replace(/\D/g, "");
-      const isId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanSearch);
+      const rawSearch = filters!.search_cpf.trim();
+      const sanitizedText = rawSearch.replace(/[,()"\\]/g, " ").replace(/\s+/g, " ").trim();
+      const digits = rawSearch.replace(/\D/g, "");
+      const isId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sanitizedText);
 
-      let loginTerms: string[] = [cleanSearch];
+      const loginTerms: string[] = [];
+      if (sanitizedText) loginTerms.push(sanitizedText);
+      if (digits && digits.length >= 3 && !loginTerms.includes(digits)) loginTerms.push(digits);
 
       let userQuery = supabaseAdmin.from("usuarios").select("cpfcnpj, email");
       let doUserQuery = false;
 
       if (isId) {
-          userQuery = userQuery.eq("id", cleanSearch);
-          doUserQuery = true;
+        userQuery = userQuery.eq("id", sanitizedText);
+        doUserQuery = true;
       } else {
-          if (digits && digits.length >= 3) {
-              userQuery = userQuery.or(`cpfcnpj.ilike.%${digits}%,telefone.ilike.%${digits}%`);
-              doUserQuery = true;
-          } else if (cleanSearch) {
-              userQuery = userQuery.or(`nome.ilike.%${cleanSearch}%`);
-              doUserQuery = true;
-          }
+        if (digits && digits.length >= 3) {
+          userQuery = userQuery.or(`cpfcnpj.ilike.%${digits}%,telefone.ilike.%${digits}%`);
+          doUserQuery = true;
+        } else if (sanitizedText) {
+          userQuery = userQuery.or(`nome.ilike.%${sanitizedText}%`);
+          doUserQuery = true;
+        }
       }
 
       if (doUserQuery) {
-          const { data: uData } = await userQuery.limit(50);
-          if (uData && uData.length > 0) {
-              uData.forEach((u: { cpfcnpj?: string | null; email?: string | null }) => {
-                  if (u.cpfcnpj) loginTerms.push(u.cpfcnpj);
-                  if (u.email) loginTerms.push(u.email);
-              });
-          }
+        const { data: uData } = await userQuery.limit(50);
+        if (uData && uData.length > 0) {
+          uData.forEach((u: { cpfcnpj?: string | null; email?: string | null }) => {
+            if (u.cpfcnpj && !loginTerms.includes(u.cpfcnpj)) loginTerms.push(u.cpfcnpj);
+            if (u.email && !loginTerms.includes(u.email)) loginTerms.push(u.email);
+          });
+        }
       }
 
-      const orConditions = loginTerms.map(term => `login_tentado.ilike.%${term}%`).join(',');
-      query = query.or(orConditions);
+      if (loginTerms.length > 0) {
+        const orConditions = loginTerms
+          .map(term => term.replace(/[,()"\\]/g, "").trim())
+          .filter(Boolean)
+          .map(term => `login_tentado.ilike.%${term}%`)
+          .join(",");
+        if (orConditions) {
+          query = query.or(orConditions);
+        }
+      }
     }
 
     if (from !== undefined && to !== undefined) {

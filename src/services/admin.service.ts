@@ -10,7 +10,7 @@ import { authProvider } from "./providers/auth.provider.js";
 import { SubscriptionStatus, UserType, AtividadeAcao, AtividadeEntidadeTipo, CanalAquisicao, DispositivoCadastro, ContratoStatus, DriverContractConfigStatus, IndicacaoStatus } from "../types/enums.js";
 import { historicoService } from "./historico.service.js";
 import { getNowBR, parseBrazilianDateToISO } from "../utils/date.utils.js";
-import { onlyDigits, cleanString } from "../utils/string.utils.js";
+import { onlyDigits, cleanString, normalizePhone } from "../utils/string.utils.js";
 import type { UpdateUserAdminDTO, UpdateSubscriptionAdminDTO, ListUsersQuery, ListUserLogsQuery, UpdatePlanDTO, CreateUserAdminDTO, ListGlobalLogsQuery } from "../schemas/admin.schema.js";
 import { subscriptionService } from "./subscriptions/subscription.service.js";
 import { notificationService } from "./notifications/notification.service.js";
@@ -255,8 +255,11 @@ export const adminService = {
     let isId = false;
 
     if (search) {
-      searchClean = search.trim();
-      digits = onlyDigits(searchClean);
+      searchClean = cleanString(search);
+      const rawDigits = onlyDigits(searchClean);
+      if (rawDigits.length >= 3) {
+        digits = normalizePhone(rawDigits);
+      }
 
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (uuidRegex.test(searchClean)) {

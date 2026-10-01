@@ -46,3 +46,5 @@ AS $$
   WHERE a.status = 'TRIAL' AND a.trial_ends_at IS NOT NULL
   ORDER BY a.trial_ends_at ASC;
 $$;
+
+GRANT EXECUTE ON FUNCTION get_admin_trials_pipeline() TO authenticated, service_role;

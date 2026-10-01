@@ -75,10 +75,25 @@ export const adminRepository = {
         if (query.isId && isValidFilterValue(query.searchClean)) {
             q = q.eq("id", query.searchClean);
         } else if (isValidFilterValue(query.searchClean)) {
+            const sanitizedText = query.searchClean.replace(/[,()"\\]/g, " ").replace(/\s+/g, " ").trim();
+            const orConditions: string[] = [];
+
             if (query.digits && query.digits.length >= 3) {
-                q = q.or(`nome.ilike.%${query.searchClean}%,telefone.ilike.%${query.digits}%`);
-            } else {
-                q = q.or(`nome.ilike.%${query.searchClean}%`);
+                orConditions.push(`telefone.ilike.%${query.digits}%`);
+                orConditions.push(`cpfcnpj.ilike.%${query.digits}%`);
+            }
+
+            const hasLetters = /[a-zA-ZÀ-ÿ]/.test(sanitizedText);
+            if (hasLetters || !query.digits) {
+                if (sanitizedText) {
+                    orConditions.push(`nome.ilike.%${sanitizedText}%`);
+                    orConditions.push(`apelido.ilike.%${sanitizedText}%`);
+                    orConditions.push(`email.ilike.%${sanitizedText}%`);
+                }
+            }
+
+            if (orConditions.length > 0) {
+                q = q.or(orConditions.join(","));
             }
         }
         return q.range(query.from, query.to);

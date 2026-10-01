@@ -296,5 +296,7 @@ export const subscriptionService = {
             planName: res.plano_nome,
             transactionId: res.fatura_id || faturaId,
         }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "[SubscriptionService] Falha ao enviar evento Purchase para Meta CAPI"));
+
+        return res;
     }
 };

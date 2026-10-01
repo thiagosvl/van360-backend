@@ -9,6 +9,7 @@ import { adminPlanController } from "../controllers/admin/admin-plan.controller.
 import { adminEvolutionController } from "../controllers/admin/admin-evolution.controller.js";
 import { adminCalculatorController } from "../controllers/admin/admin-calculator.controller.js";
 import { adminFinancialController } from "../controllers/admin/admin-financial.controller.js";
+import { adminInvoiceController } from "../controllers/admin/admin-invoice.controller.js";
 import { adminBlogController } from "../controllers/blog.controller.js";
 import { verifySupabaseJWT } from "../middleware/auth.js";
 import { verifyAdmin } from "../middleware/admin.js";
@@ -48,7 +49,10 @@ const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post("/users/:id/dispatch-notification", adminUserController.dispatchNotification);
   app.post("/users/:id/dispatch-cobranca-demo", adminUserController.dispatchDriverCobrancaDemo);
   app.delete("/users/:id", adminUserController.deleteUser);
+  app.get("/invoices", adminInvoiceController.listInvoices);
+  app.get("/invoices/stats", adminInvoiceController.getInvoiceStats);
   app.delete("/invoices/:id", adminUserController.deleteInvoice);
+  app.post("/invoices/:id/confirm-payment", adminUserController.confirmInvoicePayment);
 
   // Logs & Atividades & Notificações & Tentativas de Login
   app.get("/login-attempts", adminLoginAttemptsController.getLoginAttempts);

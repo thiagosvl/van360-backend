@@ -52,34 +52,35 @@ export const adminPassageiroService = {
       const valor = Number(p.valor_cobranca ?? 0);
       const diaVencimento = p.dia_vencimento ? Number(p.dia_vencimento) : 0;
 
-      let podeCobrar = true;
-      let motivoBloqueio: string | null = null;
+      const motivos: string[] = [];
 
       if (!p.ativo) {
-        podeCobrar = false;
-        motivoBloqueio = "Aluno inativo";
-      } else if (p.enviar_notificacoes === false) {
-        podeCobrar = false;
-        motivoBloqueio = "Notificações desativadas para o aluno";
-      } else if (!responsavelPrincipal || (!responsavelPrincipal.telefone && !responsavelPrincipal.email)) {
-        podeCobrar = false;
-        motivoBloqueio = "Responsável sem contato cadastrado";
-      } else if (valor <= 0) {
-        podeCobrar = false;
-        motivoBloqueio = "Valor da mensalidade não informado";
-      } else if (diaVencimento <= 0) {
-        podeCobrar = false;
-        motivoBloqueio = "Dia de vencimento não informado";
-      } else if (!cobranca) {
-        podeCobrar = false;
-        motivoBloqueio = "Parcela do mês atual não gerada";
-      } else if (cobranca.status === CobrancaStatus.PAGO) {
-        podeCobrar = false;
-        motivoBloqueio = "Parcela do mês já foi paga";
-      } else if (cobranca.status === CobrancaStatus.CANCELADA) {
-        podeCobrar = false;
-        motivoBloqueio = "Parcela do mês cancelada";
+        motivos.push("Aluno inativo");
       }
+      if (p.enviar_notificacoes === false) {
+        motivos.push("Notificações desativadas para o aluno");
+      }
+      if (!responsavelPrincipal) {
+        motivos.push("Sem responsável cadastrado");
+      } else if (!responsavelPrincipal.telefone && !responsavelPrincipal.email) {
+        motivos.push("Responsável sem contato cadastrado");
+      }
+      if (valor <= 0) {
+        motivos.push("Valor da mensalidade não informado");
+      }
+      if (diaVencimento <= 0) {
+        motivos.push("Dia de vencimento não informado");
+      }
+      if (!cobranca) {
+        motivos.push("Parcela do mês atual não gerada");
+      } else if (cobranca.status === CobrancaStatus.PAGO) {
+        motivos.push("Parcela do mês já foi paga");
+      } else if (cobranca.status === CobrancaStatus.CANCELADA) {
+        motivos.push("Parcela do mês cancelada");
+      }
+
+      const podeCobrar = motivos.length === 0;
+      const motivoBloqueio = motivos.length > 0 ? motivos.join(" • ") : null;
 
       const { responsaveis: _ignored, ...cleanPassageiro } = p;
 
