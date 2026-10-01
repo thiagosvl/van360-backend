@@ -40,7 +40,7 @@ export const adminLogRepository = {
   ) {
     let query = supabaseAdmin
       .from("historico_atividades")
-      .select("*, usuarios(nome, telefone, apelido)", { count: "exact" });
+      .select("*, usuarios(id, nome, telefone, apelido, logo_url)", { count: "exact" });
 
     if (isValidFilterValue(filters?.search_cpf)) {
       const cleanSearch = filters!.search_cpf.trim();
