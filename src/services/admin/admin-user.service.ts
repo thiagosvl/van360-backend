@@ -564,6 +564,8 @@ export const adminUserService = {
           id: string;
           status: string;
           data_vencimento: string | null;
+          trial_ends_at: string | null;
+          created_at?: string | null;
         }>;
       } | null;
     };
@@ -571,7 +573,12 @@ export const adminUserService = {
     const rawData = (referralsRes.data || []) as unknown as RawReferralRecord[];
 
     const data: ReferralListItemDTO[] = rawData.map((item) => {
-      const sub = item.indicado?.assinaturas?.[0];
+      const subs = item.indicado?.assinaturas || [];
+      const sub = subs.slice().sort((a, b) => {
+        const tA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const tB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return tB - tA;
+      })[0];
       return {
         id: item.id,
         status: item.status,
@@ -596,6 +603,7 @@ export const adminUserService = {
               logo_url: item.indicado.logo_url,
               assinatura_status: sub?.status || null,
               assinatura_data_vencimento: sub?.data_vencimento || null,
+              assinatura_trial_ends_at: sub?.trial_ends_at || null,
             }
           : null,
       };
