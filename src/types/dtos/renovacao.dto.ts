@@ -1,7 +1,15 @@
 import { z } from "zod";
+import type { Tables } from "../database.types.js";
 import { RenovacaoReajusteTipo, RenovacaoStatus } from "../enums.js";
 import { moneyToNumber } from "../../utils/currency.utils.js";
 import { parseLocalDate } from "../../utils/date.utils.js";
+
+export type PassageiroEntity = Tables<"passageiros">;
+export type PassageiroRenovacaoEntity = Tables<"passageiro_renovacoes">;
+export type ResponsavelEntity = Tables<"responsaveis">;
+export type EscolaEntity = Tables<"escolas">;
+export type VeiculoEntity = Tables<"veiculos">;
+export type UsuarioEntity = Tables<"usuarios">;
 
 const optionalString = z.union([z.string(), z.null(), z.undefined()]).transform(v => {
   if (v === undefined) return undefined;
@@ -59,3 +67,56 @@ export const virarAnoLetivoSchema = z.object({
 });
 
 export type VirarAnoLetivoDTO = z.infer<typeof virarAnoLetivoSchema>;
+
+export const responderRenovacaoPublicaSchema = z.object({
+  status: z.enum(["confirmado", "recusado"]),
+  observacoes_pais: z.string().optional().nullable(),
+});
+
+export type ResponderRenovacaoPublicaDTO = z.infer<typeof responderRenovacaoPublicaSchema>;
+
+export const atualizarDadosPublicosSchema = z.object({
+  nome_responsavel: optionalString,
+  cpf_responsavel: optionalString,
+  telefone_responsavel: optionalString,
+  email_responsavel: optionalString,
+  parentesco_responsavel: optionalString,
+  cep: optionalString,
+  logradouro: optionalString,
+  numero: optionalString,
+  bairro: optionalString,
+  cidade: optionalString,
+  estado: optionalString,
+  complemento: optionalString,
+  referencia: optionalString,
+  turma: optionalString,
+  sala: optionalString,
+  nome_professor: optionalString,
+  observacoes: optionalString,
+  observacoes_pais: optionalString,
+});
+
+export type AtualizarDadosPublicosDTO = z.infer<typeof atualizarDadosPublicosSchema>;
+
+export const notificarRenovacaoSchema = z.object({
+  ano_destino: z.number().int().default(2027),
+});
+
+export type NotificarRenovacaoDTO = z.infer<typeof notificarRenovacaoSchema>;
+
+export const notificarRenovacaoLoteSchema = z.object({
+  ano_destino: z.number().int().default(2027),
+  passageiro_ids: z.array(z.string().uuid()).optional(),
+});
+
+export type NotificarRenovacaoLoteDTO = z.infer<typeof notificarRenovacaoLoteSchema>;
+
+export const atualizarStatusLoteSchema = z.object({
+  ano_destino: z.number().int().default(2027),
+  passageiro_ids: z.array(z.string().uuid()).min(1),
+  status: z.nativeEnum(RenovacaoStatus),
+});
+
+export type AtualizarStatusLoteDTO = z.infer<typeof atualizarStatusLoteSchema>;
+
+

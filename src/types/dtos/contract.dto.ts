@@ -10,6 +10,9 @@ export const createContractSchema = z.object({
   dataFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   qtdParcelas: z.number().int().positive().optional(),
   modalidade: z.string().optional(),
+  ano: z.number().int().optional(),
+  nomeEscola: z.string().optional(),
+  periodo: z.string().optional(),
   notificarResponsavel: z.boolean().default(false),
 });
 

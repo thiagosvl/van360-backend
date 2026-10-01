@@ -2560,10 +2560,8 @@ export const Constants = {
       ],
       renovacao_status_enum: [
         "pendente",
-        "confirmado_manual",
-        "confirmado_online",
-        "recusado_motorista",
-        "recusado_pais",
+        "confirmado",
+        "recusado",
         "concluido",
       ],
       tipo_no_rota_enum: ["passageiro", "escola"],

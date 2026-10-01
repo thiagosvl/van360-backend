@@ -24,6 +24,12 @@ const renovacaoRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
     renovacaoController.reajusteLote
   );
 
+  app.post(
+    "/status-lote",
+    { preHandler: [requirePermission("renovacoes.gerenciar")] },
+    renovacaoController.atualizarStatusLote
+  );
+
   app.put(
     "/:passageiroId",
     { preHandler: [requirePermission("renovacoes.gerenciar")] },
@@ -35,6 +41,19 @@ const renovacaoRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
     { preHandler: [requirePermission("renovacoes.gerenciar")] },
     renovacaoController.virarAno
   );
+
+  app.post(
+    "/:passageiroId/notificar",
+    { preHandler: [requirePermission("renovacoes.gerenciar")] },
+    renovacaoController.notificarIndividual
+  );
+
+  app.post(
+    "/notificar-lote",
+    { preHandler: [requirePermission("renovacoes.gerenciar")] },
+    renovacaoController.notificarLote
+  );
 };
 
 export default renovacaoRoutes;
+

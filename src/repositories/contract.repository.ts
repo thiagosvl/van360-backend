@@ -90,6 +90,21 @@ export const contractRepository = {
     return data as { id: string; status: ContratoStatus };
   },
 
+  async getByPassageiroEAno(passageiroId: string, ano: number) {
+    const { data, error } = await supabaseAdmin
+      .from("contratos")
+      .select("id, status, token_acesso, created_at, ano")
+      .eq("passageiro_id", passageiroId)
+      .eq("ano", ano)
+      .in("status", [ContratoStatus.PENDENTE, ContratoStatus.ASSINADO])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data;
+  },
+
   async getFinalUrl(id: string) {
     return supabaseAdmin
       .from("contratos")
