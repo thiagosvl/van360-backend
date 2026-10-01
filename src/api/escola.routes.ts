@@ -9,6 +9,7 @@ const escolaRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
     // CRUD Básico
     app.post("/", { preHandler: [requirePermission("escolas.gerenciar")] }, escolaController.create);
+    app.post("/batch", { preHandler: [requirePermission("escolas.gerenciar")] }, escolaController.createBatch);
     app.put("/:id", { preHandler: [requirePermission("escolas.gerenciar")] }, escolaController.update);
     app.delete("/:id", { preHandler: [requirePermission("escolas.gerenciar")] }, escolaController.delete);
     app.get("/:id", { preHandler: [requirePermission("escolas.visualizar", "escolas.gerenciar", "rotas.visualizar", "rotas.criar_editar")] }, escolaController.get);

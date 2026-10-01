@@ -1,14 +1,24 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { ListEscolasFiltersDTO } from "../types/dtos/escola.dto.js";
 import { isValidFilterValue } from "../utils/filter.utils.js";
+import { TablesInsert } from "../types/database.types.js";
+
+export type EscolaInsert = TablesInsert<"escolas">;
 
 export const escolaRepository = {
     async insert(data: Record<string, unknown>) {
         return supabaseAdmin
             .from("escolas")
-            .insert([data])
+            .insert([data as EscolaInsert])
             .select()
             .single();
+    },
+
+    async insertBatch(records: EscolaInsert[]) {
+        return supabaseAdmin
+            .from("escolas")
+            .insert(records)
+            .select();
     },
 
     async update(id: string, data: Record<string, unknown>) {

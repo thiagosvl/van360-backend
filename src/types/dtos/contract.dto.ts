@@ -4,16 +4,22 @@ import { ContratoProvider, ContratoStatus } from '../enums.js';
 export const createContractSchema = z.object({
   passageiroId: z.string().uuid('ID do aluno inválido'),
   provider: z.enum(ContratoProvider).default(ContratoProvider.INHOUSE),
-  // Termos opcionais para sobrescrever os dados do passageiro/padrão
   valorMensal: z.number().positive().optional(),
   diaVencimento: z.number().int().min(1).max(31).optional(),
   dataInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   dataFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   qtdParcelas: z.number().int().positive().optional(),
   modalidade: z.string().optional(),
+  notificarResponsavel: z.boolean().default(false),
 });
 
 export type CreateContractDTO = z.infer<typeof createContractSchema>;
+
+export const replaceContractSchema = z.object({
+  notificarResponsavel: z.boolean().default(false),
+});
+
+export type ReplaceContractDTO = z.infer<typeof replaceContractSchema>;
 
 export const importContractSchema = z.object({
   passageiroId: z.string().uuid('ID do aluno inválido'),

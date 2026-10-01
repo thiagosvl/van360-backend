@@ -2,6 +2,7 @@ import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
 import { escolaService } from "../services/escola.service.js";
 import {
+    batchCreateEscolasSchema,
     createEscolaSchema,
     listEscolasFiltersSchema,
     toggleEscolaAtivoSchema,
@@ -26,6 +27,25 @@ export const escolaController = {
         const err = error as { code?: string };
         if (err.code === '23505') {
             throw new AppError("Já existe uma escola cadastrada com este nome.", 409);
+        }
+        throw error;
+    }
+  },
+
+  createBatch: async (request: FastifyRequest, reply: FastifyReply) => {
+    logger.info("EscolaController.createBatch - Starting");
+    try {
+        const data = batchCreateEscolasSchema.parse(request.body);
+        if (request.data_owner_id) {
+            data.usuario_id = request.data_owner_id;
+        }
+
+        const result = await escolaService.createBatchEscolas(data);
+        return reply.status(201).send(result);
+    } catch (error: unknown) {
+        const err = error as { code?: string };
+        if (err.code === '23505') {
+            throw new AppError("Uma ou mais escolas informadas já estão cadastradas.", 409);
         }
         throw error;
     }

@@ -22,6 +22,7 @@ export interface ContractJobData {
         responsaveis?: any[];
     };
     tokenAcesso: string;
+    notificarResponsavel?: boolean;
 }
 
 /**

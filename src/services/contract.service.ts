@@ -5,7 +5,7 @@ import { logger } from '../config/logger.js';
 import { AppError } from '../errors/AppError.js';
 import { addToContractQueue } from '../queues/contract.queue.js';
 import { ContractProvider, DadosContrato, SignatureMetadata } from '../types/contract.js';
-import { CreateContractDTO, ImportContractDTO, ListContractsDTO } from '../types/dtos/contract.dto.js';
+import { CreateContractDTO, ImportContractDTO, ListContractsDTO, ReplaceContractDTO } from '../types/dtos/contract.dto.js';
 import { AtividadeAcao, AtividadeEntidadeTipo, ContratoProvider, ContratoStatus, PassageiroModalidade, PeriodoEnum, TipoResponsavel } from '../types/enums.js';
 import { getNowBR, toLocalDateString, parseLocalDate, parseMonthYearFromDateString } from '../utils/date.utils.js';
 import { formatAddress, getDriverDisplayName, getFirstAndSecondName } from '../utils/format.js';
@@ -252,7 +252,8 @@ class ContractService {
           email: respInfo.email
         }
       },
-      tokenAcesso
+      tokenAcesso,
+      notificarResponsavel: data.notificarResponsavel === true,
     }, `contract-generate-${contrato.id}`);
 
     logger.info({ contratoId: contrato.id }, 'Fomento de contrato enfileirado com sucesso');
@@ -484,7 +485,16 @@ class ContractService {
           const respInfo = _getResponsavelInfoFromPassageiro(p);
           return {
             id: p.id,
+            nome: p.nome,
             tipo: 'passageiro',
+            responsavel_principal: respInfo.nome ? {
+              id: respInfo.id,
+              nome: respInfo.nome,
+              telefone: respInfo.telefone,
+              cpf: respInfo.cpf,
+              email: respInfo.email,
+              parentesco: respInfo.parentesco
+            } : null,
             passageiro: {
               id: p.id,
               nome: p.nome,
@@ -578,7 +588,7 @@ class ContractService {
     };
   }
 
-  async substituirContrato(authId: string, contratoId: string) {
+  async substituirContrato(authId: string, contratoId: string, options?: ReplaceContractDTO) {
     const usuario = await this.getUsuarioByAuthId(authId);
 
     let contratoOriginal;
@@ -596,7 +606,8 @@ class ContractService {
 
     return this.criarContrato(authId, {
       passageiroId: contratoOriginal.passageiro_id,
-      provider: providerAlvo
+      provider: providerAlvo,
+      notificarResponsavel: options?.notificarResponsavel ?? false,
     });
   }
 

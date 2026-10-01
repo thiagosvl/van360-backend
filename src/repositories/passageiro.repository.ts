@@ -315,7 +315,6 @@ export const passageiroRepository = {
       `)
       .eq("usuario_id", usuarioId)
       .eq("ativo", true)
-      .eq("enviar_notificacoes", true)
       .or("isento.eq.false,isento.is.null");
   },
 

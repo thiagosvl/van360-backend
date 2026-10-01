@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../../config/logger.js";
 import { adminLogService } from "../../services/admin/admin-log.service.js";
-import { listUserLogsQuerySchema, listGlobalLogsQuerySchema } from "../../schemas/admin.schema.js";
+import { listUserLogsQuerySchema, listGlobalLogsQuerySchema, listLogsByUserQuerySchema } from "../../schemas/admin.schema.js";
 
 export const adminLogController = {
   async getUserLogs(request: FastifyRequest, reply: FastifyReply) {
@@ -26,6 +26,18 @@ export const adminLogController = {
       const error = err as Error;
       logger.error({ error: error.message }, "[AdminLogController] Erro ao buscar logs globais.");
       return reply.status(500).send({ error: "Erro ao buscar logs globais." });
+    }
+  },
+
+  async getLogsByUser(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const query = listLogsByUserQuerySchema.parse(request.query);
+      const result = await adminLogService.getLogsByUser(query);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminLogController] Erro ao buscar logs agrupados por usuário.");
+      return reply.status(500).send({ error: "Erro ao buscar logs agrupados por usuário." });
     }
   },
 };

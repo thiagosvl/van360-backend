@@ -15,7 +15,7 @@ export const adminUserRepository = {
     from: number;
     to: number;
     searchClean?: string;
-    regexPattern?: string;
+    digits?: string;
     isId?: boolean;
     status?: string;
     tipo?: string;
@@ -57,10 +57,27 @@ export const adminUserRepository = {
 
     if (query.isId && query.searchClean) {
       q = q.eq("id", query.searchClean);
-    } else if (query.regexPattern) {
-      q = q.or(`nome.imatch.${query.regexPattern},apelido.imatch.${query.regexPattern}`);
     } else if (query.searchClean) {
-      q = q.or(`nome.ilike.%${query.searchClean}%,apelido.ilike.%${query.searchClean}%`);
+      const sanitizedText = query.searchClean.replace(/[,()"\\]/g, " ").replace(/\s+/g, " ").trim();
+      const orConditions: string[] = [];
+
+      if (query.digits && query.digits.length >= 3) {
+        orConditions.push(`telefone.ilike.%${query.digits}%`);
+        orConditions.push(`cpfcnpj.ilike.%${query.digits}%`);
+      }
+
+      const hasLetters = /[a-zA-ZÀ-ÿ]/.test(sanitizedText);
+      if (hasLetters || !query.digits) {
+        if (sanitizedText) {
+          orConditions.push(`nome.ilike.%${sanitizedText}%`);
+          orConditions.push(`apelido.ilike.%${sanitizedText}%`);
+          orConditions.push(`email.ilike.%${sanitizedText}%`);
+        }
+      }
+
+      if (orConditions.length > 0) {
+        q = q.or(orConditions.join(","));
+      }
     }
 
     return q.range(query.from, query.to);

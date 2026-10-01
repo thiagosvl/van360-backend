@@ -1,6 +1,7 @@
 import { logger } from "../../config/logger.js";
 import { adminLogRepository } from "../../repositories/admin/admin-log.repository.js";
-import type { ListUserLogsQuery, ListGlobalLogsQuery } from "../../schemas/admin.schema.js";
+import type { ListUserLogsQuery, ListGlobalLogsQuery, ListLogsByUserQuery } from "../../schemas/admin.schema.js";
+import type { AdminLogsByUserResponseDTO, AdminUserGroupLogItemDTO, AdminLogItemDTO } from "../../types/dtos/admin-log.dto.js";
 
 export const adminLogService = {
   async getUserLogs(userId: string, query: ListUserLogsQuery) {
@@ -47,6 +48,83 @@ export const adminLogService = {
     return {
       data: data || [],
       total: count ?? 0,
+      page,
+      limit,
+    };
+  },
+
+  async getLogsByUser(query: ListLogsByUserQuery): Promise<AdminLogsByUserResponseDTO> {
+    const { page, limit, dataInicio, dataFim, acao, entidade, search_cpf } = query;
+    const offset = (page - 1) * limit;
+
+    const { data, error } = await adminLogRepository.getLogsByUser({
+      dataInicio,
+      dataFim,
+      acao,
+      entidade,
+      search_cpf,
+      limit,
+      offset,
+    });
+
+    if (error) {
+      logger.error({ error }, "[AdminLogService] Erro ao buscar logs agrupados por usuário.");
+      throw error;
+    }
+
+    const rows = (data || []) as Array<{
+      usuario_id: string;
+      usuario_nome: string | null;
+      usuario_apelido: string | null;
+      usuario_telefone: string | null;
+      usuario_email: string | null;
+      usuario_logo_url: string | null;
+      assinatura_status: string;
+      tipo_usuario: string;
+      cadastrado_em: string | null;
+      total_atividades: number | string;
+      primeira_atividade_em: string | null;
+      ultima_atividade_em: string | null;
+      ultimas_atividades: AdminLogItemDTO[];
+      total_usuarios: number | string;
+      total_novos: number | string;
+      total_trial: number | string;
+      total_ativos: number | string;
+      total_vitalicios: number | string;
+      total_recorrentes: number | string;
+    }>;
+
+    const total = rows.length > 0 ? Number(rows[0].total_usuarios) : 0;
+    const total_novos = rows.length > 0 ? Number(rows[0].total_novos) : 0;
+    const total_trial = rows.length > 0 ? Number(rows[0].total_trial) : 0;
+    const total_ativos = rows.length > 0 ? Number(rows[0].total_ativos) : 0;
+    const total_vitalicios = rows.length > 0 ? Number(rows[0].total_vitalicios) : 0;
+    const total_recorrentes = rows.length > 0 ? Number(rows[0].total_recorrentes) : 0;
+
+    const mappedData: AdminUserGroupLogItemDTO[] = rows.map((r) => ({
+      usuario_id: r.usuario_id,
+      usuario_nome: r.usuario_nome,
+      usuario_apelido: r.usuario_apelido,
+      usuario_telefone: r.usuario_telefone,
+      usuario_email: r.usuario_email,
+      usuario_logo_url: r.usuario_logo_url || null,
+      assinatura_status: r.assinatura_status || "TRIAL",
+      tipo_usuario: r.tipo_usuario || "recorrente",
+      cadastrado_em: r.cadastrado_em,
+      total_atividades: Number(r.total_atividades),
+      primeira_atividade_em: r.primeira_atividade_em,
+      ultima_atividade_em: r.ultima_atividade_em,
+      ultimas_atividades: Array.isArray(r.ultimas_atividades) ? r.ultimas_atividades : [],
+    }));
+
+    return {
+      data: mappedData,
+      total,
+      total_novos,
+      total_trial,
+      total_ativos,
+      total_vitalicios,
+      total_recorrentes,
       page,
       limit,
     };

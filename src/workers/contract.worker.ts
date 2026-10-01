@@ -67,7 +67,9 @@ export const contractWorker = new Worker<ContractJobData>(
                 channels.push(NotificationChannelEnum.RESEND);
             }
 
-            if (telefoneResponsavel || hasValidEmail) {
+            const deveNotificar = job.data.notificarResponsavel === true;
+
+            if (deveNotificar && (telefoneResponsavel || hasValidEmail)) {
                 const linkAssinatura = safeProviderName === ContratoProvider.INHOUSE
                     ? `${env.FRONTEND_URL}/assinar/${tokenAcesso}`
                     : response.providerSignatureLink;
@@ -103,6 +105,8 @@ export const contractWorker = new Worker<ContractJobData>(
                 );
 
                 logger.info({ jobId: job.id, phone: telefoneResponsavel, hasValidEmail }, "[Worker] Notificação de contrato processada via NotificationService.");
+            } else if (!deveNotificar) {
+                logger.info({ jobId: job.id, contratoId }, "[Worker] Notificação ao responsável ignorada (notificarResponsavel = false)");
             }
 
             return { success: true, documentUrl: response.documentUrl };

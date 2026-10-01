@@ -1,5 +1,7 @@
+import { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "../../config/supabase.js";
 import { UserType, SubscriptionStatus, SubscriptionInvoiceStatus } from "../../types/enums.js";
+import type { Database } from "../../types/database.types.js";
 
 export const adminFinancialRepository = {
   async getFinancialRawData() {
@@ -21,7 +23,7 @@ export const adminFinancialRepository = {
           usuarios(id, nome, telefone, email),
           planos(id, nome, identificador, valor, valor_promocional)
         `)
-        .in("status", [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIAL]),
+        .in("status", [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE, SubscriptionStatus.TRIAL]),
 
       supabaseAdmin
         .from("assinatura_faturas")
@@ -54,5 +56,9 @@ export const adminFinancialRepository = {
         assinaturas(id, status, data_vencimento, trial_ends_at, updated_at, created_at)
       `)
       .eq("tipo", UserType.MOTORISTA);
+  },
+
+  async getTrialsPipeline() {
+    return (supabaseAdmin as SupabaseClient<Database>).rpc("get_admin_trials_pipeline");
   }
 };

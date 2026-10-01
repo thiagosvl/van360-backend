@@ -171,7 +171,9 @@ export const referralRepository = {
                     assinaturas (
                         id,
                         status,
-                        data_vencimento
+                        data_vencimento,
+                        trial_ends_at,
+                        created_at
                     )
                 )
             `, { count: "exact" });

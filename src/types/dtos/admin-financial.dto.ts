@@ -1,4 +1,4 @@
-import { CheckoutPaymentMethod } from "../enums.js";
+import { CheckoutPaymentMethod, SubscriptionStatus } from "../enums.js";
 
 export interface ProjecaoMesValorDTO {
   total: number;
@@ -64,6 +64,7 @@ export interface ProximaRenovacaoItemDTO {
   motoristaTelefone: string;
   planoNome: string;
   tipoPlano: "MONTHLY" | "YEARLY";
+  statusAssinatura: SubscriptionStatus;
   isVitalicio: boolean;
   metodoPagamento: CheckoutPaymentMethod | null;
   dataVencimento: string | null;
@@ -130,4 +131,29 @@ export interface AdminDemographicsStatsResponseDTO {
   funil: FunilConversaoDTO;
   evolucaoMensal: EvolucaoMensalUsuarioItemDTO[];
   distribuicaoEstados: AdminEstadoDemographicsDTO[];
+}
+
+export interface TrialPipelineItemDTO {
+  assinaturaId: string;
+  usuarioId: string;
+  nome: string;
+  apelido: string | null;
+  trialEndsAt: string;
+  diasRestantes: number;
+  diasAcessados: number;
+  totalAcoes: number;
+  alunos: number;
+  escolas: number;
+  veiculos: number;
+  rotas: number;
+  contratos: number;
+  solicitacoes: number;
+  indicadoPor: string | null;
+  valorMensal: number;
+  valorAnual: number;
+}
+
+export interface TrialsPipelineResponseDTO {
+  trials: TrialPipelineItemDTO[];
+  total: number;
 }

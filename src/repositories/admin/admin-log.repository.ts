@@ -84,4 +84,25 @@ export const adminLogRepository = {
       .order("created_at", { ascending: false })
       .range(from, to);
   },
+
+  async getLogsByUser(params: {
+    dataInicio?: string;
+    dataFim?: string;
+    acao?: string;
+    entidade?: string;
+    search_cpf?: string;
+    limit: number;
+    offset: number;
+  }) {
+    return supabaseAdmin.rpc("get_admin_logs_by_user", {
+      p_data_inicio: params.dataInicio || undefined,
+      p_data_fim: params.dataFim || undefined,
+      p_acao: params.acao || undefined,
+      p_entidade: params.entidade || undefined,
+      p_search: params.search_cpf || undefined,
+      p_limit: params.limit,
+      p_offset: params.offset,
+      p_tz: "America/Sao_Paulo",
+    });
+  },
 };

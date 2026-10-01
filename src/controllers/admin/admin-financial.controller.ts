@@ -23,5 +23,16 @@ export const adminFinancialController = {
       logger.error({ error: error.message, stack: error.stack }, "[AdminFinancialController] Erro ao buscar demografia e funil.");
       return reply.status(500).send({ error: "Erro ao buscar demografia e funil administrativos." });
     }
+  },
+
+  async getTrialsPipeline(_request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const pipeline = await adminFinancialService.getTrialsPipeline();
+      return reply.status(200).send(pipeline);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message, stack: error.stack }, "[AdminFinancialController] Erro ao buscar pipeline de trials.");
+      return reply.status(500).send({ error: "Erro ao buscar pipeline de trials administrativo." });
+    }
   }
 };

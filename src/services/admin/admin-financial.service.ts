@@ -16,7 +16,9 @@ import type {
   SafraTrialItemDTO,
   FaixaEtariaItemDTO,
   EvolucaoMensalUsuarioItemDTO,
-  AdminEstadoDemographicsDTO
+  AdminEstadoDemographicsDTO,
+  TrialPipelineItemDTO,
+  TrialsPipelineResponseDTO
 } from "../../types/dtos/admin-financial.dto.js";
 
 const DAYS_CARD_SETTLEMENT = 21;
@@ -68,7 +70,7 @@ export const adminFinancialService = {
     const assinantesPagantesAtivos: typeof assinaturasRaw = [];
 
     for (const sub of assinaturasRaw) {
-      if (sub.status !== SubscriptionStatus.ACTIVE) continue;
+      if (sub.status !== SubscriptionStatus.ACTIVE && sub.status !== SubscriptionStatus.PAST_DUE) continue;
 
       const isVitalicio = !sub.data_vencimento;
       if (isVitalicio) {
@@ -428,6 +430,7 @@ export const adminFinancialService = {
         motoristaTelefone: usuario?.telefone || "",
         planoNome: plano?.nome || (isYearly ? "Plano Anual" : "Plano Mensal"),
         tipoPlano: isYearly ? "YEARLY" : "MONTHLY",
+        statusAssinatura: sub.status as SubscriptionStatus,
         isVitalicio: false,
         metodoPagamento: (sub.metodo_pagamento as CheckoutPaymentMethod) || null,
         dataVencimento: venc.toISOString(),
@@ -626,6 +629,59 @@ export const adminFinancialService = {
       },
       evolucaoMensal: Array.from(ultimos6MesesMap.values()),
       distribuicaoEstados,
+    };
+  },
+
+  async getTrialsPipeline(): Promise<TrialsPipelineResponseDTO> {
+    const { data, error } = await adminFinancialRepository.getTrialsPipeline();
+
+    if (error) {
+      throw error;
+    }
+
+    const trialsRaw = (data || []) as Array<{
+      assinatura_id: string;
+      usuario_id: string;
+      nome: string;
+      apelido: string;
+      trial_ends_at: string;
+      dias_restantes: number;
+      dias_acessados: number | string;
+      total_acoes: number | string;
+      alunos: number | string;
+      escolas: number | string;
+      veiculos: number | string;
+      rotas: number | string;
+      contratos: number | string;
+      solicitacoes: number | string;
+      indicado_por: string | null;
+      valor_mensal: number | string;
+      valor_anual: number | string;
+    }>;
+
+    const trials: TrialPipelineItemDTO[] = trialsRaw.map((item) => ({
+      assinaturaId: item.assinatura_id,
+      usuarioId: item.usuario_id,
+      nome: item.nome,
+      apelido: item.apelido?.trim() ? item.apelido.trim() : null,
+      trialEndsAt: item.trial_ends_at,
+      diasRestantes: Number(item.dias_restantes),
+      diasAcessados: Number(item.dias_acessados || 0),
+      totalAcoes: Number(item.total_acoes || 0),
+      alunos: Number(item.alunos || 0),
+      escolas: Number(item.escolas || 0),
+      veiculos: Number(item.veiculos || 0),
+      rotas: Number(item.rotas || 0),
+      contratos: Number(item.contratos || 0),
+      solicitacoes: Number(item.solicitacoes || 0),
+      indicadoPor: item.indicado_por || null,
+      valorMensal: Number(item.valor_mensal || 39.9),
+      valorAnual: Number(item.valor_anual || 399)
+    }));
+
+    return {
+      trials,
+      total: trials.length
     };
   }
 };
