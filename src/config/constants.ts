@@ -154,5 +154,6 @@ export const TRACKING_REALTIME_CONFIG = {
 } as const;
 
 export const CUSTO_ESTIMADO_WABA_UNITARIO = 0.038;
+export const WABA_MAX_HEADER_DRIVER_NAME_LENGTH = 38;
 
 export const BUCKET_LOGOS = "logos" as const;

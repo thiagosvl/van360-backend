@@ -64,7 +64,8 @@ export class WabaTemplates {
     }
 
     static vencimentoProximo(ctx: Record<string, unknown>): WabaTemplatePayload {
-        const driverName = (ctx.apelidoMotorista || NotificationContextFormatter.getFirstAndLastName(ctx.nomeMotorista as string, "Motorista")) as string;
+        const rawDriverName = (ctx.apelidoMotorista || NotificationContextFormatter.getFirstAndLastName(ctx.nomeMotorista as string, "Motorista")) as string;
+        const driverName = NotificationContextFormatter.formatWabaHeaderDriverName(rawDriverName);
         const respName = NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string, "Responsável");
         const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
@@ -118,7 +119,8 @@ export class WabaTemplates {
     }
 
     static vencimentoHoje(ctx: Record<string, unknown>): WabaTemplatePayload {
-        const driverName = (ctx.apelidoMotorista || NotificationContextFormatter.getFirstAndLastName(ctx.nomeMotorista as string, "Motorista")) as string;
+        const rawDriverName = (ctx.apelidoMotorista || NotificationContextFormatter.getFirstAndLastName(ctx.nomeMotorista as string, "Motorista")) as string;
+        const driverName = NotificationContextFormatter.formatWabaHeaderDriverName(rawDriverName);
         const respName = NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string, "Responsável");
         const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
@@ -169,7 +171,8 @@ export class WabaTemplates {
     }
 
     static cobrancaAtrasado(ctx: Record<string, unknown>): WabaTemplatePayload {
-        const driverName = (ctx.apelidoMotorista || NotificationContextFormatter.getFirstAndLastName(ctx.nomeMotorista as string, "Motorista")) as string;
+        const rawDriverName = (ctx.apelidoMotorista || NotificationContextFormatter.getFirstAndLastName(ctx.nomeMotorista as string, "Motorista")) as string;
+        const driverName = NotificationContextFormatter.formatWabaHeaderDriverName(rawDriverName);
         const respName = NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string, "Responsável");
         const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
@@ -258,7 +261,8 @@ export class WabaTemplates {
     }
 
     static contratoDisponivel(ctx: Record<string, unknown>): WabaTemplatePayload {
-        const driverName = (ctx.apelidoMotorista || NotificationContextFormatter.getFirstAndLastName(ctx.nomeMotorista as string, "Motorista")) as string;
+        const rawDriverName = (ctx.apelidoMotorista || NotificationContextFormatter.getFirstAndLastName(ctx.nomeMotorista as string, "Motorista")) as string;
+        const driverName = NotificationContextFormatter.formatWabaHeaderDriverName(rawDriverName);
         const respName = NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string, "Responsável");
         const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         
@@ -297,7 +301,8 @@ export class WabaTemplates {
     }
 
     static renovacaoDisponivel(ctx: Record<string, unknown>): WabaTemplatePayload {
-        const driverName = (ctx.apelidoMotorista || NotificationContextFormatter.getFirstAndLastName(ctx.nomeMotorista as string, "Motorista")) as string;
+        const rawDriverName = (ctx.apelidoMotorista || NotificationContextFormatter.getFirstAndLastName(ctx.nomeMotorista as string, "Motorista")) as string;
+        const driverName = NotificationContextFormatter.formatWabaHeaderDriverName(rawDriverName);
         const respName = NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string, "Responsável");
         const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         const prep = NotificationContextFormatter.getStudentPreposition(ctx.generoPassageiro as PassageiroGenero | string | null);
