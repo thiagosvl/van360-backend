@@ -15,6 +15,7 @@ export interface AdminLogItemDTO {
     nome?: string | null;
     apelido?: string | null;
     telefone?: string | null;
+    logo_url?: string | null;
   } | null;
 }
 

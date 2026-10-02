@@ -1,6 +1,7 @@
 import { formatToBrazilianDate, getMonthNameBR, getMonthShortBR } from "../../../utils/date.utils.js";
 import { formatCurrency, maskCpf, maskCnpj, maskPhone, formatCpfCnpj, getFirstName, getFirstAndSecondName } from "../../../utils/format.js";
 import { TipoChavePix, PassageiroGenero } from "../../../types/enums.js";
+import { WABA_MAX_HEADER_DRIVER_NAME_LENGTH } from "../../../config/constants.js";
 
 export class NotificationContextFormatter {
     static getFirstName(fullName?: string, fallback = "Usuário"): string {
@@ -15,6 +16,30 @@ export class NotificationContextFormatter {
     static getFirstAndLastName(fullName?: string, fallback = "Aluno"): string {
         const formatted = getFirstAndSecondName(fullName);
         return formatted || fallback;
+    }
+
+    static formatWabaHeaderDriverName(name?: string, maxLength: number = WABA_MAX_HEADER_DRIVER_NAME_LENGTH): string {
+        if (!name) return "Motorista";
+
+        const trimmed = name.trim();
+        if (trimmed.length <= maxLength) {
+            return trimmed;
+        }
+
+        let clean = trimmed;
+        clean = clean.replace(/^transporte\s+escolar\s*[-–—:]*\s*/i, "");
+        clean = clean.replace(/\s*[-–—:]*\s*transporte\s+escolar$/i, "");
+        clean = clean.trim();
+
+        if (!clean) {
+            clean = trimmed;
+        }
+
+        if (clean.length > maxLength) {
+            return `${clean.slice(0, maxLength - 3).trim()}...`;
+        }
+
+        return clean;
     }
 
     static formatValue(value?: number | string): string {
