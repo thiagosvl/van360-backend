@@ -1,16 +1,18 @@
 import { CreateChargeRequest, ChargeResponse, NormalizedPaymentEvent, PaymentProviderAdapter } from "../../types/payment.js";
 import { PaymentProvider } from "../../types/enums.js";
 import { EfipayProvider } from "./providers/efipay.provider.js";
-// import { WooviProvider } from "./providers/woovi.provider.js";
+import { WooviProvider, WooviWithdrawResponse } from "./providers/woovi.provider.js";
 import { AppError } from "../../errors/AppError.js";
 import { logger } from "../../config/logger.js";
 
 class PaymentService {
     private providers: Map<PaymentProvider, PaymentProviderAdapter> = new Map();
+    private wooviProviderInstance: WooviProvider;
 
     constructor() {
         this.register(new EfipayProvider());
-        // this.register(new WooviProvider());
+        this.wooviProviderInstance = new WooviProvider();
+        this.register(this.wooviProviderInstance);
     }
 
     private register(provider: PaymentProviderAdapter): void {
@@ -37,9 +39,26 @@ class PaymentService {
         return this.getProvider(provider).cancelCharge(providerId);
     }
 
+    async getChargeStatus(providerId: string, provider: PaymentProvider): Promise<string> {
+        return this.getProvider(provider).getChargeStatus(providerId);
+    }
+
     async processWebhook(provider: PaymentProvider, rawBody: Record<string, unknown>): Promise<NormalizedPaymentEvent | null> {
         return await this.getProvider(provider).normalizeWebhook(rawBody);
+    }
+
+    async ensureSubaccount(pixKey: string): Promise<boolean> {
+        return this.wooviProviderInstance.createOrEnsureSubaccount(pixKey);
+    }
+
+    async getSubaccountBalance(pixKey: string): Promise<number> {
+        return this.wooviProviderInstance.getSubaccountBalance(pixKey);
+    }
+
+    async withdrawFromSubaccount(pixKey: string, amountInCents: number): Promise<WooviWithdrawResponse> {
+        return this.wooviProviderInstance.withdrawFromSubaccount(pixKey, amountInCents);
     }
 }
 
 export const paymentService = new PaymentService();
+

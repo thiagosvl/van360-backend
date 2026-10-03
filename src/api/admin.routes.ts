@@ -10,6 +10,7 @@ import { adminEvolutionController } from "../controllers/admin/admin-evolution.c
 import { adminCalculatorController } from "../controllers/admin/admin-calculator.controller.js";
 import { adminFinancialController } from "../controllers/admin/admin-financial.controller.js";
 import { adminInvoiceController } from "../controllers/admin/admin-invoice.controller.js";
+import { adminRepasseController } from "../controllers/admin/admin-repasse.controller.js";
 import { adminBlogController } from "../controllers/blog.controller.js";
 import { verifySupabaseJWT } from "../middleware/auth.js";
 import { verifyAdmin } from "../middleware/admin.js";
@@ -53,6 +54,15 @@ const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get("/invoices/stats", adminInvoiceController.getInvoiceStats);
   app.delete("/invoices/:id", adminUserController.deleteInvoice);
   app.post("/invoices/:id/confirm-payment", adminUserController.confirmInvoicePayment);
+
+  // Repasses Pix (BaaS Woovi)
+  app.get("/repasses", adminRepasseController.list);
+  app.get("/repasses/stats", adminRepasseController.getStats);
+  app.post("/repasses/:id/retry", adminRepasseController.retry);
+
+  // Configurações Financeiras do Motorista
+  app.get("/users/:id/configuracoes-financeiras", adminUserController.getFinancialConfig);
+  app.patch("/users/:id/configuracoes-financeiras", adminUserController.updateFinancialConfig);
 
   // Logs & Atividades & Notificações & Tentativas de Login
   app.get("/login-attempts", adminLoginAttemptsController.getLoginAttempts);

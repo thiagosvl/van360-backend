@@ -19,6 +19,7 @@ import usuarioRoute from "./usuario.route.js";
 import veiculoRoutes from "./veiculo.routes.js";
 
 import configuracoesRoutes from "./configuracoes.routes.js";
+import motoristaFinanceiroRoutes from "./motorista-financeiro.routes.js";
 import motoristaEquipeRoutes from "./motorista-equipe.routes.js";
 import { portalResponsavelPublicRoutes } from "./portal-responsavel.routes.js";
 import { checkSubscriptionAccess } from "../middleware/subscription.js";
@@ -35,6 +36,7 @@ const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.register(adminRoutes, { prefix: "/api/admin" });
   app.register(profileRoutes, { prefix: "/api" });
   app.register(configuracoesRoutes, { prefix: "/api" });
+  app.register(motoristaFinanceiroRoutes, { prefix: "/api" });
   app.register(appRoutes, { prefix: "/api/app" });
   app.register(publicRoutes, { prefix: "/api/public" });
   app.register(portalResponsavelPublicRoutes, { prefix: "/api/public/portal-responsavel" });
@@ -68,6 +70,10 @@ const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
   // Webhook unificado da Efí Pay (PIX e Cartão)
   app.post("/api/webhooks/efi", { config: { rateLimit: false } }, WebhookController.handleEfipay);
   app.post("/api/webhooks/efi/*", { config: { rateLimit: false } }, WebhookController.handleEfipay);
+
+  // Webhook de Pagamentos e Split (Woovi)
+  app.post("/api/webhooks/woovi", { config: { rateLimit: false } }, WebhookController.handleWoovi);
+  app.post("/api/webhooks/pagamentos", { config: { rateLimit: false } }, WebhookController.handleWoovi);
 
   // Webhook da Meta WABA (WhatsApp Cloud API)
   app.get("/api/webhooks/waba", { config: { rateLimit: false } }, wabaWebhookController.verify);

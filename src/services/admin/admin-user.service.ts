@@ -40,7 +40,9 @@ import type {
 } from "../../types/dtos/admin-vencimento-detalhes.dto.js";
 import { onlyDigits, cleanString, normalizePhone } from "../../utils/string.utils.js";
 import { subscriptionService } from "../subscriptions/subscription.service.js";
-import type {
+import { motoristaFinanceiroRepository } from "../../repositories/motorista-financeiro.repository.js";
+import { AdminMotoristaFinanceiroUpdateInput } from "../../schemas/admin-repasse.schema.js";
+import {
   UpdateUserAdminDTO,
   UpdateSubscriptionAdminDTO,
   ListUsersQuery,
@@ -244,9 +246,11 @@ export const adminUserService = {
         acessosReq,
       ],
       referralWithIndicadorRes,
+      financialConfig,
     ] = await Promise.all([
       adminUserRepository.getUserDetails(userId),
       referralRepository.getReferralWithIndicador(userId).catch(() => ({ data: null })),
+      motoristaFinanceiroRepository.getByUsuarioId(userId).catch(() => null),
     ]);
 
     if (userReq.error || !userReq.data) throw new Error("Usuário não encontrado.");
@@ -361,6 +365,7 @@ export const adminUserService = {
       dispositivos,
       ultimo_acesso: ultimoAcessoGeral,
       configuracoes: configReq?.data || null,
+      configuracao_financeira: financialConfig,
     };
   },
 
@@ -1963,6 +1968,14 @@ export const adminUserService = {
       dispositivos,
       canais_autodeclarados: canaisAutodeclaradosObj,
     };
+  },
+
+  async getFinancialConfig(userId: string) {
+    return motoristaFinanceiroRepository.getByUsuarioId(userId);
+  },
+
+  async updateFinancialConfig(userId: string, input: AdminMotoristaFinanceiroUpdateInput) {
+    return motoristaFinanceiroRepository.update(userId, input);
   },
 };
 

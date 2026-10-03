@@ -21,6 +21,8 @@ export interface PassengerContext {
     contratoUrl?: string;
     chavePix?: string;
     tipoChavePix?: string;
+    pixCopiaCola?: string;
+    pixCopiaECola?: string;
     dataPagamento?: string;
 }
 
@@ -58,6 +60,14 @@ const getSystemFooter = (ctx: PassengerContext) => {
     const rawNome = ctx.apelidoMotorista || getFirstAndSecondName(ctx.nomeMotorista);
     const nomeExibicao = capitalize(rawNome);
     return `\n\n———\n🚐 *${nomeExibicao}* · Van360\n_Esta é uma mensagem automática. Por favor, não responda._`;
+};
+
+const buildPixCopiaEColaParts = (mainText: string, pixCode: string, ctx: PassengerContext): CompositeMessagePart[] => {
+    return [
+        { type: "text", content: mainText },
+        { type: "text", content: pixCode.trim() },
+        { type: "text", content: `_Copie o código Pix acima e utilize a opção "Pix Copia e Cola" no app do seu banco._${getSystemFooter(ctx)}` }
+    ];
 };
 
 const buildPixParts = (mainText: string, chavePix: string, tipoChavePix: string | undefined, ctx: PassengerContext): CompositeMessagePart[] => {
@@ -98,6 +108,16 @@ export const PassengerTemplates = {
         const titulo = getParcelaTitle(ctx.nomePassageiro, ctx.mes);
         const corpo = getParcelaBody(ctx.nomePassageiro, ctx.mes);
 
+        const pixCode = ctx.pixCopiaECola || ctx.pixCopiaCola;
+        if (pixCode) {
+            const mainText = `🗓️ *${titulo}*\n\n` +
+                `${getFirstName(ctx.nomeResponsavel)}, lembrete da ${corpo}.\n\n` +
+                `🔹 Vencimento: *${data}*${diasMsg}\n` +
+                `⚠️ Lembre-se de pagar até a data de vencimento para evitar a cobrança de multas e juros.\n\n` +
+                `Segue o código Pix Copia e Cola para pagamento:`;
+            return buildPixCopiaEColaParts(mainText, pixCode, ctx);
+        }
+
         if (ctx.chavePix) {
             const mainText = `🗓️ *${titulo}*\n\n` +
                 `${getFirstName(ctx.nomeResponsavel)}, lembrete da ${corpo}.\n\n` +
@@ -121,6 +141,16 @@ export const PassengerTemplates = {
         const data = formatToBrazilianDate(ctx.dataVencimento || "");
         const titulo = getParcelaTitle(ctx.nomePassageiro, ctx.mes);
         const corpo = getParcelaBody(ctx.nomePassageiro, ctx.mes);
+
+        const pixCode = ctx.pixCopiaECola || ctx.pixCopiaCola;
+        if (pixCode) {
+            const mainText = `⚠️ *${titulo} — vence hoje*\n\n` +
+                `${getFirstName(ctx.nomeResponsavel)}, a ${corpo} vence hoje!\n\n` +
+                `🔹 Vencimento: *${data}*\n` +
+                `⚠️ Realize o pagamento hoje para evitar a cobrança de multas e juros.\n\n` +
+                `Segue o código Pix Copia e Cola para pagamento:`;
+            return buildPixCopiaEColaParts(mainText, pixCode, ctx);
+        }
 
         if (ctx.chavePix) {
             const mainText = `⚠️ *${titulo} — vence hoje*\n\n` +
@@ -150,6 +180,16 @@ export const PassengerTemplates = {
         const introStr = ctx.diasAtraso
             ? `consta em nosso sistema que a ${corpo} está atrasada há ${ctx.diasAtraso} dias.`
             : `consta em nosso sistema que a ${corpo} ainda está pendente.`;
+
+        const pixCode = ctx.pixCopiaECola || ctx.pixCopiaCola;
+        if (pixCode) {
+            const mainText = `🚨 *${titulo} — em atraso*\n\n` +
+                `${getFirstName(ctx.nomeResponsavel)}, ${introStr}\n\n` +
+                `🔹 Vencida em: *${data}*\n` +
+                `⚠️ *Importante:* O atraso no pagamento pode gerar cobrança de multas e juros, caso aplicável.\n\n` +
+                `Segue o código Pix Copia e Cola para pagamento:`;
+            return buildPixCopiaEColaParts(mainText, pixCode, ctx);
+        }
 
         if (ctx.chavePix) {
             const mainText = `🚨 *${titulo} — em atraso*\n\n` +

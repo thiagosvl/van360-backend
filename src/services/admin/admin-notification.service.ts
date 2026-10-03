@@ -491,20 +491,27 @@ export const adminNotificationService = {
     const diasAntecedencia = dataVencimentoStr > todayStr ? diffInDays(todayStr, dataVencimentoStr) : undefined;
     const diasAtraso = dataVencimentoStr < todayStr ? diffInDays(dataVencimentoStr, todayStr) : undefined;
 
+    const pixInfo = await cobrancaService.obterOuGerarPixCobranca(cobranca.id);
+    const valorFinal = pixInfo ? pixInfo.valorTotalPix : Number(cobranca.valor);
+
     const contextData = {
       nomeResponsavel: nomeResp,
       nomePassageiro: passageiro.nome,
       nomeMotorista: (motorista?.apelido as string) || (motorista?.nome as string) || "Motorista",
       apelidoMotorista: (motorista?.apelido as string) || undefined,
       telefoneMotorista: (motorista?.telefone as string) || undefined,
-      valor: Number(cobranca.valor),
+      valor: valorFinal,
       dataVencimento: dataVencimentoStr,
       diasAntecedencia,
       diasAtraso,
       usuarioId: passageiro.usuario_id,
       passageiroId: passageiro.id,
-      chavePix: (motorista?.chave_pix as string) || undefined,
-      tipoChavePix: (motorista?.tipo_chave_pix as string) || undefined,
+      chavePix: pixInfo?.pixCopiaCola ? undefined : ((motorista?.chave_pix as string) || undefined),
+      tipoChavePix: pixInfo?.pixCopiaCola ? undefined : ((motorista?.tipo_chave_pix as string) || undefined),
+      pixCopiaCola: pixInfo?.pixCopiaCola,
+      pixCopiaECola: pixInfo?.pixCopiaCola,
+      pixQrCodeUrl: pixInfo?.pixQrCodeUrl,
+      taxaRepassada: pixInfo?.taxaRepassada,
       mes: cobranca.mes,
       ano: cobranca.ano,
       cobrancaId: cobranca.id,

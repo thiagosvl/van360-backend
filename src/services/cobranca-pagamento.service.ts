@@ -1,6 +1,7 @@
 import { NotificationChannelEnum } from '../types/enums.js';
 import { logger } from "../config/logger.js";
 import { cobrancaRepository } from "../repositories/cobranca.repository.js";
+import { motoristaFinanceiroRepository } from "../repositories/motorista-financeiro.repository.js";
 import { AppError } from "../errors/AppError.js";
 import { RegistrarPagamentoManualDTO, ComplementarPagamentoManualDTO } from "../types/dtos/cobranca.dto.js";
 import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaStatus, CobrancaTipoPagamento, TipoResponsavel } from "../types/enums.js";
@@ -27,6 +28,7 @@ export const cobrancaPagamentoService = {
     if (findError || !cobranca) throw new AppError("Cobrança não encontrada.", 404);
     if (cobranca.status === CobrancaStatus.PAGO) throw new AppError("Esta cobrança já está paga.", 400);
     if (cobranca.status === CobrancaStatus.CANCELADA) throw new AppError("Esta cobrança está cancelada.", 400);
+    if (cobranca.repasse_em_processamento) throw new AppError("Esta cobrança está com repasse automático em processamento via Pix.", 400);
 
     const dataPagamentoStr = data.data_pagamento ? toPersistenceString(data.data_pagamento) : toPersistenceString(getNowBR());
 
@@ -279,4 +281,106 @@ export const cobrancaPagamentoService = {
 
     return updated;
   },
+
+  async registrarPagamentoAutomatico(cobrancaId: string, dataPagamento?: string): Promise<CobrancaRow> {
+    logger.info({ cobrancaId }, "[cobrancaPagamentoService.registrarPagamentoAutomatico] Baixando cobrança automática");
+
+    const { data: cobranca, error: findError } = await cobrancaRepository.getById(cobrancaId);
+
+    if (findError || !cobranca) throw new AppError("Cobrança não encontrada.", 404);
+    if (cobranca.status === CobrancaStatus.PAGO) return cobranca;
+
+    const dataPagamentoStr = dataPagamento ? toPersistenceString(dataPagamento) : toPersistenceString(getNowBR());
+
+    const { data: updated, error } = await cobrancaRepository.update(cobrancaId, {
+      status: CobrancaStatus.PAGO,
+      pagamento_manual: false,
+      tipo_pagamento: CobrancaTipoPagamento.PIX,
+      data_pagamento: dataPagamentoStr,
+      valor_pago: cobranca.valor,
+      repasse_em_processamento: false
+    });
+
+    if (error || !updated) {
+      throw new AppError(`Erro ao atualizar cobrança para pago: ${error?.message || "Erro desconhecido"}`, 500);
+    }
+
+    historicoService.log({
+      usuario_id: cobranca.usuario_id,
+      entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
+      entidade_id: cobrancaId,
+      acao: AtividadeAcao.SAAS_PAGAMENTO_RECEBIDO,
+      descricao: `Pagamento automático via Pix de ${updated.mes}/${updated.ano} (${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(updated.valor_pago || updated.valor)}) confirmado com repasse liquidado.`,
+      meta: {
+        valor_pago: updated.valor_pago,
+        tipo_pagamento: updated.tipo_pagamento,
+        data_pagamento: updated.data_pagamento,
+        passageiro: cobranca.passageiro?.nome || cobranca.passageiros?.nome
+      }
+    });
+
+    try {
+      const reciboUrl = await receiptService.generateForCobranca(cobrancaId);
+      if (reciboUrl) {
+        updated.recibo_url = reciboUrl;
+      }
+    } catch (receiptError: unknown) {
+      const msg = receiptError instanceof Error ? receiptError.message : String(receiptError);
+      logger.error({ error: msg, cobrancaId }, "[cobrancaPagamentoService.registrarPagamentoAutomatico] Falha ao gerar recibo para cobrança automática");
+    }
+
+    if (updated.recibo_url) {
+      try {
+        const configMotorista = await motoristaFinanceiroRepository.getByUsuarioId(updated.usuario_id);
+        if (configMotorista.enviar_recibo_automatico === false) {
+          logger.info({ cobrancaId, usuarioId: updated.usuario_id }, "[cobrancaPagamentoService.registrarPagamentoAutomatico] Envio de recibo automático desativado nas preferências do motorista");
+          return updated;
+        }
+
+        const { data: cobrancaCompleta } = await cobrancaRepository.getByIdWithPassageiroAndMotorista(cobrancaId);
+        const passageiroInfo = cobrancaCompleta?.passageiro as (Record<string, unknown> & { responsaveis?: ResponsavelLinkItem[] }) | undefined;
+        const motoristaInfo = cobrancaCompleta?.motorista as { nome?: string; apelido?: string; razao_social?: string } | undefined;
+        const links = passageiroInfo?.responsaveis || [];
+        const respLink = links.find((r) => r.tipo === TipoResponsavel.PRINCIPAL) || links[0];
+        const respObj = Array.isArray(respLink?.responsavel) ? respLink.responsavel[0] : (respLink?.responsavel || {});
+        const phoneResp = respObj?.telefone;
+        const nameResp = respObj?.nome || (passageiroInfo?.nome as string | undefined) || "";
+
+        if (phoneResp) {
+          const { notificationService } = await import("./notifications/notification.service.js");
+          const { EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO } = await import("../config/constants.js");
+          const { getDriverDisplayName } = await import("../utils/format.js");
+
+          await notificationService.notifyPassenger(
+            phoneResp,
+            EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO,
+            {
+              nomeResponsavel: nameResp,
+              nomePassageiro: (passageiroInfo?.nome as string | undefined) || "",
+              nomeMotorista: getDriverDisplayName(motoristaInfo),
+              apelidoMotorista: motoristaInfo?.apelido,
+              valor: Number(updated.valor_pago || updated.valor),
+              dataPagamento: updated.data_pagamento || undefined,
+              mes: updated.mes,
+              ano: updated.ano,
+              reciboUrl: updated.recibo_url,
+              usuarioId: updated.usuario_id,
+              passageiroId: updated.passageiro_id
+            },
+            {
+              channels: [NotificationChannelEnum.WABA],
+              usuarioId: updated.usuario_id,
+              passageiroId: updated.passageiro_id || undefined
+            }
+          );
+        }
+      } catch (notifErr: unknown) {
+        const msg = notifErr instanceof Error ? notifErr.message : String(notifErr);
+        logger.error({ error: msg, cobrancaId }, "[cobrancaPagamentoService.registrarPagamentoAutomatico] Falha ao enviar recibo da cobrança automática");
+      }
+    }
+
+    return updated;
+  }
 };
+

@@ -296,6 +296,7 @@ export type Database = {
       cobrancas: {
         Row: {
           ano: number
+          ano_letivo: number | null
           created_at: string
           data_envio_ultima_notificacao: string | null
           data_pagamento: string | null
@@ -306,8 +307,17 @@ export type Database = {
           observacao: string | null
           pagamento_manual: boolean | null
           passageiro_id: string
+          pix_copia_cola: string | null
+          pix_expiracao: string | null
+          pix_qrcode_url: string | null
+          provedor:
+            | Database["public"]["Enums"]["provedor_pagamento_enum"]
+            | null
+          provedor_cobranca_id: string | null
           recibo_url: string | null
+          repasse_em_processamento: boolean | null
           status: string
+          taxa_repassada_ao_pai: boolean | null
           tipo_pagamento:
             | Database["public"]["Enums"]["tipo_pagamento_enum"]
             | null
@@ -315,9 +325,11 @@ export type Database = {
           usuario_id: string | null
           valor: number
           valor_pago: number | null
+          valor_taxa_plataforma: number | null
         }
         Insert: {
           ano: number
+          ano_letivo?: number | null
           created_at?: string
           data_envio_ultima_notificacao?: string | null
           data_pagamento?: string | null
@@ -328,8 +340,17 @@ export type Database = {
           observacao?: string | null
           pagamento_manual?: boolean | null
           passageiro_id: string
+          pix_copia_cola?: string | null
+          pix_expiracao?: string | null
+          pix_qrcode_url?: string | null
+          provedor?:
+            | Database["public"]["Enums"]["provedor_pagamento_enum"]
+            | null
+          provedor_cobranca_id?: string | null
           recibo_url?: string | null
+          repasse_em_processamento?: boolean | null
           status?: string
+          taxa_repassada_ao_pai?: boolean | null
           tipo_pagamento?:
             | Database["public"]["Enums"]["tipo_pagamento_enum"]
             | null
@@ -337,9 +358,11 @@ export type Database = {
           usuario_id?: string | null
           valor: number
           valor_pago?: number | null
+          valor_taxa_plataforma?: number | null
         }
         Update: {
           ano?: number
+          ano_letivo?: number | null
           created_at?: string
           data_envio_ultima_notificacao?: string | null
           data_pagamento?: string | null
@@ -350,8 +373,17 @@ export type Database = {
           observacao?: string | null
           pagamento_manual?: boolean | null
           passageiro_id?: string
+          pix_copia_cola?: string | null
+          pix_expiracao?: string | null
+          pix_qrcode_url?: string | null
+          provedor?:
+            | Database["public"]["Enums"]["provedor_pagamento_enum"]
+            | null
+          provedor_cobranca_id?: string | null
           recibo_url?: string | null
+          repasse_em_processamento?: boolean | null
           status?: string
+          taxa_repassada_ao_pai?: boolean | null
           tipo_pagamento?:
             | Database["public"]["Enums"]["tipo_pagamento_enum"]
             | null
@@ -359,6 +391,7 @@ export type Database = {
           usuario_id?: string | null
           valor?: number
           valor_pago?: number | null
+          valor_taxa_plataforma?: number | null
         }
         Relationships: [
           {
@@ -373,6 +406,100 @@ export type Database = {
             columns: ["usuario_id"]
             isOneToOne: false
             referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cobrancas_repasses: {
+        Row: {
+          cobranca_id: string
+          created_at: string
+          data_pagamento_pai: string | null
+          data_repasse_motorista: string | null
+          end_to_end_id_in: string | null
+          end_to_end_id_out: string | null
+          id: string
+          motorista_id: string
+          passageiro_id: string
+          provedor: Database["public"]["Enums"]["provedor_pagamento_enum"]
+          saque_provedor_id: string | null
+          status_repasse: Database["public"]["Enums"]["status_repasse_enum"]
+          tarifa_gateway_pix_in: number
+          tarifa_gateway_saque: number
+          taxa_plataforma: number
+          tentativas: number
+          transacao_provedor_id: string
+          ultimo_erro: string | null
+          updated_at: string
+          valor_bruto: number
+          valor_liquido_motorista: number
+        }
+        Insert: {
+          cobranca_id: string
+          created_at?: string
+          data_pagamento_pai?: string | null
+          data_repasse_motorista?: string | null
+          end_to_end_id_in?: string | null
+          end_to_end_id_out?: string | null
+          id?: string
+          motorista_id: string
+          passageiro_id: string
+          provedor?: Database["public"]["Enums"]["provedor_pagamento_enum"]
+          saque_provedor_id?: string | null
+          status_repasse?: Database["public"]["Enums"]["status_repasse_enum"]
+          tarifa_gateway_pix_in?: number
+          tarifa_gateway_saque?: number
+          taxa_plataforma: number
+          tentativas?: number
+          transacao_provedor_id: string
+          ultimo_erro?: string | null
+          updated_at?: string
+          valor_bruto: number
+          valor_liquido_motorista: number
+        }
+        Update: {
+          cobranca_id?: string
+          created_at?: string
+          data_pagamento_pai?: string | null
+          data_repasse_motorista?: string | null
+          end_to_end_id_in?: string | null
+          end_to_end_id_out?: string | null
+          id?: string
+          motorista_id?: string
+          passageiro_id?: string
+          provedor?: Database["public"]["Enums"]["provedor_pagamento_enum"]
+          saque_provedor_id?: string | null
+          status_repasse?: Database["public"]["Enums"]["status_repasse_enum"]
+          tarifa_gateway_pix_in?: number
+          tarifa_gateway_saque?: number
+          taxa_plataforma?: number
+          tentativas?: number
+          transacao_provedor_id?: string
+          ultimo_erro?: string | null
+          updated_at?: string
+          valor_bruto?: number
+          valor_liquido_motorista?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cobrancas_repasses_cobranca_id_fkey"
+            columns: ["cobranca_id"]
+            isOneToOne: false
+            referencedRelation: "cobrancas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobrancas_repasses_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobrancas_repasses_passageiro_id_fkey"
+            columns: ["passageiro_id"]
+            isOneToOne: false
+            referencedRelation: "passageiros"
             referencedColumns: ["id"]
           },
         ]
@@ -571,6 +698,7 @@ export type Database = {
           finalizada_em: string | null
           id: string
           iniciada_em: string
+          modo_execucao: string
           notificar_conclusao_parada: boolean
           notificar_inicio_rota: boolean
           notificar_pais: boolean
@@ -586,6 +714,7 @@ export type Database = {
           finalizada_em?: string | null
           id?: string
           iniciada_em?: string
+          modo_execucao?: string
           notificar_conclusao_parada?: boolean
           notificar_inicio_rota?: boolean
           notificar_pais?: boolean
@@ -601,6 +730,7 @@ export type Database = {
           finalizada_em?: string | null
           id?: string
           iniciada_em?: string
+          modo_execucao?: string
           notificar_conclusao_parada?: boolean
           notificar_inicio_rota?: boolean
           notificar_pais?: boolean
@@ -710,6 +840,7 @@ export type Database = {
           evento: string
           id: string
           max_tentativas: number
+          passageiro_id: string | null
           payload: Json
           provider_message_id: string | null
           proxima_tentativa_em: string
@@ -717,7 +848,6 @@ export type Database = {
           tentativas: number
           updated_at: string | null
           usuario_id: string | null
-          passageiro_id: string | null
         }
         Insert: {
           canal: string
@@ -727,6 +857,7 @@ export type Database = {
           evento: string
           id?: string
           max_tentativas?: number
+          passageiro_id?: string | null
           payload: Json
           provider_message_id?: string | null
           proxima_tentativa_em?: string
@@ -734,7 +865,6 @@ export type Database = {
           tentativas?: number
           updated_at?: string | null
           usuario_id?: string | null
-          passageiro_id?: string | null
         }
         Update: {
           canal?: string
@@ -744,6 +874,7 @@ export type Database = {
           evento?: string
           id?: string
           max_tentativas?: number
+          passageiro_id?: string | null
           payload?: Json
           provider_message_id?: string | null
           proxima_tentativa_em?: string
@@ -751,21 +882,20 @@ export type Database = {
           tentativas?: number
           updated_at?: string | null
           usuario_id?: string | null
-          passageiro_id?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "fila_notificacoes_usuario_id_fkey"
-            columns: ["usuario_id"]
-            isOneToOne: false
-            referencedRelation: "usuarios"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "fila_notificacoes_passageiro_id_fkey"
             columns: ["passageiro_id"]
             isOneToOne: false
             referencedRelation: "passageiros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fila_notificacoes_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
             referencedColumns: ["id"]
           },
         ]
@@ -1007,6 +1137,80 @@ export type Database = {
           },
         ]
       }
+      motorista_configuracoes_financeiras: {
+        Row: {
+          baas_account_id: string | null
+          baas_agencia: string | null
+          baas_banco: string | null
+          baas_conta: string | null
+          baas_kyc_url: string | null
+          baas_motivo_pendencia: string | null
+          baas_status: Database["public"]["Enums"]["baas_status_enum"]
+          chave_pix_repasse: string | null
+          cobranca_automatica_ativa: boolean
+          enviar_recibo_automatico: boolean
+          created_at: string
+          id: string
+          modalidade_cobranca: Database["public"]["Enums"]["modalidade_cobranca_enum"]
+          repassar_taxa_pais_padrao: boolean
+          subconta_provedor_id: string | null
+          taxa_personalizada: number | null
+          tipo_chave_pix: string | null
+          updated_at: string
+          usuario_id: string
+        }
+        Insert: {
+          baas_account_id?: string | null
+          baas_agencia?: string | null
+          baas_banco?: string | null
+          baas_conta?: string | null
+          baas_kyc_url?: string | null
+          baas_motivo_pendencia?: string | null
+          baas_status?: Database["public"]["Enums"]["baas_status_enum"]
+          chave_pix_repasse?: string | null
+          cobranca_automatica_ativa?: boolean
+          enviar_recibo_automatico?: boolean
+          created_at?: string
+          id?: string
+          modalidade_cobranca?: Database["public"]["Enums"]["modalidade_cobranca_enum"]
+          repassar_taxa_pais_padrao?: boolean
+          subconta_provedor_id?: string | null
+          taxa_personalizada?: number | null
+          tipo_chave_pix?: string | null
+          updated_at?: string
+          usuario_id: string
+        }
+        Update: {
+          baas_account_id?: string | null
+          baas_agencia?: string | null
+          baas_banco?: string | null
+          baas_conta?: string | null
+          baas_kyc_url?: string | null
+          baas_motivo_pendencia?: string | null
+          baas_status?: Database["public"]["Enums"]["baas_status_enum"]
+          chave_pix_repasse?: string | null
+          cobranca_automatica_ativa?: boolean
+          enviar_recibo_automatico?: boolean
+          created_at?: string
+          id?: string
+          modalidade_cobranca?: Database["public"]["Enums"]["modalidade_cobranca_enum"]
+          repassar_taxa_pais_padrao?: boolean
+          subconta_provedor_id?: string | null
+          taxa_personalizada?: number | null
+          tipo_chave_pix?: string | null
+          updated_at?: string
+          usuario_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "motorista_configuracoes_financeiras_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: true
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       passageiro_ausencias: {
         Row: {
           created_at: string
@@ -1242,6 +1446,7 @@ export type Database = {
         Row: {
           ano_letivo: number
           ativo: boolean
+          cobranca_automatica_ativa: boolean | null
           created_at: string
           data_fim_cobranca: string | null
           data_fim_transporte: string | null
@@ -1261,6 +1466,7 @@ export type Database = {
           nome_professor: string | null
           observacoes: string | null
           periodo: string | null
+          repassar_taxa_pai: boolean | null
           sala: string | null
           turma: string | null
           updated_at: string
@@ -1271,6 +1477,7 @@ export type Database = {
         Insert: {
           ano_letivo?: number
           ativo?: boolean
+          cobranca_automatica_ativa?: boolean | null
           created_at?: string
           data_fim_cobranca?: string | null
           data_fim_transporte?: string | null
@@ -1290,6 +1497,7 @@ export type Database = {
           nome_professor?: string | null
           observacoes?: string | null
           periodo?: string | null
+          repassar_taxa_pai?: boolean | null
           sala?: string | null
           turma?: string | null
           updated_at?: string
@@ -1300,6 +1508,7 @@ export type Database = {
         Update: {
           ano_letivo?: number
           ativo?: boolean
+          cobranca_automatica_ativa?: boolean | null
           created_at?: string
           data_fim_cobranca?: string | null
           data_fim_transporte?: string | null
@@ -1319,6 +1528,7 @@ export type Database = {
           nome_professor?: string | null
           observacoes?: string | null
           periodo?: string | null
+          repassar_taxa_pai?: boolean | null
           sala?: string | null
           turma?: string | null
           updated_at?: string
@@ -1396,6 +1606,7 @@ export type Database = {
           data_inicio_transporte: string | null
           data_nascimento: string | null
           dia_vencimento: number | null
+          dispositivo_cadastro: string | null
           email_responsavel: string | null
           escola_id: string | null
           estado: string | null
@@ -1404,6 +1615,7 @@ export type Database = {
           horario_saida: string | null
           id: string
           logradouro: string | null
+          metadados_cadastro: Json | null
           modalidade: Database["public"]["Enums"]["modalidade_enum"] | null
           nome: string
           nome_professor: string | null
@@ -1421,8 +1633,6 @@ export type Database = {
           updated_at: string
           usuario_id: string
           valor_cobranca: number | null
-          dispositivo_cadastro: string | null
-          metadados_cadastro: Json | null
         }
         Insert: {
           ano_letivo?: number
@@ -1436,6 +1646,7 @@ export type Database = {
           data_inicio_transporte?: string | null
           data_nascimento?: string | null
           dia_vencimento?: number | null
+          dispositivo_cadastro?: string | null
           email_responsavel?: string | null
           escola_id?: string | null
           estado?: string | null
@@ -1444,6 +1655,7 @@ export type Database = {
           horario_saida?: string | null
           id?: string
           logradouro?: string | null
+          metadados_cadastro?: Json | null
           modalidade?: Database["public"]["Enums"]["modalidade_enum"] | null
           nome: string
           nome_professor?: string | null
@@ -1461,8 +1673,6 @@ export type Database = {
           updated_at?: string
           usuario_id: string
           valor_cobranca?: number | null
-          dispositivo_cadastro?: string | null
-          metadados_cadastro?: Json | null
         }
         Update: {
           ano_letivo?: number
@@ -1476,6 +1686,7 @@ export type Database = {
           data_inicio_transporte?: string | null
           data_nascimento?: string | null
           dia_vencimento?: number | null
+          dispositivo_cadastro?: string | null
           email_responsavel?: string | null
           escola_id?: string | null
           estado?: string | null
@@ -1484,6 +1695,7 @@ export type Database = {
           horario_saida?: string | null
           id?: string
           logradouro?: string | null
+          metadados_cadastro?: Json | null
           modalidade?: Database["public"]["Enums"]["modalidade_enum"] | null
           nome?: string
           nome_professor?: string | null
@@ -1501,8 +1713,6 @@ export type Database = {
           updated_at?: string
           usuario_id?: string
           valor_cobranca?: number | null
-          dispositivo_cadastro?: string | null
-          metadados_cadastro?: Json | null
         }
         Relationships: [
           {
@@ -1517,6 +1727,57 @@ export type Database = {
             columns: ["usuario_id"]
             isOneToOne: false
             referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recibos_anuais: {
+        Row: {
+          ano: number
+          created_at: string
+          id: string
+          motorista_id: string
+          passageiro_id: string
+          quantidade_meses: number
+          recibo_url: string
+          total_pago: number
+          updated_at: string
+        }
+        Insert: {
+          ano: number
+          created_at?: string
+          id?: string
+          motorista_id: string
+          passageiro_id: string
+          quantidade_meses: number
+          recibo_url: string
+          total_pago: number
+          updated_at?: string
+        }
+        Update: {
+          ano?: number
+          created_at?: string
+          id?: string
+          motorista_id?: string
+          passageiro_id?: string
+          quantidade_meses?: number
+          recibo_url?: string
+          total_pago?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recibos_anuais_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recibos_anuais_passageiro_id_fkey"
+            columns: ["passageiro_id"]
+            isOneToOne: false
+            referencedRelation: "passageiros"
             referencedColumns: ["id"]
           },
         ]
@@ -1612,57 +1873,6 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
-      }
-      recibos_anuais: {
-        Row: {
-          ano: number
-          created_at: string
-          id: string
-          motorista_id: string
-          passageiro_id: string
-          quantidade_meses: number
-          recibo_url: string
-          total_pago: number
-          updated_at: string
-        }
-        Insert: {
-          ano: number
-          created_at?: string
-          id?: string
-          motorista_id: string
-          passageiro_id: string
-          quantidade_meses: number
-          recibo_url: string
-          total_pago: number
-          updated_at?: string
-        }
-        Update: {
-          ano?: number
-          created_at?: string
-          id?: string
-          motorista_id?: string
-          passageiro_id?: string
-          quantidade_meses?: number
-          recibo_url?: string
-          total_pago?: number
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "recibos_anuais_motorista_id_fkey"
-            columns: ["motorista_id"]
-            isOneToOne: false
-            referencedRelation: "usuarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "recibos_anuais_passageiro_id_fkey"
-            columns: ["passageiro_id"]
-            isOneToOne: false
-            referencedRelation: "passageiros"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       rota_ausencias: {
         Row: {
@@ -1964,8 +2174,8 @@ export type Database = {
           email: string
           estado: string | null
           id: string
-          logradouro: string | null
           logo_url: string | null
+          logradouro: string | null
           metadados_cadastro: Json | null
           nome: string
           numero: string | null
@@ -1997,8 +2207,8 @@ export type Database = {
           email: string
           estado?: string | null
           id: string
-          logradouro?: string | null
           logo_url?: string | null
+          logradouro?: string | null
           metadados_cadastro?: Json | null
           nome: string
           numero?: string | null
@@ -2030,8 +2240,8 @@ export type Database = {
           email?: string
           estado?: string | null
           id?: string
-          logradouro?: string | null
           logo_url?: string | null
+          logradouro?: string | null
           metadados_cadastro?: Json | null
           nome?: string
           numero?: string | null
@@ -2146,76 +2356,151 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      get_motoristas_daily_pulse_stats: {
+      bytea_to_text: { Args: { data: string }; Returns: string }
+      confirm_invoice_payment: { Args: { p_fatura_id: string }; Returns: Json }
+      fn_limpar_logs_antigos: {
         Args: {
-          p_date?: string
-          p_tz?: string
+          p_dias_atividades?: number
+          p_dias_fila?: number
+          p_dias_login?: number
         }
-        Returns: {
-          total_acessos_unicos: number
-          total_recorrentes: number
-          total_novos: number
-          total_novos_reengajados: number
-          total_trial: number
-          total_ativos: number
-          total_vitalicios: number
-          total_vencidos_expirados: number
-        }[]
+        Returns: Json
       }
-      get_motoristas_daily_pulse: {
+      get_admin_dashboard_kpis: { Args: never; Returns: Json }
+      get_admin_logs_by_user: {
         Args: {
-          p_date?: string
-          p_tz?: string
-          p_search?: string | null
-          p_tipo_usuario?: string
-          p_subscription_status?: string
+          p_acao?: string
+          p_data_fim?: string
+          p_data_inicio?: string
+          p_entidade?: string
           p_limit?: number
           p_offset?: number
+          p_search?: string
+          p_tz?: string
         }
         Returns: {
-          id: string
-          nome: string
-          apelido: string | null
-          telefone: string | null
-          email: string | null
+          assinatura_status: string
           cadastrado_em: string
-          tipo_usuario_dia: string
-          reengajou_no_dia: boolean
-          total_atividades_dia: number
-          primeiro_acesso_dia: string
-          ultimo_acesso_dia: string
-          ultima_acao_dia: string | null
-          ultima_descricao_dia: string | null
-          assinatura_status: string | null
-          assinatura_vencimento: string | null
-          is_vitalicio: boolean
-          total_count: number
+          primeira_atividade_em: string
+          tipo_usuario: string
+          total_atividades: number
+          total_ativos: number
+          total_novos: number
+          total_recorrentes: number
+          total_trial: number
+          total_usuarios: number
+          total_vitalicios: number
+          ultima_atividade_em: string
+          ultimas_atividades: Json
+          usuario_apelido: string
+          usuario_email: string
+          usuario_id: string
+          usuario_logo_url: string
+          usuario_nome: string
+          usuario_telefone: string
         }[]
       }
       get_admin_trials_pipeline: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
-          assinatura_id: string
-          usuario_id: string
-          nome: string
-          apelido: string | null
-          trial_ends_at: string
-          dias_restantes: number
-          dias_acessados: number
-          total_acoes: number
           alunos: number
-          escolas: number
-          veiculos: number
-          rotas: number
+          apelido: string
+          assinatura_id: string
           contratos: number
+          dias_acessados: number
+          dias_restantes: number
+          escolas: number
+          indicado_por: string
+          nome: string
+          rotas: number
           solicitacoes: number
-          indicado_por: string | null
-          valor_mensal: number
+          total_acoes: number
+          trial_ends_at: string
+          usuario_id: string
           valor_anual: number
+          valor_mensal: number
+          veiculos: number
         }[]
       }
-      bytea_to_text: { Args: { data: string }; Returns: string }
-      confirm_invoice_payment: { Args: { p_fatura_id: string }; Returns: Json }
+      get_admin_user_kpis: { Args: { p_user_id: string }; Returns: Json }
+      get_motoristas_daily_pulse: {
+        Args: {
+          p_date?: string
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_subscription_status?: string
+          p_tipo_usuario?: string
+          p_tz?: string
+        }
+        Returns: {
+          apelido: string
+          assinatura_status: string
+          assinatura_vencimento: string
+          cadastrado_em: string
+          email: string
+          id: string
+          is_vitalicio: boolean
+          nome: string
+          primeiro_acesso_dia: string
+          reengajou_no_dia: boolean
+          telefone: string
+          tipo_usuario_dia: string
+          total_atividades_dia: number
+          total_count: number
+          ultima_acao_dia: string
+          ultima_descricao_dia: string
+          ultimo_acesso_dia: string
+        }[]
+      }
+      get_motoristas_daily_pulse_stats: {
+        Args: { p_date?: string; p_tz?: string }
+        Returns: {
+          total_acessos_unicos: number
+          total_ativos: number
+          total_novos: number
+          total_novos_reengajados: number
+          total_recorrentes: number
+          total_trial: number
+          total_vencidos_expirados: number
+          total_vitalicios: number
+        }[]
+      }
+      get_motoristas_latest_activity: {
+        Args: {
+          p_health_status?: string
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_sort?: string
+          p_subscription_status?: string
+        }
+        Returns: {
+          apelido: string
+          assinatura_status: string
+          assinatura_vencimento: string
+          cadastrado_em: string
+          dias_inativo: number
+          email: string
+          id: string
+          nome: string
+          telefone: string
+          total_count: number
+          ultima_acao: string
+          ultima_atividade_at: string
+          ultima_descricao: string
+        }[]
+      }
+      get_motoristas_radar_stats: {
+        Args: { p_subscription_status?: string }
+        Returns: {
+          total_alerta: number
+          total_ativos: number
+          total_em_risco: number
+          total_motoristas: number
+          total_sem_atividade: number
+        }[]
+      }
       http: {
         Args: { request: Database["public"]["CompositeTypes"]["http_request"] }
         Returns: Database["public"]["CompositeTypes"]["http_response"]
@@ -2341,7 +2626,11 @@ export type Database = {
         Args: { curlopt: string; value: string }
         Returns: boolean
       }
+      is_admin: { Args: never; Returns: boolean }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       text_to_bytea: { Args: { data: string }; Returns: string }
+      unaccent: { Args: { "": string }; Returns: string }
       urlencode:
         | { Args: { data: Json }; Returns: string }
         | {
@@ -2358,9 +2647,20 @@ export type Database = {
           }
     }
     Enums: {
+      baas_status_enum:
+        | "NAO_INICIADO"
+        | "PENDENTE_DOCUMENTACAO"
+        | "EM_ANALISE"
+        | "APROVADO"
+        | "PENDENCIA"
+        | "REJEITADO"
       execucao_passageiro_status_enum: "pendente" | "embarcado" | "ausente"
       execucao_rota_status_enum: "iniciada" | "concluida" | "cancelada"
       genero_enum: "masculino" | "feminino" | "prefiro_nao_informar"
+      modalidade_cobranca_enum:
+        | "MANUAL"
+        | "SPLIT_SUBCONTA"
+        | "BAAS_CONTA_PROPRIA"
       modalidade_enum: "ida" | "volta" | "ida_volta"
       parentesco_enum:
         | "pai"
@@ -2373,13 +2673,18 @@ export type Database = {
         | "madrasta"
         | "responsavel_legal"
         | "outro"
+      provedor_pagamento_enum: "WOOVI" | "ASAAS" | "EFIPAY"
       renovacao_status_enum:
         | "pendente"
-        | "confirmado_manual"
-        | "confirmado_online"
-        | "recusado_motorista"
-        | "recusado_pais"
+        | "confirmado"
+        | "recusado"
         | "concluido"
+      status_repasse_enum:
+        | "PENDENTE"
+        | "PROCESSANDO"
+        | "SUCESSO"
+        | "FALHA"
+        | "CANCELADO"
       tipo_no_rota_enum: "passageiro" | "escola"
       tipo_pagamento_enum:
         | "dinheiro"
@@ -2432,12 +2737,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2461,11 +2766,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2486,11 +2791,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2511,11 +2816,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2528,11 +2833,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2544,9 +2849,22 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      baas_status_enum: [
+        "NAO_INICIADO",
+        "PENDENTE_DOCUMENTACAO",
+        "EM_ANALISE",
+        "APROVADO",
+        "PENDENCIA",
+        "REJEITADO",
+      ],
       execucao_passageiro_status_enum: ["pendente", "embarcado", "ausente"],
       execucao_rota_status_enum: ["iniciada", "concluida", "cancelada"],
       genero_enum: ["masculino", "feminino", "prefiro_nao_informar"],
+      modalidade_cobranca_enum: [
+        "MANUAL",
+        "SPLIT_SUBCONTA",
+        "BAAS_CONTA_PROPRIA",
+      ],
       modalidade_enum: ["ida", "volta", "ida_volta"],
       parentesco_enum: [
         "pai",
@@ -2560,13 +2878,19 @@ export const Constants = {
         "responsavel_legal",
         "outro",
       ],
+      provedor_pagamento_enum: ["WOOVI", "ASAAS", "EFIPAY"],
       renovacao_status_enum: [
         "pendente",
-        "confirmado_manual",
-        "confirmado_online",
-        "recusado_motorista",
-        "recusado_pais",
+        "confirmado",
+        "recusado",
         "concluido",
+      ],
+      status_repasse_enum: [
+        "PENDENTE",
+        "PROCESSANDO",
+        "SUCESSO",
+        "FALHA",
+        "CANCELADO",
       ],
       tipo_no_rota_enum: ["passageiro", "escola"],
       tipo_pagamento_enum: [
@@ -2595,4 +2919,3 @@ export const Constants = {
     },
   },
 } as const
-

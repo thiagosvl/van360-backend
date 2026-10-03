@@ -1,14 +1,29 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
 import { env } from "../config/env.js";
-import { PaymentProvider, SubscriptionInvoiceStatus, SubscriptionStatus, NormalizedPaymentEventType } from "../types/enums.js";
+import {
+  PaymentProvider,
+  SubscriptionInvoiceStatus,
+  SubscriptionStatus,
+  NormalizedPaymentEventType,
+  CobrancaStatus,
+  StatusRepasseEnum,
+  ProvedorPagamentoEnum
+} from "../types/enums.js";
 import { paymentService } from "../services/payments/payment.service.js";
+import { cobrancaCalculoService } from "../services/cobranca-calculo.service.js";
+import { cobrancaPagamentoService } from "../services/cobranca-pagamento.service.js";
 import { subscriptionService } from "../services/subscriptions/subscription.service.js";
 import { invoiceRepository } from "../repositories/invoice.repository.js";
 import { subscriptionRepository } from "../repositories/subscription.repository.js";
+import { cobrancaRepository } from "../repositories/cobranca.repository.js";
+import { cobrancaRepasseRepository } from "../repositories/cobranca-repasse.repository.js";
+import { motoristaFinanceiroRepository } from "../repositories/motorista-financeiro.repository.js";
+import { addToRepasseQueue } from "../queues/repasse.queue.js";
 import { getClientIp } from "../utils/request-client.utils.js";
 import { withRetry } from "../utils/retry.utils.js";
 import { errorAlertService } from "../services/error-alert.service.js";
+import { isDriverInBaaSWhitelist } from "../utils/feature-flag.utils.js";
 
 export const WebhookController = {
 
@@ -95,4 +110,117 @@ export const WebhookController = {
     }
   },
 
+  async handleWoovi(request: FastifyRequest, reply: FastifyReply) {
+    const rawBody = request.body as Record<string, unknown>;
+    logger.info({ body: rawBody }, "[WebhookController] Recebido webhook da Woovi");
+
+    const event = await paymentService.processWebhook(PaymentProvider.WOOVI, rawBody);
+    if (!event) {
+      return reply.code(200).send({ received: true, status: "ignored" });
+    }
+
+    const cobrancaId = event.internalId;
+    if (!cobrancaId) {
+      logger.warn({ rawBody }, "[WebhookController] Webhook recebido sem internalId (correlationID)");
+      return reply.code(200).send({ received: true, status: "no_internal_id" });
+    }
+
+    try {
+      const { data: cobranca, error: findError } = await cobrancaRepository.getById(cobrancaId);
+      if (findError || !cobranca) {
+        logger.warn({ cobrancaId }, "[WebhookController] Cobrança não encontrada para o webhook recebido");
+        return reply.code(200).send({ received: true, status: "cobranca_not_found" });
+      }
+
+      if (cobranca.status === CobrancaStatus.PAGO) {
+        return reply.code(200).send({ received: true, status: "already_paid" });
+      }
+
+      if (event.type === NormalizedPaymentEventType.PAYMENT_RECEIVED) {
+        const motoristaId = cobranca.usuario_id || "";
+        const motorista = cobranca.usuario as { email?: string; telefone?: string } | undefined;
+
+        if (!isDriverInBaaSWhitelist(motorista)) {
+          await cobrancaPagamentoService.registrarPagamentoAutomatico(
+            cobranca.id,
+            event.paidAt ? event.paidAt.toISOString() : undefined
+          );
+          return reply.code(200).send({ received: true, status: "paid_direct_no_baas" });
+        }
+
+        await cobrancaRepository.update(cobranca.id, {
+          repasse_em_processamento: true
+        });
+
+        const motoristaConfig = await motoristaFinanceiroRepository.getByUsuarioId(motoristaId);
+        const chavePixRepasse = motoristaConfig.chave_pix_repasse;
+
+        if (!chavePixRepasse) {
+          logger.error({ cobrancaId, motoristaId }, "[WebhookController] Motorista não possui chave Pix para repasse");
+          return reply.code(200).send({ received: true, status: "missing_pix_key" });
+        }
+
+        const taxaPlataforma = cobrancaCalculoService.resolverTaxaPlataforma(
+          cobranca.valor_taxa_plataforma ? Number(cobranca.valor_taxa_plataforma) : null
+        );
+        const divisao = cobrancaCalculoService.calcularDivisaoCobranca({
+          valorMensalidade: Number(cobranca.valor),
+          taxaPlataforma,
+          repassarAoPai: Boolean(cobranca.taxa_repassada_ao_pai)
+        });
+        const valorLiquido = divisao.valorLiquidoMotorista;
+
+        let repasse = await cobrancaRepasseRepository.getByTransacaoProvedorId(event.providerRef);
+        if (!repasse) {
+          const rawCharge = rawBody.charge as Record<string, unknown> | undefined;
+          repasse = await cobrancaRepasseRepository.create({
+            cobranca_id: cobranca.id,
+            motorista_id: motoristaId,
+            passageiro_id: cobranca.passageiro_id,
+            provedor: ProvedorPagamentoEnum.WOOVI,
+            valor_bruto: Number(cobranca.valor),
+            taxa_plataforma: divisao.taxaPlataforma,
+            tarifa_gateway_pix_in: divisao.tarifaGatewayPixIn,
+            tarifa_gateway_saque: divisao.tarifaGatewaySaque,
+            valor_liquido_motorista: valorLiquido,
+            transacao_provedor_id: event.providerRef,
+            end_to_end_id_in: (rawCharge?.endToEndId as string) || null,
+            status_repasse: StatusRepasseEnum.PENDENTE,
+            data_pagamento_pai: event.paidAt ? event.paidAt.toISOString() : new Date().toISOString()
+          });
+        }
+
+        await addToRepasseQueue({
+          repasseId: repasse.id,
+          cobrancaId: cobranca.id,
+          motoristaId,
+          chavePix: chavePixRepasse,
+          valorLiquido,
+          transacaoProvedorId: event.providerRef
+        });
+
+        return reply.code(200).send({ received: true, status: "queued_for_payout" });
+      }
+
+      return reply.code(200).send({ received: true, status: "unhandled_event" });
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      logger.error({ error: errorMsg, cobrancaId }, "[WebhookController] Erro ao processar webhook Woovi");
+
+      void errorAlertService.notifyPaymentError({
+        provider: PaymentProvider.WOOVI,
+        error: err,
+        externalId: cobrancaId,
+        paymentMethod: "pix",
+        details: {
+          cobrancaId,
+          eventType: event?.type,
+        },
+      });
+
+      return reply.code(500).send({ error: "Internal Server Error" });
+    }
+  }
+
 };
+

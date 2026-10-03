@@ -30,6 +30,7 @@ export interface ChargeSplitEntry {
     pix_chave: string;
     amount: number;
     description?: string;
+    splitType?: "SPLIT_SUB_ACCOUNT" | "SPLIT_INTERNAL_TRANSFER";
 }
 
 export interface ChargeResponse {

@@ -66,7 +66,7 @@ export class NotificationContextFormatter {
         if (typeof month === "string" && !isNaN(Number(month))) {
             return getMonthNameBR(Number(month));
         }
-        return month || "Mensalidade";
+        return month || "Parcela";
     }
 
     static formatMonthYearShort(month?: number | string, year?: number | string): string {

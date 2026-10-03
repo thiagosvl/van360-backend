@@ -61,6 +61,12 @@ export const cronWorker = new Worker(
                     await logsCleanupJob.run();
                     break;
 
+                case CronJob.REPASSE_CONCILIATION: {
+                    const { conciliarRepassesPendentes } = await import("../services/conciliacao-repasse.service.js");
+                    await conciliarRepassesPendentes();
+                    break;
+                }
+
                 default:
                     logger.warn({ jobName: job.name }, "[CronWorker] Job DESATIVADO ou desconhecido recebido.");
             }

@@ -156,4 +156,11 @@ export const TRACKING_REALTIME_CONFIG = {
 export const CUSTO_ESTIMADO_WABA_UNITARIO = 0.038;
 export const WABA_MAX_HEADER_DRIVER_NAME_LENGTH = 38;
 
-export const BUCKET_LOGOS = "logos" as const;
+export const BUCKET_LOGOS = "logos" as const;
+
+export const FINANCEIRO_CONFIG = {
+  TAXA_PLATAFORMA_PADRAO: 4.00,
+  TARIFA_GATEWAY_PIX_IN: 0.85,
+  TARIFA_GATEWAY_SAQUE: 1.00,
+  DIAS_TOLERANCIA_EXPIRACAO_PIX: 15,
+} as const;
