@@ -4,7 +4,8 @@ import { paymentService } from "./payments/payment.service.js";
 import { UpdateMotoristaFinanceiroInput } from "../schemas/motorista-financeiro.schema.js";
 import { AppError } from "../errors/AppError.js";
 import { logger } from "../config/logger.js";
-import { ModalidadeCobrancaEnum, BaasStatusEnum } from "../types/enums.js";
+import { errorAlertService } from "./error-alert.service.js";
+import { ModalidadeCobrancaEnum, BaasStatusEnum, PaymentProvider } from "../types/enums.js";
 import { isDriverInBaaSWhitelist } from "../utils/feature-flag.utils.js";
 import type { Tables } from "../types/database.types.js";
 
@@ -50,6 +51,13 @@ export const motoristaFinanceiroService = {
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         logger.error({ error: msg, chavePix, usuarioId }, "[MotoristaFinanceiroService] Falha ao registrar subconta na instituição financeira");
+        
+        void errorAlertService.notifyPaymentError({
+          provider: PaymentProvider.WOOVI,
+          error: err,
+          details: { chavePix, usuarioId, action: "ensure_subaccount" }
+        });
+
         throw new AppError(`Erro ao registrar chave Pix para repasse: ${msg}`, 400);
       }
     }
