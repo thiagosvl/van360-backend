@@ -27,6 +27,7 @@ export const addToRepasseQueue = async (data: RepasseJobData) => {
             jobId,
             removeOnComplete: true,
             removeOnFail: false,
+            delay: 3000,
             attempts: 5,
             backoff: {
                 type: "exponential",

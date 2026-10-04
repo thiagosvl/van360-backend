@@ -69,7 +69,8 @@ export const repasseWorker = new Worker<RepasseJobData>(
             status_repasse: StatusRepasseEnum.SUCESSO,
             saque_provedor_id: withdrawRes.transactionId || null,
             end_to_end_id_out: withdrawRes.endToEndId || null,
-            data_repasse_motorista: new Date().toISOString()
+            data_repasse_motorista: new Date().toISOString(),
+            ultimo_erro: null
         });
 
         const { cobrancaPagamentoService } = await import("../services/cobranca-pagamento.service.js");
