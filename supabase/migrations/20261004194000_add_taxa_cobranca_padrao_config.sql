@@ -1,0 +1,3 @@
+INSERT INTO configuracao_interna (chave, valor)
+VALUES ('TAXA_COBRANCA_AUTOMATICA_PADRAO', '4.00')
+ON CONFLICT (chave) DO NOTHING;

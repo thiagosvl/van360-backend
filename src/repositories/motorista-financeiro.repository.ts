@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "../config/supabase.js";
+import { ConfigKey } from "../types/enums.js";
 import type { Tables, TablesUpdate } from "../types/database.types.js";
 
 type MotoristaConfiguracaoFinanceira = Tables<"motorista_configuracoes_financeiras">;
@@ -71,7 +72,7 @@ export const motoristaFinanceiroRepository = {
     const { data } = await supabaseAdmin
       .from("configuracao_interna")
       .select("valor")
-      .eq("chave", "TAXA_COBRANCA_AUTOMATICA_PADRAO")
+      .eq("chave", ConfigKey.TAXA_COBRANCA_AUTOMATICA_PADRAO)
       .maybeSingle();
 
     if (data && data.valor) {
