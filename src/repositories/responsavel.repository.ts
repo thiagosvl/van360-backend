@@ -3,7 +3,7 @@ import { TipoResponsavel, RouteSentido } from "../types/enums.js";
 import { AppError } from "../errors/AppError.js";
 import { toPersistenceString, getNowBR } from "../utils/date.utils.js";
 import { usuarioPushTokenRepository } from "./usuario-push-token.repository.js";
-import { onlyDigits, normalizePhone, getPhoneVariants, isSamePerson } from "../utils/string.utils.js";
+import { onlyDigits, normalizePhone, getPhoneVariants } from "../utils/string.utils.js";
 
 export interface ResponsavelPassageiroRecord {
   id: string; // passageiro_id
@@ -417,27 +417,6 @@ export const responsavelRepository = {
     }
 
     if (existing) {
-      if (existing.cpf && data.cpf && data.cpf !== existing.cpf) {
-        throw new AppError(
-          "Este telefone já está cadastrado com outro CPF. Verifique os dados.",
-          409
-        );
-      }
-
-      const isSame = isSamePerson(existing.nome, data.nome);
-
-      if (
-        data.nome &&
-        existing.nome &&
-        !isSame &&
-        (!data.cpf || !existing.cpf || data.cpf !== existing.cpf)
-      ) {
-        throw new AppError(
-          "Este telefone já está cadastrado para outro responsável.",
-          409
-        );
-      }
-
       responsavelId = existing.id;
       const updatePayload: Record<string, any> = { updated_at: new Date().toISOString() };
       // Só preenche se o campo estivesse nulo anteriormente para não sobrescrever dados existentes
@@ -564,40 +543,84 @@ export const responsavelRepository = {
       ? normalizePhone(data.telefone)
       : undefined;
 
+    let targetResponsavelId = responsavelId;
+    let mergedIntoExisting = false;
+
     if (phoneDigits) {
       const { data: existingResp } = await supabaseAdmin
         .from("responsaveis")
-        .select("id")
+        .select("id, nome, cpf, email, logradouro, numero, bairro, cidade, estado, cep, referencia, complemento")
         .eq("telefone", phoneDigits)
         .maybeSingle();
 
       if (existingResp && existingResp.id !== responsavelId) {
-        throw new AppError("Este telefone já está cadastrado para outro responsável.", 409);
+        mergedIntoExisting = true;
+        targetResponsavelId = existingResp.id;
+
+        const fillPayload: Record<string, any> = { updated_at: new Date().toISOString() };
+        if (!existingResp.nome && data.nome) fillPayload.nome = data.nome;
+        if (!existingResp.cpf && data.cpf) fillPayload.cpf = data.cpf;
+        if (!existingResp.email && data.email) fillPayload.email = data.email;
+        if (!existingResp.logradouro && data.logradouro) fillPayload.logradouro = data.logradouro;
+        if (!existingResp.numero && data.numero) fillPayload.numero = data.numero;
+        if (!existingResp.bairro && data.bairro) fillPayload.bairro = data.bairro;
+        if (!existingResp.cidade && data.cidade) fillPayload.cidade = data.cidade;
+        if (!existingResp.estado && data.estado) fillPayload.estado = data.estado;
+        if (!existingResp.cep && data.cep) fillPayload.cep = data.cep;
+        if (!existingResp.referencia && data.referencia) fillPayload.referencia = data.referencia;
+        if (!existingResp.complemento && data.complemento) fillPayload.complemento = data.complemento;
+
+        if (Object.keys(fillPayload).length > 1) {
+          await supabaseAdmin
+            .from("responsaveis")
+            .update(fillPayload)
+            .eq("id", targetResponsavelId);
+        }
+
+        if (effectivePassageiroId) {
+          await supabaseAdmin
+            .from("passageiro_responsaveis")
+            .update({ responsavel_id: targetResponsavelId, updated_at: new Date().toISOString() })
+            .eq("passageiro_id", effectivePassageiroId)
+            .eq("responsavel_id", responsavelId);
+        }
       }
     }
 
-    const respPayload: Record<string, any> = { updated_at: new Date().toISOString() };
-    if (data.nome !== undefined && data.nome !== null) respPayload.nome = data.nome;
-    if (data.cpf !== undefined) respPayload.cpf = data.cpf;
-    if (data.email !== undefined) respPayload.email = data.email;
-    if (phoneDigits !== undefined) respPayload.telefone = phoneDigits;
-    if (data.logradouro !== undefined) respPayload.logradouro = data.logradouro;
-    if (data.numero !== undefined) respPayload.numero = data.numero;
-    if (data.bairro !== undefined) respPayload.bairro = data.bairro;
-    if (data.cidade !== undefined) respPayload.cidade = data.cidade;
-    if (data.estado !== undefined) respPayload.estado = data.estado;
-    if (data.cep !== undefined) respPayload.cep = data.cep;
-    if (data.referencia !== undefined) respPayload.referencia = data.referencia;
-    if (data.complemento !== undefined) respPayload.complemento = data.complemento;
+    let updated: any;
+    if (mergedIntoExisting) {
+      const { data: currentTargetResp, error } = await supabaseAdmin
+        .from("responsaveis")
+        .select("*")
+        .eq("id", targetResponsavelId)
+        .single();
+      if (error) throw error;
+      updated = currentTargetResp;
+    } else {
+      const respPayload: Record<string, any> = { updated_at: new Date().toISOString() };
+      if (data.nome !== undefined && data.nome !== null) respPayload.nome = data.nome;
+      if (data.cpf !== undefined) respPayload.cpf = data.cpf;
+      if (data.email !== undefined) respPayload.email = data.email;
+      if (phoneDigits !== undefined) respPayload.telefone = phoneDigits;
+      if (data.logradouro !== undefined) respPayload.logradouro = data.logradouro;
+      if (data.numero !== undefined) respPayload.numero = data.numero;
+      if (data.bairro !== undefined) respPayload.bairro = data.bairro;
+      if (data.cidade !== undefined) respPayload.cidade = data.cidade;
+      if (data.estado !== undefined) respPayload.estado = data.estado;
+      if (data.cep !== undefined) respPayload.cep = data.cep;
+      if (data.referencia !== undefined) respPayload.referencia = data.referencia;
+      if (data.complemento !== undefined) respPayload.complemento = data.complemento;
 
-    const { data: updated, error } = await supabaseAdmin
-      .from("responsaveis")
-      .update(respPayload)
-      .eq("id", responsavelId)
-      .select()
-      .single();
+      const { data: updatedResp, error } = await supabaseAdmin
+        .from("responsaveis")
+        .update(respPayload)
+        .eq("id", responsavelId)
+        .select()
+        .single();
 
-    if (error) throw error;
+      if (error) throw error;
+      updated = updatedResp;
+    }
 
     if (effectivePassageiroId) {
       const linkPayload: Record<string, any> = { updated_at: new Date().toISOString() };
@@ -617,7 +640,7 @@ export const responsavelRepository = {
         .from("passageiro_responsaveis")
         .update(linkPayload)
         .eq("passageiro_id", effectivePassageiroId)
-        .eq("responsavel_id", responsavelId);
+        .eq("responsavel_id", targetResponsavelId);
     }
 
     return updated;

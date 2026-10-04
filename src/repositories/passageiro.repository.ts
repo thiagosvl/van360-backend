@@ -2,8 +2,7 @@ import { supabaseAdmin } from "../config/supabase.js";
 import { isValidFilterValue } from "../utils/filter.utils.js";
 import { TipoResponsavel } from "../types/enums.js";
 import { ListPassageirosFiltersDTO } from "../types/dtos/passageiro.dto.js";
-import { AppError } from "../errors/AppError.js";
-import { isSamePerson, normalizePhone } from "../utils/string.utils.js";
+import { normalizePhone } from "../utils/string.utils.js";
 
 const PASSAGEIRO_RESPONSAVEIS_SELECT = `
   responsaveis:passageiro_responsaveis(
@@ -386,55 +385,38 @@ export const passageiroRepository = {
       .maybeSingle();
 
     if (existing) {
-      if (existing.cpf && data.cpf && data.cpf !== existing.cpf) {
-        throw new AppError(
-          "Este telefone já está cadastrado com outro CPF. Verifique os dados.",
-          409
-        );
-      }
-
-      const isSame = isSamePerson(existing.nome, data.nome);
-
-      if (
-        data.nome &&
-        existing.nome &&
-        !isSame &&
-        (!data.cpf || !existing.cpf || data.cpf !== existing.cpf)
-      ) {
-        throw new AppError(
-          "Este telefone já está cadastrado para outro responsável.",
-          409
-        );
-      }
-
       const updatePayload: Record<string, any> = { updated_at: new Date().toISOString() };
-      if (data.nome && (!existing.cpf || data.cpf === existing.cpf || isSame)) updatePayload.nome = data.nome;
-      if (data.cpf !== undefined && (!existing.cpf || data.cpf === existing.cpf)) updatePayload.cpf = data.cpf;
-      if (data.email !== undefined) updatePayload.email = data.email;
-      if (data.pin_acesso !== undefined) updatePayload.pin_acesso = data.pin_acesso;
-      if (data.logradouro !== undefined) updatePayload.logradouro = data.logradouro;
-      if (data.numero !== undefined) updatePayload.numero = data.numero;
-      if (data.bairro !== undefined) updatePayload.bairro = data.bairro;
-      if (data.cidade !== undefined) updatePayload.cidade = data.cidade;
-      if (data.estado !== undefined) updatePayload.estado = data.estado;
-      if (data.cep !== undefined) updatePayload.cep = data.cep;
-      if (data.referencia !== undefined) updatePayload.referencia = data.referencia;
-      if (data.complemento !== undefined) updatePayload.complemento = data.complemento;
+      if (!existing.nome && data.nome) updatePayload.nome = data.nome;
+      if (!existing.cpf && data.cpf) updatePayload.cpf = data.cpf;
+      if (!existing.email && data.email) updatePayload.email = data.email;
+      if (!existing.pin_acesso && data.pin_acesso) updatePayload.pin_acesso = data.pin_acesso;
+      if (!existing.logradouro && data.logradouro) updatePayload.logradouro = data.logradouro;
+      if (!existing.numero && data.numero) updatePayload.numero = data.numero;
+      if (!existing.bairro && data.bairro) updatePayload.bairro = data.bairro;
+      if (!existing.cidade && data.cidade) updatePayload.cidade = data.cidade;
+      if (!existing.estado && data.estado) updatePayload.estado = data.estado;
+      if (!existing.cep && data.cep) updatePayload.cep = data.cep;
+      if (!existing.referencia && data.referencia) updatePayload.referencia = data.referencia;
+      if (!existing.complemento && data.complemento) updatePayload.complemento = data.complemento;
 
-      const { data: updated, error } = await supabaseAdmin
-        .from("responsaveis")
-        .update(updatePayload)
-        .eq("id", existing.id)
-        .select()
-        .single();
-      if (error) throw error;
-      return updated;
+      if (Object.keys(updatePayload).length > 1) {
+        const { data: updated, error } = await supabaseAdmin
+          .from("responsaveis")
+          .update(updatePayload)
+          .eq("id", existing.id)
+          .select()
+          .single();
+        if (error) throw error;
+        return updated;
+      }
+
+      return existing;
     }
 
     const { data: inserted, error } = await supabaseAdmin
       .from("responsaveis")
       .insert([{
-        telefone: data.telefone,
+        telefone: targetPhone,
         nome: data.nome,
         cpf: data.cpf || null,
         email: data.email || null,
