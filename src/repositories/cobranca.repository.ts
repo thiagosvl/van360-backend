@@ -339,5 +339,60 @@ export const cobrancaRepository = {
         }
 
         return query;
+    },
+
+    async getPendentesComProvedorPorUsuario(usuarioId: string) {
+        return supabaseAdmin
+            .from("cobrancas")
+            .select("id, provedor_cobranca_id, provedor")
+            .eq("usuario_id", usuarioId)
+            .eq("status", CobrancaStatus.PENDENTE)
+            .not("provedor_cobranca_id", "is", null);
+    },
+
+    async limparDadosPix(id: string) {
+        return supabaseAdmin
+            .from("cobrancas")
+            .update({
+                pix_copia_cola: null,
+                pix_qrcode_url: null,
+                pix_expiracao: null,
+                provedor_cobranca_id: null,
+                repasse_em_processamento: false
+            })
+            .eq("id", id);
+    },
+
+    async limparDadosPixBulk(ids: string[]) {
+        if (ids.length === 0) return { data: null, error: null };
+        return supabaseAdmin
+            .from("cobrancas")
+            .update({
+                pix_copia_cola: null,
+                pix_qrcode_url: null,
+                pix_expiracao: null,
+                provedor_cobranca_id: null,
+                repasse_em_processamento: false
+            })
+            .in("id", ids);
+    },
+
+    async getCobrancasTravadasEmProcessamento(limiteMinutos = 10) {
+        const cutoff = new Date(Date.now() - limiteMinutos * 60 * 1000).toISOString();
+        return supabaseAdmin
+            .from("cobrancas")
+            .select("id, usuario_id, passageiro_id, valor, taxa_repassada_ao_pai, valor_taxa_plataforma, provedor_cobranca_id, provedor, updated_at")
+            .eq("status", CobrancaStatus.PENDENTE)
+            .eq("repasse_em_processamento", true)
+            .lte("updated_at", cutoff);
+    },
+
+    async getByProvedorCobrancaId(provedorCobrancaId: string) {
+        return supabaseAdmin
+            .from("cobrancas")
+            .select("*")
+            .eq("provedor_cobranca_id", provedorCobrancaId)
+            .maybeSingle();
     }
 };
+

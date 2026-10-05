@@ -1,5 +1,6 @@
 import { motoristaFinanceiroRepository } from "../repositories/motorista-financeiro.repository.js";
 import { userRepository } from "../repositories/user.repository.js";
+import { cobrancaRepository } from "../repositories/cobranca.repository.js";
 import { paymentService } from "./payments/payment.service.js";
 import { UpdateMotoristaFinanceiroInput } from "../schemas/motorista-financeiro.schema.js";
 import { AppError } from "../errors/AppError.js";
@@ -59,6 +60,28 @@ export const motoristaFinanceiroService = {
         });
 
         throw new AppError(`Erro ao registrar chave Pix para repasse: ${msg}`, 400);
+      }
+    }
+
+    const chavePixMudou = input.chave_pix_repasse !== undefined && input.chave_pix_repasse !== configAtual.chave_pix_repasse;
+
+    if (chavePixMudou) {
+      try {
+        const { data: cobrancasPendentes } = await cobrancaRepository.getPendentesComProvedorPorUsuario(usuarioId);
+        if (cobrancasPendentes && cobrancasPendentes.length > 0) {
+          logger.info({ count: cobrancasPendentes.length, usuarioId }, "[MotoristaFinanceiroService] Cancelando cobranças Pix pendentes antigas no gateway após troca de chave");
+          for (const cobranca of cobrancasPendentes) {
+            if (cobranca.provedor_cobranca_id) {
+              await paymentService.cancelCharge(cobranca.provedor_cobranca_id, PaymentProvider.WOOVI).catch((err: unknown) => {
+                logger.warn({ error: err, cobrancaId: cobranca.id }, "[MotoristaFinanceiroService] Falha ao cancelar cobrança antiga no gateway");
+              });
+            }
+          }
+          const ids = cobrancasPendentes.map((c) => c.id);
+          await cobrancaRepository.limparDadosPixBulk(ids);
+        }
+      } catch (cancelErr: unknown) {
+        logger.error({ error: cancelErr, usuarioId }, "[MotoristaFinanceiroService] Erro ao processar cancelamento de cobranças pendentes na troca de chave");
       }
     }
 

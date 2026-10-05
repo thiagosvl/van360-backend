@@ -24,6 +24,18 @@ export const repasseWorker = new Worker<RepasseJobData>(
             return;
         }
 
+        if (repasse.saque_provedor_id || repasse.end_to_end_id_out) {
+            logger.info({ repasseId, cobrancaId }, "[RepasseWorker] Saque já emitido previamente no provedor. Pulando transferência e finalizando.");
+            await cobrancaRepasseRepository.update(repasse.id, {
+                status_repasse: StatusRepasseEnum.SUCESSO,
+                data_repasse_motorista: repasse.data_repasse_motorista || new Date().toISOString(),
+                ultimo_erro: null
+            });
+            const { cobrancaPagamentoService } = await import("../services/cobranca-pagamento.service.js");
+            await cobrancaPagamentoService.registrarPagamentoAutomatico(cobrancaId);
+            return;
+        }
+
         const motoristaConfig = await motoristaFinanceiroRepository.getByUsuarioId(repasse.motorista_id);
         const chavePixEfetiva = motoristaConfig.chave_pix_repasse || fallbackChavePix;
 
