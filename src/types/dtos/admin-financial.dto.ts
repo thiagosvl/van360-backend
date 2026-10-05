@@ -16,6 +16,8 @@ export interface AdminFinancialKpisDTO {
   totalMensais: number;
   totalAnuais: number;
   totalVitalicios: number;
+  receitaRecorrenteMensalFixa: number;
+  receitaContratadaAnual: number;
   projecaoProximoMes: ProjecaoMesValorDTO;
   projecaoCaixaRealProximoMes: ProjecaoMesValorDTO;
   taxaConversaoTrial: number;
@@ -83,6 +85,13 @@ export interface SafraTrialItemDTO {
   taxaConversao: number;
 }
 
+export interface HistoricoReceitaMensalItemDTO {
+  chaveMes: string;
+  labelMes: string;
+  valor: number;
+  quantidadeFaturas: number;
+}
+
 export interface AdminFinancialStatsResponseDTO {
   kpis: AdminFinancialKpisDTO;
   projecao12Meses: Projecao12MesesItemDTO[];
@@ -90,6 +99,7 @@ export interface AdminFinancialStatsResponseDTO {
   meiosPagamento: MeiosPagamentoBreakdownDTO;
   proximasRenovacoes: ProximaRenovacaoItemDTO[];
   safrasTrials: SafraTrialItemDTO[];
+  historicoReceitaMensal: HistoricoReceitaMensalItemDTO[];
   diasRetencaoCartao: number;
 }
 

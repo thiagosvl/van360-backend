@@ -61,11 +61,25 @@ export const adminFinancialService = {
       planoMensalPadrao?.valor_promocional ?? planoMensalPadrao?.valor ?? DEFAULT_MONTHLY_TICKET
     );
 
+    const planosMap = new Map<string, (typeof planos)[0]>();
+    for (const p of planos) {
+      planosMap.set(p.id, p);
+    }
+
+    const getSubscriptionPlan = (sub: (typeof assinaturasRaw)[0]) => {
+      if (sub.plano_id && planosMap.has(sub.plano_id)) {
+        return planosMap.get(sub.plano_id)!;
+      }
+      return Array.isArray(sub.planos) ? sub.planos[0] : sub.planos;
+    };
+
     let mrr = 0;
     let arr = 0;
     let totalMensais = 0;
     let totalAnuais = 0;
     let totalVitalicios = 0;
+    let receitaRecorrenteMensalFixa = 0;
+    let receitaContratadaAnual = 0;
 
     const assinantesPagantesAtivos: typeof assinaturasRaw = [];
 
@@ -84,7 +98,7 @@ export const adminFinancialService = {
 
       assinantesPagantesAtivos.push(sub);
 
-      const plano = Array.isArray(sub.planos) ? sub.planos[0] : sub.planos;
+      const plano = getSubscriptionPlan(sub);
       const isYearly = plano?.identificador === SubscriptionIdentifer.YEARLY;
 
       if (isYearly) {
@@ -92,6 +106,7 @@ export const adminFinancialService = {
         const valAnual = Number(
           sub.valor_promocional_anual ?? sub.valor_base_anual ?? plano?.valor_promocional ?? plano?.valor ?? 0
         );
+        receitaContratadaAnual += valAnual;
         mrr += valAnual / 12;
         arr += valAnual;
       } else {
@@ -99,6 +114,7 @@ export const adminFinancialService = {
         const valMensal = Number(
           sub.valor_promocional_mensal ?? sub.valor_base_mensal ?? plano?.valor_promocional ?? plano?.valor ?? 0
         );
+        receitaRecorrenteMensalFixa += valMensal;
         mrr += valMensal;
         arr += valMensal * 12;
       }
@@ -177,7 +193,7 @@ export const adminFinancialService = {
       if (!sub.data_vencimento) continue;
       const vencDate = parseLocalDate(sub.data_vencimento);
       if (vencDate > now && vencDate <= endOfMonth) {
-        const plano = Array.isArray(sub.planos) ? sub.planos[0] : sub.planos;
+        const plano = getSubscriptionPlan(sub);
         const isYearly = plano?.identificador === SubscriptionIdentifer.YEARLY;
         const val = isYearly
           ? Number(sub.valor_promocional_anual ?? sub.valor_base_anual ?? plano?.valor_promocional ?? plano?.valor ?? 0)
@@ -279,7 +295,7 @@ export const adminFinancialService = {
         if (!sub.data_vencimento) continue;
 
         const vencDate = parseLocalDate(sub.data_vencimento);
-        const plano = Array.isArray(sub.planos) ? sub.planos[0] : sub.planos;
+        const plano = getSubscriptionPlan(sub);
         const isYearly = plano?.identificador === SubscriptionIdentifer.YEARLY;
         const diaVenc = vencDate.getDate();
 
@@ -370,7 +386,7 @@ export const adminFinancialService = {
       if (!sub.data_vencimento) continue;
       const vencDate = parseLocalDate(sub.data_vencimento);
       const diaVenc = vencDate.getDate();
-      const plano = Array.isArray(sub.planos) ? sub.planos[0] : sub.planos;
+      const plano = getSubscriptionPlan(sub);
       const isYearly = plano?.identificador === SubscriptionIdentifer.YEARLY;
 
       const val = isYearly
@@ -411,7 +427,7 @@ export const adminFinancialService = {
       if (!sub.data_vencimento) continue;
 
       const venc = parseLocalDate(sub.data_vencimento);
-      const plano = Array.isArray(sub.planos) ? sub.planos[0] : sub.planos;
+      const plano = getSubscriptionPlan(sub);
       const usuario = Array.isArray(sub.usuarios) ? sub.usuarios[0] : sub.usuarios;
       const isYearly = plano?.identificador === SubscriptionIdentifer.YEARLY;
 
@@ -441,6 +457,35 @@ export const adminFinancialService = {
 
     proximasRenovacoes.sort((a, b) => new Date(a.dataVencimento || 0).getTime() - new Date(b.dataVencimento || 0).getTime());
 
+    const historicoMesesMap = new Map<string, { chaveMes: string; labelMes: string; valor: number; quantidadeFaturas: number }>();
+    for (let h = 5; h >= 0; h--) {
+      const d = new Date(currentYear, currentMonth - h, 1);
+      const k = getYearMonthKey(d);
+      historicoMesesMap.set(k, {
+        chaveMes: k,
+        labelMes: formatMonthYearLabel(d),
+        valor: 0,
+        quantidadeFaturas: 0
+      });
+    }
+
+    for (const fatura of faturasPagas) {
+      const dataRef = fatura.data_pagamento || fatura.created_at;
+      if (!dataRef) continue;
+
+      const dt = parseLocalDate(dataRef);
+      const ym = getYearMonthKey(dt);
+      const val = Number(fatura.valor) || 0;
+
+      if (historicoMesesMap.has(ym)) {
+        const item = historicoMesesMap.get(ym)!;
+        item.valor = Math.round((item.valor + val) * 100) / 100;
+        item.quantidadeFaturas += 1;
+      }
+    }
+
+    const historicoReceitaMensal = Array.from(historicoMesesMap.values());
+
     return {
       kpis: {
         mrr: Math.round(mrr * 100) / 100,
@@ -452,6 +497,8 @@ export const adminFinancialService = {
         totalMensais,
         totalAnuais,
         totalVitalicios,
+        receitaRecorrenteMensalFixa: Math.round(receitaRecorrenteMensalFixa * 100) / 100,
+        receitaContratadaAnual: Math.round(receitaContratadaAnual * 100) / 100,
         projecaoProximoMes,
         projecaoCaixaRealProximoMes,
         taxaConversaoTrial,
@@ -464,6 +511,7 @@ export const adminFinancialService = {
       meiosPagamento,
       proximasRenovacoes,
       safrasTrials: Array.from(safrasTrialsMap.values()),
+      historicoReceitaMensal,
       diasRetencaoCartao: DAYS_CARD_SETTLEMENT
     };
   },
