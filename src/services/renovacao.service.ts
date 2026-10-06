@@ -5,6 +5,7 @@ import { logger } from "../config/logger.js";
 import { renovacaoRepository, type PassageiroComRenovacaoItem, type PublicPropostaQueryResult } from "../repositories/renovacao.repository.js";
 import { passageiroRepository } from "../repositories/passageiro.repository.js";
 import { contractRepository } from "../repositories/contract.repository.js";
+import { historicoRepository } from "../repositories/historico.repository.js";
 import { AppError } from "../errors/AppError.js";
 import {
   ListRenovacoesQueryDTO,
@@ -702,11 +703,14 @@ export const renovacaoService = {
       }
     }
 
+    const isConcluido = data.status === RenovacaoStatus.CONCLUIDO || (data.status as string) === "concluido";
+
     return {
       token_publico: data.token_publico,
       status: data.status,
       confirmado_em: data.confirmado_em,
       recusado_em: data.recusado_em,
+      concluido: isConcluido,
       ano_origem: data.ano_origem,
       ano_destino: data.ano_destino,
       motorista: {
@@ -902,16 +906,34 @@ export const renovacaoService = {
       } catch (contractErr: unknown) {
         logger.error({ error: contractErr instanceof Error ? contractErr.message : String(contractErr), passageiroId: passageiro.id }, "[Renovacao] Erro ao gerar contrato automático na renovação confirmada");
       }
+    } else if (status === "recusado") {
+      try {
+        await contractRepository.aposentarContratosPassageiro(passageiro.id, true, data.ano_destino);
+      } catch (contractErr: unknown) {
+        logger.error({ error: contractErr instanceof Error ? contractErr.message : String(contractErr), passageiroId: passageiro.id }, "[Renovacao] Erro ao aposentar contrato pendente de renovação recusada");
+      }
+    }
+
+    const respNome = pEnriched.responsavel_principal?.nome || "Responsável";
+    const passNome = passageiro.nome;
+    const acaoTitulo = status === "confirmado" ? "🎉 Renovação Confirmada!" : "⚠️ Saída Registrada";
+    const acaoCorpo = status === "confirmado"
+      ? `${respNome} confirmou a vaga de ${passNome} para o ano letivo de ${data.ano_destino}.`
+      : `${respNome} informou que não irá renovar o transporte de ${passNome} para ${data.ano_destino}.`;
+
+    try {
+      await historicoRepository.insert({
+        usuario_id: motorista.id,
+        entidade_tipo: "passageiro",
+        entidade_id: passageiro.id,
+        acao: status === "confirmado" ? "renovacao_confirmada" : "renovacao_recusada",
+        descricao: acaoCorpo,
+      });
+    } catch {
+      // Silencioso
     }
 
     try {
-      const respNome = pEnriched.responsavel_principal?.nome || "Responsável";
-      const passNome = passageiro.nome;
-      const acaoTitulo = status === "confirmado" ? "🎉 Renovação Confirmada!" : "⚠️ Saída Registrada";
-      const acaoCorpo = status === "confirmado"
-        ? `${respNome} confirmou a vaga de ${passNome} para o ano letivo de ${data.ano_destino}.`
-        : `${respNome} informou que não irá renovar o transporte de ${passNome} para ${data.ano_destino}.`;
-
       await notificationService.sendDirect(
         NotificationChannelEnum.FIREBASE,
         "renovacao_resposta_recebida",
