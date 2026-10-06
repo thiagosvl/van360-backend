@@ -1289,6 +1289,7 @@ export type Database = {
           ano_origem: number
           confirmado_em: string | null
           created_at: string
+          dados_ano_origem: Json | null
           id: string
           ip_confirmacao: string | null
           justificativa_recusa: string | null
@@ -1322,6 +1323,7 @@ export type Database = {
           ano_origem?: number
           confirmado_em?: string | null
           created_at?: string
+          dados_ano_origem?: Json | null
           id?: string
           ip_confirmacao?: string | null
           justificativa_recusa?: string | null
@@ -1357,6 +1359,7 @@ export type Database = {
           ano_origem?: number
           confirmado_em?: string | null
           created_at?: string
+          dados_ano_origem?: Json | null
           id?: string
           ip_confirmacao?: string | null
           justificativa_recusa?: string | null

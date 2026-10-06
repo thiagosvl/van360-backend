@@ -149,6 +149,23 @@ export const passageiroRepository = {
     if (isValidFilterValue(filtros?.veiculo)) query = query.eq("veiculo_id", filtros.veiculo);
     if (isValidFilterValue(filtros?.periodo)) query = query.eq("periodo", filtros.periodo.toLowerCase());
 
+    if (isValidFilterValue(filtros?.ano_letivo)) {
+      const targetAno = Number(filtros.ano_letivo);
+      const { data: renovacoes } = await supabaseAdmin
+        .from("passageiro_renovacoes")
+        .select("passageiro_id")
+        .eq("usuario_id", usuarioId)
+        .eq("ano_origem", targetAno);
+
+      const renovadosIds = renovacoes?.map((r) => r.passageiro_id) || [];
+
+      if (renovadosIds.length > 0) {
+        query = query.or(`ano_letivo.eq.${targetAno},id.in.(${renovadosIds.join(",")})`);
+      } else {
+        query = query.eq("ano_letivo", targetAno);
+      }
+    }
+
     const rawAtivo = filtros?.ativo ?? filtros?.status;
     if (isValidFilterValue(rawAtivo)) {
       const isAtivoBool = rawAtivo === "true" || rawAtivo === "ativo";
@@ -179,7 +196,7 @@ export const passageiroRepository = {
       .single();
   },
 
-  async countByUsuario(usuarioId: string, filtros?: { ativo?: string; veiculo?: string }) {
+  async countByUsuario(usuarioId: string, filtros?: { ativo?: string; veiculo?: string; ano_letivo?: number | string }) {
     let query = supabaseAdmin
       .from("passageiros")
       .select("id", { count: "exact", head: true })
@@ -187,6 +204,23 @@ export const passageiroRepository = {
 
     if (isValidFilterValue(filtros?.ativo)) query = query.eq("ativo", filtros.ativo === "true");
     if (isValidFilterValue(filtros?.veiculo)) query = query.eq("veiculo_id", filtros.veiculo);
+
+    if (isValidFilterValue(filtros?.ano_letivo)) {
+      const targetAno = Number(filtros.ano_letivo);
+      const { data: renovacoes } = await supabaseAdmin
+        .from("passageiro_renovacoes")
+        .select("passageiro_id")
+        .eq("usuario_id", usuarioId)
+        .eq("ano_origem", targetAno);
+
+      const renovadosIds = renovacoes?.map((r) => r.passageiro_id) || [];
+
+      if (renovadosIds.length > 0) {
+        query = query.or(`ano_letivo.eq.${targetAno},id.in.(${renovadosIds.join(",")})`);
+      } else {
+        query = query.eq("ano_letivo", targetAno);
+      }
+    }
 
     return query;
   },

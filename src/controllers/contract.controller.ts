@@ -21,7 +21,9 @@ export const contractController = {
 
   getKPIs: async (req: FastifyRequest, reply: FastifyReply) => {
     const usuarioId = (req.data_owner_id || req.user?.id)!;
-    const kpis = await contractService.getKPIs(usuarioId);
+    const { ano } = req.query as { ano?: string };
+    const anoNum = ano ? Number(ano) : undefined;
+    const kpis = await contractService.getKPIs(usuarioId, anoNum);
     return reply.status(200).send(kpis);
   },
 

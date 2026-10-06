@@ -235,7 +235,7 @@ export const renovacaoRepository = {
   async listConfirmadosParaVirada(usuarioId: string, anoDestino: number) {
     const { data, error } = await supabaseAdmin
       .from("passageiro_renovacoes")
-      .select("*")
+      .select("*, passageiro:passageiros(*)")
       .eq("usuario_id", usuarioId)
       .eq("ano_destino", anoDestino)
       .eq("status", RenovacaoStatus.CONFIRMADO);
@@ -247,13 +247,22 @@ export const renovacaoRepository = {
   async listRecusadosParaVirada(usuarioId: string, anoDestino: number) {
     const { data, error } = await supabaseAdmin
       .from("passageiro_renovacoes")
-      .select("passageiro_id")
+      .select("*, passageiro:passageiros(*)")
       .eq("usuario_id", usuarioId)
       .eq("ano_destino", anoDestino)
       .eq("status", RenovacaoStatus.RECUSADO);
 
     if (error) throw error;
     return data || [];
+  },
+
+  async salvarSnapshotAnoOrigem(renovacaoId: string, snapshot: Record<string, unknown>) {
+    const { error } = await supabaseAdmin
+      .from("passageiro_renovacoes")
+      .update({ dados_ano_origem: snapshot as any })
+      .eq("id", renovacaoId);
+
+    if (error) throw error;
   },
 
   async atualizarPassageiroNaVirada(passageiroId: string, updateData: Record<string, unknown>) {

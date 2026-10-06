@@ -408,6 +408,8 @@ const countListPassageirosByUsuario = async (
     usuarioId: string,
     filtros?: {
         ativo?: string;
+        veiculo?: string;
+        ano_letivo?: number | string;
     }
 ): Promise<number> => {
     const { count, error } = await passageiroRepository.countByUsuario(usuarioId, filtros);

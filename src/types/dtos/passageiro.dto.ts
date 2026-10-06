@@ -127,6 +127,7 @@ export const listPassageirosFiltersSchema = z.object({
   status: z.string().optional(),
   periodo: z.string().optional(),
   ativo: z.string().optional(), // Query params vêm como string
+  ano_letivo: z.union([z.number(), z.string().transform(v => Number(v))]).optional(),
   page: z.union([z.number(), z.string().transform(v => Number(v))]).optional(),
   limit: z.union([z.number(), z.string().transform(v => Number(v))]).optional(),
 });

@@ -547,6 +547,29 @@ export const renovacaoService = {
     const recusados = await renovacaoRepository.listRecusadosParaVirada(usuarioId, dto.ano_destino);
 
     for (const item of confirmados) {
+      const passageiroAtual = item.passageiro as Record<string, unknown> | null;
+      if (passageiroAtual) {
+        const snapshotAnoOrigem = {
+          ano_letivo: passageiroAtual.ano_letivo ?? item.ano_origem,
+          valor_cobranca: passageiroAtual.valor_cobranca,
+          dia_vencimento: passageiroAtual.dia_vencimento,
+          escola_id: passageiroAtual.escola_id,
+          periodo: passageiroAtual.periodo,
+          modalidade: passageiroAtual.modalidade,
+          turma: passageiroAtual.turma,
+          sala: passageiroAtual.sala,
+          nome_professor: passageiroAtual.nome_professor,
+          isento: passageiroAtual.isento,
+          ativo: passageiroAtual.ativo,
+          data_inicio_transporte: passageiroAtual.data_inicio_transporte,
+          data_fim_transporte: passageiroAtual.data_fim_transporte,
+          data_inicio_cobranca: passageiroAtual.data_inicio_cobranca,
+          data_fim_cobranca: passageiroAtual.data_fim_cobranca,
+          veiculo_id: passageiroAtual.veiculo_id,
+        };
+        await renovacaoRepository.salvarSnapshotAnoOrigem(item.id, snapshotAnoOrigem);
+      }
+
       const updateData: Record<string, unknown> = {
         ano_letivo: dto.ano_destino,
         valor_cobranca: item.novo_valor_cobranca,
@@ -570,6 +593,31 @@ export const renovacaoService = {
     }
 
     if (recusados.length > 0) {
+      for (const item of recusados) {
+        const passageiroAtual = item.passageiro as Record<string, unknown> | null;
+        if (passageiroAtual) {
+          const snapshotAnoOrigem = {
+            ano_letivo: passageiroAtual.ano_letivo ?? item.ano_origem,
+            valor_cobranca: passageiroAtual.valor_cobranca,
+            dia_vencimento: passageiroAtual.dia_vencimento,
+            escola_id: passageiroAtual.escola_id,
+            periodo: passageiroAtual.periodo,
+            modalidade: passageiroAtual.modalidade,
+            turma: passageiroAtual.turma,
+            sala: passageiroAtual.sala,
+            nome_professor: passageiroAtual.nome_professor,
+            isento: passageiroAtual.isento,
+            ativo: passageiroAtual.ativo,
+            data_inicio_transporte: passageiroAtual.data_inicio_transporte,
+            data_fim_transporte: passageiroAtual.data_fim_transporte,
+            data_inicio_cobranca: passageiroAtual.data_inicio_cobranca,
+            data_fim_cobranca: passageiroAtual.data_fim_cobranca,
+            veiculo_id: passageiroAtual.veiculo_id,
+          };
+          await renovacaoRepository.salvarSnapshotAnoOrigem(item.id, snapshotAnoOrigem);
+        }
+      }
+
       const recusadosIds = recusados.map(r => r.passageiro_id);
       await renovacaoRepository.inativarPassageirosNaVirada(recusadosIds);
     }

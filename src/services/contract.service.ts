@@ -511,8 +511,8 @@ class ContractService {
     const to = from + limit - 1;
 
     if (tab === 'sem_contrato') {
-      const idsIgnorar = await contractRepository.getPassageirosIdsComContratoValido(usuarioId);
-      let query = contractRepository.buildSemContratoQuery(usuarioId, idsIgnorar);
+      const idsIgnorar = await contractRepository.getPassageirosIdsComContratoValido(usuarioId, filters.ano);
+      let query = contractRepository.buildSemContratoQuery(usuarioId, idsIgnorar, filters.ano);
 
       if (search) {
         query = query.or(`nome.ilike.%${search}%`);
@@ -573,7 +573,7 @@ class ContractService {
     if (tab === 'pendentes') statusQuery = ContratoStatus.PENDENTE;
     if (tab === 'assinados') statusQuery = ContratoStatus.ASSINADO;
 
-    let query = contractRepository.buildListContratosQuery(usuarioId, statusQuery);
+    let query = contractRepository.buildListContratosQuery(usuarioId, statusQuery, filters.ano);
 
     if (search) {
       query = query.or(`nome.ilike.%${search}%`, { foreignTable: 'passageiro' });
@@ -616,12 +616,12 @@ class ContractService {
     };
   }
 
-  async getKPIs(authId: string) {
+  async getKPIs(authId: string, ano?: number) {
     const usuario = await this.getUsuarioByAuthId(authId);
     const usuarioId = usuario.id;
 
-    const { pendentes, assinados } = await contractRepository.getKPIs(usuarioId);
-    const semContrato = await contractRepository.getSemContratoCount(usuarioId);
+    const { pendentes, assinados } = await contractRepository.getKPIs(usuarioId, ano);
+    const semContrato = await contractRepository.getSemContratoCount(usuarioId, ano);
 
     return {
       pendentes,

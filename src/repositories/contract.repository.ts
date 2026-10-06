@@ -113,43 +113,62 @@ export const contractRepository = {
       .single();
   },
 
-  async getPassageirosIdsComContratoValido(usuarioId: string) {
-    const { data } = await supabaseAdmin
+  async getPassageirosIdsComContratoValido(usuarioId: string, ano?: number) {
+    let query = supabaseAdmin
       .from("contratos")
       .select("passageiro_id, passageiros!inner(ativo)")
       .eq("usuario_id", usuarioId)
       .eq("passageiros.ativo", true)
       .in("status", [ContratoStatus.PENDENTE, ContratoStatus.ASSINADO]);
 
+    if (ano !== undefined && ano !== null) {
+      query = query.eq("ano", ano);
+    }
+
+    const { data } = await query;
     return data?.map((c) => c.passageiro_id) || [];
   },
 
-  async getKPIs(usuarioId: string) {
-    const { count: pendentes } = await supabaseAdmin
+  async getKPIs(usuarioId: string, ano?: number) {
+    let pendentesQuery = supabaseAdmin
       .from("contratos")
       .select("id, passageiros!inner(ativo)", { count: "exact", head: true })
       .eq("usuario_id", usuarioId)
       .eq("status", ContratoStatus.PENDENTE)
       .eq("passageiros.ativo", true);
 
-    const { count: assinados } = await supabaseAdmin
+    let assinadosQuery = supabaseAdmin
       .from("contratos")
       .select("id, passageiros!inner(ativo)", { count: "exact", head: true })
       .eq("usuario_id", usuarioId)
       .eq("status", ContratoStatus.ASSINADO)
       .eq("passageiros.ativo", true);
 
+    if (ano !== undefined && ano !== null) {
+      pendentesQuery = pendentesQuery.eq("ano", ano);
+      assinadosQuery = assinadosQuery.eq("ano", ano);
+    }
+
+    const [{ count: pendentes }, { count: assinados }] = await Promise.all([
+      pendentesQuery,
+      assinadosQuery,
+    ]);
+
     return { pendentes: pendentes || 0, assinados: assinados || 0 };
   },
 
-  async getSemContratoCount(usuarioId: string) {
-    const idsIgnorar = await this.getPassageirosIdsComContratoValido(usuarioId);
+  async getSemContratoCount(usuarioId: string, ano?: number) {
+    const idsIgnorar = await this.getPassageirosIdsComContratoValido(usuarioId, ano);
 
     let query = supabaseAdmin
       .from("passageiros")
       .select("id", { count: "exact", head: true })
       .eq("usuario_id", usuarioId)
       .eq("ativo", true);
+
+    if (ano !== undefined && ano !== null) {
+      query = query.eq("ano_letivo", ano);
+    }
 
     if (idsIgnorar.length > 0) {
       query = query.not("id", "in", `(${idsIgnorar.join(",")})`);
@@ -212,7 +231,7 @@ export const contractRepository = {
     return true;
   },
 
-  buildListContratosQuery(usuarioId: string, status?: ContratoStatus) {
+  buildListContratosQuery(usuarioId: string, status?: ContratoStatus, ano?: number) {
     let query = supabaseAdmin
       .from("contratos")
       .select(
@@ -226,10 +245,13 @@ export const contractRepository = {
     if (isValidFilterValue(status)) {
       query = query.eq("status", status);
     }
+    if (ano !== undefined && ano !== null) {
+      query = query.eq("ano", ano);
+    }
     return query;
   },
 
-  buildSemContratoQuery(usuarioId: string, idsIgnorar: string[]) {
+  buildSemContratoQuery(usuarioId: string, idsIgnorar: string[], ano?: number) {
     let query = supabaseAdmin
       .from("passageiros")
       .select(
@@ -238,6 +260,10 @@ export const contractRepository = {
       )
       .eq("usuario_id", usuarioId)
       .eq("ativo", true);
+
+    if (ano !== undefined && ano !== null) {
+      query = query.eq("ano_letivo", ano);
+    }
 
     if (idsIgnorar.length > 0) {
       query = query.not("id", "in", `(${idsIgnorar.join(",")})`);
