@@ -692,6 +692,7 @@ export const adminFinancialService = {
       usuario_id: string;
       nome: string;
       apelido: string;
+      telefone: string | null;
       trial_ends_at: string;
       dias_restantes: number;
       dias_acessados: number | string;
@@ -705,6 +706,7 @@ export const adminFinancialService = {
       indicado_por: string | null;
       valor_mensal: number | string;
       valor_anual: number | string;
+      status: string | null;
     }>;
 
     const trials: TrialPipelineItemDTO[] = trialsRaw.map((item) => ({
@@ -712,6 +714,7 @@ export const adminFinancialService = {
       usuarioId: item.usuario_id,
       nome: item.nome,
       apelido: item.apelido?.trim() ? item.apelido.trim() : null,
+      telefone: item.telefone?.trim() ? item.telefone.trim() : null,
       trialEndsAt: item.trial_ends_at,
       diasRestantes: Number(item.dias_restantes),
       diasAcessados: Number(item.dias_acessados || 0),
@@ -724,7 +727,8 @@ export const adminFinancialService = {
       solicitacoes: Number(item.solicitacoes || 0),
       indicadoPor: item.indicado_por || null,
       valorMensal: Number(item.valor_mensal || 39.9),
-      valorAnual: Number(item.valor_anual || 399)
+      valorAnual: Number(item.valor_anual || 399),
+      status: item.status || null
     }));
 
     return {

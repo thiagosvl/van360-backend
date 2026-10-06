@@ -95,6 +95,22 @@ export const subscriptionRepository = {
             .eq("id", id);
     },
 
+    async applyReferralBonus(id: string, newExpiry: string, forceActive: boolean) {
+        const payload: { data_vencimento: string; updated_at: string; status?: SubscriptionStatus } = {
+            data_vencimento: newExpiry,
+            updated_at: new Date().toISOString()
+        };
+
+        if (forceActive) {
+            payload.status = SubscriptionStatus.ACTIVE;
+        }
+
+        return supabaseAdmin
+            .from("assinaturas")
+            .update(payload)
+            .eq("id", id);
+    },
+
     async extendTrial(id: string, newTrialEnd: string) {
         return supabaseAdmin
             .from("assinaturas")

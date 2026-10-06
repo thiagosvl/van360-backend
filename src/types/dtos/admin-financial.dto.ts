@@ -148,6 +148,7 @@ export interface TrialPipelineItemDTO {
   usuarioId: string;
   nome: string;
   apelido: string | null;
+  telefone: string | null;
   trialEndsAt: string;
   diasRestantes: number;
   diasAcessados: number;
@@ -161,6 +162,7 @@ export interface TrialPipelineItemDTO {
   indicadoPor: string | null;
   valorMensal: number;
   valorAnual: number;
+  status: string | null;
 }
 
 export interface TrialsPipelineResponseDTO {

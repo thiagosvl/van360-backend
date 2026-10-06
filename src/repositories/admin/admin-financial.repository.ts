@@ -59,6 +59,6 @@ export const adminFinancialRepository = {
   },
 
   async getTrialsPipeline() {
-    return (supabaseAdmin as SupabaseClient<Database>).rpc("get_admin_trials_pipeline");
+    return (supabaseAdmin as SupabaseClient<Database>).rpc("get_admin_trials_pipeline_v2" as unknown as "get_admin_trials_pipeline");
   }
 };

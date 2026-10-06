@@ -4,6 +4,8 @@ import {
     SubscriptionStatus,
     IndicacaoStatus,
     ConfigKey,
+    AtividadeEntidadeTipo,
+    AtividadeAcao,
 } from "../../types/enums.js";
 import { getConfigNumber } from "../configuracao.service.js";
 import { getNowBR, parseLocalDate, addDays, toPersistenceString } from "../../utils/date.utils.js";
@@ -13,6 +15,7 @@ import { referralRepository } from "../../repositories/referral.repository.js";
 import { userRepository } from "../../repositories/user.repository.js";
 import { subscriptionRepository } from "../../repositories/subscription.repository.js";
 import { notificationService } from "../notifications/notification.service.js";
+import { historicoService } from "../historico.service.js";
 import { EVENTO_MOTORISTA_INDICACAO_BONUS, EVENTO_MOTORISTA_INDICACAO_CADASTRO } from "../../config/constants.js";
 
 export const subscriptionReferralService = {
@@ -107,13 +110,18 @@ export const subscriptionReferralService = {
             const newExpiryDate = addDays(baseDate, bonusDays);
             const newExpiryStr = toPersistenceString(newExpiryDate);
 
-            if (sub.status === SubscriptionStatus.TRIAL) {
-                await subscriptionRepository.extendTrial(sub.id, newExpiryStr);
-            } else {
-                await subscriptionRepository.updateExpiry(sub.id, newExpiryStr);
-            }
+            const shouldActivate = sub.status !== SubscriptionStatus.ACTIVE;
+            await subscriptionRepository.applyReferralBonus(sub.id, newExpiryStr, shouldActivate);
 
-            logger.info({ indicadorId: indicacao.indicador_id, dias: bonusDays }, "[SubscriptionReferralService] Bônus de indicação aplicado.");
+            await historicoService.log({
+                usuario_id: indicacao.indicador_id,
+                entidade_tipo: AtividadeEntidadeTipo.SAAS_ASSINATURA,
+                entidade_id: sub.id,
+                acao: AtividadeAcao.SAAS_REFERRAL_BONUS_RECEIVED,
+                descricao: `Bônus de indicação aplicado (+${bonusDays} dias de assinatura).`
+            });
+
+            logger.info({ indicadorId: indicacao.indicador_id, dias: bonusDays, activated: shouldActivate }, "[SubscriptionReferralService] Bônus de indicação aplicado.");
 
             // Enviar notificação
             const { data: indicador } = await userRepository.getById(indicacao.indicador_id);
