@@ -69,7 +69,7 @@ export const virarAnoLetivoSchema = z.object({
 export type VirarAnoLetivoDTO = z.infer<typeof virarAnoLetivoSchema>;
 
 export const responderRenovacaoPublicaSchema = z.object({
-  status: z.enum(["confirmado", "recusado"]),
+  status: z.enum(["confirmado", "recusado", "pendente"]),
   observacoes_pais: z.string().optional().nullable(),
 });
 

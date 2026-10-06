@@ -681,16 +681,25 @@ export const renovacaoService = {
     const modalidadeAtual = pEnriched.modalidade;
     const novaModalidade = data.nova_modalidade ?? modalidadeAtual;
 
-    let contratoInfo = null;
     const configContratoAno = resolveContractConfigForYear(motorista?.config_contrato as Record<string, any>, data.ano_destino);
+    let contratoInfo: {
+      usar_contratos: boolean;
+      id: string | null;
+      status: string | null;
+      token_acesso: string | null;
+    } = {
+      usar_contratos: Boolean(configContratoAno.usar_contratos),
+      id: null,
+      status: null,
+      token_acesso: null,
+    };
+
     if (configContratoAno.usar_contratos) {
       const contrato = await contractRepository.getByPassageiroEAno(passageiro.id, data.ano_destino);
       if (contrato) {
-        contratoInfo = {
-          id: contrato.id,
-          status: contrato.status,
-          token_acesso: contrato.token_acesso,
-        };
+        contratoInfo.id = contrato.id;
+        contratoInfo.status = contrato.status;
+        contratoInfo.token_acesso = contrato.token_acesso;
       }
     }
 
@@ -851,7 +860,7 @@ export const renovacaoService = {
     return this.getPublicRenovacao(token);
   },
 
-  async responderPublico(token: string, status: "confirmado" | "recusado", observacoesPais?: string | null) {
+  async responderPublico(token: string, status: "confirmado" | "recusado" | "pendente", observacoesPais?: string | null) {
     const data = await renovacaoRepository.getByToken(token);
     if (!data || !data.passageiro) {
       throw new AppError("Proposta de renovação não encontrada ou expirada.", 404);
@@ -916,46 +925,54 @@ export const renovacaoService = {
       } catch (contractErr: unknown) {
         logger.error({ error: contractErr instanceof Error ? contractErr.message : String(contractErr), passageiroId: passageiro.id }, "[Renovacao] Erro ao gerar contrato automático na renovação confirmada");
       }
-    } else if (status === "recusado") {
+    } else if (status === "recusado" || status === "pendente") {
       try {
         await contractRepository.aposentarContratosPassageiro(passageiro.id, true, data.ano_destino);
       } catch (contractErr: unknown) {
-        logger.error({ error: contractErr instanceof Error ? contractErr.message : String(contractErr), passageiroId: passageiro.id }, "[Renovacao] Erro ao aposentar contrato pendente de renovação recusada");
+        logger.error({ error: contractErr instanceof Error ? contractErr.message : String(contractErr), passageiroId: passageiro.id }, "[Renovacao] Erro ao aposentar contrato pendente de renovação recusada/revertida");
       }
     }
 
     const respNome = pEnriched.responsavel_principal?.nome || "Responsável";
     const passNome = passageiro.nome;
-    const acaoTitulo = status === "confirmado" ? "🎉 Renovação Confirmada!" : "⚠️ Saída Registrada";
+    const acaoTitulo = status === "confirmado"
+      ? "🎉 Renovação Confirmada!"
+      : status === "recusado"
+      ? "⚠️ Saída Registrada"
+      : "ℹ️ Resposta Revertida";
     const acaoCorpo = status === "confirmado"
       ? `${respNome} confirmou a vaga de ${passNome} para o ano letivo de ${data.ano_destino}.`
-      : `${respNome} informou que não irá renovar o transporte de ${passNome} para ${data.ano_destino}.`;
+      : status === "recusado"
+      ? `${respNome} informou que não irá renovar o transporte de ${passNome} para ${data.ano_destino}.`
+      : `${respNome} reverteu a resposta da vaga de ${passNome} para pendente.`;
 
     try {
       await historicoRepository.insert({
         usuario_id: motorista.id,
         entidade_tipo: "passageiro",
         entidade_id: passageiro.id,
-        acao: status === "confirmado" ? "renovacao_confirmada" : "renovacao_recusada",
+        acao: status === "confirmado" ? "renovacao_confirmada" : status === "recusado" ? "renovacao_recusada" : "renovacao_revertida",
         descricao: acaoCorpo,
       });
     } catch {
       // Silencioso
     }
 
-    try {
-      await notificationService.sendDirect(
-        NotificationChannelEnum.FIREBASE,
-        "renovacao_resposta_recebida",
-        {
-          usuarioId: motorista.id,
-          titulo: acaoTitulo,
-          corpo: acaoCorpo,
-        },
-        { usuarioId: motorista.id }
-      );
-    } catch {
-      // Silencioso se falhar push
+    if (status !== "pendente") {
+      try {
+        await notificationService.sendDirect(
+          NotificationChannelEnum.FIREBASE,
+          "renovacao_resposta_recebida",
+          {
+            usuarioId: motorista.id,
+            titulo: acaoTitulo,
+            corpo: acaoCorpo,
+          },
+          { usuarioId: motorista.id }
+        );
+      } catch {
+        // Silencioso se falhar push
+      }
     }
 
     return {
