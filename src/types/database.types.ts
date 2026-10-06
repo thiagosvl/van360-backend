@@ -412,7 +412,7 @@ export type Database = {
       }
       cobrancas_repasses: {
         Row: {
-          cobranca_id: string
+          cobranca_id: string | null
           created_at: string
           data_pagamento_pai: string | null
           data_repasse_motorista: string | null
@@ -420,7 +420,7 @@ export type Database = {
           end_to_end_id_out: string | null
           id: string
           motorista_id: string
-          passageiro_id: string
+          passageiro_id: string | null
           provedor: Database["public"]["Enums"]["provedor_pagamento_enum"]
           saque_provedor_id: string | null
           status_repasse: Database["public"]["Enums"]["status_repasse_enum"]
@@ -435,7 +435,7 @@ export type Database = {
           valor_liquido_motorista: number
         }
         Insert: {
-          cobranca_id: string
+          cobranca_id?: string | null
           created_at?: string
           data_pagamento_pai?: string | null
           data_repasse_motorista?: string | null
@@ -443,7 +443,7 @@ export type Database = {
           end_to_end_id_out?: string | null
           id?: string
           motorista_id: string
-          passageiro_id: string
+          passageiro_id?: string | null
           provedor?: Database["public"]["Enums"]["provedor_pagamento_enum"]
           saque_provedor_id?: string | null
           status_repasse?: Database["public"]["Enums"]["status_repasse_enum"]
@@ -458,7 +458,7 @@ export type Database = {
           valor_liquido_motorista: number
         }
         Update: {
-          cobranca_id?: string
+          cobranca_id?: string | null
           created_at?: string
           data_pagamento_pai?: string | null
           data_repasse_motorista?: string | null
@@ -466,7 +466,7 @@ export type Database = {
           end_to_end_id_out?: string | null
           id?: string
           motorista_id?: string
-          passageiro_id?: string
+          passageiro_id?: string | null
           provedor?: Database["public"]["Enums"]["provedor_pagamento_enum"]
           saque_provedor_id?: string | null
           status_repasse?: Database["public"]["Enums"]["status_repasse_enum"]

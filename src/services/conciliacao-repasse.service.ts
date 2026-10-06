@@ -22,6 +22,11 @@ export async function conciliarRepassesPendentes(): Promise<void> {
           const config = await motoristaFinanceiroRepository.getByUsuarioId(repasse.motorista_id);
           const chavePix = config.chave_pix_repasse;
 
+          if (!repasse.cobranca_id) {
+            logger.warn({ repasseId: repasse.id }, "[ConciliacaoRepasse] Repasse sem cobrança vinculada ignorado");
+            continue;
+          }
+
           if (!chavePix) {
             logger.warn({ repasseId: repasse.id, motoristaId: repasse.motorista_id }, "[ConciliacaoRepasse] Motorista sem chave Pix cadastrada");
             continue;
