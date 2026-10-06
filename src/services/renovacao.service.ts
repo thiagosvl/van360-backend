@@ -74,6 +74,16 @@ const _enrichPassageiroResponsavel = (p: PassageiroComRenovacaoItem["passageiro"
   };
 };
 
+function projectDateToYear(dateStr: string | null | undefined, targetYear: number): string | null {
+  if (!dateStr) return null;
+  const match = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const [, , m, d] = match;
+    return `${targetYear}-${m}-${d}`;
+  }
+  return null;
+}
+
 export const renovacaoService = {
   async getContratoConfig(usuarioId: string, ano: number) {
     const { userRepository } = await import("../repositories/user.repository.js");
@@ -225,10 +235,10 @@ export const renovacaoService = {
         nova_turma: novaTurma,
         novo_nome_professor: novoNomeProfessor,
         novo_veiculo_id: renovacao?.novo_veiculo_id ?? pEnriched.veiculo_id ?? null,
-        nova_data_inicio_transporte: renovacao?.nova_data_inicio_transporte || null,
-        nova_data_fim_transporte: renovacao?.nova_data_fim_transporte || null,
-        nova_data_inicio_cobranca: renovacao?.nova_data_inicio_cobranca || null,
-        nova_data_fim_cobranca: renovacao?.nova_data_fim_cobranca || null,
+        nova_data_inicio_transporte: renovacao?.nova_data_inicio_transporte || projectDateToYear(pEnriched.data_inicio_transporte, anoDestino),
+        nova_data_fim_transporte: renovacao?.nova_data_fim_transporte || projectDateToYear(pEnriched.data_fim_transporte, anoDestino),
+        nova_data_inicio_cobranca: renovacao?.nova_data_inicio_cobranca || projectDateToYear(pEnriched.data_inicio_cobranca, anoDestino),
+        nova_data_fim_cobranca: renovacao?.nova_data_fim_cobranca || projectDateToYear(pEnriched.data_fim_cobranca, anoDestino),
         notificacao_enviada_em: notificacaoEnviadaEm,
         token_publico: tokenPublico,
       };
@@ -424,8 +434,8 @@ export const renovacaoService = {
                 ano: dto.ano_destino,
                 valorMensal: Number(item.renovacao?.novo_valor_cobranca ?? item.passageiro.valor_cobranca ?? 0),
                 diaVencimento: Number(item.renovacao?.novo_dia_vencimento ?? item.passageiro.dia_vencimento ?? 10),
-                dataInicio: item.renovacao?.nova_data_inicio_transporte ? String(item.renovacao.nova_data_inicio_transporte) : undefined,
-                dataFim: item.renovacao?.nova_data_fim_transporte ? String(item.renovacao.nova_data_fim_transporte) : undefined,
+                dataInicio: item.renovacao?.nova_data_inicio_transporte ? String(item.renovacao.nova_data_inicio_transporte) : (projectDateToYear(item.passageiro.data_inicio_transporte, dto.ano_destino) || undefined),
+                dataFim: item.renovacao?.nova_data_fim_transporte ? String(item.renovacao.nova_data_fim_transporte) : (projectDateToYear(item.passageiro.data_fim_transporte, dto.ano_destino) || undefined),
                 notificarResponsavel: false,
               });
             }
@@ -527,8 +537,8 @@ export const renovacaoService = {
               ano: dto.ano_destino,
               valorMensal: Number(payload.novo_valor_cobranca ?? passageiro.valor_cobranca),
               diaVencimento: Number(payload.novo_dia_vencimento ?? passageiro.dia_vencimento),
-              dataInicio: payload.nova_data_inicio_transporte ? String(payload.nova_data_inicio_transporte) : (passageiro.data_inicio_transporte || undefined),
-              dataFim: payload.nova_data_fim_transporte ? String(payload.nova_data_fim_transporte) : (passageiro.data_fim_transporte || undefined),
+              dataInicio: payload.nova_data_inicio_transporte ? String(payload.nova_data_inicio_transporte) : (projectDateToYear(passageiro.data_inicio_transporte, dto.ano_destino) || undefined),
+              dataFim: payload.nova_data_fim_transporte ? String(payload.nova_data_fim_transporte) : (projectDateToYear(passageiro.data_fim_transporte, dto.ano_destino) || undefined),
               modalidade: payload.nova_modalidade ? String(payload.nova_modalidade) : (passageiro.modalidade || undefined),
               periodo: payload.novo_periodo ? String(payload.novo_periodo) : (passageiro.periodo || undefined),
               notificarResponsavel: false,
@@ -684,10 +694,10 @@ export const renovacaoService = {
       }
     }
 
-    const dtInicioTransp = data.nova_data_inicio_transporte || passageiro.data_inicio_transporte || null;
-    const dtFimTransp = data.nova_data_fim_transporte || passageiro.data_fim_transporte || null;
-    const dtInicioCobr = data.nova_data_inicio_cobranca || passageiro.data_inicio_cobranca || null;
-    const dtFimCobr = data.nova_data_fim_cobranca || passageiro.data_fim_cobranca || null;
+    const dtInicioTransp = data.nova_data_inicio_transporte || projectDateToYear(passageiro.data_inicio_transporte, data.ano_destino) || null;
+    const dtFimTransp = data.nova_data_fim_transporte || projectDateToYear(passageiro.data_fim_transporte, data.ano_destino) || null;
+    const dtInicioCobr = data.nova_data_inicio_cobranca || projectDateToYear(passageiro.data_inicio_cobranca, data.ano_destino) || null;
+    const dtFimCobr = data.nova_data_fim_cobranca || projectDateToYear(passageiro.data_fim_cobranca, data.ano_destino) || null;
 
     let qtdParcelas = 11;
     if (dtInicioCobr && dtFimCobr) {
@@ -881,8 +891,8 @@ export const renovacaoService = {
             ano: data.ano_destino,
             valorMensal: Number(data.novo_valor_cobranca ?? passageiro.valor_cobranca),
             diaVencimento: Number(data.novo_dia_vencimento ?? passageiro.dia_vencimento),
-            dataInicio: data.nova_data_inicio_transporte ? String(data.nova_data_inicio_transporte) : (passageiro.data_inicio_transporte || undefined),
-            dataFim: data.nova_data_fim_transporte ? String(data.nova_data_fim_transporte) : (passageiro.data_fim_transporte || undefined),
+            dataInicio: data.nova_data_inicio_transporte ? String(data.nova_data_inicio_transporte) : (projectDateToYear(passageiro.data_inicio_transporte, data.ano_destino) || undefined),
+            dataFim: data.nova_data_fim_transporte ? String(data.nova_data_fim_transporte) : (projectDateToYear(passageiro.data_fim_transporte, data.ano_destino) || undefined),
             modalidade: data.nova_modalidade || passageiro.modalidade || undefined,
             nomeEscola: nova_escola?.nome || passageiro.escola?.nome || undefined,
             periodo: data.novo_periodo || passageiro.periodo || undefined,
