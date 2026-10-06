@@ -330,7 +330,8 @@ const getPassageiro = async (id: string, targetOwnerId?: string, assignedVeiculo
         contrato_provider: ultimoContrato?.provider ?? null,
         minuta_url: ultimoContrato?.minuta_url,
         contrato_final_url: ultimoContrato?.contrato_final_url,
-        token_acesso: ultimoContrato?.token_acesso
+        token_acesso: ultimoContrato?.token_acesso,
+        contrato_ano: ultimoContrato?.ano ?? null
     };
 };
 
@@ -359,6 +360,7 @@ const listPassageiros = async (
             contrato_status: ultimo?.status ?? null,
             contrato_provider: ultimo?.provider ?? null,
             token_acesso: ultimo?.token_acesso ?? null,
+            contrato_ano: ultimo?.ano ?? null,
         };
     });
 

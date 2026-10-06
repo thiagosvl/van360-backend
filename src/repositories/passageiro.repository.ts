@@ -101,7 +101,7 @@ export const passageiroRepository = {
             *,
             escola:escolas(id, nome),
             veiculo:veiculos(id, placa, modelo),
-            contratos(id, status, provider, created_at, minuta_url, contrato_final_url, token_acesso),
+            contratos(id, ano, status, provider, created_at, minuta_url, contrato_final_url, token_acesso),
             ${PASSAGEIRO_RESPONSAVEIS_SELECT}
         `)
       .eq("id", id);
@@ -127,7 +127,7 @@ export const passageiroRepository = {
         id, usuario_id, nome, ativo, isento, data_nascimento, genero, modalidade, periodo, turma, sala, nome_professor, observacoes, valor_cobranca, dia_vencimento, data_inicio_cobranca, data_fim_cobranca, data_inicio_transporte, data_fim_transporte, horario_entrada, horario_saida, enviar_notificacoes, escola_id, veiculo_id, ano_letivo, created_at, updated_at,
         escola:escolas(id, nome),
         veiculo:veiculos(id, placa, modelo),
-        contratos(id, status, provider, token_acesso),
+        contratos(id, ano, status, provider, token_acesso),
         responsaveis:passageiro_responsaveis(
           id, tipo, parentesco,
           responsavel:responsaveis(id, nome, telefone, cpf, email, logradouro, numero, bairro, cidade, estado, cep, referencia, complemento)
