@@ -42,6 +42,10 @@ export const env = {
   EFI_WEBHOOK_URL: process.env.EFI_WEBHOOK_URL || "",
   EFI_WEBHOOK_TOKEN: process.env.EFI_WEBHOOK_TOKEN || "",
 
+  // Woovi (BaaS / Split)
+  WOOVI_APP_ID: process.env.WOOVI_APP_ID || "",
+  WOOVI_BASE_URL: process.env.WOOVI_BASE_URL || "https://api.woovi.com/api/v1",
+
   PAYMENT_PROVIDER: process.env.PAYMENT_PROVIDER || "efipay",
 
   // WABA (WhatsApp Cloud API)

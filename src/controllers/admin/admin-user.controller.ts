@@ -17,6 +17,7 @@ import {
   getUsersDailyPulseStatsQuerySchema,
   listReferralsAdminSchema,
 } from "../../schemas/admin.schema.js";
+import { adminMotoristaFinanceiroUpdateSchema } from "../../schemas/admin-repasse.schema.js";
 import { AppError } from "../../errors/AppError.js";
 
 
@@ -362,6 +363,31 @@ export const adminUserController = {
       const error = err as Error;
       logger.error({ error: error.message }, "[AdminUserController] Erro ao listar indicações.");
       return reply.status(400).send({ error: error.message || "Erro ao listar indicações." });
+    }
+  },
+
+  async getFinancialConfig(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+      const result = await adminUserService.getFinancialConfig(id);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao buscar configuração financeira.");
+      return reply.status(400).send({ error: error.message || "Erro ao buscar configuração financeira." });
+    }
+  },
+
+  async updateFinancialConfig(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+      const body = adminMotoristaFinanceiroUpdateSchema.parse(request.body);
+      const result = await adminUserService.updateFinancialConfig(id, body);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminUserController] Erro ao atualizar configuração financeira.");
+      return reply.status(400).send({ error: error.message || "Erro ao atualizar configuração financeira." });
     }
   },
 };

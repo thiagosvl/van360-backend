@@ -36,6 +36,7 @@ export async function obterConfiguracoesUsuario(usuarioId: string): Promise<Conf
     notificar_conclusao_parada: config?.notificar_conclusao_parada ?? false,
     rastreamento_ativo: config?.rastreamento_ativo ?? true,
     rastreamento_modo: config?.rastreamento_modo ?? "completo",
+    formato_nome_responsavel: (config?.formato_nome_responsavel as "primeiro_nome" | "completo") ?? "primeiro_nome",
     chave_pix: usuario.chave_pix ?? null,
     tipo_chave_pix: usuario.tipo_chave_pix ?? null,
   };

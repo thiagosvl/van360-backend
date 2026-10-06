@@ -191,6 +191,7 @@ export enum ConfigKey {
   SAAS_REFERRAL_BONUS_DAYS = "SAAS_REFERRAL_BONUS_DAYS",
   SAAS_REFERRAL_DISCOUNT_PCT = "SAAS_REFERRAL_DISCOUNT_PCT",
   SAAS_DIAS_ANTECEDENCIA_RENOVACAO = "SAAS_DIAS_ANTECEDENCIA_RENOVACAO",
+  TAXA_COBRANCA_AUTOMATICA_PADRAO = "TAXA_COBRANCA_AUTOMATICA_PADRAO",
   APP_ANDROID_MIN_VERSION = "app_android_min_version",
   APP_ANDROID_LATEST_VERSION = "app_android_latest_version",
   APP_ANDROID_UPDATE_TITLE = "app_android_update_title",
@@ -436,8 +437,10 @@ export enum CronJob {
   BIRTHDAY_REMINDER = "birthday-reminder",
   WEEKLY_DRIVER_CHARGE_SUMMARY = "weekly-driver-charge-summary",
   DAILY_DRIVER_DUE_TODAY_ALERT = "daily-driver-due-today-alert",
+  DAILY_DRIVER_NIGHT_CLOSING_ALERT = "daily-driver-night-closing-alert",
   NOTIFICATION_RETRY = "notification-retry",
   LOGS_CLEANUP = "logs-cleanup",
+  REPASSE_CONCILIATION = "repasse-conciliation",
 }
 
 export enum RouteExecutionStatus {
@@ -543,5 +546,34 @@ export enum RenovacaoReajusteTipo {
   PERCENTUAL = "percentual",
   VALOR_PADRAO = "valor_padrao",
   MANTER = "manter",
+}
+
+export enum ModalidadeCobrancaEnum {
+  MANUAL = "MANUAL",
+  SPLIT_SUBCONTA = "SPLIT_SUBCONTA",
+  BAAS_CONTA_PROPRIA = "BAAS_CONTA_PROPRIA",
+}
+
+export enum BaasStatusEnum {
+  NAO_INICIADO = "NAO_INICIADO",
+  PENDENTE_DOCUMENTACAO = "PENDENTE_DOCUMENTACAO",
+  EM_ANALISE = "EM_ANALISE",
+  APROVADO = "APROVADO",
+  REJEITADO = "REJEITADO",
+  BLOQUEADO = "BLOQUEADO",
+}
+
+export enum StatusRepasseEnum {
+  PENDENTE = "PENDENTE",
+  PROCESSANDO = "PROCESSANDO",
+  SUCESSO = "SUCESSO",
+  FALHA = "FALHA",
+  CANCELADO = "CANCELADO",
+}
+
+export enum ProvedorPagamentoEnum {
+  WOOVI = "WOOVI",
+  ASAAS = "ASAAS",
+  EFIPAY = "EFIPAY",
 }
 

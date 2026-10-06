@@ -16,6 +16,7 @@ export const updateConfiguracoesSchema = z.object({
   notificar_conclusao_parada: z.boolean().optional(),
   rastreamento_ativo: z.boolean().optional(),
   rastreamento_modo: z.nativeEnum(RastreamentoModo).optional(),
+  formato_nome_responsavel: z.enum(["primeiro_nome", "completo"]).optional(),
 });
 
 

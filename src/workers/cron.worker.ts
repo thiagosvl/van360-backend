@@ -51,6 +51,10 @@ export const cronWorker = new Worker(
                     await cobrancaService.enviarAlertaVencimentoHojeParaMotoristas();
                     break;
 
+                case CronJob.DAILY_DRIVER_NIGHT_CLOSING_ALERT:
+                    await cobrancaService.enviarLembreteNoturnoBaixasParaMotoristas();
+                    break;
+
                 case CronJob.NOTIFICATION_RETRY: {
                     const { notificationRetryWorker } = await import('../services/notifications/notification-retry.worker.js');
                     await notificationRetryWorker.processPendingRetries();
@@ -60,6 +64,12 @@ export const cronWorker = new Worker(
                 case CronJob.LOGS_CLEANUP:
                     await logsCleanupJob.run();
                     break;
+
+                case CronJob.REPASSE_CONCILIATION: {
+                    const { conciliarRepassesPendentes } = await import("../services/conciliacao-repasse.service.js");
+                    await conciliarRepassesPendentes();
+                    break;
+                }
 
                 default:
                     logger.warn({ jobName: job.name }, "[CronWorker] Job DESATIVADO ou desconhecido recebido.");

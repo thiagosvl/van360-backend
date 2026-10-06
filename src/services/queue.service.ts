@@ -5,6 +5,7 @@ import { telegramWorker } from "../workers/telegram.worker.js";
 import { cronWorker } from "../workers/cron.worker.js";
 import { birthdayWorker } from "../workers/birthday.worker.js";
 import { evolutionTransactionalWorker, evolutionBulkWorker } from "../workers/evolution.worker.js";
+import { repasseWorker } from "../workers/repasse.worker.js";
 import { setupCronJobs } from "../queues/cron.queue.js";
 
 export const queueService = {
@@ -20,6 +21,7 @@ export const queueService = {
         if (birthdayWorker) logger.info(`[QueueService] Worker iniciado: ${birthdayWorker.name}`);
         if (evolutionTransactionalWorker) logger.info(`[QueueService] Worker iniciado: ${evolutionTransactionalWorker.name}`);
         if (evolutionBulkWorker) logger.info(`[QueueService] Worker iniciado: ${evolutionBulkWorker.name}`);
+        if (repasseWorker) logger.info(`[QueueService] Worker iniciado: ${repasseWorker.name}`);
         logger.info("[QueueService] Todos os workers ativos e processando filas.");
     },
 
@@ -33,7 +35,9 @@ export const queueService = {
             birthdayWorker.close(),
             evolutionTransactionalWorker.close(),
             evolutionBulkWorker.close(),
+            repasseWorker.close(),
         ]);
         logger.info("[QueueService] Workers encerrados.");
     }
 };
+

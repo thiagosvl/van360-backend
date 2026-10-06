@@ -403,4 +403,53 @@ export class FirebaseDriverTemplates {
             }
         };
     }
+
+    static nightClosingDriver(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        const isTrial = Boolean(ctx.isTrial);
+        const userId = (ctx.usuarioId || ctx.userId || "") as string;
+
+        if (isTrial) {
+            return {
+                title: "Controle de Pagamentos 💵",
+                body: "Recebeu pagamentos da van hoje? Cadastre seus alunos no Van360 para dar baixa nas parcelas com um toque e dar adeus ao caderninho!",
+                data: {
+                    action: PushNotificationAction.OPEN_PASSENGERS,
+                    userId
+                }
+            };
+        }
+
+        return {
+            title: "Conferência do Dia 💵",
+            body: "Recebeu pagamentos hoje? Dê baixa nas cobranças no app para manter seu controle em dia e liberar os recibos.",
+            data: {
+                action: PushNotificationAction.OPEN_BILLING,
+                userId
+            }
+        };
+    }
+
+    static automaticPaymentReceivedDriver(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        const formattedValue = NotificationContextFormatter.formatValue(ctx.valor as number | string);
+        const studentName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
+        const parentName = ctx.nomeResponsavel ? NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string) : "";
+        const monthYear = NotificationContextFormatter.formatMonthYearShort(ctx.mes as number | string, ctx.ano as number | string);
+        const reciboEnviado = Boolean(ctx.reciboEnviado);
+        const userId = (ctx.usuarioId || ctx.userId || "") as string;
+        const cobrancaId = (ctx.cobrancaId || "") as string;
+
+        const respStr = parentName ? ` (${parentName})` : "";
+        const statusRecibo = reciboEnviado ? "Baixa concluída e recibo enviado!" : "Baixa automática concluída no app!";
+        const body = `Parcela de ${monthYear}${respStr}. ${statusRecibo}`;
+
+        return {
+            title: `Recebido: ${formattedValue} • ${studentName} 💰`,
+            body,
+            data: {
+                action: PushNotificationAction.OPEN_BILLING,
+                userId,
+                cobrancaId
+            }
+        };
+    }
 }

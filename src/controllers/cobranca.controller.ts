@@ -130,5 +130,12 @@ export const cobrancaController = {
     logger.info({ passageiroId, ano }, "CobrancaController.obterReciboAnual - Starting");
     const recibo = await reciboAnualService.obterOuGerarReciboAnual(passageiroId, ano, request.data_owner_id);
     return reply.status(200).send(recibo);
+  },
+
+  obterPix: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    logger.info({ cobrancaId: id }, "CobrancaController.obterPix - Starting");
+    const pixData = await cobrancaService.obterOuGerarPixCobranca(id);
+    return reply.status(200).send(pixData);
   }
 };

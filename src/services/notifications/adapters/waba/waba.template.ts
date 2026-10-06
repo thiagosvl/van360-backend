@@ -34,7 +34,7 @@ export interface WabaTemplatePayload {
 export class WabaTemplates {
 
     private static buildPixButtonComponent(ctx: Record<string, unknown>, index: string = "0"): WabaComponent | null {
-        const rawPixKey = (ctx.pixCopiaECola || ctx.chavePix) as string | undefined;
+        const rawPixKey = (ctx.pixCopiaECola || ctx.pixCopiaCola || ctx.chavePix) as string | undefined;
         if (!rawPixKey || !rawPixKey.trim()) return null;
 
         const pixStr = rawPixKey.trim();
