@@ -22,6 +22,7 @@ const CRON_DEFINITIONS: CronDefinition[] = [
     { name: CronJob.DAILY_DRIVER_DUE_TODAY_ALERT, pattern: '30 10 * * 0,2-6' },
     { name: CronJob.DAILY_CHARGE_MONITOR, pattern: '30 13 * * *' },
     { name: CronJob.BIRTHDAY_REMINDER, pattern: '30 19 * * 0' },
+    { name: CronJob.DAILY_DRIVER_NIGHT_CLOSING_ALERT, pattern: '30 20 * * *' },
     { name: CronJob.NOTIFICATION_RETRY, every: 2 * 60 * 1000 },
     { name: CronJob.LOGS_CLEANUP, pattern: '0 3 * * *' },
     { name: CronJob.REPASSE_CONCILIATION, every: 15 * 60 * 1000 }

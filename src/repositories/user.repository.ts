@@ -11,6 +11,14 @@ export const userRepository = {
             .single();
     },
 
+    async getProfileWithConfig(id: string) {
+        return supabaseAdmin
+            .from("usuarios")
+            .select("*, configuracoes:usuario_configuracoes(formato_nome_responsavel)")
+            .eq("id", id)
+            .single();
+    },
+
     async getByPhone(phone: string) {
         return supabaseAdmin
             .from("usuarios")
@@ -136,7 +144,8 @@ export const userRepository = {
                 nome,
                 email,
                 assinaturas!inner(status),
-                usuario_configuracoes(notificar_motorista_parcelas)
+                usuario_configuracoes(notificar_motorista_parcelas),
+                motorista_configuracoes_financeiras(cobranca_automatica_ativa)
             `)
             .eq("ativo", true)
             .eq("tipo", UserType.MOTORISTA)
@@ -148,7 +157,12 @@ export const userRepository = {
 
         const filtrados = (data || []).filter(u => {
             const config = Array.isArray(u.usuario_configuracoes) ? u.usuario_configuracoes[0] : u.usuario_configuracoes;
-            return config?.notificar_motorista_parcelas ?? true;
+            const notificarParcelas = config?.notificar_motorista_parcelas ?? true;
+            if (!notificarParcelas) return false;
+
+            const configFin = Array.isArray(u.motorista_configuracoes_financeiras) ? u.motorista_configuracoes_financeiras[0] : u.motorista_configuracoes_financeiras;
+            const cobrancaAutomatica = configFin?.cobranca_automatica_ativa ?? false;
+            return !cobrancaAutomatica;
         });
 
         return { data: filtrados, error: null };

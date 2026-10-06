@@ -117,6 +117,35 @@ async function clearData(usuarioId: string) {
             .in("rota_id", rotaIds);
     }
 
+    console.log("- Deletando dados da tabela: cobrancas_repasses");
+    const { data: cobrancasUsuario } = await supabaseAdmin
+        .from("cobrancas")
+        .select("id")
+        .eq("usuario_id", usuarioId);
+
+    const cobrancaIds = (cobrancasUsuario || []).map(c => c.id);
+    if (cobrancaIds.length > 0) {
+        const { error: repassePorCobrancaError } = await supabaseAdmin
+            .from("cobrancas_repasses")
+            .delete()
+            .in("cobranca_id", cobrancaIds);
+
+        if (repassePorCobrancaError && repassePorCobrancaError.code !== "PGRST205" && !repassePorCobrancaError.message?.includes("Could not find the table")) {
+            console.error("Erro ao limpar tabela cobrancas_repasses por cobranca_id:", repassePorCobrancaError);
+            throw repassePorCobrancaError;
+        }
+    }
+
+    const { error: repassePorMotoristaError } = await supabaseAdmin
+        .from("cobrancas_repasses")
+        .delete()
+        .eq("motorista_id", usuarioId);
+
+    if (repassePorMotoristaError && repassePorMotoristaError.code !== "PGRST205" && !repassePorMotoristaError.message?.includes("Could not find the table")) {
+        console.error("Erro ao limpar tabela cobrancas_repasses por motorista_id:", repassePorMotoristaError);
+        throw repassePorMotoristaError;
+    }
+
     const tablesToClean = [
         "historico_atividades",
         "cobrancas",

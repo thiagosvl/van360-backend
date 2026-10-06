@@ -12,14 +12,15 @@ import {
   EVENTO_PASSAGEIRO_ATRASADO,
   EVENTO_PASSAGEIRO_RECIBO_PAGAMENTO,
   EVENTO_MOTORISTA_RESUMO_SEMANAL_PARCELAS,
-  EVENTO_MOTORISTA_COBRANCAS_HOJE
+  EVENTO_MOTORISTA_COBRANCAS_HOJE,
+  EVENTO_MOTORISTA_CONFERENCIA_NOTURNA
 } from "../config/constants.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { getNowBR, getSafeDueDateString, toPersistenceString, diffInDays, getMonthNameBR, getShortWeekDayBR, parseLocalDate, parseMonthYearFromDateString, createLocalDateBR } from "../utils/date.utils.js";
 import { getDriverDisplayName, getFirstAndSecondName } from "../utils/format.js";
 
 import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
-import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaStatus, CobrancaTipoPagamento, ConfigKey, PaymentProvider, CheckoutPaymentMethod, ProvedorPagamentoEnum } from "../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaStatus, CobrancaTipoPagamento, ConfigKey, PaymentProvider, CheckoutPaymentMethod, ProvedorPagamentoEnum, SubscriptionStatus } from "../types/enums.js";
 import { paymentService } from "./payments/payment.service.js";
 import { cobrancaCalculoService } from "./cobranca-calculo.service.js";
 import { cobrancaValidacaoService } from "./cobranca-validacao.service.js";
@@ -1345,6 +1346,88 @@ export const cobrancaService = {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error({ err: msg }, "[CobrancaService] Erro geral no alerta diário de parcelas para motoristas");
+    }
+  },
+
+  isDiaDeDisparoNoturno(dataBR: Date): boolean {
+    const diaMes = dataBR.getDate();
+    const diaSemana = dataBR.getDay();
+    const isFevereiro = dataBR.getMonth() === 1;
+
+    const DIAS_PICO_PAGAMENTO = [5, 10, 15, 20, 25, 30];
+    const isFechamentoFevereiro = isFevereiro && diaMes === 28;
+    if (DIAS_PICO_PAGAMENTO.includes(diaMes) || isFechamentoFevereiro) {
+      return true;
+    }
+
+    const JANELA_QUENTE_INICIO = 4;
+    const JANELA_QUENTE_FIM = 22;
+    const isJanelaQuente = diaMes >= JANELA_QUENTE_INICIO && diaMes <= JANELA_QUENTE_FIM;
+    const isDiaSemanaElegivel = diaSemana === 1 || diaSemana === 3 || diaSemana === 5;
+
+    return isJanelaQuente && isDiaSemanaElegivel;
+  },
+
+  async enviarLembreteNoturnoBaixasParaMotoristas(): Promise<void> {
+    const now = getNowBR();
+    if (!this.isDiaDeDisparoNoturno(now)) {
+      logger.info(
+        { diaMes: now.getDate(), diaSemana: now.getDay() },
+        "[CobrancaService] Hoje não é dia de envio do lembrete noturno de conferência de pagamentos."
+      );
+      return;
+    }
+
+    logger.info("[CobrancaService] Iniciando envio do lembrete noturno de conferência de pagamentos...");
+
+    try {
+      const { data: motoristas } = await userRepository.listMotoristasAtivosParaAlertaDiario();
+
+      if (!motoristas || motoristas.length === 0) {
+        logger.info("[CobrancaService] Nenhum motorista elegível para o lembrete noturno de pagamentos.");
+        return;
+      }
+
+      let sentCount = 0;
+      const BATCH_SIZE = 10;
+
+      for (let i = 0; i < motoristas.length; i += BATCH_SIZE) {
+        const chunk = motoristas.slice(i, i + BATCH_SIZE);
+
+        await Promise.all(
+          chunk.map(async (m) => {
+            const assinaturaObj = Array.isArray(m.assinaturas) ? m.assinaturas[0] : m.assinaturas;
+            const isTrial = assinaturaObj?.status === SubscriptionStatus.TRIAL;
+
+            try {
+              const sent = await notificationService.notifyDriver(
+                m.telefone || "",
+                EVENTO_MOTORISTA_CONFERENCIA_NOTURNA,
+                {
+                  isTrial,
+                  nomeMotorista: m.nome,
+                  usuarioId: m.id
+                },
+                {
+                  channels: [NotificationChannelEnum.FIREBASE],
+                  usuarioId: m.id,
+                  email: m.email ?? undefined
+                }
+              );
+
+              if (sent) sentCount++;
+            } catch (notifErr: unknown) {
+              const errorMsg = notifErr instanceof Error ? notifErr.message : String(notifErr);
+              logger.error({ error: errorMsg, usuarioId: m.id }, "[CobrancaService] Erro ao enviar lembrete noturno para motorista");
+            }
+          })
+        );
+      }
+
+      logger.info({ sentCount, totalMotoristas: motoristas.length }, "[CobrancaService] Lembrete noturno de conferência concluído.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error({ err: msg }, "[CobrancaService] Erro geral no lembrete noturno de conferência para motoristas");
     }
   }
 };

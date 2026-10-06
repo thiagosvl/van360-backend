@@ -437,6 +437,7 @@ export enum CronJob {
   BIRTHDAY_REMINDER = "birthday-reminder",
   WEEKLY_DRIVER_CHARGE_SUMMARY = "weekly-driver-charge-summary",
   DAILY_DRIVER_DUE_TODAY_ALERT = "daily-driver-due-today-alert",
+  DAILY_DRIVER_NIGHT_CLOSING_ALERT = "daily-driver-night-closing-alert",
   NOTIFICATION_RETRY = "notification-retry",
   LOGS_CLEANUP = "logs-cleanup",
   REPASSE_CONCILIATION = "repasse-conciliation",
