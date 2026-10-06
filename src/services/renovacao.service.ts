@@ -13,6 +13,7 @@ import {
   VirarAnoLetivoDTO,
   AtualizarStatusLoteDTO,
   AtualizarDadosPublicosDTO,
+  SalvarRenovacaoContratoConfigDTO,
 } from "../types/dtos/renovacao.dto.js";
 import {
   NotificationChannelEnum,
@@ -24,6 +25,7 @@ import {
 import { toPersistenceString } from "../utils/date.utils.js";
 import { cleanString } from "../utils/string.utils.js";
 import { notificationService } from "./notifications/notification.service.js";
+import { resolveContractConfigForYear } from "./contract.service.js";
 
 type EnrichedPassageiro = PassageiroComRenovacaoItem["passageiro"] & {
   responsavel_principal: {
@@ -72,6 +74,65 @@ const _enrichPassageiroResponsavel = (p: PassageiroComRenovacaoItem["passageiro"
 };
 
 export const renovacaoService = {
+  async getContratoConfig(usuarioId: string, ano: number) {
+    const { userRepository } = await import("../repositories/user.repository.js");
+    const { data: usuario } = await userRepository.getProfileData(usuarioId);
+    if (!usuario) {
+      throw new AppError("Usuário não encontrado.", 404);
+    }
+
+    const resolved = resolveContractConfigForYear(usuario.config_contrato as Record<string, any>, ano);
+
+    const baseConfig = (usuario.config_contrato as Record<string, any>) || {};
+    const anos = (baseConfig.anos as Record<string, any>) || {};
+    const anoConfig = anos[String(ano)] || anos[ano];
+
+    return {
+      ano,
+      customizado_para_ano: Boolean(anoConfig),
+      usar_contratos: resolved.usar_contratos,
+      multa_atraso: resolved.multa_atraso,
+      juros_atraso: resolved.juros_atraso,
+      multa_rescisao: resolved.multa_rescisao,
+      secoes: resolved.secoes,
+      clausulas: resolved.clausulas,
+      tem_assinatura_digital: Boolean(usuario.assinatura_digital_url),
+      logo_url: usuario.logo_url,
+    };
+  },
+
+  async salvarContratoConfig(usuarioId: string, dto: SalvarRenovacaoContratoConfigDTO) {
+    const { userRepository } = await import("../repositories/user.repository.js");
+    const { data: usuario } = await userRepository.getProfileData(usuarioId);
+    if (!usuario) {
+      throw new AppError("Usuário não encontrado.", 404);
+    }
+
+    const baseConfig = (usuario.config_contrato as Record<string, any>) || {};
+    const anos = { ...(baseConfig.anos as Record<string, any> || {}) };
+
+    anos[String(dto.ano)] = {
+      usar_contratos: dto.usar_contratos,
+      multa_atraso: dto.multa_atraso as any,
+      juros_atraso: dto.juros_atraso as any,
+      multa_rescisao: dto.multa_rescisao as any,
+      secoes: dto.secoes as any,
+      clausulas: dto.clausulas as any,
+    };
+
+    const newConfigContrato = {
+      ...baseConfig,
+      anos,
+    };
+
+    await supabaseAdmin
+      .from("usuarios")
+      .update({ config_contrato: newConfigContrato })
+      .eq("id", usuarioId);
+
+    return this.getContratoConfig(usuarioId, dto.ano);
+  },
+
   async getDashboardRenovacao(usuarioId: string, query: ListRenovacoesQueryDTO) {
     const anoDestino = query.ano_destino || 2027;
     const itens = await renovacaoRepository.listPassageirosComRenovacao(usuarioId, anoDestino);
@@ -350,7 +411,8 @@ export const renovacaoService = {
       try {
         const { userRepository } = await import("../repositories/user.repository.js");
         const { data: usuario } = await userRepository.getProfileData(usuarioId);
-        if (usuario?.config_contrato?.usar_contratos) {
+        const configAno = resolveContractConfigForYear(usuario?.config_contrato as Record<string, any>, dto.ano_destino);
+        if (configAno.usar_contratos) {
           const { contractService } = await import("./contract.service.js");
           for (const item of targetItens) {
             const contratoExistente = await contractRepository.getByPassageiroEAno(item.passageiro.id, dto.ano_destino);
@@ -388,14 +450,43 @@ export const renovacaoService = {
     const isPassageiroIsento = Boolean(passageiro.isento);
     const existente = await renovacaoRepository.getByPassageiroEAno(passageiroId, dto.ano_destino);
 
+    const valorAtual = isPassageiroIsento ? 0 : Number(passageiro.valor_cobranca || 0);
+    const novoValorFinal = isPassageiroIsento ? 0 : (dto.novo_valor_cobranca !== undefined ? dto.novo_valor_cobranca : (existente?.novo_valor_cobranca ?? valorAtual));
+    const novoVencimentoFinal = isPassageiroIsento ? null : (dto.novo_dia_vencimento !== undefined ? dto.novo_dia_vencimento : (existente?.novo_dia_vencimento ?? passageiro.dia_vencimento));
+
+    const alterouValor = dto.novo_valor_cobranca !== undefined && existente?.novo_valor_cobranca !== undefined && dto.novo_valor_cobranca !== existente.novo_valor_cobranca;
+    const alterouVencimento = dto.novo_dia_vencimento !== undefined && existente?.novo_dia_vencimento !== undefined && dto.novo_dia_vencimento !== existente.novo_dia_vencimento;
+    const eraConfirmado = existente?.status === RenovacaoStatus.CONFIRMADO;
+
+    let targetStatus = dto.status;
+    let confirmadoEm: string | null = null;
+
+    if (targetStatus === undefined) {
+      if (eraConfirmado && (alterouValor || alterouVencimento)) {
+        targetStatus = RenovacaoStatus.PENDENTE;
+        confirmadoEm = null;
+        await contractRepository.aposentarContratosPassageiro(passageiroId, false, dto.ano_destino);
+      } else {
+        targetStatus = existente?.status || RenovacaoStatus.PENDENTE;
+        confirmadoEm = existente?.confirmado_em || null;
+      }
+    } else if (targetStatus === RenovacaoStatus.CONFIRMADO) {
+      confirmadoEm = existente?.confirmado_em || new Date().toISOString();
+    } else {
+      confirmadoEm = null;
+      if (targetStatus === RenovacaoStatus.RECUSADO) {
+        await contractRepository.aposentarContratosPassageiro(passageiroId, false, dto.ano_destino);
+      }
+    }
+
     const payload: Record<string, unknown> = {
       usuario_id: usuarioId,
       passageiro_id: passageiroId,
       ano_origem: passageiro.ano_letivo || 2026,
       ano_destino: dto.ano_destino,
-      status: dto.status ?? (existente?.status || RenovacaoStatus.PENDENTE),
-      novo_valor_cobranca: isPassageiroIsento ? 0 : (dto.novo_valor_cobranca !== undefined ? dto.novo_valor_cobranca : (existente?.novo_valor_cobranca ?? passageiro.valor_cobranca)),
-      novo_dia_vencimento: isPassageiroIsento ? null : (dto.novo_dia_vencimento !== undefined ? dto.novo_dia_vencimento : (existente?.novo_dia_vencimento ?? passageiro.dia_vencimento)),
+      status: targetStatus,
+      novo_valor_cobranca: novoValorFinal,
+      novo_dia_vencimento: novoVencimentoFinal,
       nova_escola_id: dto.nova_escola_id !== undefined ? dto.nova_escola_id : (existente?.nova_escola_id ?? passageiro.escola_id),
       novo_periodo: dto.novo_periodo !== undefined ? dto.novo_periodo : (existente?.novo_periodo ?? passageiro.periodo),
       nova_modalidade: dto.nova_modalidade !== undefined ? dto.nova_modalidade : (existente?.nova_modalidade ?? passageiro.modalidade),
@@ -404,6 +495,7 @@ export const renovacaoService = {
       novo_veiculo_id: dto.novo_veiculo_id !== undefined ? dto.novo_veiculo_id : (existente?.novo_veiculo_id ?? passageiro.veiculo_id),
       novo_isento: isPassageiroIsento,
       token_publico: existente?.token_publico || crypto.randomBytes(16).toString("hex"),
+      confirmado_em: confirmadoEm,
     };
 
     if (dto.nova_data_inicio_transporte !== undefined) payload.nova_data_inicio_transporte = dto.nova_data_inicio_transporte ? toPersistenceString(dto.nova_data_inicio_transporte) : null;
@@ -417,19 +509,14 @@ export const renovacaoService = {
       payload.nova_data_fim_cobranca = null;
     }
 
-    if (dto.status === RenovacaoStatus.CONFIRMADO) {
-      payload.confirmado_em = new Date().toISOString();
-    } else {
-      payload.confirmado_em = null;
-    }
-
     const result = await renovacaoRepository.upsertReserva(payload);
 
-    if (dto.status === RenovacaoStatus.CONFIRMADO) {
+    if (targetStatus === RenovacaoStatus.CONFIRMADO) {
       try {
         const { userRepository } = await import("../repositories/user.repository.js");
         const { data: usuario } = await userRepository.getProfileData(usuarioId);
-        if (usuario?.config_contrato?.usar_contratos) {
+        const configAno = resolveContractConfigForYear(usuario?.config_contrato as Record<string, any>, dto.ano_destino);
+        if (configAno.usar_contratos) {
           const contratoExistente = await contractRepository.getByPassageiroEAno(passageiroId, dto.ano_destino);
           if (!contratoExistente) {
             const { contractService } = await import("./contract.service.js");
@@ -536,7 +623,8 @@ export const renovacaoService = {
     const novaModalidade = data.nova_modalidade ?? modalidadeAtual;
 
     let contratoInfo = null;
-    if (motorista?.config_contrato?.usar_contratos) {
+    const configContratoAno = resolveContractConfigForYear(motorista?.config_contrato as Record<string, any>, data.ano_destino);
+    if (configContratoAno.usar_contratos) {
       const contrato = await contractRepository.getByPassageiroEAno(passageiro.id, data.ano_destino);
       if (contrato) {
         contratoInfo = {
@@ -579,7 +667,7 @@ export const renovacaoService = {
         apelido: motorista.apelido,
         telefone: motorista.telefone,
         logo_url: motorista.logo_url,
-        usar_contratos: Boolean(motorista.config_contrato?.usar_contratos),
+        usar_contratos: Boolean(configContratoAno.usar_contratos),
       },
       passageiro: {
         id: passageiro.id,
@@ -728,7 +816,9 @@ export const renovacaoService = {
 
     let contratoGerado = null;
 
-    if (status === "confirmado" && motorista?.config_contrato?.usar_contratos) {
+    const configContratoAno = resolveContractConfigForYear(motorista?.config_contrato as Record<string, any>, data.ano_destino);
+
+    if (status === "confirmado" && configContratoAno.usar_contratos) {
       try {
         const contratoExistente = await contractRepository.getByPassageiroEAno(passageiro.id, data.ano_destino);
         if (!contratoExistente) {
@@ -886,6 +976,8 @@ export const renovacaoService = {
     } else {
       targetItens = targetItens.filter(i => (i.renovacao?.status || RenovacaoStatus.PENDENTE) === RenovacaoStatus.PENDENTE);
     }
+
+    targetItens = targetItens.filter(i => !i.renovacao?.notificacao_enviada_em);
 
     let enviados = 0;
     let falhas = 0;

@@ -119,4 +119,20 @@ export const atualizarStatusLoteSchema = z.object({
 
 export type AtualizarStatusLoteDTO = z.infer<typeof atualizarStatusLoteSchema>;
 
+export const getRenovacaoContratoConfigSchema = z.object({
+  ano: z.union([z.number(), z.string().transform(v => Number(v))]).optional().default(2027),
+});
 
+export type GetRenovacaoContratoConfigDTO = z.infer<typeof getRenovacaoContratoConfigSchema>;
+
+export const salvarRenovacaoContratoConfigSchema = z.object({
+  ano: z.number().int().default(2027),
+  usar_contratos: z.boolean(),
+  multa_atraso: z.object({ valor: z.number(), tipo: z.any() }).optional().nullable(),
+  juros_atraso: z.object({ valor: z.number(), tipo: z.any() }).optional().nullable(),
+  multa_rescisao: z.object({ valor: z.number(), tipo: z.any() }).optional().nullable(),
+  secoes: z.array(z.any()).optional().nullable(),
+  clausulas: z.array(z.string()).optional().nullable(),
+});
+
+export type SalvarRenovacaoContratoConfigDTO = z.infer<typeof salvarRenovacaoContratoConfigSchema>;

@@ -12,6 +12,8 @@ import {
   notificarRenovacaoSchema,
   notificarRenovacaoLoteSchema,
   atualizarStatusLoteSchema,
+  getRenovacaoContratoConfigSchema,
+  salvarRenovacaoContratoConfigSchema,
 } from "../types/dtos/renovacao.dto.js";
 
 export const renovacaoController = {
@@ -114,6 +116,24 @@ export const renovacaoController = {
 
     const dto = notificarRenovacaoLoteSchema.parse(request.body);
     const result = await renovacaoService.notificarLote(usuarioId, dto.ano_destino, dto.passageiro_ids);
+    return reply.status(200).send(result);
+  },
+
+  getContratoConfig: async (request: FastifyRequest, reply: FastifyReply) => {
+    const usuarioId = request.data_owner_id || request.user?.id;
+    if (!usuarioId) throw new AppError("Usuário não autenticado", 401);
+
+    const query = getRenovacaoContratoConfigSchema.parse(request.query);
+    const result = await renovacaoService.getContratoConfig(usuarioId, query.ano);
+    return reply.status(200).send(result);
+  },
+
+  salvarContratoConfig: async (request: FastifyRequest, reply: FastifyReply) => {
+    const usuarioId = request.data_owner_id || request.user?.id;
+    if (!usuarioId) throw new AppError("Usuário não autenticado", 401);
+
+    const dto = salvarRenovacaoContratoConfigSchema.parse(request.body);
+    const result = await renovacaoService.salvarContratoConfig(usuarioId, dto);
     return reply.status(200).send(result);
   },
 };

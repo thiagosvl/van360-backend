@@ -180,16 +180,22 @@ export const contractRepository = {
     return true;
   },
 
-  async aposentarContratosPassageiro(passageiroId: string, apenasPendentes = false) {
+  async aposentarContratosPassageiro(passageiroId: string, apenasPendentes = false, ano?: number) {
     const statusList = apenasPendentes
       ? [ContratoStatus.PENDENTE]
       : [ContratoStatus.PENDENTE, ContratoStatus.ASSINADO];
 
-    const { error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from("contratos")
       .update({ status: ContratoStatus.SUBSTITUIDO })
       .eq("passageiro_id", passageiroId)
       .in("status", statusList);
+
+    if (ano !== undefined && ano !== null) {
+      query = query.eq("ano", ano);
+    }
+
+    const { error } = await query;
 
     if (error) throw error;
     return true;

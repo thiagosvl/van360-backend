@@ -68,6 +68,43 @@ const _getResponsavelInfoFromPassageiro = (p?: PassageiroWithResponsaveis | null
   };
 };
 
+export interface ContractConfigYearTerms {
+  usar_contratos?: boolean;
+  multa_atraso?: { valor: number; tipo: any };
+  juros_atraso?: { valor: number; tipo: any };
+  multa_rescisao?: { valor: number; tipo: any };
+  secoes?: any[];
+  clausulas?: string[];
+}
+
+export function resolveContractConfigForYear(
+  configContrato: Record<string, any> | null | undefined,
+  ano: number
+) {
+  const base = (configContrato || {}) as Record<string, any>;
+  const anosConfig = (base.anos as Record<string, ContractConfigYearTerms>) || {};
+  const anoEspecifico = anosConfig[String(ano)] || anosConfig[ano];
+
+  const usarContratos = anoEspecifico?.usar_contratos !== undefined
+    ? Boolean(anoEspecifico.usar_contratos)
+    : Boolean(base.usar_contratos);
+
+  const multaAtraso = anoEspecifico?.multa_atraso ?? base.multa_atraso ?? null;
+  const jurosAtraso = anoEspecifico?.juros_atraso ?? base.juros_atraso ?? null;
+  const multaRescisao = anoEspecifico?.multa_rescisao ?? base.multa_rescisao ?? null;
+  const secoes = anoEspecifico?.secoes ?? base.secoes ?? null;
+  const clausulas = anoEspecifico?.clausulas ?? base.clausulas ?? null;
+
+  return {
+    usar_contratos: usarContratos,
+    multa_atraso: multaAtraso,
+    juros_atraso: jurosAtraso,
+    multa_rescisao: multaRescisao,
+    secoes,
+    clausulas,
+  };
+}
+
 class ContractService {
   private providers: Map<string, ContractProvider> = new Map();
 
@@ -102,15 +139,19 @@ class ContractService {
     const usuario = await this.getUsuarioByAuthId(authId);
     const usuarioId = usuario.id;
 
-    if (!usuario.config_contrato?.usar_contratos) {
-      throw new AppError("A funcionalidade de contratos não está ativa para este usuário.", 400);
-    }
-
     logger.info({ usuarioId: usuario.id, passageiroId, providerName }, 'Criando contrato');
 
     const passageiro = await passageiroRepository.getByIdCompleto(passageiroId, usuarioId);
     if (!passageiro) {
       throw new AppError('Aluno não encontrado', 404);
+    }
+
+    const dInicioEstimada = customTerms.dataInicio ? parseLocalDate(customTerms.dataInicio) : (passageiro.data_inicio_transporte ? parseLocalDate(passageiro.data_inicio_transporte) : getNowBR());
+    const anoContrato = customTerms.ano || passageiro.ano_letivo || dInicioEstimada.getFullYear();
+    const configContratoAno = resolveContractConfigForYear(usuario.config_contrato, anoContrato);
+
+    if (!configContratoAno.usar_contratos) {
+      throw new AppError("A funcionalidade de contratos não está ativa para este ano letivo.", 400);
     }
 
     const respInfo = _getResponsavelInfoFromPassageiro(passageiro);
@@ -178,7 +219,7 @@ class ContractService {
       valorMensal: valorMensal,
       diaVencimento: customTerms.diaVencimento || passageiro.dia_vencimento,
 
-      ano: customTerms.ano || passageiro.ano_letivo || dInicio.getFullYear(),
+      ano: anoContrato,
       dataInicio,
       dataFim,
       horarioEntrada: passageiro.horario_entrada || null,
@@ -188,28 +229,28 @@ class ContractService {
       valorTotal,
       qtdParcelas,
       valorParcela: valorMensal,
-      multaAtraso: (usuario.config_contrato?.multa_atraso?.valor && usuario.config_contrato.multa_atraso.valor > 0)
-        ? usuario.config_contrato.multa_atraso
+      multaAtraso: (configContratoAno.multa_atraso?.valor && configContratoAno.multa_atraso.valor > 0)
+        ? configContratoAno.multa_atraso
         : null,
-      jurosAtraso: (usuario.config_contrato?.juros_atraso?.valor && usuario.config_contrato.juros_atraso.valor > 0)
-        ? usuario.config_contrato.juros_atraso
+      jurosAtraso: (configContratoAno.juros_atraso?.valor && configContratoAno.juros_atraso.valor > 0)
+        ? configContratoAno.juros_atraso
         : null,
-      multaRescisao: (usuario.config_contrato?.multa_rescisao?.valor && usuario.config_contrato.multa_rescisao.valor > 0)
-        ? usuario.config_contrato.multa_rescisao
+      multaRescisao: (configContratoAno.multa_rescisao?.valor && configContratoAno.multa_rescisao.valor > 0)
+        ? configContratoAno.multa_rescisao
         : null,
       nomeCondutor: getDriverDisplayName(usuario),
       cpfCnpjCondutor: usuario.cpfcnpj,
       telefoneCondutor: usuario.telefone,
       placaVeiculo: passageiro.veiculo?.placa ? formatarPlacaExibicao(passageiro.veiculo.placa) : '',
       modeloVeiculo: passageiro.veiculo ? `${passageiro.veiculo.marca} ${passageiro.veiculo.modelo}` : '',
-      secoes: usuario.config_contrato?.secoes,
-      clausulas: usuario.config_contrato?.clausulas,
+      secoes: configContratoAno.secoes,
+      clausulas: configContratoAno.clausulas,
       assinaturaCondutorUrl: usuario.assinatura_digital_url,
       logoCondutorUrl: usuario.logo_url,
       apelidoCondutor: usuario.apelido,
     };
 
-    await contractRepository.aposentarContratosPassageiro(data.passageiroId, true);
+    await contractRepository.aposentarContratosPassageiro(data.passageiroId, true, anoContrato);
 
     const tokenAcesso = uuidv4();
 
@@ -322,7 +363,8 @@ class ContractService {
 
     const publicUrl = storageProvider.getPublicUrl('contratos', storagePath);
 
-    await contractRepository.aposentarContratosPassageiro(data.passageiroId, true);
+    const anoImportado = new Date().getFullYear();
+    await contractRepository.aposentarContratosPassageiro(data.passageiroId, true, anoImportado);
 
     const nowIso = new Date().toISOString();
     const contrato = await contractRepository.insert({
