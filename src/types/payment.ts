@@ -1,4 +1,4 @@
-import { CheckoutPaymentMethod, PaymentProvider, NormalizedPaymentEventType } from "./enums.js";
+import { CheckoutPaymentMethod, PaymentProvider, NormalizedPaymentEventType, ContractMultaTipo } from "./enums.js";
 
 export interface CreateChargeRequest {
     externalId: string;
@@ -23,6 +23,15 @@ export interface CreateChargeRequest {
         state: string;
     };
     dueDate: string;
+    daysAfterDueDate?: number;
+    fines?: {
+        value: number;
+        tipo?: ContractMultaTipo;
+    };
+    interests?: {
+        value: number;
+        tipo?: ContractMultaTipo;
+    };
     splits?: ChargeSplitEntry[];
 }
 

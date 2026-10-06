@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from "axios";
-import { PaymentProvider, NormalizedPaymentEventType } from "../../../types/enums.js";
+import { PaymentProvider, NormalizedPaymentEventType, ContractMultaTipo } from "../../../types/enums.js";
 import { AppError } from "../../../errors/AppError.js";
 import { logger } from "../../../config/logger.js";
 import { env } from "../../../config/env.js";
@@ -9,6 +9,7 @@ import {
     NormalizedPaymentEvent,
     PaymentProviderAdapter
 } from "../../../types/payment.js";
+import { getEndOfDayBR } from "../../../utils/date.utils.js";
 
 export interface WooviSubaccount {
     pixKey: string;
@@ -62,21 +63,44 @@ export class WooviProvider implements PaymentProviderAdapter {
                 splitType: split.splitType || "SPLIT_SUB_ACCOUNT"
             }));
 
+            const hasOverdueRules = Boolean(request.fines || request.interests);
+
             const payload: Record<string, unknown> = {
                 correlationID: request.externalId,
                 value: valueInCents,
                 comment: request.description.substring(0, 140),
-                expiresIn: 1296000
             };
+
+            if (hasOverdueRules) {
+                payload.type = "OVERDUE";
+                payload.dueDate = request.dueDate.includes("T")
+                    ? request.dueDate
+                    : getEndOfDayBR(request.dueDate).toISOString();
+                payload.daysAfterDueDate = request.daysAfterDueDate || 30;
+
+                if (request.fines) {
+                    payload.fines = {
+                        value: Math.round(request.fines.tipo === ContractMultaTipo.PERCENTUAL ? request.fines.value * 100 : request.fines.value * 100)
+                    };
+                }
+                if (request.interests) {
+                    payload.interests = {
+                        value: Math.round(request.interests.tipo === ContractMultaTipo.PERCENTUAL ? request.interests.value * 100 : request.interests.value * 100)
+                    };
+                }
+            } else {
+                payload.expiresIn = 1296000;
+            }
 
             if (splitsPayload && splitsPayload.length > 0) {
                 payload.splits = splitsPayload;
             }
 
             if (request.customer) {
+                const cleanTaxId = request.customer.document?.replace(/\D/g, "");
                 payload.customer = {
                     name: request.customer.name,
-                    taxID: request.customer.document?.replace(/\D/g, ""),
+                    taxID: cleanTaxId && cleanTaxId.length >= 11 ? cleanTaxId : undefined,
                     email: request.customer.email,
                     phone: request.customer.phone?.replace(/\D/g, "")
                 };
@@ -127,9 +151,17 @@ export class WooviProvider implements PaymentProviderAdapter {
         return response.data?.charge?.status || "UNKNOWN";
     }
 
-    async createOrEnsureSubaccount(pixKey: string): Promise<boolean> {
+    async createOrEnsureSubaccount(pixKey: string, name?: string): Promise<boolean> {
         const sanitizedKey = this.sanitizePixKey(pixKey);
         try {
+            try {
+                const directCheck = await this.client.get(`/subaccount/${encodeURIComponent(sanitizedKey)}`);
+                if (directCheck.status === 200 && directCheck.data) {
+                    return true;
+                }
+            } catch {
+            }
+
             const listResponse = await this.client.get("/subaccount");
             const subAccounts: WooviSubaccount[] = listResponse.data?.subAccounts || [];
             const exists = subAccounts.some((sub) => sub.pixKey === sanitizedKey || sub.pixKey === pixKey);
@@ -138,16 +170,22 @@ export class WooviProvider implements PaymentProviderAdapter {
                 return true;
             }
 
-            await this.client.post("/subaccount", { pixKey: sanitizedKey });
-            logger.info({ pixKey: sanitizedKey }, "[WooviProvider] Subconta criada com sucesso");
+            const subaccountName = (name && name.trim()) || `Motorista ${sanitizedKey}`;
+            await this.client.post("/subaccount", {
+                name: subaccountName.substring(0, 100),
+                pixKey: sanitizedKey
+            });
+            logger.info({ pixKey: sanitizedKey, name: subaccountName }, "[WooviProvider] Subconta criada com sucesso");
             return true;
         } catch (error: unknown) {
-            const err = error as { response?: { data?: { error?: string; message?: string } }; message?: string };
-            const msg = err.response?.data?.error || err.response?.data?.message || err.message;
-            if (typeof msg === "string" && msg.toLowerCase().includes("already exists")) {
+            const err = error as { response?: { status?: number; data?: { error?: string; message?: string } | Record<string, unknown> }; message?: string };
+            const errorData = err.response?.data as { error?: string; message?: string } | undefined;
+            const msg = errorData?.error || errorData?.message || err.message || "Erro desconhecido";
+            const lowerMsg = typeof msg === "string" ? msg.toLowerCase() : "";
+            if (lowerMsg.includes("already exists") || lowerMsg.includes("já existe") || lowerMsg.includes("já cadastrada")) {
                 return true;
             }
-            logger.error({ error: msg, pixKey: sanitizedKey }, "[WooviProvider] Falha ao criar subconta");
+            logger.error({ status: err.response?.status, responseData: err.response?.data, error: msg, pixKey: sanitizedKey }, "[WooviProvider] Falha ao criar subconta");
             throw new AppError(`Não foi possível registrar a chave Pix na instituição financeira: ${msg}`, 400);
         }
     }

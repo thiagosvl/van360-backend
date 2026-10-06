@@ -2,6 +2,7 @@ import { NotificationChannelEnum } from '../types/enums.js';
 import { logger } from "../config/logger.js";
 import { cobrancaRepository } from "../repositories/cobranca.repository.js";
 import { motoristaFinanceiroRepository } from "../repositories/motorista-financeiro.repository.js";
+import { cobrancaValidacaoService } from "./cobranca-validacao.service.js";
 import { AppError } from "../errors/AppError.js";
 import { RegistrarPagamentoManualDTO, ComplementarPagamentoManualDTO } from "../types/dtos/cobranca.dto.js";
 import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaStatus, CobrancaTipoPagamento, TipoResponsavel } from "../types/enums.js";
@@ -28,7 +29,12 @@ export const cobrancaPagamentoService = {
     if (findError || !cobranca) throw new AppError("Cobrança não encontrada.", 404);
     if (cobranca.status === CobrancaStatus.PAGO) throw new AppError("Esta cobrança já está paga.", 400);
     if (cobranca.status === CobrancaStatus.CANCELADA) throw new AppError("Esta cobrança está cancelada.", 400);
-    if (cobranca.repasse_em_processamento) throw new AppError("Esta cobrança está com repasse automático em processamento via Pix.", 400);
+
+    await cobrancaValidacaoService.validarImpedimentoPorRepasse(cobrancaId, cobranca, "registrar pagamento manual");
+
+    if (cobranca.provedor_cobranca_id) {
+      void cobrancaValidacaoService.cancelarPixCobrancaSeExistir(cobrancaId, cobranca.provedor_cobranca_id);
+    }
 
     const dataPagamentoStr = data.data_pagamento ? toPersistenceString(data.data_pagamento) : toPersistenceString(getNowBR());
 
@@ -38,6 +44,11 @@ export const cobrancaPagamentoService = {
       tipo_pagamento: data.tipo_pagamento || CobrancaTipoPagamento.DINHEIRO,
       data_pagamento: dataPagamentoStr,
       valor_pago: data.valor_pago || cobranca.valor,
+      pix_copia_cola: null,
+      pix_qrcode_url: null,
+      pix_expiracao: null,
+      provedor_cobranca_id: null,
+      repasse_em_processamento: false,
       ...(data.observacao !== undefined ? { observacao: (data.observacao && data.observacao.trim()) ? data.observacao.trim() : null } : {}),
     });
 
@@ -133,6 +144,16 @@ export const cobrancaPagamentoService = {
       throw new AppError("Cobrança não encontrada.", 404);
     }
 
+    if (cobranca.status !== CobrancaStatus.PAGO) {
+      throw new AppError("Esta cobrança não está com pagamento registrado.", 400);
+    }
+
+    if (!cobranca.pagamento_manual) {
+      throw new AppError("Não é permitido desfazer cobranças liquidadas automaticamente via Pix.", 400);
+    }
+
+    await cobrancaValidacaoService.validarImpedimentoPorRepasse(cobrancaId, cobranca, "desfazer pagamento");
+
     const { data, error } = await cobrancaRepository.desfazerPagamento(cobrancaId);
 
     if (error) {
@@ -178,6 +199,11 @@ export const cobrancaPagamentoService = {
     if (cobranca.status === CobrancaStatus.CANCELADA) {
       throw new AppError("Esta cobrança está cancelada.", 400);
     }
+    if (!cobranca.pagamento_manual) {
+      throw new AppError("Não é permitido complementar manualmente cobranças liquidadas automaticamente via Pix.", 400);
+    }
+
+    await cobrancaValidacaoService.validarImpedimentoPorRepasse(cobrancaId, cobranca, "complementar pagamento");
 
     const valorAdicional = Number(data.valor_adicional);
     if (isNaN(valorAdicional) || valorAdicional <= 0) {
@@ -282,7 +308,7 @@ export const cobrancaPagamentoService = {
     return updated;
   },
 
-  async registrarPagamentoAutomatico(cobrancaId: string, dataPagamento?: string): Promise<CobrancaRow> {
+  async registrarPagamentoAutomatico(cobrancaId: string, dataPagamento?: string, valorPago?: number): Promise<CobrancaRow> {
     logger.info({ cobrancaId }, "[cobrancaPagamentoService.registrarPagamentoAutomatico] Baixando cobrança automática");
 
     const { data: cobranca, error: findError } = await cobrancaRepository.getById(cobrancaId);
@@ -291,13 +317,14 @@ export const cobrancaPagamentoService = {
     if (cobranca.status === CobrancaStatus.PAGO) return cobranca;
 
     const dataPagamentoStr = dataPagamento ? toPersistenceString(dataPagamento) : toPersistenceString(getNowBR());
+    const valorPagoFinal = valorPago && valorPago > 0 ? valorPago : cobranca.valor;
 
     const { data: updated, error } = await cobrancaRepository.update(cobrancaId, {
       status: CobrancaStatus.PAGO,
       pagamento_manual: false,
       tipo_pagamento: CobrancaTipoPagamento.PIX,
       data_pagamento: dataPagamentoStr,
-      valor_pago: cobranca.valor,
+      valor_pago: valorPagoFinal,
       repasse_em_processamento: false
     });
 

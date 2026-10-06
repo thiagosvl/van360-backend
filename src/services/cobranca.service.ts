@@ -22,6 +22,7 @@ import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
 import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaStatus, CobrancaTipoPagamento, ConfigKey, PaymentProvider, CheckoutPaymentMethod, ProvedorPagamentoEnum } from "../types/enums.js";
 import { paymentService } from "./payments/payment.service.js";
 import { cobrancaCalculoService } from "./cobranca-calculo.service.js";
+import { cobrancaValidacaoService } from "./cobranca-validacao.service.js";
 import { motoristaFinanceiroRepository } from "../repositories/motorista-financeiro.repository.js";
 import { historicoService } from "./historico.service.js";
 import { receiptService } from "./receipt.service.js";
@@ -289,18 +290,37 @@ export const cobrancaService = {
   async updateCobranca(id: string, data: Partial<CreateCobrancaDTO>, cobrancaOriginal?: Record<string, any>): Promise<any> {
     if (!id) throw new AppError("ID da cobrança é obrigatório", 400);
 
-    // Buscar cobrança original se não foi fornecida
     if (!cobrancaOriginal) {
       cobrancaOriginal = await this.getCobranca(id);
     }
 
+    if (cobrancaOriginal?.status === CobrancaStatus.PAGO) {
+      throw new AppError("Não é possível editar uma parcela com pagamento já confirmado.", 400);
+    }
+
+    if (cobrancaOriginal?.status === CobrancaStatus.CANCELADA) {
+      throw new AppError("Não é possível editar uma parcela cancelada. Reative-a primeiro.", 400);
+    }
+
+    await cobrancaValidacaoService.validarImpedimentoPorRepasse(id, cobrancaOriginal, "editar parcela");
+
     const cobrancaData: Record<string, unknown> = {};
 
-    // Mapeamento de campos permitidos para edição de metadados
+    const valorMudou = data.valor !== undefined && Number(data.valor) !== Number(cobrancaOriginal?.valor);
+    const vencimentoMudou = data.data_vencimento !== undefined && toPersistenceString(data.data_vencimento) !== cobrancaOriginal?.data_vencimento;
+
     if (data.valor !== undefined) cobrancaData.valor = data.valor;
     if (data.data_vencimento !== undefined) cobrancaData.data_vencimento = data.data_vencimento ? toPersistenceString(data.data_vencimento) : undefined;
 
-    // Bloqueio de transição de status via PUT (Diretrizes de Arquitetura)
+    if ((valorMudou || vencimentoMudou) && cobrancaOriginal?.provedor_cobranca_id) {
+      void cobrancaValidacaoService.cancelarPixCobrancaSeExistir(id, cobrancaOriginal.provedor_cobranca_id);
+      cobrancaData.pix_copia_cola = null;
+      cobrancaData.pix_qrcode_url = null;
+      cobrancaData.pix_expiracao = null;
+      cobrancaData.provedor_cobranca_id = null;
+      cobrancaData.repasse_em_processamento = false;
+    }
+
     if (data.status !== undefined && data.status !== cobrancaOriginal?.status) {
       logger.warn({ cobrancaId: id, from: cobrancaOriginal?.status, to: data.status }, "Tentativa de alteração de status via PUT (updateCobranca) ignorada. Use os endpoints especializados.");
     }
@@ -360,15 +380,20 @@ export const cobrancaService = {
       throw new AppError("Não é possível cancelar uma parcela com pagamento confirmado.", 400);
     }
 
+    await cobrancaValidacaoService.validarImpedimentoPorRepasse(id, cobranca, "cancelar parcela");
+
     if (cobranca.provedor_cobranca_id) {
-      try {
-        await paymentService.cancelCharge(cobranca.provedor_cobranca_id, PaymentProvider.WOOVI);
-      } catch (cancelErr: unknown) {
-        logger.warn({ error: cancelErr, cobrancaId: id }, "[CobrancaService] Falha ao cancelar cobrança no gateway");
-      }
+      void cobrancaValidacaoService.cancelarPixCobrancaSeExistir(id, cobranca.provedor_cobranca_id);
     }
 
-    const { error: updateError } = await cobrancaRepository.update(id, { status: CobrancaStatus.CANCELADA });
+    const { error: updateError } = await cobrancaRepository.update(id, {
+      status: CobrancaStatus.CANCELADA,
+      provedor_cobranca_id: null,
+      pix_copia_cola: null,
+      pix_qrcode_url: null,
+      pix_expiracao: null,
+      repasse_em_processamento: false
+    });
     if (updateError) throw new AppError("Erro ao cancelar cobrança no banco de dados.", 500);
 
     const passageiroNomeDelete = (cobranca as Record<string, { nome?: string } | undefined>).passageiros?.nome || (cobranca as Record<string, { nome?: string } | undefined>).passageiro?.nome;
@@ -733,6 +758,8 @@ export const cobrancaService = {
     const respLink = links.find((r) => r.tipo === "PRINCIPAL") || links[0];
     const respObj = Array.isArray(respLink?.responsavel) ? respLink.responsavel[0] : respLink?.responsavel;
 
+    const encargos = cobrancaCalculoService.resolverEncargosAtraso(motoristaConfig);
+
     const chargeRes = await paymentService.createCharge(
       {
         externalId: cobranca.id,
@@ -740,6 +767,9 @@ export const cobrancaService = {
         description: `Parcela ${cobranca.mes}/${cobranca.ano} - ${passageiroNome}`,
         paymentMethod: CheckoutPaymentMethod.PIX,
         dueDate: cobranca.data_vencimento,
+        daysAfterDueDate: encargos.daysAfterDueDate,
+        fines: encargos.fines,
+        interests: encargos.interests,
         customer: {
           name: respObj?.nome || passageiroNome,
           document: respObj?.cpf || "",
@@ -762,7 +792,7 @@ export const cobrancaService = {
     }
 
     const expiracao = new Date(cobranca.data_vencimento);
-    expiracao.setDate(expiracao.getDate() + 15);
+    expiracao.setDate(expiracao.getDate() + (encargos.hasOverdueRules ? encargos.daysAfterDueDate : 15));
 
     await cobrancaRepository.update(cobranca.id, {
       provedor: ProvedorPagamentoEnum.WOOVI,

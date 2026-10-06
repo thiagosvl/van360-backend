@@ -143,7 +143,8 @@ export const WebhookController = {
         if (!isDriverInBaaSWhitelist(motorista)) {
           await cobrancaPagamentoService.registrarPagamentoAutomatico(
             cobranca.id,
-            event.paidAt ? event.paidAt.toISOString() : undefined
+            event.paidAt ? event.paidAt.toISOString() : undefined,
+            event.amount
           );
           return reply.code(200).send({ received: true, status: "paid_direct_no_baas" });
         }
@@ -163,8 +164,9 @@ export const WebhookController = {
         const taxaPlataforma = cobrancaCalculoService.resolverTaxaPlataforma(
           cobranca.valor_taxa_plataforma ? Number(cobranca.valor_taxa_plataforma) : null
         );
+        const valorRealPago = event.amount && event.amount > 0 ? event.amount : Number(cobranca.valor);
         const divisao = cobrancaCalculoService.calcularDivisaoCobranca({
-          valorMensalidade: Number(cobranca.valor),
+          valorMensalidade: valorRealPago,
           taxaPlataforma,
           repassarAoPai: Boolean(cobranca.taxa_repassada_ao_pai)
         });
@@ -178,7 +180,7 @@ export const WebhookController = {
             motorista_id: motoristaId,
             passageiro_id: cobranca.passageiro_id,
             provedor: ProvedorPagamentoEnum.WOOVI,
-            valor_bruto: Number(cobranca.valor),
+            valor_bruto: valorRealPago,
             taxa_plataforma: divisao.taxaPlataforma,
             tarifa_gateway_pix_in: divisao.tarifaGatewayPixIn,
             tarifa_gateway_saque: divisao.tarifaGatewaySaque,

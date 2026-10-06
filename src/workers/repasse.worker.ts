@@ -86,7 +86,7 @@ export const repasseWorker = new Worker<RepasseJobData>(
         });
 
         const { cobrancaPagamentoService } = await import("../services/cobranca-pagamento.service.js");
-        await cobrancaPagamentoService.registrarPagamentoAutomatico(cobrancaId);
+        await cobrancaPagamentoService.registrarPagamentoAutomatico(cobrancaId, undefined, Number(repasse.valor_bruto));
 
         logger.info({ repasseId, cobrancaId }, "[RepasseWorker] Repasse liquidado e cobrança baixada com sucesso");
     },

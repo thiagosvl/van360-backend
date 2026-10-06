@@ -1,6 +1,18 @@
 import { FINANCEIRO_CONFIG } from "../config/constants.js";
-import { ModalidadeCobrancaEnum } from "../types/enums.js";
+import { ModalidadeCobrancaEnum, ContractMultaTipo } from "../types/enums.js";
 import type { Tables } from "../types/database.types.js";
+
+export interface RegraEncargoResolvido {
+  value: number;
+  tipo: ContractMultaTipo;
+}
+
+export interface EncargosAtrasoResolvidos {
+  fines?: RegraEncargoResolvido;
+  interests?: RegraEncargoResolvido;
+  daysAfterDueDate: number;
+  hasOverdueRules: boolean;
+}
 
 export interface ParametrosCalculoDivisao {
   valorMensalidade: number;
@@ -83,5 +95,46 @@ export const cobrancaCalculoService = {
     if (statusCobranca && (statusCobranca === "pago" || statusCobranca === "cancelada")) return false;
 
     return true;
+  },
+
+  resolverEncargosAtraso(motoristaConfig?: Tables<"motorista_configuracoes_financeiras"> | null): EncargosAtrasoResolvidos {
+    if (!motoristaConfig) {
+      return { daysAfterDueDate: 30, hasOverdueRules: false };
+    }
+
+    const hasMulta = Boolean(
+      motoristaConfig.cobrar_multa_atraso &&
+      motoristaConfig.multa_atraso_valor &&
+      Number(motoristaConfig.multa_atraso_valor) > 0
+    );
+
+    const hasJuros = Boolean(
+      motoristaConfig.cobrar_juros_atraso &&
+      motoristaConfig.juros_atraso_valor &&
+      Number(motoristaConfig.juros_atraso_valor) > 0
+    );
+
+    const fines: RegraEncargoResolvido | undefined = hasMulta
+      ? {
+          value: Number(motoristaConfig.multa_atraso_valor),
+          tipo: (motoristaConfig.multa_atraso_tipo as ContractMultaTipo) || ContractMultaTipo.PERCENTUAL
+        }
+      : undefined;
+
+    const interests: RegraEncargoResolvido | undefined = hasJuros
+      ? {
+          value: Number(motoristaConfig.juros_atraso_valor),
+          tipo: (motoristaConfig.juros_atraso_tipo as ContractMultaTipo) || ContractMultaTipo.PERCENTUAL
+        }
+      : undefined;
+
+    const daysAfterDueDate = motoristaConfig.dias_validade_apos_vencimento || FINANCEIRO_CONFIG.DIAS_VALIDADE_APOS_VENCIMENTO_PADRAO;
+
+    return {
+      fines,
+      interests,
+      daysAfterDueDate,
+      hasOverdueRules: hasMulta || hasJuros
+    };
   }
 };

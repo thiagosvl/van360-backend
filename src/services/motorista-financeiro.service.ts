@@ -48,7 +48,8 @@ export const motoristaFinanceiroService = {
 
     if (chavePix && cobrancaAtiva && isWhitelisted) {
       try {
-        await paymentService.ensureSubaccount(chavePix);
+        const nomeMotorista = usuario?.nome ? `Motorista ${usuario.nome}` : undefined;
+        await paymentService.ensureSubaccount(chavePix, nomeMotorista);
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         logger.error({ error: msg, chavePix, usuarioId }, "[MotoristaFinanceiroService] Falha ao registrar subconta na instituição financeira");

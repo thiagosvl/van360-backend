@@ -1149,6 +1149,14 @@ export type Database = {
           chave_pix_repasse: string | null
           cobranca_automatica_ativa: boolean
           enviar_recibo_automatico: boolean
+          cobrar_multa_atraso: boolean
+          multa_atraso_tipo: string | null
+          multa_atraso_valor: number | null
+          cobrar_juros_atraso: boolean
+          juros_atraso_tipo: string | null
+          juros_atraso_valor: number | null
+          dias_carencia_atraso: number
+          dias_validade_apos_vencimento: number
           created_at: string
           id: string
           modalidade_cobranca: Database["public"]["Enums"]["modalidade_cobranca_enum"]
@@ -1170,6 +1178,14 @@ export type Database = {
           chave_pix_repasse?: string | null
           cobranca_automatica_ativa?: boolean
           enviar_recibo_automatico?: boolean
+          cobrar_multa_atraso?: boolean
+          multa_atraso_tipo?: string | null
+          multa_atraso_valor?: number | null
+          cobrar_juros_atraso?: boolean
+          juros_atraso_tipo?: string | null
+          juros_atraso_valor?: number | null
+          dias_carencia_atraso?: number
+          dias_validade_apos_vencimento?: number
           created_at?: string
           id?: string
           modalidade_cobranca?: Database["public"]["Enums"]["modalidade_cobranca_enum"]
@@ -1191,6 +1207,14 @@ export type Database = {
           chave_pix_repasse?: string | null
           cobranca_automatica_ativa?: boolean
           enviar_recibo_automatico?: boolean
+          cobrar_multa_atraso?: boolean
+          multa_atraso_tipo?: string | null
+          multa_atraso_valor?: number | null
+          cobrar_juros_atraso?: boolean
+          juros_atraso_tipo?: string | null
+          juros_atraso_valor?: number | null
+          dias_carencia_atraso?: number
+          dias_validade_apos_vencimento?: number
           created_at?: string
           id?: string
           modalidade_cobranca?: Database["public"]["Enums"]["modalidade_cobranca_enum"]

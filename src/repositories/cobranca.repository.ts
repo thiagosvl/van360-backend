@@ -230,6 +230,11 @@ export const cobrancaRepository = {
                 tipo_pagamento: null,
                 pagamento_manual: false,
                 recibo_url: null,
+                pix_copia_cola: null,
+                pix_qrcode_url: null,
+                pix_expiracao: null,
+                provedor_cobranca_id: null,
+                repasse_em_processamento: false
             })
             .eq("id", id)
             .select()

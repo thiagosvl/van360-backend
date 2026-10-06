@@ -47,8 +47,8 @@ class PaymentService {
         return await this.getProvider(provider).normalizeWebhook(rawBody);
     }
 
-    async ensureSubaccount(pixKey: string): Promise<boolean> {
-        return this.wooviProviderInstance.createOrEnsureSubaccount(pixKey);
+    async ensureSubaccount(pixKey: string, name?: string): Promise<boolean> {
+        return this.wooviProviderInstance.createOrEnsureSubaccount(pixKey, name);
     }
 
     async getSubaccountBalance(pixKey: string): Promise<number> {
