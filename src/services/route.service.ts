@@ -1019,26 +1019,101 @@ const checkEFinalizarSeTodasParadasConcluidas = async (execucaoId: string): Prom
   return false;
 };
 
-const registrarAusenciaAntecipada = async (data: CreateAusenciaDTO & { registrado_por?: string }): Promise<any> => {
-  if (!data.passageiro_id) throw new AppError("Aluno é obrigatório", 400);
-  if (!data.rota_id) throw new AppError("Rota é obrigatória", 400);
-  if (!data.data_ausencia) throw new AppError("Data da ausência é obrigatória", 400);
+const expandirDiasUteis = (dataInicio: string, dataFim?: string | null): string[] => {
+  const result: string[] = [];
+  const start = new Date(`${dataInicio}T12:00:00Z`);
+  const end = dataFim ? new Date(`${dataFim}T12:00:00Z`) : start;
 
-  const { data: ausenciasExistentes } = await routeRepository.getAusenciasByRotaEData(data.rota_id, data.data_ausencia);
-  const existente = ausenciasExistentes?.find((a: any) => a.passageiro_id === data.passageiro_id);
-  if (existente) {
-    return existente;
+  if (isNaN(start.getTime())) {
+    return [];
   }
 
-  const { data: inserted, error } = await routeRepository.insertAusencia({
-    passageiro_id: data.passageiro_id,
-    rota_id: data.rota_id,
-    data_ausencia: data.data_ausencia,
-    sentido: data.sentido || null,
-    registrado_por: data.registrado_por || null
-  });
+  const actualEnd = isNaN(end.getTime()) || end < start ? start : end;
+  const current = new Date(start);
 
-  if (error) throw error;
+  while (current <= actualEnd) {
+    const dayOfWeek = current.getUTCDay();
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      result.push(current.toISOString().split("T")[0]);
+    }
+    current.setUTCDate(current.getUTCDate() + 1);
+  }
+
+  return result;
+};
+
+const registrarAusenciaAntecipada = async (data: CreateAusenciaDTO & { registrado_por?: string }): Promise<any> => {
+  if (!data.passageiro_id) throw new AppError("Aluno é obrigatório", 400);
+
+  const rotasIds = (data.rotas_ids && data.rotas_ids.length > 0)
+    ? data.rotas_ids
+    : (data.rota_id ? [data.rota_id] : []);
+
+  if (rotasIds.length === 0) throw new AppError("Selecione ao menos uma rota", 400);
+
+  const dataInicial = data.data_inicio || data.data_ausencia;
+  if (!dataInicial) throw new AppError("Data da ausência é obrigatória", 400);
+
+  const datas = expandirDiasUteis(dataInicial, data.data_fim);
+  if (datas.length === 0) {
+    throw new AppError("Nenhum dia útil encontrado no período selecionado.", 400);
+  }
+
+  const ausenciasCriadas: any[] = [];
+  let alunoNome = "Aluno";
+
+  for (const rotaId of rotasIds) {
+    for (const dataItem of datas) {
+      const { data: ausenciasExistentes } = await routeRepository.getAusenciasByRotaEData(rotaId, dataItem);
+      const existente = ausenciasExistentes?.find((a: any) => a.passageiro_id === data.passageiro_id);
+
+      if (existente) {
+        ausenciasCriadas.push(existente);
+        if (existente.passageiro?.nome) {
+          alunoNome = existente.passageiro.nome;
+        }
+        continue;
+      }
+
+      const { data: inserted, error } = await routeRepository.insertAusencia({
+        passageiro_id: data.passageiro_id,
+        rota_id: rotaId,
+        data_ausencia: dataItem,
+        sentido: data.sentido || null,
+        registrado_por: data.registrado_por || null
+      });
+
+      if (error) throw error;
+      if (inserted) {
+        ausenciasCriadas.push(inserted);
+        if (inserted.passageiro?.nome) {
+          alunoNome = inserted.passageiro.nome;
+        }
+      }
+
+      const todayStr = getTodayLocalDateStr();
+      if (dataItem === todayStr) {
+        const { data: execAtiva } = await routeRepository.getExecucaoAtivaByRotaId(rotaId);
+        if (execAtiva?.id) {
+          await routeRepository.updateTodasParadasDoPassageiroStatus(
+            data.passageiro_id,
+            execAtiva.id,
+            RouteStopStatus.AUSENTE,
+            new Date().toISOString()
+          );
+          notifyFleetRealtime(RouteBroadcastEvent.STOP_STATUS_CHANGED, {
+            execucaoId: execAtiva.id,
+            passageiroId: data.passageiro_id,
+            status: RouteStopStatus.AUSENTE
+          });
+
+          await checkEFinalizarSeTodasParadasConcluidas(execAtiva.id);
+        }
+      }
+
+      notifyFleetRealtime(RouteBroadcastEvent.ABSENCE_CHANGED, { rotaId, passageiroId: data.passageiro_id });
+    }
+  }
 
   let targetOwnerId = data.registrado_por;
   if (targetOwnerId) {
@@ -1049,36 +1124,21 @@ const registrarAusenciaAntecipada = async (data: CreateAusenciaDTO & { registrad
   }
 
   if (targetOwnerId) {
+    const periodoFormatado = datas.length > 1
+      ? `no período de ${datas[0]} a ${datas[datas.length - 1]} (${datas.length} dias letivos)`
+      : `na data ${datas[0]}`;
+
     historicoService.log({
       usuario_id: targetOwnerId,
       entidade_tipo: AtividadeEntidadeTipo.ROTA,
-      entidade_id: data.rota_id,
+      entidade_id: rotasIds[0],
       acao: AtividadeAcao.PASSAGEIRO_STATUS,
-      descricao: `Registrou ausência antecipada para o aluno "${inserted?.passageiro?.nome || 'Aluno'}" na data ${data.data_ausencia}.`,
-      meta: { passageiro_id: data.passageiro_id, rota_id: data.rota_id, data_ausencia: data.data_ausencia }
+      descricao: `Registrou ausência antecipada para o aluno "${alunoNome}" ${periodoFormatado} em ${rotasIds.length} rota(s).`,
+      meta: { passageiro_id: data.passageiro_id, rotas_ids: rotasIds, datas }
     });
   }
 
-  const { data: execAtiva } = await routeRepository.getExecucaoAtivaByRotaId(data.rota_id);
-  if (execAtiva?.id) {
-    await routeRepository.updateTodasParadasDoPassageiroStatus(
-      data.passageiro_id,
-      execAtiva.id,
-      RouteStopStatus.AUSENTE,
-      new Date().toISOString()
-    );
-    notifyFleetRealtime(RouteBroadcastEvent.STOP_STATUS_CHANGED, {
-      execucaoId: execAtiva.id,
-      passageiroId: data.passageiro_id,
-      status: RouteStopStatus.AUSENTE
-    });
-
-    await checkEFinalizarSeTodasParadasConcluidas(execAtiva.id);
-  }
-
-  notifyFleetRealtime(RouteBroadcastEvent.ABSENCE_CHANGED, { rotaId: data.rota_id, passageiroId: data.passageiro_id });
-
-  return inserted;
+  return ausenciasCriadas.length === 1 ? ausenciasCriadas[0] : ausenciasCriadas;
 };
 
 const removerAusenciaAntecipada = async (id: string, passageiroId?: string, rotaId?: string, dataAusencia?: string): Promise<void> => {

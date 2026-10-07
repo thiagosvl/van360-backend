@@ -52,9 +52,18 @@ export const reorderExecucaoSchema = z.object({
 
 export const createAusenciaSchema = z.object({
   passageiro_id: z.string().uuid("ID do aluno é obrigatório"),
-  rota_id: z.string().uuid("ID da rota é obrigatório"),
-  data_ausencia: z.string().min(1, "Data é obrigatória"),
+  rota_id: z.string().uuid("ID da rota inválido").optional().nullable(),
+  rotas_ids: z.array(z.string().uuid("ID de rota inválido")).min(1, "Selecione ao menos uma rota").optional().nullable(),
+  data_ausencia: z.string().optional().nullable(),
+  data_inicio: z.string().optional().nullable(),
+  data_fim: z.string().optional().nullable(),
   sentido: z.nativeEnum(RouteSentido).optional().nullable()
+}).refine((data) => Boolean(data.rota_id || (data.rotas_ids && data.rotas_ids.length > 0)), {
+  message: "Selecione ao menos uma rota",
+  path: ["rotas_ids"]
+}).refine((data) => Boolean(data.data_ausencia || data.data_inicio), {
+  message: "Informe a data da ausência",
+  path: ["data_inicio"]
 });
 
 export const chamadaEscolaSchema = z.object({

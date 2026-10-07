@@ -105,9 +105,10 @@ export const fretamentoService = {
       const veiculos = (item.fretamento_veiculos as unknown as VeiculoRel[]) || [];
 
       const totalPagoFretamento = pagamentos.reduce((acc, p) => acc + Number(p.valor || 0), 0);
-      const totalPagoParticipantes = participantes
-        .filter((p) => p.status_pagamento === "pago")
-        .reduce((acc, p) => acc + Number(p.valor || 0), 0);
+      const totalPagoParticipantes = participantes.reduce(
+        (acc, p) => acc + Number(p.valor_pago ?? (p.status_pagamento === "pago" ? p.valor : 0)),
+        0
+      );
 
       const totalPago = item.tipo === "fretamento" ? totalPagoFretamento : totalPagoParticipantes;
       const valorTotal = Number(item.valor_total || 0);
@@ -181,9 +182,10 @@ export const fretamentoService = {
     const veiculos = (data.fretamento_veiculos as unknown as VeiculoRel[]) || [];
 
     const totalPagoFretamento = pagamentos.reduce((acc, p) => acc + Number(p.valor || 0), 0);
-    const totalPagoParticipantes = participantes
-      .filter((p) => p.status_pagamento === "pago")
-      .reduce((acc, p) => acc + Number(p.valor || 0), 0);
+    const totalPagoParticipantes = participantes.reduce(
+      (acc, p) => acc + Number(p.valor_pago ?? (p.status_pagamento === "pago" ? p.valor : 0)),
+      0
+    );
 
     const totalPago = data.tipo === "fretamento" ? totalPagoFretamento : totalPagoParticipantes;
     const valorTotal = Number(data.valor_total || 0);
@@ -485,19 +487,50 @@ export const fretamentoService = {
     participanteId: string,
     dados: AtualizarStatusParticipanteDTO
   ) {
-    await this.obterPorId(usuarioId, fretamentoId);
+    const fretamento = await this.obterPorId(usuarioId, fretamentoId);
+    const participante = fretamento.participantes.find((p) => p.id === participanteId);
+    if (!participante) throw new AppError("Participante não encontrado", 404);
 
-    const updatePayload: Record<string, unknown> = {
-      status_pagamento: dados.status_pagamento,
-    };
+    const valorTotal = Number(participante.valor || 0);
+    let valorPago = dados.valor_pago !== undefined ? Number(dados.valor_pago) : undefined;
+    let status = dados.status_pagamento;
 
-    if (dados.status_pagamento === "pago") {
-      updatePayload.data_pagamento = new Date().toISOString();
-      if (dados.tipo_pagamento) {
-        updatePayload.tipo_pagamento = dados.tipo_pagamento;
+    if (valorPago !== undefined) {
+      if (valorPago >= valorTotal && valorTotal > 0) {
+        status = "pago";
+      } else if (valorPago > 0) {
+        status = "parcial";
+      } else {
+        status = "pendente";
+        valorPago = 0;
       }
-    } else {
+    } else if (status) {
+      if (status === "pago") {
+        valorPago = valorTotal;
+      } else if (status === "pendente") {
+        valorPago = 0;
+      }
+    }
+
+    const updatePayload: Record<string, unknown> = {};
+
+    if (status !== undefined) {
+      updatePayload.status_pagamento = status;
+    }
+    if (valorPago !== undefined) {
+      updatePayload.valor_pago = valorPago;
+    }
+    if (dados.tipo_pagamento !== undefined) {
+      updatePayload.tipo_pagamento = dados.tipo_pagamento;
+    }
+
+    if (status === "pago" || status === "parcial") {
+      updatePayload.data_pagamento = dados.data_pagamento
+        ? new Date(dados.data_pagamento).toISOString()
+        : new Date().toISOString();
+    } else if (status === "pendente") {
       updatePayload.data_pagamento = null;
+      updatePayload.tipo_pagamento = null;
     }
 
     const { error } = await supabaseAdmin
@@ -569,14 +602,14 @@ export const fretamentoService = {
 
     const { data: participantesRecebidos } = await supabaseAdmin
       .from("fretamento_participantes")
-      .select("valor, fretamentos!inner(usuario_id)")
+      .select("valor, valor_pago, status_pagamento, fretamentos!inner(usuario_id)")
       .eq("fretamentos.usuario_id", usuarioId)
-      .eq("status_pagamento", "pago")
+      .in("status_pagamento", ["pago", "parcial"])
       .gte("data_pagamento", dataInicioMesUtc)
       .lte("data_pagamento", dataFimMesUtc);
 
     const totalParticipantesRecebidos = (participantesRecebidos || []).reduce(
-      (acc, p) => acc + Number(p.valor || 0),
+      (acc, p) => acc + Number(p.valor_pago ?? (p.status_pagamento === "pago" ? p.valor : 0)),
       0
     );
 

@@ -213,48 +213,63 @@ export const portalResponsavelService = {
     const payload = await this.verifyResponsavelToken(token);
     const target = await this._authorizePassageiroAccess(payload.phone, passageiroId);
 
-    let rotaId = data.rota_id;
+    const { data: rotasVinculadas } = await routeRepository.getRotasByPassageiro(passageiroId);
+    const rotasDisponiveis = (rotasVinculadas || [])
+      .map((r: any) => (Array.isArray(r.rota) ? r.rota[0] : r.rota))
+      .filter((r: any) => r && r.id);
 
-    if (!rotaId) {
-      const { data: rotasVinculadas } = await routeRepository.getRotasByPassageiro(passageiroId);
+    let rotasIds = (data.rotas_ids && data.rotas_ids.length > 0)
+      ? data.rotas_ids
+      : (data.rota_id ? [data.rota_id] : []);
 
-      const rotasDisponiveis = (rotasVinculadas || [])
-        .map((r: any) => (Array.isArray(r.rota) ? r.rota[0] : r.rota))
-        .filter((r: any) => r && r.id);
-
+    if (rotasIds.length === 0) {
       if (rotasDisponiveis.length === 1) {
-        rotaId = rotasDisponiveis[0].id;
+        rotasIds = [rotasDisponiveis[0].id];
       } else if (rotasDisponiveis.length === 0) {
         throw new AppError("O aluno não está vinculado a nenhuma rota para registrar ausência.", 400);
       } else {
-        throw new AppError("Selecione a qual rota a ausência se refere.", 400);
+        throw new AppError("Selecione ao menos uma rota para registrar ausência.", 400);
       }
     }
 
+    const dataInicial = data.data_inicio || data.data_ausencia || "";
     const ausencia = await routeService.registrarAusenciaAntecipada({
       passageiro_id: passageiroId,
-      rota_id: rotaId!,
-      data_ausencia: data.data_ausencia,
+      rotas_ids: rotasIds,
+      data_inicio: dataInicial,
+      data_fim: data.data_fim || undefined,
       sentido: data.sentido,
       registrado_por: target.motorista_id
     });
 
     try {
-      const { data: rotaData } = await routeRepository.getRotaNomeById(rotaId!);
+      const rotasNomes = rotasDisponiveis
+        .filter((r: any) => rotasIds.includes(r.id))
+        .map((r: any) => r.nome);
 
-      const [ano, mes, dia] = data.data_ausencia.split("-");
-      const dataFormatada = `${dia}/${mes}/${ano}`;
+      const nomeRotasTexto = rotasNomes.length > 0 ? rotasNomes.join(" e ") : "rotas vinculadas";
+
+      let dataFormatada = "";
+      if (data.data_fim && data.data_fim !== dataInicial) {
+        const [anoI, mesI, diaI] = dataInicial.split("-");
+        const [anoF, mesF, diaF] = data.data_fim.split("-");
+        dataFormatada = `no período de ${diaI}/${mesI}/${anoI} até ${diaF}/${mesF}/${anoF}`;
+      } else {
+        const [ano, mes, dia] = dataInicial.split("-");
+        dataFormatada = `no dia ${dia}/${mes}/${ano}`;
+      }
 
       notificationService.sendDirect(
         NotificationChannelEnum.FIREBASE,
         EVENTO_MOTORISTA_AUSENCIA_REGISTRADA,
         {
           nomePassageiro: target.nome,
-          nomeRota: rotaData?.nome || "rota",
-          dataAusencia: data.data_ausencia,
+          nomeRota: nomeRotasTexto,
+          dataAusencia: dataInicial,
           dataFormatada,
           passageiroId,
-          rotaId: rotaId!,
+          rotaId: rotasIds[0],
+          rotasIds,
           usuarioId: target.motorista_id
         },
         { usuarioId: target.motorista_id }

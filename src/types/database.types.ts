@@ -957,6 +957,7 @@ export type Database = {
             | null
           updated_at: string
           valor: number
+          valor_pago: number
         }
         Insert: {
           created_at?: string
@@ -976,6 +977,7 @@ export type Database = {
             | null
           updated_at?: string
           valor?: number
+          valor_pago?: number
         }
         Update: {
           created_at?: string
@@ -995,6 +997,7 @@ export type Database = {
             | null
           updated_at?: string
           valor?: number
+          valor_pago?: number
         }
         Relationships: [
           {
@@ -2966,7 +2969,7 @@ export type Database = {
         | "madrasta"
         | "responsavel_legal"
         | "outro"
-      participante_pagamento_status_enum: "pendente" | "pago"
+      participante_pagamento_status_enum: "pendente" | "parcial" | "pago"
       provedor_pagamento_enum: "WOOVI" | "ASAAS" | "EFIPAY"
       renovacao_status_enum:
         | "pendente"
@@ -3180,7 +3183,7 @@ export const Constants = {
         "responsavel_legal",
         "outro",
       ],
-      participante_pagamento_status_enum: ["pendente", "pago"],
+      participante_pagamento_status_enum: ["pendente", "parcial", "pago"],
       provedor_pagamento_enum: ["WOOVI", "ASAAS", "EFIPAY"],
       renovacao_status_enum: [
         "pendente",

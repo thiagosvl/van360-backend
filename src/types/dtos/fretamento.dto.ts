@@ -72,8 +72,10 @@ export interface AdicionarParticipanteDTO {
 }
 
 export interface AtualizarStatusParticipanteDTO {
-  status_pagamento: ParticipantePagamentoStatus;
+  status_pagamento?: ParticipantePagamentoStatus;
+  valor_pago?: number;
   tipo_pagamento?: TipoPagamento | null;
+  data_pagamento?: string | null;
 }
 
 export interface FretamentoDetalhesDTO extends FretamentoRow {

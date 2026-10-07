@@ -3,7 +3,7 @@ import { z } from "zod";
 export const fretamentoTipoEnum = z.enum(["fretamento", "passeio"]);
 export const fretamentoStatusEnum = z.enum(["pendente", "confirmado", "concluido", "cancelado"]);
 export const fretamentoPagamentoStatusEnum = z.enum(["pendente", "pago_parcial", "quitado"]);
-export const participantePagamentoStatusEnum = z.enum(["pendente", "pago"]);
+export const participantePagamentoStatusEnum = z.enum(["pendente", "parcial", "pago"]);
 export const tipoPagamentoEnum = z.enum([
   "dinheiro",
   "cartao-credito",
@@ -74,8 +74,10 @@ export const adicionarParticipanteSchema = z.object({
 });
 
 export const atualizarStatusParticipanteSchema = z.object({
-  status_pagamento: participantePagamentoStatusEnum,
+  status_pagamento: participantePagamentoStatusEnum.optional(),
+  valor_pago: z.coerce.number().min(0).optional(),
   tipo_pagamento: tipoPagamentoEnum.optional().nullable(),
+  data_pagamento: z.string().optional().nullable(),
 });
 
 export const listarFretamentosQuerySchema = z.object({
