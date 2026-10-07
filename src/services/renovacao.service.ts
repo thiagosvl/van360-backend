@@ -22,6 +22,7 @@ import {
   RenovacaoStatus,
   TipoResponsavel,
   ContratoProvider,
+  ContratoStatus,
 } from "../types/enums.js";
 import { toPersistenceString } from "../utils/date.utils.js";
 import { cleanString } from "../utils/string.utils.js";
@@ -148,6 +149,20 @@ export const renovacaoService = {
     const anoDestino = query.ano_destino || 2027;
     const itens = await renovacaoRepository.listPassageirosComRenovacao(usuarioId, anoDestino);
 
+    const { data: contratosDoAno } = await supabaseAdmin
+      .from("contratos")
+      .select("id, passageiro_id, status")
+      .eq("usuario_id", usuarioId)
+      .eq("ano", anoDestino)
+      .in("status", [ContratoStatus.PENDENTE, ContratoStatus.ASSINADO]);
+
+    const contratosMap = new Map<string, { id: string; status: string }>();
+    if (contratosDoAno) {
+      for (const c of contratosDoAno) {
+        contratosMap.set(c.passageiro_id, { id: c.id, status: c.status });
+      }
+    }
+
     let faturamentoAtual = 0;
     let faturamentoProjetado = 0;
     let countAtivos = 0;
@@ -241,6 +256,8 @@ export const renovacaoService = {
         nova_data_fim_cobranca: renovacao?.nova_data_fim_cobranca || projectDateToYear(pEnriched.data_fim_cobranca, anoDestino),
         notificacao_enviada_em: notificacaoEnviadaEm,
         token_publico: tokenPublico,
+        contrato_id: contratosMap.get(pEnriched.id)?.id || null,
+        contrato_status: contratosMap.get(pEnriched.id)?.status || null,
       };
     });
 
@@ -444,6 +461,14 @@ export const renovacaoService = {
       } catch (err: unknown) {
         logger.error({ error: err }, "Falha ao gerar contratos em lote para renovações confirmadas");
       }
+    } else if (dto.status === RenovacaoStatus.RECUSADO || dto.status === RenovacaoStatus.PENDENTE) {
+      try {
+        for (const item of targetItens) {
+          await contractRepository.aposentarContratosPassageiro(item.passageiro.id, false, dto.ano_destino);
+        }
+      } catch (err: unknown) {
+        logger.error({ error: err }, "Falha ao aposentar contratos em lote para status recusado/pendente");
+      }
     }
 
     return {
@@ -547,6 +572,12 @@ export const renovacaoService = {
         }
       } catch (contractErr: unknown) {
         logger.warn({ error: contractErr instanceof Error ? contractErr.message : String(contractErr), passageiroId }, "[Renovacao] Não foi possível gerar contrato automático na confirmação individual");
+      }
+    } else if (targetStatus === RenovacaoStatus.RECUSADO || targetStatus === RenovacaoStatus.PENDENTE) {
+      try {
+        await contractRepository.aposentarContratosPassageiro(passageiroId, false, dto.ano_destino);
+      } catch (contractErr: unknown) {
+        logger.warn({ error: contractErr instanceof Error ? contractErr.message : String(contractErr), passageiroId }, "[Renovacao] Erro ao aposentar contrato individual ao mudar status");
       }
     }
 

@@ -640,7 +640,7 @@ class ContractService {
       throw new AppError('Contrato não encontrado', 404);
     }
 
-    await contractRepository.aposentarContratosPassageiro(contratoOriginal.passageiro_id, true);
+    await contractRepository.aposentarContratosPassageiro(contratoOriginal.passageiro_id, false, contratoOriginal.ano);
 
     const providerAlvo = contratoOriginal.provider === ContratoProvider.IMPORTADO
       ? ContratoProvider.INHOUSE
