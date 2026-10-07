@@ -377,6 +377,10 @@ export const subscriptionMonitorService = {
   // ---------------------------------------------------------------------------
 
   async processarAssinaturaPastDue(sub: any, now: Date = getNowBR()): Promise<boolean> {
+    if (sub.metodo_pagamento === CheckoutPaymentMethod.APPLE_IAP) {
+      return false;
+    }
+
     await subscriptionService.updateStatus(sub.id, SubscriptionStatus.PAST_DUE, "Mensalidade não paga no dia do vencimento. Conta em carência.");
 
     const user = this.getUserObject((sub as any).usuarios);
@@ -396,6 +400,10 @@ export const subscriptionMonitorService = {
   },
 
   async processarAssinaturaExpiradaCarencia(sub: any, gracePeriod: number): Promise<boolean> {
+    if (sub.metodo_pagamento === CheckoutPaymentMethod.APPLE_IAP) {
+      return false;
+    }
+
     await subscriptionService.updateStatus(sub.id, SubscriptionStatus.EXPIRED, `Assinatura expirada por falta de pagamento (${gracePeriod} dias de atraso).`);
 
     const user = this.getUserObject((sub as any).usuarios);
@@ -447,6 +455,10 @@ export const subscriptionMonitorService = {
     fatura?: any,
     notifiedSet?: Set<string>
   ): Promise<{ tipo: string; cicloRef: string; subId: string; description: string } | null> {
+    if (sub.metodo_pagamento === CheckoutPaymentMethod.APPLE_IAP) {
+      return null;
+    }
+
     const user = this.getUserObject((sub as any).usuarios);
     if (!user?.telefone || !sub.data_vencimento) return null;
 
@@ -532,6 +544,10 @@ export const subscriptionMonitorService = {
     now: Date = getNowBR(),
     notifiedSet?: Set<string>
   ): Promise<{ tipo: string; cicloRef: string; subId: string; description: string } | null> {
+    if (sub.metodo_pagamento === CheckoutPaymentMethod.APPLE_IAP) {
+      return null;
+    }
+
     const user = this.getUserObject((sub as any).usuarios);
     if (!user?.telefone || !sub.data_vencimento) return null;
 
@@ -615,6 +631,9 @@ export const subscriptionMonitorService = {
     notifiedSet?: Set<string>
   ): Promise<{ tipo?: string; cicloRef?: string; subId?: string; description?: string } | null> {
     const user = this.getUserObject((sub as any).usuarios);
+    if (sub.metodo_pagamento === CheckoutPaymentMethod.APPLE_IAP) {
+      return null;
+    }
     const isCard = sub.metodo_pagamento === "credit_card";
 
     if (hasPendingInvoice) return null;

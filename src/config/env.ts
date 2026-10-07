@@ -61,4 +61,5 @@ export const env = {
 
   PORTAL_DEPLOY_WEBHOOK: process.env.PORTAL_DEPLOY_WEBHOOK || "",
   BLOG_DEPLOY_WEBHOOK: process.env.BLOG_DEPLOY_WEBHOOK || "",
+  REVENUECAT_WEBHOOK_SECRET: process.env.REVENUECAT_WEBHOOK_SECRET || "",
 };

@@ -17,6 +17,7 @@ import publicRoutes from "./public.routes.js";
 import subscriptionRoutes from "./subscription.routes.js";
 import usuarioRoute from "./usuario.route.js";
 import veiculoRoutes from "./veiculo.routes.js";
+import fretamentoRoutes from "./fretamento.routes.js";
 
 import configuracoesRoutes from "./configuracoes.routes.js";
 import motoristaFinanceiroRoutes from "./motorista-financeiro.routes.js";
@@ -51,6 +52,7 @@ const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.register(routeRoutes, { prefix: "/api/routes" });
   app.register(prePassageiroRoutes, { prefix: "/api/pre-passageiros" });
   app.register(veiculoRoutes, { prefix: "/api/veiculos" });
+  app.register(fretamentoRoutes, { prefix: "/api/fretamentos" });
   app.register(escolaRoutes, { prefix: "/api/escolas" });
   app.register(gastoRoute, { prefix: "/api/gastos" });
   app.register(gastoCategoriaRoute, { prefix: "/api/gasto-categorias" });
@@ -78,6 +80,9 @@ const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
   // Webhook da Meta WABA (WhatsApp Cloud API)
   app.get("/api/webhooks/waba", { config: { rateLimit: false } }, wabaWebhookController.verify);
   app.post("/api/webhooks/waba", { config: { rateLimit: false } }, wabaWebhookController.handle);
+
+  // Webhook do RevenueCat (Apple In-App Purchase)
+  app.post("/api/webhooks/revenuecat", { config: { rateLimit: false } }, WebhookController.handleRevenueCat);
 };
 
 export default routes;

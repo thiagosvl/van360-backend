@@ -24,6 +24,8 @@ import { getClientIp } from "../utils/request-client.utils.js";
 import { withRetry } from "../utils/retry.utils.js";
 import { errorAlertService } from "../services/error-alert.service.js";
 import { isDriverInBaaSWhitelist } from "../utils/feature-flag.utils.js";
+import { subscriptionRevenueCatService } from "../services/subscriptions/subscription-revenuecat.service.js";
+import { RevenueCatWebhookPayload } from "../types/dtos/revenuecat.dto.js";
 
 export const WebhookController = {
 
@@ -222,7 +224,24 @@ export const WebhookController = {
 
       return reply.code(500).send({ error: "Internal Server Error" });
     }
-  }
+  },
 
+  async handleRevenueCat(request: FastifyRequest, reply: FastifyReply) {
+    const authHeader = request.headers.authorization;
+    if (env.REVENUECAT_WEBHOOK_SECRET && authHeader !== `Bearer ${env.REVENUECAT_WEBHOOK_SECRET}`) {
+      logger.warn({ ip: getClientIp(request) }, "[WebhookController] Webhook RevenueCat rejeitado: token inválido");
+      return reply.code(401).send({ error: "Unauthorized" });
+    }
+
+    const payload = request.body as RevenueCatWebhookPayload;
+    try {
+      const result = await subscriptionRevenueCatService.processWebhook(payload);
+      return reply.code(200).send({ received: true, ...result });
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      logger.error({ error: errorMsg }, "[WebhookController] Erro ao processar webhook RevenueCat");
+      return reply.code(500).send({ error: "Internal Server Error" });
+    }
+  },
 };
 

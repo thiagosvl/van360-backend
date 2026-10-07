@@ -278,7 +278,8 @@ export enum IndicacaoStatus {
 
 export enum CheckoutPaymentMethod {
   PIX = "pix",
-  CREDIT_CARD = "credit_card"
+  CREDIT_CARD = "credit_card",
+  APPLE_IAP = "apple_iap"
 }
 
 export enum PaymentProvider {
