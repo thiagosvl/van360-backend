@@ -20,7 +20,7 @@ export async function obterConfiguracoesUsuario(usuarioId: string): Promise<Conf
   const diasPadrao = await getConfigNumber(ConfigKey.PASSAGEIRO_DIAS_AVISO_VENCIMENTO, 2);
 
   return {
-    notificar_pais_cobrancas: config?.notificar_pais_cobrancas ?? true,
+    notificar_pais_cobrancas: config?.notificar_pais_cobrancas ?? false,
     cobranca_aviso_previo_ativo: config?.cobranca_aviso_previo_ativo ?? true,
     cobranca_aviso_previo_whatsapp_ativo: config?.cobranca_aviso_previo_whatsapp_ativo ?? false,
     cobranca_dias_aviso_previo: config?.cobranca_dias_aviso_previo ?? null,
@@ -37,6 +37,7 @@ export async function obterConfiguracoesUsuario(usuarioId: string): Promise<Conf
     rastreamento_ativo: config?.rastreamento_ativo ?? true,
     rastreamento_modo: config?.rastreamento_modo ?? "completo",
     formato_nome_responsavel: (config?.formato_nome_responsavel as "primeiro_nome" | "completo") ?? "primeiro_nome",
+    exibir_telefone_lista_alunos: config?.exibir_telefone_lista_alunos ?? false,
     chave_pix: usuario.chave_pix ?? null,
     tipo_chave_pix: usuario.tipo_chave_pix ?? null,
   };

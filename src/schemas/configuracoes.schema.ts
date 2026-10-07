@@ -17,6 +17,7 @@ export const updateConfiguracoesSchema = z.object({
   rastreamento_ativo: z.boolean().optional(),
   rastreamento_modo: z.nativeEnum(RastreamentoModo).optional(),
   formato_nome_responsavel: z.enum(["primeiro_nome", "completo"]).optional(),
+  exibir_telefone_lista_alunos: z.boolean().optional(),
 });
 
 

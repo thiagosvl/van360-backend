@@ -1315,7 +1315,7 @@ export const adminUserService = {
           semContato++;
         }
 
-        const motoristaAtivoEnvio = motoristaConfigs?.notificar_pais_cobrancas !== false;
+        const motoristaAtivoEnvio = motoristaConfigs?.notificar_pais_cobrancas === true;
         if (!motoristaAtivoEnvio) {
           notificacoesDesativadasMotorista++;
         }
@@ -1589,7 +1589,7 @@ export const adminUserService = {
           }>;
         })?.usuario_configuracoes?.[0];
 
-        if (motoristaConfig?.notificar_pais_cobrancas === false) continue;
+        if (!motoristaConfig?.notificar_pais_cobrancas) continue;
 
         const avisoPrevioAtivo = motoristaConfig?.cobranca_aviso_previo_ativo ?? true;
         const driverThresholdDays = Number(motoristaConfig?.cobranca_dias_aviso_previo) || 2;

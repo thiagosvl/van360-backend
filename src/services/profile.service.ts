@@ -21,11 +21,15 @@ export async function getUserProfile(userId: string) {
     const formatoNome = (config && typeof config === "object" && "formato_nome_responsavel" in config && typeof config.formato_nome_responsavel === "string")
         ? config.formato_nome_responsavel
         : "primeiro_nome";
+    const exibirTelefone = (config && typeof config === "object" && "exibir_telefone_lista_alunos" in config && typeof config.exibir_telefone_lista_alunos === "boolean")
+        ? config.exibir_telefone_lista_alunos
+        : false;
 
     return {
         ...data,
         configuracoes: {
             formato_nome_responsavel: formatoNome,
+            exibir_telefone_lista_alunos: exibirTelefone,
         },
     };
 }
