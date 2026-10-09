@@ -884,8 +884,8 @@ export const cobrancaService = {
           const driverThresholdDays = Number(motoristaConfig?.cobranca_dias_aviso_previo) || globalThresholdDays;
           const vencimentoHojeAtivo = motoristaConfig?.cobranca_vencimento_hoje_ativo ?? true;
           const atraso3DiasAtivo = motoristaConfig?.cobranca_atraso_3_dias_ativo ?? true;
-          const atraso5DiasAtivo = motoristaConfig?.cobranca_atraso_5_dias_ativo ?? true;
-          const atraso7DiasAtivo = motoristaConfig?.cobranca_atraso_7_dias_ativo ?? true;
+          // const atraso5DiasAtivo = motoristaConfig?.cobranca_atraso_5_dias_ativo ?? true;
+          // const atraso7DiasAtivo = motoristaConfig?.cobranca_atraso_7_dias_ativo ?? true;
           const avisoPrevioWhatsappAtivo = motoristaConfig?.cobranca_aviso_previo_whatsapp_ativo ?? false;
 
           let eventType:
@@ -902,40 +902,40 @@ export const cobrancaService = {
               if (diasAntecedencia === driverThresholdDays) {
                 eventType = EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO;
                 baseChannels = avisoPrevioWhatsappAtivo
-                  ? [NotificationChannelEnum.WABA, NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND]
-                  : [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND];
+                  ? [NotificationChannelEnum.WABA, NotificationChannelEnum.FIREBASE]
+                  : [NotificationChannelEnum.FIREBASE];
                 shouldSend = true;
               }
             }
           } else if (dataVencimentoStr === todayStr) {
             if (vencimentoHojeAtivo) {
               eventType = EVENTO_PASSAGEIRO_VENCIMENTO_HOJE;
-              baseChannels = [NotificationChannelEnum.WABA, NotificationChannelEnum.RESEND, NotificationChannelEnum.FIREBASE];
+              baseChannels = [NotificationChannelEnum.WABA, NotificationChannelEnum.FIREBASE];
               shouldSend = true;
             }
           } else {
             const diasAtraso = diffInDays(dataVencimentoStr, todayStr);
             if (diasAtraso === 3 && atraso3DiasAtivo) {
               eventType = EVENTO_PASSAGEIRO_ATRASADO;
-              baseChannels = [NotificationChannelEnum.WABA, NotificationChannelEnum.RESEND, NotificationChannelEnum.FIREBASE];
+              baseChannels = [NotificationChannelEnum.WABA, NotificationChannelEnum.FIREBASE];
               shouldSend = true;
-            } else if (diasAtraso === 5 && atraso5DiasAtivo) {
+            }
+            /* Lembretes de 5 e 7 dias desativados temporariamente
+            else if (diasAtraso === 5 && atraso5DiasAtivo) {
               eventType = EVENTO_PASSAGEIRO_ATRASADO;
-              baseChannels = [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND];
+              baseChannels = [NotificationChannelEnum.FIREBASE];
               shouldSend = true;
             } else if (diasAtraso === 7 && atraso7DiasAtivo) {
               eventType = EVENTO_PASSAGEIRO_ATRASADO;
-              baseChannels = [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND];
+              baseChannels = [NotificationChannelEnum.FIREBASE];
               shouldSend = true;
             }
+            */
           }
 
           if (!shouldSend || !eventType) return null;
 
           const activeChannels = baseChannels.filter((ch) => {
-            if (ch === NotificationChannelEnum.RESEND) {
-              return !!(resp.email && resp.email.trim());
-            }
             if (ch === NotificationChannelEnum.WABA) {
               return !!(resp.telefone && resp.telefone.trim());
             }

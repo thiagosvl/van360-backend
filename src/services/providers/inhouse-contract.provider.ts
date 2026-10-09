@@ -534,16 +534,7 @@ export class InHouseContractProvider implements ContractProvider {
     for (const section of sections) {
       currentY -= 14;
 
-      let firstClauseHeight = 60;
-      if (section.clauses.length > 0) {
-        const firstClauseText = `Cláusula ${clauseCounter}ª - ${section.clauses[0]}`;
-        const firstClauseLines = await this.splitTextToLines(firstClauseText, font, fontSizeBody, width);
-        firstClauseHeight = firstClauseLines.length * lineHeight + (lineHeight / 2);
-      }
-
-      const totalSectionHeaderSpace = (headerSpacing + 6) + firstClauseHeight + 12;
-
-      if (currentY - totalSectionHeaderSpace < 45) {
+      if (currentY < 110) {
         page = pdfDoc.addPage([595, 842]);
         currentY = 800;
       }
@@ -553,14 +544,19 @@ export class InHouseContractProvider implements ContractProvider {
 
       for (const clausula of section.clauses) {
         const text = `Cláusula ${clauseCounter}ª - ${clausula}`;
-        const lines = await this.splitTextToLines(text, font, fontSizeBody, width);
+        const lines = this.splitTextToLines(text, font, fontSizeBody, width);
 
-        if (currentY - (lines.length * lineHeight) < 50) {
+        if (currentY < 65) {
           page = pdfDoc.addPage([595, 842]);
           currentY = 800;
         }
 
         for (const line of lines) {
+          if (currentY < 50) {
+            page = pdfDoc.addPage([595, 842]);
+            currentY = 800;
+          }
+
           if (line.startsWith(`Cláusula ${clauseCounter}ª`)) {
             const prefix = `Cláusula ${clauseCounter}ª`;
             const rest = line.substring(prefix.length);

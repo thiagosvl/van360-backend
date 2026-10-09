@@ -135,9 +135,8 @@ export const subscriptionReferralService = {
                         dataVencimento: newExpiryStr
                     },
                     {
-                        channels: [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND],
-                        usuarioId: indicador.id,
-                        email: indicador.email
+                        channels: [NotificationChannelEnum.FIREBASE],
+                        usuarioId: indicador.id
                     }
                 ).catch(err => {
                     logger.error({ err, indicadorId: indicador.id }, "[SubscriptionReferralService] Erro ao notificar bônus de indicação");

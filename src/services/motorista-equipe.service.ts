@@ -12,7 +12,6 @@ import { calculateAuditDiff } from "../utils/audit-diff.util.js";
 import {
   EVENTO_MOTORISTA_EQUIPE_CADASTRO,
   EVENTO_MOTORISTA_EQUIPE_RESET_SENHA,
-  EVENTO_MOTORISTA_EQUIPE_STATUS_ALTERADO,
 } from "../config/constants.js";
 
 export const motoristaEquipeService = {
@@ -248,22 +247,6 @@ export const motoristaEquipeService = {
         campos: ["ativo"]
       }
     });
-
-    const recipientPhone = data.telefone || membro.data.telefone;
-    const recipientEmail = data.email || membro.data.email;
-
-    if (recipientPhone || recipientEmail) {
-      notificationService.notifyDriver(
-        recipientPhone || "",
-        EVENTO_MOTORISTA_EQUIPE_STATUS_ALTERADO,
-        {
-          nomeMotorista: data.nome,
-          isEngaged: novoStatus,
-          email: recipientEmail,
-        },
-        { channels: [NotificationChannelEnum.RESEND], email: recipientEmail, usuarioId: id }
-      ).catch((err) => logger.warn({ err, id }, "[MotoristaEquipeService] Falha ao enviar mensagem de status alterado"));
-    }
 
     return data;
   },
