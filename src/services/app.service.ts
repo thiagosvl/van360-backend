@@ -49,7 +49,11 @@ export async function checkAppUpdates(
       ConfigKey.APP_ANDROID_MIN_VERSION,
       ConfigKey.APP_ANDROID_LATEST_VERSION,
       ConfigKey.APP_ANDROID_UPDATE_TITLE,
-      ConfigKey.APP_ANDROID_UPDATE_MESSAGE
+      ConfigKey.APP_ANDROID_UPDATE_MESSAGE,
+      ConfigKey.APP_IOS_MIN_VERSION,
+      ConfigKey.APP_IOS_LATEST_VERSION,
+      ConfigKey.APP_IOS_UPDATE_TITLE,
+      ConfigKey.APP_IOS_UPDATE_MESSAGE
     ])
   ]);
 
@@ -63,6 +67,27 @@ export async function checkAppUpdates(
       internalConfigs[ConfigKey.APP_ANDROID_UPDATE_MESSAGE] ||
       "Uma nova versão do Van360 está disponível na Google Play com melhorias e novos recursos. Atualize para continuar aproveitando a melhor experiência.";
     const storeUrl = "market://details?id=com.tibis.van360";
+
+    const isMandatory = nativeVersion ? compareSemver(nativeVersion, minVersion) < 0 : false;
+    const hasUpdate = nativeVersion ? compareSemver(nativeVersion, latestVersion) < 0 : false;
+
+    nativeInfo = {
+      min_version: minVersion,
+      latest_version: latestVersion,
+      title,
+      message,
+      is_mandatory: isMandatory,
+      has_update: hasUpdate,
+      store_url: storeUrl
+    };
+  } else if (platform === "ios") {
+    const minVersion = internalConfigs[ConfigKey.APP_IOS_MIN_VERSION] || "1.0.0";
+    const latestVersion = internalConfigs[ConfigKey.APP_IOS_LATEST_VERSION] || "1.0.0";
+    const title = internalConfigs[ConfigKey.APP_IOS_UPDATE_TITLE] || "Atualização Disponível";
+    const message =
+      internalConfigs[ConfigKey.APP_IOS_UPDATE_MESSAGE] ||
+      "Uma nova versão do Van360 está disponível na App Store com melhorias e novos recursos. Atualize para continuar aproveitando a melhor experiência.";
+    const storeUrl = "itms-apps://itunes.apple.com/app/id6816251189";
 
     const isMandatory = nativeVersion ? compareSemver(nativeVersion, minVersion) < 0 : false;
     const hasUpdate = nativeVersion ? compareSemver(nativeVersion, latestVersion) < 0 : false;

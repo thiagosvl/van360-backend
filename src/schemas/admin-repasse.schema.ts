@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { StatusRepasseEnum, ModalidadeCobrancaEnum } from "../types/enums.js";
+import { StatusRepasseEnum, ModoCobrancaEnum } from "../types/enums.js";
 
 export const listAdminRepassesQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -16,10 +16,8 @@ export type ListAdminRepassesQuery = z.infer<typeof listAdminRepassesQuerySchema
 export const adminMotoristaFinanceiroUpdateSchema = z.object({
   chave_pix_repasse: z.string().max(255).optional().nullable(),
   tipo_chave_pix: z.string().max(50).optional().nullable(),
-  cobranca_automatica_ativa: z.boolean().optional(),
-  modalidade_cobranca: z.nativeEnum(ModalidadeCobrancaEnum).optional(),
+  modo_cobranca: z.nativeEnum(ModoCobrancaEnum).optional(),
   taxa_personalizada: z.number().min(0).max(100).optional().nullable(),
-  repassar_taxa_pais_padrao: z.boolean().optional(),
   enviar_recibo_automatico: z.boolean().optional(),
 });
 

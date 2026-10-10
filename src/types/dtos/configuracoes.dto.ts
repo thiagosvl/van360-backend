@@ -1,7 +1,6 @@
 import { RastreamentoModo } from "../enums.js";
 
 export interface ConfiguracoesUsuarioDTO {
-  notificar_pais_cobrancas: boolean;
   cobranca_aviso_previo_ativo: boolean;
   cobranca_aviso_previo_whatsapp_ativo: boolean;
   cobranca_dias_aviso_previo: number | null;
@@ -24,7 +23,6 @@ export interface ConfiguracoesUsuarioDTO {
 }
 
 export interface UpdateConfiguracoesDTO {
-  notificar_pais_cobrancas?: boolean;
   cobranca_aviso_previo_ativo?: boolean;
   cobranca_dias_aviso_previo?: number | null;
   cobranca_vencimento_hoje_ativo?: boolean;

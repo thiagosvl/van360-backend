@@ -38,6 +38,7 @@ const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get("/users/:id/pre-passageiros", adminUserController.getUserPrePassageiros);
   app.get("/users/:id/veiculos", adminUserController.getUserVeiculos);
   app.get("/users/:id/escolas", adminUserController.getUserEscolas);
+  app.get("/users/:id/equipe", adminUserController.getUserEquipe);
   app.get("/referrals", adminUserController.listReferrals);
   app.get("/users/:id/referral", adminUserController.getUserReferral);
 
@@ -55,7 +56,7 @@ const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.delete("/invoices/:id", adminUserController.deleteInvoice);
   app.post("/invoices/:id/confirm-payment", adminUserController.confirmInvoicePayment);
 
-  // Repasses Pix (BaaS Woovi)
+  // Repasses Pix
   app.get("/repasses", adminRepasseController.list);
   app.get("/repasses/stats", adminRepasseController.getStats);
   app.post("/repasses/:id/retry", adminRepasseController.retry);

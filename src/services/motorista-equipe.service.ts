@@ -25,13 +25,11 @@ export const motoristaEquipeService = {
   },
 
   async createMembro(gestorId: string, dto: CreateMembroEquipeDTO) {
-    // 1. Validar se o veículo pertence ao Gestor
     const veiculo = await veiculoRepository.getById(dto.veiculo_id);
     if (!veiculo.data || veiculo.data.usuario_id !== gestorId) {
       throw new AppError("Veículo inválido ou não pertencente à sua frota", 400);
     }
 
-    // 1.5 Checagem prévia na tabela usuarios para E-mail, CPF/CNPJ ou Telefone duplicados
     const { data: existingUsers } = await authRepository.checkUserStatus(
       dto.cpf,
       dto.email,
@@ -51,7 +49,6 @@ export const motoristaEquipeService = {
       }
     }
 
-    // 2. Criar no Supabase Auth Admin
     const { data: authUser, error: authError } = await authProvider.createUser({
       email: dto.email,
       password: dto.senha,
@@ -76,7 +73,6 @@ export const motoristaEquipeService = {
 
     const userId = authUser.user.id;
 
-    // 3. Criar Perfil na Tabela `usuarios`
     try {
       const { data: profile, error: profileError } = await motoristaEquipeRepository.createProfile({
         id: userId,
@@ -94,7 +90,6 @@ export const motoristaEquipeService = {
       if (profileError) {
         logger.error({ profileError, dto }, "Erro ao inserir perfil do membro da equipe na tabela usuarios");
 
-        // Rollback Auth user if profile creation failed
         try {
           await authProvider.deleteUser(userId);
         } catch (delErr) {
@@ -118,7 +113,6 @@ export const motoristaEquipeService = {
         throw new AppError(profileError.message || "Erro ao criar perfil da equipe no banco de dados", 400);
       }
 
-      // Disparar notificação (em segundo plano)
       if (dto.email || dto.telefone) {
         notificationService.notifyDriver(
           dto.telefone || "",
@@ -132,6 +126,24 @@ export const motoristaEquipeService = {
           { channels: [NotificationChannelEnum.RESEND], email: dto.email, usuarioId: userId }
         ).catch((err) => logger.warn({ err, userId }, "[MotoristaEquipeService] Falha ao enviar mensagem de boas-vindas"));
       }
+
+      const cargoDescCriado = dto.tipo === "monitor" ? "Monitor(a)" : "Motorista auxiliar";
+      historicoService.log({
+        usuario_id: gestorId,
+        entidade_tipo: AtividadeEntidadeTipo.EQUIPE,
+        entidade_id: userId,
+        acao: AtividadeAcao.EQUIPE_MEMBRO_CRIADO,
+        descricao: `${cargoDescCriado} ${dto.nome} cadastrado(a) na equipe.`,
+        meta: {
+          membro_id: userId,
+          nome: dto.nome,
+          tipo: dto.tipo,
+          email: dto.email,
+          telefone: dto.telefone,
+          cpf: dto.cpf,
+          veiculo_id: dto.veiculo_id,
+        }
+      });
 
       return profile;
     } catch (err: any) {
@@ -172,14 +184,17 @@ export const motoristaEquipeService = {
     const diff = calculateAuditDiff(membroAnterior.data, dto);
 
     if (diff.hasChanges) {
+      const cargoDescEditado = (data.tipo || membroAnterior.data.tipo) === "monitor" ? "Monitor(a)" : "Motorista auxiliar";
       historicoService.log({
         usuario_id: gestorId,
-        entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+        entidade_tipo: AtividadeEntidadeTipo.EQUIPE,
         entidade_id: id,
-        acao: AtividadeAcao.PERFIL_EDITADO,
-        descricao: `Dados do membro da equipe ${data.nome} foram atualizados.`,
+        acao: AtividadeAcao.EQUIPE_MEMBRO_EDITADO,
+        descricao: `Dados do(a) ${cargoDescEditado.toLowerCase()} ${data.nome} foram atualizados.`,
         meta: {
+          membro_id: id,
           nome: data.nome,
+          tipo: data.tipo,
           campos_alterados: diff.campos,
           campos: diff.campos,
           alteracoes: diff.alteracoes
@@ -216,6 +231,20 @@ export const motoristaEquipeService = {
       ).catch((err) => logger.warn({ err, id }, "[MotoristaEquipeService] Falha ao enviar mensagem de redefinição de senha"));
     }
 
+    const cargoDescSenha = membro.data.tipo === "monitor" ? "Monitor(a)" : "Motorista auxiliar";
+    historicoService.log({
+      usuario_id: gestorId,
+      entidade_tipo: AtividadeEntidadeTipo.EQUIPE,
+      entidade_id: id,
+      acao: AtividadeAcao.EQUIPE_SENHA_RESETADA,
+      descricao: `Senha do(a) ${cargoDescSenha.toLowerCase()} ${membro.data.nome} foi redefinida.`,
+      meta: {
+        membro_id: id,
+        nome: membro.data.nome,
+        tipo: membro.data.tipo,
+      }
+    });
+
     return { message: "Senha redefinida com sucesso!" };
   },
 
@@ -231,13 +260,17 @@ export const motoristaEquipeService = {
       throw new AppError("Falha ao atualizar status do membro da equipe", 500);
     }
 
+    const cargoDescStatus = membro.data.tipo === "monitor" ? "Monitor(a)" : "Motorista auxiliar";
     historicoService.log({
       usuario_id: gestorId,
-      entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+      entidade_tipo: AtividadeEntidadeTipo.EQUIPE,
       entidade_id: id,
-      acao: AtividadeAcao.USUARIO_SUSPENSO,
-      descricao: `Membro da equipe ${data.nome} foi ${novoStatus ? "ativado" : "desativado"}.`,
+      acao: AtividadeAcao.EQUIPE_MEMBRO_STATUS,
+      descricao: `${cargoDescStatus} ${data.nome} foi ${novoStatus ? "ativado(a)" : "desativado(a)"}.`,
       meta: {
+        membro_id: id,
+        nome: data.nome,
+        tipo: data.tipo,
         ativo: novoStatus,
         alteracoes: [{
           campo: "ativo",
@@ -257,22 +290,35 @@ export const motoristaEquipeService = {
       throw new AppError("Funcionário não encontrado", 404);
     }
 
-    // 1. Reatribuir histórico (gastos, execuções de rota, presenças, ausências) para o gestor
     await motoristaEquipeRepository.reassignRecordsToGestor(id, gestorId);
 
-    // 2. Apagar registro em public.usuarios
     const { error: deleteError } = await motoristaEquipeRepository.hardDeleteProfile(id, gestorId);
     if (deleteError) {
       logger.error({ deleteError, id }, "Erro ao deletar perfil do usuário no banco de dados");
       throw new AppError("Erro ao remover usuário do banco de dados", 500);
     }
 
-    // 3. Apagar conta no Supabase Auth
     try {
       await authProvider.deleteUser(id);
     } catch (authErr) {
       logger.error({ authErr, id }, "Erro ao remover usuário do Supabase Auth após exclusão do perfil");
     }
+
+    const cargoDescExcluido = membro.data.tipo === "monitor" ? "Monitor(a)" : "Motorista auxiliar";
+    historicoService.log({
+      usuario_id: gestorId,
+      entidade_tipo: AtividadeEntidadeTipo.EQUIPE,
+      entidade_id: id,
+      acao: AtividadeAcao.EQUIPE_MEMBRO_EXCLUIDO,
+      descricao: `${cargoDescExcluido} ${membro.data.nome} foi excluído(a) da equipe.`,
+      meta: {
+        membro_id: id,
+        nome: membro.data.nome,
+        tipo: membro.data.tipo,
+        email: membro.data.email,
+        telefone: membro.data.telefone,
+      }
+    });
 
     return { message: "Funcionário excluído com sucesso e histórico preservado" };
   }

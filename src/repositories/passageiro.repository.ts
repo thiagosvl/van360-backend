@@ -124,7 +124,7 @@ export const passageiroRepository = {
     let query = supabaseAdmin
       .from("passageiros")
       .select(`
-        id, usuario_id, nome, ativo, isento, data_nascimento, genero, modalidade, periodo, turma, sala, nome_professor, observacoes, valor_cobranca, dia_vencimento, data_inicio_cobranca, data_fim_cobranca, data_inicio_transporte, data_fim_transporte, horario_entrada, horario_saida, enviar_notificacoes, escola_id, veiculo_id, created_at, updated_at,
+        id, usuario_id, nome, ativo, isento, data_nascimento, genero, modalidade, periodo, turma, sala, nome_professor, observacoes, valor_cobranca, dia_vencimento, data_inicio_cobranca, data_fim_cobranca, data_inicio_transporte, data_fim_transporte, horario_entrada, horario_saida, enviar_notificacoes, modo_cobranca, escola_id, veiculo_id, created_at, updated_at,
         escola:escolas(id, nome),
         veiculo:veiculos(id, placa, modelo),
         contratos(id, status, provider, token_acesso),
@@ -309,7 +309,7 @@ export const passageiroRepository = {
     return supabaseAdmin
       .from("passageiros")
       .select(`
-        id, nome, valor_cobranca, dia_vencimento, created_at, data_inicio_cobranca, data_fim_cobranca, isento, ano_letivo,
+        id, nome, valor_cobranca, dia_vencimento, created_at, data_inicio_cobranca, data_fim_cobranca, isento, ano_letivo, modo_cobranca,
         ${PASSAGEIRO_RESPONSAVEIS_SELECT}
       `)
       .eq("usuario_id", usuarioId)
@@ -321,7 +321,7 @@ export const passageiroRepository = {
     let query = supabaseAdmin
       .from("passageiros")
       .select(`
-        id, nome, valor_cobranca, dia_vencimento, created_at, data_inicio_cobranca, data_fim_cobranca, isento, ativo, veiculo_id, ano_letivo,
+        id, nome, valor_cobranca, dia_vencimento, created_at, data_inicio_cobranca, data_fim_cobranca, isento, ativo, veiculo_id, ano_letivo, modo_cobranca,
         responsaveis:passageiro_responsaveis(
           id, tipo, parentesco,
           responsavel:responsaveis(id, nome, telefone, cpf, email)

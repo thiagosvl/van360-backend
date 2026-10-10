@@ -102,7 +102,7 @@ export class EmailComponents {
 
             <!-- Orientação Única e Clara para Acesso Web -->
             <div style="font-size: 13px; color: #475569; line-height: 1.5; margin-top: 8px;">
-                💻 <strong>Prefere não baixar agora ou utiliza computador / iPhone?</strong><br>
+                💻 <strong>Prefere não baixar agora ou acessar pelo computador / navegador?</strong><br>
                 Acesse a sua conta pelo navegador Web em <a href="${appUrl}" target="_blank" style="color: #1a3a5c; font-weight: 700; text-decoration: underline;">${appUrl}</a>.
             </div>
         </div>

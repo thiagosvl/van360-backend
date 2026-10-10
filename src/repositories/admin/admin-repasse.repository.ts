@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "../../config/supabase.js";
 import { StatusRepasseEnum } from "../../types/enums.js";
+import { toStartOfDayISO, toEndOfDayISO } from "../../utils/date.utils.js";
 
 export interface ListRepassesFilters {
   from: number;
@@ -40,11 +41,11 @@ export const adminRepasseRepository = {
     }
 
     if (filters.dataInicio) {
-      query = query.gte("created_at", `${filters.dataInicio}T00:00:00.000Z`);
+      query = query.gte("created_at", toStartOfDayISO(filters.dataInicio));
     }
 
     if (filters.dataFim) {
-      query = query.lte("created_at", `${filters.dataFim}T23:59:59.999Z`);
+      query = query.lte("created_at", toEndOfDayISO(filters.dataFim));
     }
 
     if (filters.search && filters.search.trim()) {
@@ -69,11 +70,11 @@ export const adminRepasseRepository = {
     }
 
     if (filters.dataInicio) {
-      query = query.gte("created_at", `${filters.dataInicio}T00:00:00.000Z`);
+      query = query.gte("created_at", toStartOfDayISO(filters.dataInicio));
     }
 
     if (filters.dataFim) {
-      query = query.lte("created_at", `${filters.dataFim}T23:59:59.999Z`);
+      query = query.lte("created_at", toEndOfDayISO(filters.dataFim));
     }
 
     const { data, error } = await query;

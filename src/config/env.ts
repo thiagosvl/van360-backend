@@ -11,7 +11,7 @@ export const env = {
   BACKEND_URL: process.env.BACKEND_URL || "http://host.docker.internal:3000",
   FRONTEND_URL: process.env.FRONTEND_URL || "",
   SITE_URL: process.env.SITE_URL || "https://van360.com.br",
-  
+
   // Observability
   SENTRY_DSN: process.env.SENTRY_DSN,
   SENTRY_ENVIRONMENT: process.env.SENTRY_ENVIRONMENT,
@@ -23,16 +23,6 @@ export const env = {
   TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || "",
   TELEGRAM_ADMIN_CHAT_ID: process.env.TELEGRAM_ADMIN_CHAT_ID || "",
 
-  // C6 Bank
-  C6_CLIENT_ID: process.env.C6_CLIENT_ID!,
-  C6_CLIENT_SECRET: process.env.C6_CLIENT_SECRET!,
-  C6_PIX_KEY: process.env.C6_PIX_KEY!,
-  C6_API_URL: process.env.C6_API_URL || "https://baas-api-sandbox.c6bank.info",
-  C6_CERT_PATH: process.env.C6_CERT_PATH!,
-  C6_KEY_PATH: process.env.C6_KEY_PATH!,
-  C6_CERT_BASE64: process.env.C6_CERT_BASE64,
-  C6_KEY_BASE64: process.env.C6_KEY_BASE64,
-
   // Efí Pay
   EFI_CLIENT_ID: process.env.EFI_CLIENT_ID || "",
   EFI_CLIENT_SECRET: process.env.EFI_CLIENT_SECRET || "",
@@ -42,7 +32,7 @@ export const env = {
   EFI_WEBHOOK_URL: process.env.EFI_WEBHOOK_URL || "",
   EFI_WEBHOOK_TOKEN: process.env.EFI_WEBHOOK_TOKEN || "",
 
-  // Woovi (BaaS / Split)
+  // Woovi (Split)
   WOOVI_APP_ID: process.env.WOOVI_APP_ID || "",
   WOOVI_BASE_URL: process.env.WOOVI_BASE_URL || "https://api.woovi.com/api/v1",
 

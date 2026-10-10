@@ -157,6 +157,7 @@ async function clearData(usuarioId: string) {
         "passageiro_renovacoes",
         "fila_notificacoes",
         "passageiros",
+        "fretamentos",
         "escolas",
         "veiculos",
         "gasto_categorias",
@@ -811,7 +812,7 @@ async function main() {
         await clearData(usuarioId);
 
         if (config.resetarPix) {
-            console.log(`[SEED] Resetando chave Pix do usuário...`);
+            console.log(`[SEED] Resetando chave Pix e configurações financeiras do usuário...`);
             const { error: updateError } = await supabaseAdmin
                 .from("usuarios")
                 .update({
@@ -823,6 +824,11 @@ async function main() {
             if (updateError) {
                 console.error("[SEED] Erro ao resetar Pix:", updateError);
             }
+
+            await supabaseAdmin
+                .from("motorista_configuracoes_financeiras")
+                .delete()
+                .eq("usuario_id", usuarioId);
         }
 
         if (scenarioName === "cenario-rota-real") {

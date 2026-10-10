@@ -2,7 +2,7 @@ import { supabaseAdmin } from "../../config/supabase.js";
 import { usuarioPushTokenRepository } from "../../repositories/usuario-push-token.repository.js";
 import { usuarioConfiguracoesRepository } from "../../repositories/usuario-configuracoes.repository.js";
 import { motoristaEquipeRepository } from "../../repositories/motorista-equipe.repository.js";
-import { NotificationChannelEnum } from '../../types/enums.js';
+import { NotificationChannelEnum, ModoCobrancaEnum } from '../../types/enums.js';
 import { logger } from "../../config/logger.js";
 import { adminUserRepository } from "../../repositories/admin/admin-user.repository.js";
 import { userRepository } from "../../repositories/user.repository.js";
@@ -217,8 +217,6 @@ export const adminUserService = {
       isId,
       status: status?.trim() || undefined,
       tipo: query.tipo?.trim() || undefined,
-      dataInicio: query.data_inicio?.trim() || undefined,
-      dataFim: query.data_fim?.trim() || undefined,
     });
 
     if (error) {
@@ -338,8 +336,34 @@ export const adminUserService = {
       userData.canal_aquisicao = CanalAquisicao.INDICACAO;
     }
 
+    let gestor: { id: string; nome: string; apelido: string | null; telefone: string | null; email: string | null; logo_url: string | null; tipo: string } | null = null;
+    if (userData.conta_pai_id) {
+      const { data: gestorData } = await supabaseAdmin
+        .from("usuarios")
+        .select("id, nome, apelido, telefone, email, logo_url, tipo")
+        .eq("id", userData.conta_pai_id)
+        .maybeSingle();
+      gestor = gestorData || null;
+    }
+
+    let veiculoVinculado: { id: string; placa: string; modelo: string; marca: string | null } | null = null;
+    if (userData.veiculo_id) {
+      const { data: veicData } = await supabaseAdmin
+        .from("veiculos")
+        .select("id, placa, modelo, marca")
+        .eq("id", userData.veiculo_id)
+        .maybeSingle();
+      veiculoVinculado = veicData || null;
+    }
+
+    const { data: equipeData } = await motoristaEquipeRepository.listByGestor(userId);
+    const equipeList = equipeData || [];
+
     return {
       user: userData,
+      gestor,
+      veiculo_vinculado: veiculoVinculado,
+      equipe: equipeList,
       assinatura: assinaturaReq.data,
       faturas: faturasReq.data || [],
       planos: planos.data || [],
@@ -353,6 +377,7 @@ export const adminUserService = {
         contratosPendentesCount: kpisData.contratosPendentesCount ?? 0,
         valorTotalContratos: Number(kpisData.valorTotalContratos) || 0,
         statusConfiguracaoContrato,
+        equipeCount: equipeList.length,
       },
       referralSummary: null,
       indicador,
@@ -367,6 +392,12 @@ export const adminUserService = {
       configuracoes: configReq?.data || null,
       configuracao_financeira: financialConfig,
     };
+  },
+
+  async getUserEquipe(userId: string) {
+    const { data, error } = await motoristaEquipeRepository.listByGestor(userId);
+    if (error) throw error;
+    return data || [];
   },
 
   async getUserContratos(userId: string) {
@@ -1297,9 +1328,15 @@ export const adminUserService = {
       const rawResp = principalLink?.responsavel;
       const resp = Array.isArray(rawResp) ? rawResp[0] : rawResp;
 
-      const rawMotorista = p.motorista as unknown as { usuario_configuracoes?: Array<{ notificar_pais_cobrancas: boolean; cobranca_vencimento_hoje_ativo: boolean }> } | Array<{ usuario_configuracoes?: Array<{ notificar_pais_cobrancas: boolean; cobranca_vencimento_hoje_ativo: boolean }> }> | null;
+      const rawMotorista = p.motorista as unknown as {
+        motorista_configuracoes_financeiras?: Array<{ modo_cobranca: ModoCobrancaEnum }>;
+        usuario_configuracoes?: Array<{ cobranca_vencimento_hoje_ativo: boolean }>;
+      } | Array<{
+        motorista_configuracoes_financeiras?: Array<{ modo_cobranca: ModoCobrancaEnum }>;
+        usuario_configuracoes?: Array<{ cobranca_vencimento_hoje_ativo: boolean }>;
+      }> | null;
       const motoristaObj = Array.isArray(rawMotorista) ? rawMotorista[0] : rawMotorista;
-      const motoristaConfigs = motoristaObj?.usuario_configuracoes?.[0];
+      const modoCobranca = motoristaObj?.motorista_configuracoes_financeiras?.[0]?.modo_cobranca;
 
       if (!principalLink || !resp) {
         semResponsavelPrincipal++;
@@ -1315,7 +1352,7 @@ export const adminUserService = {
           semContato++;
         }
 
-        const motoristaAtivoEnvio = motoristaConfigs?.notificar_pais_cobrancas === true;
+        const motoristaAtivoEnvio = Boolean(modoCobranca && modoCobranca !== ModoCobrancaEnum.DESATIVADO);
         if (!motoristaAtivoEnvio) {
           notificacoesDesativadasMotorista++;
         }
@@ -1576,9 +1613,9 @@ export const adminUserService = {
         );
         if (!hasPhone && !hasEmail && !hasPush) continue;
 
-        const motoristaConfig = (c.motorista as {
+        const motoristaObj = c.motorista as {
+          motorista_configuracoes_financeiras?: Array<{ modo_cobranca: ModoCobrancaEnum }>;
           usuario_configuracoes?: Array<{
-            notificar_pais_cobrancas?: boolean;
             cobranca_aviso_previo_ativo?: boolean;
             cobranca_aviso_previo_whatsapp_ativo?: boolean;
             cobranca_dias_aviso_previo?: number;
@@ -1587,9 +1624,11 @@ export const adminUserService = {
             cobranca_atraso_5_dias_ativo?: boolean;
             cobranca_atraso_7_dias_ativo?: boolean;
           }>;
-        })?.usuario_configuracoes?.[0];
+        };
+        const modoCobranca = motoristaObj?.motorista_configuracoes_financeiras?.[0]?.modo_cobranca;
+        if (!modoCobranca || modoCobranca === ModoCobrancaEnum.DESATIVADO) continue;
 
-        if (!motoristaConfig?.notificar_pais_cobrancas) continue;
+        const motoristaConfig = motoristaObj?.usuario_configuracoes?.[0];
 
         const avisoPrevioAtivo = motoristaConfig?.cobranca_aviso_previo_ativo ?? true;
         const driverThresholdDays = Number(motoristaConfig?.cobranca_dias_aviso_previo) || 2;

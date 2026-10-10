@@ -2,7 +2,6 @@ import { z } from "zod";
 import { RastreamentoModo } from "../types/enums.js";
 
 export const updateConfiguracoesSchema = z.object({
-  notificar_pais_cobrancas: z.boolean().optional(),
   cobranca_aviso_previo_ativo: z.boolean().optional(),
   cobranca_dias_aviso_previo: z.number().int().min(1).max(5).nullable().optional(),
   cobranca_vencimento_hoje_ativo: z.boolean().optional(),
@@ -24,7 +23,6 @@ export const updateConfiguracoesSchema = z.object({
 export type UpdateConfiguracoesInput = z.infer<typeof updateConfiguracoesSchema>;
 
 export const FINANCIAL_CONFIGURACAO_KEYS: readonly (keyof UpdateConfiguracoesInput)[] = [
-  "notificar_pais_cobrancas",
   "cobranca_aviso_previo_ativo",
   "cobranca_dias_aviso_previo",
   "cobranca_vencimento_hoje_ativo",

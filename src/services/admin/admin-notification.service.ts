@@ -511,7 +511,6 @@ export const adminNotificationService = {
       pixCopiaCola: pixInfo?.pixCopiaCola,
       pixCopiaECola: pixInfo?.pixCopiaCola,
       pixQrCodeUrl: pixInfo?.pixQrCodeUrl,
-      taxaRepassada: pixInfo?.taxaRepassada,
       mes: cobranca.mes,
       ano: cobranca.ano,
       cobrancaId: cobranca.id,

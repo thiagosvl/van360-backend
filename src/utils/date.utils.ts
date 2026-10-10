@@ -71,6 +71,30 @@ export const getStartOfDayBR = (date?: Date | string): Date => {
   return new Date(`${dateStr}T00:00:00.000-03:00`);
 };
 
+export const toStartOfDayISO = (date?: Date | string): string => {
+  return getStartOfDayBR(date).toISOString();
+};
+
+export const toEndOfDayISO = (date?: Date | string): string => {
+  return getEndOfDayBR(date).toISOString();
+};
+
+export const toISODateTimeBR = (date: Date | string | null | undefined): string | null => {
+  if (!date) return null;
+  const d = typeof date === 'string' ? parseLocalDate(date) : date;
+
+  const pad = (n: number) => n.toString().padStart(2, '0');
+
+  const YYYY = d.getFullYear();
+  const MM = pad(d.getMonth() + 1);
+  const DD = pad(d.getDate());
+  const hh = pad(d.getHours());
+  const mm = pad(d.getMinutes());
+  const ss = pad(d.getSeconds());
+
+  return `${YYYY}-${MM}-${DD}T${hh}:${mm}:${ss}-03:00`;
+};
+
 export const toPersistenceString = (date: Date | string): string => {
   const d = typeof date === 'string' ? parseLocalDate(date) : date;
   return new Intl.DateTimeFormat('en-CA', {

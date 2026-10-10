@@ -93,6 +93,12 @@ export const adminUserController = {
     return reply.status(200).send(result);
   },
 
+  async getUserEquipe(request: FastifyRequest, reply: FastifyReply) {
+    const { id } = request.params as { id: string };
+    const result = await adminUserService.getUserEquipe(id);
+    return reply.status(200).send(result);
+  },
+
   async getUserReferral(request: FastifyRequest, reply: FastifyReply) {
     const { id } = request.params as { id: string };
     const result = await adminUserService.getUserReferral(id);

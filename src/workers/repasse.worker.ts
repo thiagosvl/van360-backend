@@ -62,7 +62,7 @@ export const repasseWorker = new Worker<RepasseJobData>(
 
             if (isLastAttempt) {
                 const { telegramService } = await import("../services/telegram.service.js");
-                const alertMsg = `⚠️ <b>ALERTA CRÍTICO: Falha no Repasse Pix (BaaS)</b>\n\n` +
+                const alertMsg = `⚠️ <b>ALERTA CRÍTICO: Falha no Repasse Pix</b>\n\n` +
                     `<b>ID Repasse:</b> <code>${repasse.id}</code>\n` +
                     `<b>Motorista ID:</b> <code>${repasse.motorista_id}</code>\n` +
                     `<b>Valor Líquido:</b> R$ ${valorLiquido.toFixed(2)}\n` +

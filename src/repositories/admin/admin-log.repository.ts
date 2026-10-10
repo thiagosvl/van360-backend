@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "../../config/supabase.js";
 import { isValidFilterValue } from "../../utils/filter.utils.js";
+import { toStartOfDayISO, toEndOfDayISO } from "../../utils/date.utils.js";
 
 export const adminLogRepository = {
   async getUserLogs(
@@ -14,12 +15,10 @@ export const adminLogRepository = {
       .eq("usuario_id", userId);
 
     if (isValidFilterValue(filters?.dataInicio)) {
-      const inicio = filters!.dataInicio.length === 10 ? `${filters!.dataInicio}T00:00:00.000-03:00` : filters!.dataInicio;
-      query = query.gte("created_at", inicio);
+      query = query.gte("created_at", toStartOfDayISO(filters!.dataInicio));
     }
     if (isValidFilterValue(filters?.dataFim)) {
-      const fim = filters!.dataFim.length === 10 ? `${filters!.dataFim}T23:59:59.999-03:00` : filters!.dataFim;
-      query = query.lte("created_at", fim);
+      query = query.lte("created_at", toEndOfDayISO(filters!.dataFim));
     }
     if (isValidFilterValue(filters?.acao)) {
       query = query.eq("acao", filters!.acao);
@@ -66,12 +65,10 @@ export const adminLogRepository = {
     }
 
     if (isValidFilterValue(filters?.dataInicio)) {
-      const inicio = filters!.dataInicio.length === 10 ? `${filters!.dataInicio}T00:00:00.000-03:00` : filters!.dataInicio;
-      query = query.gte("created_at", inicio);
+      query = query.gte("created_at", toStartOfDayISO(filters!.dataInicio));
     }
     if (isValidFilterValue(filters?.dataFim)) {
-      const fim = filters!.dataFim.length === 10 ? `${filters!.dataFim}T23:59:59.999-03:00` : filters!.dataFim;
-      query = query.lte("created_at", fim);
+      query = query.lte("created_at", toEndOfDayISO(filters!.dataFim));
     }
     if (isValidFilterValue(filters?.acao)) {
       query = query.eq("acao", filters!.acao);

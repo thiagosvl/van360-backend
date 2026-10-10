@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "../config/supabase.js";
-import { STATUS_ASSINATURA_LIBERADA, UserType } from "../types/enums.js";
+import { ModoCobrancaEnum, STATUS_ASSINATURA_LIBERADA, UserType } from "../types/enums.js";
 import { authCacheService } from "../services/auth-cache.service.js";
 
 export const userRepository = {
@@ -145,7 +145,7 @@ export const userRepository = {
                 email,
                 assinaturas!inner(status),
                 usuario_configuracoes(notificar_motorista_parcelas),
-                motorista_configuracoes_financeiras(cobranca_automatica_ativa)
+                motorista_configuracoes_financeiras(modo_cobranca)
             `)
             .eq("ativo", true)
             .eq("tipo", UserType.MOTORISTA)
@@ -161,7 +161,7 @@ export const userRepository = {
             if (!notificarParcelas) return false;
 
             const configFin = Array.isArray(u.motorista_configuracoes_financeiras) ? u.motorista_configuracoes_financeiras[0] : u.motorista_configuracoes_financeiras;
-            const cobrancaAutomatica = configFin?.cobranca_automatica_ativa ?? false;
+            const cobrancaAutomatica = configFin?.modo_cobranca === ModoCobrancaEnum.AUTOMATICA;
             return !cobrancaAutomatica;
         });
 

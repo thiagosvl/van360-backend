@@ -44,8 +44,6 @@ export const listUsersQuerySchema = z.object({
   search: z.string().optional(),
   status: z.string().optional(),
   tipo: z.string().optional().default(UserType.MOTORISTA),
-  data_inicio: z.string().optional(),
-  data_fim: z.string().optional(),
 });
 
 export const listAcquisitionStatsQuerySchema = z.object({

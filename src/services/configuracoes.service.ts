@@ -20,7 +20,6 @@ export async function obterConfiguracoesUsuario(usuarioId: string): Promise<Conf
   const diasPadrao = await getConfigNumber(ConfigKey.PASSAGEIRO_DIAS_AVISO_VENCIMENTO, 2);
 
   return {
-    notificar_pais_cobrancas: config?.notificar_pais_cobrancas ?? false,
     cobranca_aviso_previo_ativo: config?.cobranca_aviso_previo_ativo ?? true,
     cobranca_aviso_previo_whatsapp_ativo: config?.cobranca_aviso_previo_whatsapp_ativo ?? false,
     cobranca_dias_aviso_previo: config?.cobranca_dias_aviso_previo ?? null,

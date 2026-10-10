@@ -20,7 +20,7 @@ import { getNowBR, getSafeDueDateString, toPersistenceString, diffInDays, getMon
 import { getDriverDisplayName, getFirstAndSecondName } from "../utils/format.js";
 
 import { CreateCobrancaDTO } from "../types/dtos/cobranca.dto.js";
-import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaStatus, CobrancaTipoPagamento, ConfigKey, PaymentProvider, CheckoutPaymentMethod, ProvedorPagamentoEnum, SubscriptionStatus } from "../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaStatus, CobrancaTipoPagamento, ConfigKey, PaymentProvider, CheckoutPaymentMethod, ProvedorPagamentoEnum, SubscriptionStatus, ModoCobrancaEnum } from "../types/enums.js";
 import { paymentService } from "./payments/payment.service.js";
 import { cobrancaCalculoService } from "./cobranca-calculo.service.js";
 import { cobrancaValidacaoService } from "./cobranca-validacao.service.js";
@@ -32,7 +32,6 @@ import { notificationService } from "./notifications/notification.service.js";
 import { NotificationContextFormatter } from "./notifications/utils/notification-context.formatter.js";
 import { addToGenerationQueue } from "../queues/generation.queue.js";
 import { calculateAuditDiff } from "../utils/audit-diff.util.js";
-import { isDriverInBaaSWhitelist } from "../utils/feature-flag.utils.js";
 
 interface ResponsavelLinkInfo {
   id?: string;
@@ -575,6 +574,8 @@ export const cobrancaService = {
 
     if (motError) throw motError;
 
+    const motoristaConfig = await motoristaFinanceiroRepository.getByUsuarioId(motoristaId);
+
     const { data: passageiros, error: passError } = await passageiroRepository.listParaCobrancaAutomatica(motoristaId);
 
     if (passError) throw passError;
@@ -589,13 +590,11 @@ export const cobrancaService = {
 
     // 2. Iterar por Passageiro e Gerar Cobrança
     for (const passageiro of passageiros) {
-      // Ignorar se for passageiro isento
       if (passageiro.isento === true) {
         skipped++;
         continue;
       }
 
-      // Verificar se já existe cobrança para este mês/ano/passageiro
       if (passageirosComCobranca.has(passageiro.id)) {
         skipped++;
         continue;
@@ -681,7 +680,6 @@ export const cobrancaService = {
     pixCopiaCola: string;
     pixQrCodeUrl?: string | null;
     valorTotalPix: number;
-    taxaRepassada: boolean;
   } | null> {
     const { data: cobranca } = await cobrancaRepository.getByIdWithPassageiroAndMotorista(cobrancaId);
     if (!cobranca || cobranca.status === CobrancaStatus.PAGO || cobranca.status === CobrancaStatus.CANCELADA) {
@@ -690,32 +688,22 @@ export const cobrancaService = {
 
     const agora = new Date();
     if (cobranca.pix_copia_cola && cobranca.pix_expiracao && new Date(cobranca.pix_expiracao) > agora) {
-      const valorTotal = cobranca.taxa_repassada_ao_pai
-        ? Number(cobranca.valor) + Number(cobranca.valor_taxa_plataforma || 0)
-        : Number(cobranca.valor);
-
       return {
         pixCopiaCola: cobranca.pix_copia_cola,
         pixQrCodeUrl: cobranca.pix_qrcode_url,
-        valorTotalPix: valorTotal,
-        taxaRepassada: !!cobranca.taxa_repassada_ao_pai
+        valorTotalPix: Number(cobranca.valor)
       };
     }
 
     const motoristaId = cobranca.usuario_id;
     if (!motoristaId) return null;
 
-    const motorista = cobranca.motorista as { email?: string; telefone?: string } | undefined;
-    if (!isDriverInBaaSWhitelist(motorista)) {
-      return null;
-    }
-
     const motoristaConfig = await motoristaFinanceiroRepository.getByUsuarioId(motoristaId);
     const passageiro = cobranca.passageiro as Record<string, unknown> | undefined;
 
     const elegivel = cobrancaCalculoService.verificarElegibilidadeCobrancaAutomatica({
       motoristaConfig,
-      passageiroOverrideCobrancaAtiva: passageiro?.cobranca_automatica_ativa as boolean | undefined,
+      passageiroModoCobranca: passageiro?.modo_cobranca as ModoCobrancaEnum | null | undefined,
       statusCobranca: cobranca.status
     });
 
@@ -729,26 +717,13 @@ export const cobrancaService = {
       taxaGlobal
     );
 
-    const repassarAoPai = cobrancaCalculoService.resolverRepasseAoPai(
-      passageiro?.repassar_taxa_pai as boolean | undefined,
-      motoristaConfig.repassar_taxa_pais_padrao
-    );
-
     const divisao = cobrancaCalculoService.calcularDivisaoCobranca({
       valorMensalidade: Number(cobranca.valor),
-      taxaPlataforma,
-      repassarAoPai
+      taxaPlataforma
     });
 
     const valorTotalPix = divisao.valorCobrancaPai;
     const valorRepasseMotorista = divisao.valorLiquidoMotorista;
-
-    try {
-      await paymentService.ensureSubaccount(motoristaConfig.chave_pix_repasse);
-    } catch (subErr: unknown) {
-      logger.error({ error: subErr, cobrancaId }, "[CobrancaService] Falha ao verificar subconta para split");
-      return null;
-    }
 
     const passageiroNome = (passageiro?.nome as string) || "Aluno";
 
@@ -801,15 +776,13 @@ export const cobrancaService = {
       pix_copia_cola: chargeRes.pixCopyPaste,
       pix_qrcode_url: chargeRes.pixQrCodeUrl || null,
       pix_expiracao: expiracao.toISOString(),
-      valor_taxa_plataforma: taxaPlataforma,
-      taxa_repassada_ao_pai: repassarAoPai
+      valor_taxa_plataforma: taxaPlataforma
     });
 
     return {
       pixCopiaCola: chargeRes.pixCopyPaste,
       pixQrCodeUrl: chargeRes.pixQrCodeUrl || null,
-      valorTotalPix,
-      taxaRepassada: repassarAoPai
+      valorTotalPix
     };
   },
 
@@ -867,6 +840,20 @@ export const cobrancaService = {
           const resp = _getResponsavelFromPassageiro(passageiro);
           if (!resp.telefone && !resp.email) return null;
           if (passageiro?.enviar_notificacoes === false) return null;
+          if (passageiro?.isento === true) return null;
+          if (c.desativar_lembretes === true) return null;
+
+          const motoristaConfigFin = Array.isArray(motorista?.motorista_configuracoes_financeiras)
+            ? motorista.motorista_configuracoes_financeiras[0]
+            : motorista?.motorista_configuracoes_financeiras;
+
+          const elegivelLembrete = cobrancaCalculoService.verificarElegibilidadeLembretes({
+            motoristaConfig: motoristaConfigFin,
+            passageiroModoCobranca: passageiro?.modo_cobranca,
+            statusCobranca: c.status
+          });
+
+          if (!elegivelLembrete) return null;
 
           const dataVencimentoStr = c.data_vencimento;
           const ultimaNotifStr = c.data_envio_ultima_notificacao;
@@ -961,12 +948,11 @@ export const cobrancaService = {
               diasAtraso: eventType === EVENTO_PASSAGEIRO_ATRASADO ? diffInDays(dataVencimentoStr, todayStr) : undefined,
               usuarioId: c.usuario_id,
               passageiroId: passageiro.id,
-              chavePix: pixInfo?.pixCopiaCola ? undefined : motorista.chave_pix,
-              tipoChavePix: pixInfo?.pixCopiaCola ? undefined : motorista.tipo_chave_pix,
+              chavePix: pixInfo?.pixCopiaCola ? undefined : (motoristaConfigFin?.chave_pix_repasse || motorista.chave_pix),
+              tipoChavePix: pixInfo?.pixCopiaCola ? undefined : (motoristaConfigFin?.tipo_chave_pix || motorista.tipo_chave_pix),
               pixCopiaCola: pixInfo?.pixCopiaCola,
               pixCopiaECola: pixInfo?.pixCopiaCola,
               pixQrCodeUrl: pixInfo?.pixQrCodeUrl,
-              taxaRepassada: pixInfo?.taxaRepassada,
               mes: c.mes,
               ano: c.ano,
               cobrancaId: c.id

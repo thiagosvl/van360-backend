@@ -3,18 +3,21 @@ import { responsavelRepository } from "../repositories/responsavel.repository.js
 import { prePassageiroRepository } from "../repositories/pre-passageiro.repository.js";
 import { AppError } from "../errors/AppError.js";
 import { CreatePassageiroDTO, ListPassageirosFiltersDTO, UpdatePassageiroDTO, CreateResponsavelAdicionalDTO, UpdateResponsavelAdicionalDTO, UpdatePassageiroBatchItemDTO } from "../types/dtos/passageiro.dto.js";
-import { AtividadeAcao, AtividadeEntidadeTipo, TipoResponsavel } from "../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, TipoResponsavel, ModoCobrancaEnum } from "../types/enums.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { cleanString, onlyDigits, normalizePhone } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
-import { parseLocalDate, toPersistenceString, getNowBR } from "../utils/date.utils.js";
+import { parseLocalDate, toPersistenceString, getNowBR, getSafeDueDateString } from "../utils/date.utils.js";
 import { notificationService } from "./notifications/notification.service.js";
 import { EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA } from "../config/constants.js";
-import { NotificationChannelEnum } from "../types/enums.js";
+import { NotificationChannelEnum, CobrancaStatus } from "../types/enums.js";
 import { formatarPlacaExibicao } from "../utils/placa.utils.js";
 import { userRepository } from "../repositories/user.repository.js";
 import { calculateAuditDiff } from "../utils/audit-diff.util.js";
 import { getFirstAndSecondName, getFirstName } from "../utils/format.js";
+import { supabaseAdmin } from "../config/supabase.js";
+import { cobrancaValidacaoService } from "./cobranca-validacao.service.js";
+import { logger } from "../config/logger.js";
 
 const _enrichPassageiroWithResponsavel = (p: Record<string, any>, isListMode: boolean = false) => {
     if (!p) return p;
@@ -132,6 +135,7 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO> | UpdatePassa
     // Controle
     if (data.ativo !== undefined) prepared.ativo = data.ativo;
     if (data.isento !== undefined) prepared.isento = data.isento;
+    if (data.modo_cobranca !== undefined) prepared.modo_cobranca = data.modo_cobranca;
 
     if (prepared.horario_entrada && prepared.horario_saida && prepared.horario_saida <= prepared.horario_entrada) {
         throw new AppError("Horário de saída deve ser maior que o horário de entrada", 400);
@@ -142,6 +146,7 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO> | UpdatePassa
         prepared.dia_vencimento = null;
         prepared.data_inicio_cobranca = null;
         prepared.data_fim_cobranca = null;
+        prepared.modo_cobranca = ModoCobrancaEnum.DESATIVADO;
     }
 
     return prepared;
@@ -246,6 +251,79 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO, targetOwn
     if (Object.keys(passageiroData).length > 0) {
         const { error } = await passageiroRepository.update(id, passageiroData);
         if (error) throw error;
+    }
+
+    const valorMudou = passageiroData.valor_cobranca !== undefined && Number(passageiroData.valor_cobranca) !== Number(estadoAnterior.valor_cobranca);
+    const vencimentoMudou = passageiroData.dia_vencimento !== undefined && passageiroData.dia_vencimento !== estadoAnterior.dia_vencimento;
+    const modoMudou = passageiroData.modo_cobranca !== undefined && passageiroData.modo_cobranca !== estadoAnterior.modo_cobranca;
+    const isentoMudou = passageiroData.isento !== undefined && passageiroData.isento !== estadoAnterior.isento;
+
+    if (valorMudou || vencimentoMudou || modoMudou || isentoMudou) {
+        try {
+            const { data: cobrancasPendentes } = await supabaseAdmin
+                .from("cobrancas")
+                .select("id, mes, ano, valor, data_vencimento, provedor_cobranca_id")
+                .eq("passageiro_id", id)
+                .eq("status", CobrancaStatus.PENDENTE);
+
+            if (cobrancasPendentes && cobrancasPendentes.length > 0) {
+                for (const cob of cobrancasPendentes) {
+                    if (passageiroData.isento === true) {
+                        if (cob.provedor_cobranca_id) {
+                            void cobrancaValidacaoService.cancelarPixCobrancaSeExistir(cob.id, cob.provedor_cobranca_id);
+                        }
+                        await supabaseAdmin
+                            .from("cobrancas")
+                            .update({
+                                status: CobrancaStatus.CANCELADA,
+                                pix_copia_cola: null,
+                                pix_qrcode_url: null,
+                                pix_expiracao: null,
+                                provedor_cobranca_id: null,
+                                repasse_em_processamento: false
+                            })
+                            .eq("id", cob.id);
+                    } else {
+                        const updateCobData: Record<string, unknown> = {};
+
+                        if (valorMudou && passageiroData.valor_cobranca !== null && passageiroData.valor_cobranca !== undefined) {
+                            updateCobData.valor = passageiroData.valor_cobranca;
+                        }
+
+                        if (vencimentoMudou && passageiroData.dia_vencimento) {
+                            updateCobData.data_vencimento = getSafeDueDateString(Number(passageiroData.dia_vencimento), cob.mes, cob.ano);
+                        }
+
+                        const deveCancelarPix = Boolean(
+                            cob.provedor_cobranca_id && (
+                                valorMudou ||
+                                vencimentoMudou ||
+                                passageiroData.modo_cobranca === ModoCobrancaEnum.DESATIVADO ||
+                                passageiroData.modo_cobranca === ModoCobrancaEnum.LEMBRETES
+                            )
+                        );
+
+                        if (deveCancelarPix && cob.provedor_cobranca_id) {
+                            void cobrancaValidacaoService.cancelarPixCobrancaSeExistir(cob.id, cob.provedor_cobranca_id);
+                            updateCobData.pix_copia_cola = null;
+                            updateCobData.pix_qrcode_url = null;
+                            updateCobData.pix_expiracao = null;
+                            updateCobData.provedor_cobranca_id = null;
+                            updateCobData.repasse_em_processamento = false;
+                        }
+
+                        if (Object.keys(updateCobData).length > 0) {
+                            await supabaseAdmin
+                                .from("cobrancas")
+                                .update(updateCobData)
+                                .eq("id", cob.id);
+                        }
+                    }
+                }
+            }
+        } catch (syncCobErr: unknown) {
+            logger.error({ error: syncCobErr, passageiroId: id }, "[PassageiroService] Erro ao sincronizar cobranças pendentes na edição do aluno");
+        }
     }
 
     if (data.responsavel_principal) {

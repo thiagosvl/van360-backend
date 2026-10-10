@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { logger } from "../config/logger.js";
 import { isValidFilterValue } from "../utils/filter.utils.js";
+import { toStartOfDayISO, toEndOfDayISO } from "../utils/date.utils.js";
 import { PostgrestError } from "@supabase/supabase-js";
 
 export interface LoginAttemptPayload {
@@ -41,13 +42,11 @@ class LoginAttemptsRepository {
       .order("created_at", { ascending: false });
 
     if (isValidFilterValue(filters?.data_inicio)) {
-      const inicio = filters!.data_inicio.length === 10 ? `${filters!.data_inicio}T00:00:00.000-03:00` : filters!.data_inicio;
-      query = query.gte("created_at", inicio);
+      query = query.gte("created_at", toStartOfDayISO(filters!.data_inicio));
     }
     
     if (isValidFilterValue(filters?.data_fim)) {
-      const fim = filters!.data_fim.length === 10 ? `${filters!.data_fim}T23:59:59.999-03:00` : filters!.data_fim;
-      query = query.lte("created_at", fim);
+      query = query.lte("created_at", toEndOfDayISO(filters!.data_fim));
     }
     
     if (isValidFilterValue(filters?.search_cpf)) {

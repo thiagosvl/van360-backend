@@ -182,83 +182,85 @@ export async function atualizarUsuario(usuarioId: string, payload: AtualizarUsua
     payload.cpfcnpj !== undefined ||
     payload.email !== undefined;
 
-  if (perfilAlterado) {
-    const perfilDiff = calculateAuditDiff(
-      usuarioAnterior as Record<string, unknown> | null,
-      updates,
-      ["assinatura_digital_url", "config_contrato"]
-    );
+  if (!isSubAccount) {
+    if (perfilAlterado) {
+      const perfilDiff = calculateAuditDiff(
+        usuarioAnterior as Record<string, unknown> | null,
+        updates,
+        ["assinatura_digital_url", "config_contrato"]
+      );
 
-    if (perfilDiff.hasChanges) {
-      historicoService.log({
-        usuario_id: usuarioId,
-        entidade_tipo: AtividadeEntidadeTipo.USUARIO,
-        entidade_id: usuarioId,
-        acao: AtividadeAcao.PERFIL_EDITADO,
-        descricao: "Dados de identificação do perfil atualizados.",
-        meta: {
-          campos_alterados: perfilDiff.campos,
-          campos: perfilDiff.campos,
-          alteracoes: perfilDiff.alteracoes,
-        },
-      });
-    }
-  } else if (payload.config_contrato !== undefined) {
-    const configAntiga = (usuarioAnterior?.config_contrato as Record<string, unknown>) || {};
-    const configNova = payload.config_contrato || {};
-    const configDiff = calculateAuditDiff(configAntiga, configNova);
-
-    if (configDiff.hasChanges) {
-      const config = payload.config_contrato as Record<string, unknown> | null;
-      historicoService.log({
-        usuario_id: usuarioId,
-        entidade_tipo: AtividadeEntidadeTipo.USUARIO,
-        entidade_id: usuarioId,
-        acao: AtividadeAcao.CONTRATO_CONFIG_EDITADA,
-        descricao: `Configurações de contrato atualizadas (Usa contratos: ${config?.usar_contratos ? "Sim" : "Não"}).`,
-        meta: {
-          usar_contratos: config?.usar_contratos,
-          multa_atraso: config?.multa_atraso,
-          juros_atraso: config?.juros_atraso,
-          multa_rescisao: config?.multa_rescisao,
-          campos_alterados: configDiff.campos,
-          campos: configDiff.campos,
-          alteracoes: configDiff.alteracoes,
-        },
-      });
-    }
-  }
-
-  if (payload.logo_url !== undefined) {
-    const logoAnterior = usuarioAnterior?.logo_url || null;
-    const logoNovo = updates.logo_url ? (updates.logo_url as string) : null;
-
-    if (logoAnterior !== logoNovo) {
-      if (logoNovo) {
+      if (perfilDiff.hasChanges) {
         historicoService.log({
           usuario_id: usuarioId,
           entidade_tipo: AtividadeEntidadeTipo.USUARIO,
           entidade_id: usuarioId,
-          acao: AtividadeAcao.LOGO_ATUALIZADO,
-          descricao: logoAnterior
-            ? "Logotipo do motorista atualizado."
-            : "Logotipo do motorista cadastrado.",
+          acao: AtividadeAcao.PERFIL_EDITADO,
+          descricao: "Dados de identificação do perfil atualizados.",
           meta: {
-            logo_anterior: logoAnterior,
-            logo_novo: logoNovo,
+            campos_alterados: perfilDiff.campos,
+            campos: perfilDiff.campos,
+            alteracoes: perfilDiff.alteracoes,
           },
         });
-      } else {
+      }
+    } else if (payload.config_contrato !== undefined) {
+      const configAntiga = (usuarioAnterior?.config_contrato as Record<string, unknown>) || {};
+      const configNova = payload.config_contrato || {};
+      const configDiff = calculateAuditDiff(configAntiga, configNova);
+
+      if (configDiff.hasChanges) {
+        const config = payload.config_contrato as Record<string, unknown> | null;
         historicoService.log({
           usuario_id: usuarioId,
           entidade_tipo: AtividadeEntidadeTipo.USUARIO,
           entidade_id: usuarioId,
-          acao: AtividadeAcao.LOGO_REMOVIDO,
-          descricao: "Logotipo do motorista removido.",
+          acao: AtividadeAcao.CONTRATO_CONFIG_EDITADA,
+          descricao: `Configurações de contrato atualizadas (Usa contratos: ${config?.usar_contratos ? "Sim" : "Não"}).`,
           meta: {
-            logo_anterior: logoAnterior,
+            usar_contratos: config?.usar_contratos,
+            multa_atraso: config?.multa_atraso,
+            juros_atraso: config?.juros_atraso,
+            multa_rescisao: config?.multa_rescisao,
+            campos_alterados: configDiff.campos,
+            campos: configDiff.campos,
+            alteracoes: configDiff.alteracoes,
           },
         });
+      }
+    }
+
+    if (payload.logo_url !== undefined) {
+      const logoAnterior = usuarioAnterior?.logo_url || null;
+      const logoNovo = updates.logo_url ? (updates.logo_url as string) : null;
+
+      if (logoAnterior !== logoNovo) {
+        if (logoNovo) {
+          historicoService.log({
+            usuario_id: usuarioId,
+            entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+            entidade_id: usuarioId,
+            acao: AtividadeAcao.LOGO_ATUALIZADO,
+            descricao: logoAnterior
+              ? "Logotipo do motorista atualizado."
+              : "Logotipo do motorista cadastrado.",
+            meta: {
+              logo_anterior: logoAnterior,
+              logo_novo: logoNovo,
+            },
+          });
+        } else {
+          historicoService.log({
+            usuario_id: usuarioId,
+            entidade_tipo: AtividadeEntidadeTipo.USUARIO,
+            entidade_id: usuarioId,
+            acao: AtividadeAcao.LOGO_REMOVIDO,
+            descricao: "Logotipo do motorista removido.",
+            meta: {
+              logo_anterior: logoAnterior,
+            },
+          });
+        }
       }
     }
   }

@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "../../config/supabase.js";
 import { isValidFilterValue } from "../../utils/filter.utils.js";
+import { toStartOfDayISO, toEndOfDayISO } from "../../utils/date.utils.js";
 import { NotificationCategoryEnum, NotificationQueueStatus, NotificationChannelEnum } from "../../types/enums.js";
 import {
   EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
@@ -177,17 +178,11 @@ function applyFilters<T extends NotificationFilterableQuery<T>>(query: T, filter
   }
 
   if (isValidFilterValue(filters?.dataInicio)) {
-    const inicio = filters!.dataInicio.length === 10
-      ? `${filters!.dataInicio}T00:00:00.000-03:00`
-      : filters!.dataInicio;
-    filteredQuery = filteredQuery.gte("created_at", inicio);
+    filteredQuery = filteredQuery.gte("created_at", toStartOfDayISO(filters!.dataInicio));
   }
 
   if (isValidFilterValue(filters?.dataFim)) {
-    const fim = filters!.dataFim.length === 10
-      ? `${filters!.dataFim}T23:59:59.999-03:00`
-      : filters!.dataFim;
-    filteredQuery = filteredQuery.lte("created_at", fim);
+    filteredQuery = filteredQuery.lte("created_at", toEndOfDayISO(filters!.dataFim));
   }
 
   if (isValidFilterValue(filters?.search)) {
@@ -229,6 +224,52 @@ async function resolveDriverUserIds(searchMotorista?: string): Promise<string[] 
   return ["00000000-0000-0000-0000-000000000000"];
 }
 
+async function resolveNotificationSearchDrivers(filters?: AdminNotificationFilters) {
+  let driverIds: string[] | null = null;
+  let searchDriverIds: string[] | null = null;
+
+  if (filters?.searchMotorista) {
+    driverIds = await resolveDriverUserIds(filters.searchMotorista);
+  }
+
+  if (isValidFilterValue(filters?.search) && !filters?.searchMotorista) {
+    const matched = await resolveDriverUserIds(filters!.search.trim());
+    if (matched && matched.length > 0 && matched[0] !== "00000000-0000-0000-0000-000000000000") {
+      searchDriverIds = matched;
+    }
+  }
+
+  return { driverIds, searchDriverIds };
+}
+
+function applyResolvedFilters<T extends NotificationFilterableQuery<T>>(
+  query: T,
+  filters: AdminNotificationFilters | undefined,
+  resolved: { driverIds: string[] | null; searchDriverIds: string[] | null }
+): T {
+  let filteredQuery = query;
+
+  if (resolved.driverIds) {
+    filteredQuery = filteredQuery.in("usuario_id", resolved.driverIds);
+  }
+
+  if (isValidFilterValue(filters?.search)) {
+    const clean = filters!.search.trim();
+    const orClauses: string[] = [
+      `destinatario.ilike.%${clean}%`,
+      `evento.ilike.%${clean}%`,
+      `payload->>nomePassageiro.ilike.%${clean}%`,
+      `payload->>nomeResponsavel.ilike.%${clean}%`,
+    ];
+    if (resolved.searchDriverIds && resolved.searchDriverIds.length > 0) {
+      orClauses.push(`usuario_id.in.(${resolved.searchDriverIds.join(",")})`);
+    }
+    filteredQuery = filteredQuery.or(orClauses.join(","));
+  }
+
+  return applyFilters(filteredQuery, { ...filters, search: undefined });
+}
+
 export const adminNotificationRepository = {
   async getUserNotifications(userId: string, from: number, to: number, filters?: AdminNotificationFilters) {
     let query = supabaseAdmin
@@ -257,16 +298,13 @@ export const adminNotificationRepository = {
   },
 
   async getGlobalNotifications(from: number, to: number, filters?: AdminNotificationFilters) {
+    const resolved = await resolveNotificationSearchDrivers(filters);
+
     let query = supabaseAdmin
       .from("fila_notificacoes")
       .select("*, usuarios(id, nome, email, telefone, cpfcnpj, apelido)", { count: "exact" });
 
-    const driverIds = await resolveDriverUserIds(filters?.searchMotorista);
-    if (driverIds) {
-      query = query.in("usuario_id", driverIds);
-    }
-
-    query = applyFilters(query, filters);
+    query = applyResolvedFilters(query, filters, resolved);
 
     return query
       .order("created_at", { ascending: false })
@@ -274,17 +312,14 @@ export const adminNotificationRepository = {
   },
 
   async getGlobalNotificationKpis(filters?: AdminNotificationFilters): Promise<NotificationKpisDTO> {
+    const resolved = await resolveNotificationSearchDrivers(filters);
+
     let query = supabaseAdmin
       .from("fila_notificacoes")
       .select("canal, status", { count: "exact" })
       .limit(10000);
 
-    const driverIds = await resolveDriverUserIds(filters?.searchMotorista);
-    if (driverIds) {
-      query = query.in("usuario_id", driverIds);
-    }
-
-    query = applyFilters(query, filters);
+    query = applyResolvedFilters(query, filters, resolved);
 
     const { data, error, count } = await query;
     if (error) {
@@ -415,13 +450,8 @@ export const adminNotificationRepository = {
       .from("fila_notificacoes")
       .select("id");
 
-    const driverIds = await resolveDriverUserIds(filters?.searchMotorista);
-    if (driverIds) {
-      if (driverIds.length === 0) return 0;
-      query = query.in("usuario_id", driverIds);
-    }
-
-    query = applyFilters(query, filters);
+    const resolved = await resolveNotificationSearchDrivers(filters);
+    query = applyResolvedFilters(query, filters, resolved);
 
     if (!filters.status || filters.status.toUpperCase() === "TODOS" || filters.status.toUpperCase() === "ALL") {
       query = query.in("status", [

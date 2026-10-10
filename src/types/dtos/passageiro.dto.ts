@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { moneyToNumber } from "../../utils/currency.utils.js";
 import { parseLocalDate, getNowBR } from "../../utils/date.utils.js";
-import { ParentescoResponsavel } from "../enums.js";
+import { ParentescoResponsavel, ModoCobrancaEnum } from "../enums.js";
 
 const optionalString = z.union([z.string(), z.null(), z.undefined()]).transform(v => {
   if (v === undefined) return undefined;
@@ -63,6 +63,7 @@ export const createPassageiroSchema = z.object({
   ativo: z.boolean().optional(),
   isento: z.boolean().optional(),
   enviar_notificacoes: z.boolean().optional(),
+  modo_cobranca: z.nativeEnum(ModoCobrancaEnum).optional().nullable(),
 
   periodo: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
     if (v === undefined) return undefined;

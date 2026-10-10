@@ -23,7 +23,6 @@ import { addToRepasseQueue } from "../queues/repasse.queue.js";
 import { getClientIp } from "../utils/request-client.utils.js";
 import { withRetry } from "../utils/retry.utils.js";
 import { errorAlertService } from "../services/error-alert.service.js";
-import { isDriverInBaaSWhitelist } from "../utils/feature-flag.utils.js";
 import { subscriptionRevenueCatService } from "../services/subscriptions/subscription-revenuecat.service.js";
 import { RevenueCatWebhookPayload } from "../types/dtos/revenuecat.dto.js";
 
@@ -140,16 +139,6 @@ export const WebhookController = {
 
       if (event.type === NormalizedPaymentEventType.PAYMENT_RECEIVED) {
         const motoristaId = cobranca.usuario_id || "";
-        const motorista = cobranca.usuario as { email?: string; telefone?: string } | undefined;
-
-        if (!isDriverInBaaSWhitelist(motorista)) {
-          await cobrancaPagamentoService.registrarPagamentoAutomatico(
-            cobranca.id,
-            event.paidAt ? event.paidAt.toISOString() : undefined,
-            event.amount
-          );
-          return reply.code(200).send({ received: true, status: "paid_direct_no_baas" });
-        }
 
         await cobrancaRepository.update(cobranca.id, {
           repasse_em_processamento: true
@@ -164,13 +153,14 @@ export const WebhookController = {
         }
 
         const taxaPlataforma = cobrancaCalculoService.resolverTaxaPlataforma(
-          cobranca.valor_taxa_plataforma ? Number(cobranca.valor_taxa_plataforma) : null
+          cobranca.valor_taxa_plataforma !== null && cobranca.valor_taxa_plataforma !== undefined
+            ? Number(cobranca.valor_taxa_plataforma)
+            : motoristaConfig.taxa_personalizada
         );
         const valorRealPago = event.amount && event.amount > 0 ? event.amount : Number(cobranca.valor);
         const divisao = cobrancaCalculoService.calcularDivisaoCobranca({
           valorMensalidade: valorRealPago,
-          taxaPlataforma,
-          repassarAoPai: Boolean(cobranca.taxa_repassada_ao_pai)
+          taxaPlataforma
         });
         const valorLiquido = divisao.valorLiquidoMotorista;
 

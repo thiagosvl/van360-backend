@@ -75,8 +75,7 @@ export async function conciliarRepassesPendentes(): Promise<void> {
                 );
                 const divisao = cobrancaCalculoService.calcularDivisaoCobranca({
                   valorMensalidade: Number(cobranca.valor),
-                  taxaPlataforma,
-                  repassarAoPai: Boolean(cobranca.taxa_repassada_ao_pai)
+                  taxaPlataforma
                 });
 
                 const novoRepasse = await cobrancaRepasseRepository.create({
