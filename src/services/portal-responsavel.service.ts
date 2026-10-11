@@ -264,6 +264,7 @@ export const portalResponsavelService = {
         EVENTO_MOTORISTA_AUSENCIA_REGISTRADA,
         {
           nomePassageiro: target.nome,
+          nomeResponsavel: target.responsavel_nome,
           nomeRota: nomeRotasTexto,
           dataAusencia: dataInicial,
           dataFormatada,
@@ -303,6 +304,7 @@ export const portalResponsavelService = {
           EVENTO_MOTORISTA_AUSENCIA_REMOVIDA,
           {
             nomePassageiro: target.nome,
+            nomeResponsavel: target.responsavel_nome,
             nomeRota: r?.nome || "rota",
             dataAusencia: ausenciaExistente.data_ausencia,
             dataFormatada,

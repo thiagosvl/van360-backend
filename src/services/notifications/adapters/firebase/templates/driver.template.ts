@@ -105,10 +105,14 @@ export class FirebaseDriverTemplates {
         const passName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro as string, "Aluno");
         const rawTokenOrLink = (ctx.linkAssinatura || ctx.linkContrato || ctx.contratoUrl || ctx.tokenAssinatura || ctx.token || "") as string;
         const contractUrl = NotificationUrlBuilder.getContractSignatureUrl(rawTokenOrLink);
+        const parentName = ctx.nomeResponsavel ? NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string) : "";
+        const body = parentName
+            ? `${parentName} acabou de assinar o contrato de ${passName}.`
+            : `O responsável pelo(a) ${passName} acabou de assinar o contrato.`;
 
         return {
             title: "Novo Contrato Assinado! 📝",
-            body: `O responsável pelo(a) ${passName} acabou de assinar o contrato.`,
+            body,
             data: {
                 action: PushNotificationAction.OPEN_CONTRACTS,
                 contractUrl
@@ -312,10 +316,13 @@ export class FirebaseDriverTemplates {
         const studentName = (ctx.nomePassageiro || ctx.nomeAluno || "O aluno") as string;
         const routeName = (ctx.nomeRota || ctx.rota || "rota") as string;
         const formattedDate = (ctx.dataFormatada || ctx.data || "") as string;
+        const parentName = ctx.nomeResponsavel ? NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string) : "";
+        const sujeito = parentName || "O responsável";
+        const dateSuffix = formattedDate.startsWith("no ") ? formattedDate : `no dia ${formattedDate}`;
 
         return {
             title: "Notificação de Ausência 🚫",
-            body: `O responsável informou que ${studentName} estará ausente na ${routeName} no dia ${formattedDate}.`,
+            body: `${sujeito} informou que ${studentName} estará ausente na ${routeName} ${dateSuffix}.`,
             data: {
                 action: PushNotificationAction.OPEN_ROUTE,
                 passageiroId: (ctx.passageiroId || "") as string,
@@ -329,10 +336,12 @@ export class FirebaseDriverTemplates {
         const studentName = (ctx.nomePassageiro || ctx.nomeAluno || "O aluno") as string;
         const routeName = (ctx.nomeRota || ctx.rota || "rota") as string;
         const formattedDate = (ctx.dataFormatada || ctx.data || "") as string;
+        const parentName = ctx.nomeResponsavel ? NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string) : "";
+        const sujeito = parentName || "O responsável";
 
         return {
             title: "Ausência Cancelada! 🚌",
-            body: `O responsável cancelou a ausência de ${studentName} na ${routeName} do dia ${formattedDate}.`,
+            body: `${sujeito} cancelou a ausência de ${studentName} na ${routeName} do dia ${formattedDate}.`,
             data: {
                 action: PushNotificationAction.OPEN_ROUTE,
                 passageiroId: (ctx.passageiroId || "") as string,
