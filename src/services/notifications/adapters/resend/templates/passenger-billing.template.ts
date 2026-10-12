@@ -91,7 +91,7 @@ export class ResendPassengerBillingTemplates {
         
         const chavePix = ctx.chavePix as string | undefined;
         const tipoChavePix = ctx.tipoChavePix as string | undefined;
-        const pixCopiaCola = (ctx.pixCopiaCola || ctx.pixCopiaECola) as string | undefined;
+        const pixCopiaCola = ctx.pixCopiaCola as string | undefined;
 
         const contentHtml = `
             ${EmailComponents.greeting(respFirstName)}
@@ -132,7 +132,7 @@ export class ResendPassengerBillingTemplates {
 
         const chavePix = ctx.chavePix as string | undefined;
         const tipoChavePix = ctx.tipoChavePix as string | undefined;
-        const pixCopiaCola = (ctx.pixCopiaCola || ctx.pixCopiaECola) as string | undefined;
+        const pixCopiaCola = ctx.pixCopiaCola as string | undefined;
 
         const contentHtml = `
             ${EmailComponents.greeting(respFirstName)}
@@ -180,7 +180,7 @@ export class ResendPassengerBillingTemplates {
 
         const chavePix = ctx.chavePix as string | undefined;
         const tipoChavePix = ctx.tipoChavePix as string | undefined;
-        const pixCopiaCola = (ctx.pixCopiaCola || ctx.pixCopiaECola) as string | undefined;
+        const pixCopiaCola = ctx.pixCopiaCola as string | undefined;
 
         const contentHtml = `
             ${EmailComponents.greeting(respFirstName)}

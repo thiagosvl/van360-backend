@@ -25,13 +25,24 @@ export function formatDateTime(date: string | Date): string {
 
 const PREPOSICOES_NOME = new Set(["de", "da", "do", "dos", "das", "e"]);
 
+export function normalizeCompoundName(name?: string): string {
+  if (!name) return "";
+  return name.trim().replace(/\s*\/\s*/g, " / ");
+}
+
 export function getFirstName(name?: string): string {
   if (!name) return "";
+  if (name.includes("/")) {
+    return normalizeCompoundName(name);
+  }
   return name.trim().split(/\s+/)[0];
 }
 
 export function getFirstAndSecondName(name?: string): string {
   if (!name) return "";
+  if (name.includes("/")) {
+    return normalizeCompoundName(name);
+  }
   const parts = name.trim().split(/\s+/);
   if (parts.length < 2) return parts[0] || "";
 

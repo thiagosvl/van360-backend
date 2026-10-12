@@ -41,6 +41,7 @@ import type {
 import { onlyDigits, cleanString, normalizePhone } from "../../utils/string.utils.js";
 import { subscriptionService } from "../subscriptions/subscription.service.js";
 import { motoristaFinanceiroRepository } from "../../repositories/motorista-financeiro.repository.js";
+import { motoristaFinanceiroService } from "../motorista-financeiro.service.js";
 import { AdminMotoristaFinanceiroUpdateInput } from "../../schemas/admin-repasse.schema.js";
 import {
   UpdateUserAdminDTO,
@@ -248,7 +249,7 @@ export const adminUserService = {
     ] = await Promise.all([
       adminUserRepository.getUserDetails(userId),
       referralRepository.getReferralWithIndicador(userId).catch(() => ({ data: null })),
-      motoristaFinanceiroRepository.getByUsuarioId(userId).catch(() => null),
+      motoristaFinanceiroService.obterConfiguracoes(userId).catch(() => null),
     ]);
 
     if (userReq.error || !userReq.data) throw new Error("Usuário não encontrado.");
@@ -678,6 +679,9 @@ export const adminUserService = {
       }
       updatePayload.cpfcnpj = cpfcnpjClean;
     }
+    if (data.cpf_responsavel !== undefined) {
+      updatePayload.cpf_responsavel = data.cpf_responsavel ? onlyDigits(data.cpf_responsavel) : null;
+    }
     if (data.ativo !== undefined) updatePayload.ativo = data.ativo;
     if (data.data_nascimento !== undefined) {
       updatePayload.data_nascimento = parseBrazilianDateToISO(data.data_nascimento);
@@ -716,6 +720,10 @@ export const adminUserService = {
       await usuarioConfiguracoesRepository.update(userId, {
         cobranca_aviso_previo_whatsapp_ativo: data.cobranca_aviso_previo_whatsapp_ativo,
       });
+    }
+
+    if (data.configuracoes !== undefined) {
+      await usuarioConfiguracoesRepository.update(userId, data.configuracoes);
     }
 
     if (Object.keys(updatePayload).length > 1 || (Object.keys(updatePayload).length === 1 && data.ativo === undefined)) {
@@ -2010,11 +2018,12 @@ export const adminUserService = {
   },
 
   async getFinancialConfig(userId: string) {
-    return motoristaFinanceiroRepository.getByUsuarioId(userId);
+    return motoristaFinanceiroService.obterConfiguracoes(userId);
   },
 
   async updateFinancialConfig(userId: string, input: AdminMotoristaFinanceiroUpdateInput) {
-    return motoristaFinanceiroRepository.update(userId, input);
+    await motoristaFinanceiroRepository.update(userId, input);
+    return motoristaFinanceiroService.obterConfiguracoes(userId);
   },
 };
 

@@ -729,19 +729,8 @@ export const cobrancaService = {
     const todayStr = toPersistenceString(getNowBR());
     const encargos = cobrancaCalculoService.resolverEncargosAtraso(motoristaConfig);
 
-    let valorBaseCobranca = valorOriginal;
-    if (cobranca.data_vencimento < todayStr && encargos.hasOverdueRules) {
-      const diasAtraso = Math.max(1, diffInDays(cobranca.data_vencimento, todayStr));
-      const calculoRetroativo = cobrancaCalculoService.calcularEncargosRetroativos({
-        valorOriginal,
-        diasAtraso,
-        encargos
-      });
-      valorBaseCobranca = calculoRetroativo.valorAtualizado;
-    }
-
     const divisao = cobrancaCalculoService.calcularDivisaoCobranca({
-      valorMensalidade: valorBaseCobranca,
+      valorMensalidade: valorOriginal,
       taxaPlataforma
     });
 
@@ -756,10 +745,34 @@ export const cobrancaService = {
     }>) || [];
     const respLink = links.find((r) => r.tipo === TipoResponsavel.PRINCIPAL) || links[0];
     const respObj = Array.isArray(respLink?.responsavel) ? respLink.responsavel[0] : respLink?.responsavel;
+    const cleanTaxId = respObj?.cpf?.replace(/\D/g, "");
+    const hasValidTaxId = Boolean(cleanTaxId && (cleanTaxId.length === 11 || cleanTaxId.length === 14));
+
+    if (encargos.hasOverdueRules && !hasValidTaxId) {
+      logger.warn(
+        { cobrancaId, motoristaId, passageiroId: cobranca.passageiro_id },
+        "[CobrancaService] Cobrança possui regras de multa/juros mas o responsável não possui CPF cadastrado"
+      );
+      historicoService.log({
+        usuario_id: motoristaId,
+        entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
+        entidade_id: cobranca.id,
+        acao: AtividadeAcao.COBRANCA_EDITADA,
+        descricao: `Falha ao gerar Pix da cobrança (${cobranca.mes}/${cobranca.ano}): o responsável do aluno ${passageiroNome} não possui CPF cadastrado (obrigatório pelo Banco Central para regras de juros e multa).`,
+        meta: {
+          motivo: "CPF_RESPONSAVEL_AUSENTE",
+          passageiro_id: cobranca.passageiro_id,
+          cobranca_id: cobranca.id,
+        }
+      });
+      return null;
+    }
+
+    const externalCorrelationId = `${cobranca.id}_${Date.now()}`;
 
     const chargeRes = await paymentService.createCharge(
       {
-        externalId: cobranca.id,
+        externalId: externalCorrelationId,
         amount: valorTotalPix,
         description: `Parcela ${cobranca.mes}/${cobranca.ano} - ${passageiroNome}`,
         paymentMethod: CheckoutPaymentMethod.PIX,
@@ -769,7 +782,7 @@ export const cobrancaService = {
         interests: encargos.interests,
         customer: {
           name: respObj?.nome || passageiroNome,
-          document: respObj?.cpf || "",
+          document: cleanTaxId || "",
           phone: respObj?.telefone || undefined,
           email: respObj?.email || undefined
         },
@@ -785,6 +798,17 @@ export const cobrancaService = {
 
     if (!chargeRes.success || !chargeRes.pixCopyPaste) {
       logger.error({ cobrancaId, error: chargeRes.error }, "[CobrancaService] Falha ao criar cobrança Pix na Woovi");
+      historicoService.log({
+        usuario_id: motoristaId,
+        entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
+        entidade_id: cobranca.id,
+        acao: AtividadeAcao.COBRANCA_EDITADA,
+        descricao: `Falha na integração com a Woovi ao gerar Pix para o aluno ${passageiroNome}: ${chargeRes.error || "Erro desconhecido"}`,
+        meta: {
+          erro_provedor: chargeRes.error,
+          cobranca_id: cobranca.id,
+        }
+      });
       return null;
     }
 
@@ -794,7 +818,7 @@ export const cobrancaService = {
 
     await cobrancaRepository.update(cobranca.id, {
       provedor: ProvedorPagamentoEnum.WOOVI,
-      provedor_cobranca_id: chargeRes.providerId || cobranca.id,
+      provedor_cobranca_id: chargeRes.providerId || externalCorrelationId,
       pix_copia_cola: chargeRes.pixCopyPaste,
       pix_qrcode_url: chargeRes.pixQrCodeUrl || null,
       pix_expiracao: expiracao.toISOString(),
@@ -954,9 +978,23 @@ export const cobrancaService = {
           if (activeChannels.length === 0) return null;
 
           try {
+            const modoEfetivo = cobrancaCalculoService.resolverModoEfetivo({
+              motoristaModoCobranca: motoristaConfigFin?.modo_cobranca,
+              passageiroModoCobranca: passageiro.modo_cobranca as ModoCobrancaEnum | null | undefined,
+            });
+
+            if (modoEfetivo === ModoCobrancaEnum.DESATIVADO) return null;
+
             const diasAntecedencia = dataVencimentoStr > todayStr ? diffInDays(todayStr, dataVencimentoStr) : undefined;
             const pixInfo = await this.obterOuGerarPixCobranca(c.id);
+
+            if (modoEfetivo === ModoCobrancaEnum.AUTOMATICA && !pixInfo?.pixCopiaCola) {
+              logger.warn({ cobrancaId: c.id, passageiroId: passageiro.id }, "[CobrancaService] Notificação de cobrança automática suspensa: Pix não pôde ser gerado");
+              return null;
+            }
+
             const valorFinal = pixInfo ? pixInfo.valorTotalPix : Number(c.valor);
+            const isModoLembrete = modoEfetivo === ModoCobrancaEnum.LEMBRETES;
 
             const context = {
               nomeResponsavel: resp.nome,
@@ -970,10 +1008,9 @@ export const cobrancaService = {
               diasAtraso: eventType === EVENTO_PASSAGEIRO_ATRASADO ? diffInDays(dataVencimentoStr, todayStr) : undefined,
               usuarioId: c.usuario_id,
               passageiroId: passageiro.id,
-              chavePix: pixInfo?.pixCopiaCola ? undefined : (motoristaConfigFin?.chave_pix_repasse || motorista.chave_pix),
-              tipoChavePix: pixInfo?.pixCopiaCola ? undefined : (motoristaConfigFin?.tipo_chave_pix || motorista.tipo_chave_pix),
+              chavePix: isModoLembrete ? (motoristaConfigFin?.chave_pix_repasse || motorista.chave_pix) : undefined,
+              tipoChavePix: isModoLembrete ? (motoristaConfigFin?.tipo_chave_pix || motorista.tipo_chave_pix) : undefined,
               pixCopiaCola: pixInfo?.pixCopiaCola,
-              pixCopiaECola: pixInfo?.pixCopiaCola,
               pixQrCodeUrl: pixInfo?.pixQrCodeUrl,
               mes: c.mes,
               ano: c.ano,

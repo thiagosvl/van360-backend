@@ -9,7 +9,7 @@ export interface DriverContext {
     valor?: number;
     planoNome?: string;
     dataVencimento?: string;
-    pixCopiaECola?: string;
+    pixCopiaCola?: string;
     metodoCobranca?: string;
     cardLast4?: string;
     mes?: number;
@@ -61,7 +61,7 @@ export const DriverTemplates = {
         const valorStr = valor ? ` de *${valor}*` : "";
         const planoStr = ctx.planoNome ? ` (Plano *${ctx.planoNome}*)` : "";
 
-        if (ctx.pixCopiaECola) {
+        if (ctx.pixCopiaCola) {
             return [
                 {
                     type: "text",
@@ -72,7 +72,7 @@ export const DriverTemplates = {
                 },
                 {
                     type: "text",
-                    content: ctx.pixCopiaECola
+                    content: ctx.pixCopiaCola
                 },
                 {
                     type: "text",
@@ -93,7 +93,7 @@ export const DriverTemplates = {
         const dataDia = data ? `dia ${data}` : "em breve";
         const planoStr = ctx.planoNome ? `\n🏷️ Plano: *${ctx.planoNome}*` : "";
 
-        if (ctx.pixCopiaECola) {
+        if (ctx.pixCopiaCola) {
             return [
                 {
                     type: "text",
@@ -104,7 +104,7 @@ export const DriverTemplates = {
                 },
                 {
                     type: "text",
-                    content: ctx.pixCopiaECola
+                    content: ctx.pixCopiaCola
                 },
                 {
                     type: "text",

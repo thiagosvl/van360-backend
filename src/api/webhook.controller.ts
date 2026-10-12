@@ -120,18 +120,31 @@ export const WebhookController = {
       return reply.code(200).send({ received: true, status: "ignored" });
     }
 
-    const cobrancaId = event.internalId;
-    if (!cobrancaId) {
+    const rawCorrelationId = event.internalId;
+    if (!rawCorrelationId) {
       logger.warn({ rawBody }, "[WebhookController] Webhook recebido sem internalId (correlationID)");
       return reply.code(200).send({ received: true, status: "no_internal_id" });
     }
 
+    let cobrancaId = rawCorrelationId;
+
     try {
-      const { data: cobranca, error: findError } = await cobrancaRepository.getById(cobrancaId);
-      if (findError || !cobranca) {
-        logger.warn({ cobrancaId }, "[WebhookController] Cobrança não encontrada para o webhook recebido");
+      let cobranca = null;
+      const { data: cobrancaPorProvedor } = await cobrancaRepository.getByProvedorCobrancaId(rawCorrelationId);
+      if (cobrancaPorProvedor) {
+        cobranca = cobrancaPorProvedor;
+      } else {
+        const baseId = rawCorrelationId.split("_")[0];
+        const { data: cobrancaPorId } = await cobrancaRepository.getById(baseId);
+        cobranca = cobrancaPorId;
+      }
+
+      if (!cobranca) {
+        logger.warn({ rawCorrelationId }, "[WebhookController] Cobrança não encontrada para o webhook recebido");
         return reply.code(200).send({ received: true, status: "cobranca_not_found" });
       }
+
+      cobrancaId = cobranca.id;
 
       if (cobranca.status === CobrancaStatus.PAGO) {
         return reply.code(200).send({ received: true, status: "already_paid" });

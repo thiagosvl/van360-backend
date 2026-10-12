@@ -41,19 +41,6 @@ export interface ParametrosDecomposicaoEncargos {
   motoristaConfig?: Tables<"motorista_configuracoes_financeiras"> | null;
 }
 
-export interface ParametrosCalculoRetroativo {
-  valorOriginal: number;
-  diasAtraso: number;
-  encargos: EncargosAtrasoResolvidos;
-}
-
-export interface ResultadoCalculoRetroativo {
-  multaRetroativa: number;
-  jurosRetroativos: number;
-  totalEncargos: number;
-  valorAtualizado: number;
-}
-
 export interface ResultadoDecomposicaoEncargos {
   valorOriginal: number;
   valorRealPago: number;
@@ -211,47 +198,6 @@ export const cobrancaCalculoService = {
       valorMulta,
       valorJuros,
       totalEncargos
-    };
-  },
-
-  calcularEncargosRetroativos({
-    valorOriginal,
-    diasAtraso,
-    encargos
-  }: ParametrosCalculoRetroativo): ResultadoCalculoRetroativo {
-    const original = Number(Number(valorOriginal || 0).toFixed(2));
-    if (diasAtraso <= 0 || !encargos.hasOverdueRules) {
-      return {
-        multaRetroativa: 0,
-        jurosRetroativos: 0,
-        totalEncargos: 0,
-        valorAtualizado: original
-      };
-    }
-
-    let multaRetroativa = 0;
-    if (encargos.fines) {
-      multaRetroativa = encargos.fines.tipo === ContractMultaTipo.PERCENTUAL
-        ? (original * encargos.fines.value) / 100
-        : encargos.fines.value;
-    }
-
-    let jurosRetroativos = 0;
-    if (encargos.interests) {
-      const taxaDiaria = (encargos.interests.value / 30) / 100;
-      jurosRetroativos = original * taxaDiaria * diasAtraso;
-    }
-
-    multaRetroativa = Number(multaRetroativa.toFixed(2));
-    jurosRetroativos = Number(jurosRetroativos.toFixed(2));
-    const totalEncargos = Number((multaRetroativa + jurosRetroativos).toFixed(2));
-    const valorAtualizado = Number((original + totalEncargos).toFixed(2));
-
-    return {
-      multaRetroativa,
-      jurosRetroativos,
-      totalEncargos,
-      valorAtualizado
     };
   }
 };

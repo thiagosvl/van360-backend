@@ -63,7 +63,16 @@ export class WooviProvider implements PaymentProviderAdapter {
                 splitType: split.splitType || "SPLIT_SUB_ACCOUNT"
             }));
 
+            const cleanTaxId = request.customer?.document?.replace(/\D/g, "");
+            const hasValidTaxId = Boolean(cleanTaxId && (cleanTaxId.length === 11 || cleanTaxId.length === 14));
             const hasOverdueRules = Boolean(request.fines || request.interests);
+
+            if (hasOverdueRules && !hasValidTaxId) {
+                return {
+                    success: false,
+                    error: "CPF/CNPJ do responsável é obrigatório para registrar cobrança com multa e juros no Banco Central."
+                };
+            }
 
             const payload: Record<string, unknown> = {
                 correlationID: request.externalId,
@@ -71,17 +80,15 @@ export class WooviProvider implements PaymentProviderAdapter {
                 comment: request.description.substring(0, 140),
             };
 
+            const targetDueDate = request.dueDate.includes("T")
+                ? new Date(request.dueDate)
+                : getEndOfDayBR(request.dueDate);
+            const now = new Date();
+
             if (hasOverdueRules) {
                 payload.type = "OVERDUE";
-                const targetDueDate = request.dueDate.includes("T")
-                    ? new Date(request.dueDate)
-                    : getEndOfDayBR(request.dueDate);
-                const now = new Date();
-                const safeDueDate = targetDueDate.getTime() < now.getTime()
-                    ? getEndOfDayBR(now)
-                    : targetDueDate;
-
-                payload.dueDate = safeDueDate.toISOString();
+                payload.dueDate = targetDueDate.toISOString();
+                payload.daysForDueDate = Math.max(0, Math.ceil((targetDueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
                 payload.daysAfterDueDate = request.daysAfterDueDate || 30;
 
                 if (request.fines) {
@@ -101,7 +108,7 @@ export class WooviProvider implements PaymentProviderAdapter {
                     };
                 }
             } else {
-                payload.expiresIn = 1296000;
+                payload.expiresIn = Math.min(1296000, Math.max(86400, (request.daysAfterDueDate || 15) * 86400));
             }
 
             if (splitsPayload && splitsPayload.length > 0) {
@@ -109,10 +116,9 @@ export class WooviProvider implements PaymentProviderAdapter {
             }
 
             if (request.customer) {
-                const cleanTaxId = request.customer.document?.replace(/\D/g, "");
                 payload.customer = {
                     name: request.customer.name,
-                    taxID: cleanTaxId && cleanTaxId.length >= 11 ? cleanTaxId : undefined,
+                    taxID: hasValidTaxId ? cleanTaxId : undefined,
                     email: request.customer.email,
                     phone: request.customer.phone?.replace(/\D/g, "")
                 };
