@@ -140,10 +140,6 @@ export const WebhookController = {
       if (event.type === NormalizedPaymentEventType.PAYMENT_RECEIVED) {
         const motoristaId = cobranca.usuario_id || "";
 
-        await cobrancaRepository.update(cobranca.id, {
-          repasse_em_processamento: true
-        });
-
         const motoristaConfig = await motoristaFinanceiroRepository.getByUsuarioId(motoristaId);
         const chavePixRepasse = motoristaConfig.chave_pix_repasse;
 
@@ -158,6 +154,19 @@ export const WebhookController = {
             : motoristaConfig.taxa_personalizada
         );
         const valorRealPago = event.amount && event.amount > 0 ? event.amount : Number(cobranca.valor);
+
+        const encargosDecompostos = cobrancaCalculoService.decomporEncargosPagamento({
+          valorOriginal: Number(cobranca.valor),
+          valorRealPago,
+          motoristaConfig
+        });
+
+        await cobrancaRepository.update(cobranca.id, {
+          repasse_em_processamento: true,
+          valor_multa: encargosDecompostos.valorMulta,
+          valor_juros: encargosDecompostos.valorJuros
+        });
+
         const divisao = cobrancaCalculoService.calcularDivisaoCobranca({
           valorMensalidade: valorRealPago,
           taxaPlataforma
@@ -166,7 +175,10 @@ export const WebhookController = {
 
         let repasse = await cobrancaRepasseRepository.getByTransacaoProvedorId(event.providerRef);
         if (!repasse) {
+          const rawPix = rawBody.pix as Record<string, unknown> | undefined;
           const rawCharge = rawBody.charge as Record<string, unknown> | undefined;
+          const endToEndIdIn = (rawPix?.endToEndId as string) || (rawCharge?.endToEndId as string) || null;
+
           repasse = await cobrancaRepasseRepository.create({
             cobranca_id: cobranca.id,
             motorista_id: motoristaId,
@@ -178,7 +190,7 @@ export const WebhookController = {
             tarifa_gateway_saque: divisao.tarifaGatewaySaque,
             valor_liquido_motorista: valorLiquido,
             transacao_provedor_id: event.providerRef,
-            end_to_end_id_in: (rawCharge?.endToEndId as string) || null,
+            end_to_end_id_in: endToEndIdIn,
             status_repasse: StatusRepasseEnum.PENDENTE,
             data_pagamento_pai: event.paidAt ? event.paidAt.toISOString() : new Date().toISOString()
           });

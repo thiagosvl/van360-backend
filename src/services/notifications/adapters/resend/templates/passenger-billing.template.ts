@@ -27,7 +27,24 @@ const renderBillingSummaryCard = (items: Array<{ label: string; value: string; i
     `;
 };
 
-const renderPixSection = (chavePix?: string, tipoChavePix?: string): string => {
+const renderPixSection = (chavePix?: string, tipoChavePix?: string, pixCopiaCola?: string): string => {
+    if (pixCopiaCola && pixCopiaCola.trim()) {
+        const codigoPix = pixCopiaCola.trim();
+        return `
+            <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 14px; padding: 20px; text-align: center; margin: 20px 0;">
+                <div style="font-size: 11px; font-weight: 800; color: #0284c7; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">
+                    Pix Copia e Cola
+                </div>
+                <div style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13px; font-weight: 600; color: #0f172a; background-color: #ffffff; border: 1px dashed #0284c7; border-radius: 8px; padding: 12px 14px; word-break: break-all; margin-bottom: 10px; user-select: all; -webkit-user-select: all; cursor: pointer;">
+                    ${codigoPix}
+                </div>
+                <div style="font-size: 12px; color: #64748b; font-weight: 500;">
+                    Toque ou dê um duplo clique no código acima para selecionar e copiar, depois cole na opção <strong>Pix Copia e Cola</strong> no aplicativo do seu banco.
+                </div>
+            </div>
+        `;
+    }
+
     if (!chavePix || !chavePix.trim()) {
         return `
             <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px 20px; text-align: center; margin: 20px 0;">
@@ -49,7 +66,7 @@ const renderPixSection = (chavePix?: string, tipoChavePix?: string): string => {
                 ${chaveFormatada}
             </div>
             <div style="font-size: 12px; color: #64748b; font-weight: 500;">
-                Toque ou selecione a chave Pix acima para copiar e pagar no app do seu banco.
+                Toque ou dê um duplo clique na chave Pix acima para copiar e pagar no app do seu banco.
             </div>
         </div>
     `;
@@ -74,6 +91,7 @@ export class ResendPassengerBillingTemplates {
         
         const chavePix = ctx.chavePix as string | undefined;
         const tipoChavePix = ctx.tipoChavePix as string | undefined;
+        const pixCopiaCola = (ctx.pixCopiaCola || ctx.pixCopiaECola) as string | undefined;
 
         const contentHtml = `
             ${EmailComponents.greeting(respFirstName)}
@@ -86,12 +104,18 @@ export class ResendPassengerBillingTemplates {
                 { label: "Valor", value: valorStr, isHighlight: true }
             ])}
 
-            ${renderPixSection(chavePix, tipoChavePix)}
+            ${renderPixSection(chavePix, tipoChavePix, pixCopiaCola)}
 
             ${EmailComponents.paragraph("<small style='color: #64748b;'>Caso já tenha efetuado o pagamento, por favor desconsidere este aviso.</small>")}
         `;
 
-        const text = `Olá, ${respFirstName}!\n\nLembramos que a parcela de transporte escolar de ${passDisplayName} ${prazoTexto} (${dataVencStr}) no valor de ${valorStr}.\n\nCaso já tenha efetuado o pagamento, desconsidere este aviso.\n\nAtenciosamente,\nVan360`;
+        const pixTextoPlano = pixCopiaCola
+            ? `\n\nCódigo Pix Copia e Cola:\n${pixCopiaCola}\n\nCopie o código acima e pague na opção Pix Copia e Cola no aplicativo do seu banco.`
+            : chavePix
+                ? `\n\nChave Pix para pagamento: ${chavePix}`
+                : "";
+
+        const text = `Olá, ${respFirstName}!\n\nLembramos que a parcela de transporte escolar de ${passDisplayName} ${prazoTexto} (${dataVencStr}) no valor de ${valorStr}.${pixTextoPlano}\n\nCaso já tenha efetuado o pagamento, desconsidere este aviso.\n\nAtenciosamente,\nVan360`;
         const html = EmailComponents.layout({ subject, preheader, contentHtml });
 
         return { subject, html, text };
@@ -108,6 +132,7 @@ export class ResendPassengerBillingTemplates {
 
         const chavePix = ctx.chavePix as string | undefined;
         const tipoChavePix = ctx.tipoChavePix as string | undefined;
+        const pixCopiaCola = (ctx.pixCopiaCola || ctx.pixCopiaECola) as string | undefined;
 
         const contentHtml = `
             ${EmailComponents.greeting(respFirstName)}
@@ -120,12 +145,18 @@ export class ResendPassengerBillingTemplates {
                 { label: "Valor", value: valorStr, isHighlight: true }
             ])}
 
-            ${renderPixSection(chavePix, tipoChavePix)}
+            ${renderPixSection(chavePix, tipoChavePix, pixCopiaCola)}
 
             ${EmailComponents.paragraph("<small style='color: #64748b;'>Caso já tenha efetuado o pagamento, por favor desconsidere este aviso.</small>")}
         `;
 
-        const text = `Olá, ${respFirstName}!\n\nInformamos que a parcela de transporte escolar de ${passDisplayName} vence hoje no valor de ${valorStr}.\n\nCaso já tenha efetuado o pagamento, desconsidere este aviso.\n\nAtenciosamente,\nVan360`;
+        const pixTextoPlano = pixCopiaCola
+            ? `\n\nCódigo Pix Copia e Cola:\n${pixCopiaCola}\n\nCopie o código acima e pague na opção Pix Copia e Cola no aplicativo do seu banco.`
+            : chavePix
+                ? `\n\nChave Pix para pagamento: ${chavePix}`
+                : "";
+
+        const text = `Olá, ${respFirstName}!\n\nInformamos que a parcela de transporte escolar de ${passDisplayName} vence hoje no valor de ${valorStr}.${pixTextoPlano}\n\nCaso já tenha efetuado o pagamento, desconsidere este aviso.\n\nAtenciosamente,\nVan360`;
         const html = EmailComponents.layout({ subject, preheader, contentHtml });
 
         return { subject, html, text };
@@ -149,6 +180,7 @@ export class ResendPassengerBillingTemplates {
 
         const chavePix = ctx.chavePix as string | undefined;
         const tipoChavePix = ctx.tipoChavePix as string | undefined;
+        const pixCopiaCola = (ctx.pixCopiaCola || ctx.pixCopiaECola) as string | undefined;
 
         const contentHtml = `
             ${EmailComponents.greeting(respFirstName)}
@@ -162,12 +194,18 @@ export class ResendPassengerBillingTemplates {
                 { label: "Valor", value: valorStr, isHighlight: true }
             ])}
 
-            ${renderPixSection(chavePix, tipoChavePix)}
+            ${renderPixSection(chavePix, tipoChavePix, pixCopiaCola)}
 
             ${EmailComponents.paragraph("<small style='color: #64748b;'>Caso o pagamento já tenha sido realizado nas últimas horas, por favor desconsidere este e-mail.</small>")}
         `;
 
-        const text = `Olá, ${respFirstName}!\n\nIdentificamos que a parcela de transporte de ${passDisplayName} no valor de ${valorStr} consta como pendente (${diasAtraso > 0 ? `vencida há ${diasRotulo}` : `vencida em ${dataVencStr}`}).\n\nCaso o pagamento já tenha sido realizado, por favor desconsidere este aviso.\n\nAtenciosamente,\nVan360`;
+        const pixTextoPlano = pixCopiaCola
+            ? `\n\nCódigo Pix Copia e Cola:\n${pixCopiaCola}\n\nCopie o código acima e pague na opção Pix Copia e Cola no aplicativo do seu banco.`
+            : chavePix
+                ? `\n\nChave Pix para pagamento: ${chavePix}`
+                : "";
+
+        const text = `Olá, ${respFirstName}!\n\nIdentificamos que a parcela de transporte de ${passDisplayName} no valor de ${valorStr} consta como pendente (${diasAtraso > 0 ? `vencida há ${diasRotulo}` : `vencida em ${dataVencStr}`}).${pixTextoPlano}\n\nCaso o pagamento já tenha sido realizado, por favor desconsidere este aviso.\n\nAtenciosamente,\nVan360`;
         const html = EmailComponents.layout({ subject, preheader, contentHtml });
 
         return { subject, html, text };

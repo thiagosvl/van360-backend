@@ -137,4 +137,8 @@ export const adminRepasseRepository = {
       .select("*")
       .single();
   },
+
+  async delete(id: string) {
+    return supabaseAdmin.from("cobrancas_repasses").delete().eq("id", id);
+  },
 };

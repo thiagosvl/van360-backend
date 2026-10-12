@@ -686,15 +686,6 @@ export const cobrancaService = {
       return null;
     }
 
-    const agora = new Date();
-    if (cobranca.pix_copia_cola && cobranca.pix_expiracao && new Date(cobranca.pix_expiracao) > agora) {
-      return {
-        pixCopiaCola: cobranca.pix_copia_cola,
-        pixQrCodeUrl: cobranca.pix_qrcode_url,
-        valorTotalPix: Number(cobranca.valor)
-      };
-    }
-
     const motoristaId = cobranca.usuario_id;
     if (!motoristaId) return null;
 
@@ -708,7 +699,24 @@ export const cobrancaService = {
     });
 
     if (!elegivel || !motoristaConfig.chave_pix_repasse) {
+      if (cobranca.pix_copia_cola) {
+        await cobrancaRepository.update(cobranca.id, {
+          pix_copia_cola: null,
+          pix_qrcode_url: null,
+          pix_expiracao: null,
+          provedor_cobranca_id: null
+        });
+      }
       return null;
+    }
+
+    const agora = new Date();
+    if (cobranca.pix_copia_cola && cobranca.pix_expiracao && new Date(cobranca.pix_expiracao) > agora) {
+      return {
+        pixCopiaCola: cobranca.pix_copia_cola,
+        pixQrCodeUrl: cobranca.pix_qrcode_url,
+        valorTotalPix: Number(cobranca.valor)
+      };
     }
 
     const taxaGlobal = await motoristaFinanceiroRepository.getTaxaPadraoGlobal();
@@ -717,8 +725,23 @@ export const cobrancaService = {
       taxaGlobal
     );
 
+    const valorOriginal = Number(cobranca.valor);
+    const todayStr = toPersistenceString(getNowBR());
+    const encargos = cobrancaCalculoService.resolverEncargosAtraso(motoristaConfig);
+
+    let valorBaseCobranca = valorOriginal;
+    if (cobranca.data_vencimento < todayStr && encargos.hasOverdueRules) {
+      const diasAtraso = Math.max(1, diffInDays(cobranca.data_vencimento, todayStr));
+      const calculoRetroativo = cobrancaCalculoService.calcularEncargosRetroativos({
+        valorOriginal,
+        diasAtraso,
+        encargos
+      });
+      valorBaseCobranca = calculoRetroativo.valorAtualizado;
+    }
+
     const divisao = cobrancaCalculoService.calcularDivisaoCobranca({
-      valorMensalidade: Number(cobranca.valor),
+      valorMensalidade: valorBaseCobranca,
       taxaPlataforma
     });
 
@@ -731,10 +754,8 @@ export const cobrancaService = {
       tipo?: string;
       responsavel?: { id?: string; nome?: string; telefone?: string; cpf?: string; email?: string } | Array<{ id?: string; nome?: string; telefone?: string; cpf?: string; email?: string }>;
     }>) || [];
-    const respLink = links.find((r) => r.tipo === "PRINCIPAL") || links[0];
+    const respLink = links.find((r) => r.tipo === TipoResponsavel.PRINCIPAL) || links[0];
     const respObj = Array.isArray(respLink?.responsavel) ? respLink.responsavel[0] : respLink?.responsavel;
-
-    const encargos = cobrancaCalculoService.resolverEncargosAtraso(motoristaConfig);
 
     const chargeRes = await paymentService.createCharge(
       {
@@ -767,7 +788,8 @@ export const cobrancaService = {
       return null;
     }
 
-    const expiracao = new Date(cobranca.data_vencimento);
+    const expiracaoBaseDate = cobranca.data_vencimento < todayStr ? getNowBR() : new Date(cobranca.data_vencimento);
+    const expiracao = new Date(expiracaoBaseDate);
     expiracao.setDate(expiracao.getDate() + (encargos.hasOverdueRules ? encargos.daysAfterDueDate : 15));
 
     await cobrancaRepository.update(cobranca.id, {

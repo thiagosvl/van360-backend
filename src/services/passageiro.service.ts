@@ -729,6 +729,19 @@ const updateResponsavelAdicional = async (responsavelId: string, data: UpdateRes
 };
 
 const deleteResponsavelAdicional = async (responsavelId: string, passageiroId?: string) => {
+    if (passageiroId) {
+        const { data: link } = await supabaseAdmin
+            .from("passageiro_responsaveis")
+            .select("tipo")
+            .eq("passageiro_id", passageiroId)
+            .eq("responsavel_id", responsavelId)
+            .maybeSingle();
+
+        if (link?.tipo === TipoResponsavel.PRINCIPAL) {
+            throw new AppError("Não é permitido excluir o responsável principal do aluno.", 400);
+        }
+    }
+
     await responsavelRepository.deleteResponsavelAdicional(responsavelId, passageiroId);
 
     if (passageiroId) {

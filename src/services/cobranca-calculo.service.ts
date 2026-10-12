@@ -35,6 +35,33 @@ export interface ParametrosElegibilidade {
   statusCobranca?: string;
 }
 
+export interface ParametrosDecomposicaoEncargos {
+  valorOriginal: number;
+  valorRealPago: number;
+  motoristaConfig?: Tables<"motorista_configuracoes_financeiras"> | null;
+}
+
+export interface ParametrosCalculoRetroativo {
+  valorOriginal: number;
+  diasAtraso: number;
+  encargos: EncargosAtrasoResolvidos;
+}
+
+export interface ResultadoCalculoRetroativo {
+  multaRetroativa: number;
+  jurosRetroativos: number;
+  totalEncargos: number;
+  valorAtualizado: number;
+}
+
+export interface ResultadoDecomposicaoEncargos {
+  valorOriginal: number;
+  valorRealPago: number;
+  valorMulta: number;
+  valorJuros: number;
+  totalEncargos: number;
+}
+
 export const cobrancaCalculoService = {
   resolverTaxaPlataforma(taxaPersonalizada?: number | null, taxaPadraoGlobal?: number | null): number {
     if (taxaPersonalizada !== null && taxaPersonalizada !== undefined) {
@@ -144,6 +171,87 @@ export const cobrancaCalculoService = {
       interests,
       daysAfterDueDate,
       hasOverdueRules: hasMulta || hasJuros
+    };
+  },
+
+  decomporEncargosPagamento({
+    valorOriginal,
+    valorRealPago,
+    motoristaConfig
+  }: ParametrosDecomposicaoEncargos): ResultadoDecomposicaoEncargos {
+    const original = Number(Number(valorOriginal || 0).toFixed(2));
+    const pago = Number(Number(valorRealPago || 0).toFixed(2));
+    const totalEncargos = Math.max(0, Number((pago - original).toFixed(2)));
+
+    if (totalEncargos <= 0) {
+      return {
+        valorOriginal: original,
+        valorRealPago: pago,
+        valorMulta: 0,
+        valorJuros: 0,
+        totalEncargos: 0
+      };
+    }
+
+    let multaEstimada = 0;
+    if (motoristaConfig?.cobrar_multa_atraso && motoristaConfig.multa_atraso_valor && Number(motoristaConfig.multa_atraso_valor) > 0) {
+      const multaValor = Number(motoristaConfig.multa_atraso_valor);
+      const isPercentual = motoristaConfig.multa_atraso_tipo !== ContractMultaTipo.FIXO;
+      multaEstimada = isPercentual
+        ? Number(((original * multaValor) / 100).toFixed(2))
+        : Number(multaValor.toFixed(2));
+    }
+
+    const valorMulta = Math.min(totalEncargos, multaEstimada);
+    const valorJuros = Number((totalEncargos - valorMulta).toFixed(2));
+
+    return {
+      valorOriginal: original,
+      valorRealPago: pago,
+      valorMulta,
+      valorJuros,
+      totalEncargos
+    };
+  },
+
+  calcularEncargosRetroativos({
+    valorOriginal,
+    diasAtraso,
+    encargos
+  }: ParametrosCalculoRetroativo): ResultadoCalculoRetroativo {
+    const original = Number(Number(valorOriginal || 0).toFixed(2));
+    if (diasAtraso <= 0 || !encargos.hasOverdueRules) {
+      return {
+        multaRetroativa: 0,
+        jurosRetroativos: 0,
+        totalEncargos: 0,
+        valorAtualizado: original
+      };
+    }
+
+    let multaRetroativa = 0;
+    if (encargos.fines) {
+      multaRetroativa = encargos.fines.tipo === ContractMultaTipo.PERCENTUAL
+        ? (original * encargos.fines.value) / 100
+        : encargos.fines.value;
+    }
+
+    let jurosRetroativos = 0;
+    if (encargos.interests) {
+      const taxaDiaria = (encargos.interests.value / 30) / 100;
+      jurosRetroativos = original * taxaDiaria * diasAtraso;
+    }
+
+    multaRetroativa = Number(multaRetroativa.toFixed(2));
+    jurosRetroativos = Number(jurosRetroativos.toFixed(2));
+    const totalEncargos = Number((multaRetroativa + jurosRetroativos).toFixed(2));
+    const valorAtualizado = Number((original + totalEncargos).toFixed(2));
+
+    return {
+      multaRetroativa,
+      jurosRetroativos,
+      totalEncargos,
+      valorAtualizado
     };
   }
 };

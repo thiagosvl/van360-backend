@@ -1029,6 +1029,11 @@ const expandirDiasUteis = (dataInicio: string, dataFim?: string | null): string[
   }
 
   const actualEnd = isNaN(end.getTime()) || end < start ? start : end;
+
+  if (!dataFim || dataInicio === dataFim) {
+    return [dataInicio];
+  }
+
   const current = new Date(start);
 
   while (current <= actualEnd) {
@@ -1037,6 +1042,13 @@ const expandirDiasUteis = (dataInicio: string, dataFim?: string | null): string[
       result.push(current.toISOString().split("T")[0]);
     }
     current.setUTCDate(current.getUTCDate() + 1);
+  }
+
+  if (result.length === 0) {
+    result.push(dataInicio);
+    if (dataFim && dataFim !== dataInicio) {
+      result.push(dataFim);
+    }
   }
 
   return result;

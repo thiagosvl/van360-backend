@@ -73,19 +73,31 @@ export class WooviProvider implements PaymentProviderAdapter {
 
             if (hasOverdueRules) {
                 payload.type = "OVERDUE";
-                payload.dueDate = request.dueDate.includes("T")
-                    ? request.dueDate
-                    : getEndOfDayBR(request.dueDate).toISOString();
+                const targetDueDate = request.dueDate.includes("T")
+                    ? new Date(request.dueDate)
+                    : getEndOfDayBR(request.dueDate);
+                const now = new Date();
+                const safeDueDate = targetDueDate.getTime() < now.getTime()
+                    ? getEndOfDayBR(now)
+                    : targetDueDate;
+
+                payload.dueDate = safeDueDate.toISOString();
                 payload.daysAfterDueDate = request.daysAfterDueDate || 30;
 
                 if (request.fines) {
+                    const fineBasisPoints = request.fines.tipo === ContractMultaTipo.PERCENTUAL
+                        ? Math.round(request.fines.value * 100)
+                        : (request.amount > 0 ? Math.round((request.fines.value / request.amount) * 10000) : 0);
                     payload.fines = {
-                        value: Math.round(request.fines.tipo === ContractMultaTipo.PERCENTUAL ? request.fines.value * 100 : request.fines.value * 100)
+                        value: fineBasisPoints
                     };
                 }
                 if (request.interests) {
+                    const interestDailyBasisPoints = request.interests.tipo === ContractMultaTipo.PERCENTUAL
+                        ? Math.max(1, Math.round((request.interests.value / 30) * 100))
+                        : (request.amount > 0 ? Math.max(1, Math.round(((request.interests.value / request.amount) / 30) * 10000)) : 1);
                     payload.interests = {
-                        value: Math.round(request.interests.tipo === ContractMultaTipo.PERCENTUAL ? request.interests.value * 100 : request.interests.value * 100)
+                        value: interestDailyBasisPoints
                     };
                 }
             } else {
@@ -229,9 +241,36 @@ export class WooviProvider implements PaymentProviderAdapter {
         }
     }
 
+    async transferFromMainAccount(toPixKey: string, amountInCents: number): Promise<WooviWithdrawResponse> {
+        const sanitizedKey = this.sanitizePixKey(toPixKey);
+        try {
+            const response = await this.client.post("/transfer", {
+                value: amountInCents,
+                toPixKey: sanitizedKey
+            });
+
+            const data = response.data;
+            const transaction = data?.transaction;
+            return {
+                success: true,
+                endToEndId: transaction?.endToEndId || data?.endToEndId,
+                transactionId: transaction?.id || data?.id
+            };
+        } catch (error: unknown) {
+            const err = error as { response?: { data?: { error?: string; message?: string } }; message?: string };
+            const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || "Erro na transferência";
+            logger.error({ error: errorMsg, toPixKey: sanitizedKey, amountInCents }, "[WooviProvider] Falha ao executar transferência da conta matriz");
+            return {
+                success: false,
+                error: errorMsg
+            };
+        }
+    }
+
     normalizeWebhook(rawBody: Record<string, unknown>): NormalizedPaymentEvent | null {
         const event = (rawBody.event as string) || "";
         const charge = rawBody.charge as Record<string, unknown> | undefined;
+        const pix = rawBody.pix as Record<string, unknown> | undefined;
 
         if (
             event === "OPENPIX:CHARGE_COMPLETED" ||
@@ -239,13 +278,13 @@ export class WooviProvider implements PaymentProviderAdapter {
             event === "OPENPIX:CHARGE_COMPLETED_NOT_SAME_CUSTOMER_PAYER"
         ) {
             const correlationID = (charge?.correlationID as string) || (rawBody.correlationID as string) || "";
-            const value = (charge?.value as number) || 0;
-            const paidAtStr = (charge?.paidAt as string) || (charge?.updatedAt as string);
+            const value = (pix?.value as number) || (charge?.value as number) || 0;
+            const paidAtStr = (pix?.time as string) || (charge?.paidAt as string) || (charge?.updatedAt as string);
 
             return {
                 type: NormalizedPaymentEventType.PAYMENT_RECEIVED,
                 internalId: correlationID,
-                providerRef: (charge?.transactionID as string) || correlationID,
+                providerRef: (pix?.endToEndId as string) || (charge?.transactionID as string) || correlationID,
                 amount: value ? value / 100 : undefined,
                 paidAt: paidAtStr ? new Date(paidAtStr) : new Date(),
                 raw: rawBody

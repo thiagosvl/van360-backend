@@ -60,6 +60,7 @@ const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get("/repasses", adminRepasseController.list);
   app.get("/repasses/stats", adminRepasseController.getStats);
   app.post("/repasses/:id/retry", adminRepasseController.retry);
+  app.delete("/repasses/:id", adminRepasseController.delete);
 
   // Configurações Financeiras do Motorista
   app.get("/users/:id/configuracoes-financeiras", adminUserController.getFinancialConfig);

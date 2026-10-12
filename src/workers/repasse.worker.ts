@@ -7,6 +7,7 @@ import { motoristaFinanceiroRepository } from "../repositories/motorista-finance
 import { paymentService } from "../services/payments/payment.service.js";
 
 import { StatusRepasseEnum } from "../types/enums.js";
+import { FINANCEIRO_CONFIG } from "../config/constants.js";
 
 export const repasseWorker = new Worker<RepasseJobData>(
     QUEUE_NAME_REPASSE,
@@ -36,6 +37,10 @@ export const repasseWorker = new Worker<RepasseJobData>(
             return;
         }
 
+        if (!repasse.motorista_id) {
+            throw new Error(`Repasse ${repasse.id} não possui motorista_id vinculado`);
+        }
+
         const motoristaConfig = await motoristaFinanceiroRepository.getByUsuarioId(repasse.motorista_id);
         const chavePixEfetiva = motoristaConfig.chave_pix_repasse || fallbackChavePix;
 
@@ -49,11 +54,55 @@ export const repasseWorker = new Worker<RepasseJobData>(
         });
 
         const valorEmCentavos = Math.round(valorLiquido * 100);
-        const withdrawRes = await paymentService.withdrawFromSubaccount(chavePixEfetiva, valorEmCentavos);
+        let withdrawRes: { success: boolean; transactionId?: string; endToEndId?: string; error?: string } = { success: false };
+
+        const saldoSubcontaReais = await paymentService.getSubaccountBalance(chavePixEfetiva);
+        const saldoSubcontaCentavos = Math.round(saldoSubcontaReais * 100);
+
+        if (saldoSubcontaCentavos >= valorEmCentavos) {
+            withdrawRes = await paymentService.withdrawFromSubaccount(chavePixEfetiva, valorEmCentavos);
+        } else {
+            let lastSuccessEndToEnd = "";
+            let lastSuccessTxId = "";
+            let saqueSubcontaFalhou = false;
+
+            if (saldoSubcontaCentavos > 0) {
+                const subWithdraw = await paymentService.withdrawFromSubaccount(chavePixEfetiva, saldoSubcontaCentavos);
+                if (!subWithdraw.success) {
+                    saqueSubcontaFalhou = true;
+                    withdrawRes = subWithdraw;
+                } else {
+                    lastSuccessEndToEnd = subWithdraw.endToEndId || "";
+                    lastSuccessTxId = subWithdraw.transactionId || "";
+                }
+            }
+
+            const diferencaCentavos = valorEmCentavos - Math.max(0, saldoSubcontaCentavos);
+            if (!saqueSubcontaFalhou && diferencaCentavos > 0) {
+                const mainTransfer = await paymentService.transferFromMainAccount(chavePixEfetiva, diferencaCentavos);
+                if (!mainTransfer.success) {
+                    withdrawRes = mainTransfer;
+                } else {
+                    lastSuccessEndToEnd = mainTransfer.endToEndId || lastSuccessEndToEnd;
+                    lastSuccessTxId = mainTransfer.transactionId || lastSuccessTxId;
+                    withdrawRes = {
+                        success: true,
+                        endToEndId: lastSuccessEndToEnd,
+                        transactionId: lastSuccessTxId
+                    };
+                }
+            } else if (!saqueSubcontaFalhou) {
+                withdrawRes = {
+                    success: true,
+                    endToEndId: lastSuccessEndToEnd,
+                    transactionId: lastSuccessTxId
+                };
+            }
+        }
 
         if (!withdrawRes.success) {
             const errorMsg = withdrawRes.error || "Falha no saque da subconta";
-            const isLastAttempt = job.attemptsMade >= ((job.opts.attempts || 3) - 1);
+            const isLastAttempt = job.attemptsMade >= ((job.opts.attempts || FINANCEIRO_CONFIG.REPASSE_MAX_TENTATIVAS) - 1);
             await cobrancaRepasseRepository.update(repasse.id, {
                 status_repasse: isLastAttempt ? StatusRepasseEnum.FALHA : StatusRepasseEnum.PENDENTE,
                 ultimo_erro: errorMsg
