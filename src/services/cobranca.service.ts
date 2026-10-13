@@ -676,7 +676,10 @@ export const cobrancaService = {
     return { created, skipped };
   },
 
-  async obterOuGerarPixCobranca(cobrancaId: string): Promise<{
+  async obterOuGerarPixCobranca(
+    cobrancaId: string,
+    options?: { force?: boolean }
+  ): Promise<{
     pixCopiaCola: string;
     pixQrCodeUrl?: string | null;
     valorTotalPix: number;
@@ -700,6 +703,9 @@ export const cobrancaService = {
 
     if (!elegivel || !motoristaConfig.chave_pix_repasse) {
       if (cobranca.pix_copia_cola) {
+        if (cobranca.provedor_cobranca_id) {
+          void cobrancaValidacaoService.cancelarPixCobrancaSeExistir(cobranca.id, cobranca.provedor_cobranca_id);
+        }
         await cobrancaRepository.update(cobranca.id, {
           pix_copia_cola: null,
           pix_qrcode_url: null,
@@ -710,8 +716,22 @@ export const cobrancaService = {
       return null;
     }
 
+    if (options?.force && cobranca.provedor_cobranca_id) {
+      void cobrancaValidacaoService.cancelarPixCobrancaSeExistir(cobranca.id, cobranca.provedor_cobranca_id);
+      await cobrancaRepository.update(cobranca.id, {
+        pix_copia_cola: null,
+        pix_qrcode_url: null,
+        pix_expiracao: null,
+        provedor_cobranca_id: null
+      });
+      cobranca.pix_copia_cola = null;
+      cobranca.pix_qrcode_url = null;
+      cobranca.pix_expiracao = null;
+      cobranca.provedor_cobranca_id = null;
+    }
+
     const agora = new Date();
-    if (cobranca.pix_copia_cola && cobranca.pix_expiracao && new Date(cobranca.pix_expiracao) > agora) {
+    if (!options?.force && cobranca.pix_copia_cola && cobranca.pix_expiracao && new Date(cobranca.pix_expiracao) > agora) {
       return {
         pixCopiaCola: cobranca.pix_copia_cola,
         pixQrCodeUrl: cobranca.pix_qrcode_url,

@@ -12,6 +12,7 @@ import { formatDateTime, maskCpf, maskCnpj, maskPhone } from "../utils/format.js
 import { telegramService } from "./telegram.service.js";
 import { adminService } from "./admin.service.js";
 import { isSubConta } from "../utils/user.utils.js";
+import { sanitizeContractConfig } from "../utils/pdf-text.utils.js";
 
 export async function getUsuarioData(usuarioId: string) {
   const { data: usuario, error } = await userRepository.getProfileData(usuarioId);
@@ -144,7 +145,7 @@ export async function atualizarUsuario(usuarioId: string, payload: AtualizarUsua
   }
 
   if (payload.config_contrato !== undefined) {
-    updates.config_contrato = payload.config_contrato;
+    updates.config_contrato = payload.config_contrato ? sanitizeContractConfig(payload.config_contrato as Record<string, unknown>) : null;
   }
 
   if (payload.data_nascimento !== undefined) {

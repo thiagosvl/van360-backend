@@ -92,9 +92,41 @@ export const subscriptionReferralService = {
 
         if (error || !indicacao) return;
 
-        // 2. Aplicar bônus ao indicador
         const sub = await subscriptionService.getOrCreateSubscription(indicacao.indicador_id);
         if (sub) {
+            const isVitalicio = sub.status === SubscriptionStatus.ACTIVE && !sub.data_vencimento;
+
+            if (isVitalicio) {
+                await historicoService.log({
+                    usuario_id: indicacao.indicador_id,
+                    entidade_tipo: AtividadeEntidadeTipo.SAAS_ASSINATURA,
+                    entidade_id: sub.id,
+                    acao: AtividadeAcao.SAAS_REFERRAL_BONUS_RECEIVED,
+                    descricao: "Indicação concluída com sucesso. Por possuir plano vitalício, o acesso do indicador permanece ilimitado sem alteração de vencimento."
+                });
+
+                logger.info({ indicadorId: indicacao.indicador_id, isVitalicio: true }, "[SubscriptionReferralService] Bônus de indicação: plano vitalício mantido sem atribuir vencimento.");
+
+                const { data: indicador } = await userRepository.getById(indicacao.indicador_id);
+                if (indicador?.telefone) {
+                    await notificationService.notifyDriver(
+                        indicador.telefone,
+                        EVENTO_MOTORISTA_INDICACAO_BONUS,
+                        {
+                            nomeMotorista: indicador.nome,
+                            isVitalicio: true
+                        },
+                        {
+                            channels: [NotificationChannelEnum.FIREBASE],
+                            usuarioId: indicador.id
+                        }
+                    ).catch(err => {
+                        logger.error({ err, indicadorId: indicador.id }, "[SubscriptionReferralService] Erro ao notificar bônus de indicação");
+                    });
+                }
+                return;
+            }
+
             let baseDate = getNowBR();
             if (sub.status === SubscriptionStatus.TRIAL && sub.trial_ends_at) {
                 baseDate = parseLocalDate(sub.trial_ends_at);
@@ -123,7 +155,6 @@ export const subscriptionReferralService = {
 
             logger.info({ indicadorId: indicacao.indicador_id, dias: bonusDays, activated: shouldActivate }, "[SubscriptionReferralService] Bônus de indicação aplicado.");
 
-            // Enviar notificação
             const { data: indicador } = await userRepository.getById(indicacao.indicador_id);
             if (indicador?.telefone) {
                 await notificationService.notifyDriver(
@@ -132,11 +163,13 @@ export const subscriptionReferralService = {
                     {
                         nomeMotorista: indicador.nome,
                         trialDays: bonusDays,
-                        dataVencimento: newExpiryStr
+                        dataVencimento: newExpiryStr,
+                        isVitalicio: false
                     },
                     {
                         channels: [NotificationChannelEnum.FIREBASE],
-                        usuarioId: indicador.id
+                        usuarioId: indicador.id,
+                        email: indicador.email
                     }
                 ).catch(err => {
                     logger.error({ err, indicadorId: indicador.id }, "[SubscriptionReferralService] Erro ao notificar bônus de indicação");

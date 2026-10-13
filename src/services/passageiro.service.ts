@@ -722,6 +722,41 @@ const updateResponsavelAdicional = async (responsavelId: string, data: UpdateRes
                     alteracoes: diff.alteracoes
                 }
             });
+
+            if (diff.campos.includes("cpf") && prepared.cpf) {
+                try {
+                    const now = getNowBR();
+                    const anoAtual = now.getFullYear();
+
+                    const { data: cobrancasPendentes } = await supabaseAdmin
+                        .from("cobrancas")
+                        .select("id, provedor_cobranca_id, pix_copia_cola")
+                        .eq("passageiro_id", passageiroId)
+                        .eq("status", CobrancaStatus.PENDENTE)
+                        .gte("ano", anoAtual)
+                        .not("pix_copia_cola", "is", null);
+
+                    if (cobrancasPendentes && cobrancasPendentes.length > 0) {
+                        for (const cob of cobrancasPendentes) {
+                            if (cob.provedor_cobranca_id) {
+                                void cobrancaValidacaoService.cancelarPixCobrancaSeExistir(cob.id, cob.provedor_cobranca_id);
+                            }
+                            await supabaseAdmin
+                                .from("cobrancas")
+                                .update({
+                                    pix_copia_cola: null,
+                                    pix_qrcode_url: null,
+                                    pix_expiracao: null,
+                                    provedor_cobranca_id: null,
+                                    repasse_em_processamento: false
+                                })
+                                .eq("id", cob.id);
+                        }
+                    }
+                } catch (cleanPixErr: unknown) {
+                    logger.error({ error: cleanPixErr, passageiroId }, "[PassageiroService] Erro ao invalidar Pix pendentes na atualização do CPF do responsável");
+                }
+            }
         }
     }
 

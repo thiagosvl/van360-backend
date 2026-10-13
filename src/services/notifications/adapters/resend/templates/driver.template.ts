@@ -331,7 +331,11 @@ export class ResendDriverTemplates {
     /**
      * 12. Bônus de Indicação Concluída
      */
-    static referralBonus(ctx: ResendTemplateContext): ResendTemplatePayload {
+    static referralBonus(ctx: ResendTemplateContext): ResendTemplatePayload | null {
+        if (ctx.isVitalicio) {
+            return null;
+        }
+
         const nome = NotificationContextFormatter.getFirstName(ctx.nomeMotorista || ctx.nome, "Motorista");
         const bonusDays = (ctx.trialDays || 30) as number;
 

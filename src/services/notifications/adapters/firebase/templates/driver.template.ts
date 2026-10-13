@@ -241,9 +241,12 @@ export class FirebaseDriverTemplates {
     }
 
     static referralBonus(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        const isVitalicio = Boolean(ctx.isVitalicio);
         return {
-            title: "Bônus de Indicação! 💰",
-            body: "Você ganhou um mês grátis! Seu indicado realizou a assinatura.",
+            title: isVitalicio ? "Sua indicação assinou o Van360" : "Você recebeu 1 mês grátis! 🎁",
+            body: isVitalicio
+                ? "O motorista que você indicou assinou o Van360. Agradecemos pela indicação e pela confiança!"
+                : "O motorista que você indicou assinou o Van360. O seu bônus de 30 dias foi aplicado com sucesso.",
             data: {
                 action: PushNotificationAction.OPEN_SUBSCRIPTION,
                 userId: (ctx.usuarioId || ctx.userId || "") as string

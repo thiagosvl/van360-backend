@@ -506,7 +506,9 @@ export const adminNotificationService = {
       passageiroModoCobranca: passageiroModo,
     });
 
-    const pixInfo = await cobrancaService.obterOuGerarPixCobranca(cobranca.id);
+    const pixInfo = await cobrancaService.obterOuGerarPixCobranca(cobranca.id, {
+      force: options?.force,
+    });
 
     if (modoEfetivo === ModoCobrancaEnum.AUTOMATICA && !pixInfo?.pixCopiaCola) {
       throw new AppError(
