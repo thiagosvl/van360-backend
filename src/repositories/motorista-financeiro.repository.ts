@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "../config/supabase.js";
-import { ConfigKey } from "../types/enums.js";
+import { ConfigKey, ModoCobrancaEnum } from "../types/enums.js";
 import type { Tables, TablesUpdate } from "../types/database.types.js";
+import type { ResumoExcecoesModoCobrancaDTO } from "../types/dtos/motorista-financeiro.dto.js";
 
 type MotoristaConfiguracaoFinanceira = Tables<"motorista_configuracoes_financeiras">;
 type MotoristaConfiguracaoFinanceiraUpdate = TablesUpdate<"motorista_configuracoes_financeiras">;
@@ -29,11 +30,9 @@ export const motoristaFinanceiroRepository = {
         .upsert(
           {
             usuario_id: usuarioId,
-            modalidade_cobranca: "MANUAL",
-            cobranca_automatica_ativa: false,
+            modo_cobranca: ModoCobrancaEnum.DESATIVADO,
             chave_pix_repasse: usuario?.chave_pix || null,
             tipo_chave_pix: usuario?.tipo_chave_pix || null,
-            repassar_taxa_pais_padrao: false,
           },
           { onConflict: "usuario_id" }
         )
@@ -81,5 +80,46 @@ export const motoristaFinanceiroRepository = {
     }
 
     return 4.0;
+  },
+
+  async getResumoExcecoesModoCobranca(usuarioId: string): Promise<ResumoExcecoesModoCobrancaDTO> {
+    const { data, error } = await supabaseAdmin
+      .from("passageiros")
+      .select("modo_cobranca")
+      .eq("usuario_id", usuarioId)
+      .eq("ativo", true)
+      .eq("isento", false);
+
+    if (error) {
+      throw error;
+    }
+
+    const rows = data || [];
+    let padraoVan = 0;
+    const excecoes = {
+      DESATIVADO: 0,
+      LEMBRETES: 0,
+      AUTOMATICA: 0,
+    };
+
+    for (const r of rows) {
+      if (!r.modo_cobranca) {
+        padraoVan++;
+      } else {
+        const modo = r.modo_cobranca.toUpperCase() as keyof typeof excecoes;
+        if (excecoes[modo] !== undefined) {
+          excecoes[modo]++;
+        }
+      }
+    }
+
+    const totalExcecoes = excecoes.DESATIVADO + excecoes.LEMBRETES + excecoes.AUTOMATICA;
+
+    return {
+      total_alunos: rows.length,
+      padrao_van: padraoVan,
+      excecoes,
+      total_excecoes: totalExcecoes,
+    };
   }
 };

@@ -21,7 +21,11 @@ import {
   AtividadeEntidadeTipo,
   CobrancaStatus,
   TipoResponsavel,
+  ModoCobrancaEnum,
 } from "../../types/enums.js";
+import { AppError } from "../../errors/AppError.js";
+import { cobrancaCalculoService } from "../cobranca-calculo.service.js";
+import { motoristaFinanceiroRepository } from "../../repositories/motorista-financeiro.repository.js";
 import { cobrancaService } from "../cobranca.service.js";
 import { passageiroService } from "../passageiro.service.js";
 import { subscriptionRepository } from "../../repositories/subscription.repository.js";
@@ -173,7 +177,7 @@ export const adminNotificationService = {
             nomeMotorista: user.nome,
             email: user.email,
             dataVencimento: dataVencimentoAssinatura,
-            pixCopiaECola: pixCopyPaste,
+            pixCopiaCola: pixCopyPaste,
             valor: valor,
             planoNome: sub.planos?.nome || "Plano Van360",
             usuarioId: driverId,
@@ -491,8 +495,31 @@ export const adminNotificationService = {
     const diasAntecedencia = dataVencimentoStr > todayStr ? diffInDays(todayStr, dataVencimentoStr) : undefined;
     const diasAtraso = dataVencimentoStr < todayStr ? diffInDays(dataVencimentoStr, todayStr) : undefined;
 
-    const pixInfo = await cobrancaService.obterOuGerarPixCobranca(cobranca.id);
+    const motoristaConfig = passageiro.usuario_id
+      ? await motoristaFinanceiroRepository.getByUsuarioId(passageiro.usuario_id)
+      : null;
+
+    const passageiroModo = (passageiro as Record<string, unknown>).modo_cobranca as ModoCobrancaEnum | null | undefined;
+
+    const modoEfetivo = cobrancaCalculoService.resolverModoEfetivo({
+      motoristaModoCobranca: motoristaConfig?.modo_cobranca,
+      passageiroModoCobranca: passageiroModo,
+    });
+
+    const pixInfo = await cobrancaService.obterOuGerarPixCobranca(cobranca.id, {
+      force: options?.force,
+    });
+
+    if (modoEfetivo === ModoCobrancaEnum.AUTOMATICA && !pixInfo?.pixCopiaCola) {
+      throw new AppError(
+        "Não foi possível enviar a cobrança automática: o Pix Copia e Cola não pôde ser gerado. Verifique no Histórico de Atividades o motivo (ex: CPF do responsável obrigatório para regras de juros e multa).",
+        400
+      );
+    }
+
     const valorFinal = pixInfo ? pixInfo.valorTotalPix : Number(cobranca.valor);
+
+    const isModoLembrete = modoEfetivo === ModoCobrancaEnum.LEMBRETES;
 
     const contextData = {
       nomeResponsavel: nomeResp,
@@ -506,12 +533,10 @@ export const adminNotificationService = {
       diasAtraso,
       usuarioId: passageiro.usuario_id,
       passageiroId: passageiro.id,
-      chavePix: pixInfo?.pixCopiaCola ? undefined : ((motorista?.chave_pix as string) || undefined),
-      tipoChavePix: pixInfo?.pixCopiaCola ? undefined : ((motorista?.tipo_chave_pix as string) || undefined),
+      chavePix: isModoLembrete ? ((motoristaConfig?.chave_pix_repasse || motorista?.chave_pix as string) || undefined) : undefined,
+      tipoChavePix: isModoLembrete ? ((motoristaConfig?.tipo_chave_pix || motorista?.tipo_chave_pix as string) || undefined) : undefined,
       pixCopiaCola: pixInfo?.pixCopiaCola,
-      pixCopiaECola: pixInfo?.pixCopiaCola,
       pixQrCodeUrl: pixInfo?.pixQrCodeUrl,
-      taxaRepassada: pixInfo?.taxaRepassada,
       mes: cobranca.mes,
       ano: cobranca.ano,
       cobrancaId: cobranca.id,

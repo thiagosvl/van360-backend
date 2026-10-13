@@ -1,6 +1,8 @@
 import { FINANCEIRO_CONFIG } from "../config/constants.js";
-import { ModalidadeCobrancaEnum, ContractMultaTipo } from "../types/enums.js";
-import type { Tables } from "../types/database.types.js";
+import { ModoCobrancaEnum, ContractMultaTipo, CobrancaStatus } from "../types/enums.js";
+import type { Tables, Database } from "../types/database.types.js";
+
+export type ModoCobrancaTipo = ModoCobrancaEnum | Database["public"]["Enums"]["modo_cobranca_enum"];
 
 export interface RegraEncargoResolvido {
   value: number;
@@ -17,22 +19,34 @@ export interface EncargosAtrasoResolvidos {
 export interface ParametrosCalculoDivisao {
   valorMensalidade: number;
   taxaPlataforma: number;
-  repassarAoPai: boolean;
 }
 
 export interface ResultadoCalculoDivisao {
   valorCobrancaPai: number;
   taxaPlataforma: number;
   valorLiquidoMotorista: number;
-  repassarAoPai: boolean;
   tarifaGatewayPixIn: number;
   tarifaGatewaySaque: number;
 }
 
 export interface ParametrosElegibilidade {
   motoristaConfig?: Tables<"motorista_configuracoes_financeiras"> | null;
-  passageiroOverrideCobrancaAtiva?: boolean | null;
+  passageiroModoCobranca?: ModoCobrancaTipo | null;
   statusCobranca?: string;
+}
+
+export interface ParametrosDecomposicaoEncargos {
+  valorOriginal: number;
+  valorRealPago: number;
+  motoristaConfig?: Tables<"motorista_configuracoes_financeiras"> | null;
+}
+
+export interface ResultadoDecomposicaoEncargos {
+  valorOriginal: number;
+  valorRealPago: number;
+  valorMulta: number;
+  valorJuros: number;
+  totalEncargos: number;
 }
 
 export const cobrancaCalculoService = {
@@ -46,55 +60,64 @@ export const cobrancaCalculoService = {
     return FINANCEIRO_CONFIG.TAXA_PLATAFORMA_PADRAO;
   },
 
-  resolverRepasseAoPai(repassarPaiOverride?: boolean | null, repassarPadraoMotorista?: boolean | null): boolean {
-    if (repassarPaiOverride !== null && repassarPaiOverride !== undefined) {
-      return Boolean(repassarPaiOverride);
-    }
-    return Boolean(repassarPadraoMotorista);
-  },
-
   calcularDivisaoCobranca({
     valorMensalidade,
-    taxaPlataforma,
-    repassarAoPai
+    taxaPlataforma
   }: ParametrosCalculoDivisao): ResultadoCalculoDivisao {
     const valorOriginal = Number(valorMensalidade) || 0;
     const taxa = Number(taxaPlataforma) || 0;
-
-    if (repassarAoPai) {
-      return {
-        valorCobrancaPai: Number((valorOriginal + taxa).toFixed(2)),
-        taxaPlataforma: taxa,
-        valorLiquidoMotorista: Number(valorOriginal.toFixed(2)),
-        repassarAoPai: true,
-        tarifaGatewayPixIn: FINANCEIRO_CONFIG.TARIFA_GATEWAY_PIX_IN,
-        tarifaGatewaySaque: FINANCEIRO_CONFIG.TARIFA_GATEWAY_SAQUE
-      };
-    }
 
     return {
       valorCobrancaPai: Number(valorOriginal.toFixed(2)),
       taxaPlataforma: taxa,
       valorLiquidoMotorista: Number(Math.max(0, valorOriginal - taxa).toFixed(2)),
-      repassarAoPai: false,
       tarifaGatewayPixIn: FINANCEIRO_CONFIG.TARIFA_GATEWAY_PIX_IN,
       tarifaGatewaySaque: FINANCEIRO_CONFIG.TARIFA_GATEWAY_SAQUE
     };
   },
 
+  resolverModoEfetivo({
+    motoristaModoCobranca,
+    passageiroModoCobranca
+  }: {
+    motoristaModoCobranca?: ModoCobrancaTipo | null;
+    passageiroModoCobranca?: ModoCobrancaTipo | null;
+  }): ModoCobrancaTipo {
+    if (passageiroModoCobranca) {
+      return passageiroModoCobranca;
+    }
+    return motoristaModoCobranca || ModoCobrancaEnum.DESATIVADO;
+  },
+
+  verificarElegibilidadeLembretes({
+    motoristaConfig,
+    passageiroModoCobranca,
+    statusCobranca
+  }: ParametrosElegibilidade): boolean {
+    if (statusCobranca && (statusCobranca === CobrancaStatus.PAGO || statusCobranca === CobrancaStatus.CANCELADA)) return false;
+
+    const modoEfetivo = this.resolverModoEfetivo({
+      motoristaModoCobranca: motoristaConfig?.modo_cobranca,
+      passageiroModoCobranca
+    });
+
+    return modoEfetivo === ModoCobrancaEnum.LEMBRETES || modoEfetivo === ModoCobrancaEnum.AUTOMATICA;
+  },
+
   verificarElegibilidadeCobrancaAutomatica({
     motoristaConfig,
-    passageiroOverrideCobrancaAtiva,
+    passageiroModoCobranca,
     statusCobranca
   }: ParametrosElegibilidade): boolean {
     if (!motoristaConfig) return false;
-    if (!motoristaConfig.cobranca_automatica_ativa) return false;
-    if (motoristaConfig.modalidade_cobranca === ModalidadeCobrancaEnum.MANUAL) return false;
-    if (!motoristaConfig.chave_pix_repasse || !motoristaConfig.chave_pix_repasse.trim()) return false;
-    if (passageiroOverrideCobrancaAtiva === false) return false;
-    if (statusCobranca && (statusCobranca === "pago" || statusCobranca === "cancelada")) return false;
+    if (statusCobranca && (statusCobranca === CobrancaStatus.PAGO || statusCobranca === CobrancaStatus.CANCELADA)) return false;
+    if (passageiroModoCobranca === ModoCobrancaEnum.DESATIVADO || passageiroModoCobranca === ModoCobrancaEnum.LEMBRETES) return false;
 
-    return true;
+    if (!motoristaConfig.chave_pix_repasse || !motoristaConfig.chave_pix_repasse.trim()) return false;
+
+    if (passageiroModoCobranca === ModoCobrancaEnum.AUTOMATICA) return true;
+
+    return motoristaConfig.modo_cobranca === ModoCobrancaEnum.AUTOMATICA;
   },
 
   resolverEncargosAtraso(motoristaConfig?: Tables<"motorista_configuracoes_financeiras"> | null): EncargosAtrasoResolvidos {
@@ -135,6 +158,46 @@ export const cobrancaCalculoService = {
       interests,
       daysAfterDueDate,
       hasOverdueRules: hasMulta || hasJuros
+    };
+  },
+
+  decomporEncargosPagamento({
+    valorOriginal,
+    valorRealPago,
+    motoristaConfig
+  }: ParametrosDecomposicaoEncargos): ResultadoDecomposicaoEncargos {
+    const original = Number(Number(valorOriginal || 0).toFixed(2));
+    const pago = Number(Number(valorRealPago || 0).toFixed(2));
+    const totalEncargos = Math.max(0, Number((pago - original).toFixed(2)));
+
+    if (totalEncargos <= 0) {
+      return {
+        valorOriginal: original,
+        valorRealPago: pago,
+        valorMulta: 0,
+        valorJuros: 0,
+        totalEncargos: 0
+      };
+    }
+
+    let multaEstimada = 0;
+    if (motoristaConfig?.cobrar_multa_atraso && motoristaConfig.multa_atraso_valor && Number(motoristaConfig.multa_atraso_valor) > 0) {
+      const multaValor = Number(motoristaConfig.multa_atraso_valor);
+      const isPercentual = motoristaConfig.multa_atraso_tipo !== ContractMultaTipo.FIXO;
+      multaEstimada = isPercentual
+        ? Number(((original * multaValor) / 100).toFixed(2))
+        : Number(multaValor.toFixed(2));
+    }
+
+    const valorMulta = Math.min(totalEncargos, multaEstimada);
+    const valorJuros = Number((totalEncargos - valorMulta).toFixed(2));
+
+    return {
+      valorOriginal: original,
+      valorRealPago: pago,
+      valorMulta,
+      valorJuros,
+      totalEncargos
     };
   }
 };

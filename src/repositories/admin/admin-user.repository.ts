@@ -5,6 +5,7 @@ import {
   EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
   EVENTO_PASSAGEIRO_ATRASADO
 } from "../../config/constants.js";
+import { toStartOfDayISO, toEndOfDayISO } from "../../utils/date.utils.js";
 
 export const adminUserRepository = {
   async getDashboardStats() {
@@ -19,8 +20,6 @@ export const adminUserRepository = {
     isId?: boolean;
     status?: string;
     tipo?: string;
-    dataInicio?: string;
-    dataFim?: string;
   }) {
     const isFilteredByStatus = Boolean(query.status);
     const assinaturasRelation = isFilteredByStatus ? "assinaturas!inner" : "assinaturas";
@@ -35,13 +34,6 @@ export const adminUserRepository = {
 
     const tipo = query.tipo?.trim() || UserType.MOTORISTA;
     q = q.eq("tipo", tipo);
-
-    if (query.dataInicio) {
-      q = q.gte("created_at", query.dataInicio);
-    }
-    if (query.dataFim) {
-      q = q.lte("created_at", query.dataFim);
-    }
 
     if (query.status === SUBSCRIPTION_VITALICIO_FILTER) {
       q = q
@@ -93,10 +85,10 @@ export const adminUserRepository = {
       .order("created_at", { ascending: false });
 
     if (dataInicio) {
-      q = q.gte("created_at", dataInicio);
+      q = q.gte("created_at", toStartOfDayISO(dataInicio));
     }
     if (dataFim) {
-      q = q.lte("created_at", dataFim);
+      q = q.lte("created_at", toEndOfDayISO(dataFim));
     }
 
     return q;
@@ -278,8 +270,8 @@ export const adminUserRepository = {
           tipo,
           email,
           assinaturas(id, status, data_vencimento, trial_ends_at),
+          motorista_configuracoes_financeiras(modo_cobranca),
           usuario_configuracoes(
-            notificar_pais_cobrancas,
             cobranca_vencimento_hoje_ativo
           )
         )
@@ -313,8 +305,8 @@ export const adminUserRepository = {
           tipo,
           email,
           assinaturas(id, status, data_vencimento, trial_ends_at),
+          motorista_configuracoes_financeiras(modo_cobranca),
           usuario_configuracoes(
-            notificar_pais_cobrancas,
             cobranca_vencimento_hoje_ativo
           )
         )
@@ -354,8 +346,8 @@ export const adminUserRepository = {
           tipo,
           email,
           assinaturas(id, status, data_vencimento, trial_ends_at),
+          motorista_configuracoes_financeiras(modo_cobranca),
           usuario_configuracoes(
-            notificar_pais_cobrancas,
             cobranca_aviso_previo_ativo,
             cobranca_aviso_previo_whatsapp_ativo,
             cobranca_dias_aviso_previo,
@@ -373,14 +365,11 @@ export const adminUserRepository = {
   },
 
   async getHistoricoNotificacoesCobrancaDoDia(dataISO: string) {
-    const start = `${dataISO}T00:00:00-03:00`;
-    const end = `${dataISO}T23:59:59-03:00`;
-
     return supabaseAdmin
       .from("fila_notificacoes")
       .select("id, evento, canal, status, payload, created_at")
-      .gte("created_at", start)
-      .lte("created_at", end)
+      .gte("created_at", toStartOfDayISO(dataISO))
+      .lte("created_at", toEndOfDayISO(dataISO))
       .in("evento", [
         EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
         EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,

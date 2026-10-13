@@ -70,10 +70,11 @@ export const monitorRepository = {
     async getPastDueForGracePeriod(nowStr: string, graceLimitDate: string) {
         return supabaseAdmin
             .from("assinaturas")
-            .select("id, usuario_id, data_vencimento, usuarios(nome, telefone)")
+            .select("id, usuario_id, data_vencimento, metodo_pagamento, usuarios(nome, telefone)")
             .eq("status", SubscriptionStatus.ACTIVE)
             .lte("data_vencimento", nowStr)
-            .gt("data_vencimento", graceLimitDate);
+            .gt("data_vencimento", graceLimitDate)
+            .neq("metodo_pagamento", CheckoutPaymentMethod.APPLE_IAP);
     },
 
     async getExpiredForGracePeriod(graceLimitDate: string) {
@@ -81,7 +82,8 @@ export const monitorRepository = {
             .from("assinaturas")
             .select("id, usuario_id, data_vencimento, metodo_pagamento, planos(nome, valor), usuarios(nome, telefone)")
             .in("status", [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE])
-            .lte("data_vencimento", graceLimitDate);
+            .lte("data_vencimento", graceLimitDate)
+            .neq("metodo_pagamento", CheckoutPaymentMethod.APPLE_IAP);
     },
 
     async getPastDueForReminders(windows: {from: string, to: string}[]) {
@@ -89,7 +91,8 @@ export const monitorRepository = {
             .from("assinaturas")
             .select("id, usuario_id, data_vencimento, metodo_pagamento, usuarios(nome, telefone)")
             .eq("status", SubscriptionStatus.PAST_DUE)
-            .not("data_vencimento", "is", null);
+            .not("data_vencimento", "is", null)
+            .neq("metodo_pagamento", CheckoutPaymentMethod.APPLE_IAP);
 
         if (windows.length > 0) {
             const orFilters = windows.map(w => `and(data_vencimento.gte.${w.from},data_vencimento.lte.${w.to})`);
@@ -114,9 +117,10 @@ export const monitorRepository = {
     async getExpiredForRenewals(windows: {from: string, to: string}[]) {
         let query = supabaseAdmin
             .from("assinaturas")
-            .select("id, usuario_id, data_vencimento, usuarios(nome, telefone)")
+            .select("id, usuario_id, data_vencimento, metodo_pagamento, usuarios(nome, telefone)")
             .eq("status", SubscriptionStatus.EXPIRED)
-            .not("data_vencimento", "is", null);
+            .not("data_vencimento", "is", null)
+            .neq("metodo_pagamento", CheckoutPaymentMethod.APPLE_IAP);
 
         if (windows.length > 0) {
             const orFilters = windows.map(w => `and(data_vencimento.gte.${w.from},data_vencimento.lte.${w.to})`);
@@ -129,9 +133,10 @@ export const monitorRepository = {
     async getExpiredForRecovery(windows: {from: string, to: string}[]) {
         let query = supabaseAdmin
             .from("assinaturas")
-            .select("id, usuario_id, data_vencimento, usuarios(nome, telefone)")
+            .select("id, usuario_id, data_vencimento, metodo_pagamento, usuarios(nome, telefone)")
             .eq("status", SubscriptionStatus.EXPIRED)
-            .not("data_vencimento", "is", null);
+            .not("data_vencimento", "is", null)
+            .neq("metodo_pagamento", CheckoutPaymentMethod.APPLE_IAP);
 
         if (windows.length > 0) {
             const orFilters = windows.map(w => `and(data_vencimento.gte.${w.from},data_vencimento.lte.${w.to})`);
@@ -146,7 +151,8 @@ export const monitorRepository = {
             .from("assinaturas")
             .select("*, planos(*), metodos_pagamento(last_4_digits), usuarios(nome, telefone)")
             .in("status", [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE])
-            .lte("data_vencimento", thresholdStr);
+            .lte("data_vencimento", thresholdStr)
+            .neq("metodo_pagamento", CheckoutPaymentMethod.APPLE_IAP);
     },
 
     async getFailedCardInvoicesCount(userId: string, sinceStr: string) {

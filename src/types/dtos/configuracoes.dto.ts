@@ -1,7 +1,6 @@
 import { RastreamentoModo } from "../enums.js";
 
 export interface ConfiguracoesUsuarioDTO {
-  notificar_pais_cobrancas: boolean;
   cobranca_aviso_previo_ativo: boolean;
   cobranca_aviso_previo_whatsapp_ativo: boolean;
   cobranca_dias_aviso_previo: number | null;
@@ -18,12 +17,12 @@ export interface ConfiguracoesUsuarioDTO {
   rastreamento_ativo: boolean;
   rastreamento_modo: RastreamentoModo;
   formato_nome_responsavel: "primeiro_nome" | "completo";
+  exibir_telefone_lista_alunos: boolean;
   chave_pix: string | null;
   tipo_chave_pix: string | null;
 }
 
 export interface UpdateConfiguracoesDTO {
-  notificar_pais_cobrancas?: boolean;
   cobranca_aviso_previo_ativo?: boolean;
   cobranca_dias_aviso_previo?: number | null;
   cobranca_vencimento_hoje_ativo?: boolean;
@@ -38,6 +37,7 @@ export interface UpdateConfiguracoesDTO {
   rastreamento_ativo?: boolean;
   rastreamento_modo?: RastreamentoModo;
   formato_nome_responsavel?: "primeiro_nome" | "completo";
+  exibir_telefone_lista_alunos?: boolean;
 }
 
 

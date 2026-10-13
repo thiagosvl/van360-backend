@@ -105,10 +105,14 @@ export class FirebaseDriverTemplates {
         const passName = NotificationContextFormatter.getFirstAndLastName(ctx.nomePassageiro as string, "Aluno");
         const rawTokenOrLink = (ctx.linkAssinatura || ctx.linkContrato || ctx.contratoUrl || ctx.tokenAssinatura || ctx.token || "") as string;
         const contractUrl = NotificationUrlBuilder.getContractSignatureUrl(rawTokenOrLink);
+        const parentName = ctx.nomeResponsavel ? NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string) : "";
+        const body = parentName
+            ? `${parentName} acabou de assinar o contrato de ${passName}.`
+            : `O responsável pelo(a) ${passName} acabou de assinar o contrato.`;
 
         return {
             title: "Novo Contrato Assinado! 📝",
-            body: `O responsável pelo(a) ${passName} acabou de assinar o contrato.`,
+            body,
             data: {
                 action: PushNotificationAction.OPEN_CONTRACTS,
                 contractUrl
@@ -237,9 +241,12 @@ export class FirebaseDriverTemplates {
     }
 
     static referralBonus(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        const isVitalicio = Boolean(ctx.isVitalicio);
         return {
-            title: "Bônus de Indicação! 💰",
-            body: "Você ganhou um mês grátis! Seu indicado realizou a assinatura.",
+            title: isVitalicio ? "Sua indicação assinou o Van360" : "Você recebeu 1 mês grátis! 🎁",
+            body: isVitalicio
+                ? "O motorista que você indicou assinou o Van360. Agradecemos pela indicação e pela confiança!"
+                : "O motorista que você indicou assinou o Van360. O seu bônus de 30 dias foi aplicado com sucesso.",
             data: {
                 action: PushNotificationAction.OPEN_SUBSCRIPTION,
                 userId: (ctx.usuarioId || ctx.userId || "") as string
@@ -312,10 +319,13 @@ export class FirebaseDriverTemplates {
         const studentName = (ctx.nomePassageiro || ctx.nomeAluno || "O aluno") as string;
         const routeName = (ctx.nomeRota || ctx.rota || "rota") as string;
         const formattedDate = (ctx.dataFormatada || ctx.data || "") as string;
+        const parentName = ctx.nomeResponsavel ? NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string) : "";
+        const sujeito = parentName || "O responsável";
+        const dateSuffix = formattedDate.startsWith("no ") ? formattedDate : `no dia ${formattedDate}`;
 
         return {
             title: "Notificação de Ausência 🚫",
-            body: `O responsável informou que ${studentName} estará ausente na ${routeName} no dia ${formattedDate}.`,
+            body: `${sujeito} informou que ${studentName} estará ausente na ${routeName} ${dateSuffix}.`,
             data: {
                 action: PushNotificationAction.OPEN_ROUTE,
                 passageiroId: (ctx.passageiroId || "") as string,
@@ -329,10 +339,12 @@ export class FirebaseDriverTemplates {
         const studentName = (ctx.nomePassageiro || ctx.nomeAluno || "O aluno") as string;
         const routeName = (ctx.nomeRota || ctx.rota || "rota") as string;
         const formattedDate = (ctx.dataFormatada || ctx.data || "") as string;
+        const parentName = ctx.nomeResponsavel ? NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string) : "";
+        const sujeito = parentName || "O responsável";
 
         return {
             title: "Ausência Cancelada! 🚌",
-            body: `O responsável cancelou a ausência de ${studentName} na ${routeName} do dia ${formattedDate}.`,
+            body: `${sujeito} cancelou a ausência de ${studentName} na ${routeName} do dia ${formattedDate}.`,
             data: {
                 action: PushNotificationAction.OPEN_ROUTE,
                 passageiroId: (ctx.passageiroId || "") as string,

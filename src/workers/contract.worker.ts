@@ -59,17 +59,12 @@ export const contractWorker = new Worker<ContractJobData>(
             const respLink = Array.isArray(passageiro.responsaveis) ? (passageiro.responsaveis.find((r: any) => r.tipo === TipoResponsavel.PRINCIPAL) || passageiro.responsaveis[0]) : null;
             const rawRespPrincipal = passageiro.responsavel_principal || (respLink ? (Array.isArray(respLink.responsavel) ? respLink.responsavel[0] : respLink.responsavel) : null);
             const respPrincipal = Array.isArray(rawRespPrincipal) ? rawRespPrincipal[0] : rawRespPrincipal;
-            const emailResponsavel = respPrincipal?.email;
             const telefoneResponsavel = respPrincipal?.telefone;
-            const hasValidEmail = typeof emailResponsavel === "string" && emailResponsavel.includes("@");
             const channels: NotificationChannelEnum[] = [NotificationChannelEnum.WABA];
-            if (hasValidEmail) {
-                channels.push(NotificationChannelEnum.RESEND);
-            }
 
             const deveNotificar = job.data.notificarResponsavel === true;
 
-            if (deveNotificar && (telefoneResponsavel || hasValidEmail)) {
+            if (deveNotificar && telefoneResponsavel) {
                 const linkAssinatura = safeProviderName === ContratoProvider.INHOUSE
                     ? `${env.FRONTEND_URL}/assinar/${tokenAcesso}`
                     : response.providerSignatureLink;
@@ -79,7 +74,7 @@ export const contractWorker = new Worker<ContractJobData>(
                 const { getDriverDisplayName } = await import('../utils/format.js');
 
                 await notificationService.notifyPassenger(
-                    telefoneResponsavel || "",
+                    telefoneResponsavel,
                     EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL,
                     {
                         nomeResponsavel: respPrincipal?.nome,
@@ -92,19 +87,17 @@ export const contractWorker = new Worker<ContractJobData>(
                         }),
                         apelidoMotorista: dadosContrato.apelidoCondutor,
                         linkAssinatura,
-                        email: hasValidEmail ? emailResponsavel : undefined,
                         passageiroId: passageiro.id,
                         usuarioId
                     },
                     {
                         channels,
-                        email: hasValidEmail ? emailResponsavel : undefined,
                         passageiroId: passageiro.id,
                         usuarioId
                     }
                 );
 
-                logger.info({ jobId: job.id, phone: telefoneResponsavel, hasValidEmail }, "[Worker] Notificação de contrato processada via NotificationService.");
+                logger.info({ jobId: job.id, phone: telefoneResponsavel }, "[Worker] Notificação de contrato processada via NotificationService.");
             } else if (!deveNotificar) {
                 logger.info({ jobId: job.id, contratoId }, "[Worker] Notificação ao responsável ignorada (notificarResponsavel = false)");
             }

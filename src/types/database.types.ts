@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -317,13 +317,14 @@ export type Database = {
           recibo_url: string | null
           repasse_em_processamento: boolean | null
           status: string
-          taxa_repassada_ao_pai: boolean | null
           tipo_pagamento:
             | Database["public"]["Enums"]["tipo_pagamento_enum"]
             | null
           updated_at: string
           usuario_id: string | null
           valor: number
+          valor_juros: number | null
+          valor_multa: number | null
           valor_pago: number | null
           valor_taxa_plataforma: number | null
         }
@@ -350,13 +351,14 @@ export type Database = {
           recibo_url?: string | null
           repasse_em_processamento?: boolean | null
           status?: string
-          taxa_repassada_ao_pai?: boolean | null
           tipo_pagamento?:
             | Database["public"]["Enums"]["tipo_pagamento_enum"]
             | null
           updated_at?: string
           usuario_id?: string | null
           valor: number
+          valor_juros?: number | null
+          valor_multa?: number | null
           valor_pago?: number | null
           valor_taxa_plataforma?: number | null
         }
@@ -383,13 +385,14 @@ export type Database = {
           recibo_url?: string | null
           repasse_em_processamento?: boolean | null
           status?: string
-          taxa_repassada_ao_pai?: boolean | null
           tipo_pagamento?:
             | Database["public"]["Enums"]["tipo_pagamento_enum"]
             | null
           updated_at?: string
           usuario_id?: string | null
           valor?: number
+          valor_juros?: number | null
+          valor_multa?: number | null
           valor_pago?: number | null
           valor_taxa_plataforma?: number | null
         }
@@ -419,7 +422,7 @@ export type Database = {
           end_to_end_id_in: string | null
           end_to_end_id_out: string | null
           id: string
-          motorista_id: string
+          motorista_id: string | null
           passageiro_id: string | null
           provedor: Database["public"]["Enums"]["provedor_pagamento_enum"]
           saque_provedor_id: string | null
@@ -442,7 +445,7 @@ export type Database = {
           end_to_end_id_in?: string | null
           end_to_end_id_out?: string | null
           id?: string
-          motorista_id: string
+          motorista_id?: string | null
           passageiro_id?: string | null
           provedor?: Database["public"]["Enums"]["provedor_pagamento_enum"]
           saque_provedor_id?: string | null
@@ -465,7 +468,7 @@ export type Database = {
           end_to_end_id_in?: string | null
           end_to_end_id_out?: string | null
           id?: string
-          motorista_id?: string
+          motorista_id?: string | null
           passageiro_id?: string | null
           provedor?: Database["public"]["Enums"]["provedor_pagamento_enum"]
           saque_provedor_id?: string | null
@@ -900,6 +903,238 @@ export type Database = {
           },
         ]
       }
+      fretamento_pagamentos: {
+        Row: {
+          created_at: string
+          data_pagamento: string
+          descricao: string | null
+          fretamento_id: string
+          id: string
+          tipo_pagamento: Database["public"]["Enums"]["tipo_pagamento_enum"]
+          valor: number
+        }
+        Insert: {
+          created_at?: string
+          data_pagamento?: string
+          descricao?: string | null
+          fretamento_id: string
+          id?: string
+          tipo_pagamento?: Database["public"]["Enums"]["tipo_pagamento_enum"]
+          valor: number
+        }
+        Update: {
+          created_at?: string
+          data_pagamento?: string
+          descricao?: string | null
+          fretamento_id?: string
+          id?: string
+          tipo_pagamento?: Database["public"]["Enums"]["tipo_pagamento_enum"]
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fretamento_pagamentos_fretamento_id_fkey"
+            columns: ["fretamento_id"]
+            isOneToOne: false
+            referencedRelation: "fretamentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fretamento_participantes: {
+        Row: {
+          created_at: string
+          data_pagamento: string | null
+          endereco: string | null
+          fretamento_id: string
+          id: string
+          is_proprio_responsavel: boolean
+          nome: string
+          observacoes: string | null
+          passageiro_id: string | null
+          responsavel_nome: string | null
+          status_pagamento: Database["public"]["Enums"]["participante_pagamento_status_enum"]
+          telefone: string | null
+          tipo_pagamento:
+            | Database["public"]["Enums"]["tipo_pagamento_enum"]
+            | null
+          updated_at: string
+          valor: number
+          valor_pago: number
+        }
+        Insert: {
+          created_at?: string
+          data_pagamento?: string | null
+          endereco?: string | null
+          fretamento_id: string
+          id?: string
+          is_proprio_responsavel?: boolean
+          nome: string
+          observacoes?: string | null
+          passageiro_id?: string | null
+          responsavel_nome?: string | null
+          status_pagamento?: Database["public"]["Enums"]["participante_pagamento_status_enum"]
+          telefone?: string | null
+          tipo_pagamento?:
+            | Database["public"]["Enums"]["tipo_pagamento_enum"]
+            | null
+          updated_at?: string
+          valor?: number
+          valor_pago?: number
+        }
+        Update: {
+          created_at?: string
+          data_pagamento?: string | null
+          endereco?: string | null
+          fretamento_id?: string
+          id?: string
+          is_proprio_responsavel?: boolean
+          nome?: string
+          observacoes?: string | null
+          passageiro_id?: string | null
+          responsavel_nome?: string | null
+          status_pagamento?: Database["public"]["Enums"]["participante_pagamento_status_enum"]
+          telefone?: string | null
+          tipo_pagamento?:
+            | Database["public"]["Enums"]["tipo_pagamento_enum"]
+            | null
+          updated_at?: string
+          valor?: number
+          valor_pago?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fretamento_participantes_fretamento_id_fkey"
+            columns: ["fretamento_id"]
+            isOneToOne: false
+            referencedRelation: "fretamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fretamento_participantes_passageiro_id_fkey"
+            columns: ["passageiro_id"]
+            isOneToOne: false
+            referencedRelation: "passageiros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fretamento_veiculos: {
+        Row: {
+          created_at: string
+          fretamento_id: string
+          id: string
+          vagas_capacidade: number | null
+          veiculo_id: string
+        }
+        Insert: {
+          created_at?: string
+          fretamento_id: string
+          id?: string
+          vagas_capacidade?: number | null
+          veiculo_id: string
+        }
+        Update: {
+          created_at?: string
+          fretamento_id?: string
+          id?: string
+          vagas_capacidade?: number | null
+          veiculo_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fretamento_veiculos_fretamento_id_fkey"
+            columns: ["fretamento_id"]
+            isOneToOne: false
+            referencedRelation: "fretamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fretamento_veiculos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fretamentos: {
+        Row: {
+          chave_pix: string | null
+          contratante_nome: string | null
+          contratante_telefone: string | null
+          created_at: string
+          data_fim: string | null
+          data_inicio: string
+          destino: string
+          id: string
+          observacoes: string | null
+          origem: string | null
+          slug_publico: string | null
+          status: Database["public"]["Enums"]["fretamento_status_enum"]
+          status_pagamento: Database["public"]["Enums"]["fretamento_pagamento_status_enum"]
+          tipo: Database["public"]["Enums"]["fretamento_tipo_enum"]
+          titulo: string
+          updated_at: string
+          usuario_id: string
+          vagas_totais: number | null
+          valor_por_pessoa: number | null
+          valor_total: number
+        }
+        Insert: {
+          chave_pix?: string | null
+          contratante_nome?: string | null
+          contratante_telefone?: string | null
+          created_at?: string
+          data_fim?: string | null
+          data_inicio: string
+          destino: string
+          id?: string
+          observacoes?: string | null
+          origem?: string | null
+          slug_publico?: string | null
+          status?: Database["public"]["Enums"]["fretamento_status_enum"]
+          status_pagamento?: Database["public"]["Enums"]["fretamento_pagamento_status_enum"]
+          tipo?: Database["public"]["Enums"]["fretamento_tipo_enum"]
+          titulo: string
+          updated_at?: string
+          usuario_id: string
+          vagas_totais?: number | null
+          valor_por_pessoa?: number | null
+          valor_total?: number
+        }
+        Update: {
+          chave_pix?: string | null
+          contratante_nome?: string | null
+          contratante_telefone?: string | null
+          created_at?: string
+          data_fim?: string | null
+          data_inicio?: string
+          destino?: string
+          id?: string
+          observacoes?: string | null
+          origem?: string | null
+          slug_publico?: string | null
+          status?: Database["public"]["Enums"]["fretamento_status_enum"]
+          status_pagamento?: Database["public"]["Enums"]["fretamento_pagamento_status_enum"]
+          tipo?: Database["public"]["Enums"]["fretamento_tipo_enum"]
+          titulo?: string
+          updated_at?: string
+          usuario_id?: string
+          vagas_totais?: number | null
+          valor_por_pessoa?: number | null
+          valor_total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fretamentos_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gasto_categorias: {
         Row: {
           cor: string
@@ -1139,87 +1374,57 @@ export type Database = {
       }
       motorista_configuracoes_financeiras: {
         Row: {
-          baas_account_id: string | null
-          baas_agencia: string | null
-          baas_banco: string | null
-          baas_conta: string | null
-          baas_kyc_url: string | null
-          baas_motivo_pendencia: string | null
-          baas_status: Database["public"]["Enums"]["baas_status_enum"]
           chave_pix_repasse: string | null
-          cobranca_automatica_ativa: boolean
-          enviar_recibo_automatico: boolean
-          cobrar_multa_atraso: boolean
-          multa_atraso_tipo: string | null
-          multa_atraso_valor: number | null
           cobrar_juros_atraso: boolean
-          juros_atraso_tipo: string | null
-          juros_atraso_valor: number | null
+          cobrar_multa_atraso: boolean
+          created_at: string
           dias_carencia_atraso: number
           dias_validade_apos_vencimento: number
-          created_at: string
+          enviar_recibo_automatico: boolean
           id: string
-          modalidade_cobranca: Database["public"]["Enums"]["modalidade_cobranca_enum"]
-          repassar_taxa_pais_padrao: boolean
-          subconta_provedor_id: string | null
+          juros_atraso_tipo: string | null
+          juros_atraso_valor: number | null
+          modo_cobranca: Database["public"]["Enums"]["modo_cobranca_enum"]
+          multa_atraso_tipo: string | null
+          multa_atraso_valor: number | null
           taxa_personalizada: number | null
           tipo_chave_pix: string | null
           updated_at: string
           usuario_id: string
         }
         Insert: {
-          baas_account_id?: string | null
-          baas_agencia?: string | null
-          baas_banco?: string | null
-          baas_conta?: string | null
-          baas_kyc_url?: string | null
-          baas_motivo_pendencia?: string | null
-          baas_status?: Database["public"]["Enums"]["baas_status_enum"]
           chave_pix_repasse?: string | null
-          cobranca_automatica_ativa?: boolean
-          enviar_recibo_automatico?: boolean
-          cobrar_multa_atraso?: boolean
-          multa_atraso_tipo?: string | null
-          multa_atraso_valor?: number | null
           cobrar_juros_atraso?: boolean
-          juros_atraso_tipo?: string | null
-          juros_atraso_valor?: number | null
+          cobrar_multa_atraso?: boolean
+          created_at?: string
           dias_carencia_atraso?: number
           dias_validade_apos_vencimento?: number
-          created_at?: string
+          enviar_recibo_automatico?: boolean
           id?: string
-          modalidade_cobranca?: Database["public"]["Enums"]["modalidade_cobranca_enum"]
-          repassar_taxa_pais_padrao?: boolean
-          subconta_provedor_id?: string | null
+          juros_atraso_tipo?: string | null
+          juros_atraso_valor?: number | null
+          modo_cobranca?: Database["public"]["Enums"]["modo_cobranca_enum"]
+          multa_atraso_tipo?: string | null
+          multa_atraso_valor?: number | null
           taxa_personalizada?: number | null
           tipo_chave_pix?: string | null
           updated_at?: string
           usuario_id: string
         }
         Update: {
-          baas_account_id?: string | null
-          baas_agencia?: string | null
-          baas_banco?: string | null
-          baas_conta?: string | null
-          baas_kyc_url?: string | null
-          baas_motivo_pendencia?: string | null
-          baas_status?: Database["public"]["Enums"]["baas_status_enum"]
           chave_pix_repasse?: string | null
-          cobranca_automatica_ativa?: boolean
-          enviar_recibo_automatico?: boolean
-          cobrar_multa_atraso?: boolean
-          multa_atraso_tipo?: string | null
-          multa_atraso_valor?: number | null
           cobrar_juros_atraso?: boolean
-          juros_atraso_tipo?: string | null
-          juros_atraso_valor?: number | null
+          cobrar_multa_atraso?: boolean
+          created_at?: string
           dias_carencia_atraso?: number
           dias_validade_apos_vencimento?: number
-          created_at?: string
+          enviar_recibo_automatico?: boolean
           id?: string
-          modalidade_cobranca?: Database["public"]["Enums"]["modalidade_cobranca_enum"]
-          repassar_taxa_pais_padrao?: boolean
-          subconta_provedor_id?: string | null
+          juros_atraso_tipo?: string | null
+          juros_atraso_valor?: number | null
+          modo_cobranca?: Database["public"]["Enums"]["modo_cobranca_enum"]
+          multa_atraso_tipo?: string | null
+          multa_atraso_valor?: number | null
           taxa_personalizada?: number | null
           tipo_chave_pix?: string | null
           updated_at?: string
@@ -1473,7 +1678,6 @@ export type Database = {
         Row: {
           ano_letivo: number
           ativo: boolean
-          cobranca_automatica_ativa: boolean | null
           created_at: string
           data_fim_cobranca: string | null
           data_fim_transporte: string | null
@@ -1489,11 +1693,13 @@ export type Database = {
           id: string
           isento: boolean
           modalidade: Database["public"]["Enums"]["modalidade_enum"] | null
+          modo_cobranca:
+            | Database["public"]["Enums"]["modo_cobranca_enum"]
+            | null
           nome: string
           nome_professor: string | null
           observacoes: string | null
           periodo: string | null
-          repassar_taxa_pai: boolean | null
           sala: string | null
           turma: string | null
           updated_at: string
@@ -1504,7 +1710,6 @@ export type Database = {
         Insert: {
           ano_letivo?: number
           ativo?: boolean
-          cobranca_automatica_ativa?: boolean | null
           created_at?: string
           data_fim_cobranca?: string | null
           data_fim_transporte?: string | null
@@ -1520,11 +1725,13 @@ export type Database = {
           id?: string
           isento?: boolean
           modalidade?: Database["public"]["Enums"]["modalidade_enum"] | null
+          modo_cobranca?:
+            | Database["public"]["Enums"]["modo_cobranca_enum"]
+            | null
           nome: string
           nome_professor?: string | null
           observacoes?: string | null
           periodo?: string | null
-          repassar_taxa_pai?: boolean | null
           sala?: string | null
           turma?: string | null
           updated_at?: string
@@ -1535,7 +1742,6 @@ export type Database = {
         Update: {
           ano_letivo?: number
           ativo?: boolean
-          cobranca_automatica_ativa?: boolean | null
           created_at?: string
           data_fim_cobranca?: string | null
           data_fim_transporte?: string | null
@@ -1551,11 +1757,13 @@ export type Database = {
           id?: string
           isento?: boolean
           modalidade?: Database["public"]["Enums"]["modalidade_enum"] | null
+          modo_cobranca?:
+            | Database["public"]["Enums"]["modo_cobranca_enum"]
+            | null
           nome?: string
           nome_professor?: string | null
           observacoes?: string | null
           periodo?: string | null
-          repassar_taxa_pai?: boolean | null
           sala?: string | null
           turma?: string | null
           updated_at?: string
@@ -2093,12 +2301,12 @@ export type Database = {
           cobranca_dias_aviso_previo: number | null
           cobranca_vencimento_hoje_ativo: boolean
           created_at: string
+          exibir_telefone_lista_alunos: boolean
           formato_nome_responsavel: string
           notificar_conclusao_parada: boolean
           notificar_inicio_rota: boolean
           notificar_motorista_aniversarios: boolean
           notificar_motorista_parcelas: boolean
-          notificar_pais_cobrancas: boolean
           notificar_proxima_parada: boolean
           rastreamento_ativo: boolean
           rastreamento_modo: string
@@ -2114,12 +2322,12 @@ export type Database = {
           cobranca_dias_aviso_previo?: number | null
           cobranca_vencimento_hoje_ativo?: boolean
           created_at?: string
+          exibir_telefone_lista_alunos?: boolean
           formato_nome_responsavel?: string
           notificar_conclusao_parada?: boolean
           notificar_inicio_rota?: boolean
           notificar_motorista_aniversarios?: boolean
           notificar_motorista_parcelas?: boolean
-          notificar_pais_cobrancas?: boolean
           notificar_proxima_parada?: boolean
           rastreamento_ativo?: boolean
           rastreamento_modo?: string
@@ -2135,12 +2343,12 @@ export type Database = {
           cobranca_dias_aviso_previo?: number | null
           cobranca_vencimento_hoje_ativo?: boolean
           created_at?: string
+          exibir_telefone_lista_alunos?: boolean
           formato_nome_responsavel?: string
           notificar_conclusao_parada?: boolean
           notificar_inicio_rota?: boolean
           notificar_motorista_aniversarios?: boolean
           notificar_motorista_parcelas?: boolean
-          notificar_pais_cobrancas?: boolean
           notificar_proxima_parada?: boolean
           rastreamento_ativo?: boolean
           rastreamento_modo?: string
@@ -2452,6 +2660,30 @@ export type Database = {
           veiculos: number
         }[]
       }
+      get_admin_trials_pipeline_v2: {
+        Args: never
+        Returns: {
+          alunos: number
+          apelido: string
+          assinatura_id: string
+          contratos: number
+          dias_acessados: number
+          dias_restantes: number
+          escolas: number
+          indicado_por: string
+          nome: string
+          rotas: number
+          solicitacoes: number
+          status: string
+          telefone: string
+          total_acoes: number
+          trial_ends_at: string
+          usuario_id: string
+          valor_anual: number
+          valor_mensal: number
+          veiculos: number
+        }[]
+      }
       get_admin_user_kpis: { Args: { p_user_id: string }; Returns: Json }
       get_motoristas_daily_pulse: {
         Args: {
@@ -2677,21 +2909,18 @@ export type Database = {
           }
     }
     Enums: {
-      baas_status_enum:
-        | "NAO_INICIADO"
-        | "PENDENTE_DOCUMENTACAO"
-        | "EM_ANALISE"
-        | "APROVADO"
-        | "PENDENCIA"
-        | "REJEITADO"
       execucao_passageiro_status_enum: "pendente" | "embarcado" | "ausente"
       execucao_rota_status_enum: "iniciada" | "concluida" | "cancelada"
+      fretamento_pagamento_status_enum: "pendente" | "pago_parcial" | "quitado"
+      fretamento_status_enum:
+        | "pendente"
+        | "confirmado"
+        | "concluido"
+        | "cancelado"
+      fretamento_tipo_enum: "fretamento" | "passeio"
       genero_enum: "masculino" | "feminino" | "prefiro_nao_informar"
-      modalidade_cobranca_enum:
-        | "MANUAL"
-        | "SPLIT_SUBCONTA"
-        | "BAAS_CONTA_PROPRIA"
       modalidade_enum: "ida" | "volta" | "ida_volta"
+      modo_cobranca_enum: "DESATIVADO" | "LEMBRETES" | "AUTOMATICA"
       parentesco_enum:
         | "pai"
         | "mae"
@@ -2703,6 +2932,7 @@ export type Database = {
         | "madrasta"
         | "responsavel_legal"
         | "outro"
+      participante_pagamento_status_enum: "pendente" | "pago" | "parcial"
       provedor_pagamento_enum: "WOOVI" | "ASAAS" | "EFIPAY"
       renovacao_status_enum:
         | "pendente"
@@ -2879,23 +3109,19 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      baas_status_enum: [
-        "NAO_INICIADO",
-        "PENDENTE_DOCUMENTACAO",
-        "EM_ANALISE",
-        "APROVADO",
-        "PENDENCIA",
-        "REJEITADO",
-      ],
       execucao_passageiro_status_enum: ["pendente", "embarcado", "ausente"],
       execucao_rota_status_enum: ["iniciada", "concluida", "cancelada"],
-      genero_enum: ["masculino", "feminino", "prefiro_nao_informar"],
-      modalidade_cobranca_enum: [
-        "MANUAL",
-        "SPLIT_SUBCONTA",
-        "BAAS_CONTA_PROPRIA",
+      fretamento_pagamento_status_enum: ["pendente", "pago_parcial", "quitado"],
+      fretamento_status_enum: [
+        "pendente",
+        "confirmado",
+        "concluido",
+        "cancelado",
       ],
+      fretamento_tipo_enum: ["fretamento", "passeio"],
+      genero_enum: ["masculino", "feminino", "prefiro_nao_informar"],
       modalidade_enum: ["ida", "volta", "ida_volta"],
+      modo_cobranca_enum: ["DESATIVADO", "LEMBRETES", "AUTOMATICA"],
       parentesco_enum: [
         "pai",
         "mae",
@@ -2908,6 +3134,7 @@ export const Constants = {
         "responsavel_legal",
         "outro",
       ],
+      participante_pagamento_status_enum: ["pendente", "pago", "parcial"],
       provedor_pagamento_enum: ["WOOVI", "ASAAS", "EFIPAY"],
       renovacao_status_enum: [
         "pendente",

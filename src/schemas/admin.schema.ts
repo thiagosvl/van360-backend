@@ -16,9 +16,27 @@ export const updateUserAdminSchema = z.object({
   email: z.string().email().optional(),
   telefone: z.string().min(10).max(15).optional(),
   cpfcnpj: z.string().min(11).max(14).optional(),
+  cpf_responsavel: z.string().optional().nullable(),
   ativo: z.boolean().optional(),
   data_nascimento: z.string().optional().nullable(),
   cobranca_aviso_previo_whatsapp_ativo: z.boolean().optional(),
+  configuracoes: z.object({
+    cobranca_aviso_previo_ativo: z.boolean().optional(),
+    cobranca_dias_aviso_previo: z.number().int().min(1).max(30).optional().nullable(),
+    cobranca_vencimento_hoje_ativo: z.boolean().optional(),
+    cobranca_atraso_3_dias_ativo: z.boolean().optional(),
+    cobranca_atraso_5_dias_ativo: z.boolean().optional(),
+    cobranca_atraso_7_dias_ativo: z.boolean().optional(),
+    notificar_inicio_rota: z.boolean().optional(),
+    notificar_proxima_parada: z.boolean().optional(),
+    notificar_conclusao_parada: z.boolean().optional(),
+    notificar_motorista_parcelas: z.boolean().optional(),
+    notificar_motorista_aniversarios: z.boolean().optional(),
+    rastreamento_ativo: z.boolean().optional(),
+    rastreamento_modo: z.enum(["completo", "apenas_proximo"]).optional(),
+    formato_nome_responsavel: z.enum(["primeiro_nome", "completo"]).optional(),
+    exibir_telefone_lista_alunos: z.boolean().optional(),
+  }).optional(),
 });
 
 export const updateSubscriptionAdminSchema = z.object({
@@ -44,8 +62,6 @@ export const listUsersQuerySchema = z.object({
   search: z.string().optional(),
   status: z.string().optional(),
   tipo: z.string().optional().default(UserType.MOTORISTA),
-  data_inicio: z.string().optional(),
-  data_fim: z.string().optional(),
 });
 
 export const listAcquisitionStatsQuerySchema = z.object({

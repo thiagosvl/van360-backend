@@ -6,7 +6,7 @@ import { usuarioPushTokenRepository } from "./usuario-push-token.repository.js";
 import { onlyDigits, normalizePhone, getPhoneVariants } from "../utils/string.utils.js";
 
 export interface ResponsavelPassageiroRecord {
-  id: string; // passageiro_id
+  id: string;
   nome: string;
   ativo: boolean;
   pin_acesso: string | null;
@@ -14,6 +14,7 @@ export interface ResponsavelPassageiroRecord {
   motorista_id: string;
   tipo_responsavel: TipoResponsavel;
   responsavel_id: string;
+  responsavel_nome?: string;
 }
 
 export const responsavelRepository = {
@@ -36,6 +37,7 @@ export const responsavelRepository = {
       .from("responsaveis")
       .select(`
         id,
+        nome,
         pin_acesso,
         passageiro_links:passageiro_responsaveis(
           id,
@@ -75,7 +77,8 @@ export const responsavelRepository = {
             motorista_nome: motoristaNome,
             motorista_id: pass.usuario_id,
             tipo_responsavel: link.tipo === TipoResponsavel.ADICIONAL ? TipoResponsavel.ADICIONAL : TipoResponsavel.PRINCIPAL,
-            responsavel_id: responsavel.id
+            responsavel_id: responsavel.id,
+            responsavel_nome: responsavel.nome
           });
         }
       }

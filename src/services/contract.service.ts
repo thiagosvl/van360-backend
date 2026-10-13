@@ -440,12 +440,13 @@ class ContractService {
     const respInfo = _getResponsavelInfoFromPassageiro(passageiro);
 
     // --- LOG DE AUDITORIA ---
+    const assinanteStr = respInfo.nome ? `por ${getFirstAndSecondName(respInfo.nome)}` : "pelo responsável";
     historicoService.log({
       usuario_id: usuario.id,
       entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
       entidade_id: passageiro.id,
       acao: AtividadeAcao.CONTRATO_ASSINADO,
-      descricao: `Contrato de ${getFirstAndSecondName(passageiro.nome)} foi assinado digitalmente pelo responsável.`,
+      descricao: `Contrato de ${getFirstAndSecondName(passageiro.nome)} foi assinado digitalmente ${assinanteStr}.`,
       meta: { contrato_id: contrato.id, documento_final: response.documentoFinalUrl }
     });
 

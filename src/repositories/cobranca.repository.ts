@@ -1,10 +1,10 @@
 import { supabaseAdmin } from "../config/supabase.js";
-import { CobrancaStatus, STATUS_ASSINATURA_LIBERADA } from "../types/enums.js";
+import { CobrancaStatus, ModoCobrancaEnum, STATUS_ASSINATURA_LIBERADA } from "../types/enums.js";
 import { getLastDayOfMonth } from "../utils/date.utils.js";
 import { isValidFilterValue } from "../utils/filter.utils.js";
 
 const COBRANCA_PASSAGEIRO_SELECT = `
-    nome, enviar_notificacoes,
+    nome, enviar_notificacoes, modo_cobranca, isento,
     responsaveis:passageiro_responsaveis(
         tipo, parentesco,
         responsavel:responsaveis(id, nome, telefone, cpf, email)
@@ -178,8 +178,8 @@ export const cobrancaRepository = {
                 motorista:usuarios!cobrancas_usuario_id_fkey!inner(
                     nome, apelido, telefone, chave_pix, tipo_chave_pix,
                     assinaturas!inner(status),
+                    motorista_configuracoes_financeiras(modo_cobranca, chave_pix_repasse, tipo_chave_pix),
                     usuario_configuracoes!inner(
-                        notificar_pais_cobrancas,
                         cobranca_aviso_previo_ativo,
                         cobranca_aviso_previo_whatsapp_ativo,
                         cobranca_dias_aviso_previo,
@@ -191,8 +191,8 @@ export const cobrancaRepository = {
                 )
             `)
             .eq("status", CobrancaStatus.PENDENTE)
+            .eq("desativar_lembretes", false)
             .in("motorista.assinaturas.status", STATUS_ASSINATURA_LIBERADA)
-            .eq("motorista.usuario_configuracoes.notificar_pais_cobrancas", true)
             .in("data_vencimento", datasVencimento);
     },
 
@@ -386,7 +386,7 @@ export const cobrancaRepository = {
         const cutoff = new Date(Date.now() - limiteMinutos * 60 * 1000).toISOString();
         return supabaseAdmin
             .from("cobrancas")
-            .select("id, usuario_id, passageiro_id, valor, taxa_repassada_ao_pai, valor_taxa_plataforma, provedor_cobranca_id, provedor, updated_at")
+            .select("id, usuario_id, passageiro_id, valor, valor_taxa_plataforma, provedor_cobranca_id, provedor, updated_at")
             .eq("status", CobrancaStatus.PENDENTE)
             .eq("repasse_em_processamento", true)
             .lte("updated_at", cutoff);

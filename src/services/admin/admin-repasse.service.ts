@@ -56,20 +56,20 @@ export const adminRepasseService = {
       created_at: row.created_at,
       updated_at: row.updated_at,
       motorista: {
-        id: row.motorista?.id || row.motorista_id,
-        nome: row.motorista?.nome || "Motorista Desconhecido",
+        id: row.motorista?.id || row.motorista_id || "",
+        nome: row.motorista?.nome || (row.motorista_id ? "Motorista Desconhecido" : "Motorista Excluído"),
         apelido: row.motorista?.apelido || null,
         telefone: row.motorista?.telefone || null,
         cpfcnpj: row.motorista?.cpfcnpj || null,
       },
       passageiro: {
-        id: row.passageiro?.id || row.passageiro_id,
-        nome: row.passageiro?.nome || "Aluno Desconhecido",
+        id: row.passageiro?.id || row.passageiro_id || "",
+        nome: row.passageiro?.nome || (row.passageiro_id ? "Aluno Desconhecido" : "Aluno Excluído"),
       },
       cobranca: {
-        id: row.cobranca?.id || row.cobranca_id,
+        id: row.cobranca?.id || row.cobranca_id || "",
         valor: Number(row.cobranca?.valor || 0),
-        status: row.cobranca?.status || "desconhecido",
+        status: row.cobranca?.status || "excluída",
         mes: Number(row.cobranca?.mes || 0),
         ano: Number(row.cobranca?.ano || 0),
         data_vencimento: row.cobranca?.data_vencimento || "",
@@ -124,6 +124,28 @@ export const adminRepasseService = {
     return {
       success: true,
       message: "Repasse reenfileirado para processamento imediato.",
+    };
+  },
+
+  async deleteRepasse(id: string) {
+    const { data: repasse, error } = await adminRepasseRepository.getById(id);
+
+    if (error || !repasse) {
+      throw new AppError("Registro de repasse não encontrado.", 404);
+    }
+
+    const { error: deleteError } = await adminRepasseRepository.delete(id);
+
+    if (deleteError) {
+      logger.error({ deleteError, repasseId: id }, "[AdminRepasseService] Erro ao excluir repasse.");
+      throw new AppError("Erro ao excluir registro de repasse.", 500);
+    }
+
+    logger.info({ repasseId: id }, "[AdminRepasseService] Registro de repasse excluído pelo administrador.");
+
+    return {
+      success: true,
+      message: "Registro de repasse excluído com sucesso.",
     };
   },
 };

@@ -27,7 +27,7 @@ export class ResendTeamTemplates {
             { label: "Senha", value: senha, isMonospace: true }
         ])}
 
-            ${EmailComponents.warningCard("💡 <strong>Aviso de Segurança:</strong> Por motivos de segurança, altere sua senha temporária no primeiro acesso em <strong>Configurações > Meu Perfil</strong>.")}
+            ${EmailComponents.warningCard("💡 <strong>Aviso de Segurança:</strong> Por motivos de segurança, recomendamos alterar sua senha temporária no primeiro acesso ao aplicativo.")}
 
             ${EmailComponents.accessButtonsBlock()}
         `;
@@ -45,7 +45,7 @@ export class ResendTeamTemplates {
 
         const subject = formatSubject("Nova Senha de Acesso");
         const preheader = `Sua senha de acesso à equipe no Van360 foi redefinida.`;
-        const text = `Olá, ${nome}!\n\nSua senha temporária de acesso ao Van360 é: ${senha}\n\nAtenciosamente,\nEquipe Van360`;
+        const text = `Olá, ${nome}!\n\nSua senha temporária de acesso ao Van360 é: ${senha}\n\nRecomendamos alterar sua senha temporária no primeiro acesso ao aplicativo.\n\nAtenciosamente,\nEquipe Van360`;
 
         const contentHtml = `
             ${EmailComponents.greeting(nome)}
@@ -53,7 +53,7 @@ export class ResendTeamTemplates {
             
             ${EmailComponents.otpCard(senha, "Sua Nova Senha Temporária")}
 
-            ${EmailComponents.warningCard("💡 <strong>Aviso de Segurança:</strong> Por motivos de segurança, altere sua senha temporária após o login em <strong>Configurações > Meu Perfil</strong>.")}
+            ${EmailComponents.warningCard("💡 <strong>Aviso de Segurança:</strong> Por motivos de segurança, recomendamos alterar sua senha temporária no primeiro acesso ao aplicativo.")}
 
             ${EmailComponents.accessButtonsBlock()}
         `;

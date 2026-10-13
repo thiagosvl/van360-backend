@@ -58,6 +58,10 @@ class PaymentService {
     async withdrawFromSubaccount(pixKey: string, amountInCents: number): Promise<WooviWithdrawResponse> {
         return this.wooviProviderInstance.withdrawFromSubaccount(pixKey, amountInCents);
     }
+
+    async transferFromMainAccount(toPixKey: string, amountInCents: number): Promise<WooviWithdrawResponse> {
+        return this.wooviProviderInstance.transferFromMainAccount(toPixKey, amountInCents);
+    }
 }
 
 export const paymentService = new PaymentService();

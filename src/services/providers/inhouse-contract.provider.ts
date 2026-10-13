@@ -4,6 +4,7 @@ import zlib from 'zlib';
 import { PDFDocument, PDFImage, rgb, StandardFonts, PDFFont } from 'pdf-lib';
 import { formatToBrazilianDate, getNowBR, parseLocalDate } from '../../utils/date.utils.js';
 import { formatModalidade, formatParentesco, formatPeriodo, maskCnpj, maskCpf, maskPhone } from '../../utils/format.js';
+import { sanitizePdfText } from '../../utils/pdf-text.utils.js';
 
 function isValidPng(buf: Buffer | Uint8Array): boolean {
   if (!buf || buf.length < 8) return false;
@@ -211,8 +212,10 @@ export class InHouseContractProvider implements ContractProvider {
 
   private splitTextToLines(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
     if (!text || typeof text !== 'string') return [];
+    const cleanText = sanitizePdfText(text);
+    if (!cleanText) return [];
     const lines: string[] = [];
-    const paragraphs = text.split('\n');
+    const paragraphs = cleanText.split('\n');
     for (const paragraph of paragraphs) {
       const words = paragraph.split(' ');
       let currentLine = '';
@@ -326,7 +329,8 @@ export class InHouseContractProvider implements ContractProvider {
     }
 
     const drawHeader = (title: string, y: number) => {
-      page.drawText(title, { x: margin, y, size: fontSizeHeader, font: fontBold });
+      const cleanTitle = sanitizePdfText(title);
+      page.drawText(cleanTitle, { x: margin, y, size: fontSizeHeader, font: fontBold });
       page.drawLine({ start: { x: margin, y: y - 5 }, end: { x: 545, y: y - 5 }, thickness: 0.5, color: rgb(0, 0, 0) });
       return y - 20;
     };
@@ -514,15 +518,19 @@ export class InHouseContractProvider implements ContractProvider {
     if (dados.secoes && dados.secoes.length > 0) {
       sections = dados.secoes
         .map((s) => ({
-          title: (s.titulo && s.titulo.trim()) ? s.titulo.trim().toUpperCase() : "SEÇÃO SEM TÍTULO",
-          clauses: (s.clausulas || []).filter((c) => c && c.trim() !== ""),
+          title: sanitizePdfText(s.titulo || "SEÇÃO SEM TÍTULO").toUpperCase(),
+          clauses: (s.clausulas || [])
+            .map((c) => sanitizePdfText(c))
+            .filter((c) => c.trim() !== ""),
         }))
         .filter((s) => s.clauses.length > 0);
     } else if (dados.clausulas && dados.clausulas.length > 0) {
       sections = [
         {
           title: "DA PRESTAÇÃO DO SERVIÇO",
-          clauses: dados.clausulas.filter((c) => c && c.trim() !== ""),
+          clauses: dados.clausulas
+            .map((c) => sanitizePdfText(c))
+            .filter((c) => c.trim() !== ""),
         },
       ];
     } else {
@@ -534,16 +542,7 @@ export class InHouseContractProvider implements ContractProvider {
     for (const section of sections) {
       currentY -= 14;
 
-      let firstClauseHeight = 60;
-      if (section.clauses.length > 0) {
-        const firstClauseText = `Cláusula ${clauseCounter}ª - ${section.clauses[0]}`;
-        const firstClauseLines = await this.splitTextToLines(firstClauseText, font, fontSizeBody, width);
-        firstClauseHeight = firstClauseLines.length * lineHeight + (lineHeight / 2);
-      }
-
-      const totalSectionHeaderSpace = (headerSpacing + 6) + firstClauseHeight + 12;
-
-      if (currentY - totalSectionHeaderSpace < 45) {
+      if (currentY < 110) {
         page = pdfDoc.addPage([595, 842]);
         currentY = 800;
       }
@@ -553,14 +552,19 @@ export class InHouseContractProvider implements ContractProvider {
 
       for (const clausula of section.clauses) {
         const text = `Cláusula ${clauseCounter}ª - ${clausula}`;
-        const lines = await this.splitTextToLines(text, font, fontSizeBody, width);
+        const lines = this.splitTextToLines(text, font, fontSizeBody, width);
 
-        if (currentY - (lines.length * lineHeight) < 50) {
+        if (currentY < 65) {
           page = pdfDoc.addPage([595, 842]);
           currentY = 800;
         }
 
         for (const line of lines) {
+          if (currentY < 50) {
+            page = pdfDoc.addPage([595, 842]);
+            currentY = 800;
+          }
+
           if (line.startsWith(`Cláusula ${clauseCounter}ª`)) {
             const prefix = `Cláusula ${clauseCounter}ª`;
             const rest = line.substring(prefix.length);
@@ -664,7 +668,7 @@ export class InHouseContractProvider implements ContractProvider {
     });
 
 
-    const text = `Assinado pelo CONTRATANTE (${params.nomeAssinante}) em ${dataFormatada} | IP: ${params.metadados.ip}`;
+    const text = sanitizePdfText(`Assinado pelo CONTRATANTE (${params.nomeAssinante}) em ${dataFormatada} | IP: ${params.metadados.ip}`);
     lastPage.drawText(text, { x: 50, y: 30, size: 7, font, color: rgb(0.5, 0.5, 0.5) });
   }
 }

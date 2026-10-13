@@ -21,7 +21,7 @@ function resolveDescricaoTelemetria(acao: AtividadeAcao, meta?: Record<string, u
             case DispositivoCadastro.APP_ANDROID:
                 return "Acesso registrado via App Android.";
             case DispositivoCadastro.APP_IOS:
-                return "Acesso registrado via App Iphone (iOS).";
+                return "Acesso registrado via App iPhone (iOS).";
             case DispositivoCadastro.WEB_DESKTOP:
                 return "Acesso registrado via navegador (computador).";
             case DispositivoCadastro.WEB_MOBILE_ANDROID:

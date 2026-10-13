@@ -80,7 +80,7 @@ export class ResendDriverTemplates {
         const nome = NotificationContextFormatter.getFirstName(ctx.nomeMotorista || ctx.nome, "Motorista");
         const email = (ctx.email || ctx.emailMotorista) as string | undefined;
         const fullUrl = await NotificationUrlBuilder.getSubscriptionCheckoutUrl({ autoOpen: false, email });
-        const pixCode = (ctx.pixCopiaECola || ctx.chavePix) as string | undefined;
+        const pixCode = (ctx.pixCopiaCola || ctx.chavePix) as string | undefined;
 
         const subject = formatSubject("Lembrete de Vencimento da Assinatura");
         const preheader = "Sua assinatura do Van360 está próxima do vencimento. Acesse o sistema para renovar via Pix ou cartão.";
@@ -106,7 +106,7 @@ export class ResendDriverTemplates {
         const nome = NotificationContextFormatter.getFirstName(ctx.nomeMotorista || ctx.nome, "Motorista");
         const email = (ctx.email || ctx.emailMotorista) as string | undefined;
         const fullUrl = await NotificationUrlBuilder.getSubscriptionCheckoutUrl({ autoOpen: true, email });
-        const pixCode = (ctx.pixCopiaECola || ctx.chavePix) as string | undefined;
+        const pixCode = (ctx.pixCopiaCola || ctx.chavePix) as string | undefined;
 
         const subject = formatSubject("Assinatura Vence Hoje");
         const preheader = "Sua assinatura do Van360 vence hoje. Realize o pagamento para evitar interrupções no sistema.";
@@ -331,7 +331,11 @@ export class ResendDriverTemplates {
     /**
      * 12. Bônus de Indicação Concluída
      */
-    static referralBonus(ctx: ResendTemplateContext): ResendTemplatePayload {
+    static referralBonus(ctx: ResendTemplateContext): ResendTemplatePayload | null {
+        if (ctx.isVitalicio) {
+            return null;
+        }
+
         const nome = NotificationContextFormatter.getFirstName(ctx.nomeMotorista || ctx.nome, "Motorista");
         const bonusDays = (ctx.trialDays || 30) as number;
 

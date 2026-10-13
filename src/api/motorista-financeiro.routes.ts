@@ -6,6 +6,11 @@ export default async function motoristaFinanceiroRoutes(app: FastifyInstance) {
   app.addHook("onRequest", authenticate);
 
   app.get(
+    "/motorista/configuracoes-financeiras/excecoes-resumo",
+    MotoristaFinanceiroController.obterResumoExcecoes
+  );
+
+  app.get(
     "/motorista/configuracoes-financeiras",
     MotoristaFinanceiroController.obterConfiguracoes
   );

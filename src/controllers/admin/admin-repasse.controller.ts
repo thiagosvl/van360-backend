@@ -49,4 +49,19 @@ export const adminRepasseController = {
       return reply.status(500).send({ error: "Erro ao processar retentativa de repasse." });
     }
   },
+
+  async delete(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { id } = request.params as { id: string };
+      const result = await adminRepasseService.deleteRepasse(id);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      if (err instanceof AppError) {
+        return reply.status(err.statusCode).send({ error: err.message });
+      }
+      const error = err as Error;
+      logger.error({ error: error.message }, "[AdminRepasseController] Erro ao excluir repasse.");
+      return reply.status(500).send({ error: "Erro ao excluir registro de repasse." });
+    }
+  },
 };

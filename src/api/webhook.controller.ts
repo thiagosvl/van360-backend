@@ -23,7 +23,8 @@ import { addToRepasseQueue } from "../queues/repasse.queue.js";
 import { getClientIp } from "../utils/request-client.utils.js";
 import { withRetry } from "../utils/retry.utils.js";
 import { errorAlertService } from "../services/error-alert.service.js";
-import { isDriverInBaaSWhitelist } from "../utils/feature-flag.utils.js";
+import { subscriptionRevenueCatService } from "../services/subscriptions/subscription-revenuecat.service.js";
+import { RevenueCatWebhookPayload } from "../types/dtos/revenuecat.dto.js";
 
 export const WebhookController = {
 
@@ -119,18 +120,31 @@ export const WebhookController = {
       return reply.code(200).send({ received: true, status: "ignored" });
     }
 
-    const cobrancaId = event.internalId;
-    if (!cobrancaId) {
+    const rawCorrelationId = event.internalId;
+    if (!rawCorrelationId) {
       logger.warn({ rawBody }, "[WebhookController] Webhook recebido sem internalId (correlationID)");
       return reply.code(200).send({ received: true, status: "no_internal_id" });
     }
 
+    let cobrancaId = rawCorrelationId;
+
     try {
-      const { data: cobranca, error: findError } = await cobrancaRepository.getById(cobrancaId);
-      if (findError || !cobranca) {
-        logger.warn({ cobrancaId }, "[WebhookController] Cobrança não encontrada para o webhook recebido");
+      let cobranca = null;
+      const { data: cobrancaPorProvedor } = await cobrancaRepository.getByProvedorCobrancaId(rawCorrelationId);
+      if (cobrancaPorProvedor) {
+        cobranca = cobrancaPorProvedor;
+      } else {
+        const baseId = rawCorrelationId.split("_")[0];
+        const { data: cobrancaPorId } = await cobrancaRepository.getById(baseId);
+        cobranca = cobrancaPorId;
+      }
+
+      if (!cobranca) {
+        logger.warn({ rawCorrelationId }, "[WebhookController] Cobrança não encontrada para o webhook recebido");
         return reply.code(200).send({ received: true, status: "cobranca_not_found" });
       }
+
+      cobrancaId = cobranca.id;
 
       if (cobranca.status === CobrancaStatus.PAGO) {
         return reply.code(200).send({ received: true, status: "already_paid" });
@@ -138,20 +152,6 @@ export const WebhookController = {
 
       if (event.type === NormalizedPaymentEventType.PAYMENT_RECEIVED) {
         const motoristaId = cobranca.usuario_id || "";
-        const motorista = cobranca.usuario as { email?: string; telefone?: string } | undefined;
-
-        if (!isDriverInBaaSWhitelist(motorista)) {
-          await cobrancaPagamentoService.registrarPagamentoAutomatico(
-            cobranca.id,
-            event.paidAt ? event.paidAt.toISOString() : undefined,
-            event.amount
-          );
-          return reply.code(200).send({ received: true, status: "paid_direct_no_baas" });
-        }
-
-        await cobrancaRepository.update(cobranca.id, {
-          repasse_em_processamento: true
-        });
 
         const motoristaConfig = await motoristaFinanceiroRepository.getByUsuarioId(motoristaId);
         const chavePixRepasse = motoristaConfig.chave_pix_repasse;
@@ -162,19 +162,36 @@ export const WebhookController = {
         }
 
         const taxaPlataforma = cobrancaCalculoService.resolverTaxaPlataforma(
-          cobranca.valor_taxa_plataforma ? Number(cobranca.valor_taxa_plataforma) : null
+          cobranca.valor_taxa_plataforma !== null && cobranca.valor_taxa_plataforma !== undefined
+            ? Number(cobranca.valor_taxa_plataforma)
+            : motoristaConfig.taxa_personalizada
         );
         const valorRealPago = event.amount && event.amount > 0 ? event.amount : Number(cobranca.valor);
+
+        const encargosDecompostos = cobrancaCalculoService.decomporEncargosPagamento({
+          valorOriginal: Number(cobranca.valor),
+          valorRealPago,
+          motoristaConfig
+        });
+
+        await cobrancaRepository.update(cobranca.id, {
+          repasse_em_processamento: true,
+          valor_multa: encargosDecompostos.valorMulta,
+          valor_juros: encargosDecompostos.valorJuros
+        });
+
         const divisao = cobrancaCalculoService.calcularDivisaoCobranca({
           valorMensalidade: valorRealPago,
-          taxaPlataforma,
-          repassarAoPai: Boolean(cobranca.taxa_repassada_ao_pai)
+          taxaPlataforma
         });
         const valorLiquido = divisao.valorLiquidoMotorista;
 
         let repasse = await cobrancaRepasseRepository.getByTransacaoProvedorId(event.providerRef);
         if (!repasse) {
+          const rawPix = rawBody.pix as Record<string, unknown> | undefined;
           const rawCharge = rawBody.charge as Record<string, unknown> | undefined;
+          const endToEndIdIn = (rawPix?.endToEndId as string) || (rawCharge?.endToEndId as string) || null;
+
           repasse = await cobrancaRepasseRepository.create({
             cobranca_id: cobranca.id,
             motorista_id: motoristaId,
@@ -186,7 +203,7 @@ export const WebhookController = {
             tarifa_gateway_saque: divisao.tarifaGatewaySaque,
             valor_liquido_motorista: valorLiquido,
             transacao_provedor_id: event.providerRef,
-            end_to_end_id_in: (rawCharge?.endToEndId as string) || null,
+            end_to_end_id_in: endToEndIdIn,
             status_repasse: StatusRepasseEnum.PENDENTE,
             data_pagamento_pai: event.paidAt ? event.paidAt.toISOString() : new Date().toISOString()
           });
@@ -222,7 +239,24 @@ export const WebhookController = {
 
       return reply.code(500).send({ error: "Internal Server Error" });
     }
-  }
+  },
 
+  async handleRevenueCat(request: FastifyRequest, reply: FastifyReply) {
+    const authHeader = request.headers.authorization;
+    if (env.REVENUECAT_WEBHOOK_SECRET && authHeader !== `Bearer ${env.REVENUECAT_WEBHOOK_SECRET}`) {
+      logger.warn({ ip: getClientIp(request) }, "[WebhookController] Webhook RevenueCat rejeitado: token inválido");
+      return reply.code(401).send({ error: "Unauthorized" });
+    }
+
+    const payload = request.body as RevenueCatWebhookPayload;
+    try {
+      const result = await subscriptionRevenueCatService.processWebhook(payload);
+      return reply.code(200).send({ received: true, ...result });
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      logger.error({ error: errorMsg }, "[WebhookController] Erro ao processar webhook RevenueCat");
+      return reply.code(500).send({ error: "Internal Server Error" });
+    }
+  },
 };
 

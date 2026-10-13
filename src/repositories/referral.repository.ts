@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { IndicacaoStatus } from "../types/enums.js";
+import { toStartOfDayISO, toEndOfDayISO } from "../utils/date.utils.js";
 
 export interface IndicadorReferralDTO {
     id: string;
@@ -183,11 +184,11 @@ export const referralRepository = {
         }
 
         if (params.data_inicio) {
-            q = q.gte("created_at", params.data_inicio);
+            q = q.gte("created_at", toStartOfDayISO(params.data_inicio));
         }
 
         if (params.data_fim) {
-            q = q.lte("created_at", params.data_fim);
+            q = q.lte("created_at", toEndOfDayISO(params.data_fim));
         }
 
         if (params.searchUserIds && params.searchUserIds.length > 0) {

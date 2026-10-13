@@ -209,9 +209,9 @@ export class NotificationUrlBuilder {
     /**
      * URL oficial da App Store (Apple/iOS)
      */
-    static getAppStoreUrl(): string | null {
+    static getAppStoreUrl(): string {
         const url = process.env.APP_STORE_URL || process.env.APPLE_STORE_URL;
-        return url && url.trim().length > 0 ? url.trim() : null;
+        return url && url.trim().length > 0 ? url.trim() : "https://apps.apple.com/app/id6816251189";
     }
 
     /**

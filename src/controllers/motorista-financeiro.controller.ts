@@ -9,6 +9,16 @@ interface AuthenticatedRequest extends FastifyRequest {
 }
 
 export const MotoristaFinanceiroController = {
+  async obterResumoExcecoes(request: FastifyRequest, reply: FastifyReply) {
+    const usuarioId = (request as AuthenticatedRequest).user?.id;
+    if (!usuarioId) {
+      return reply.status(401).send({ error: "Usuário não autenticado." });
+    }
+
+    const resumo = await motoristaFinanceiroService.obterResumoExcecoes(usuarioId);
+    return reply.status(200).send(resumo);
+  },
+
   async obterConfiguracoes(request: FastifyRequest, reply: FastifyReply) {
     const usuarioId = (request as AuthenticatedRequest).user?.id;
     if (!usuarioId) {
