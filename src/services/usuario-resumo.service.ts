@@ -8,6 +8,10 @@ import { CobrancaStatus, GastoCategoria } from "../types/enums.js";
 import { getNowBR, toLocalDateString, getLastDayOfMonth, getSafeDueDateString } from "../utils/date.utils.js";
 import { getUsuarioData } from "./usuario.service.js";
 import { isSubConta, getDonoContaId } from "../utils/user.utils.js";
+import type { Tables } from "../types/database.types.js";
+
+type DashboardCobranca = Pick<Tables<"cobrancas">, "status" | "valor" | "valor_pago" | "data_vencimento" | "passageiro_id">;
+type DashboardGasto = Pick<Tables<"gastos">, "valor" | "categoria">;
 
 interface SystemSummary {
   usuario: {
@@ -135,11 +139,11 @@ export const usuarioResumoService = {
       gastoRepository.getGastosForPeriodForDashboard(dataOwnerId, start, end, targetVeiculoId)
     ]);
 
-    const cobrancas = cobrancasRes.data || [];
-    const gastos = gastosRes.data || [];
+    const cobrancas = (cobrancasRes.data || []) as unknown as DashboardCobranca[];
+    const gastos = (gastosRes.data || []) as unknown as DashboardGasto[];
 
-    const cobrancasPagas = cobrancas.filter((c: Record<string, any>) => c.status === CobrancaStatus.PAGO);
-    const receitaRealizada = cobrancasPagas.reduce((acc: number, c: Record<string, any>) => acc + Number(c.valor_pago ?? c.valor ?? 0), 0);
+    const cobrancasPagas = cobrancas.filter((c) => c.status === CobrancaStatus.PAGO);
+    const receitaRealizada = cobrancasPagas.reduce((acc: number, c) => acc + Number(c.valor_pago ?? c.valor ?? 0), 0);
 
     const hoje = toLocalDateString(getNowBR());
     const isPastPeriod = targetAno < now.getFullYear() || (targetAno === now.getFullYear() && targetMes < (now.getMonth() + 1));
@@ -148,7 +152,7 @@ export const usuarioResumoService = {
     let atrasosProjetadosCount = 0;
 
     if (!isPastPeriod) {
-      const passageirosComCobranca = new Set(cobrancas.map((c: Record<string, any>) => c.passageiro_id));
+      const passageirosComCobranca = new Set(cobrancas.map((c) => c.passageiro_id));
       const driverCreatedAt = (usuario as Record<string, any>)?.created_at;
 
       const parseYearMonth = (dateStr?: string | null) => {
@@ -201,21 +205,29 @@ export const usuarioResumoService = {
       });
     }
 
-    const cobrancasAtivas = cobrancas.filter((c: Record<string, any>) => c.status !== CobrancaStatus.CANCELADA);
-    const receitaPrevista = cobrancasAtivas.reduce((acc: number, c: Record<string, any>) => acc + Number(c.valor || 0), 0) + receitaProjetada;
+    const cobrancasPendentes = cobrancas.filter((c) => c.status === CobrancaStatus.PENDENTE);
+    const valorPendenteReais = cobrancasPendentes.reduce((acc: number, c) => acc + Number(c.valor || 0), 0);
+    const saldoParcialRecebidas = cobrancasPagas.reduce((acc: number, c) => {
+      const pago = Number(c.valor_pago ?? c.valor ?? 0);
+      const total = Number(c.valor || 0);
+      return acc + (pago < total ? total - pago : 0);
+    }, 0);
+
+    const receitaPendente = valorPendenteReais + saldoParcialRecebidas + receitaProjetada;
+    const receitaPrevista = receitaRealizada + receitaPendente;
     const taxaRecebimento = receitaPrevista > 0 ? (receitaRealizada / receitaPrevista) * 100 : 0;
 
-    const totalDespesas = gastos.reduce((acc: number, g: Record<string, any>) => acc + Number(g.valor || 0), 0);
+    const totalDespesas = gastos.reduce((acc: number, g) => acc + Number(g.valor || 0), 0);
     const detalhamentoGastos: Record<string, number> = {};
     
-    gastos.forEach((g: Record<string, any>) => {
+    gastos.forEach((g) => {
       const cat = g.categoria || GastoCategoria.OUTROS;
       detalhamentoGastos[cat] = (detalhamentoGastos[cat] || 0) + Number(g.valor || 0);
     });
 
     const margemOperacional = receitaRealizada > 0 ? ((receitaRealizada - totalDespesas) / receitaRealizada) * 100 : 0;
 
-    const cobrancasAtrasadas = cobrancas.filter((c: Record<string, any>) => {
+    const cobrancasAtrasadas = cobrancas.filter((c) => {
       if (c.status === CobrancaStatus.CANCELADA) return false;
       if (c.data_vencimento >= hoje) return false;
       if (c.status === CobrancaStatus.PENDENTE) return true;
@@ -227,7 +239,7 @@ export const usuarioResumoService = {
       return false;
     });
 
-    const valorAtrasosReais = cobrancasAtrasadas.reduce((acc: number, c: Record<string, any>) => {
+    const valorAtrasosReais = cobrancasAtrasadas.reduce((acc: number, c) => {
       if (c.status === CobrancaStatus.PENDENTE) return acc + Number(c.valor || 0);
       const pago = Number(c.valor_pago ?? c.valor ?? 0);
       const total = Number(c.valor || 0);
@@ -237,14 +249,14 @@ export const usuarioResumoService = {
     const valorAtrasos = valorAtrasosReais + atrasosProjetadosValor;
     const countAtrasos = cobrancasAtrasadas.length + atrasosProjetadosCount;
 
-    const passageirosPagos = new Set(cobrancasPagas.map((c: Record<string, any>) => c.passageiro_id)).size;
+    const passageirosPagos = new Set(cobrancasPagas.map((c) => c.passageiro_id)).size;
     const ticketMedio = passageirosPagos > 0 ? receitaRealizada / passageirosPagos : 0;
 
     const financeiro = {
       receita: {
         realizada: receitaRealizada,
         prevista: receitaPrevista,
-        pendente: Math.max(0, receitaPrevista - receitaRealizada),
+        pendente: receitaPendente,
         taxa_recebimento: Math.round(taxaRecebimento)
       },
       saidas: {

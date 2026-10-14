@@ -12,6 +12,7 @@ export interface RepasseJobData {
     chavePix: string;
     valorLiquido: number;
     transacaoProvedorId: string;
+    creditoEncargosRealizado?: boolean;
 }
 
 export const addToRepasseQueue = async (data: RepasseJobData) => {
@@ -19,11 +20,12 @@ export const addToRepasseQueue = async (data: RepasseJobData) => {
 
     try {
         const existingJob = await repasseQueue.getJob(jobId);
+        const creditoEncargosRealizado = Boolean(existingJob?.data?.creditoEncargosRealizado || data.creditoEncargosRealizado);
         if (existingJob) {
             await existingJob.remove().catch(() => {});
         }
 
-        await repasseQueue.add("processar-repasse", data, {
+        await repasseQueue.add("processar-repasse", { ...data, creditoEncargosRealizado }, {
             jobId,
             removeOnComplete: true,
             removeOnFail: false,

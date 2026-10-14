@@ -2,6 +2,7 @@ import { Job, Worker } from "bullmq";
 import { logger } from "../config/logger.js";
 import { redisConfig } from "../config/redis.js";
 import { QUEUE_NAME_REPASSE, RepasseJobData } from "../queues/repasse.queue.js";
+import { cobrancaRepository } from "../repositories/cobranca.repository.js";
 import { cobrancaRepasseRepository } from "../repositories/cobranca-repasse.repository.js";
 import { motoristaFinanceiroRepository } from "../repositories/motorista-financeiro.repository.js";
 import { paymentService } from "../services/payments/payment.service.js";
@@ -33,7 +34,7 @@ export const repasseWorker = new Worker<RepasseJobData>(
                 ultimo_erro: null
             });
             const { cobrancaPagamentoService } = await import("../services/cobranca-pagamento.service.js");
-            await cobrancaPagamentoService.registrarPagamentoAutomatico(cobrancaId);
+            await cobrancaPagamentoService.registrarPagamentoAutomatico(cobrancaId, undefined, Number(repasse.valor_bruto));
             return;
         }
 
@@ -54,51 +55,56 @@ export const repasseWorker = new Worker<RepasseJobData>(
         });
 
         const valorEmCentavos = Math.round(valorLiquido * 100);
-        let withdrawRes: { success: boolean; transactionId?: string; endToEndId?: string; error?: string } = { success: false };
+
+        const { data: cobranca } = await cobrancaRepository.getByIdBasic(cobrancaId);
+        const encargosCentavos = cobranca
+            ? Math.max(0, Math.round((Number(repasse.valor_bruto) - Number(cobranca.valor)) * 100))
+            : 0;
 
         const saldoSubcontaReais = await paymentService.getSubaccountBalance(chavePixEfetiva);
         const saldoSubcontaCentavos = Math.round(saldoSubcontaReais * 100);
+        const diferencaSaldoCentavos = Math.max(0, valorEmCentavos - saldoSubcontaCentavos);
 
-        if (saldoSubcontaCentavos >= valorEmCentavos) {
-            withdrawRes = await paymentService.withdrawFromSubaccount(chavePixEfetiva, valorEmCentavos);
-        } else {
-            let lastSuccessEndToEnd = "";
-            let lastSuccessTxId = "";
-            let saqueSubcontaFalhou = false;
+        const diferencaCentavos = (!job.data.creditoEncargosRealizado && encargosCentavos > 0)
+            ? Math.max(encargosCentavos, diferencaSaldoCentavos)
+            : diferencaSaldoCentavos;
 
-            if (saldoSubcontaCentavos > 0) {
-                const subWithdraw = await paymentService.withdrawFromSubaccount(chavePixEfetiva, saldoSubcontaCentavos);
-                if (!subWithdraw.success) {
-                    saqueSubcontaFalhou = true;
-                    withdrawRes = subWithdraw;
-                } else {
-                    lastSuccessEndToEnd = subWithdraw.endToEndId || "";
-                    lastSuccessTxId = subWithdraw.transactionId || "";
+        if (diferencaCentavos > 0) {
+            logger.info({ repasseId, chavePix: chavePixEfetiva, diferencaCentavos }, "[RepasseWorker] Creditando encargos de atraso na subconta...");
+            const creditRes = await paymentService.creditSubaccount(chavePixEfetiva, diferencaCentavos);
+            if (!creditRes.success) {
+                const errorMsg = creditRes.error || "Falha ao creditar encargos na subconta";
+                const isLastAttempt = job.attemptsMade >= ((job.opts.attempts || FINANCEIRO_CONFIG.REPASSE_MAX_TENTATIVAS) - 1);
+                await cobrancaRepasseRepository.update(repasse.id, {
+                    status_repasse: isLastAttempt ? StatusRepasseEnum.FALHA : StatusRepasseEnum.PENDENTE,
+                    ultimo_erro: errorMsg
+                });
+                logger.error({ repasseId, error: errorMsg }, "[RepasseWorker] Falha ao creditar subconta antes do saque");
+
+                if (isLastAttempt) {
+                    const { telegramService } = await import("../services/telegram.service.js");
+                    const alertMsg = `⚠️ <b>ALERTA CRÍTICO: Falha no Repasse Pix (Crédito Interno)</b>\n\n` +
+                        `<b>ID Repasse:</b> <code>${repasse.id}</code>\n` +
+                        `<b>Motorista ID:</b> <code>${repasse.motorista_id}</code>\n` +
+                        `<b>Valor Líquido:</b> R$ ${valorLiquido.toFixed(2)}\n` +
+                        `<b>Chave Pix:</b> <code>${chavePixEfetiva}</code>\n` +
+                        `<b>Motivo:</b> ${errorMsg}\n\n` +
+                        `👉 Acesse o painel de Repasses no Admin para verificar e retentar.`;
+                    telegramService.sendMessage(alertMsg).catch((tErr) => {
+                        logger.warn({ error: tErr }, "[RepasseWorker] Falha ao enviar alerta no Telegram");
+                    });
                 }
+
+                throw new Error(errorMsg);
             }
 
-            const diferencaCentavos = valorEmCentavos - Math.max(0, saldoSubcontaCentavos);
-            if (!saqueSubcontaFalhou && diferencaCentavos > 0) {
-                const mainTransfer = await paymentService.transferFromMainAccount(chavePixEfetiva, diferencaCentavos);
-                if (!mainTransfer.success) {
-                    withdrawRes = mainTransfer;
-                } else {
-                    lastSuccessEndToEnd = mainTransfer.endToEndId || lastSuccessEndToEnd;
-                    lastSuccessTxId = mainTransfer.transactionId || lastSuccessTxId;
-                    withdrawRes = {
-                        success: true,
-                        endToEndId: lastSuccessEndToEnd,
-                        transactionId: lastSuccessTxId
-                    };
-                }
-            } else if (!saqueSubcontaFalhou) {
-                withdrawRes = {
-                    success: true,
-                    endToEndId: lastSuccessEndToEnd,
-                    transactionId: lastSuccessTxId
-                };
-            }
+            await job.updateData({
+                ...job.data,
+                creditoEncargosRealizado: true
+            });
         }
+
+        const withdrawRes = await paymentService.withdrawFromSubaccount(chavePixEfetiva, valorEmCentavos);
 
         if (!withdrawRes.success) {
             const errorMsg = withdrawRes.error || "Falha no saque da subconta";
@@ -141,7 +147,7 @@ export const repasseWorker = new Worker<RepasseJobData>(
     },
     {
         connection: redisConfig,
-        concurrency: 5
+        concurrency: 1
     }
 );
 
