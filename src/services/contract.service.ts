@@ -141,7 +141,7 @@ class ContractService {
 
     logger.info({ usuarioId: usuario.id, passageiroId, providerName }, 'Criando contrato');
 
-    const passageiro = await passageiroRepository.getByIdCompleto(passageiroId, usuarioId);
+    const passageiro = await passageiroRepository.getByIdCompleto(passageiroId, usuarioId, data.ano);
     if (!passageiro) {
       throw new AppError('Aluno não encontrado', 404);
     }
@@ -327,7 +327,7 @@ class ContractService {
 
     logger.info({ usuarioId, passageiroId: data.passageiroId, nomeArquivo: data.nomeArquivo }, 'Importando contrato em PDF');
 
-    const { data: passageiro, error: passageiroError } = await passageiroRepository.getById(data.passageiroId, usuarioId);
+    const { data: passageiro, error: passageiroError } = await passageiroRepository.getById(data.passageiroId, usuarioId, data.ano);
     if (passageiroError || !passageiro) {
       throw new AppError('Aluno não encontrado', 404);
     }
@@ -363,7 +363,7 @@ class ContractService {
 
     const publicUrl = storageProvider.getPublicUrl('contratos', storagePath);
 
-    const anoImportado = new Date().getFullYear();
+    const anoImportado = data.ano || passageiro.ano_letivo || new Date().getFullYear();
     await contractRepository.aposentarContratosPassageiro(data.passageiroId, true, anoImportado);
 
     const nowIso = new Date().toISOString();
@@ -381,7 +381,7 @@ class ContractService {
       status: ContratoStatus.ASSINADO,
       contrato_final_url: publicUrl,
       assinado_em: nowIso,
-      ano: new Date().getFullYear(),
+      ano: anoImportado,
       valor_parcela: Number(passageiro.valor_cobranca) || null,
       dia_vencimento: passageiro.dia_vencimento || null,
     });
@@ -516,19 +516,20 @@ class ContractService {
       let query = contractRepository.buildSemContratoQuery(usuarioId, idsIgnorar, filters.ano);
 
       if (search) {
-        query = query.or(`nome.ilike.%${search}%`);
+        query = query.ilike('passageiro.nome', `%${search}%`);
       }
 
-      const { data, error, count } = await query.range(from, to).order('nome');
+      const { data, error, count } = await query.range(from, to).order('created_at', { ascending: false });
 
       if (error) throw error;
 
       return {
-        data: data.map((p: Record<string, any>) => {
+        data: (data || []).map((row: Record<string, any>) => {
+          const p = Array.isArray(row.passageiro) ? row.passageiro[0] : row.passageiro;
           const respInfo = _getResponsavelInfoFromPassageiro(p);
           return {
-            id: p.id,
-            nome: p.nome,
+            id: p?.id || row.passageiro_id,
+            nome: p?.nome || '',
             tipo: 'passageiro',
             responsavel_principal: respInfo.nome ? {
               id: respInfo.id,
@@ -539,12 +540,12 @@ class ContractService {
               parentesco: respInfo.parentesco
             } : null,
             passageiro: {
-              id: p.id,
-              nome: p.nome,
-              data_inicio_transporte: p.data_inicio_transporte,
-              data_fim_transporte: p.data_fim_transporte,
-              valor_cobranca: p.valor_cobranca,
-              dia_vencimento: p.dia_vencimento,
+              id: p?.id || row.passageiro_id,
+              nome: p?.nome || '',
+              data_inicio_transporte: row.data_inicio_transporte,
+              data_fim_transporte: row.data_fim_transporte,
+              valor_cobranca: row.valor_cobranca,
+              dia_vencimento: row.dia_vencimento,
               responsavel_principal: respInfo.nome ? {
                 id: respInfo.id,
                 nome: respInfo.nome,
@@ -553,11 +554,11 @@ class ContractService {
                 email: respInfo.email,
                 parentesco: respInfo.parentesco
               } : null,
-              ativo: p.ativo
+              ativo: row.ativo
             },
             dados_contrato: {
-              valorMensal: Number(p.valor_cobranca),
-              diaVencimento: p.dia_vencimento
+              valorMensal: Number(row.valor_cobranca),
+              diaVencimento: row.dia_vencimento
             }
           };
         }),
@@ -574,7 +575,20 @@ class ContractService {
     if (tab === 'pendentes') statusQuery = ContratoStatus.PENDENTE;
     if (tab === 'assinados') statusQuery = ContratoStatus.ASSINADO;
 
-    let query = contractRepository.buildListContratosQuery(usuarioId, statusQuery, filters.ano);
+    const activeIdsForYear = await contractRepository.getActivePassageiroIdsForYear(usuarioId, filters.ano);
+    if (activeIdsForYear !== null && activeIdsForYear.length === 0) {
+      return {
+        data: [],
+        pagination: {
+          page,
+          limit,
+          total: 0,
+          totalPages: 0,
+        },
+      };
+    }
+
+    let query = contractRepository.buildListContratosQuery(usuarioId, statusQuery, filters.ano, activeIdsForYear);
 
     if (search) {
       query = query.or(`nome.ilike.%${search}%`, { foreignTable: 'passageiro' });
@@ -650,6 +664,7 @@ class ContractService {
     return this.criarContrato(authId, {
       passageiroId: contratoOriginal.passageiro_id,
       provider: providerAlvo,
+      ano: contratoOriginal.ano ?? undefined,
       notificarResponsavel: options?.notificarResponsavel ?? false,
     });
   }

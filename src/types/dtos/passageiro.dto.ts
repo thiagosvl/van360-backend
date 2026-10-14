@@ -116,7 +116,8 @@ export const createPassageiroSchema = z.object({
 
 export type CreatePassageiroDTO = z.infer<typeof createPassageiroSchema>;
 
-export const updatePassageiroSchema = createPassageiroSchema.omit({ ano_letivo: true }).extend({
+export const updatePassageiroSchema = createPassageiroSchema.extend({
+  ano_letivo: z.union([z.number(), z.string().transform(v => parseInt(v, 10))]).optional(),
   responsavel_principal: responsavelPrincipalInputSchema.partial().optional().nullable(),
 }).partial();
 export type UpdatePassageiroDTO = z.infer<typeof updatePassageiroSchema>;
@@ -136,7 +137,8 @@ export const listPassageirosFiltersSchema = z.object({
 export type ListPassageirosFiltersDTO = z.infer<typeof listPassageirosFiltersSchema>;
 
 export const toggleAtivoSchema = z.object({
-  novoStatus: z.boolean()
+  novoStatus: z.boolean(),
+  ano_letivo: z.union([z.number(), z.string().transform(v => Number(v))]).optional(),
 });
 
 export type ToggleAtivoDTO = z.infer<typeof toggleAtivoSchema>;
@@ -184,6 +186,7 @@ export type ToggleNotificacoesRotaResponsavelDTO = z.infer<typeof toggleNotifica
 
 export const updatePassageiroBatchItemSchema = z.object({
   id: z.string().uuid("ID do passageiro inválido"),
+  ano_letivo: z.union([z.number(), z.string().transform(v => Number(v))]).optional(),
   escola_id: z.string().uuid().optional().nullable().or(z.literal("")).transform(v => (v === "" || v === "none") ? null : v),
   veiculo_id: z.string().uuid().optional().nullable().or(z.literal("")).transform(v => (v === "" || v === "none") ? null : v),
   turma: optionalString,
@@ -208,6 +211,7 @@ export const updatePassageiroBatchItemSchema = z.object({
 });
 
 export const updatePassageirosBatchSchema = z.object({
+  ano_letivo: z.union([z.number(), z.string().transform(v => Number(v))]).optional(),
   passageiros: z.array(updatePassageiroBatchItemSchema).min(1, "Ao menos um passageiro deve ser informado"),
 });
 

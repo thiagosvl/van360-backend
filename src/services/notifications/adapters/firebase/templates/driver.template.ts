@@ -464,4 +464,19 @@ export class FirebaseDriverTemplates {
             }
         };
     }
+
+    static renewalResponseReceivedDriver(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        const userId = (ctx.usuarioId || ctx.userId || "") as string;
+        const title = (ctx.titulo || "Atualização na Renovação") as string;
+        const body = (ctx.corpo || "Um responsável respondeu à proposta de renovação.") as string;
+
+        return {
+            title,
+            body,
+            data: {
+                action: PushNotificationAction.OPEN_PASSENGERS,
+                userId
+            }
+        };
+    }
 }

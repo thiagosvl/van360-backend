@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -1488,13 +1488,128 @@ export type Database = {
           },
         ]
       }
+      passageiro_matriculas: {
+        Row: {
+          ano_letivo: number
+          ativo: boolean
+          created_at: string
+          data_fim_cobranca: string | null
+          data_fim_transporte: string | null
+          data_inicio_cobranca: string | null
+          data_inicio_transporte: string | null
+          dia_vencimento: number | null
+          escola_id: string
+          horario_entrada: string | null
+          horario_saida: string | null
+          id: string
+          isento: boolean
+          modalidade: Database["public"]["Enums"]["modalidade_enum"] | null
+          modo_cobranca:
+            | Database["public"]["Enums"]["modo_cobranca_enum"]
+            | null
+          nome_professor: string | null
+          passageiro_id: string
+          periodo: string | null
+          sala: string | null
+          turma: string | null
+          updated_at: string
+          usuario_id: string
+          valor_cobranca: number | null
+          veiculo_id: string
+        }
+        Insert: {
+          ano_letivo?: number
+          ativo?: boolean
+          created_at?: string
+          data_fim_cobranca?: string | null
+          data_fim_transporte?: string | null
+          data_inicio_cobranca?: string | null
+          data_inicio_transporte?: string | null
+          dia_vencimento?: number | null
+          escola_id: string
+          horario_entrada?: string | null
+          horario_saida?: string | null
+          id?: string
+          isento?: boolean
+          modalidade?: Database["public"]["Enums"]["modalidade_enum"] | null
+          modo_cobranca?:
+            | Database["public"]["Enums"]["modo_cobranca_enum"]
+            | null
+          nome_professor?: string | null
+          passageiro_id: string
+          periodo?: string | null
+          sala?: string | null
+          turma?: string | null
+          updated_at?: string
+          usuario_id: string
+          valor_cobranca?: number | null
+          veiculo_id: string
+        }
+        Update: {
+          ano_letivo?: number
+          ativo?: boolean
+          created_at?: string
+          data_fim_cobranca?: string | null
+          data_fim_transporte?: string | null
+          data_inicio_cobranca?: string | null
+          data_inicio_transporte?: string | null
+          dia_vencimento?: number | null
+          escola_id?: string
+          horario_entrada?: string | null
+          horario_saida?: string | null
+          id?: string
+          isento?: boolean
+          modalidade?: Database["public"]["Enums"]["modalidade_enum"] | null
+          modo_cobranca?:
+            | Database["public"]["Enums"]["modo_cobranca_enum"]
+            | null
+          nome_professor?: string | null
+          passageiro_id?: string
+          periodo?: string | null
+          sala?: string | null
+          turma?: string | null
+          updated_at?: string
+          usuario_id?: string
+          valor_cobranca?: number | null
+          veiculo_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "passageiro_matriculas_escola_id_fkey"
+            columns: ["escola_id"]
+            isOneToOne: false
+            referencedRelation: "escolas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passageiro_matriculas_passageiro_id_fkey"
+            columns: ["passageiro_id"]
+            isOneToOne: false
+            referencedRelation: "passageiros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passageiro_matriculas_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passageiro_matriculas_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       passageiro_renovacoes: {
         Row: {
           ano_destino: number
           ano_origem: number
           confirmado_em: string | null
           created_at: string
-          dados_ano_origem: Json | null
           id: string
           ip_confirmacao: string | null
           justificativa_recusa: string | null
@@ -1506,6 +1621,7 @@ export type Database = {
           nova_data_inicio_transporte: string | null
           nova_escola_id: string | null
           nova_modalidade: Database["public"]["Enums"]["modalidade_enum"] | null
+          nova_sala: string | null
           nova_turma: string | null
           novo_dia_vencimento: number | null
           novo_isento: boolean
@@ -1528,7 +1644,6 @@ export type Database = {
           ano_origem?: number
           confirmado_em?: string | null
           created_at?: string
-          dados_ano_origem?: Json | null
           id?: string
           ip_confirmacao?: string | null
           justificativa_recusa?: string | null
@@ -1542,6 +1657,7 @@ export type Database = {
           nova_modalidade?:
             | Database["public"]["Enums"]["modalidade_enum"]
             | null
+          nova_sala?: string | null
           nova_turma?: string | null
           novo_dia_vencimento?: number | null
           novo_isento?: boolean
@@ -1564,7 +1680,6 @@ export type Database = {
           ano_origem?: number
           confirmado_em?: string | null
           created_at?: string
-          dados_ano_origem?: Json | null
           id?: string
           ip_confirmacao?: string | null
           justificativa_recusa?: string | null
@@ -1578,6 +1693,7 @@ export type Database = {
           nova_modalidade?:
             | Database["public"]["Enums"]["modalidade_enum"]
             | null
+          nova_sala?: string | null
           nova_turma?: string | null
           novo_dia_vencimento?: number | null
           novo_isento?: boolean

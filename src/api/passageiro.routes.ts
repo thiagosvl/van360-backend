@@ -12,6 +12,7 @@ const passageiroRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     app.post("/", { preHandler: [requirePermission("passageiros.gerenciar")] }, passageiroController.create);
     app.put("/batch", { preHandler: [requirePermission("passageiros.gerenciar")] }, passageiroController.updateBatch);
     app.put("/:id", { preHandler: [requirePermission("passageiros.gerenciar")] }, passageiroController.update);
+    app.delete("/:id/matriculas/:ano", { preHandler: [requirePermission("passageiros.gerenciar")] }, passageiroController.deleteMatricula);
     app.delete("/:id", { preHandler: [requirePermission("passageiros.gerenciar")] }, passageiroController.delete);
     app.get("/:id", { preHandler: [requirePermission("passageiros.visualizar")] }, passageiroController.get);
 

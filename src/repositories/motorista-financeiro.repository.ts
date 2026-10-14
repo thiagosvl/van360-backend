@@ -2,6 +2,7 @@ import { supabaseAdmin } from "../config/supabase.js";
 import { ConfigKey, ModoCobrancaEnum } from "../types/enums.js";
 import type { Tables, TablesUpdate } from "../types/database.types.js";
 import type { ResumoExcecoesModoCobrancaDTO } from "../types/dtos/motorista-financeiro.dto.js";
+import { getNowBR } from "../utils/date.utils.js";
 
 type MotoristaConfiguracaoFinanceira = Tables<"motorista_configuracoes_financeiras">;
 type MotoristaConfiguracaoFinanceiraUpdate = TablesUpdate<"motorista_configuracoes_financeiras">;
@@ -84,9 +85,10 @@ export const motoristaFinanceiroRepository = {
 
   async getResumoExcecoesModoCobranca(usuarioId: string): Promise<ResumoExcecoesModoCobrancaDTO> {
     const { data, error } = await supabaseAdmin
-      .from("passageiros")
+      .from("passageiro_matriculas")
       .select("modo_cobranca")
       .eq("usuario_id", usuarioId)
+      .eq("ano_letivo", getNowBR().getFullYear())
       .eq("ativo", true)
       .eq("isento", false);
 

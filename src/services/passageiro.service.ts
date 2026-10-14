@@ -3,7 +3,7 @@ import { responsavelRepository } from "../repositories/responsavel.repository.js
 import { prePassageiroRepository } from "../repositories/pre-passageiro.repository.js";
 import { AppError } from "../errors/AppError.js";
 import { CreatePassageiroDTO, ListPassageirosFiltersDTO, UpdatePassageiroDTO, CreateResponsavelAdicionalDTO, UpdateResponsavelAdicionalDTO, UpdatePassageiroBatchItemDTO } from "../types/dtos/passageiro.dto.js";
-import { AtividadeAcao, AtividadeEntidadeTipo, TipoResponsavel, ModoCobrancaEnum } from "../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, TipoResponsavel, ModoCobrancaEnum, ContratoStatus, RenovacaoStatus } from "../types/enums.js";
 import { moneyToNumber } from "../utils/currency.utils.js";
 import { cleanString, onlyDigits, normalizePhone } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
@@ -18,6 +18,46 @@ import { getFirstAndSecondName, getFirstName } from "../utils/format.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { cobrancaValidacaoService } from "./cobranca-validacao.service.js";
 import { logger } from "../config/logger.js";
+
+const MATRICULA_KEYS = [
+    "ano_letivo",
+    "ativo",
+    "escola_id",
+    "veiculo_id",
+    "periodo",
+    "modalidade",
+    "turma",
+    "sala",
+    "nome_professor",
+    "horario_entrada",
+    "horario_saida",
+    "valor_cobranca",
+    "dia_vencimento",
+    "isento",
+    "modo_cobranca",
+    "data_inicio_transporte",
+    "data_fim_transporte",
+    "data_inicio_cobranca",
+    "data_fim_cobranca",
+] as const;
+
+const PERMANENT_KEYS = [
+    "usuario_id",
+    "nome",
+    "data_nascimento",
+    "genero",
+    "observacoes",
+    "enviar_notificacoes",
+] as const;
+
+const _matchContratoForYear = (contratos: Record<string, any>[] | undefined, targetYear: number) => {
+    if (!Array.isArray(contratos) || contratos.length === 0) return null;
+    const validContratos = contratos.filter((c) => c.status !== ContratoStatus.SUBSTITUIDO);
+    const exactMatch = validContratos.find(
+        (c) => Number(c.ano) === Number(targetYear) || (!c.ano && Number(targetYear) === 2026)
+    );
+    return exactMatch || null;
+};
 
 const _enrichPassageiroWithResponsavel = (p: Record<string, any>, isListMode: boolean = false) => {
     if (!p) return p;
@@ -89,24 +129,21 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO> | UpdatePassa
 
     if (!isUpdate && usuarioId) {
         prepared.usuario_id = usuarioId;
-        prepared.ativo = true; // Default registration active
+        prepared.ativo = true;
     }
 
     if (data.nome) prepared.nome = cleanString(data.nome, true);
 
-    // Tratamento de Foreign Keys (permite null ou undefined)
     if (data.escola_id !== undefined) prepared.escola_id = (data.escola_id === "none" || data.escola_id === "") ? null : data.escola_id;
     if (data.veiculo_id !== undefined) prepared.veiculo_id = (data.veiculo_id === "none" || data.veiculo_id === "") ? null : data.veiculo_id;
 
     if (data.observacoes !== undefined) prepared.observacoes = data.observacoes ? cleanString(data.observacoes, true) : null;
 
-    // Detalhes
     if (data.periodo !== undefined) prepared.periodo = data.periodo ? cleanString(data.periodo.toLocaleLowerCase()) : null;
     if (data.genero !== undefined) prepared.genero = data.genero ? cleanString(data.genero) : null;
     if (data.valor_cobranca !== undefined) prepared.valor_cobranca = typeof data.valor_cobranca === "string" ? moneyToNumber(data.valor_cobranca) : (data.valor_cobranca || 0);
     if (data.dia_vencimento !== undefined) prepared.dia_vencimento = data.dia_vencimento;
 
-    // Novos Campos
     if (data.modalidade !== undefined) prepared.modalidade = data.modalidade;
     if (data.turma !== undefined) prepared.turma = data.turma ? cleanString(data.turma, true) : null;
     if (data.sala !== undefined) prepared.sala = data.sala ? cleanString(data.sala, true) : null;
@@ -126,13 +163,12 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO> | UpdatePassa
     if (data.data_inicio_cobranca !== undefined) prepared.data_inicio_cobranca = data.data_inicio_cobranca ? toPersistenceString(data.data_inicio_cobranca) : null;
     if (data.data_fim_cobranca !== undefined) prepared.data_fim_cobranca = data.data_fim_cobranca ? toPersistenceString(data.data_fim_cobranca) : null;
     if (data.ano_letivo !== undefined) {
-        prepared.ano_letivo = data.ano_letivo;
-    } else if (data.data_inicio_cobranca) {
+        prepared.ano_letivo = Number(data.ano_letivo);
+    } else if (!isUpdate && data.data_inicio_cobranca) {
         prepared.ano_letivo = data.data_inicio_cobranca.getFullYear();
     }
     if (data.enviar_notificacoes !== undefined) prepared.enviar_notificacoes = data.enviar_notificacoes;
 
-    // Controle
     if (data.ativo !== undefined) prepared.ativo = data.ativo;
     if (data.isento !== undefined) prepared.isento = data.isento;
     if (data.modo_cobranca !== undefined) prepared.modo_cobranca = data.modo_cobranca;
@@ -199,10 +235,42 @@ const createPassageiro = async (data: CreatePassageiroDTO, isPreCadastro: boolea
     if (!data.nome) throw new Error("Nome do aluno é obrigatório");
 
     const passageiroData = _preparePassageiroData(data, data.usuario_id, false);
+    const targetAnoLetivo = Number(passageiroData.ano_letivo) || getNowBR().getFullYear();
+    passageiroData.ano_letivo = targetAnoLetivo;
 
     const { data: inserted, error } = await passageiroRepository.insert(passageiroData);
 
     if (error) throw error;
+
+    const matriculaPayload: Record<string, unknown> = {
+        usuario_id: inserted.usuario_id,
+        passageiro_id: inserted.id,
+        ano_letivo: targetAnoLetivo,
+        ativo: inserted.ativo ?? true,
+        escola_id: inserted.escola_id,
+        veiculo_id: inserted.veiculo_id,
+        periodo: inserted.periodo,
+        modalidade: inserted.modalidade,
+        turma: inserted.turma,
+        sala: inserted.sala,
+        nome_professor: inserted.nome_professor,
+        horario_entrada: inserted.horario_entrada,
+        horario_saida: inserted.horario_saida,
+        valor_cobranca: inserted.valor_cobranca,
+        dia_vencimento: inserted.dia_vencimento,
+        isento: inserted.isento ?? false,
+        modo_cobranca: inserted.modo_cobranca,
+        data_inicio_transporte: inserted.data_inicio_transporte,
+        data_fim_transporte: inserted.data_fim_transporte,
+        data_inicio_cobranca: inserted.data_inicio_cobranca,
+        data_fim_cobranca: inserted.data_fim_cobranca,
+    };
+
+    const { error: matError } = await passageiroRepository.upsertMatricula(matriculaPayload);
+    if (matError) {
+        await passageiroRepository.delete(inserted.id);
+        throw matError;
+    }
 
     const respPrincipalData = data.responsavel_principal;
     if (respPrincipalData) {
@@ -223,23 +291,27 @@ const createPassageiro = async (data: CreatePassageiroDTO, isPreCadastro: boolea
             descricao: `Novo aluno ${getFirstAndSecondName(inserted.nome)} cadastrado.`,
             meta: {
                 nome: inserted.nome,
+                ano_letivo: targetAnoLetivo,
                 responsavel: respPrincipalData?.nome || null,
                 valor_cobranca: inserted.valor_cobranca
             }
         });
     }
 
-    const fullPassageiro = await passageiroRepository.getByIdCompleto(inserted.id);
-    return _enrichPassageiroWithResponsavel(fullPassageiro);
+    const fullPassageiro = await passageiroRepository.getByIdCompleto(inserted.id, undefined, targetAnoLetivo);
+    return _enrichPassageiroWithResponsavel(fullPassageiro as Record<string, any>);
 };
 
 const updatePassageiro = async (id: string, data: UpdatePassageiroDTO, targetOwnerId?: string, assignedVeiculoId?: string): Promise<any> => {
     if (!id) throw new Error("ID do aluno é obrigatório");
 
-    const estadoAnterior = await getPassageiro(id, targetOwnerId, assignedVeiculoId);
+    const requestedAno = data.ano_letivo ? Number(data.ano_letivo) : undefined;
+    const estadoAnterior = await getPassageiro(id, targetOwnerId, assignedVeiculoId, requestedAno);
     if (!estadoAnterior) throw new AppError("Aluno não encontrado", 404);
 
+    const effectiveAno = requestedAno || Number(estadoAnterior.ano_letivo) || getNowBR().getFullYear();
     const passageiroData = _preparePassageiroData(data, undefined, true);
+    delete passageiroData.ano_letivo;
 
     const entradaFinal = passageiroData.horario_entrada !== undefined ? passageiroData.horario_entrada : estadoAnterior.horario_entrada;
     const saidaFinal = passageiroData.horario_saida !== undefined ? passageiroData.horario_saida : estadoAnterior.horario_saida;
@@ -248,8 +320,64 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO, targetOwn
         throw new AppError("Horário de saída deve ser maior que o horário de entrada", 400);
     }
 
-    if (Object.keys(passageiroData).length > 0) {
-        const { error } = await passageiroRepository.update(id, passageiroData);
+    const permanentPayload: Record<string, unknown> = {};
+    for (const key of PERMANENT_KEYS) {
+        if (passageiroData[key] !== undefined) {
+            permanentPayload[key] = passageiroData[key];
+        }
+    }
+
+    const matriculaPayload: Record<string, unknown> = {};
+    for (const key of MATRICULA_KEYS) {
+        if (key !== "ano_letivo" && passageiroData[key] !== undefined) {
+            matriculaPayload[key] = passageiroData[key];
+        }
+    }
+
+    if (Object.keys(matriculaPayload).length > 0) {
+        const { data: updatedMat, error: matErr } = await passageiroRepository.updateMatricula(id, effectiveAno, matriculaPayload);
+        if (matErr) throw matErr;
+
+        if (!updatedMat) {
+            const upsertData: Record<string, unknown> = {
+                usuario_id: estadoAnterior.usuario_id,
+                passageiro_id: id,
+                ano_letivo: effectiveAno,
+                ativo: matriculaPayload.ativo ?? estadoAnterior.ativo ?? true,
+                escola_id: matriculaPayload.escola_id ?? estadoAnterior.escola_id,
+                veiculo_id: matriculaPayload.veiculo_id ?? estadoAnterior.veiculo_id,
+                periodo: matriculaPayload.periodo !== undefined ? matriculaPayload.periodo : estadoAnterior.periodo,
+                modalidade: matriculaPayload.modalidade !== undefined ? matriculaPayload.modalidade : estadoAnterior.modalidade,
+                turma: matriculaPayload.turma !== undefined ? matriculaPayload.turma : estadoAnterior.turma,
+                sala: matriculaPayload.sala !== undefined ? matriculaPayload.sala : estadoAnterior.sala,
+                nome_professor: matriculaPayload.nome_professor !== undefined ? matriculaPayload.nome_professor : estadoAnterior.nome_professor,
+                horario_entrada: matriculaPayload.horario_entrada !== undefined ? matriculaPayload.horario_entrada : estadoAnterior.horario_entrada,
+                horario_saida: matriculaPayload.horario_saida !== undefined ? matriculaPayload.horario_saida : estadoAnterior.horario_saida,
+                valor_cobranca: matriculaPayload.valor_cobranca !== undefined ? matriculaPayload.valor_cobranca : estadoAnterior.valor_cobranca,
+                dia_vencimento: matriculaPayload.dia_vencimento !== undefined ? matriculaPayload.dia_vencimento : estadoAnterior.dia_vencimento,
+                isento: matriculaPayload.isento ?? estadoAnterior.isento ?? false,
+                modo_cobranca: matriculaPayload.modo_cobranca !== undefined ? matriculaPayload.modo_cobranca : estadoAnterior.modo_cobranca,
+                data_inicio_transporte: matriculaPayload.data_inicio_transporte !== undefined ? matriculaPayload.data_inicio_transporte : estadoAnterior.data_inicio_transporte,
+                data_fim_transporte: matriculaPayload.data_fim_transporte !== undefined ? matriculaPayload.data_fim_transporte : estadoAnterior.data_fim_transporte,
+                data_inicio_cobranca: matriculaPayload.data_inicio_cobranca !== undefined ? matriculaPayload.data_inicio_cobranca : estadoAnterior.data_inicio_cobranca,
+                data_fim_cobranca: matriculaPayload.data_fim_cobranca !== undefined ? matriculaPayload.data_fim_cobranca : estadoAnterior.data_fim_cobranca,
+            };
+            const { error: upsertErr } = await passageiroRepository.upsertMatricula(upsertData);
+            if (upsertErr) throw upsertErr;
+        }
+    }
+
+    const currentYear = getNowBR().getFullYear();
+    const shouldMirrorMatriculaToLegacyTable =
+        effectiveAno === currentYear ||
+        (Array.isArray(estadoAnterior.anos_matriculados) && estadoAnterior.anos_matriculados.length <= 1);
+
+    const legacyUpdatePayload = shouldMirrorMatriculaToLegacyTable
+        ? { ...permanentPayload, ...matriculaPayload }
+        : permanentPayload;
+
+    if (Object.keys(legacyUpdatePayload).length > 0) {
+        const { error } = await passageiroRepository.update(id, legacyUpdatePayload);
         if (error) throw error;
     }
 
@@ -262,9 +390,10 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO, targetOwn
         try {
             const { data: cobrancasPendentes } = await supabaseAdmin
                 .from("cobrancas")
-                .select("id, mes, ano, valor, data_vencimento, provedor_cobranca_id")
+                .select("id, mes, ano, ano_letivo, valor, data_vencimento, provedor_cobranca_id")
                 .eq("passageiro_id", id)
-                .eq("status", CobrancaStatus.PENDENTE);
+                .eq("status", CobrancaStatus.PENDENTE)
+                .or(`ano_letivo.eq.${effectiveAno},and(ano_letivo.is.null,ano.eq.${effectiveAno})`);
 
             if (cobrancasPendentes && cobrancasPendentes.length > 0) {
                 for (const cob of cobrancasPendentes) {
@@ -330,20 +459,21 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO, targetOwn
         await _syncResponsavelPrincipal(id, data.responsavel_principal, estadoAnterior.responsavel_principal);
     }
 
-    const fullPassageiro = await passageiroRepository.getByIdCompleto(id);
-    const enriched = _enrichPassageiroWithResponsavel(fullPassageiro);
+    const fullPassageiro = await passageiroRepository.getByIdCompleto(id, undefined, effectiveAno);
+    const enriched = _enrichPassageiroWithResponsavel(fullPassageiro as Record<string, any>);
 
     const diff = calculateAuditDiff(estadoAnterior, passageiroData);
 
-    if (diff.hasChanges) {
+    if (diff.hasChanges && fullPassageiro) {
         historicoService.log({
             usuario_id: fullPassageiro.usuario_id,
             entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
             entidade_id: id,
             acao: AtividadeAcao.PASSAGEIRO_EDITADO,
-            descricao: `Cadastro do aluno ${getFirstAndSecondName(fullPassageiro.nome)} atualizado.`,
+            descricao: `Cadastro do aluno ${getFirstAndSecondName(fullPassageiro.nome)} (${effectiveAno}) atualizado.`,
             meta: {
                 nome: fullPassageiro.nome,
+                ano_letivo: effectiveAno,
                 campos_alterados: diff.campos,
                 campos: diff.campos,
                 alteracoes: diff.alteracoes,
@@ -354,7 +484,7 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO, targetOwn
         });
     }
 
-    return getPassageiro(id, targetOwnerId, assignedVeiculoId);
+    return getPassageiro(id, targetOwnerId, assignedVeiculoId, effectiveAno);
 };
 
 const deletePassageiro = async (id: string, targetOwnerId?: string, assignedVeiculoId?: string): Promise<void> => {
@@ -377,10 +507,130 @@ const deletePassageiro = async (id: string, targetOwnerId?: string, assignedVeic
             }
         });
     }
-}
+};
 
-const getPassageiro = async (id: string, targetOwnerId?: string, assignedVeiculoId?: string): Promise<any> => {
-    const { data, error } = await passageiroRepository.getById(id);
+const deleteMatricula = async (
+    id: string,
+    anoLetivo: number,
+    targetOwnerId?: string,
+    assignedVeiculoId?: string
+): Promise<{ deletedStudent: boolean; remainingYears: number[] }> => {
+    if (!id || !anoLetivo) throw new AppError("ID do aluno e ano letivo são obrigatórios", 400);
+
+    const passageiro = await getPassageiro(id, targetOwnerId, assignedVeiculoId, anoLetivo);
+    if (!passageiro) throw new AppError("Aluno não encontrado", 404);
+
+    const { data: cobrancasPagas } = await supabaseAdmin
+        .from("cobrancas")
+        .select("id")
+        .eq("passageiro_id", id)
+        .eq("status", CobrancaStatus.PAGO)
+        .or(`ano_letivo.eq.${anoLetivo},and(ano_letivo.is.null,ano.eq.${anoLetivo})`)
+        .limit(1);
+
+    if (cobrancasPagas && cobrancasPagas.length > 0) {
+        throw new AppError(`Não é possível excluir a matrícula de ${anoLetivo} pois existem parcelas pagas neste ano letivo.`, 400);
+    }
+
+    const { data: todasMatriculas } = await passageiroRepository.getMatriculasByPassageiro(id);
+    const listMats = todasMatriculas || [];
+
+    if (listMats.length <= 1) {
+        await deletePassageiro(id, targetOwnerId, assignedVeiculoId);
+        return { deletedStudent: true, remainingYears: [] };
+    }
+
+    const { data: cobrancasPendentes } = await supabaseAdmin
+        .from("cobrancas")
+        .select("id, provedor_cobranca_id")
+        .eq("passageiro_id", id)
+        .eq("status", CobrancaStatus.PENDENTE)
+        .or(`ano_letivo.eq.${anoLetivo},and(ano_letivo.is.null,ano.eq.${anoLetivo})`);
+
+    if (cobrancasPendentes && cobrancasPendentes.length > 0) {
+        for (const cob of cobrancasPendentes) {
+            if (cob.provedor_cobranca_id) {
+                void cobrancaValidacaoService.cancelarPixCobrancaSeExistir(cob.id, cob.provedor_cobranca_id);
+            }
+        }
+        await supabaseAdmin
+            .from("cobrancas")
+            .update({
+                status: CobrancaStatus.CANCELADA,
+                pix_copia_cola: null,
+                pix_qrcode_url: null,
+                pix_expiracao: null,
+                provedor_cobranca_id: null,
+                repasse_em_processamento: false,
+            })
+            .in("id", cobrancasPendentes.map((c) => c.id));
+    }
+
+    await supabaseAdmin
+        .from("contratos")
+        .update({ status: ContratoStatus.SUBSTITUIDO, updated_at: new Date().toISOString() })
+        .eq("passageiro_id", id)
+        .eq("ano", anoLetivo);
+
+    const { error: delMatError } = await passageiroRepository.deleteMatricula(id, anoLetivo);
+    if (delMatError) throw delMatError;
+
+    await supabaseAdmin
+        .from("passageiro_renovacoes")
+        .update({
+            status: RenovacaoStatus.PENDENTE,
+            confirmado_em: null,
+            updated_at: new Date().toISOString(),
+        })
+        .eq("passageiro_id", id)
+        .eq("ano_destino", anoLetivo)
+        .eq("status", RenovacaoStatus.CONFIRMADO);
+
+    const remainingMats = listMats.filter((m) => Number(m.ano_letivo) !== Number(anoLetivo));
+    const remainingYears = remainingMats.map((m) => Number(m.ano_letivo)).sort((a, b) => a - b);
+
+    const fallbackMat = remainingMats.find((m) => Number(m.ano_letivo) === getNowBR().getFullYear()) || remainingMats[remainingMats.length - 1];
+    if (fallbackMat) {
+        await passageiroRepository.update(id, {
+            ano_letivo: fallbackMat.ano_letivo,
+            ativo: fallbackMat.ativo,
+            escola_id: fallbackMat.escola_id,
+            veiculo_id: fallbackMat.veiculo_id,
+            periodo: fallbackMat.periodo,
+            modalidade: fallbackMat.modalidade,
+            turma: fallbackMat.turma,
+            sala: fallbackMat.sala,
+            nome_professor: fallbackMat.nome_professor,
+            horario_entrada: fallbackMat.horario_entrada,
+            horario_saida: fallbackMat.horario_saida,
+            valor_cobranca: fallbackMat.valor_cobranca,
+            dia_vencimento: fallbackMat.dia_vencimento,
+            isento: fallbackMat.isento,
+            modo_cobranca: fallbackMat.modo_cobranca,
+            data_inicio_transporte: fallbackMat.data_inicio_transporte,
+            data_fim_transporte: fallbackMat.data_fim_transporte,
+            data_inicio_cobranca: fallbackMat.data_inicio_cobranca,
+            data_fim_cobranca: fallbackMat.data_fim_cobranca,
+        });
+    }
+
+    historicoService.log({
+        usuario_id: passageiro.usuario_id,
+        entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
+        entidade_id: id,
+        acao: AtividadeAcao.PASSAGEIRO_EDITADO,
+        descricao: `Matrícula de ${anoLetivo} do aluno ${getFirstAndSecondName(passageiro.nome)} foi excluída.`,
+        meta: {
+            ano_excluido: anoLetivo,
+            anos_restantes: remainingYears,
+        }
+    });
+
+    return { deletedStudent: false, remainingYears };
+};
+
+const getPassageiro = async (id: string, targetOwnerId?: string, assignedVeiculoId?: string, anoLetivo?: number): Promise<any> => {
+    const { data, error } = await passageiroRepository.getById(id, undefined, anoLetivo);
 
     if (error) throw error;
     if (!data) throw new AppError("Aluno não encontrado", 404);
@@ -394,22 +644,43 @@ const getPassageiro = async (id: string, targetOwnerId?: string, assignedVeiculo
     }
 
     const enriched = _enrichPassageiroWithResponsavel(data);
+    const allContratos = (data.contratos as Record<string, any>[]) || [];
+    const targetYear = Number(data.ano_letivo) || getNowBR().getFullYear();
 
-    const ultimoContrato = data.contratos?.[0];
-    const statusContrato = ultimoContrato ? ultimoContrato.status : null;
-    const contratoId = ultimoContrato ? ultimoContrato.id : null;
-    const contratoUrl = ultimoContrato ? (ultimoContrato.contrato_final_url || ultimoContrato.minuta_url) : null;
+    const contratoDoAno = _matchContratoForYear(allContratos, targetYear);
+    const statusContrato = contratoDoAno ? contratoDoAno.status : null;
+    const contratoId = contratoDoAno ? contratoDoAno.id : null;
+    const contratoUrl = contratoDoAno ? (contratoDoAno.contrato_final_url || contratoDoAno.minuta_url) : null;
+
+    const rawMatriculas = Array.isArray(data.matriculas) ? (data.matriculas as Record<string, any>[]) : [];
+    const matriculasEnriquecidas = [...rawMatriculas]
+        .sort((a, b) => Number(a.ano_letivo) - Number(b.ano_letivo))
+        .map((m) => {
+            const cMat = _matchContratoForYear(allContratos, Number(m.ano_letivo));
+            return {
+                ...m,
+                status_contrato: cMat?.status ?? null,
+                contrato_id: cMat?.id ?? null,
+                contrato_url: cMat ? (cMat.contrato_final_url || cMat.minuta_url) : null,
+                contrato_provider: cMat?.provider ?? null,
+                minuta_url: cMat?.minuta_url ?? null,
+                contrato_final_url: cMat?.contrato_final_url ?? null,
+                token_acesso: cMat?.token_acesso ?? null,
+                contrato_ano: cMat?.ano ?? null,
+            };
+        });
 
     return {
         ...enriched,
+        matriculas: matriculasEnriquecidas,
         status_contrato: statusContrato,
         contrato_id: contratoId,
         contrato_url: contratoUrl,
-        contrato_provider: ultimoContrato?.provider ?? null,
-        minuta_url: ultimoContrato?.minuta_url,
-        contrato_final_url: ultimoContrato?.contrato_final_url,
-        token_acesso: ultimoContrato?.token_acesso,
-        contrato_ano: ultimoContrato?.ano ?? null
+        contrato_provider: contratoDoAno?.provider ?? null,
+        minuta_url: contratoDoAno?.minuta_url,
+        contrato_final_url: contratoDoAno?.contrato_final_url,
+        token_acesso: contratoDoAno?.token_acesso,
+        contrato_ano: contratoDoAno?.ano ?? null
     };
 };
 
@@ -427,18 +698,19 @@ const listPassageiros = async (
 
     const passageiros = listData.map((p: Record<string, any>) => {
         const enriched = _enrichPassageiroWithResponsavel(p, true);
-        const ultimo = p.contratos?.[0];
+        const targetYear = Number(p.ano_letivo) || getNowBR().getFullYear();
+        const contratoDoAno = _matchContratoForYear(p.contratos as Record<string, any>[], targetYear);
         const enrichedClean = { ...enriched };
         delete enrichedClean.contratos;
 
         return {
             ...enrichedClean,
-            status_contrato: ultimo?.status ?? null,
-            contrato_id: ultimo?.id ?? null,
-            contrato_status: ultimo?.status ?? null,
-            contrato_provider: ultimo?.provider ?? null,
-            token_acesso: ultimo?.token_acesso ?? null,
-            contrato_ano: ultimo?.ano ?? null,
+            status_contrato: contratoDoAno?.status ?? null,
+            contrato_id: contratoDoAno?.id ?? null,
+            contrato_status: contratoDoAno?.status ?? null,
+            contrato_provider: contratoDoAno?.provider ?? null,
+            token_acesso: contratoDoAno?.token_acesso ?? null,
+            contrato_ano: contratoDoAno?.ano ?? null,
         };
     });
 
@@ -456,9 +728,10 @@ const listPassageiros = async (
     };
 };
 
-const toggleAtivo = async (passageiroId: string, novoStatus: boolean, targetOwnerId?: string, assignedVeiculoId?: string): Promise<boolean> => {
-    const pass = await getPassageiro(passageiroId, targetOwnerId, assignedVeiculoId);
-    const { error } = await passageiroRepository.updateAtivo(passageiroId, novoStatus);
+const toggleAtivo = async (passageiroId: string, novoStatus: boolean, targetOwnerId?: string, assignedVeiculoId?: string, anoLetivo?: number): Promise<boolean> => {
+    const pass = await getPassageiro(passageiroId, targetOwnerId, assignedVeiculoId, anoLetivo);
+    const effectiveAno = anoLetivo || Number(pass.ano_letivo) || getNowBR().getFullYear();
+    const { error } = await passageiroRepository.updateAtivo(passageiroId, novoStatus, effectiveAno);
 
     if (error) throw new Error(`Falha ao alterar status do aluno: ${error.message}`);
 
@@ -468,8 +741,9 @@ const toggleAtivo = async (passageiroId: string, novoStatus: boolean, targetOwne
             entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
             entidade_id: passageiroId,
             acao: AtividadeAcao.PASSAGEIRO_STATUS,
-            descricao: `Cadastro de ${getFirstAndSecondName(pass.nome)} foi ${novoStatus ? 'ATIVADO' : 'DESATIVADO'}.`,
+            descricao: `Cadastro de ${getFirstAndSecondName(pass.nome)} (${effectiveAno}) foi ${novoStatus ? 'ATIVADO' : 'DESATIVADO'}.`,
             meta: {
+                ano_letivo: effectiveAno,
                 ativo: novoStatus,
                 alteracoes: [{
                     campo: "ativo",
@@ -482,7 +756,7 @@ const toggleAtivo = async (passageiroId: string, novoStatus: boolean, targetOwne
     }
 
     return true;
-}
+};
 
 const countListPassageirosByUsuario = async (
     usuarioId: string,
@@ -503,7 +777,6 @@ const finalizePreCadastro = async (
     data: UpdatePassageiroDTO,
     usuarioId: string
 ): Promise<any> => {
-    // 1. Buscar Pré-Cadastro
     const { data: pre, error } = await prePassageiroRepository.getById(prePassageiroId, usuarioId);
 
     if (error) throw error;
@@ -525,33 +798,25 @@ const finalizePreCadastro = async (
         complemento: data.responsavel_principal?.complemento !== undefined ? data.responsavel_principal.complemento : (pre.complemento || null),
     };
 
-    // 2. Mesclar dados (Data sobrescreve Pre)
     const payload: CreatePassageiroDTO = {
         ...pre,
         ...data,
         nome: data.nome || pre.nome || pre.nome_aluno || "Aluno",
         usuario_id: usuarioId,
         responsavel_principal: responsavelPrincipal,
-        // Garantir que valor_cobranca e dia_vencimento do pre sejam mantidos se não vierem no data
+        ano_letivo: data.ano_letivo !== undefined ? data.ano_letivo : (pre.ano_letivo || getNowBR().getFullYear()),
         valor_cobranca: data.valor_cobranca !== undefined ? data.valor_cobranca : pre.valor_cobranca,
         dia_vencimento: data.dia_vencimento !== undefined ? data.dia_vencimento : pre.dia_vencimento,
     };
 
-    // Remover campos de sistema do pre
     delete (payload as Record<string, unknown>).id;
     delete (payload as Record<string, unknown>).created_at;
     delete (payload as Record<string, unknown>).updated_at;
 
-    // 3. Criar Passageiro
     const novoPassageiro = await createPassageiro(payload, true);
 
-    // 4. Trigger de Contrato Automático
-    // Removido pois createPassageiro já realiza essa verificação e criação
-
-    // 5. Deletar Pré-Cadastro
     await prePassageiroRepository.delete(prePassageiroId);
 
-    // --- LOG DE AUDITORIA ---
     historicoService.log({
         usuario_id: usuarioId,
         entidade_tipo: AtividadeEntidadeTipo.PASSAGEIRO,
@@ -562,7 +827,7 @@ const finalizePreCadastro = async (
     });
 
     return novoPassageiro;
-}
+};
 
 const lookupResponsavelByCpf = async (usuarioId: string, searchVal: string): Promise<any> => {
     if (!usuarioId) throw new AppError("Usuário não identificado", 401);
@@ -589,7 +854,6 @@ const listarAniversariantesDoMes = async (usuarioId: string, mes: number, veicul
     let passageirosSemData = 0;
     const passageirosSemDataList: any[] = [];
     const aniversariantesMap = new Map<number, any[]>();
-    // Inicializar as 5 semanas possíveis
     for (let i = 1; i <= 5; i++) {
         aniversariantesMap.set(i, []);
     }
@@ -609,13 +873,12 @@ const listarAniversariantesDoMes = async (usuarioId: string, mes: number, veicul
         }
 
         const date = parseLocalDate(p.data_nascimento);
-        const pMes = date.getMonth() + 1; // getMonth é 0-indexado
+        const pMes = date.getMonth() + 1;
 
         if (pMes === mes) {
-            // Calcular em qual semana do mês a data cai
             const dia = date.getDate();
             const semanaNoMes = Math.ceil(dia / 7);
-            const semanaGarantida = semanaNoMes > 5 ? 5 : semanaNoMes; // Garantir limite
+            const semanaGarantida = semanaNoMes > 5 ? 5 : semanaNoMes;
 
             const lista = aniversariantesMap.get(semanaGarantida) || [];
             lista.push({
@@ -630,7 +893,6 @@ const listarAniversariantesDoMes = async (usuarioId: string, mes: number, veicul
     });
 
     const semanasFormatadas = Array.from(aniversariantesMap.entries()).map(([semana, aniversariantes]) => {
-        // Ordenar por dia dentro da semana
         aniversariantes.sort((a, b) => a.dia - b.dia);
         return {
             semana,
@@ -914,7 +1176,8 @@ const processarLembreteAniversarioMotorista = async (params: {
 const updatePassageirosBatch = async (
     items: UpdatePassageiroBatchItemDTO[],
     targetOwnerId?: string,
-    assignedVeiculoId?: string
+    assignedVeiculoId?: string,
+    batchAnoLetivo?: number
 ): Promise<{ success: boolean; updatedCount: number }> => {
     if (!targetOwnerId) {
         throw new AppError("Usuário não autenticado", 401);
@@ -941,12 +1204,14 @@ const updatePassageirosBatch = async (
         }
     }
 
+    const currentYear = getNowBR().getFullYear();
     let updatedCount = 0;
     const CHUNK_SIZE = 10;
     for (let i = 0; i < items.length; i += CHUNK_SIZE) {
         const chunk = items.slice(i, i + CHUNK_SIZE);
         await Promise.all(chunk.map(async (item) => {
             const payload: Record<string, unknown> = {};
+            const itemAno = item.ano_letivo || batchAnoLetivo || currentYear;
 
             if (item.escola_id !== undefined) payload.escola_id = (item.escola_id === "none" || item.escola_id === "") ? null : item.escola_id;
             if (item.veiculo_id !== undefined) payload.veiculo_id = (item.veiculo_id === "none" || item.veiculo_id === "") ? null : item.veiculo_id;
@@ -959,8 +1224,13 @@ const updatePassageirosBatch = async (
             if (item.ativo !== undefined) payload.ativo = item.ativo;
 
             if (Object.keys(payload).length > 0) {
-                const { error: updateError } = await passageiroRepository.update(item.id, payload);
-                if (updateError) throw updateError;
+                const { error: updateMatError } = await passageiroRepository.updateMatricula(item.id, itemAno, payload);
+                if (updateMatError) throw updateMatError;
+
+                if (itemAno === currentYear) {
+                    const { error: updateError } = await passageiroRepository.update(item.id, payload);
+                    if (updateError) throw updateError;
+                }
                 updatedCount++;
             }
         }));
@@ -975,6 +1245,7 @@ const updatePassageirosBatch = async (
             descricao: `Atualização rápida realizada em ${updatedCount} aluno(s).`,
             meta: {
                 total_atualizados: updatedCount,
+                ano_letivo: batchAnoLetivo || currentYear,
                 ids: items.map(i => i.id)
             }
         });
@@ -988,6 +1259,7 @@ export const passageiroService = {
     updatePassageiro,
     updatePassageirosBatch,
     deletePassageiro,
+    deleteMatricula,
     getPassageiro,
     listPassageiros,
     toggleAtivo,

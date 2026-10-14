@@ -13,7 +13,7 @@ export const reciboAnualService = {
     async obterOuGerarReciboAnual(passageiroId: string, ano: number, usuarioId?: string): Promise<ReciboAnual | null> {
         logger.info({ passageiroId, ano, usuarioId }, "[reciboAnualService.obterOuGerarReciboAnual] Verificando recibo anual");
 
-        const passageiro = await passageiroRepository.getByIdCompleto(passageiroId);
+        const passageiro = await passageiroRepository.getByIdCompleto(passageiroId, usuarioId, ano);
         if (!passageiro) {
             throw new AppError("Passageiro não encontrado.", 404);
         }

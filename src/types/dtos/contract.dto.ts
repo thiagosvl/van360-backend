@@ -28,6 +28,7 @@ export const importContractSchema = z.object({
   passageiroId: z.string().uuid('ID do aluno inválido'),
   arquivoBase64: z.string().min(1, 'Arquivo PDF é obrigatório'),
   nomeArquivo: z.string().min(1, 'Nome do arquivo é obrigatório'),
+  ano: z.number().int().optional(),
 });
 
 export type ImportContractDTO = z.infer<typeof importContractSchema>;

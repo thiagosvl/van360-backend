@@ -6,7 +6,6 @@ import {
   listRenovacoesQuerySchema,
   reajusteLoteSchema,
   updateRenovacaoSchema,
-  virarAnoLetivoSchema,
   responderRenovacaoPublicaSchema,
   atualizarDadosPublicosSchema,
   notificarRenovacaoSchema,
@@ -59,17 +58,6 @@ export const renovacaoController = {
     logger.info({ usuarioId, passageiroId }, "RenovacaoController.updateIndividual - Starting");
 
     const result = await renovacaoService.updateRenovacaoIndividual(usuarioId, passageiroId, dto);
-    return reply.status(200).send(result);
-  },
-
-  virarAno: async (request: FastifyRequest, reply: FastifyReply) => {
-    const usuarioId = request.data_owner_id || request.user?.id;
-    if (!usuarioId) throw new AppError("Usuário não autenticado", 401);
-
-    const dto = virarAnoLetivoSchema.parse(request.body);
-    logger.info({ usuarioId, ano: dto.ano_destino }, "RenovacaoController.virarAno - Starting");
-
-    const result = await renovacaoService.virarAnoLetivo(usuarioId, dto);
     return reply.status(200).send(result);
   },
 

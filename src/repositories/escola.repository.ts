@@ -2,6 +2,7 @@ import { supabaseAdmin } from "../config/supabase.js";
 import { ListEscolasFiltersDTO } from "../types/dtos/escola.dto.js";
 import { isValidFilterValue } from "../utils/filter.utils.js";
 import { TablesInsert } from "../types/database.types.js";
+import { getNowBR } from "../utils/date.utils.js";
 
 export type EscolaInsert = TablesInsert<"escolas">;
 
@@ -58,7 +59,7 @@ export const escolaRepository = {
         const selectStr = isSlim
             ? "id, usuario_id, nome, ativo"
             : isComContagem
-            ? "*, passageiros(count)"
+            ? "*, passageiros:passageiro_matriculas(count)"
             : "*";
 
         let query = supabaseAdmin
@@ -68,7 +69,9 @@ export const escolaRepository = {
             .order("nome", { ascending: true });
 
         if (isComContagem) {
-            query = query.eq("passageiros.ativo", true);
+            query = query
+                .eq("passageiros.ativo", true)
+                .eq("passageiros.ano_letivo", getNowBR().getFullYear());
         }
 
         if (isValidFilterValue(filtros?.search)) {

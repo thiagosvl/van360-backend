@@ -81,10 +81,13 @@ export const usuarioResumoService = {
       prePassageiroRepository.getCountForDashboard(dataOwnerId),
     ]);
 
-    // Process Counters
+    const currentYear = getNowBR().getFullYear();
     const passageirosList = passData.data || [];
-    const passTotal = passageirosList.length;
-    const passAtivos = passageirosList.filter((p: Record<string, any>) => p.ativo).length;
+    const currentYearMatriculas = passageirosList.filter(
+      (p: Record<string, any>) => Number(p.ano_letivo || currentYear) === currentYear
+    );
+    const passTotal = currentYearMatriculas.length;
+    const passAtivos = currentYearMatriculas.filter((p: Record<string, any>) => p.ativo).length;
     const passInativos = passTotal - passAtivos;
 
     const veicTotal = veiculosCount.data?.length || 0;
@@ -125,7 +128,6 @@ export const usuarioResumoService = {
       };
     }
 
-    // 3. Financial Summary
     const now = getNowBR();
     const targetMes = mes ?? (now.getMonth() + 1);
     const targetAno = ano ?? now.getFullYear();
@@ -172,28 +174,33 @@ export const usuarioResumoService = {
         return { year: d.getFullYear(), month: d.getMonth() + 1 };
       };
 
-      passageirosList.forEach((p: Record<string, any>) => {
+      const candidateMatriculas = [...passageirosList]
+        .filter((p: Record<string, any>) => {
+          const anoMat = Number(p.ano_letivo || targetAno);
+          return anoMat === targetAno || anoMat === targetAno - 1;
+        })
+        .sort((a, b) => Number(b.ano_letivo || 0) - Number(a.ano_letivo || 0));
+
+      candidateMatriculas.forEach((p: Record<string, any>) => {
         if (!p.ativo || p.isento || passageirosComCobranca.has(p.id) || !p.valor_cobranca || Number(p.valor_cobranca) <= 0) {
           return;
         }
 
+        const anoMat = Number(p.ano_letivo || targetAno);
         const inicioStr = p.data_inicio_cobranca || p.created_at || driverCreatedAt;
-        const inicio = parseYearMonth(inicioStr);
-        if (inicio) {
-          if (targetAno < inicio.year || (targetAno === inicio.year && targetMes < inicio.month)) {
-            return;
-          }
+        const inicio = parseYearMonth(inicioStr) || { year: anoMat, month: 1 };
+        if (targetAno < inicio.year || (targetAno === inicio.year && targetMes < inicio.month)) {
+          return;
         }
 
-        if (p.data_fim_cobranca) {
-          const fim = parseYearMonth(p.data_fim_cobranca);
-          if (fim) {
-            if (targetAno > fim.year || (targetAno === fim.year && targetMes > fim.month)) {
-              return;
-            }
-          }
+        const fim = p.data_fim_cobranca
+          ? (parseYearMonth(p.data_fim_cobranca) || { year: anoMat, month: 12 })
+          : { year: anoMat, month: 12 };
+        if (targetAno > fim.year || (targetAno === fim.year && targetMes > fim.month)) {
+          return;
         }
 
+        passageirosComCobranca.add(p.id);
         receitaProjetada += Number(p.valor_cobranca);
 
         const dataVencProj = getSafeDueDateString(p.dia_vencimento, targetMes, targetAno);

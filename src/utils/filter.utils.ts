@@ -4,6 +4,7 @@
  */
 export function isValidFilterValue(val: unknown): val is string {
   if (val === null || val === undefined) return false;
+  if (typeof val === "number") return !Number.isNaN(val);
   if (typeof val !== "string") return false;
   const trimmed = val.trim();
   if (trimmed === "") return false;

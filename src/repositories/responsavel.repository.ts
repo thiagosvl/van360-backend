@@ -48,6 +48,7 @@ export const responsavelRepository = {
             nome,
             ativo,
             usuario_id,
+            matriculas:passageiro_matriculas(id, ano_letivo, ativo),
             usuario:usuarios(id, nome, apelido)
           )
         )
@@ -64,7 +65,8 @@ export const responsavelRepository = {
       if (!responsavel.passageiro_links) continue;
       for (const link of responsavel.passageiro_links as any[]) {
         const pass = Array.isArray(link.passageiro) ? link.passageiro[0] : link.passageiro;
-        if (pass && pass.ativo && !seenPassageiroIds.has(pass.id)) {
+        const hasMatricula = Array.isArray(pass?.matriculas) && pass.matriculas.length > 0;
+        if (pass && (pass.ativo || hasMatricula) && !seenPassageiroIds.has(pass.id)) {
           seenPassageiroIds.add(pass.id);
           const usr = Array.isArray(pass.usuario) ? pass.usuario[0] : pass.usuario;
           const motoristaNome = usr?.apelido?.trim() || usr?.nome?.trim() || "";
@@ -119,7 +121,6 @@ export const responsavelRepository = {
       .eq("id", responsavelId);
   },
 
-  // Mantidos aliases para compatibilidade com chamadas existentes
   async updatePinPrincipal(passageiroId: string, pinHash: string) {
     const { data: link } = await supabaseAdmin
       .from("passageiro_responsaveis")
@@ -166,6 +167,11 @@ export const responsavelRepository = {
         escola_id, veiculo_id,
         escola:escolas (id, nome),
         veiculo:veiculos (id, placa, modelo),
+        matriculas:passageiro_matriculas (
+          *,
+          escola:escolas (id, nome),
+          veiculo:veiculos (id, placa, modelo)
+        ),
         usuario:usuarios (id, nome, apelido, telefone),
         responsaveis_links:passageiro_responsaveis (
           id, tipo, parentesco, notificacoes_rota_habilitadas,
@@ -226,14 +232,44 @@ export const responsavelRepository = {
       };
     });
 
-    const { data: contratos } = await supabaseAdmin
+    const { data: todosContratos } = await supabaseAdmin
       .from("contratos")
-      .select("id, status, minuta_url, contrato_final_url, token_acesso, created_at")
+      .select("id, ano, status, minuta_url, contrato_final_url, token_acesso, created_at")
       .eq("passageiro_id", passageiroId)
-      .order("created_at", { ascending: false })
-      .limit(1);
+      .in("status", ["pendente", "assinado"])
+      .order("created_at", { ascending: false });
 
-    const contrato = contratos && contratos.length > 0 ? contratos[0] : null;
+    const contratosValidos = todosContratos || [];
+    const currentYear = getNowBR().getFullYear();
+    const rawMatriculas = ((passageiro as Record<string, unknown>).matriculas as Record<string, unknown>[]) || [];
+    const activeMatricula =
+      rawMatriculas.find((m) => Number(m.ano_letivo) === currentYear) ||
+      [...rawMatriculas].sort((a, b) => Number(b.ano_letivo) - Number(a.ano_letivo))[0] ||
+      null;
+
+    const matriculasEnriquecidas: Record<string, unknown>[] = rawMatriculas
+      .map((m: Record<string, unknown>): Record<string, unknown> => {
+        const escMat = Array.isArray(m.escola) ? (m.escola[0] as { nome?: string }) : (m.escola as { nome?: string } | null);
+        const veicMat = Array.isArray(m.veiculo) ? (m.veiculo[0] as { placa?: string; modelo?: string }) : (m.veiculo as { placa?: string; modelo?: string } | null);
+        const contratoAno = contratosValidos.find((c) => Number(c.ano) === Number(m.ano_letivo)) || null;
+        return {
+          ...m,
+          escola_nome: escMat?.nome || null,
+          veiculo_placa: veicMat?.placa || null,
+          veiculo_modelo: veicMat?.modelo || null,
+          contrato: contratoAno,
+        };
+      })
+      .sort((a, b) => Number(a.ano_letivo) - Number(b.ano_letivo));
+
+    const anosMatriculados = Array.from(
+      new Set(matriculasEnriquecidas.map((m) => Number(m.ano_letivo)).filter((n) => !Number.isNaN(n)))
+    ).sort((a, b) => a - b);
+
+    const contrato =
+      (activeMatricula && contratosValidos.find((c) => Number(c.ano) === Number(activeMatricula.ano_letivo))) ||
+      contratosValidos[0] ||
+      null;
 
     const responsaveisAdicionais = links
       .filter((l: any) => l.tipo === TipoResponsavel.ADICIONAL && l.responsavel)
@@ -282,11 +318,35 @@ export const responsavelRepository = {
     const rotas = Array.from(rotasMap.values());
 
     const usr = Array.isArray(passageiro.usuario) ? passageiro.usuario[0] : passageiro.usuario;
-    const esc = Array.isArray(passageiro.escola) ? passageiro.escola[0] : passageiro.escola;
-    const veic = Array.isArray(passageiro.veiculo) ? passageiro.veiculo[0] : passageiro.veiculo;
+    const rawEsc = activeMatricula?.escola ?? passageiro.escola;
+    const rawVeic = activeMatricula?.veiculo ?? passageiro.veiculo;
+    const esc = Array.isArray(rawEsc) ? rawEsc[0] : rawEsc;
+    const veic = Array.isArray(rawVeic) ? rawVeic[0] : rawVeic;
 
     return {
       ...passageiro,
+      ...(activeMatricula ? {
+        ano_letivo: activeMatricula.ano_letivo,
+        ativo: activeMatricula.ativo,
+        isento: activeMatricula.isento,
+        escola_id: activeMatricula.escola_id,
+        veiculo_id: activeMatricula.veiculo_id,
+        periodo: activeMatricula.periodo,
+        modalidade: activeMatricula.modalidade,
+        turma: activeMatricula.turma,
+        sala: activeMatricula.sala,
+        nome_professor: activeMatricula.nome_professor,
+        horario_entrada: activeMatricula.horario_entrada,
+        horario_saida: activeMatricula.horario_saida,
+        valor_cobranca: activeMatricula.valor_cobranca,
+        dia_vencimento: activeMatricula.dia_vencimento,
+        data_inicio_transporte: activeMatricula.data_inicio_transporte,
+        data_fim_transporte: activeMatricula.data_fim_transporte,
+        data_inicio_cobranca: activeMatricula.data_inicio_cobranca,
+        data_fim_cobranca: activeMatricula.data_fim_cobranca,
+      } : {}),
+      matriculas: matriculasEnriquecidas,
+      anos_matriculados: anosMatriculados.length > 0 ? anosMatriculados : (passageiro.ano_letivo ? [Number(passageiro.ano_letivo)] : []),
       responsavel_principal: principalResp?.id ? {
         id: principalResp.id,
         nome: principalResp.nome || null,

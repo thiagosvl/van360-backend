@@ -125,8 +125,8 @@ export const cobrancaRepository = {
             .order("data_vencimento", { ascending: false });
 
         if (isValidFilterValue(ano)) {
-            const anoInt = parseInt(ano);
-            query = query.or(`ano.eq.${anoInt},ano_letivo.eq.${anoInt}`);
+            const anoInt = parseInt(ano, 10);
+            query = query.or(`ano_letivo.eq.${anoInt},and(ano_letivo.is.null,ano.eq.${anoInt})`);
         }
 
         return query;
@@ -227,6 +227,8 @@ export const cobrancaRepository = {
                 status: CobrancaStatus.PENDENTE,
                 data_pagamento: null,
                 valor_pago: null,
+                valor_multa: 0,
+                valor_juros: 0,
                 tipo_pagamento: null,
                 pagamento_manual: false,
                 recibo_url: null,

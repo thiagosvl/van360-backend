@@ -36,6 +36,7 @@ import {
     EVENTO_MOTORISTA_NOVO_PRE_CADASTRO,
     EVENTO_MOTORISTA_AUSENCIA_REGISTRADA,
     EVENTO_MOTORISTA_AUSENCIA_REMOVIDA,
+    EVENTO_MOTORISTA_RENOVACAO_RESPOSTA_RECEBIDA,
     EVENTO_MOTORISTA_COBRANCAS_HOJE,
     EVENTO_MOTORISTA_CONFERENCIA_NOTURNA,
     EVENTO_MOTORISTA_PAGAMENTO_RECEBIDO_AUTOMATICO
@@ -56,6 +57,7 @@ export class FirebaseMapper {
                 case EVENTO_MOTORISTA_NOVO_PRE_CADASTRO: return FirebaseDriverTemplates.newPassengerPreRegistration(contextData);
                 case EVENTO_MOTORISTA_AUSENCIA_REGISTRADA: return FirebaseDriverTemplates.absenceRegisteredByParent(contextData);
                 case EVENTO_MOTORISTA_AUSENCIA_REMOVIDA: return FirebaseDriverTemplates.absenceRemovedByParent(contextData);
+                case EVENTO_MOTORISTA_RENOVACAO_RESPOSTA_RECEBIDA: return FirebaseDriverTemplates.renewalResponseReceivedDriver(contextData);
                 case EVENTO_MOTORISTA_CONTRATO_ASSINADO: return FirebaseDriverTemplates.contractSignedDriver(contextData);
                 case EVENTO_MOTORISTA_ASSINATURA_PAGO: return FirebaseDriverTemplates.subscriptionPaid(contextData);
                 case EVENTO_MOTORISTA_ASSINATURA_VENCEU: return FirebaseDriverTemplates.subscriptionDueToday(contextData);

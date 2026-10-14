@@ -231,10 +231,11 @@ export class WooviProvider implements PaymentProviderAdapter {
             });
 
             const data = response.data;
+            const endToEndId = data?.endToEndId || data?.transaction?.endToEndId;
             return {
                 success: true,
-                endToEndId: data?.endToEndId || data?.transaction?.endToEndId,
-                transactionId: data?.transactionId || data?.id
+                endToEndId,
+                transactionId: data?.transactionId || data?.id || data?.transaction?.correlationID || data?.transaction?.id || endToEndId
             };
         } catch (error: unknown) {
             const err = error as { response?: { data?: { error?: string; message?: string } }; message?: string };

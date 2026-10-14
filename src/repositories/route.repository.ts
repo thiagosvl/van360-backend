@@ -634,18 +634,23 @@ export const routeRepository = {
     const sanitizedSearch = search.replace(/[,()%\\]/g, "").trim();
     if (!sanitizedSearch) return { data: [], error: null };
 
+    const currentYear = getNowBR().getFullYear();
+
     const formatAlunoItem = (p: any) => {
       const responsaveis = p?.responsaveis || [];
       const principalLink = Array.isArray(responsaveis)
         ? responsaveis.find((l: any) => l.tipo === TipoResponsavel.PRINCIPAL) || responsaveis[0]
         : null;
       const resp = Array.isArray(principalLink?.responsavel) ? principalLink.responsavel[0] : principalLink?.responsavel;
-      const escola = Array.isArray(p?.escola) ? p.escola[0] : p?.escola;
+      const matriculas = Array.isArray(p?.matriculas) ? (p.matriculas as Array<{ ano_letivo?: number; turma?: string | null; escola?: unknown }>) : [];
+      const currentMat = matriculas.find((m) => Number(m.ano_letivo) === currentYear) || matriculas[0];
+      const rawEscola = currentMat?.escola ?? p?.escola;
+      const escola = Array.isArray(rawEscola) ? rawEscola[0] : rawEscola;
 
       return {
         id: p.id,
         nome: p.nome,
-        turma: p.turma || null,
+        turma: (currentMat ? currentMat.turma : p.turma) || null,
         escola_nome: escola?.nome || null,
         responsavel_nome: resp?.nome || null,
       };
@@ -664,6 +669,12 @@ export const routeRepository = {
               id,
               nome
             ),
+            matriculas:passageiro_matriculas (
+              ano_letivo,
+              ativo,
+              turma,
+              escola:escolas (id, nome)
+            ),
             responsaveis:passageiro_responsaveis (
               id,
               tipo,
@@ -675,15 +686,19 @@ export const routeRepository = {
           )
         `)
         .eq("rota_id", rotaId)
-        .eq("passageiro.ativo", true)
         .ilike("passageiro.nome", `%${sanitizedSearch}%`);
 
       if (error) return { data: null, error };
 
       const map = new Map<string, { id: string; nome: string; turma?: string | null; escola_nome?: string | null; responsavel_nome?: string | null }>();
-      (data || []).forEach((item: any) => {
-        if (item.passageiro && item.passageiro.id && item.passageiro.nome) {
-          map.set(item.passageiro.id, formatAlunoItem(item.passageiro));
+      (data || []).forEach((item: Record<string, unknown>) => {
+        const p = item.passageiro as { id?: string; nome?: string; ativo?: boolean; matriculas?: Array<{ ano_letivo?: number; ativo?: boolean }> } | undefined;
+        if (!p || !p.id || !p.nome) return;
+        const matriculas = Array.isArray(p.matriculas) ? p.matriculas : [];
+        const currentMat = matriculas.find((m) => Number(m.ano_letivo) === currentYear);
+        const isAtivo = currentMat ? Boolean(currentMat.ativo) : Boolean(p.ativo);
+        if (isAtivo) {
+          map.set(p.id, formatAlunoItem(p));
         }
       });
 
@@ -692,33 +707,51 @@ export const routeRepository = {
     }
 
     const { data, error } = await supabaseAdmin
-      .from("passageiros")
+      .from("passageiro_matriculas")
       .select(`
-        id,
-        nome,
+        passageiro_id,
+        ano_letivo,
+        ativo,
         turma,
-        escola:escolas (
+        escola:escolas (id, nome),
+        passageiro:passageiros!inner (
           id,
-          nome
-        ),
-        responsaveis:passageiro_responsaveis (
-          id,
-          tipo,
-          responsavel:responsaveis (
+          nome,
+          turma,
+          escola:escolas (
             id,
             nome
+          ),
+          responsaveis:passageiro_responsaveis (
+            id,
+            tipo,
+            responsavel:responsaveis (
+              id,
+              nome
+            )
           )
         )
       `)
       .eq("usuario_id", usuarioId)
+      .eq("ano_letivo", currentYear)
       .eq("ativo", true)
-      .ilike("nome", `%${sanitizedSearch}%`)
-      .order("nome", { ascending: true })
+      .ilike("passageiro.nome", `%${sanitizedSearch}%`)
       .limit(25);
 
     if (error) return { data: null, error };
 
-    const alunos = (data || []).map(formatAlunoItem);
+    const alunos = (data || [])
+      .map((row) => {
+        const p = Array.isArray(row.passageiro) ? row.passageiro[0] : row.passageiro;
+        if (!p) return null;
+        return formatAlunoItem({
+          ...p,
+          matriculas: [row],
+        });
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item))
+      .sort((a, b) => a.nome.localeCompare(b.nome));
+
     return { data: alunos, error: null };
   }
 };

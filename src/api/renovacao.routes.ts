@@ -49,12 +49,6 @@ const renovacaoRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   );
 
   app.post(
-    "/virar-ano",
-    { preHandler: [requirePermission("renovacoes.gerenciar")] },
-    renovacaoController.virarAno
-  );
-
-  app.post(
     "/:passageiroId/notificar",
     { preHandler: [requirePermission("renovacoes.gerenciar")] },
     renovacaoController.notificarIndividual

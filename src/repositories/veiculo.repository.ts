@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { ListVeiculosFiltersDTO } from "../types/dtos/veiculo.dto.js";
 import { isValidFilterValue } from "../utils/filter.utils.js";
+import { getNowBR } from "../utils/date.utils.js";
 
 export const veiculoRepository = {
     async insert(data: Record<string, unknown>) {
@@ -48,7 +49,7 @@ export const veiculoRepository = {
         const selectStr = isSlim
             ? "id, usuario_id, placa, marca, modelo, ativo"
             : isComContagem
-            ? "*, passageiros(count)"
+            ? "*, passageiros:passageiro_matriculas(count)"
             : "*";
 
         let query = supabaseAdmin
@@ -58,7 +59,9 @@ export const veiculoRepository = {
             .order("placa", { ascending: true });
 
         if (isComContagem) {
-            query = query.eq("passageiros.ativo", true);
+            query = query
+                .eq("passageiros.ativo", true)
+                .eq("passageiros.ano_letivo", getNowBR().getFullYear());
         }
 
         if (isValidFilterValue(filtros?.search)) {

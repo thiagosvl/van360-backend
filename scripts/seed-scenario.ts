@@ -155,6 +155,7 @@ async function clearData(usuarioId: string) {
         "execucoes_rota",
         "rotas",
         "passageiro_renovacoes",
+        "passageiro_matriculas",
         "fila_notificacoes",
         "passageiros",
         "fretamentos",
@@ -305,6 +306,31 @@ async function seedPassageiros(
             .single();
 
         if (pError) throw pError;
+
+        const { error: mError } = await supabaseAdmin
+            .from("passageiro_matriculas")
+            .insert({
+                passageiro_id: pData.id,
+                usuario_id: usuarioId,
+                ano_letivo: anoAtual,
+                ativo: true,
+                isento: false,
+                escola_id: escola.id,
+                veiculo_id: veiculo.id,
+                periodo: pData.periodo,
+                modalidade: pData.modalidade,
+                turma: pData.turma,
+                sala: `Sala ${randomNumber(1, 12)}`,
+                nome_professor: pData.nome_professor,
+                dia_vencimento: pData.dia_vencimento,
+                valor_cobranca: pData.valor_cobranca,
+                data_inicio_cobranca: dataInicio,
+                data_fim_cobranca: dataFim,
+                data_inicio_transporte: dataInicio,
+                data_fim_transporte: dataFim,
+            });
+
+        if (mError) throw mError;
 
         const respTelefone = index === 0 ? TARGET_PHONE : generatePhone();
         const respParentesco = parentescos[randomNumber(0, parentescos.length - 1)];
@@ -733,6 +759,25 @@ async function seedSantaMariaRoute(usuarioId: string, cfg: ScenarioConfig) {
                 ativo: true,
             }).select("id, nome, valor_cobranca, dia_vencimento").single();
             if (passErr) throw passErr;
+
+            const { error: mErr } = await supabaseAdmin.from("passageiro_matriculas").insert({
+                passageiro_id: pass.id,
+                usuario_id: usuarioId,
+                ano_letivo: anoAtual,
+                ativo: true,
+                isento: false,
+                escola_id: targetEscolaId,
+                veiculo_id: veiculo.id,
+                periodo: stop.passageiro.periodo,
+                modalidade: stop.passageiro.modalidade,
+                dia_vencimento: stop.passageiro.dia_vencimento,
+                valor_cobranca: stop.passageiro.valor_cobranca,
+                data_inicio_cobranca: dataInicio,
+                data_fim_cobranca: dataFim,
+                data_inicio_transporte: dataInicio,
+                data_fim_transporte: dataFim,
+            });
+            if (mErr) throw mErr;
 
             await supabaseAdmin.from("passageiro_responsaveis").insert({
                 passageiro_id: pass.id,

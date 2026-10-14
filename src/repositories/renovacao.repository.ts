@@ -1,5 +1,4 @@
 import { supabaseAdmin } from "../config/supabase.js";
-import { RenovacaoStatus } from "../types/enums.js";
 import type { Tables } from "../types/database.types.js";
 
 export type PassageiroComRenovacaoItem = {
@@ -67,6 +66,8 @@ export type PublicPropostaQueryResult = Tables<"passageiro_renovacoes"> & {
 
 export const renovacaoRepository = {
   async listPassageirosComRenovacao(usuarioId: string, anoDestino: number) {
+    const anoOrigem = anoDestino - 1;
+
     const { data: passageiros, error: passError } = await supabaseAdmin
       .from("passageiros")
       .select(`
@@ -82,15 +83,41 @@ export const renovacaoRepository = {
         periodo,
         modalidade,
         turma,
+        sala,
         nome_professor,
+        horario_entrada,
+        horario_saida,
+        modo_cobranca,
         data_inicio_transporte,
         data_fim_transporte,
         data_inicio_cobranca,
         data_fim_cobranca,
         ano_letivo,
         created_at,
-        escola:escolas(id, nome),
-        veiculo:veiculos(id, placa, modelo),
+        matriculas:passageiro_matriculas!inner(
+          id,
+          ano_letivo,
+          ativo,
+          isento,
+          valor_cobranca,
+          dia_vencimento,
+          escola_id,
+          veiculo_id,
+          periodo,
+          modalidade,
+          turma,
+          sala,
+          nome_professor,
+          horario_entrada,
+          horario_saida,
+          modo_cobranca,
+          data_inicio_transporte,
+          data_fim_transporte,
+          data_inicio_cobranca,
+          data_fim_cobranca,
+          escola:escolas(id, nome),
+          veiculo:veiculos(id, placa, modelo)
+        ),
         responsaveis:passageiro_responsaveis(
           id,
           tipo,
@@ -99,7 +126,8 @@ export const renovacaoRepository = {
         )
       `)
       .eq("usuario_id", usuarioId)
-      .eq("ativo", true)
+      .eq("matriculas.ano_letivo", anoOrigem)
+      .eq("matriculas.ativo", true)
       .order("nome", { ascending: true });
 
     if (passError) throw passError;
@@ -125,10 +153,38 @@ export const renovacaoRepository = {
       renovacoesMap.set(r.passageiro_id, r as NonNullable<PassageiroComRenovacaoItem["renovacao"]>);
     });
 
-    return (passageiros as unknown as Array<PassageiroComRenovacaoItem["passageiro"]>).map(p => {
-      const res = renovacoesMap.get(p.id);
+    return (passageiros as Record<string, any>[]).map((rawP) => {
+      const matList = (rawP.matriculas as Record<string, any>[]) || [];
+      const mat = matList[0];
+      const mergedPassageiro: Record<string, any> = {
+        ...rawP,
+        ano_letivo: mat ? mat.ano_letivo : rawP.ano_letivo,
+        ativo: mat ? mat.ativo : rawP.ativo,
+        isento: mat ? mat.isento : rawP.isento,
+        valor_cobranca: mat ? mat.valor_cobranca : rawP.valor_cobranca,
+        dia_vencimento: mat ? mat.dia_vencimento : rawP.dia_vencimento,
+        escola_id: mat ? mat.escola_id : rawP.escola_id,
+        veiculo_id: mat ? mat.veiculo_id : rawP.veiculo_id,
+        periodo: mat ? mat.periodo : rawP.periodo,
+        modalidade: mat ? mat.modalidade : rawP.modalidade,
+        turma: mat ? mat.turma : rawP.turma,
+        sala: mat ? mat.sala : rawP.sala,
+        nome_professor: mat ? mat.nome_professor : rawP.nome_professor,
+        horario_entrada: mat ? mat.horario_entrada : rawP.horario_entrada,
+        horario_saida: mat ? mat.horario_saida : rawP.horario_saida,
+        modo_cobranca: mat ? mat.modo_cobranca : rawP.modo_cobranca,
+        data_inicio_transporte: mat ? mat.data_inicio_transporte : rawP.data_inicio_transporte,
+        data_fim_transporte: mat ? mat.data_fim_transporte : rawP.data_fim_transporte,
+        data_inicio_cobranca: mat ? mat.data_inicio_cobranca : rawP.data_inicio_cobranca,
+        data_fim_cobranca: mat ? mat.data_fim_cobranca : rawP.data_fim_cobranca,
+        escola: mat?.escola ?? rawP.escola ?? null,
+        veiculo: mat?.veiculo ?? rawP.veiculo ?? null,
+      };
+      delete mergedPassageiro.matriculas;
+
+      const res = renovacoesMap.get(rawP.id);
       return {
-        passageiro: p,
+        passageiro: mergedPassageiro as PassageiroComRenovacaoItem["passageiro"],
         renovacao: res || null,
       };
     });
@@ -161,6 +217,11 @@ export const renovacaoRepository = {
           valor_cobranca,
           dia_vencimento,
           escola_id,
+          veiculo_id,
+          isento,
+          modo_cobranca,
+          horario_entrada,
+          horario_saida,
           periodo,
           modalidade,
           turma,
@@ -172,6 +233,10 @@ export const renovacaoRepository = {
           data_fim_cobranca,
           ano_letivo,
           escola:escolas(id, nome),
+          matriculas:passageiro_matriculas(
+            *,
+            escola:escolas(id, nome)
+          ),
           responsaveis:passageiro_responsaveis(
             id,
             tipo,
@@ -207,13 +272,41 @@ export const renovacaoRepository = {
       .maybeSingle();
 
     if (error) throw error;
-    return data as unknown as PublicPropostaQueryResult | null;
+    if (!data || !data.passageiro) return null;
+
+    const rawPass = data.passageiro as Record<string, any>;
+    const matList = (rawPass.matriculas as Record<string, any>[]) || [];
+    const matOrigem = matList.find((m) => Number(m.ano_letivo) === Number(data.ano_origem)) || matList[0];
+
+    if (matOrigem) {
+      rawPass.ano_letivo = matOrigem.ano_letivo;
+      rawPass.valor_cobranca = matOrigem.valor_cobranca;
+      rawPass.dia_vencimento = matOrigem.dia_vencimento;
+      rawPass.escola_id = matOrigem.escola_id;
+      rawPass.veiculo_id = matOrigem.veiculo_id;
+      rawPass.isento = matOrigem.isento;
+      rawPass.modo_cobranca = matOrigem.modo_cobranca;
+      rawPass.horario_entrada = matOrigem.horario_entrada;
+      rawPass.horario_saida = matOrigem.horario_saida;
+      rawPass.periodo = matOrigem.periodo;
+      rawPass.modalidade = matOrigem.modalidade;
+      rawPass.turma = matOrigem.turma;
+      rawPass.sala = matOrigem.sala;
+      rawPass.nome_professor = matOrigem.nome_professor;
+      rawPass.data_inicio_transporte = matOrigem.data_inicio_transporte;
+      rawPass.data_fim_transporte = matOrigem.data_fim_transporte;
+      rawPass.data_inicio_cobranca = matOrigem.data_inicio_cobranca;
+      rawPass.data_fim_cobranca = matOrigem.data_fim_cobranca;
+      if (matOrigem.escola) rawPass.escola = matOrigem.escola;
+    }
+
+    return data as unknown as PublicPropostaQueryResult;
   },
 
   async upsertReserva(reserva: Record<string, unknown>) {
     const { data, error } = await supabaseAdmin
       .from("passageiro_renovacoes")
-      .upsert(reserva, { onConflict: "passageiro_id,ano_destino" })
+      .upsert(reserva as unknown as import("../types/database.types.js").TablesInsert<"passageiro_renovacoes">, { onConflict: "passageiro_id,ano_destino" })
       .select()
       .single();
 
@@ -225,83 +318,23 @@ export const renovacaoRepository = {
     if (reservas.length === 0) return [];
     const { data, error } = await supabaseAdmin
       .from("passageiro_renovacoes")
-      .upsert(reservas, { onConflict: "passageiro_id,ano_destino" })
+      .upsert(reservas as unknown as import("../types/database.types.js").TablesInsert<"passageiro_renovacoes">[], { onConflict: "passageiro_id,ano_destino" })
       .select();
 
     if (error) throw error;
     return data;
   },
 
-  async listConfirmadosParaVirada(usuarioId: string, anoDestino: number) {
-    const { data, error } = await supabaseAdmin
-      .from("passageiro_renovacoes")
-      .select("*, passageiro:passageiros(*)")
-      .eq("usuario_id", usuarioId)
-      .eq("ano_destino", anoDestino)
-      .eq("status", RenovacaoStatus.CONFIRMADO);
-
-    if (error) throw error;
-    return data || [];
-  },
-
-  async listRecusadosParaVirada(usuarioId: string, anoDestino: number) {
-    const { data, error } = await supabaseAdmin
-      .from("passageiro_renovacoes")
-      .select("*, passageiro:passageiros(*)")
-      .eq("usuario_id", usuarioId)
-      .eq("ano_destino", anoDestino)
-      .eq("status", RenovacaoStatus.RECUSADO);
-
-    if (error) throw error;
-    return data || [];
-  },
-
-  async salvarSnapshotAnoOrigem(renovacaoId: string, snapshot: Record<string, unknown>) {
-    const { error } = await supabaseAdmin
-      .from("passageiro_renovacoes")
-      .update({ dados_ano_origem: snapshot as any })
-      .eq("id", renovacaoId);
-
-    if (error) throw error;
-  },
-
-  async atualizarPassageiroNaVirada(passageiroId: string, updateData: Record<string, unknown>) {
-    const { error } = await supabaseAdmin
-      .from("passageiros")
-      .update(updateData)
-      .eq("id", passageiroId);
-
-    if (error) throw error;
-  },
-
-  async inativarPassageirosNaVirada(passageiroIds: string[]) {
-    if (passageiroIds.length === 0) return;
-    const { error } = await supabaseAdmin
-      .from("passageiros")
-      .update({ ativo: false })
-      .in("id", passageiroIds);
-
-    if (error) throw error;
-  },
-
-  async marcarRenovacoesComoConcluidas(usuarioId: string, anoDestino: number) {
-    const { error } = await supabaseAdmin
-      .from("passageiro_renovacoes")
-      .update({ status: RenovacaoStatus.CONCLUIDO })
-      .eq("usuario_id", usuarioId)
-      .eq("ano_destino", anoDestino)
-      .in("status", [RenovacaoStatus.CONFIRMADO, RenovacaoStatus.RECUSADO]);
-
-    if (error) throw error;
-  },
-
   async atualizarDadosPublicos(
     reservaId: string,
     passageiroId: string,
+    anoDestino: number,
     responsavelId: string | null,
+    parentesco: string | null | undefined,
     dadosResponsavel: Record<string, unknown>,
     dadosPassageiro: Record<string, unknown>,
-    dadosReserva: Record<string, unknown>
+    dadosReserva: Record<string, unknown>,
+    dadosMatriculaDestino: Record<string, unknown>
   ) {
     if (responsavelId && Object.keys(dadosResponsavel).length > 0) {
       const { error: respError } = await supabaseAdmin
@@ -309,6 +342,14 @@ export const renovacaoRepository = {
         .update(dadosResponsavel)
         .eq("id", responsavelId);
       if (respError) throw respError;
+    }
+
+    if (responsavelId && parentesco !== undefined) {
+      await supabaseAdmin
+        .from("passageiro_responsaveis")
+        .update({ parentesco, updated_at: new Date().toISOString() })
+        .eq("passageiro_id", passageiroId)
+        .eq("responsavel_id", responsavelId);
     }
 
     if (Object.keys(dadosPassageiro).length > 0) {
@@ -325,6 +366,14 @@ export const renovacaoRepository = {
         .update(dadosReserva)
         .eq("id", reservaId);
       if (resError) throw resError;
+    }
+
+    if (Object.keys(dadosMatriculaDestino).length > 0) {
+      await supabaseAdmin
+        .from("passageiro_matriculas")
+        .update(dadosMatriculaDestino)
+        .eq("passageiro_id", passageiroId)
+        .eq("ano_letivo", anoDestino);
     }
   }
 };

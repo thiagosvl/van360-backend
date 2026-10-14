@@ -482,7 +482,9 @@ export const cobrancaService = {
 
     const { data: passageirosAtivos, error: passError } = await passageiroRepository.listAtivosParaProjecao(
       filtros.usuarioId,
-      filtros.veiculoId
+      filtros.veiculoId,
+      targetMonth,
+      targetYear
     );
 
     if (passError || !passageirosAtivos) {
@@ -552,9 +554,8 @@ export const cobrancaService = {
       throw new AppError("Erro ao alterar notificações.", 500);
     }
 
-    // --- LOG DE AUDITORIA ---
     historicoService.log({
-      usuario_id: data.usuario_id, // Precisamos garantir que usuario_id esteja disponível ou buscar
+      usuario_id: data.usuario_id,
       entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
       entidade_id: cobrancaId,
       acao: AtividadeAcao.CONFIG_LEMBRETE,
@@ -569,14 +570,17 @@ export const cobrancaService = {
     let created = 0;
     let skipped = 0;
 
-    // 1. Buscar Passageiros Ativos e Detalhes do Motorista
     const { data: motorista, error: motError } = await userRepository.getMotoristaId(motoristaId);
 
     if (motError) throw motError;
 
     const motoristaConfig = await motoristaFinanceiroRepository.getByUsuarioId(motoristaId);
 
-    const { data: passageiros, error: passError } = await passageiroRepository.listParaCobrancaAutomatica(motoristaId);
+    const { data: passageiros, error: passError } = await passageiroRepository.listParaCobrancaAutomatica(
+      motoristaId,
+      targetMonth,
+      targetYear
+    );
 
     if (passError) throw passError;
     if (!passageiros) return { created, skipped };
