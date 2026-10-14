@@ -57,7 +57,11 @@ export async function conciliarRepassesPendentes(): Promise<void> {
 
           if (repasseExistente) {
             if (repasseExistente.status_repasse === StatusRepasseEnum.SUCESSO) {
-              await cobrancaPagamentoService.registrarPagamentoAutomatico(cobranca.id);
+              await cobrancaPagamentoService.registrarPagamentoAutomatico(
+                cobranca.id,
+                undefined,
+                Number(repasseExistente.valor_bruto)
+              );
             }
             continue;
           }

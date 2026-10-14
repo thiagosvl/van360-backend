@@ -247,25 +247,18 @@ export class WooviProvider implements PaymentProviderAdapter {
         }
     }
 
-    async transferFromMainAccount(toPixKey: string, amountInCents: number): Promise<WooviWithdrawResponse> {
-        const sanitizedKey = this.sanitizePixKey(toPixKey);
+    async creditSubaccount(pixKey: string, amountInCents: number): Promise<{ success: boolean; error?: string }> {
+        const sanitizedKey = this.sanitizePixKey(pixKey);
         try {
-            const response = await this.client.post("/transfer", {
-                value: amountInCents,
-                toPixKey: sanitizedKey
+            const encodedPixKey = encodeURIComponent(sanitizedKey);
+            await this.client.post(`/subaccount/${encodedPixKey}/credit`, {
+                value: amountInCents
             });
-
-            const data = response.data;
-            const transaction = data?.transaction;
-            return {
-                success: true,
-                endToEndId: transaction?.endToEndId || data?.endToEndId,
-                transactionId: transaction?.id || data?.id
-            };
+            return { success: true };
         } catch (error: unknown) {
             const err = error as { response?: { data?: { error?: string; message?: string } }; message?: string };
-            const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || "Erro na transferência";
-            logger.error({ error: errorMsg, toPixKey: sanitizedKey, amountInCents }, "[WooviProvider] Falha ao executar transferência da conta matriz");
+            const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || "Erro no crédito da subconta";
+            logger.error({ error: errorMsg, pixKey: sanitizedKey, amountInCents }, "[WooviProvider] Falha ao creditar subconta");
             return {
                 success: false,
                 error: errorMsg
