@@ -535,7 +535,7 @@ export const passageiroRepository = {
       .or("isento.eq.false,isento.is.null");
 
     if (targetYear) {
-      query = query.in("ano_letivo", [targetYear - 1, targetYear]);
+      query = query.in("ano_letivo", [targetYear - 1, targetYear, targetYear + 1]);
     }
 
     const { data, error } = await query.order("ano_letivo", { ascending: true });
@@ -596,7 +596,7 @@ export const passageiroRepository = {
     }
 
     if (targetYear) {
-      query = query.in("ano_letivo", [targetYear - 1, targetYear]);
+      query = query.in("ano_letivo", [targetYear - 1, targetYear, targetYear + 1]);
     }
 
     const { data, error } = await query.order("ano_letivo", { ascending: true });

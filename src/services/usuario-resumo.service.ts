@@ -177,7 +177,7 @@ export const usuarioResumoService = {
       const candidateMatriculas = [...passageirosList]
         .filter((p: Record<string, any>) => {
           const anoMat = Number(p.ano_letivo || targetAno);
-          return anoMat === targetAno || anoMat === targetAno - 1;
+          return anoMat >= targetAno - 1 && anoMat <= targetAno + 1;
         })
         .sort((a, b) => Number(b.ano_letivo || 0) - Number(a.ano_letivo || 0));
 
