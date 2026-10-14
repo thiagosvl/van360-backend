@@ -118,6 +118,9 @@ UPDATE "public"."passageiro_renovacoes"
 SET "status" = 'confirmado'
 WHERE "status" = 'concluido';
 
+DROP POLICY IF EXISTS "Acesso publico para consulta de renovacao por token" ON "public"."passageiro_renovacoes";
+DROP POLICY IF EXISTS "Acesso publico para atualizacao de renovacao por token" ON "public"."passageiro_renovacoes";
+
 INSERT INTO "public"."passageiro_matriculas" (
     "usuario_id",
     "passageiro_id",

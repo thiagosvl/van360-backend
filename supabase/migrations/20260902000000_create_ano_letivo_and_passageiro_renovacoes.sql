@@ -90,17 +90,4 @@ TO authenticated
 USING (usuario_id = auth.uid())
 WITH CHECK (usuario_id = auth.uid());
 
-CREATE POLICY "Acesso publico para consulta de renovacao por token"
-ON "public"."passageiro_renovacoes"
-FOR SELECT
-TO anon, authenticated
-USING (token_publico IS NOT NULL);
-
-CREATE POLICY "Acesso publico para atualizacao de renovacao por token"
-ON "public"."passageiro_renovacoes"
-FOR UPDATE
-TO anon, authenticated
-USING (token_publico IS NOT NULL)
-WITH CHECK (token_publico IS NOT NULL);
-
 GRANT ALL ON TABLE "public"."passageiro_renovacoes" TO anon, authenticated, service_role;
