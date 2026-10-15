@@ -143,12 +143,19 @@ export async function checkUserStatus(
 export async function criarUsuario(data: UsuarioPayload & { tipo?: UserType, id: string }) {
   const { id, nome, razao_social, apelido, email, cpfcnpj, telefone, ativo = false, tipo, termos_aceitos, data_nascimento, dispositivo_cadastro, metadados_cadastro, canal_aquisicao } = data;
 
+  const normalizedEmail = cleanString(email).toLowerCase();
+  const cleanedApelido = apelido ? cleanString(apelido, true) : null;
+  const isInvalidApelido = Boolean(
+    cleanedApelido && (cleanedApelido.includes("@") || cleanedApelido.toLowerCase() === normalizedEmail)
+  );
+  const finalApelido = isInvalidApelido ? null : cleanedApelido;
+
   const { data: usuario, error } = await userRepository.insert({
     id,
     nome: cleanString(nome, true),
     razao_social: razao_social ? cleanString(razao_social, true) : null,
-    apelido: apelido ? cleanString(apelido, true) : null,
-    email: cleanString(email).toLowerCase(),
+    apelido: finalApelido,
+    email: normalizedEmail,
     cpfcnpj: onlyDigits(cpfcnpj),
     telefone: onlyDigits(telefone),
     ativo,
