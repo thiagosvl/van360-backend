@@ -138,6 +138,8 @@ export const passageiroRepository = {
           escola:escolas(*),
           veiculo:veiculos(*)
         ),
+        contratos(id, ano, status, provider, created_at, minuta_url, contrato_final_url, token_acesso),
+        renovacoes:passageiro_renovacoes(id, ano_origem, ano_destino, status),
         ${PASSAGEIRO_RESPONSAVEIS_SELECT}
       `)
       .eq("id", id);
@@ -268,6 +270,7 @@ export const passageiroRepository = {
           veiculo:veiculos(id, placa, modelo)
         ),
         contratos(id, ano, status, provider, created_at, minuta_url, contrato_final_url, token_acesso),
+        renovacoes:passageiro_renovacoes(id, ano_origem, ano_destino, status),
         ${PASSAGEIRO_RESPONSAVEIS_SELECT}
       `)
       .eq("id", id);

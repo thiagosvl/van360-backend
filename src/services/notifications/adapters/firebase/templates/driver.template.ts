@@ -42,7 +42,7 @@ export class FirebaseDriverTemplates {
 
         return {
             title: "Último dia de teste! ⚠️",
-            body: "Assine hoje para continuar enviando lembretes aos pais e manter suas mensalidades organizadas.",
+            body: "Assine hoje para continuar enviando lembretes aos pais e manter o financeiro do transporte organizado.",
             data: {
                 action: PushNotificationAction.OPEN_SUBSCRIPTION,
                 checkoutUrl

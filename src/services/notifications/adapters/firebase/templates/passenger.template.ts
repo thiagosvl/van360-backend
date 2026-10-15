@@ -195,7 +195,7 @@ export class FirebasePassengerTemplates {
 
         return {
             title: "Recibo de Pagamento 🧾",
-            body: `Pagamento confirmado! O recibo da mensalidade de ${passName}${mesAnoStr} já está disponível no app.`,
+            body: `Pagamento confirmado! O recibo da parcela de ${passName}${mesAnoStr} já está disponível no app.`,
             data: {
                 action: PushNotificationAction.OPEN_HOME,
                 reciboUrl: (ctx.reciboUrl || "") as string,
