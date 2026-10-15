@@ -657,8 +657,18 @@ const getPassageiro = async (id: string, targetOwnerId?: string, assignedVeiculo
         .sort((a, b) => Number(a.ano_letivo) - Number(b.ano_letivo))
         .map((m) => {
             const cMat = _matchContratoForYear(allContratos, Number(m.ano_letivo));
+            const contratoObj = cMat ? {
+                id: cMat.id,
+                status: cMat.status,
+                provider: cMat.provider ?? null,
+                minuta_url: cMat.minuta_url ?? null,
+                contrato_final_url: cMat.contrato_final_url ?? null,
+                token_acesso: cMat.token_acesso ?? null,
+                ano: cMat.ano ?? null,
+            } : null;
             return {
                 ...m,
+                contrato: contratoObj,
                 status_contrato: cMat?.status ?? null,
                 contrato_id: cMat?.id ?? null,
                 contrato_url: cMat ? (cMat.contrato_final_url || cMat.minuta_url) : null,
