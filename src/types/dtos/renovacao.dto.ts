@@ -34,6 +34,7 @@ export const reajusteLoteSchema = z.object({
   tipo_reajuste: z.nativeEnum(RenovacaoReajusteTipo).optional(),
   valor: z.union([z.number(), z.string().transform(v => moneyToNumber(v))]).optional(),
   valor_reajuste: z.union([z.number(), z.string().transform(v => moneyToNumber(v))]).optional(),
+  passageiro_ids: z.array(z.string().uuid()).optional().nullable(),
   escola_id: z.string().uuid().optional().nullable(),
   escola_ids: z.array(z.string().uuid()).optional().nullable(),
   data_inicio_transporte: z.union([z.string(), z.null(), z.undefined()]).transform(v => v ? parseLocalDate(v) : undefined).optional(),

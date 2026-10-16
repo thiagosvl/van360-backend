@@ -466,7 +466,11 @@ export const renovacaoService = {
         continue;
       }
 
-      if (dto.escola_ids && dto.escola_ids.length > 0) {
+      if (dto.passageiro_ids && dto.passageiro_ids.length > 0) {
+        if (!dto.passageiro_ids.includes(passageiro.id)) {
+          continue;
+        }
+      } else if (dto.escola_ids && dto.escola_ids.length > 0) {
         const matchOrigem = passageiro.escola_id && dto.escola_ids.includes(passageiro.escola_id);
         const matchDestino = renovacao?.nova_escola_id && dto.escola_ids.includes(renovacao.nova_escola_id);
         if (!matchOrigem && !matchDestino) {
