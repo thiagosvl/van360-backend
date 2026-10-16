@@ -2519,6 +2519,7 @@ export type Database = {
           chave_pix: string | null
           cidade: string | null
           config_contrato: Json | null
+          config_renovacao: Json | null
           conta_pai_id: string | null
           cpf_responsavel: string | null
           cpfcnpj: string
@@ -2552,6 +2553,7 @@ export type Database = {
           chave_pix?: string | null
           cidade?: string | null
           config_contrato?: Json | null
+          config_renovacao?: Json | null
           conta_pai_id?: string | null
           cpf_responsavel?: string | null
           cpfcnpj: string
@@ -2585,6 +2587,7 @@ export type Database = {
           chave_pix?: string | null
           cidade?: string | null
           config_contrato?: Json | null
+          config_renovacao?: Json | null
           conta_pai_id?: string | null
           cpf_responsavel?: string | null
           cpfcnpj?: string

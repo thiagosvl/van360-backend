@@ -155,3 +155,28 @@ export const salvarRenovacaoContratoConfigSchema = z.object({
 });
 
 export type SalvarRenovacaoContratoConfigDTO = z.infer<typeof salvarRenovacaoContratoConfigSchema>;
+
+export const getPeriodoRenovacaoConfigSchema = z.object({
+  ano: z.union([z.number(), z.string().transform(v => Number(v))]).optional().default(2027),
+});
+
+export type GetPeriodoRenovacaoConfigDTO = z.infer<typeof getPeriodoRenovacaoConfigSchema>;
+
+export const salvarPeriodoRenovacaoConfigSchema = z.object({
+  ano: z.number().int().min(2020).max(2100),
+  mes_inicio_cobranca: z.number().int().min(1).max(12),
+  ano_inicio_cobranca: z.number().int().min(2020).max(2100),
+  mes_fim_cobranca: z.number().int().min(1).max(12),
+  ano_fim_cobranca: z.number().int().min(2020).max(2100),
+  data_inicio_transporte: z.string().optional().nullable(),
+  data_fim_transporte: z.string().optional().nullable(),
+}).refine((data) => {
+  const totalInicio = data.ano_inicio_cobranca * 12 + data.mes_inicio_cobranca;
+  const totalFim = data.ano_fim_cobranca * 12 + data.mes_fim_cobranca;
+  return totalFim >= totalInicio;
+}, {
+  message: "O término da cobrança deve ser igual ou posterior ao início",
+  path: ["mes_fim_cobranca"],
+});
+
+export type SalvarPeriodoRenovacaoConfigDTO = z.infer<typeof salvarPeriodoRenovacaoConfigSchema>;

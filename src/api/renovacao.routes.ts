@@ -24,6 +24,18 @@ const renovacaoRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
     renovacaoController.salvarContratoConfig
   );
 
+  app.get(
+    "/periodo-config",
+    { preHandler: [requirePermission("renovacoes.gerenciar")] },
+    renovacaoController.getPeriodoConfig
+  );
+
+  app.put(
+    "/periodo-config",
+    { preHandler: [requirePermission("renovacoes.gerenciar")] },
+    renovacaoController.salvarPeriodoConfig
+  );
+
   app.post(
     "/reajuste-lote",
     { preHandler: [requirePermission("renovacoes.gerenciar")] },

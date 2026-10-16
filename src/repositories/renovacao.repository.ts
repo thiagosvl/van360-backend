@@ -265,7 +265,8 @@ export const renovacaoRepository = {
           telefone,
           logo_url,
           cpfcnpj,
-          config_contrato
+          config_contrato,
+          config_renovacao
         )
       `)
       .eq("token_publico", token)

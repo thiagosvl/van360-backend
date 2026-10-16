@@ -13,19 +13,19 @@ export const reciboAnualService = {
     async obterOuGerarReciboAnual(passageiroId: string, ano: number, usuarioId?: string): Promise<ReciboAnual | null> {
         logger.info({ passageiroId, ano, usuarioId }, "[reciboAnualService.obterOuGerarReciboAnual] Verificando recibo anual");
 
+        const { data: existente } = await reciboAnualRepository.findByPassageiroEAno(passageiroId, ano);
+
         const passageiro = await passageiroRepository.getByIdCompleto(passageiroId, usuarioId, ano);
         if (!passageiro) {
             throw new AppError("Passageiro não encontrado.", 404);
         }
 
         if (passageiro.isento) {
-            await this.removerReciboAnualSeExistir(passageiroId, ano);
-            return null;
+            return existente || null;
         }
 
         if (!passageiro.data_inicio_cobranca || !passageiro.data_fim_cobranca) {
-            await this.removerReciboAnualSeExistir(passageiroId, ano);
-            return null;
+            return existente || null;
         }
 
         const dataInicio = new Date(passageiro.data_inicio_cobranca);
@@ -35,8 +35,7 @@ export const reciboAnualService = {
         const anoFim = dataFim.getUTCFullYear();
 
         if (ano < anoInicio || ano > anoFim) {
-            await this.removerReciboAnualSeExistir(passageiroId, ano);
-            return null;
+            return existente || null;
         }
 
         const mesInicio = ano === anoInicio ? dataInicio.getUTCMonth() + 1 : 1;
@@ -71,8 +70,7 @@ export const reciboAnualService = {
         });
         if (!todosMesesPagos) {
             logger.warn({ passageiroId, ano, esperados: mesesEsperados.length, pagos: mesesPagosMap.size }, "[reciboAnualService] Ano ainda não quitado");
-            await this.removerReciboAnualSeExistir(passageiroId, ano);
-            return null;
+            return existente || null;
         }
 
         const itensMeses: AnnualReceiptMonthItem[] = mesesEsperados.map((m) => {
@@ -90,7 +88,6 @@ export const reciboAnualService = {
         const totalPago = itensMeses.reduce((acc, curr) => acc + curr.valor, 0);
         const quantidadeMesesEsperados = mesesEsperados.length;
 
-        const { data: existente } = await reciboAnualRepository.findByPassageiroEAno(passageiroId, ano);
         if (existente) {
             const mesmaQuantidade = existente.quantidade_meses === quantidadeMesesEsperados;
             const mesmoTotal = Math.abs(Number(existente.total_pago) - totalPago) < 0.01;
@@ -134,7 +131,7 @@ export const reciboAnualService = {
             responsavelDocumento: responsavelReal?.cpf,
             passageiroNome: passageiro.nome,
             escolaNome: (passageiro.escola as { nome?: string } | null)?.nome,
-            turno: passageiro.turno,
+            turno: (passageiro.periodo as string) || null,
             meses: itensMeses,
             totalPago,
             quantidadeMeses: quantidadeMesesEsperados

@@ -15,6 +15,7 @@ import {
   AtualizarStatusLoteDTO,
   AtualizarDadosPublicosDTO,
   SalvarRenovacaoContratoConfigDTO,
+  SalvarPeriodoRenovacaoConfigDTO,
 } from "../types/dtos/renovacao.dto.js";
 import {
   NotificationChannelEnum,
@@ -49,6 +50,25 @@ type EnrichedPassageiro = PassageiroComRenovacaoItem["passageiro"] & {
     complemento?: string | null;
     referencia?: string | null;
   } | null;
+};
+
+interface PeriodoMestreAnoConfig {
+  mes_inicio_cobranca?: number | null;
+  ano_inicio_cobranca?: number | null;
+  mes_fim_cobranca?: number | null;
+  ano_fim_cobranca?: number | null;
+  data_inicio_transporte?: string | null;
+  data_fim_transporte?: string | null;
+  configurado_em?: string | null;
+}
+
+interface ConfigRenovacaoStorage {
+  anos?: Record<string, PeriodoMestreAnoConfig>;
+}
+
+const _formatMesAnoParaDataISO = (ano?: number | null, mes?: number | null): string | null => {
+  if (!ano || !mes) return null;
+  return `${ano}-${String(mes).padStart(2, "0")}-01`;
 };
 
 const _enrichPassageiroResponsavel = (p: PassageiroComRenovacaoItem["passageiro"]): EnrichedPassageiro => {
@@ -106,23 +126,52 @@ const _sincronizarMatriculaConfirmada = async (
   const anoOrigem = Number(reserva.ano_origem || passageiroOrigem.ano_letivo || (anoDestino - 1));
   const isento = Boolean(reserva.novo_isento ?? passageiroOrigem.isento);
 
-  const dtInicioTransp = reserva.nova_data_inicio_transporte
+  let dtInicioTransp = reserva.nova_data_inicio_transporte
     ? String(reserva.nova_data_inicio_transporte)
     : null;
-  const dtFimTransp = reserva.nova_data_fim_transporte
+  let dtFimTransp = reserva.nova_data_fim_transporte
     ? String(reserva.nova_data_fim_transporte)
     : null;
 
-  const dtInicioCobr = isento
+  let dtInicioCobr = isento
     ? null
     : (reserva.nova_data_inicio_cobranca
       ? String(reserva.nova_data_inicio_cobranca)
       : null);
-  const dtFimCobr = isento
+  let dtFimCobr = isento
     ? null
     : (reserva.nova_data_fim_cobranca
       ? String(reserva.nova_data_fim_cobranca)
       : null);
+
+  if (!isento && (!dtInicioCobr || !dtFimCobr || !dtInicioTransp || !dtFimTransp)) {
+    const { userRepository } = await import("../repositories/user.repository.js");
+    const { data: usuario } = await userRepository.getProfileData(usuarioId);
+    const configRenovacao = (usuario?.config_renovacao as ConfigRenovacaoStorage | null) || {};
+    const masterConfig = configRenovacao.anos?.[String(anoDestino)];
+
+    if (masterConfig) {
+      if (!dtInicioCobr) {
+        dtInicioCobr = _formatMesAnoParaDataISO(masterConfig.ano_inicio_cobranca, masterConfig.mes_inicio_cobranca);
+      }
+      if (!dtFimCobr) {
+        dtFimCobr = _formatMesAnoParaDataISO(masterConfig.ano_fim_cobranca, masterConfig.mes_fim_cobranca);
+      }
+      if (!dtInicioTransp && masterConfig.data_inicio_transporte) {
+        dtInicioTransp = String(masterConfig.data_inicio_transporte);
+      }
+      if (!dtFimTransp && masterConfig.data_fim_transporte) {
+        dtFimTransp = String(masterConfig.data_fim_transporte);
+      }
+    }
+  }
+
+  if (!isento && (!dtInicioCobr || !dtFimCobr)) {
+    throw new AppError(
+      `O período de cobrança de ${anoDestino} não foi configurado. Configure o período de cobrança antes de confirmar vagas.`,
+      400
+    );
+  }
 
   const matriculaPayload: Record<string, unknown> = {
     usuario_id: usuarioId,
@@ -273,9 +322,80 @@ export const renovacaoService = {
     return this.getContratoConfig(usuarioId, dto.ano);
   },
 
+  async getPeriodoRenovacaoConfig(usuarioId: string, ano: number) {
+    const { userRepository } = await import("../repositories/user.repository.js");
+    const { data: usuario } = await userRepository.getProfileData(usuarioId);
+    if (!usuario) {
+      throw new AppError("Usuário não encontrado.", 404);
+    }
+
+    const baseConfig = (usuario.config_renovacao as ConfigRenovacaoStorage | null) || {};
+    const anoConfig = baseConfig.anos?.[String(ano)];
+
+    if (!anoConfig || !anoConfig.mes_inicio_cobranca || !anoConfig.ano_inicio_cobranca || !anoConfig.mes_fim_cobranca || !anoConfig.ano_fim_cobranca) {
+      return {
+        configurado: false,
+        ano,
+        mes_inicio_cobranca: null,
+        ano_inicio_cobranca: null,
+        mes_fim_cobranca: null,
+        ano_fim_cobranca: null,
+        data_inicio_transporte: null,
+        data_fim_transporte: null,
+        configurado_em: null,
+      };
+    }
+
+    return {
+      configurado: true,
+      ano,
+      mes_inicio_cobranca: Number(anoConfig.mes_inicio_cobranca),
+      ano_inicio_cobranca: Number(anoConfig.ano_inicio_cobranca),
+      mes_fim_cobranca: Number(anoConfig.mes_fim_cobranca),
+      ano_fim_cobranca: Number(anoConfig.ano_fim_cobranca),
+      data_inicio_transporte: anoConfig.data_inicio_transporte ? String(anoConfig.data_inicio_transporte) : null,
+      data_fim_transporte: anoConfig.data_fim_transporte ? String(anoConfig.data_fim_transporte) : null,
+      configurado_em: anoConfig.configurado_em ? String(anoConfig.configurado_em) : null,
+    };
+  },
+
+  async salvarPeriodoRenovacaoConfig(usuarioId: string, dto: SalvarPeriodoRenovacaoConfigDTO) {
+    const { userRepository } = await import("../repositories/user.repository.js");
+    const { data: usuario } = await userRepository.getProfileData(usuarioId);
+    if (!usuario) {
+      throw new AppError("Usuário não encontrado.", 404);
+    }
+
+    const baseConfig = (usuario.config_renovacao as ConfigRenovacaoStorage | null) || {};
+    const anos: Record<string, PeriodoMestreAnoConfig> = { ...(baseConfig.anos || {}) };
+
+    anos[String(dto.ano)] = {
+      mes_inicio_cobranca: dto.mes_inicio_cobranca,
+      ano_inicio_cobranca: dto.ano_inicio_cobranca,
+      mes_fim_cobranca: dto.mes_fim_cobranca,
+      ano_fim_cobranca: dto.ano_fim_cobranca,
+      data_inicio_transporte: dto.data_inicio_transporte || null,
+      data_fim_transporte: dto.data_fim_transporte || null,
+      configurado_em: new Date().toISOString(),
+    };
+
+    const newConfigRenovacao = {
+      ...baseConfig,
+      anos,
+    };
+
+    await supabaseAdmin
+      .from("usuarios")
+      .update({ config_renovacao: newConfigRenovacao })
+      .eq("id", usuarioId);
+
+    return this.getPeriodoRenovacaoConfig(usuarioId, dto.ano);
+  },
+
   async getDashboardRenovacao(usuarioId: string, query: ListRenovacoesQueryDTO) {
     const anoDestino = query.ano_destino || 2027;
     const anoOrigem = anoDestino - 1;
+    const periodoConfig = await this.getPeriodoRenovacaoConfig(usuarioId, anoDestino);
     const itens = await renovacaoRepository.listPassageirosComRenovacao(usuarioId, anoDestino);
 
     const { data: contratosDoAno } = await supabaseAdmin
@@ -352,6 +472,26 @@ export const renovacaoService = {
         }
       }
 
+      let novaDataInicioCobranca = renovacao?.nova_data_inicio_cobranca ? String(renovacao.nova_data_inicio_cobranca) : null;
+      let novaDataFimCobranca = renovacao?.nova_data_fim_cobranca ? String(renovacao.nova_data_fim_cobranca) : null;
+      let novaDataInicioTransporte = renovacao?.nova_data_inicio_transporte ? String(renovacao.nova_data_inicio_transporte) : null;
+      let novaDataFimTransporte = renovacao?.nova_data_fim_transporte ? String(renovacao.nova_data_fim_transporte) : null;
+
+      if (!novoIsento) {
+        if (!novaDataInicioCobranca && periodoConfig.configurado) {
+          novaDataInicioCobranca = _formatMesAnoParaDataISO(periodoConfig.ano_inicio_cobranca, periodoConfig.mes_inicio_cobranca);
+        }
+        if (!novaDataFimCobranca && periodoConfig.configurado) {
+          novaDataFimCobranca = _formatMesAnoParaDataISO(periodoConfig.ano_fim_cobranca, periodoConfig.mes_fim_cobranca);
+        }
+      }
+      if (!novaDataInicioTransporte && periodoConfig.configurado && periodoConfig.data_inicio_transporte) {
+        novaDataInicioTransporte = periodoConfig.data_inicio_transporte;
+      }
+      if (!novaDataFimTransporte && periodoConfig.configurado && periodoConfig.data_fim_transporte) {
+        novaDataFimTransporte = periodoConfig.data_fim_transporte;
+      }
+
       return {
         passageiro_id: pEnriched.id,
         nome: pEnriched.nome,
@@ -387,10 +527,10 @@ export const renovacaoService = {
         nova_sala: novaSala,
         novo_nome_professor: novoNomeProfessor,
         novo_veiculo_id: renovacao?.novo_veiculo_id ?? pEnriched.veiculo_id ?? null,
-        nova_data_inicio_transporte: renovacao?.nova_data_inicio_transporte ? String(renovacao.nova_data_inicio_transporte) : null,
-        nova_data_fim_transporte: renovacao?.nova_data_fim_transporte ? String(renovacao.nova_data_fim_transporte) : null,
-        nova_data_inicio_cobranca: renovacao?.nova_data_inicio_cobranca ? String(renovacao.nova_data_inicio_cobranca) : null,
-        nova_data_fim_cobranca: renovacao?.nova_data_fim_cobranca ? String(renovacao.nova_data_fim_cobranca) : null,
+        nova_data_inicio_transporte: novaDataInicioTransporte,
+        nova_data_fim_transporte: novaDataFimTransporte,
+        nova_data_inicio_cobranca: novaDataInicioCobranca,
+        nova_data_fim_cobranca: novaDataFimCobranca,
         notificacao_enviada_em: notificacaoEnviadaEm,
         token_publico: tokenPublico,
         contrato_id: contratosMap.get(pEnriched.id)?.id || null,
@@ -423,6 +563,7 @@ export const renovacaoService = {
       : 0;
 
     return {
+      periodo_config: periodoConfig,
       kpis: {
         faturamento_atual: faturamentoAtual,
         faturamento_projetado: faturamentoProjetado,
@@ -877,10 +1018,29 @@ export const renovacaoService = {
       }
     }
 
-    const dtInicioTransp = data.nova_data_inicio_transporte ? String(data.nova_data_inicio_transporte) : null;
-    const dtFimTransp = data.nova_data_fim_transporte ? String(data.nova_data_fim_transporte) : null;
-    const dtInicioCobr = data.nova_data_inicio_cobranca ? String(data.nova_data_inicio_cobranca) : null;
-    const dtFimCobr = data.nova_data_fim_cobranca ? String(data.nova_data_fim_cobranca) : null;
+    let dtInicioTransp = data.nova_data_inicio_transporte ? String(data.nova_data_inicio_transporte) : null;
+    let dtFimTransp = data.nova_data_fim_transporte ? String(data.nova_data_fim_transporte) : null;
+    let dtInicioCobr = data.nova_data_inicio_cobranca ? String(data.nova_data_inicio_cobranca) : null;
+    let dtFimCobr = data.nova_data_fim_cobranca ? String(data.nova_data_fim_cobranca) : null;
+
+    if (!Boolean(data.novo_isento) && (!dtInicioCobr || !dtFimCobr || !dtInicioTransp || !dtFimTransp)) {
+      const configRenovacao = (motorista?.config_renovacao as ConfigRenovacaoStorage | null) || {};
+      const masterConfig = configRenovacao.anos?.[String(data.ano_destino)];
+      if (masterConfig) {
+        if (!dtInicioCobr) {
+          dtInicioCobr = _formatMesAnoParaDataISO(masterConfig.ano_inicio_cobranca, masterConfig.mes_inicio_cobranca);
+        }
+        if (!dtFimCobr) {
+          dtFimCobr = _formatMesAnoParaDataISO(masterConfig.ano_fim_cobranca, masterConfig.mes_fim_cobranca);
+        }
+        if (!dtInicioTransp && masterConfig.data_inicio_transporte) {
+          dtInicioTransp = String(masterConfig.data_inicio_transporte);
+        }
+        if (!dtFimTransp && masterConfig.data_fim_transporte) {
+          dtFimTransp = String(masterConfig.data_fim_transporte);
+        }
+      }
+    }
 
     let qtdParcelas = 11;
     if (dtInicioCobr && dtFimCobr) {

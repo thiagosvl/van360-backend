@@ -13,6 +13,8 @@ import {
   atualizarStatusLoteSchema,
   getRenovacaoContratoConfigSchema,
   salvarRenovacaoContratoConfigSchema,
+  getPeriodoRenovacaoConfigSchema,
+  salvarPeriodoRenovacaoConfigSchema,
 } from "../types/dtos/renovacao.dto.js";
 
 export const renovacaoController = {
@@ -122,6 +124,24 @@ export const renovacaoController = {
 
     const dto = salvarRenovacaoContratoConfigSchema.parse(request.body);
     const result = await renovacaoService.salvarContratoConfig(usuarioId, dto);
+    return reply.status(200).send(result);
+  },
+
+  getPeriodoConfig: async (request: FastifyRequest, reply: FastifyReply) => {
+    const usuarioId = request.data_owner_id || request.user?.id;
+    if (!usuarioId) throw new AppError("Usuário não autenticado", 401);
+
+    const query = getPeriodoRenovacaoConfigSchema.parse(request.query);
+    const result = await renovacaoService.getPeriodoRenovacaoConfig(usuarioId, query.ano);
+    return reply.status(200).send(result);
+  },
+
+  salvarPeriodoConfig: async (request: FastifyRequest, reply: FastifyReply) => {
+    const usuarioId = request.data_owner_id || request.user?.id;
+    if (!usuarioId) throw new AppError("Usuário não autenticado", 401);
+
+    const dto = salvarPeriodoRenovacaoConfigSchema.parse(request.body);
+    const result = await renovacaoService.salvarPeriodoRenovacaoConfig(usuarioId, dto);
     return reply.status(200).send(result);
   },
 };

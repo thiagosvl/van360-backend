@@ -85,15 +85,31 @@ export function resolveContractConfigForYear(
   const anosConfig = (base.anos as Record<string, ContractConfigYearTerms>) || {};
   const anoEspecifico = anosConfig[String(ano)] || anosConfig[ano];
 
+  const anosAnteriores = Object.keys(anosConfig)
+    .map(Number)
+    .filter((a) => !isNaN(a) && a < ano)
+    .sort((a, b) => b - a);
+
+  let anoAnteriorMaisRecente: ContractConfigYearTerms | undefined;
+  for (const a of anosAnteriores) {
+    const cfg = anosConfig[String(a)] || anosConfig[a];
+    if (cfg && (cfg.secoes || cfg.clausulas || cfg.usar_contratos !== undefined)) {
+      anoAnteriorMaisRecente = cfg;
+      break;
+    }
+  }
+
   const usarContratos = anoEspecifico?.usar_contratos !== undefined
     ? Boolean(anoEspecifico.usar_contratos)
-    : Boolean(base.usar_contratos);
+    : (anoAnteriorMaisRecente?.usar_contratos !== undefined
+        ? Boolean(anoAnteriorMaisRecente.usar_contratos)
+        : Boolean(base.usar_contratos));
 
-  const multaAtraso = anoEspecifico?.multa_atraso ?? base.multa_atraso ?? null;
-  const jurosAtraso = anoEspecifico?.juros_atraso ?? base.juros_atraso ?? null;
-  const multaRescisao = anoEspecifico?.multa_rescisao ?? base.multa_rescisao ?? null;
-  const secoes = anoEspecifico?.secoes ?? base.secoes ?? null;
-  const clausulas = anoEspecifico?.clausulas ?? base.clausulas ?? null;
+  const multaAtraso = anoEspecifico?.multa_atraso ?? anoAnteriorMaisRecente?.multa_atraso ?? base.multa_atraso ?? null;
+  const jurosAtraso = anoEspecifico?.juros_atraso ?? anoAnteriorMaisRecente?.juros_atraso ?? base.juros_atraso ?? null;
+  const multaRescisao = anoEspecifico?.multa_rescisao ?? anoAnteriorMaisRecente?.multa_rescisao ?? base.multa_rescisao ?? null;
+  const secoes = anoEspecifico?.secoes ?? anoAnteriorMaisRecente?.secoes ?? base.secoes ?? null;
+  const clausulas = anoEspecifico?.clausulas ?? anoAnteriorMaisRecente?.clausulas ?? base.clausulas ?? null;
 
   return {
     usar_contratos: usarContratos,
