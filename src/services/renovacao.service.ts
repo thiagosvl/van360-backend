@@ -1,5 +1,4 @@
 import crypto from "node:crypto";
-import { supabaseAdmin } from "../config/supabase.js";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { EVENTO_MOTORISTA_RENOVACAO_RESPOSTA_RECEBIDA } from "../config/constants.js";
@@ -7,6 +6,8 @@ import { renovacaoRepository, type PassageiroComRenovacaoItem } from "../reposit
 import { passageiroRepository } from "../repositories/passageiro.repository.js";
 import { contractRepository } from "../repositories/contract.repository.js";
 import { historicoRepository } from "../repositories/historico.repository.js";
+import { userRepository } from "../repositories/user.repository.js";
+import { escolaRepository } from "../repositories/escola.repository.js";
 import { AppError } from "../errors/AppError.js";
 import {
   ListRenovacoesQueryDTO,
@@ -117,6 +118,34 @@ function projectDateToYear(dateStr: string | null | undefined, targetYear: numbe
   return null;
 }
 
+const _resolverDatasTransporteParaContrato = (
+  reservaDtInicio: string | null | undefined,
+  reservaDtFim: string | null | undefined,
+  periodoConfig: PeriodoMestreAnoConfig | null | undefined,
+  anoDestino: number
+): { dataInicio: string; dataFim: string } => {
+  const dataInicio = reservaDtInicio
+    ? String(reservaDtInicio)
+    : (periodoConfig?.data_inicio_transporte
+      ? String(periodoConfig.data_inicio_transporte)
+      : null);
+
+  const dataFim = reservaDtFim
+    ? String(reservaDtFim)
+    : (periodoConfig?.data_fim_transporte
+      ? String(periodoConfig.data_fim_transporte)
+      : null);
+
+  if (!dataInicio || !dataFim) {
+    throw new AppError(
+      `O período de transporte de ${anoDestino} não foi configurado. Configure as datas de início e término do transporte nas configurações de renovação antes de confirmar vagas ou emitir contratos.`,
+      400
+    );
+  }
+
+  return { dataInicio, dataFim };
+};
+
 const _sincronizarMatriculaConfirmada = async (
   usuarioId: string,
   passageiroOrigem: Record<string, any>,
@@ -202,15 +231,8 @@ const _sincronizarMatriculaConfirmada = async (
 };
 
 const _validarSemParcelasPagasNoAnoDestino = async (passageiroId: string, anoDestino: number, nomePassageiro?: string) => {
-  const { data: cobrancasPagas } = await supabaseAdmin
-    .from("cobrancas")
-    .select("id")
-    .eq("passageiro_id", passageiroId)
-    .eq("status", CobrancaStatus.PAGO)
-    .or(`ano_letivo.eq.${anoDestino},and(ano_letivo.is.null,ano.eq.${anoDestino})`)
-    .limit(1);
-
-  if (cobrancasPagas && cobrancasPagas.length > 0) {
+  const countPagas = await renovacaoRepository.countCobrancasPagasAnoDestino(passageiroId, anoDestino);
+  if (countPagas > 0) {
     throw new AppError(
       `Não é possível reverter a confirmação de ${nomePassageiro || "este aluno"} para ${anoDestino} pois já existem parcelas pagas registradas em ${anoDestino}.`,
       400
@@ -226,12 +248,7 @@ const _removerMatriculaAnoDestinoSePermitido = async (
 ) => {
   await _validarSemParcelasPagasNoAnoDestino(passageiroId, anoDestino, nomePassageiro);
 
-  const { data: cobrancasPendentes } = await supabaseAdmin
-    .from("cobrancas")
-    .select("id, provedor_cobranca_id")
-    .eq("passageiro_id", passageiroId)
-    .eq("status", CobrancaStatus.PENDENTE)
-    .or(`ano_letivo.eq.${anoDestino},and(ano_letivo.is.null,ano.eq.${anoDestino})`);
+  const cobrancasPendentes = await renovacaoRepository.listCobrancasPendentesAnoDestino(passageiroId, anoDestino);
 
   if (cobrancasPendentes && cobrancasPendentes.length > 0) {
     for (const cob of cobrancasPendentes) {
@@ -239,17 +256,7 @@ const _removerMatriculaAnoDestinoSePermitido = async (
         void cobrancaValidacaoService.cancelarPixCobrancaSeExistir(cob.id, cob.provedor_cobranca_id);
       }
     }
-    await supabaseAdmin
-      .from("cobrancas")
-      .update({
-        status: CobrancaStatus.CANCELADA,
-        pix_copia_cola: null,
-        pix_qrcode_url: null,
-        pix_expiracao: null,
-        provedor_cobranca_id: null,
-        repasse_em_processamento: false,
-      })
-      .in("id", cobrancasPendentes.map((c) => c.id));
+    await renovacaoRepository.cancelarCobrancasPendentes(cobrancasPendentes.map((c) => c.id));
   }
 
   try {
@@ -302,11 +309,11 @@ export const renovacaoService = {
 
     anos[String(dto.ano)] = {
       usar_contratos: dto.usar_contratos,
-      multa_atraso: dto.multa_atraso as any,
-      juros_atraso: dto.juros_atraso as any,
-      multa_rescisao: dto.multa_rescisao as any,
-      secoes: dto.secoes as any,
-      clausulas: dto.clausulas as any,
+      multa_atraso: dto.multa_atraso || null,
+      juros_atraso: dto.juros_atraso || null,
+      multa_rescisao: dto.multa_rescisao || null,
+      secoes: dto.secoes || null,
+      clausulas: dto.clausulas || null,
     };
 
     const newConfigContrato = {
@@ -314,16 +321,12 @@ export const renovacaoService = {
       anos,
     };
 
-    await supabaseAdmin
-      .from("usuarios")
-      .update({ config_contrato: newConfigContrato })
-      .eq("id", usuarioId);
+    await userRepository.updateContractConfig(usuarioId, newConfigContrato);
 
     return this.getContratoConfig(usuarioId, dto.ano);
   },
 
   async getPeriodoRenovacaoConfig(usuarioId: string, ano: number) {
-    const { userRepository } = await import("../repositories/user.repository.js");
     const { data: usuario } = await userRepository.getProfileData(usuarioId);
     if (!usuario) {
       throw new AppError("Usuário não encontrado.", 404);
@@ -360,7 +363,6 @@ export const renovacaoService = {
   },
 
   async salvarPeriodoRenovacaoConfig(usuarioId: string, dto: SalvarPeriodoRenovacaoConfigDTO) {
-    const { userRepository } = await import("../repositories/user.repository.js");
     const { data: usuario } = await userRepository.getProfileData(usuarioId);
     if (!usuario) {
       throw new AppError("Usuário não encontrado.", 404);
@@ -384,10 +386,7 @@ export const renovacaoService = {
       anos,
     };
 
-    await supabaseAdmin
-      .from("usuarios")
-      .update({ config_renovacao: newConfigRenovacao })
-      .eq("id", usuarioId);
+    await userRepository.updateRenovacaoConfig(usuarioId, newConfigRenovacao);
 
     return this.getPeriodoRenovacaoConfig(usuarioId, dto.ano);
   },
@@ -398,12 +397,10 @@ export const renovacaoService = {
     const periodoConfig = await this.getPeriodoRenovacaoConfig(usuarioId, anoDestino);
     const itens = await renovacaoRepository.listPassageirosComRenovacao(usuarioId, anoDestino);
 
-    const { data: contratosDoAno } = await supabaseAdmin
-      .from("contratos")
-      .select("id, passageiro_id, status")
-      .eq("usuario_id", usuarioId)
-      .eq("ano", anoDestino)
-      .in("status", [ContratoStatus.PENDENTE, ContratoStatus.ASSINADO]);
+    const contratosDoAno = await contractRepository.listBasicByAno(usuarioId, anoDestino, [
+      ContratoStatus.PENDENTE,
+      ContratoStatus.ASSINADO,
+    ]);
 
     const contratosMap = new Map<string, { id: string; status: string }>();
     if (contratosDoAno) {
@@ -584,12 +581,10 @@ export const renovacaoService = {
 
   async reajusteLote(usuarioId: string, dto: ReajusteLoteDTO) {
     const itens = await renovacaoRepository.listPassageirosComRenovacao(usuarioId, dto.ano_destino);
-    const { data: contratosAnoDestino } = await supabaseAdmin
-      .from("contratos")
-      .select("passageiro_id")
-      .eq("usuario_id", usuarioId)
-      .eq("ano", dto.ano_destino)
-      .in("status", [ContratoStatus.PENDENTE, ContratoStatus.ASSINADO]);
+    const contratosAnoDestino = await contractRepository.listBasicByAno(usuarioId, dto.ano_destino, [
+      ContratoStatus.PENDENTE,
+      ContratoStatus.ASSINADO,
+    ]);
 
     const passageirosComContratoNoAno = new Set(
       (contratosAnoDestino || []).map((c) => c.passageiro_id)
@@ -773,19 +768,28 @@ export const renovacaoService = {
         const { data: usuario } = await userRepository.getProfileData(usuarioId);
         const configAno = resolveContractConfigForYear(usuario?.config_contrato as Record<string, any>, dto.ano_destino);
         if (configAno.usar_contratos) {
+          const configRenovacao = (usuario?.config_renovacao as ConfigRenovacaoStorage | null) || {};
+          const masterConfig = configRenovacao.anos?.[String(dto.ano_destino)];
           const { contractService } = await import("./contract.service.js");
           for (const item of targetItens) {
             const anoOrigem = Number(item.passageiro.ano_letivo || (dto.ano_destino - 1));
             const contratoExistente = await contractRepository.getByPassageiroEAno(item.passageiro.id, dto.ano_destino);
             if (!contratoExistente) {
+              const { dataInicio, dataFim } = _resolverDatasTransporteParaContrato(
+                item.renovacao?.nova_data_inicio_transporte,
+                item.renovacao?.nova_data_fim_transporte,
+                masterConfig,
+                dto.ano_destino
+              );
+
               await contractService.criarContrato(usuarioId, {
                 passageiroId: item.passageiro.id,
                 provider: ContratoProvider.INHOUSE,
                 ano: dto.ano_destino,
                 valorMensal: Number(item.renovacao?.novo_valor_cobranca ?? item.passageiro.valor_cobranca ?? 0),
                 diaVencimento: Number(item.renovacao?.novo_dia_vencimento ?? item.passageiro.dia_vencimento ?? 10),
-                dataInicio: item.renovacao?.nova_data_inicio_transporte ? String(item.renovacao.nova_data_inicio_transporte) : undefined,
-                dataFim: item.renovacao?.nova_data_fim_transporte ? String(item.renovacao.nova_data_fim_transporte) : undefined,
+                dataInicio,
+                dataFim,
                 modalidade: item.renovacao?.nova_modalidade ? String(item.renovacao.nova_modalidade) : (item.passageiro.modalidade || undefined),
                 periodo: item.renovacao?.novo_periodo ? String(item.renovacao.novo_periodo) : (item.passageiro.periodo || undefined),
                 nomeEscola: item.renovacao?.nova_escola?.nome || item.passageiro.escola?.nome || undefined,
@@ -944,19 +948,28 @@ export const renovacaoService = {
 
           let nomeEscolaDestino = passageiro.escola?.nome || undefined;
           if (payload.nova_escola_id && payload.nova_escola_id !== passageiro.escola_id) {
-            const { data: esc } = await supabaseAdmin.from("escolas").select("nome").eq("id", String(payload.nova_escola_id)).maybeSingle();
+            const { data: esc } = await escolaRepository.getById(String(payload.nova_escola_id));
             if (esc?.nome) nomeEscolaDestino = esc.nome;
           }
 
           if (!contratoExistente) {
+            const configRenovacao = (usuario?.config_renovacao as ConfigRenovacaoStorage | null) || {};
+            const masterConfig = configRenovacao.anos?.[String(dto.ano_destino)];
+            const { dataInicio, dataFim } = _resolverDatasTransporteParaContrato(
+              payload.nova_data_inicio_transporte ? String(payload.nova_data_inicio_transporte) : null,
+              payload.nova_data_fim_transporte ? String(payload.nova_data_fim_transporte) : null,
+              masterConfig,
+              dto.ano_destino
+            );
+
             await contractService.criarContrato(usuarioId, {
               passageiroId,
               provider: ContratoProvider.INHOUSE,
               ano: dto.ano_destino,
               valorMensal: Number(payload.novo_valor_cobranca ?? passageiro.valor_cobranca),
               diaVencimento: Number(payload.novo_dia_vencimento ?? passageiro.dia_vencimento),
-              dataInicio: payload.nova_data_inicio_transporte ? String(payload.nova_data_inicio_transporte) : undefined,
-              dataFim: payload.nova_data_fim_transporte ? String(payload.nova_data_fim_transporte) : undefined,
+              dataInicio,
+              dataFim,
               modalidade: payload.nova_modalidade ? String(payload.nova_modalidade) : (passageiro.modalidade || undefined),
               periodo: payload.novo_periodo ? String(payload.novo_periodo) : (passageiro.periodo || undefined),
               nomeEscola: nomeEscolaDestino,
@@ -1054,9 +1067,10 @@ export const renovacaoService = {
           qtdParcelas = months;
         }
       } catch {
-        // fallback
       }
     }
+
+    const escolasMotorista = await escolaRepository.listAtivasByUsuario(data.usuario_id);
 
     const effectiveStatus = data.status === RenovacaoStatus.CONCLUIDO ? RenovacaoStatus.CONFIRMADO : data.status;
 
@@ -1068,6 +1082,10 @@ export const renovacaoService = {
       concluido: false,
       ano_origem: data.ano_origem,
       ano_destino: data.ano_destino,
+      escolas_disponiveis: (escolasMotorista || []).map((e) => ({
+        id: e.id,
+        nome: e.nome,
+      })),
       motorista: {
         id: motorista.id,
         nome: motorista.nome,
@@ -1115,9 +1133,11 @@ export const renovacaoService = {
           alterado: vencimentoAtual !== novoVencimento,
         },
         escola: {
+          atual_id: pEnriched.escola_id || null,
           atual: escolaAtualNome,
+          novo_id: data.nova_escola_id ?? pEnriched.escola_id ?? null,
           novo: novaEscolaNome,
-          alterado: pEnriched.escola_id !== (data.nova_escola_id ?? pEnriched.escola_id),
+          alterado: (pEnriched.escola_id || null) !== (data.nova_escola_id ?? pEnriched.escola_id ?? null),
         },
         periodo: {
           atual: periodoAtual,
@@ -1204,18 +1224,56 @@ export const renovacaoService = {
     const profVal = pInput.nome_professor !== undefined ? pInput.nome_professor : dto.nome_professor;
     const obsVal = pInput.observacoes !== undefined ? pInput.observacoes : dto.observacoes;
     const dtNascVal = pInput.data_nascimento;
+    const escolaIdVal = pInput.escola_id !== undefined ? pInput.escola_id : dto.escola_id;
+    const periodoVal = pInput.periodo !== undefined ? pInput.periodo : dto.periodo;
+    const modalidadeVal = pInput.modalidade !== undefined ? pInput.modalidade : dto.modalidade;
+
+    const dadosReserva: Record<string, unknown> = {};
+    const dadosMatriculaDestino: Record<string, unknown> = {};
+
+    if (escolaIdVal !== undefined) {
+      const cleanEscolaId = cleanString(escolaIdVal);
+      if (!cleanEscolaId) {
+        throw new AppError("O campo Escola é obrigatório e não pode ficar em branco.", 400);
+      }
+
+      const { data: escolaValida } = await escolaRepository.getById(cleanEscolaId, data.usuario_id);
+
+      if (!escolaValida) {
+        throw new AppError("Escola selecionada não encontrada ou indisponível.", 400);
+      }
+
+      dadosReserva.nova_escola_id = cleanEscolaId;
+      dadosMatriculaDestino.escola_id = cleanEscolaId;
+    }
+
+    if (periodoVal !== undefined) {
+      const cleanPeriodo = cleanString(periodoVal, true);
+      if (!cleanPeriodo) {
+        throw new AppError("O campo Turno é obrigatório e não pode ficar em branco.", 400);
+      }
+      dadosReserva.novo_periodo = cleanPeriodo;
+      dadosMatriculaDestino.periodo = cleanPeriodo;
+    }
+
+    if (modalidadeVal !== undefined) {
+      const cleanModalidade = cleanString(modalidadeVal);
+      if (!cleanModalidade) {
+        throw new AppError("O campo Modalidade é obrigatório e não pode ficar em branco.", 400);
+      }
+      dadosReserva.nova_modalidade = cleanModalidade;
+      dadosMatriculaDestino.modalidade = cleanModalidade;
+    }
 
     const dadosPassageiro: Record<string, unknown> = {};
     if (obsVal !== undefined) dadosPassageiro.observacoes = obsVal ? cleanString(obsVal, true) : null;
     if (dtNascVal !== undefined) dadosPassageiro.data_nascimento = dtNascVal || null;
 
-    const dadosReserva: Record<string, unknown> = {};
     if (turmaVal !== undefined) dadosReserva.nova_turma = turmaVal ? cleanString(turmaVal, true) : null;
     if (salaVal !== undefined) dadosReserva.nova_sala = salaVal ? cleanString(salaVal, true) : null;
     if (profVal !== undefined) dadosReserva.novo_nome_professor = profVal ? cleanString(profVal, true) : null;
     if (dto.observacoes_pais !== undefined) dadosReserva.observacoes_pais = dto.observacoes_pais;
 
-    const dadosMatriculaDestino: Record<string, unknown> = {};
     if (turmaVal !== undefined) dadosMatriculaDestino.turma = turmaVal ? cleanString(turmaVal, true) : null;
     if (salaVal !== undefined) dadosMatriculaDestino.sala = salaVal ? cleanString(salaVal, true) : null;
     if (profVal !== undefined) dadosMatriculaDestino.nome_professor = profVal ? cleanString(profVal, true) : null;
@@ -1235,7 +1293,7 @@ export const renovacaoService = {
     return this.getPublicRenovacao(token);
   },
 
-  async responderPublico(token: string, status: "confirmado" | "recusado" | "pendente", observacoesPais?: string | null) {
+  async responderPublico(token: string, status: RenovacaoStatus, observacoesPais?: string | null) {
     const data = await renovacaoRepository.getByToken(token);
     if (!data || !data.passageiro) {
       throw new AppError("Proposta de renovação não encontrada ou expirada.", 404);
@@ -1254,30 +1312,36 @@ export const renovacaoService = {
     const now = new Date().toISOString();
     const updatePayload: Record<string, unknown> = {
       status,
-      confirmado_em: status === "confirmado" ? now : null,
-      recusado_em: status === "recusado" ? now : null,
+      confirmado_em: status === RenovacaoStatus.CONFIRMADO ? now : null,
+      recusado_em: status === RenovacaoStatus.RECUSADO ? now : null,
     };
 
     if (observacoesPais !== undefined) {
       updatePayload.observacoes_pais = observacoesPais;
     }
 
-    await supabaseAdmin
-      .from("passageiro_renovacoes")
-      .update(updatePayload)
-      .eq("id", data.id);
+    await renovacaoRepository.updateStatusRespostaPublica(data.id, updatePayload);
 
     let contratoGerado = null;
 
     const configContratoAno = resolveContractConfigForYear(motorista?.config_contrato as Record<string, any>, data.ano_destino);
 
-    if (status === "confirmado") {
+    if (status === RenovacaoStatus.CONFIRMADO) {
       await _sincronizarMatriculaConfirmada(motorista.id, passageiro, data, data.ano_destino);
 
       if (configContratoAno.usar_contratos) {
         try {
           const contratoExistente = await contractRepository.getByPassageiroEAno(passageiro.id, data.ano_destino);
           if (!contratoExistente) {
+            const configRenovacao = (motorista?.config_renovacao as ConfigRenovacaoStorage | null) || {};
+            const masterConfig = configRenovacao.anos?.[String(data.ano_destino)];
+            const { dataInicio, dataFim } = _resolverDatasTransporteParaContrato(
+              data.nova_data_inicio_transporte ? String(data.nova_data_inicio_transporte) : null,
+              data.nova_data_fim_transporte ? String(data.nova_data_fim_transporte) : null,
+              masterConfig,
+              data.ano_destino
+            );
+
             const { contractService } = await import("./contract.service.js");
             const contrato = await contractService.criarContrato(motorista.id, {
               passageiroId: passageiro.id,
@@ -1285,8 +1349,8 @@ export const renovacaoService = {
               ano: data.ano_destino,
               valorMensal: Number(data.novo_valor_cobranca ?? passageiro.valor_cobranca),
               diaVencimento: Number(data.novo_dia_vencimento ?? passageiro.dia_vencimento),
-              dataInicio: data.nova_data_inicio_transporte ? String(data.nova_data_inicio_transporte) : undefined,
-              dataFim: data.nova_data_fim_transporte ? String(data.nova_data_fim_transporte) : undefined,
+              dataInicio,
+              dataFim,
               modalidade: data.nova_modalidade || passageiro.modalidade || undefined,
               nomeEscola: nova_escola?.nome || passageiro.escola?.nome || undefined,
               periodo: data.novo_periodo || passageiro.periodo || undefined,
@@ -1311,20 +1375,20 @@ export const renovacaoService = {
           logger.error({ error: contractErr instanceof Error ? contractErr.message : String(contractErr), passageiroId: passageiro.id }, "[Renovacao] Erro ao gerar contrato automático na renovação confirmada");
         }
       }
-    } else if (status === "recusado" || status === "pendente") {
+    } else if (status === RenovacaoStatus.RECUSADO || status === RenovacaoStatus.PENDENTE) {
       await _removerMatriculaAnoDestinoSePermitido(passageiro.id, data.ano_destino, passageiro.nome);
     }
 
     const respNome = pEnriched.responsavel_principal?.nome || "Responsável";
     const passNome = passageiro.nome;
-    const acaoTitulo = status === "confirmado"
+    const acaoTitulo = status === RenovacaoStatus.CONFIRMADO
       ? "🎉 Renovação Confirmada!"
-      : status === "recusado"
+      : status === RenovacaoStatus.RECUSADO
       ? "⚠️ Saída Registrada"
       : "ℹ️ Resposta Revertida";
-    const acaoCorpo = status === "confirmado"
+    const acaoCorpo = status === RenovacaoStatus.CONFIRMADO
       ? `${respNome} confirmou a vaga de ${passNome} para o ano letivo de ${data.ano_destino}.`
-      : status === "recusado"
+      : status === RenovacaoStatus.RECUSADO
       ? `${respNome} informou que não irá renovar o transporte de ${passNome} para ${data.ano_destino}.`
       : `${respNome} reverteu a resposta da vaga de ${passNome} para pendente.`;
 
@@ -1333,14 +1397,13 @@ export const renovacaoService = {
         usuario_id: motorista.id,
         entidade_tipo: "passageiro",
         entidade_id: passageiro.id,
-        acao: status === "confirmado" ? "renovacao_confirmada" : status === "recusado" ? "renovacao_recusada" : "renovacao_revertida",
+        acao: status === RenovacaoStatus.CONFIRMADO ? "renovacao_confirmada" : status === RenovacaoStatus.RECUSADO ? "renovacao_recusada" : "renovacao_revertida",
         descricao: acaoCorpo,
       });
     } catch {
-      // Silencioso
     }
 
-    if (status !== "pendente") {
+    if (status !== RenovacaoStatus.PENDENTE) {
       try {
         await notificationService.sendDirect(
           NotificationChannelEnum.FIREBASE,
@@ -1353,7 +1416,6 @@ export const renovacaoService = {
           { usuarioId: motorista.id }
         );
       } catch {
-        // Silencioso se falhar push
       }
     }
 
@@ -1398,13 +1460,9 @@ export const renovacaoService = {
       });
     } else if (!tokenPublico) {
       tokenPublico = crypto.randomBytes(16).toString("hex");
-      await supabaseAdmin
-        .from("passageiro_renovacoes")
-        .update({ token_publico: tokenPublico })
-        .eq("id", renovacao.id);
+      await renovacaoRepository.updateReserva(renovacao.id, { token_publico: tokenPublico });
     }
 
-    const { userRepository } = await import("../repositories/user.repository.js");
     const { data: usuario } = await userRepository.getProfileData(usuarioId);
 
     const { EVENTO_PASSAGEIRO_RENOVACAO_DISPONIVEL } = await import("../config/constants.js");
@@ -1435,10 +1493,7 @@ export const renovacaoService = {
     );
 
     const now = new Date().toISOString();
-    await supabaseAdmin
-      .from("passageiro_renovacoes")
-      .update({ notificacao_enviada_em: now })
-      .eq("id", renovacao.id);
+    await renovacaoRepository.updateReserva(renovacao.id, { notificacao_enviada_em: now });
 
     return {
       success: true,

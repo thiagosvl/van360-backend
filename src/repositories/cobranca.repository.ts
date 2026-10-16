@@ -400,6 +400,42 @@ export const cobrancaRepository = {
             .select("*")
             .eq("provedor_cobranca_id", provedorCobrancaId)
             .maybeSingle();
+    },
+
+    async listPagasByPassageiroEAno(passageiroId: string, ano: number) {
+        const { data, error } = await supabaseAdmin
+            .from("cobrancas")
+            .select("id, valor, data_pagamento, status")
+            .eq("passageiro_id", passageiroId)
+            .gte("data_vencimento", `${ano}-01-01`)
+            .lte("data_vencimento", `${ano}-12-31`)
+            .eq("status", CobrancaStatus.PAGO);
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async listPendentesByPassageiroEAno(passageiroId: string, ano: number) {
+        const { data, error } = await supabaseAdmin
+            .from("cobrancas")
+            .select("id, status")
+            .eq("passageiro_id", passageiroId)
+            .gte("data_vencimento", `${ano}-01-01`)
+            .lte("data_vencimento", `${ano}-12-31`)
+            .eq("status", CobrancaStatus.PENDENTE);
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async deleteByIds(ids: string[]) {
+        if (ids.length === 0) return;
+        const { error } = await supabaseAdmin
+            .from("cobrancas")
+            .delete()
+            .in("id", ids);
+
+        if (error) throw error;
     }
 };
 

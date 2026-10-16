@@ -251,11 +251,9 @@ export const contractRepository = {
     let query = supabaseAdmin
       .from("contratos")
       .select(
-        `*, passageiro:passageiros!inner(${CONTRACT_PASSAGEIRO_SELECT})`,
-        { count: "exact" }
+        `*, passageiro:passageiros!inner(${CONTRACT_PASSAGEIRO_SELECT})`
       )
-      .eq("usuario_id", usuarioId)
-      .order("created_at", { ascending: false });
+      .eq("usuario_id", usuarioId);
 
     if (isValidFilterValue(status)) {
       query = query.eq("status", status);
@@ -282,6 +280,8 @@ export const contractRepository = {
         ativo,
         valor_cobranca,
         dia_vencimento,
+        periodo,
+        isento,
         data_inicio_transporte,
         data_fim_transporte,
         passageiro:passageiros!inner(
@@ -292,8 +292,7 @@ export const contractRepository = {
             responsavel:responsaveis(id, nome, cpf, email, telefone)
           )
         )
-        `,
-        { count: "exact" }
+        `
       )
       .eq("usuario_id", usuarioId)
       .eq("ativo", true);
@@ -307,6 +306,39 @@ export const contractRepository = {
     }
 
     return query;
+  },
+
+  async listBasicByAno(usuarioId: string, ano: number, statuses?: string[]) {
+    let query = supabaseAdmin
+      .from("contratos")
+      .select("id, passageiro_id, status, valor_parcela, valor_total, qtd_parcelas, dados_contrato")
+      .eq("usuario_id", usuarioId)
+      .eq("ano", ano);
+
+    if (statuses && statuses.length > 0) {
+      query = query.in("status", statuses as ContratoStatus[]);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  },
+
+  async updateContratoReajuste(contratoId: string, updates: {
+    valor_parcela: number;
+    valor_total: number;
+    dados_contrato: unknown;
+  }) {
+    const { error } = await supabaseAdmin
+      .from("contratos")
+      .update({
+        valor_parcela: updates.valor_parcela,
+        valor_total: updates.valor_total,
+        dados_contrato: updates.dados_contrato as import("../types/database.types.js").Json,
+      })
+      .eq("id", contratoId);
+
+    if (error) throw error;
   },
 };
 

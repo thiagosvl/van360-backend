@@ -66,7 +66,7 @@ export const updateRenovacaoSchema = z.object({
 export type UpdateRenovacaoDTO = z.infer<typeof updateRenovacaoSchema>;
 
 export const responderRenovacaoPublicaSchema = z.object({
-  status: z.enum(["confirmado", "recusado", "pendente"]),
+  status: z.nativeEnum(RenovacaoStatus),
   observacoes_pais: z.string().optional().nullable(),
 });
 
@@ -94,6 +94,9 @@ export const atualizarDadosPublicosSchema = z.object({
     sala: optionalString,
     nome_professor: optionalString,
     observacoes: optionalString,
+    escola_id: optionalString,
+    periodo: optionalString,
+    modalidade: optionalString,
   }).optional(),
   nome_responsavel: optionalString,
   cpf_responsavel: optionalString,
@@ -113,6 +116,9 @@ export const atualizarDadosPublicosSchema = z.object({
   nome_professor: optionalString,
   observacoes: optionalString,
   observacoes_pais: optionalString,
+  escola_id: optionalString,
+  periodo: optionalString,
+  modalidade: optionalString,
 });
 
 export type AtualizarDadosPublicosDTO = z.infer<typeof atualizarDadosPublicosSchema>;
@@ -147,10 +153,10 @@ export type GetRenovacaoContratoConfigDTO = z.infer<typeof getRenovacaoContratoC
 export const salvarRenovacaoContratoConfigSchema = z.object({
   ano: z.number().int().default(2027),
   usar_contratos: z.boolean(),
-  multa_atraso: z.object({ valor: z.number(), tipo: z.any() }).optional().nullable(),
-  juros_atraso: z.object({ valor: z.number(), tipo: z.any() }).optional().nullable(),
-  multa_rescisao: z.object({ valor: z.number(), tipo: z.any() }).optional().nullable(),
-  secoes: z.array(z.any()).optional().nullable(),
+  multa_atraso: z.object({ valor: z.number(), tipo: z.string() }).optional().nullable(),
+  juros_atraso: z.object({ valor: z.number(), tipo: z.string() }).optional().nullable(),
+  multa_rescisao: z.object({ valor: z.number(), tipo: z.string() }).optional().nullable(),
+  secoes: z.array(z.record(z.string(), z.unknown())).optional().nullable(),
   clausulas: z.array(z.string()).optional().nullable(),
 });
 
@@ -168,8 +174,8 @@ export const salvarPeriodoRenovacaoConfigSchema = z.object({
   ano_inicio_cobranca: z.number().int().min(2020).max(2100),
   mes_fim_cobranca: z.number().int().min(1).max(12),
   ano_fim_cobranca: z.number().int().min(2020).max(2100),
-  data_inicio_transporte: z.string().optional().nullable(),
-  data_fim_transporte: z.string().optional().nullable(),
+  data_inicio_transporte: z.string().min(10, "Informe a data de início do transporte"),
+  data_fim_transporte: z.string().min(10, "Informe a data de término do transporte"),
 }).refine((data) => {
   const totalInicio = data.ano_inicio_cobranca * 12 + data.mes_inicio_cobranca;
   const totalFim = data.ano_fim_cobranca * 12 + data.mes_fim_cobranca;
@@ -177,6 +183,14 @@ export const salvarPeriodoRenovacaoConfigSchema = z.object({
 }, {
   message: "O término da cobrança deve ser igual ou posterior ao início",
   path: ["mes_fim_cobranca"],
+}).refine((data) => {
+  if (data.data_inicio_transporte && data.data_fim_transporte) {
+    return new Date(data.data_fim_transporte) >= new Date(data.data_inicio_transporte);
+  }
+  return true;
+}, {
+  message: "O término do transporte deve ser igual ou posterior ao início",
+  path: ["data_fim_transporte"],
 });
 
 export type SalvarPeriodoRenovacaoConfigDTO = z.infer<typeof salvarPeriodoRenovacaoConfigSchema>;

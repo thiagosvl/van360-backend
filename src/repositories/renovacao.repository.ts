@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import type { Tables } from "../types/database.types.js";
+import { CobrancaStatus } from "../types/enums.js";
 
 export type PassageiroComRenovacaoItem = {
   passageiro: Tables<"passageiros"> & {
@@ -386,5 +387,115 @@ export const renovacaoRepository = {
         .eq("passageiro_id", passageiroId)
         .eq("ano_letivo", anoDestino);
     }
+  },
+
+  async countCobrancasPagasAnoDestino(passageiroId: string, anoDestino: number): Promise<number> {
+    const { count, error } = await supabaseAdmin
+      .from("cobrancas")
+      .select("id", { count: "exact", head: true })
+      .eq("passageiro_id", passageiroId)
+      .eq("status", CobrancaStatus.PAGO)
+      .or(`ano_letivo.eq.${anoDestino},and(ano_letivo.is.null,ano.eq.${anoDestino})`);
+
+    if (error) throw error;
+    return count || 0;
+  },
+
+  async listCobrancasPendentesAnoDestino(passageiroId: string, anoDestino: number) {
+    const { data, error } = await supabaseAdmin
+      .from("cobrancas")
+      .select("id, provedor_cobranca_id")
+      .eq("passageiro_id", passageiroId)
+      .eq("status", CobrancaStatus.PENDENTE)
+      .or(`ano_letivo.eq.${anoDestino},and(ano_letivo.is.null,ano.eq.${anoDestino})`);
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async cancelarCobrancasPendentes(ids: string[]) {
+    if (ids.length === 0) return;
+    const { error } = await supabaseAdmin
+      .from("cobrancas")
+      .update({
+        status: CobrancaStatus.CANCELADA,
+        pix_copia_cola: null,
+        pix_qrcode_url: null,
+        pix_expiracao: null,
+        provedor_cobranca_id: null,
+      })
+      .in("id", ids);
+
+    if (error) throw error;
+  },
+
+  async updateReserva(reservaId: string, payload: Record<string, unknown>) {
+    const { error } = await supabaseAdmin
+      .from("passageiro_renovacoes")
+      .update(payload)
+      .eq("id", reservaId);
+
+    if (error) throw error;
+  },
+
+  async updateStatusRespostaPublica(reservaId: string, payload: Record<string, unknown>) {
+    return this.updateReserva(reservaId, payload);
+  },
+
+  async removerMatricula(passageiroId: string, anoDestino: number) {
+    const { error } = await supabaseAdmin
+      .from("passageiro_matriculas")
+      .update({ ativo: false, updated_at: new Date().toISOString() })
+      .eq("passageiro_id", passageiroId)
+      .eq("ano_letivo", anoDestino);
+
+    if (error) throw error;
+  },
+
+  async listTelefonesResponsaveis(usuarioId: string, passageiroIds: string[]) {
+    const { data, error } = await supabaseAdmin
+      .from("passageiros")
+      .select(`
+        id,
+        nome,
+        responsaveis:passageiro_responsaveis(
+          tipo,
+          responsavel:responsaveis(id, nome, telefone)
+        )
+      `)
+      .eq("usuario_id", usuarioId)
+      .in("id", passageiroIds);
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async marcarNotificacaoEnviada(usuarioId: string, passageiroId: string, anoDestino: number, canal: string) {
+    const { error } = await supabaseAdmin
+      .from("passageiro_renovacoes")
+      .update({
+        notificado_em: new Date().toISOString(),
+        canal_notificacao: canal,
+      })
+      .eq("usuario_id", usuarioId)
+      .eq("passageiro_id", passageiroId)
+      .eq("ano_destino", anoDestino);
+
+    if (error) throw error;
+  },
+
+  async marcarNotificacaoEnviadaLote(usuarioId: string, passageiroIds: string[], anoDestino: number, canal: string) {
+    if (passageiroIds.length === 0) return;
+    const { error } = await supabaseAdmin
+      .from("passageiro_renovacoes")
+      .update({
+        notificado_em: new Date().toISOString(),
+        canal_notificacao: canal,
+      })
+      .eq("usuario_id", usuarioId)
+      .in("passageiro_id", passageiroIds)
+      .eq("ano_destino", anoDestino);
+
+    if (error) throw error;
   }
 };

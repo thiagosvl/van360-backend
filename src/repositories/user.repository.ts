@@ -222,5 +222,19 @@ export const userRepository = {
             .select("id, nome, apelido, razao_social, cpfcnpj, logo_url")
             .eq("id", id)
             .single();
+    },
+
+    async updateContractConfig(usuarioId: string, configContrato: unknown) {
+        return supabaseAdmin
+            .from("usuarios")
+            .update({ config_contrato: configContrato as import("../types/database.types.js").Json })
+            .eq("id", usuarioId);
+    },
+
+    async updateRenovacaoConfig(usuarioId: string, configRenovacao: unknown) {
+        return supabaseAdmin
+            .from("usuarios")
+            .update({ config_renovacao: configRenovacao as import("../types/database.types.js").Json })
+            .eq("id", usuarioId);
     }
 };

@@ -117,5 +117,17 @@ export const escolaRepository = {
             .from("escolas")
             .select("id", { count: "exact", head: true })
             .eq("usuario_id", usuarioId);
+    },
+
+    async listAtivasByUsuario(usuarioId: string) {
+        const { data, error } = await supabaseAdmin
+            .from("escolas")
+            .select("id, nome")
+            .eq("usuario_id", usuarioId)
+            .eq("ativo", true)
+            .order("nome", { ascending: true });
+
+        if (error) throw error;
+        return data || [];
     }
 };

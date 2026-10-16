@@ -535,18 +535,36 @@ class ContractService {
         query = query.ilike('passageiro.nome', `%${search}%`);
       }
 
-      const { data, error, count } = await query.range(from, to).order('created_at', { ascending: false });
+      const { data, error } = await query;
 
       if (error) throw error;
 
-      return {
-        data: (data || []).map((row: Record<string, any>) => {
-          const p = Array.isArray(row.passageiro) ? row.passageiro[0] : row.passageiro;
-          const respInfo = _getResponsavelInfoFromPassageiro(p);
-          return {
-            id: p?.id || row.passageiro_id,
+      const mapped = (data || []).map((row: Record<string, unknown>) => {
+        const rawPassageiro = row.passageiro;
+        const p = Array.isArray(rawPassageiro) ? rawPassageiro[0] : rawPassageiro;
+        const respInfo = _getResponsavelInfoFromPassageiro(p);
+        return {
+          id: p?.id || (row.passageiro_id as string),
+          nome: p?.nome || '',
+          tipo: 'passageiro',
+          responsavel_principal: respInfo.nome ? {
+            id: respInfo.id,
+            nome: respInfo.nome,
+            telefone: respInfo.telefone,
+            cpf: respInfo.cpf,
+            email: respInfo.email,
+            parentesco: respInfo.parentesco
+          } : null,
+          passageiro: {
+            id: p?.id || (row.passageiro_id as string),
             nome: p?.nome || '',
-            tipo: 'passageiro',
+            data_inicio_transporte: row.data_inicio_transporte,
+            data_fim_transporte: row.data_fim_transporte,
+            valor_cobranca: row.valor_cobranca,
+            dia_vencimento: row.dia_vencimento,
+            periodo: row.periodo,
+            isento: row.isento,
+            ano_letivo: row.ano_letivo,
             responsavel_principal: respInfo.nome ? {
               id: respInfo.id,
               nome: respInfo.nome,
@@ -555,34 +573,27 @@ class ContractService {
               email: respInfo.email,
               parentesco: respInfo.parentesco
             } : null,
-            passageiro: {
-              id: p?.id || row.passageiro_id,
-              nome: p?.nome || '',
-              data_inicio_transporte: row.data_inicio_transporte,
-              data_fim_transporte: row.data_fim_transporte,
-              valor_cobranca: row.valor_cobranca,
-              dia_vencimento: row.dia_vencimento,
-              responsavel_principal: respInfo.nome ? {
-                id: respInfo.id,
-                nome: respInfo.nome,
-                telefone: respInfo.telefone,
-                cpf: respInfo.cpf,
-                email: respInfo.email,
-                parentesco: respInfo.parentesco
-              } : null,
-              ativo: row.ativo
-            },
-            dados_contrato: {
-              valorMensal: Number(row.valor_cobranca),
-              diaVencimento: row.dia_vencimento
-            }
-          };
-        }),
+            ativo: row.ativo
+          },
+          dados_contrato: {
+            valorMensal: Number(row.valor_cobranca),
+            diaVencimento: row.dia_vencimento
+          }
+        };
+      });
+
+      mapped.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' }));
+
+      const total = mapped.length;
+      const pagedData = mapped.slice(from, from + limit);
+
+      return {
+        data: pagedData,
         pagination: {
           page,
           limit,
-          total: count || 0,
-          totalPages: Math.ceil((count || 0) / limit),
+          total,
+          totalPages: Math.ceil(total / limit),
         },
       };
     }
@@ -610,39 +621,52 @@ class ContractService {
       query = query.or(`nome.ilike.%${search}%`, { foreignTable: 'passageiro' });
     }
 
-    const { data, error, count } = await query.range(from, to);
+    const { data, error } = await query;
 
     if (error) throw error;
 
-    return {
-      data: data.map((c: Record<string, any>) => {
-        const respInfo = _getResponsavelInfoFromPassageiro(c.passageiro);
-        const dadosContrato = c.dados_contrato ? { ...(c.dados_contrato as Record<string, unknown>) } : null;
-        if (dadosContrato && 'assinaturaCondutorUrl' in dadosContrato) {
-          delete dadosContrato.assinaturaCondutorUrl;
-        }
-        return {
-          ...c,
-          dados_contrato: dadosContrato,
-          tipo: 'contrato',
-          passageiro: c.passageiro ? {
-            ...c.passageiro,
-            responsavel_principal: respInfo.nome ? {
-              id: respInfo.id,
-              nome: respInfo.nome,
-              telefone: respInfo.telefone,
-              cpf: respInfo.cpf,
-              email: respInfo.email,
-              parentesco: respInfo.parentesco
-            } : null
+    const mapped = (data || []).map((c: Record<string, unknown>) => {
+      const rawPassageiro = c.passageiro;
+      const p = (Array.isArray(rawPassageiro) ? rawPassageiro[0] : rawPassageiro) as PassageiroWithResponsaveis | undefined;
+      const respInfo = _getResponsavelInfoFromPassageiro(p);
+      const dadosContrato = c.dados_contrato ? { ...(c.dados_contrato as Record<string, unknown>) } : null;
+      if (dadosContrato && 'assinaturaCondutorUrl' in dadosContrato) {
+        delete dadosContrato.assinaturaCondutorUrl;
+      }
+      return {
+        ...c,
+        dados_contrato: dadosContrato,
+        tipo: 'contrato',
+        passageiro: p ? {
+          ...p,
+          responsavel_principal: respInfo.nome ? {
+            id: respInfo.id,
+            nome: respInfo.nome,
+            telefone: respInfo.telefone,
+            cpf: respInfo.cpf,
+            email: respInfo.email,
+            parentesco: respInfo.parentesco
           } : null
-        };
-      }),
+        } : null
+      };
+    });
+
+    mapped.sort((a, b) => {
+      const nomeA = (a.passageiro as { nome?: string } | null)?.nome || '';
+      const nomeB = (b.passageiro as { nome?: string } | null)?.nome || '';
+      return nomeA.localeCompare(nomeB, 'pt-BR', { sensitivity: 'base' });
+    });
+
+    const total = mapped.length;
+    const pagedData = mapped.slice(from, from + limit);
+
+    return {
+      data: pagedData,
       pagination: {
         page,
         limit,
-        total: count || 0,
-        totalPages: Math.ceil((count || 0) / limit),
+        total,
+        totalPages: Math.ceil(total / limit),
       },
     };
   }

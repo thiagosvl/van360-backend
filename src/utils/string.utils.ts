@@ -1,4 +1,4 @@
-export function cleanString(str: string, capitalize = false): string {
+export function cleanString(str?: string | null, capitalize = false): string {
   if (!str) return "";
   return str.trim().replace(/\s+/g, " ");
 }
