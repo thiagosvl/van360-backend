@@ -558,6 +558,8 @@ export const renovacaoService = {
       );
     }
 
+    filtrados.sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "pt-BR", { sensitivity: "base" }));
+
     const percentualCrescimento = faturamentoAtual > 0
       ? Number((((faturamentoProjetado - faturamentoAtual) / faturamentoAtual) * 100).toFixed(1))
       : 0;

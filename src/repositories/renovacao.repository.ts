@@ -126,6 +126,7 @@ export const renovacaoRepository = {
         )
       `)
       .eq("usuario_id", usuarioId)
+      .eq("ativo", true)
       .eq("matriculas.ano_letivo", anoOrigem)
       .eq("matriculas.ativo", true)
       .order("nome", { ascending: true });
@@ -133,7 +134,16 @@ export const renovacaoRepository = {
     if (passError) throw passError;
     if (!passageiros || passageiros.length === 0) return [];
 
-    const passageiroIds = passageiros.map(p => p.id);
+    const itensValidos = (passageiros as Record<string, any>[]).filter((rawP) => {
+      if (rawP.ativo !== true) return false;
+      const matList = (rawP.matriculas as Record<string, any>[]) || [];
+      const mat = matList.find((m) => Number(m.ano_letivo) === anoOrigem && m.ativo === true);
+      return Boolean(mat);
+    });
+
+    itensValidos.sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "pt-BR", { sensitivity: "base" }));
+
+    const passageiroIds = itensValidos.map(p => p.id);
 
     const { data: renovacoes, error: renError } = await supabaseAdmin
       .from("passageiro_renovacoes")
@@ -153,9 +163,9 @@ export const renovacaoRepository = {
       renovacoesMap.set(r.passageiro_id, r as NonNullable<PassageiroComRenovacaoItem["renovacao"]>);
     });
 
-    return (passageiros as Record<string, any>[]).map((rawP) => {
+    return itensValidos.map((rawP) => {
       const matList = (rawP.matriculas as Record<string, any>[]) || [];
-      const mat = matList[0];
+      const mat = matList.find((m) => Number(m.ano_letivo) === anoOrigem && m.ativo === true) || matList[0];
       const mergedPassageiro: Record<string, any> = {
         ...rawP,
         ano_letivo: mat ? mat.ano_letivo : rawP.ano_letivo,

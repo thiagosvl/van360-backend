@@ -55,6 +55,16 @@ async function cleanupOrphanedResponsaveis(responsavelIds: string[]) {
     const uniqueIds = Array.from(new Set(responsavelIds.filter(Boolean)));
 
     for (const respId of uniqueIds) {
+        const { data: resp } = await supabaseAdmin
+            .from("responsaveis")
+            .select("telefone")
+            .eq("id", respId)
+            .maybeSingle();
+
+        if (resp && resp.telefone === TARGET_PHONE) {
+            continue;
+        }
+
         const { count, error } = await supabaseAdmin
             .from("passageiro_responsaveis")
             .select("id", { count: "exact", head: true })
@@ -236,17 +246,41 @@ async function seedVeiculos(usuarioId: string, cfg: ScenarioConfig) {
 
 async function seedPassageiros(
     usuarioId: string,
+    usuarioInfo: { nome?: string | null; email?: string | null } | null,
     escolasInseridas: any[],
     veiculosInseridos: any[],
     cfg: ScenarioConfig
 ) {
     if (cfg.passageiros.quantidade === 0) return [];
 
-    console.log(`[SEED] Inserindo ${cfg.passageiros.quantidade} passageiros e responsáveis...`);
+    console.log(`[SEED] Inserindo ${cfg.passageiros.quantidade} passageiros com responsável único (${TARGET_PHONE})...`);
     const periodos = Object.values(PeriodoEnum);
     const modalidades = Object.values(PassageiroModalidade);
     const generos = [PassageiroGenero.MASCULINO, PassageiroGenero.FEMININO];
-    const parentescos = Object.values(ParentescoResponsavel);
+
+    let { data: principalResp, error: rFetchError } = await supabaseAdmin
+        .from("responsaveis")
+        .select("id, nome, cpf, email, telefone")
+        .eq("telefone", TARGET_PHONE)
+        .maybeSingle();
+
+    if (rFetchError) throw rFetchError;
+
+    if (!principalResp) {
+        const { data: createdResp, error: rInsertError } = await supabaseAdmin
+            .from("responsaveis")
+            .insert({
+                telefone: TARGET_PHONE,
+                nome: usuarioInfo?.nome || "Responsável Principal",
+                cpf: "39542391838",
+                email: usuarioInfo?.email || "responsavel@van360.com.br",
+            })
+            .select("id, nome, cpf, email, telefone")
+            .single();
+
+        if (rInsertError) throw rInsertError;
+        principalResp = createdResp;
+    }
 
     const insertedPassengers: any[] = [];
 
@@ -332,75 +366,17 @@ async function seedPassageiros(
 
         if (mError) throw mError;
 
-        const respTelefone = index === 0 ? TARGET_PHONE : generatePhone();
-        const respParentesco = parentescos[randomNumber(0, parentescos.length - 1)];
+        const { error: prError } = await supabaseAdmin
+            .from("passageiro_responsaveis")
+            .insert({
+                passageiro_id: pData.id,
+                responsavel_id: principalResp.id,
+                tipo: TipoResponsavel.PRINCIPAL,
+                parentesco: ParentescoResponsavel.PAI,
+                notificacoes_rota_habilitadas: true,
+            });
 
-        const respPayload: Record<string, any> = {
-            telefone: respTelefone,
-            nome: generateName(),
-            cpf: generateCPF(),
-            email: generateEmail(),
-            logradouro: endereco ? endereco.logradouro : null,
-            numero: endereco ? endereco.numero : null,
-            bairro: endereco ? endereco.bairro : null,
-            cidade: endereco ? endereco.cidade : null,
-            estado: endereco ? endereco.estado : null,
-            cep: endereco ? endereco.cep : null,
-            referencia: endereco ? endereco.referencia : null,
-            complemento: endereco ? endereco.complemento : null,
-        };
-
-        const { data: rData, error: rError } = await supabaseAdmin
-            .from("responsaveis")
-            .upsert(respPayload, { onConflict: "telefone" })
-            .select()
-            .single();
-
-        if (rError) throw rError;
-
-        await supabaseAdmin.from("passageiro_responsaveis").insert({
-            passageiro_id: pData.id,
-            responsavel_id: rData.id,
-            tipo: TipoResponsavel.PRINCIPAL,
-            parentesco: respParentesco,
-            notificacoes_rota_habilitadas: true,
-        });
-
-        const deveTerAdicional = cfg.passageiros.percentualComResponsaveisAdicionais
-            ? randomNumber(1, 100) <= cfg.passageiros.percentualComResponsaveisAdicionais
-            : false;
-
-        if (deveTerAdicional) {
-            const endAdicional = generateAddress();
-            const { data: rAdicional, error: errAdicional } = await supabaseAdmin
-                .from("responsaveis")
-                .upsert({
-                    telefone: generatePhone(),
-                    nome: generateName(),
-                    cpf: generateCPF(),
-                    email: generateEmail(),
-                    logradouro: endAdicional.logradouro,
-                    numero: endAdicional.numero,
-                    bairro: endAdicional.bairro,
-                    cidade: endAdicional.cidade,
-                    estado: endAdicional.estado,
-                    cep: endAdicional.cep,
-                    referencia: endAdicional.referencia,
-                    complemento: endAdicional.complemento,
-                }, { onConflict: "telefone" })
-                .select()
-                .single();
-
-            if (!errAdicional && rAdicional && rAdicional.id !== rData.id) {
-                await supabaseAdmin.from("passageiro_responsaveis").insert({
-                    passageiro_id: pData.id,
-                    responsavel_id: rAdicional.id,
-                    tipo: TipoResponsavel.ADICIONAL,
-                    parentesco: parentescos[randomNumber(0, parentescos.length - 1)],
-                    notificacoes_rota_habilitadas: true,
-                });
-            }
-        }
+        if (prError) throw prError;
 
         insertedPassengers.push(pData);
     }
@@ -672,7 +648,11 @@ async function seedCobrancas(usuarioId: string, passageirosInseridos: any[], cfg
     if (error) throw error;
 }
 
-async function seedSantaMariaRoute(usuarioId: string, cfg: ScenarioConfig) {
+async function seedSantaMariaRoute(
+    usuarioId: string,
+    cfg: ScenarioConfig,
+    usuarioInfo: { nome?: string | null; email?: string | null } | null
+) {
     console.log(`[SEED] Inserindo cenário de rota real Santa Maria (Brasília DF)...`);
 
     const escolasMap = new Map<string, string>();
@@ -700,39 +680,36 @@ async function seedSantaMariaRoute(usuarioId: string, cfg: ScenarioConfig) {
     }).select("id").single();
     if (vErr) throw vErr;
 
-    const passageirosMap = new Map<string, any>();
-    const responsaveisMap = new Map<string, string>();
-    const passageirosList: any[] = [];
-    let respIndex = 0;
+    let { data: principalResp } = await supabaseAdmin
+        .from("responsaveis")
+        .select("id")
+        .eq("telefone", TARGET_PHONE)
+        .maybeSingle();
+
+    if (!principalResp) {
+        const { data: createdResp, error: rInsertError } = await supabaseAdmin
+            .from("responsaveis")
+            .insert({
+                telefone: TARGET_PHONE,
+                nome: usuarioInfo?.nome || "Responsável Principal",
+                cpf: "39542391838",
+                email: usuarioInfo?.email || "responsavel@van360.com.br",
+            })
+            .select("id")
+            .single();
+
+        if (rInsertError) throw rInsertError;
+        principalResp = createdResp;
+    }
 
     for (const stop of santaMariaStops) {
         if (stop.tipo_no === "passageiro" && stop.passageiro && stop.responsavel) {
             const passOriginalId = stop.passageiro.id;
             if (passageirosMap.has(passOriginalId)) continue;
 
-            let respId = responsaveisMap.get(stop.responsavel.telefone);
-            if (!respId) {
-                respIndex++;
-                const isFirst = respIndex === 1;
-                const phoneToUse = isFirst ? TARGET_PHONE : generatePhone();
-
-                const { data: resp, error: respErr } = await supabaseAdmin.from("responsaveis").upsert({
-                    nome: stop.responsavel.nome,
-                    telefone: phoneToUse,
-                    cpf: "39542391838",
-                    email: "thiago-svl@hotmail.com",
-                    logradouro: stop.responsavel.logradouro,
-                    numero: stop.responsavel.numero,
-                    bairro: stop.responsavel.bairro,
-                    cidade: stop.responsavel.cidade,
-                    estado: stop.responsavel.estado,
-                    cep: stop.responsavel.cep,
-                    complemento: stop.responsavel.complemento,
-                }, { onConflict: "telefone" }).select("id").single();
-                if (respErr) throw respErr;
-                respId = resp.id;
-                responsaveisMap.set(stop.responsavel.telefone, respId);
-            }
+            const targetEscolaId = stop.passageiro.escola_id
+                ? (escolasMap.get(stop.passageiro.escola_id) || Array.from(escolasMap.values())[0])
+                : Array.from(escolasMap.values())[0];
 
             const hoje = new Date();
             const anoAtual = hoje.getFullYear();
@@ -781,8 +758,8 @@ async function seedSantaMariaRoute(usuarioId: string, cfg: ScenarioConfig) {
 
             await supabaseAdmin.from("passageiro_responsaveis").insert({
                 passageiro_id: pass.id,
-                responsavel_id: respId,
-                parentesco: stop.responsavel.parentesco,
+                responsavel_id: principalResp.id,
+                parentesco: ParentescoResponsavel.PAI,
                 tipo: TipoResponsavel.PRINCIPAL,
                 notificacoes_rota_habilitadas: true,
             });
@@ -838,10 +815,11 @@ async function seedSantaMariaRoute(usuarioId: string, cfg: ScenarioConfig) {
 }
 
 async function main() {
+    console.log(`[SEED] Conectado ao banco: ${env.SUPABASE_URL}`);
     console.log(`[SEED] Buscando usuário pelo telefone: ${TARGET_PHONE}...`);
     const { data: usuario, error: userError } = await supabaseAdmin
         .from("usuarios")
-        .select("id")
+        .select("id, nome, email")
         .eq("telefone", TARGET_PHONE)
         .single();
 
@@ -851,7 +829,7 @@ async function main() {
     }
 
     const usuarioId = usuario.id;
-    console.log(`[SEED] Usuário encontrado: ${usuarioId}. Iniciando cenário: '${scenarioName}'...`);
+    console.log(`[SEED] Usuário encontrado: ${usuarioId} (${usuario.nome}). Iniciando cenário: '${scenarioName}'...`);
 
     try {
         await clearData(usuarioId);
@@ -877,7 +855,7 @@ async function main() {
         }
 
         if (scenarioName === "cenario-rota-real") {
-            await seedSantaMariaRoute(usuarioId, config);
+            await seedSantaMariaRoute(usuarioId, config, usuario);
         } else {
             const escolasInseridas = await seedEscolas(usuarioId, config);
             const veiculosInseridos = await seedVeiculos(usuarioId, config);
@@ -885,6 +863,7 @@ async function main() {
             if (escolasInseridas && veiculosInseridos) {
                 const passageirosInseridos = await seedPassageiros(
                     usuarioId,
+                    usuario,
                     escolasInseridas,
                     veiculosInseridos,
                     config
