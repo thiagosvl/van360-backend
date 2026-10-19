@@ -177,7 +177,7 @@ export const cobrancaRepository = {
                 *,
                 passageiro:passageiros(${COBRANCA_PASSAGEIRO_SELECT}),
                 motorista:usuarios!cobrancas_usuario_id_fkey!inner(
-                    nome, apelido, telefone, chave_pix, tipo_chave_pix,
+                    nome, apelido, telefone,
                     assinaturas!inner(status),
                     motorista_configuracoes_financeiras(modo_cobranca, chave_pix_repasse, tipo_chave_pix),
                     usuario_configuracoes!inner(

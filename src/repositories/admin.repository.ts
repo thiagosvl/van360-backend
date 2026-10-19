@@ -227,6 +227,11 @@ export const adminRepository = {
                 )
                 .eq("usuario_id", userId)
                 .order("created_at", { ascending: false }),
+            supabaseAdmin
+                .from("motorista_configuracoes_financeiras")
+                .select("chave_pix_repasse, tipo_chave_pix")
+                .eq("usuario_id", userId)
+                .maybeSingle(),
         ]);
     },
 

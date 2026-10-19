@@ -1,4 +1,5 @@
 import { logger } from "../../config/logger.js";
+import { supabaseAdmin } from "../../config/supabase.js";
 import { adminNotificationRepository } from "../../repositories/admin/admin-notification.repository.js";
 import type { ListUserNotificationsQuery, DispatchDriverNotificationDTO, RetryBulkNotificationsDTO } from "../../schemas/admin.schema.js";
 import {
@@ -35,6 +36,7 @@ import { notificationService } from "../notifications/notification.service.js";
 import { userRepository } from "../../repositories/user.repository.js";
 import { notificationRepository } from "../../repositories/notification.repository.js";
 import { cobrancaRepository } from "../../repositories/cobranca.repository.js";
+import { veiculoRepository } from "../../repositories/veiculo.repository.js";
 import { adminPassageiroRepository } from "../../repositories/admin/admin-passageiro.repository.js";
 import { historicoRepository } from "../../repositories/historico.repository.js";
 import { diffInDays, getNowBR, toPersistenceString } from "../../utils/date.utils.js";
@@ -526,10 +528,10 @@ export const adminNotificationService = {
     const chavePixVeiculo = veiculoPassageiro?.chave_pix as string | undefined;
     const tipoChavePixVeiculo = veiculoPassageiro?.tipo_chave_pix as string | undefined;
 
-    const chavePixResolvida = chavePixVeiculo || motoristaConfig?.chave_pix_repasse || (motorista?.chave_pix as string);
+    const chavePixResolvida = chavePixVeiculo || motoristaConfig?.chave_pix_repasse || null;
     const tipoChavePixResolvido = chavePixVeiculo
       ? tipoChavePixVeiculo
-      : (motoristaConfig?.tipo_chave_pix || (motorista?.tipo_chave_pix as string));
+      : (motoristaConfig?.tipo_chave_pix || null);
 
     const contextData = {
       nomeResponsavel: nomeResp,
@@ -623,6 +625,23 @@ export const adminNotificationService = {
     const primeiroNomeMotorista = getFirstName(user.nome) || "Motorista";
     const nomeExibicaoMotorista = user.apelido || user.nome;
 
+    const motoristaConfig = await motoristaFinanceiroRepository.getByUsuarioId(driverId);
+    let chavePixResolvida = motoristaConfig?.chave_pix_repasse || null;
+    let tipoChavePixResolvido = motoristaConfig?.tipo_chave_pix || null;
+
+    if (!chavePixResolvida) {
+      const { data: veiculos } = await supabaseAdmin
+        .from("veiculos")
+        .select("id, ativo, chave_pix, tipo_chave_pix")
+        .eq("usuario_id", driverId);
+
+      const veiculoComChave = veiculos?.find((v) => v.ativo && v.chave_pix && v.chave_pix.trim() !== "");
+      if (veiculoComChave) {
+        chavePixResolvida = veiculoComChave.chave_pix;
+        tipoChavePixResolvido = veiculoComChave.tipo_chave_pix || null;
+      }
+    }
+
     const contextData = {
       nomeResponsavel: user.nome,
       nomePassageiro: `TESTE ${primeiroNomeMotorista}`,
@@ -631,8 +650,8 @@ export const adminNotificationService = {
       telefoneMotorista: telefone,
       valor: 300,
       dataVencimento: todayStr,
-      chavePix: user.chave_pix || undefined,
-      tipoChavePix: user.tipo_chave_pix || undefined,
+      chavePix: chavePixResolvida || undefined,
+      tipoChavePix: tipoChavePixResolvido || undefined,
       usuarioId: user.id,
       mes: now.getMonth() + 1,
       ano: now.getFullYear(),

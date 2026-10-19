@@ -53,17 +53,6 @@ export const motoristaFinanceiroService = {
       throw new AppError("Para ativar a cobrança automática, é obrigatório cadastrar uma chave Pix para repasse.", 400);
     }
 
-    if (input.chave_pix_repasse !== undefined) {
-      try {
-        await userRepository.update(usuarioId, {
-          chave_pix: input.chave_pix_repasse,
-          tipo_chave_pix: input.chave_pix_repasse ? (input.tipo_chave_pix || null) : null
-        });
-      } catch (userErr: unknown) {
-        logger.warn({ error: userErr, usuarioId }, "[MotoristaFinanceiroService] Falha secundária ao sincronizar chave Pix em usuarios");
-      }
-    }
-
     if (input.aplicar_a_todos === true) {
       await supabaseAdmin
         .from("passageiros")

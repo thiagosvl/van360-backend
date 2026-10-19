@@ -20,20 +20,14 @@ export const motoristaFinanceiroRepository = {
     }
 
     if (!data) {
-      const { data: usuario } = await supabaseAdmin
-        .from("usuarios")
-        .select("chave_pix, tipo_chave_pix")
-        .eq("id", usuarioId)
-        .single();
-
       const { data: newConfig, error: insertError } = await supabaseAdmin
         .from("motorista_configuracoes_financeiras")
         .upsert(
           {
             usuario_id: usuarioId,
             modo_cobranca: ModoCobrancaEnum.DESATIVADO,
-            chave_pix_repasse: usuario?.chave_pix || null,
-            tipo_chave_pix: usuario?.tipo_chave_pix || null,
+            chave_pix_repasse: null,
+            tipo_chave_pix: null,
           },
           { onConflict: "usuario_id" }
         )

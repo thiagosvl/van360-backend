@@ -2528,7 +2528,6 @@ export type Database = {
           bairro: string | null
           canal_aquisicao: string | null
           cep: string | null
-          chave_pix: string | null
           cidade: string | null
           config_contrato: Json | null
           config_renovacao: Json | null
@@ -2551,7 +2550,6 @@ export type Database = {
           termos_aceitos_em: string | null
           termos_versao: string | null
           tipo: Database["public"]["Enums"]["user_type_enum"]
-          tipo_chave_pix: string | null
           updated_at: string
           veiculo_id: string | null
         }
@@ -2562,7 +2560,6 @@ export type Database = {
           bairro?: string | null
           canal_aquisicao?: string | null
           cep?: string | null
-          chave_pix?: string | null
           cidade?: string | null
           config_contrato?: Json | null
           config_renovacao?: Json | null
@@ -2585,7 +2582,6 @@ export type Database = {
           termos_aceitos_em?: string | null
           termos_versao?: string | null
           tipo?: Database["public"]["Enums"]["user_type_enum"]
-          tipo_chave_pix?: string | null
           updated_at?: string
           veiculo_id?: string | null
         }
@@ -2596,7 +2592,6 @@ export type Database = {
           bairro?: string | null
           canal_aquisicao?: string | null
           cep?: string | null
-          chave_pix?: string | null
           cidade?: string | null
           config_contrato?: Json | null
           config_renovacao?: Json | null
@@ -2619,7 +2614,6 @@ export type Database = {
           termos_aceitos_em?: string | null
           termos_versao?: string | null
           tipo?: Database["public"]["Enums"]["user_type_enum"]
-          tipo_chave_pix?: string | null
           updated_at?: string
           veiculo_id?: string | null
         }

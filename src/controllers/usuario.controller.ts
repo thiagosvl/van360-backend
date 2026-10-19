@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
-import { atualizarUsuario, atualizarPixUsuario, validarAcessoUsuario, atualizarCanalAquisicao, excluirMinhaConta } from "../services/usuario.service.js";
+import { atualizarUsuario, validarAcessoUsuario, atualizarCanalAquisicao, excluirMinhaConta } from "../services/usuario.service.js";
 import { TipoChavePix } from "../types/enums.js";
 import { atualizarUsuarioSchema } from "../schemas/usuario.schema.js";
 
@@ -23,31 +23,6 @@ export const UsuarioController = {
         } catch (err: unknown) {
             const error = err as Error;
             logger.error({ error: error.message, usuarioId }, "Falha ao atualizar usuário.");
-            return reply.status(400).send({ error: error.message });
-        }
-    },
-
-    async atualizarPixUsuario(request: FastifyRequest, reply: FastifyReply) {
-        const { id: usuarioId } = request.params as { id: string };
-        const payload = request.body as { 
-            chave_pix: string | null;
-            tipo_chave_pix: TipoChavePix | null;
-        };
-        const authUid = request.user?.id;
-
-        if (authUid) {
-            const temAcesso = await validarAcessoUsuario(authUid, usuarioId);
-            if (!temAcesso) {
-                 return reply.status(403).send({ error: "Acesso negado." });
-            }
-        }
-
-        try {
-            await atualizarPixUsuario(usuarioId, payload);
-            return reply.status(200).send({ success: true });
-        } catch (err: unknown) {
-            const error = err as Error;
-            logger.error({ error: error.message, usuarioId }, "Falha ao atualizar Pix do usuário.");
             return reply.status(400).send({ error: error.message });
         }
     },

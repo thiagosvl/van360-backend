@@ -39,7 +39,7 @@ export const userRepository = {
     async getProfileData(id: string) {
         return supabaseAdmin
             .from("usuarios")
-            .select("id, nome, apelido, razao_social, cpfcnpj, telefone, tipo, conta_pai_id, veiculo_id, config_contrato, config_renovacao, chave_pix, tipo_chave_pix, data_nascimento, assinatura_digital_url, logo_url, logradouro, numero, bairro, cidade, estado, cep, canal_aquisicao, dispositivo_cadastro, metadados_cadastro, created_at, veiculos:veiculo_id(id, modelo, placa, marca)")
+            .select("id, nome, apelido, razao_social, cpfcnpj, telefone, tipo, conta_pai_id, veiculo_id, config_contrato, config_renovacao, data_nascimento, assinatura_digital_url, logo_url, logradouro, numero, bairro, cidade, estado, cep, canal_aquisicao, dispositivo_cadastro, metadados_cadastro, created_at, veiculos:veiculo_id(id, modelo, placa, marca)")
             .eq("id", id)
             .single();
     },
@@ -51,14 +51,6 @@ export const userRepository = {
             .eq("id", id);
         await authCacheService.invalidateUserAuth(id);
         return result;
-    },
-
-    async getPixKey(id: string) {
-        return supabaseAdmin
-            .from("usuarios")
-            .select("chave_pix, tipo_chave_pix")
-            .eq("id", id)
-            .single();
     },
 
     async getMotoristaId(id: string) {

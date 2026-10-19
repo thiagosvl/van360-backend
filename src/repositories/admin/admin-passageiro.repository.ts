@@ -50,9 +50,7 @@ export const adminPassageiroRepository = {
           id,
           nome,
           apelido,
-          telefone,
-          chave_pix,
-          tipo_chave_pix
+          telefone
         ),
         responsaveis:passageiro_responsaveis(
           tipo,

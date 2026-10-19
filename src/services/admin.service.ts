@@ -360,7 +360,7 @@ export const adminService = {
 
   async getUserDetails(userId: string) {
     const [
-      [userReq, assinaturaReq, faturasReq, planosReq, veiculosReq, escolasReq, passageirosReq, prePassageirosReq, contratosReq],
+      [userReq, assinaturaReq, faturasReq, planosReq, veiculosReq, escolasReq, passageirosReq, prePassageirosReq, contratosReq, configFinReq],
       passageirosList,
       prePassageirosList,
       veiculosList,
@@ -375,7 +375,11 @@ export const adminService = {
 
     if (userReq.error || !userReq.data) throw new Error("Usuário não encontrado.");
 
-    const userData = userReq.data;
+    const userData = {
+      ...userReq.data,
+      chave_pix: configFinReq?.data?.chave_pix_repasse || null,
+      chave_pix_tipo: configFinReq?.data?.tipo_chave_pix || null,
+    };
     const statusConfiguracaoContrato = resolveDriverContractConfigStatus(
       userData.assinatura_digital_url,
       userData.config_contrato

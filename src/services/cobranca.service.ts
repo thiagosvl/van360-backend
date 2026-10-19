@@ -1038,10 +1038,10 @@ export const cobrancaService = {
               usuarioId: c.usuario_id,
               passageiroId: passageiro.id,
               chavePix: isModoLembrete
-                ? ((passageiro?.veiculo as Record<string, unknown> | undefined)?.chave_pix as string || motoristaConfigFin?.chave_pix_repasse || motorista.chave_pix)
+                ? ((passageiro?.veiculo as Record<string, unknown> | undefined)?.chave_pix as string || motoristaConfigFin?.chave_pix_repasse)
                 : undefined,
               tipoChavePix: isModoLembrete
-                ? ((passageiro?.veiculo as Record<string, unknown> | undefined)?.tipo_chave_pix as string || motoristaConfigFin?.tipo_chave_pix || motorista.tipo_chave_pix)
+                ? ((passageiro?.veiculo as Record<string, unknown> | undefined)?.tipo_chave_pix as string || motoristaConfigFin?.tipo_chave_pix)
                 : undefined,
               pixCopiaCola: pixInfo?.pixCopiaCola,
               pixQrCodeUrl: pixInfo?.pixQrCodeUrl,
