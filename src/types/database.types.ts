@@ -2418,6 +2418,7 @@ export type Database = {
           cobranca_vencimento_hoje_ativo: boolean
           created_at: string
           exibir_telefone_lista_alunos: boolean
+          formato_nome_aluno: string
           formato_nome_responsavel: string
           notificar_conclusao_parada: boolean
           notificar_inicio_rota: boolean
@@ -2439,6 +2440,7 @@ export type Database = {
           cobranca_vencimento_hoje_ativo?: boolean
           created_at?: string
           exibir_telefone_lista_alunos?: boolean
+          formato_nome_aluno?: string
           formato_nome_responsavel?: string
           notificar_conclusao_parada?: boolean
           notificar_inicio_rota?: boolean
@@ -2460,6 +2462,7 @@ export type Database = {
           cobranca_vencimento_hoje_ativo?: boolean
           created_at?: string
           exibir_telefone_lista_alunos?: boolean
+          formato_nome_aluno?: string
           formato_nome_responsavel?: string
           notificar_conclusao_parada?: boolean
           notificar_inicio_rota?: boolean

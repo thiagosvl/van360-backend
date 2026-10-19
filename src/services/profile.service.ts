@@ -21,6 +21,9 @@ export async function getUserProfile(userId: string) {
     const formatoNome = (config && typeof config === "object" && "formato_nome_responsavel" in config && typeof config.formato_nome_responsavel === "string")
         ? config.formato_nome_responsavel
         : "primeiro_nome";
+    const formatoNomeAluno = (config && typeof config === "object" && "formato_nome_aluno" in config && typeof config.formato_nome_aluno === "string")
+        ? config.formato_nome_aluno
+        : "curto";
     const exibirTelefone = (config && typeof config === "object" && "exibir_telefone_lista_alunos" in config && typeof config.exibir_telefone_lista_alunos === "boolean")
         ? config.exibir_telefone_lista_alunos
         : false;
@@ -29,6 +32,7 @@ export async function getUserProfile(userId: string) {
         ...data,
         configuracoes: {
             formato_nome_responsavel: formatoNome,
+            formato_nome_aluno: formatoNomeAluno,
             exibir_telefone_lista_alunos: exibirTelefone,
         },
     };

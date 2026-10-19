@@ -14,7 +14,7 @@ export const userRepository = {
     async getProfileWithConfig(id: string) {
         return supabaseAdmin
             .from("usuarios")
-            .select("*, configuracoes:usuario_configuracoes(formato_nome_responsavel, exibir_telefone_lista_alunos)")
+            .select("*, configuracoes:usuario_configuracoes(formato_nome_responsavel, exibir_telefone_lista_alunos, formato_nome_aluno)")
             .eq("id", id)
             .single();
     },

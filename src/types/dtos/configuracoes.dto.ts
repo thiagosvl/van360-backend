@@ -16,6 +16,7 @@ export interface ConfiguracoesUsuarioDTO {
   notificar_conclusao_parada: boolean;
   rastreamento_ativo: boolean;
   rastreamento_modo: RastreamentoModo;
+  formato_nome_aluno: "curto" | "completo";
   formato_nome_responsavel: "primeiro_nome" | "completo";
   exibir_telefone_lista_alunos: boolean;
   chave_pix: string | null;
@@ -36,6 +37,7 @@ export interface UpdateConfiguracoesDTO {
   notificar_conclusao_parada?: boolean;
   rastreamento_ativo?: boolean;
   rastreamento_modo?: RastreamentoModo;
+  formato_nome_aluno?: "curto" | "completo";
   formato_nome_responsavel?: "primeiro_nome" | "completo";
   exibir_telefone_lista_alunos?: boolean;
 }

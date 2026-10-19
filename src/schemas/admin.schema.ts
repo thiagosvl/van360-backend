@@ -35,6 +35,7 @@ export const updateUserAdminSchema = z.object({
     rastreamento_ativo: z.boolean().optional(),
     rastreamento_modo: z.enum(["completo", "apenas_proximo"]).optional(),
     formato_nome_responsavel: z.enum(["primeiro_nome", "completo"]).optional(),
+    formato_nome_aluno: z.enum(["curto", "completo"]).optional(),
     exibir_telefone_lista_alunos: z.boolean().optional(),
   }).optional(),
 });
