@@ -4,7 +4,8 @@ import { getLastDayOfMonth } from "../utils/date.utils.js";
 import { isValidFilterValue } from "../utils/filter.utils.js";
 
 const COBRANCA_PASSAGEIRO_SELECT = `
-    nome, enviar_notificacoes, modo_cobranca, isento,
+    nome, enviar_notificacoes, modo_cobranca, isento, veiculo_id,
+    veiculo:veiculos (id, placa, modelo, marca, chave_pix, tipo_chave_pix),
     responsaveis:passageiro_responsaveis(
         tipo, parentesco,
         responsavel:responsaveis(id, nome, telefone, cpf, email)
@@ -388,7 +389,7 @@ export const cobrancaRepository = {
         const cutoff = new Date(Date.now() - limiteMinutos * 60 * 1000).toISOString();
         return supabaseAdmin
             .from("cobrancas")
-            .select("id, usuario_id, passageiro_id, valor, valor_taxa_plataforma, provedor_cobranca_id, provedor, updated_at")
+            .select("id, usuario_id, passageiro_id, valor, valor_taxa_plataforma, provedor_cobranca_id, provedor, updated_at, chave_pix_repasse")
             .eq("status", CobrancaStatus.PENDENTE)
             .eq("repasse_em_processamento", true)
             .lte("updated_at", cutoff);

@@ -698,14 +698,17 @@ export const cobrancaService = {
 
     const motoristaConfig = await motoristaFinanceiroRepository.getByUsuarioId(motoristaId);
     const passageiro = cobranca.passageiro as Record<string, unknown> | undefined;
+    const veiculoPassageiro = passageiro?.veiculo as Record<string, unknown> | undefined;
+    const chavePixRepasseEfetiva = (veiculoPassageiro?.chave_pix as string) || motoristaConfig.chave_pix_repasse || null;
 
     const elegivel = cobrancaCalculoService.verificarElegibilidadeCobrancaAutomatica({
       motoristaConfig,
       passageiroModoCobranca: passageiro?.modo_cobranca as ModoCobrancaEnum | null | undefined,
-      statusCobranca: cobranca.status
+      statusCobranca: cobranca.status,
+      chavePixEfetiva: chavePixRepasseEfetiva
     });
 
-    if (!elegivel || !motoristaConfig.chave_pix_repasse) {
+    if (!elegivel || !chavePixRepasseEfetiva) {
       if (cobranca.pix_copia_cola) {
         if (cobranca.provedor_cobranca_id) {
           void cobrancaValidacaoService.cancelarPixCobrancaSeExistir(cobranca.id, cobranca.provedor_cobranca_id);
@@ -793,6 +796,7 @@ export const cobrancaService = {
     }
 
     const externalCorrelationId = `${cobranca.id}_${Date.now()}`;
+    const chavePixSplit = chavePixRepasseEfetiva;
 
     const chargeRes = await paymentService.createCharge(
       {
@@ -812,7 +816,7 @@ export const cobrancaService = {
         },
         splits: [
           {
-            pix_chave: motoristaConfig.chave_pix_repasse,
+            pix_chave: chavePixSplit,
             amount: valorRepasseMotorista
           }
         ]
@@ -846,7 +850,8 @@ export const cobrancaService = {
       pix_copia_cola: chargeRes.pixCopyPaste,
       pix_qrcode_url: chargeRes.pixQrCodeUrl || null,
       pix_expiracao: expiracao.toISOString(),
-      valor_taxa_plataforma: taxaPlataforma
+      valor_taxa_plataforma: taxaPlataforma,
+      chave_pix_repasse: chavePixSplit
     });
 
     return {
@@ -1032,8 +1037,12 @@ export const cobrancaService = {
               diasAtraso: eventType === EVENTO_PASSAGEIRO_ATRASADO ? diffInDays(dataVencimentoStr, todayStr) : undefined,
               usuarioId: c.usuario_id,
               passageiroId: passageiro.id,
-              chavePix: isModoLembrete ? (motoristaConfigFin?.chave_pix_repasse || motorista.chave_pix) : undefined,
-              tipoChavePix: isModoLembrete ? (motoristaConfigFin?.tipo_chave_pix || motorista.tipo_chave_pix) : undefined,
+              chavePix: isModoLembrete
+                ? ((passageiro?.veiculo as Record<string, unknown> | undefined)?.chave_pix as string || motoristaConfigFin?.chave_pix_repasse || motorista.chave_pix)
+                : undefined,
+              tipoChavePix: isModoLembrete
+                ? ((passageiro?.veiculo as Record<string, unknown> | undefined)?.tipo_chave_pix as string || motoristaConfigFin?.tipo_chave_pix || motorista.tipo_chave_pix)
+                : undefined,
               pixCopiaCola: pixInfo?.pixCopiaCola,
               pixQrCodeUrl: pixInfo?.pixQrCodeUrl,
               mes: c.mes,

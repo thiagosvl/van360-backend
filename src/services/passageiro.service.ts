@@ -639,10 +639,6 @@ const getPassageiro = async (id: string, targetOwnerId?: string, assignedVeiculo
         throw new AppError("Acesso negado", 403);
     }
 
-    if (assignedVeiculoId && data.veiculo_id && data.veiculo_id !== assignedVeiculoId) {
-        throw new AppError("Acesso negado para este veículo", 403);
-    }
-
     const enriched = _enrichPassageiroWithResponsavel(data);
     const allContratos = (data.contratos as Record<string, any>[]) || [];
     const targetYear = Number(data.ano_letivo) || getNowBR().getFullYear();
@@ -1208,9 +1204,6 @@ const updatePassageirosBatch = async (
         const existente = existentesMap.get(item.id);
         if (!existente || existente.usuario_id !== targetOwnerId) {
             throw new AppError(`Acesso negado para o aluno ${item.id}`, 403);
-        }
-        if (assignedVeiculoId && existente.veiculo_id && existente.veiculo_id !== assignedVeiculoId) {
-            throw new AppError(`Acesso negado para o veículo do aluno ${item.id}`, 403);
         }
     }
 

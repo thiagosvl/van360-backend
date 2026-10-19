@@ -25,7 +25,7 @@ export async function conciliarRepassesPendentes(): Promise<void> {
           }
 
           const config = await motoristaFinanceiroRepository.getByUsuarioId(repasse.motorista_id);
-          const chavePix = config.chave_pix_repasse;
+          const chavePix = repasse.chave_pix || config.chave_pix_repasse;
 
           if (!chavePix) {
             logger.warn({ repasseId: repasse.id, motoristaId: repasse.motorista_id }, "[ConciliacaoRepasse] Motorista sem chave Pix cadastrada");
@@ -71,7 +71,7 @@ export async function conciliarRepassesPendentes(): Promise<void> {
 
             if (statusProvedor === "COMPLETED") {
               const motoristaConfig = await motoristaFinanceiroRepository.getByUsuarioId(cobranca.usuario_id);
-              const chavePix = motoristaConfig.chave_pix_repasse;
+              const chavePix = cobranca.chave_pix_repasse || motoristaConfig.chave_pix_repasse;
 
               if (chavePix) {
                 const taxaPlataforma = cobrancaCalculoService.resolverTaxaPlataforma(
@@ -94,7 +94,8 @@ export async function conciliarRepassesPendentes(): Promise<void> {
                   valor_liquido_motorista: divisao.valorLiquidoMotorista,
                   transacao_provedor_id: cobranca.provedor_cobranca_id,
                   status_repasse: StatusRepasseEnum.PENDENTE,
-                  data_pagamento_pai: new Date().toISOString()
+                  data_pagamento_pai: new Date().toISOString(),
+                  chave_pix: chavePix
                 });
 
                 await addToRepasseQueue({

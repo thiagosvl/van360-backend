@@ -521,6 +521,16 @@ export const adminNotificationService = {
 
     const isModoLembrete = modoEfetivo === ModoCobrancaEnum.LEMBRETES;
 
+    const rawVeiculo = passageiro.veiculo;
+    const veiculoPassageiro = (Array.isArray(rawVeiculo) ? rawVeiculo[0] : rawVeiculo) as Record<string, unknown> | undefined;
+    const chavePixVeiculo = veiculoPassageiro?.chave_pix as string | undefined;
+    const tipoChavePixVeiculo = veiculoPassageiro?.tipo_chave_pix as string | undefined;
+
+    const chavePixResolvida = chavePixVeiculo || motoristaConfig?.chave_pix_repasse || (motorista?.chave_pix as string);
+    const tipoChavePixResolvido = chavePixVeiculo
+      ? tipoChavePixVeiculo
+      : (motoristaConfig?.tipo_chave_pix || (motorista?.tipo_chave_pix as string));
+
     const contextData = {
       nomeResponsavel: nomeResp,
       nomePassageiro: passageiro.nome,
@@ -533,8 +543,8 @@ export const adminNotificationService = {
       diasAtraso,
       usuarioId: passageiro.usuario_id,
       passageiroId: passageiro.id,
-      chavePix: isModoLembrete ? ((motoristaConfig?.chave_pix_repasse || motorista?.chave_pix as string) || undefined) : undefined,
-      tipoChavePix: isModoLembrete ? ((motoristaConfig?.tipo_chave_pix || motorista?.tipo_chave_pix as string) || undefined) : undefined,
+      chavePix: isModoLembrete ? (chavePixResolvida || undefined) : undefined,
+      tipoChavePix: isModoLembrete ? (tipoChavePixResolvido || undefined) : undefined,
       pixCopiaCola: pixInfo?.pixCopiaCola,
       pixQrCodeUrl: pixInfo?.pixQrCodeUrl,
       mes: cobranca.mes,

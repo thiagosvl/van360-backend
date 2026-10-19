@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TipoChavePix } from "../enums.js";
 
 const optionalString = z.string().optional().or(z.literal("")).transform(v => v === "" ? undefined : v);
 const optionalNumber = z.union([z.number(), z.string().length(0).transform(() => undefined), z.string().min(1).transform(val => Number(val))]).optional();
@@ -35,6 +36,13 @@ export const toggleVeiculoAtivoSchema = z.object({
 
 export type ToggleVeiculoAtivoDTO = z.infer<typeof toggleVeiculoAtivoSchema>;
 
+export const atualizarPixVeiculoSchema = z.object({
+    chave_pix: z.string().trim().nullable(),
+    tipo_chave_pix: z.nativeEnum(TipoChavePix).nullable(),
+});
+
+export type AtualizarPixVeiculoDTO = z.infer<typeof atualizarPixVeiculoSchema>;
+
 export interface Veiculo {
     id: string;
     usuario_id: string;
@@ -42,6 +50,8 @@ export interface Veiculo {
     marca: string | null;
     modelo: string | null;
     ativo: boolean;
+    chave_pix?: string | null;
+    tipo_chave_pix?: string | null;
     created_at: string;
     updated_at: string;
 }

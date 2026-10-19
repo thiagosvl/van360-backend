@@ -44,6 +44,8 @@ export const adminPassageiroRepository = {
         valor_cobranca,
         enviar_notificacoes,
         usuario_id,
+        veiculo_id,
+        veiculo:veiculos(id, placa, modelo, marca, chave_pix, tipo_chave_pix),
         motorista:usuarios!passageiros_usuario_id_fkey(
           id,
           nome,

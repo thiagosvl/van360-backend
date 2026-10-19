@@ -1,11 +1,12 @@
 import { veiculoRepository } from "../repositories/veiculo.repository.js";
-import { CreateVeiculoDTO, ListVeiculosFiltersDTO, UpdateVeiculoDTO, Veiculo, VeiculoComContagem } from "../types/dtos/veiculo.dto.js";
-import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
+import { CreateVeiculoDTO, ListVeiculosFiltersDTO, UpdateVeiculoDTO, AtualizarPixVeiculoDTO, Veiculo, VeiculoComContagem } from "../types/dtos/veiculo.dto.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, TipoChavePix } from "../types/enums.js";
 import { cleanString } from "../utils/string.utils.js";
 import { limparPlaca } from "../utils/placa.utils.js";
 import { historicoService } from "./historico.service.js";
 import { AppError } from "../errors/AppError.js";
 import { calculateAuditDiff } from "../utils/audit-diff.util.js";
+import { isValidPixKey } from "../utils/validators.js";
 
 // Helper Methods
 const _prepareVeiculoData = (data: Partial<CreateVeiculoDTO>, usuarioId?: string, isUpdate: boolean = false): Record<string, unknown> => {
@@ -160,5 +161,64 @@ export const veiculoService = {
         }
 
         return novoStatus;
+    },
+
+    async atualizarPixVeiculo(id: string, usuarioId: string, payload: AtualizarPixVeiculoDTO): Promise<Veiculo> {
+        if (!id) throw new AppError("ID do veículo é obrigatório", 400);
+
+        const veiculo = await this.getVeiculo(id, usuarioId);
+        if (!veiculo) throw new AppError("Veículo não encontrado", 404);
+
+        const { chave_pix, tipo_chave_pix } = payload;
+        if ((chave_pix && !tipo_chave_pix) || (!chave_pix && tipo_chave_pix)) {
+            throw new AppError("A chave Pix e o tipo de chave Pix devem ser fornecidos juntos ou ambos nulos.", 400);
+        }
+
+        const updates: { chave_pix: string | null; tipo_chave_pix: TipoChavePix | null } = {
+            chave_pix: null,
+            tipo_chave_pix: null
+        };
+
+        if (chave_pix && tipo_chave_pix) {
+            const isValid = isValidPixKey(tipo_chave_pix, chave_pix);
+            if (!isValid) {
+                throw new AppError("Formato de chave Pix inválido para o tipo selecionado.", 400);
+            }
+            updates.chave_pix = chave_pix;
+            updates.tipo_chave_pix = tipo_chave_pix;
+        }
+
+        const { data: updated, error } = await veiculoRepository.update(id, updates);
+        if (error) {
+            throw new AppError(`Erro ao atualizar dados Pix do veículo: ${error.message}`, 500);
+        }
+
+        const pixDiff = calculateAuditDiff(
+            { tipo_chave_pix: veiculo.tipo_chave_pix, chave_pix: veiculo.chave_pix },
+            { tipo_chave_pix: updates.tipo_chave_pix, chave_pix: updates.chave_pix }
+        );
+
+        if (pixDiff.hasChanges) {
+            const descricaoPix = updates.chave_pix
+                ? (veiculo.chave_pix ? `Chave Pix do veículo ${veiculo.placa} atualizada.` : `Chave Pix própria configurada para o veículo ${veiculo.placa}.`)
+                : `Chave Pix própria removida do veículo ${veiculo.placa}.`;
+
+            historicoService.log({
+                usuario_id: usuarioId,
+                entidade_tipo: AtividadeEntidadeTipo.VEICULO,
+                entidade_id: id,
+                acao: AtividadeAcao.CHAVE_PIX_ALTERADA,
+                descricao: descricaoPix,
+                meta: {
+                    veiculo_id: id,
+                    placa: veiculo.placa,
+                    tipo_chave_pix: updates.tipo_chave_pix,
+                    chave_pix: updates.chave_pix ? "***" : null,
+                    campos: pixDiff.campos
+                }
+            });
+        }
+
+        return updated as Veiculo;
     },
 };

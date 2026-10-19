@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "13.0.4"
   }
   public: {
     Tables: {
@@ -297,6 +297,7 @@ export type Database = {
         Row: {
           ano: number
           ano_letivo: number | null
+          chave_pix_repasse: string | null
           created_at: string
           data_envio_ultima_notificacao: string | null
           data_pagamento: string | null
@@ -331,6 +332,7 @@ export type Database = {
         Insert: {
           ano: number
           ano_letivo?: number | null
+          chave_pix_repasse?: string | null
           created_at?: string
           data_envio_ultima_notificacao?: string | null
           data_pagamento?: string | null
@@ -365,6 +367,7 @@ export type Database = {
         Update: {
           ano?: number
           ano_letivo?: number | null
+          chave_pix_repasse?: string | null
           created_at?: string
           data_envio_ultima_notificacao?: string | null
           data_pagamento?: string | null
@@ -415,6 +418,7 @@ export type Database = {
       }
       cobrancas_repasses: {
         Row: {
+          chave_pix: string | null
           cobranca_id: string | null
           created_at: string
           data_pagamento_pai: string | null
@@ -438,6 +442,7 @@ export type Database = {
           valor_liquido_motorista: number
         }
         Insert: {
+          chave_pix?: string | null
           cobranca_id?: string | null
           created_at?: string
           data_pagamento_pai?: string | null
@@ -461,6 +466,7 @@ export type Database = {
           valor_liquido_motorista: number
         }
         Update: {
+          chave_pix?: string | null
           cobranca_id?: string | null
           created_at?: string
           data_pagamento_pai?: string | null
@@ -1610,6 +1616,7 @@ export type Database = {
           ano_origem: number
           confirmado_em: string | null
           created_at: string
+          dados_ano_origem: Json | null
           id: string
           ip_confirmacao: string | null
           justificativa_recusa: string | null
@@ -1644,6 +1651,7 @@ export type Database = {
           ano_origem?: number
           confirmado_em?: string | null
           created_at?: string
+          dados_ano_origem?: Json | null
           id?: string
           ip_confirmacao?: string | null
           justificativa_recusa?: string | null
@@ -1680,6 +1688,7 @@ export type Database = {
           ano_origem?: number
           confirmado_em?: string | null
           created_at?: string
+          dados_ano_origem?: Json | null
           id?: string
           ip_confirmacao?: string | null
           justificativa_recusa?: string | null
@@ -2634,31 +2643,37 @@ export type Database = {
       veiculos: {
         Row: {
           ativo: boolean | null
+          chave_pix: string | null
           created_at: string | null
           id: string
           marca: string
           modelo: string
           placa: string
+          tipo_chave_pix: string | null
           updated_at: string | null
           usuario_id: string
         }
         Insert: {
           ativo?: boolean | null
+          chave_pix?: string | null
           created_at?: string | null
           id?: string
           marca: string
           modelo: string
           placa: string
+          tipo_chave_pix?: string | null
           updated_at?: string | null
           usuario_id: string
         }
         Update: {
           ativo?: boolean | null
+          chave_pix?: string | null
           created_at?: string | null
           id?: string
           marca?: string
           modelo?: string
           placa?: string
+          tipo_chave_pix?: string | null
           updated_at?: string | null
           usuario_id?: string
         }

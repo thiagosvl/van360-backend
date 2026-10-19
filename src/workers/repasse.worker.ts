@@ -43,7 +43,7 @@ export const repasseWorker = new Worker<RepasseJobData>(
         }
 
         const motoristaConfig = await motoristaFinanceiroRepository.getByUsuarioId(repasse.motorista_id);
-        const chavePixEfetiva = motoristaConfig.chave_pix_repasse || fallbackChavePix;
+        const chavePixEfetiva = repasse.chave_pix || fallbackChavePix || motoristaConfig.chave_pix_repasse;
 
         if (!chavePixEfetiva) {
             throw new Error(`Motorista ${repasse.motorista_id} não possui chave Pix cadastrada para repasse`);

@@ -5,7 +5,8 @@ import {
     createVeiculoSchema,
     listVeiculosFiltersSchema,
     toggleVeiculoAtivoSchema,
-    updateVeiculoSchema
+    updateVeiculoSchema,
+    atualizarPixVeiculoSchema
 } from "../types/dtos/veiculo.dto.js";
 
 import { AppError } from "../errors/AppError.js";
@@ -81,5 +82,15 @@ export const veiculoController = {
     const { novoStatus } = toggleVeiculoAtivoSchema.parse(request.body);
     await veiculoService.toggleAtivo(id, novoStatus);
     return reply.status(200).send({ ativo: novoStatus });
+  },
+
+  atualizarPix: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const usuarioId = request.data_owner_id || request.user?.id;
+    if (!usuarioId) throw new AppError("Não autorizado", 401);
+
+    const payload = atualizarPixVeiculoSchema.parse(request.body);
+    const updated = await veiculoService.atualizarPixVeiculo(id, usuarioId, payload);
+    return reply.status(200).send(updated);
   }
 };

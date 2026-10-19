@@ -104,7 +104,8 @@ export const adminRepasseService = {
     }
 
     const motoristaConfig = await motoristaFinanceiroRepository.getByUsuarioId(repasse.motorista_id);
-    if (!motoristaConfig.chave_pix_repasse) {
+    const chavePix = repasse.chave_pix || motoristaConfig?.chave_pix_repasse;
+    if (!chavePix) {
       throw new AppError("O motorista não possui uma chave Pix configurada para repasse.", 400);
     }
 
@@ -114,7 +115,7 @@ export const adminRepasseService = {
       repasseId: repasse.id,
       cobrancaId: repasse.cobranca_id,
       motoristaId: repasse.motorista_id,
-      chavePix: motoristaConfig.chave_pix_repasse,
+      chavePix,
       valorLiquido: Number(repasse.valor_liquido_motorista),
       transacaoProvedorId: repasse.transacao_provedor_id,
     });

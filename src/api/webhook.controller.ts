@@ -154,7 +154,7 @@ export const WebhookController = {
         const motoristaId = cobranca.usuario_id || "";
 
         const motoristaConfig = await motoristaFinanceiroRepository.getByUsuarioId(motoristaId);
-        const chavePixRepasse = motoristaConfig.chave_pix_repasse;
+        const chavePixRepasse = cobranca.chave_pix_repasse || motoristaConfig.chave_pix_repasse;
 
         if (!chavePixRepasse) {
           logger.error({ cobrancaId, motoristaId }, "[WebhookController] Motorista não possui chave Pix para repasse");
@@ -205,7 +205,8 @@ export const WebhookController = {
             transacao_provedor_id: event.providerRef,
             end_to_end_id_in: endToEndIdIn,
             status_repasse: StatusRepasseEnum.PENDENTE,
-            data_pagamento_pai: event.paidAt ? event.paidAt.toISOString() : new Date().toISOString()
+            data_pagamento_pai: event.paidAt ? event.paidAt.toISOString() : new Date().toISOString(),
+            chave_pix: chavePixRepasse
           });
         }
 

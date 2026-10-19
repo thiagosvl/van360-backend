@@ -18,6 +18,7 @@ const veiculoRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
     // Ações Específicas
     app.patch("/:id/toggle-ativo", { preHandler: [requirePermission("veiculos.gerenciar")] }, veiculoController.toggleAtivo);
+    app.patch("/:id/pix", { preHandler: [requirePermission("veiculos.gerenciar", "financeiro.visualizar")] }, veiculoController.atualizarPix);
 };
 
 export default veiculoRoute;

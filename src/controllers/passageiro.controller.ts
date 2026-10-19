@@ -33,23 +33,21 @@ export const passageiroController = {
   update: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     const targetOwnerId = request.data_owner_id || request.user?.id;
-    const assignedVeiculoId = request.assigned_veiculo_id || undefined;
     logger.info({ passageiroId: id }, "PassageiroController.update - Starting");
 
     const data = updatePassageiroSchema.parse(request.body);
     
-    const result = await passageiroService.updatePassageiro(id, data, targetOwnerId, assignedVeiculoId);
+    const result = await passageiroService.updatePassageiro(id, data, targetOwnerId);
     
     return reply.status(200).send(result);
   },
 
   updateBatch: async (request: FastifyRequest, reply: FastifyReply) => {
     const targetOwnerId = request.data_owner_id || request.user?.id;
-    const assignedVeiculoId = request.assigned_veiculo_id || undefined;
     logger.info({ targetOwnerId }, "PassageiroController.updateBatch - Starting");
 
     const data = updatePassageirosBatchSchema.parse(request.body);
-    const result = await passageiroService.updatePassageirosBatch(data.passageiros, targetOwnerId, assignedVeiculoId, data.ano_letivo);
+    const result = await passageiroService.updatePassageirosBatch(data.passageiros, targetOwnerId, undefined, data.ano_letivo);
 
     return reply.status(200).send(result);
   },
@@ -57,20 +55,18 @@ export const passageiroController = {
   delete: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     const targetOwnerId = request.data_owner_id || request.user?.id;
-    const assignedVeiculoId = request.assigned_veiculo_id || undefined;
     logger.info({ passageiroId: id }, "PassageiroController.delete - Starting");
 
-    await passageiroService.deletePassageiro(id, targetOwnerId, assignedVeiculoId);
+    await passageiroService.deletePassageiro(id, targetOwnerId);
     return reply.status(200).send({ success: true });
   },
 
   deleteMatricula: async (request: FastifyRequest, reply: FastifyReply) => {
     const { id, ano } = request.params as { id: string; ano: string };
     const targetOwnerId = request.data_owner_id || request.user?.id;
-    const assignedVeiculoId = request.assigned_veiculo_id || undefined;
     const anoLetivo = Number(ano);
 
-    const result = await passageiroService.deleteMatricula(id, anoLetivo, targetOwnerId, assignedVeiculoId);
+    const result = await passageiroService.deleteMatricula(id, anoLetivo, targetOwnerId);
     return reply.status(200).send({ success: true, ...result });
   },
 
@@ -78,9 +74,8 @@ export const passageiroController = {
     const { id } = request.params as { id: string };
     const { ano_letivo } = request.query as { ano_letivo?: string };
     const targetOwnerId = request.data_owner_id || request.user?.id;
-    const assignedVeiculoId = request.assigned_veiculo_id || undefined;
     const parsedAno = ano_letivo ? Number(ano_letivo) : undefined;
-    const passageiro = await passageiroService.getPassageiro(id, targetOwnerId, assignedVeiculoId, parsedAno);
+    const passageiro = await passageiroService.getPassageiro(id, targetOwnerId, undefined, parsedAno);
     return reply.status(200).send(passageiro);
   },
 
@@ -89,9 +84,6 @@ export const passageiroController = {
     const filtros = listPassageirosFiltersSchema.parse(request.query);
 
     const targetOwnerId = request.data_owner_id || usuarioId;
-    if (request.assigned_veiculo_id) {
-      filtros.veiculo = request.assigned_veiculo_id;
-    }
 
     logger.info({ usuarioId, targetOwnerId, filtros }, "PassageiroController.listByUsuario");
     const passageiros = await passageiroService.listPassageiros(targetOwnerId, filtros);
@@ -102,10 +94,9 @@ export const passageiroController = {
     const { id } = request.params as { id: string };
     const { novoStatus, ano_letivo } = toggleAtivoSchema.parse(request.body);
     const targetOwnerId = request.data_owner_id || request.user?.id;
-    const assignedVeiculoId = request.assigned_veiculo_id || undefined;
     
     try {
-        await passageiroService.toggleAtivo(id, novoStatus, targetOwnerId, assignedVeiculoId, ano_letivo);
+        await passageiroService.toggleAtivo(id, novoStatus, targetOwnerId, undefined, ano_letivo);
         return reply.status(200).send({ ativo: novoStatus });
     } catch (err: unknown) {
          const error = err as Error;

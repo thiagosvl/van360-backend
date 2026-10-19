@@ -33,6 +33,7 @@ export interface ParametrosElegibilidade {
   motoristaConfig?: Tables<"motorista_configuracoes_financeiras"> | null;
   passageiroModoCobranca?: ModoCobrancaTipo | null;
   statusCobranca?: string;
+  chavePixEfetiva?: string | null;
 }
 
 export interface ParametrosDecomposicaoEncargos {
@@ -107,13 +108,15 @@ export const cobrancaCalculoService = {
   verificarElegibilidadeCobrancaAutomatica({
     motoristaConfig,
     passageiroModoCobranca,
-    statusCobranca
+    statusCobranca,
+    chavePixEfetiva
   }: ParametrosElegibilidade): boolean {
     if (!motoristaConfig) return false;
     if (statusCobranca && (statusCobranca === CobrancaStatus.PAGO || statusCobranca === CobrancaStatus.CANCELADA)) return false;
     if (passageiroModoCobranca === ModoCobrancaEnum.DESATIVADO || passageiroModoCobranca === ModoCobrancaEnum.LEMBRETES) return false;
 
-    if (!motoristaConfig.chave_pix_repasse || !motoristaConfig.chave_pix_repasse.trim()) return false;
+    const chavePix = chavePixEfetiva || motoristaConfig.chave_pix_repasse;
+    if (!chavePix || !chavePix.trim()) return false;
 
     if (passageiroModoCobranca === ModoCobrancaEnum.AUTOMATICA) return true;
 
