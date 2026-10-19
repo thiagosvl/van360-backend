@@ -170,6 +170,23 @@ class ContractService {
       throw new AppError("A funcionalidade de contratos não está ativa para este ano letivo.", 400);
     }
 
+    const contratoRecente = await contractRepository.getByPassageiroEAno(passageiroId, anoContrato);
+    if (contratoRecente && contratoRecente.status === ContratoStatus.PENDENTE) {
+      const segundosCriado = (Date.now() - new Date(contratoRecente.created_at).getTime()) / 1000;
+      if (segundosCriado < 5) {
+        logger.warn({ passageiroId, anoContrato, contratoId: contratoRecente.id }, "Chamada concorrente para criar contrato detectada. Reutilizando contrato existente.");
+        const linkAssinatura = providerName === ContratoProvider.INHOUSE
+          ? `${env.FRONTEND_URL}/assinar/${contratoRecente.token_acesso}`
+          : undefined;
+        return {
+          ...contratoRecente,
+          linkAssinatura,
+          minuta_url: null,
+          contrato_url: null,
+        };
+      }
+    }
+
     const respInfo = _getResponsavelInfoFromPassageiro(passageiro);
 
     // 3. Validações e Cálculos dinâmicos
@@ -185,21 +202,15 @@ class ContractService {
       throw new AppError("CPF do responsável é obrigatório para gerar o contrato", 400);
     }
 
-    const hoje = getNowBR();
-    const dataInicio = customTerms.dataInicio || passageiro.data_inicio_transporte;
-    if (!dataInicio) {
-      throw new AppError("Data de início de transporte é obrigatória para gerar o contrato", 400);
-    }
-    const dInicio = parseLocalDate(dataInicio);
+    const dataInicio: string | null = customTerms.dataInicio || passageiro.data_inicio_transporte || null;
+    const dataFim: string | null = customTerms.dataFim || passageiro.data_fim_transporte || null;
 
-    const dataFim = customTerms.dataFim || passageiro.data_fim_transporte;
-    if (!dataFim) {
-      throw new AppError("Data de término de transporte é obrigatória para gerar o contrato", 400);
-    }
-    const dFim = parseLocalDate(dataFim);
-
-    if (dFim < dInicio) {
-      throw new AppError("Data de término do transporte não pode ser anterior à data de início", 400);
+    if (dataInicio && dataFim) {
+      const dInicio = parseLocalDate(dataInicio);
+      const dFim = parseLocalDate(dataFim);
+      if (dFim < dInicio) {
+        throw new AppError("Data de término do transporte não pode ser anterior à data de início", 400);
+      }
     }
 
     let qtdParcelas = customTerms.qtdParcelas;
@@ -210,16 +221,19 @@ class ContractService {
       if (ymInicio && ymFim) {
         const diffMonths = (ymFim.year - ymInicio.year) * 12 + (ymFim.month - ymInicio.month);
         qtdParcelas = Math.max(1, diffMonths + 1);
-      } else {
+      } else if (dataInicio && dataFim) {
+        const dInicio = parseLocalDate(dataInicio);
+        const dFim = parseLocalDate(dataFim);
         const diffMonths = (dFim.getFullYear() - dInicio.getFullYear()) * 12 + (dFim.getMonth() - dInicio.getMonth());
         qtdParcelas = Math.max(1, diffMonths + 1);
+      } else {
+        qtdParcelas = 12;
       }
     }
 
     const valorMensal = customTerms.valorMensal || Number(passageiro.valor_cobranca) || 0;
     const valorTotal = valorMensal * qtdParcelas;
 
-    // 4. Preparar dados do contrato
     const dadosContrato: DadosContrato = {
       nomePassageiro: passageiro.nome,
       nomeResponsavel: respInfo.nome,
@@ -279,7 +293,7 @@ class ContractService {
       provider: providerName,
       dados_contrato: dadosContratoPersistidos,
       status: ContratoStatus.PENDENTE,
-      ano: customTerms.ano || passageiro.ano_letivo || dInicio.getFullYear(),
+      ano: anoContrato,
       data_inicio: dataInicio,
       data_fim: dataFim,
       valor_total: valorTotal,

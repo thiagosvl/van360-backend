@@ -433,11 +433,24 @@ export class InHouseContractProvider implements ContractProvider {
     };
 
     currentY = drawFullWidthRow(`Ano Letivo: ${dados.ano || currentYear}`, currentY);
-    currentY = drawTwoColumnRow(
-      `Início do Transporte: ${formatToBrazilianDate(dados.dataInicio)}`,
-      `Término do Transporte: ${formatToBrazilianDate(dados.dataFim)}`,
-      currentY
-    );
+
+    const temDataInicio = Boolean(dados.dataInicio && String(dados.dataInicio).trim() !== "");
+    const temDataFim = Boolean(dados.dataFim && String(dados.dataFim).trim() !== "");
+
+    if (temDataInicio || temDataFim) {
+      const inicioTexto = temDataInicio ? formatToBrazilianDate(dados.dataInicio!) : "Conforme calendário escolar";
+      const fimTexto = temDataFim ? formatToBrazilianDate(dados.dataFim!) : "Conforme calendário escolar";
+      currentY = drawTwoColumnRow(
+        `Início do Transporte: ${inicioTexto}`,
+        `Término do Transporte: ${fimTexto}`,
+        currentY
+      );
+    } else {
+      currentY = drawFullWidthRow(
+        "Período do Transporte: Conforme calendário escolar da instituição de ensino",
+        currentY
+      );
+    }
     currentY = drawTwoColumnRow(
       `Horário de Entrada: ${dados.horarioEntrada || ''}`,
       `Horário de Saída: ${dados.horarioSaida || ''}`,

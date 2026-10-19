@@ -174,8 +174,8 @@ export const salvarPeriodoRenovacaoConfigSchema = z.object({
   ano_inicio_cobranca: z.number().int().min(2020).max(2100),
   mes_fim_cobranca: z.number().int().min(1).max(12),
   ano_fim_cobranca: z.number().int().min(2020).max(2100),
-  data_inicio_transporte: z.string().min(10, "Informe a data de início do transporte"),
-  data_fim_transporte: z.string().min(10, "Informe a data de término do transporte"),
+  data_inicio_transporte: z.string().optional().nullable(),
+  data_fim_transporte: z.string().optional().nullable(),
 }).refine((data) => {
   const totalInicio = data.ano_inicio_cobranca * 12 + data.mes_inicio_cobranca;
   const totalFim = data.ano_fim_cobranca * 12 + data.mes_fim_cobranca;

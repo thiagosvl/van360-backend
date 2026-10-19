@@ -29,8 +29,8 @@ export interface DadosContrato {
   
   // Condições do Período e Valor (Ano vigente)
   ano: number;
-  dataInicio: string; // YYYY-MM-DD
-  dataFim: string; // YYYY-MM-DD
+  dataInicio?: string | null; // YYYY-MM-DD
+  dataFim?: string | null; // YYYY-MM-DD
   horarioEntrada?: string | null;
   horarioSaida?: string | null;
   dataInicioCobranca?: string; // YYYY-MM-DD

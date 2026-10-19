@@ -122,26 +122,19 @@ const _resolverDatasTransporteParaContrato = (
   reservaDtInicio: string | null | undefined,
   reservaDtFim: string | null | undefined,
   periodoConfig: PeriodoMestreAnoConfig | null | undefined,
-  anoDestino: number
-): { dataInicio: string; dataFim: string } => {
+  _anoDestino: number
+): { dataInicio?: string; dataFim?: string } => {
   const dataInicio = reservaDtInicio
     ? String(reservaDtInicio)
     : (periodoConfig?.data_inicio_transporte
       ? String(periodoConfig.data_inicio_transporte)
-      : null);
+      : undefined);
 
   const dataFim = reservaDtFim
     ? String(reservaDtFim)
     : (periodoConfig?.data_fim_transporte
       ? String(periodoConfig.data_fim_transporte)
-      : null);
-
-  if (!dataInicio || !dataFim) {
-    throw new AppError(
-      `O período de transporte de ${anoDestino} não foi configurado. Configure as datas de início e término do transporte nas configurações de renovação antes de confirmar vagas ou emitir contratos.`,
-      400
-    );
-  }
+      : undefined);
 
   return { dataInicio, dataFim };
 };
