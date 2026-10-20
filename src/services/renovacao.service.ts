@@ -204,9 +204,9 @@ const _sincronizarMatriculaConfirmada = async (
     veiculo_id: reserva.novo_veiculo_id ?? passageiroOrigem.veiculo_id,
     periodo: reserva.novo_periodo ?? passageiroOrigem.periodo,
     modalidade: reserva.nova_modalidade ?? passageiroOrigem.modalidade,
-    turma: reserva.nova_turma ?? passageiroOrigem.turma,
-    sala: reserva.nova_sala ?? passageiroOrigem.sala ?? null,
-    nome_professor: reserva.novo_nome_professor ?? passageiroOrigem.nome_professor,
+    turma: reserva.nova_turma ?? null,
+    sala: reserva.nova_sala ?? null,
+    nome_professor: reserva.novo_nome_professor ?? null,
     horario_entrada: passageiroOrigem.horario_entrada ?? null,
     horario_saida: passageiroOrigem.horario_saida ?? null,
     isento,
@@ -424,9 +424,9 @@ export const renovacaoService = {
       let novaEscolaNome = pEnriched.escola?.nome || null;
       let novoPeriodo = pEnriched.periodo;
       let novaModalidade = pEnriched.modalidade;
-      let novaTurma = pEnriched.turma;
-      let novaSala = pEnriched.sala;
-      let novoNomeProfessor = pEnriched.nome_professor;
+      let novaTurma: string | null = null;
+      let novaSala: string | null = null;
+      let novoNomeProfessor: string | null = null;
       let novoIsento = Boolean(pEnriched.isento);
       let notificacaoEnviadaEm = null;
       let tokenPublico = null;
@@ -442,9 +442,9 @@ export const renovacaoService = {
         novaEscolaNome = renovacao.nova_escola?.nome ?? pEnriched.escola?.nome ?? null;
         novoPeriodo = renovacao.novo_periodo ?? pEnriched.periodo;
         novaModalidade = renovacao.nova_modalidade ?? pEnriched.modalidade;
-        novaTurma = renovacao.nova_turma ?? pEnriched.turma;
-        novaSala = renovacao.nova_sala ?? pEnriched.sala;
-        novoNomeProfessor = renovacao.novo_nome_professor ?? pEnriched.nome_professor;
+        novaTurma = renovacao.nova_turma ?? null;
+        novaSala = renovacao.nova_sala ?? null;
+        novoNomeProfessor = renovacao.novo_nome_professor ?? null;
       } else {
         statusReserva = RenovacaoStatus.PENDENTE;
       }
@@ -649,9 +649,9 @@ export const renovacaoService = {
         nova_escola_id: renovacao?.nova_escola_id ?? passageiro.escola_id,
         novo_periodo: renovacao?.novo_periodo ?? passageiro.periodo,
         nova_modalidade: renovacao?.nova_modalidade ?? passageiro.modalidade,
-        nova_turma: renovacao?.nova_turma ?? passageiro.turma,
-        nova_sala: renovacao?.nova_sala ?? passageiro.sala,
-        novo_nome_professor: renovacao?.novo_nome_professor ?? passageiro.nome_professor,
+        nova_turma: renovacao?.nova_turma ?? null,
+        nova_sala: renovacao?.nova_sala ?? null,
+        novo_nome_professor: renovacao?.novo_nome_professor ?? null,
         novo_veiculo_id: renovacao?.novo_veiculo_id ?? passageiro.veiculo_id,
         novo_isento: isPassageiroIsento,
         token_publico: renovacao?.token_publico || crypto.randomBytes(16).toString("hex"),
@@ -730,9 +730,9 @@ export const renovacaoService = {
         nova_escola_id: renovacao?.nova_escola_id ?? passageiro.escola_id,
         novo_periodo: renovacao?.novo_periodo ?? passageiro.periodo,
         nova_modalidade: renovacao?.nova_modalidade ?? passageiro.modalidade,
-        nova_turma: renovacao?.nova_turma ?? passageiro.turma,
-        nova_sala: renovacao?.nova_sala ?? passageiro.sala,
-        novo_nome_professor: renovacao?.novo_nome_professor ?? passageiro.nome_professor,
+        nova_turma: renovacao?.nova_turma ?? null,
+        nova_sala: renovacao?.nova_sala ?? null,
+        novo_nome_professor: renovacao?.novo_nome_professor ?? null,
         novo_veiculo_id: renovacao?.novo_veiculo_id ?? passageiro.veiculo_id,
         novo_isento: isPassageiroIsento,
         token_publico: renovacao?.token_publico || crypto.randomBytes(16).toString("hex"),
@@ -892,9 +892,9 @@ export const renovacaoService = {
       nova_escola_id: dto.nova_escola_id !== undefined ? dto.nova_escola_id : (existente?.nova_escola_id ?? passageiro.escola_id),
       novo_periodo: dto.novo_periodo !== undefined ? dto.novo_periodo : (existente?.novo_periodo ?? passageiro.periodo),
       nova_modalidade: dto.nova_modalidade !== undefined ? dto.nova_modalidade : (existente?.nova_modalidade ?? passageiro.modalidade),
-      nova_turma: dto.nova_turma !== undefined ? dto.nova_turma : (existente?.nova_turma ?? passageiro.turma),
-      nova_sala: dto.nova_sala !== undefined ? dto.nova_sala : (existente?.nova_sala ?? passageiro.sala),
-      novo_nome_professor: dto.novo_nome_professor !== undefined ? dto.novo_nome_professor : (existente?.novo_nome_professor ?? passageiro.nome_professor),
+      nova_turma: dto.nova_turma !== undefined ? dto.nova_turma : (existente?.nova_turma ?? null),
+      nova_sala: dto.nova_sala !== undefined ? dto.nova_sala : (existente?.nova_sala ?? null),
+      novo_nome_professor: dto.novo_nome_professor !== undefined ? dto.novo_nome_professor : (existente?.novo_nome_professor ?? null),
       novo_veiculo_id: dto.novo_veiculo_id !== undefined ? dto.novo_veiculo_id : (existente?.novo_veiculo_id ?? passageiro.veiculo_id),
       novo_isento: isPassageiroIsento,
       token_publico: existente?.token_publico || crypto.randomBytes(16).toString("hex"),
@@ -1091,9 +1091,9 @@ export const renovacaoService = {
         id: passageiro.id,
         nome: passageiro.nome,
         data_nascimento: passageiro.data_nascimento || null,
-        turma: data.nova_turma || passageiro.turma || null,
-        sala: data.nova_sala || passageiro.sala || null,
-        nome_professor: data.novo_nome_professor || passageiro.nome_professor || null,
+        turma: data.nova_turma || null,
+        sala: data.nova_sala || null,
+        nome_professor: data.novo_nome_professor || null,
         observacoes: passageiro.observacoes || null,
         foto_url: null,
       },
@@ -1144,17 +1144,17 @@ export const renovacaoService = {
         },
         turma: {
           atual: passageiro.turma || null,
-          novo: data.nova_turma ?? passageiro.turma ?? null,
+          novo: data.nova_turma ?? null,
           alterado: Boolean(data.nova_turma && data.nova_turma !== passageiro.turma),
         },
         sala: {
           atual: passageiro.sala || null,
-          novo: data.nova_sala ?? passageiro.sala ?? null,
+          novo: data.nova_sala ?? null,
           alterado: Boolean(data.nova_sala && data.nova_sala !== passageiro.sala),
         },
         nome_professor: {
           atual: passageiro.nome_professor || null,
-          novo: data.novo_nome_professor ?? passageiro.nome_professor ?? null,
+          novo: data.novo_nome_professor ?? null,
           alterado: Boolean(data.novo_nome_professor && data.novo_nome_professor !== passageiro.nome_professor),
         },
         data_inicio_transporte: dtInicioTransp,
