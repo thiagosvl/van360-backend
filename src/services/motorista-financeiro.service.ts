@@ -62,6 +62,11 @@ export const motoristaFinanceiroService = {
 
     const { aplicar_a_todos, ...updatePayload } = input;
 
+    if (modoFinal === ModoCobrancaEnum.DESATIVADO) {
+      updatePayload.chave_pix_repasse = null;
+      updatePayload.tipo_chave_pix = null;
+    }
+
     const updated = await motoristaFinanceiroRepository.update(usuarioId, {
       ...updatePayload,
       modo_cobranca: modoFinal,

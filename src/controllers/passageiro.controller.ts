@@ -13,7 +13,8 @@ import {
     createResponsavelAdicionalSchema,
     updateResponsavelAdicionalSchema,
     toggleNotificacoesRotaResponsavelSchema,
-    updatePassageirosBatchSchema
+    updatePassageirosBatchSchema,
+    atualizarPixPassageiroSchema
 } from "../types/dtos/passageiro.dto.js";
 
 
@@ -177,5 +178,15 @@ export const passageiroController = {
     const status = parsedBody.success ? parsedBody.data.status : undefined;
     const result = await passageiroService.toggleNotificacoesRota(passageiroId, responsavelId, status);
     return reply.status(200).send(result);
+  },
+
+  atualizarPix: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const usuarioId = request.data_owner_id || request.user?.id;
+    if (!usuarioId) throw new AppError("Não autorizado", 401);
+
+    const payload = atualizarPixPassageiroSchema.parse(request.body);
+    const updated = await passageiroService.atualizarPixPassageiro(id, usuarioId, payload);
+    return reply.status(200).send(updated);
   }
 };

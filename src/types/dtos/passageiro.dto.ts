@@ -1,7 +1,14 @@
 import { z } from "zod";
 import { moneyToNumber } from "../../utils/currency.utils.js";
 import { parseLocalDate, getNowBR } from "../../utils/date.utils.js";
-import { ParentescoResponsavel, ModoCobrancaEnum } from "../enums.js";
+import { ParentescoResponsavel, ModoCobrancaEnum, TipoChavePix } from "../enums.js";
+
+export const atualizarPixPassageiroSchema = z.object({
+  chave_pix: z.string().trim().nullable(),
+  tipo_chave_pix: z.nativeEnum(TipoChavePix).nullable(),
+});
+
+export type AtualizarPixPassageiroDTO = z.infer<typeof atualizarPixPassageiroSchema>;
 
 const optionalString = z.union([z.string(), z.null(), z.undefined()]).transform(v => {
   if (v === undefined) return undefined;

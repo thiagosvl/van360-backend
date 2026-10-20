@@ -7,8 +7,10 @@ import { cobrancaRepasseRepository } from "../repositories/cobranca-repasse.repo
 import { motoristaFinanceiroRepository } from "../repositories/motorista-financeiro.repository.js";
 import { paymentService } from "../services/payments/payment.service.js";
 
-import { StatusRepasseEnum } from "../types/enums.js";
-import { FINANCEIRO_CONFIG } from "../config/constants.js";
+import { StatusRepasseEnum, NotificationChannelEnum } from "../types/enums.js";
+import { FINANCEIRO_CONFIG, EVENTO_ADMIN_REPASSE_SUCESSO } from "../config/constants.js";
+import { notificationService } from "../services/notifications/notification.service.js";
+import { formatDateTime } from "../utils/format.js";
 
 export const repasseWorker = new Worker<RepasseJobData>(
     QUEUE_NAME_REPASSE,
@@ -56,7 +58,7 @@ export const repasseWorker = new Worker<RepasseJobData>(
 
         const valorEmCentavos = Math.round(valorLiquido * 100);
 
-        const { data: cobranca } = await cobrancaRepository.getByIdBasic(cobrancaId);
+        const { data: cobranca } = await cobrancaRepository.getByIdWithPassageiroAndMotorista(cobrancaId);
         const encargosCentavos = cobranca
             ? Math.max(0, Math.round((Number(repasse.valor_bruto) - Number(cobranca.valor)) * 100))
             : 0;
@@ -142,6 +144,41 @@ export const repasseWorker = new Worker<RepasseJobData>(
 
         const { cobrancaPagamentoService } = await import("../services/cobranca-pagamento.service.js");
         await cobrancaPagamentoService.registrarPagamentoAutomatico(cobrancaId, undefined, Number(repasse.valor_bruto));
+
+        const passageiro = cobranca?.passageiro as { nome?: string } | null | undefined;
+        const motorista = cobranca?.motorista as { nome?: string; apelido?: string | null } | null | undefined;
+
+        const mesStr = cobranca?.mes ? String(cobranca.mes).padStart(2, "0") : "";
+        const anoStr = cobranca?.ano_letivo
+            ? String(cobranca.ano_letivo)
+            : (cobranca?.data_vencimento ? String(new Date(cobranca.data_vencimento).getFullYear()) : "");
+        const parcela = (mesStr && anoStr) ? `${mesStr}/${anoStr}` : (mesStr || "N/A");
+
+        notificationService.notifyAdmin(
+            EVENTO_ADMIN_REPASSE_SUCESSO,
+            {
+                motoristaNome: motorista?.nome || "Motorista",
+                motoristaApelido: motorista?.apelido || null,
+                alunoNome: passageiro?.nome || "Aluno",
+                pagadorNome: repasse.pagador_nome,
+                parcela,
+                valorBruto: Number(repasse.valor_bruto),
+                valorMultaJuros: encargosCentavos > 0 ? (encargosCentavos / 100) : 0,
+                taxaPlataforma: Number(repasse.taxa_plataforma),
+                valorLiquido: Number(repasse.valor_liquido_motorista),
+                dataRepasse: formatDateTime(new Date()),
+                repasseId: repasse.id,
+                endToEndIdSaque: withdrawRes.endToEndId || null,
+                endToEndIdEntrada: repasse.end_to_end_id_in || null
+            },
+            {
+                channels: [NotificationChannelEnum.TELEGRAM],
+                jobId: `admin-repasse-sucesso-${repasse.id}`,
+                usuarioId: repasse.motorista_id || undefined
+            }
+        ).catch((err: unknown) => {
+            logger.error({ err: err instanceof Error ? err.message : String(err), repasseId: repasse.id }, "[RepasseWorker] Falha ao notificar admin sobre repasse com sucesso");
+        });
 
         logger.info({ repasseId, cobrancaId }, "[RepasseWorker] Repasse liquidado e cobrança baixada com sucesso");
     },

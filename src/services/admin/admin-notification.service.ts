@@ -525,13 +525,18 @@ export const adminNotificationService = {
 
     const rawVeiculo = passageiro.veiculo;
     const veiculoPassageiro = (Array.isArray(rawVeiculo) ? rawVeiculo[0] : rawVeiculo) as Record<string, unknown> | undefined;
+    const passageiroRecord = passageiro as Record<string, unknown>;
+    const chavePixPassageiro = passageiroRecord.chave_pix as string | undefined;
+    const tipoChavePixPassageiro = passageiroRecord.tipo_chave_pix as string | undefined;
     const chavePixVeiculo = veiculoPassageiro?.chave_pix as string | undefined;
     const tipoChavePixVeiculo = veiculoPassageiro?.tipo_chave_pix as string | undefined;
 
-    const chavePixResolvida = chavePixVeiculo || motoristaConfig?.chave_pix_repasse || null;
-    const tipoChavePixResolvido = chavePixVeiculo
-      ? tipoChavePixVeiculo
-      : (motoristaConfig?.tipo_chave_pix || null);
+    const chavePixResolvida = chavePixPassageiro || chavePixVeiculo || motoristaConfig?.chave_pix_repasse || null;
+    const tipoChavePixResolvido = chavePixPassageiro
+      ? tipoChavePixPassageiro
+      : (chavePixVeiculo
+          ? tipoChavePixVeiculo
+          : (motoristaConfig?.tipo_chave_pix || null));
 
     const contextData = {
       nomeResponsavel: nomeResp,

@@ -16,6 +16,7 @@ import { EVENTO_MOTORISTA_ASSINATURA_PAGO, EVENTO_ADMIN_NOVA_ASSINATURA, EVENTO_
 import { subscriptionRepository } from "../../repositories/subscription.repository.js";
 import { planRepository } from "../../repositories/plan.repository.js";
 import { invoiceRepository } from "../../repositories/invoice.repository.js";
+import { userRepository } from "../../repositories/user.repository.js";
 import { subscriptionReferralService } from "./subscription-referral.service.js";
 import { MetaCapiService } from "../meta-capi.service.js";
 import { AppError } from "../../errors/AppError.js";
@@ -273,10 +274,20 @@ export const subscriptionService = {
             }, { channels: [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND], usuarioId: res.usuario_id! }).catch(err => logger.error({ err }, "[SubscriptionService] Falha ao notificar pagamento confirmado"));
         }
 
-        // Notificação para o Admin (Telegram)
+        let apelidoMotorista: string | null = null;
+        if (res.usuario_id) {
+            try {
+                const { data: usuario } = await userRepository.getById(res.usuario_id);
+                apelidoMotorista = usuario?.apelido || null;
+            } catch (err) {
+                logger.warn({ err: err instanceof Error ? err.message : String(err), usuarioId: res.usuario_id }, "[SubscriptionService] Falha ao obter apelido do motorista para notificação");
+            }
+        }
+
         const valorNumerico = typeof res.valor === "string" ? parseFloat(res.valor) : (res.valor || 0);
         notificationService.notifyAdmin(EVENTO_ADMIN_NOVA_ASSINATURA, {
             nomeMotorista: res.usuario_nome!,
+            apelidoMotorista,
             telefone: res.usuario_telefone!,
             nomePlano: res.plano_nome!,
             valor: `R$ ${valorNumerico.toFixed(2).replace('.', ',')}`,

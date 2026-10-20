@@ -37,6 +37,10 @@ export interface AdminRepasseItemDTO {
   saque_provedor_id: string | null;
   end_to_end_id_in: string | null;
   end_to_end_id_out: string | null;
+  pagador_nome: string | null;
+  pagador_documento: string | null;
+  pagador_banco: string | null;
+  chave_pix: string | null;
   status_repasse: StatusRepasseEnum;
   tentativas: number;
   ultimo_erro: string | null;
@@ -52,6 +56,8 @@ export interface AdminRepasseItemDTO {
 export interface AdminRepasseKpisDTO {
   total_repassado: number;
   total_taxa_plataforma: number;
+  total_custo_provedor: number;
+  total_lucro_liquido: number;
   total_sucesso: number;
   total_falhas: number;
   total_pendentes: number;

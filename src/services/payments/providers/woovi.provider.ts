@@ -101,7 +101,7 @@ export class WooviProvider implements PaymentProviderAdapter {
                 }
                 if (request.interests) {
                     const interestDailyBasisPoints = request.interests.tipo === ContractMultaTipo.PERCENTUAL
-                        ? Math.max(1, Math.round((request.interests.value / 30) * 100))
+                        ? Math.max(1, Math.round(request.interests.value * 100))
                         : (request.amount > 0 ? Math.max(1, Math.round((request.interests.value / request.amount) * 10000)) : 1);
                     payload.interests = {
                         value: interestDailyBasisPoints

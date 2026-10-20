@@ -140,34 +140,42 @@ export const contractRepository = {
   },
 
   async getKPIs(usuarioId: string, ano?: number) {
-    const activeIdsForYear = await this.getActivePassageiroIdsForYear(usuarioId, ano);
-    if (activeIdsForYear !== null && activeIdsForYear.length === 0) {
-      return { pendentes: 0, assinados: 0 };
-    }
+    if (ano !== undefined && ano !== null) {
+      const [{ count: pendentes }, { count: assinados }] = await Promise.all([
+        supabaseAdmin
+          .from("contratos")
+          .select("id, passageiro:passageiros!inner(id, matriculas:passageiro_matriculas!inner(id, ativo, ano_letivo))", { count: "exact", head: true })
+          .eq("usuario_id", usuarioId)
+          .eq("status", ContratoStatus.PENDENTE)
+          .eq("ano", ano)
+          .eq("passageiro.matriculas.ano_letivo", ano)
+          .eq("passageiro.matriculas.ativo", true),
+        supabaseAdmin
+          .from("contratos")
+          .select("id, passageiro:passageiros!inner(id, matriculas:passageiro_matriculas!inner(id, ativo, ano_letivo))", { count: "exact", head: true })
+          .eq("usuario_id", usuarioId)
+          .eq("status", ContratoStatus.ASSINADO)
+          .eq("ano", ano)
+          .eq("passageiro.matriculas.ano_letivo", ano)
+          .eq("passageiro.matriculas.ativo", true),
+      ]);
 
-    let pendentesQuery = supabaseAdmin
-      .from("contratos")
-      .select("id, passageiros!inner(ativo)", { count: "exact", head: true })
-      .eq("usuario_id", usuarioId)
-      .eq("status", ContratoStatus.PENDENTE);
-
-    let assinadosQuery = supabaseAdmin
-      .from("contratos")
-      .select("id, passageiros!inner(ativo)", { count: "exact", head: true })
-      .eq("usuario_id", usuarioId)
-      .eq("status", ContratoStatus.ASSINADO);
-
-    if (ano !== undefined && ano !== null && activeIdsForYear !== null) {
-      pendentesQuery = pendentesQuery.eq("ano", ano).in("passageiro_id", activeIdsForYear);
-      assinadosQuery = assinadosQuery.eq("ano", ano).in("passageiro_id", activeIdsForYear);
-    } else {
-      pendentesQuery = pendentesQuery.eq("passageiros.ativo", true);
-      assinadosQuery = assinadosQuery.eq("passageiros.ativo", true);
+      return { pendentes: pendentes || 0, assinados: assinados || 0 };
     }
 
     const [{ count: pendentes }, { count: assinados }] = await Promise.all([
-      pendentesQuery,
-      assinadosQuery,
+      supabaseAdmin
+        .from("contratos")
+        .select("id, passageiro:passageiros!inner(id)", { count: "exact", head: true })
+        .eq("usuario_id", usuarioId)
+        .eq("status", ContratoStatus.PENDENTE)
+        .eq("passageiro.ativo", true),
+      supabaseAdmin
+        .from("contratos")
+        .select("id, passageiro:passageiros!inner(id)", { count: "exact", head: true })
+        .eq("usuario_id", usuarioId)
+        .eq("status", ContratoStatus.ASSINADO)
+        .eq("passageiro.ativo", true),
     ]);
 
     return { pendentes: pendentes || 0, assinados: assinados || 0 };
@@ -247,24 +255,34 @@ export const contractRepository = {
     return true;
   },
 
-  buildListContratosQuery(usuarioId: string, status?: ContratoStatus, ano?: number, activeIdsForYear?: string[] | null) {
+  buildListContratosQuery(usuarioId: string, status?: ContratoStatus, ano?: number) {
+    if (ano !== undefined && ano !== null) {
+      let query = supabaseAdmin
+        .from("contratos")
+        .select(
+          `*, passageiro:passageiros!inner(${CONTRACT_PASSAGEIRO_SELECT}, matriculas:passageiro_matriculas!inner(id, ativo, ano_letivo))`
+        )
+        .eq("usuario_id", usuarioId)
+        .eq("ano", ano)
+        .eq("passageiro.matriculas.ano_letivo", ano)
+        .eq("passageiro.matriculas.ativo", true);
+
+      if (isValidFilterValue(status)) {
+        query = query.eq("status", status);
+      }
+      return query;
+    }
+
     let query = supabaseAdmin
       .from("contratos")
       .select(
         `*, passageiro:passageiros!inner(${CONTRACT_PASSAGEIRO_SELECT})`
       )
-      .eq("usuario_id", usuarioId);
+      .eq("usuario_id", usuarioId)
+      .eq("passageiro.ativo", true);
 
     if (isValidFilterValue(status)) {
       query = query.eq("status", status);
-    }
-    if (ano !== undefined && ano !== null) {
-      query = query.eq("ano", ano);
-      if (activeIdsForYear && activeIdsForYear.length > 0) {
-        query = query.in("passageiro_id", activeIdsForYear);
-      }
-    } else {
-      query = query.eq("passageiros.ativo", true);
     }
     return query;
   },

@@ -19,6 +19,7 @@ import { formatarPlacaExibicao } from '../utils/placa.utils.js';
 import { contractRepository } from '../repositories/contract.repository.js';
 import { passageiroRepository } from '../repositories/passageiro.repository.js';
 import { userRepository } from '../repositories/user.repository.js';
+import { usuarioConfiguracoesRepository } from '../repositories/usuario-configuracoes.repository.js';
 
 interface ResponsavelLinkJoin {
   id?: string;
@@ -165,6 +166,7 @@ class ContractService {
     const dInicioEstimada = customTerms.dataInicio ? parseLocalDate(customTerms.dataInicio) : (passageiro.data_inicio_transporte ? parseLocalDate(passageiro.data_inicio_transporte) : getNowBR());
     const anoContrato = customTerms.ano || passageiro.ano_letivo || dInicioEstimada.getFullYear();
     const configContratoAno = resolveContractConfigForYear(usuario.config_contrato, anoContrato);
+    const configUser = await usuarioConfiguracoesRepository.getByUsuarioId(usuarioId);
 
     if (!configContratoAno.usar_contratos) {
       throw new AppError("A funcionalidade de contratos não está ativa para este ano letivo.", 400);
@@ -273,6 +275,7 @@ class ContractService {
       telefoneCondutor: usuario.telefone,
       placaVeiculo: passageiro.veiculo?.placa ? formatarPlacaExibicao(passageiro.veiculo.placa) : '',
       modeloVeiculo: passageiro.veiculo ? `${passageiro.veiculo.marca} ${passageiro.veiculo.modelo}` : '',
+      exibirVeiculo: configUser?.contrato_exibir_dados_veiculo ?? true,
       secoes: configContratoAno.secoes,
       clausulas: configContratoAno.clausulas,
       assinaturaCondutorUrl: usuario.assinatura_digital_url,
@@ -616,20 +619,7 @@ class ContractService {
     if (tab === 'pendentes') statusQuery = ContratoStatus.PENDENTE;
     if (tab === 'assinados') statusQuery = ContratoStatus.ASSINADO;
 
-    const activeIdsForYear = await contractRepository.getActivePassageiroIdsForYear(usuarioId, filters.ano);
-    if (activeIdsForYear !== null && activeIdsForYear.length === 0) {
-      return {
-        data: [],
-        pagination: {
-          page,
-          limit,
-          total: 0,
-          totalPages: 0,
-        },
-      };
-    }
-
-    let query = contractRepository.buildListContratosQuery(usuarioId, statusQuery, filters.ano, activeIdsForYear);
+    let query = contractRepository.buildListContratosQuery(usuarioId, statusQuery, filters.ano);
 
     if (search) {
       query = query.or(`nome.ilike.%${search}%`, { foreignTable: 'passageiro' });
@@ -836,6 +826,7 @@ class ContractService {
 
     const hoje = getNowBR();
     const anoVigente = hoje.getFullYear();
+    const configUser = await usuarioConfiguracoesRepository.getByUsuarioId(targetUserId);
 
     const config = draftConfig || {};
     const savedConfig = usuario.config_contrato || {};
@@ -884,6 +875,9 @@ class ContractService {
       telefoneCondutor: usuario.telefone,
       placaVeiculo: "ABC-1234",
       modeloVeiculo: "Mercedes Sprinter",
+      exibirVeiculo: (config as Record<string, unknown>).exibirVeiculo !== undefined
+        ? Boolean((config as Record<string, unknown>).exibirVeiculo)
+        : (configUser?.contrato_exibir_dados_veiculo ?? true),
 
       secoes: config.secoes !== undefined ? config.secoes : savedConfig.secoes,
       clausulas,

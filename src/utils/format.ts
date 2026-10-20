@@ -111,6 +111,7 @@ export function maskPhone(value?: string | null) {
 
 export const formatPeriodo = (periodo: string): string => {
   if (periodo === PeriodoEnum.INTEGRAL) return "Integral";
+  if (periodo === PeriodoEnum.SEMI_INTEGRAL || periodo === "semi-integral" || periodo === "semi integral") return "Semi-integral";
   if (periodo === PeriodoEnum.MANHA) return "Manhã";
   if (periodo === PeriodoEnum.TARDE) return "Tarde";
   if (periodo === PeriodoEnum.NOITE) return "Noite";

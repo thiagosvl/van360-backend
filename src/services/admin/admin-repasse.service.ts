@@ -8,8 +8,31 @@ import {
   AdminRepasseListResponseDTO,
 } from "../../types/dtos/admin-repasse.dto.js";
 import { StatusRepasseEnum, ProvedorPagamentoEnum } from "../../types/enums.js";
+import { Tables } from "../../types/database.types.js";
 import { AppError } from "../../errors/AppError.js";
 import { logger } from "../../config/logger.js";
+
+interface AdminRepasseDbRow extends Tables<"cobrancas_repasses"> {
+  motorista?: {
+    id: string;
+    nome: string;
+    apelido: string | null;
+    telefone: string | null;
+    cpfcnpj: string | null;
+  } | null;
+  passageiro?: {
+    id: string;
+    nome: string;
+  } | null;
+  cobranca?: {
+    id: string;
+    valor: number;
+    status: string;
+    mes: number;
+    ano: number;
+    data_vencimento: string;
+  } | null;
+}
 
 export const adminRepasseService = {
   async listRepasses(query: ListAdminRepassesQuery): Promise<AdminRepasseListResponseDTO> {
@@ -33,11 +56,11 @@ export const adminRepasseService = {
       throw new AppError("Erro ao buscar repasses no banco de dados.", 500);
     }
 
-    const items: AdminRepasseItemDTO[] = (data || []).map((row: any) => ({
+    const items: AdminRepasseItemDTO[] = ((data as unknown as AdminRepasseDbRow[]) || []).map((row) => ({
       id: row.id,
-      cobranca_id: row.cobranca_id,
-      motorista_id: row.motorista_id,
-      passageiro_id: row.passageiro_id,
+      cobranca_id: row.cobranca_id || "",
+      motorista_id: row.motorista_id || "",
+      passageiro_id: row.passageiro_id || "",
       provedor: row.provedor as ProvedorPagamentoEnum,
       valor_bruto: Number(row.valor_bruto),
       taxa_plataforma: Number(row.taxa_plataforma),
@@ -48,6 +71,10 @@ export const adminRepasseService = {
       saque_provedor_id: row.saque_provedor_id,
       end_to_end_id_in: row.end_to_end_id_in,
       end_to_end_id_out: row.end_to_end_id_out,
+      pagador_nome: row.pagador_nome,
+      pagador_documento: row.pagador_documento,
+      pagador_banco: row.pagador_banco,
+      chave_pix: row.chave_pix,
       status_repasse: row.status_repasse as StatusRepasseEnum,
       tentativas: row.tentativas,
       ultimo_erro: row.ultimo_erro,

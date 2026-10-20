@@ -70,6 +70,24 @@ export function globalErrorHandler(error: FastifyError, request: FastifyRequest,
         });
     }
 
+    const errObj = error as unknown as Record<string, unknown>;
+    if (errObj?.code === "PGRST103" || String(errObj?.message || "").includes("Requested range not satisfiable")) {
+        logger.warn({
+            msg: "Range Not Satisfiable (PGRST103)",
+            details: errObj.details || errObj.message,
+            method,
+            url
+        });
+        return reply.status(200).send({
+            list: [],
+            data: [],
+            total: 0,
+            page: 1,
+            totalPages: 0,
+            message: "Página solicitada fora dos limites existentes."
+        });
+    }
+
     Sentry.captureException(error);
     (request as FastifyRequest & { __errorAlertDispatched?: boolean }).__errorAlertDispatched = true;
     void errorAlertService.notifyHttpError({

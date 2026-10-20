@@ -334,12 +334,10 @@ export async function registrarUsuario(
       resolvedIndicadorId ? CanalAquisicao.INDICACAO : undefined
     );
 
-    // 5. Notificação para o Admin (Telegram)
     notificationService.notifyAdmin(EVENTO_ADMIN_NOVO_CADASTRO, {
-      nome: payload.apelido?.trim() ? `${payload.nome} (${payload.apelido.trim()})` : payload.nome,
-      email: payload.email,
+      nome: payload.nome,
+      apelido: payload.apelido?.trim() || null,
       telefone: payload.telefone,
-      cpfcnpj: payload.cpfcnpj,
       origem: atribuicao.label,
       campanha: atribuicao.detalhe,
       dataRegistro: getNowBR().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }),

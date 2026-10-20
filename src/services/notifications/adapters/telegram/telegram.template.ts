@@ -1,12 +1,11 @@
 import { CompositeMessagePart } from "../../../../types/dtos/evolution.dto.js";
-import { maskCpf, maskCnpj, maskPhone } from "../../../../utils/format.js";
+import { maskPhone, getFirstAndSecondName, formatCurrency } from "../../../../utils/format.js";
 import { extractErrorMessage } from "../../../../utils/string.utils.js";
 
 export interface AdminRegistrationContext {
     nome: string;
-    email: string;
+    apelido?: string | null;
     telefone?: string;
-    cpfcnpj?: string;
     origem?: string;
     campanha?: string;
     dataRegistro: string;
@@ -15,6 +14,7 @@ export interface AdminRegistrationContext {
 
 export interface AdminSubscriptionContext {
     nomeMotorista: string;
+    apelidoMotorista?: string | null;
     telefone: string;
     nomePlano: string;
     valor: string;
@@ -37,43 +37,113 @@ export interface AdminSystemAlertContext {
     detalhes?: Record<string, string>;
 }
 
+export interface AdminRepasseSucessoContext {
+    motoristaNome: string;
+    motoristaApelido?: string | null;
+    alunoNome: string;
+    pagadorNome?: string | null;
+    parcela: string;
+    valorBruto: number;
+    valorMultaJuros?: number;
+    taxaPlataforma: number;
+    valorLiquido: number;
+    dataRepasse: string;
+    repasseId: string;
+    endToEndIdSaque?: string | null;
+    endToEndIdEntrada?: string | null;
+}
+
 export class TelegramTemplates {
     static newRegistration(ctx: AdminRegistrationContext): CompositeMessagePart[] {
-        const cpfcnpjClean = ctx.cpfcnpj?.replace(/\D/g, "") || "";
-        const docFormatado = cpfcnpjClean ? (cpfcnpjClean.length > 11 ? maskCnpj(cpfcnpjClean) : maskCpf(cpfcnpjClean)) : "";
+        const nomeCurto = getFirstAndSecondName(ctx.nome);
+        const motoristaDisplay = ctx.apelido?.trim()
+            ? `${ctx.apelido.trim()} (${nomeCurto})`
+            : nomeCurto;
 
-        const telLine = ctx.telefone ? `<b>Telefone:</b> ${maskPhone(ctx.telefone)}\n` : "";
-        const docLine = docFormatado ? `<b>CPF/CNPJ:</b> ${docFormatado}\n` : "";
-        const origemLine = ctx.origem ? `<b>Origem:</b> ${ctx.origem}${ctx.campanha ? ` • ${ctx.campanha}` : ""}\n` : "";
+        const lines = [
+            `👤 <b>Novo Cadastro no Van360!</b>\n`,
+            `<b>Motorista:</b> ${motoristaDisplay}`
+        ];
+        if (ctx.telefone) {
+            lines.push(`<b>Telefone:</b> ${maskPhone(ctx.telefone)}`);
+        }
+        if (ctx.origem) {
+            lines.push(`<b>Origem:</b> ${ctx.origem}${ctx.campanha ? ` • ${ctx.campanha}` : ""}`);
+        }
+        lines.push(`<b>Data:</b> ${ctx.dataRegistro}`);
+        lines.push(`<b>ID:</b> ${ctx.usuarioId}`);
 
         return [
             {
                 type: "text",
-                content: `👤 <b>Novo Cadastro no Van360!</b>\n\n` +
-                    `<b>Nome:</b> ${ctx.nome}\n` +
-                    `<b>Email:</b> ${ctx.email}\n` +
-                    telLine +
-                    docLine +
-                    origemLine +
-                    `<b>Data:</b> ${ctx.dataRegistro}\n` +
-                    `<b>ID:</b> ${ctx.usuarioId}`
+                content: lines.join("\n")
             }
         ];
     }
 
     static newSubscription(ctx: AdminSubscriptionContext): CompositeMessagePart[] {
-        const telLine = ctx.telefone ? `<b>Telefone:</b> ${maskPhone(ctx.telefone)}\n` : "";
+        const motoristaDisplay = ctx.apelidoMotorista?.trim() || getFirstAndSecondName(ctx.nomeMotorista);
+
+        const lines = [
+            `✅ <b>Nova Assinatura Paga!</b>\n`,
+            `<b>Motorista:</b> ${motoristaDisplay}`
+        ];
+        if (ctx.telefone) {
+            lines.push(`<b>Telefone:</b> ${maskPhone(ctx.telefone)}`);
+        }
+        lines.push(`<b>Plano:</b> ${ctx.nomePlano}`);
+        lines.push(`<b>Valor:</b> ${ctx.valor}`);
+        lines.push(`<b>Vencimento:</b> ${ctx.dataVencimento}`);
+        lines.push(`<b>ID:</b> ${ctx.usuarioId}`);
 
         return [
             {
                 type: "text",
-                content: `✅ <b>Nova Assinatura Paga!</b>\n\n` +
-                    `<b>Motorista:</b> ${ctx.nomeMotorista}\n` +
-                    telLine +
-                    `<b>Plano:</b> ${ctx.nomePlano}\n` +
-                    `<b>Valor:</b> ${ctx.valor}\n` +
-                    `<b>Vencimento:</b> ${ctx.dataVencimento}\n` +
-                    `<b>ID:</b> ${ctx.usuarioId}`
+                content: lines.join("\n")
+            }
+        ];
+    }
+
+    static repasseSuccess(ctx: AdminRepasseSucessoContext): CompositeMessagePart[] {
+        const motoristaNomeCurto = getFirstAndSecondName(ctx.motoristaNome);
+        const motoristaDisplay = ctx.motoristaApelido?.trim()
+            ? `${ctx.motoristaApelido.trim()} (${motoristaNomeCurto})`
+            : motoristaNomeCurto;
+
+        const alunoCurto = getFirstAndSecondName(ctx.alunoNome);
+        const pagadorDisplay = ctx.pagadorNome?.trim() || "Não identificado";
+
+        const valorBrutoFmt = formatCurrency(ctx.valorBruto);
+        const multaJurosTexto = ctx.valorMultaJuros && ctx.valorMultaJuros > 0
+            ? ` (inclui ${formatCurrency(ctx.valorMultaJuros)} de multa e juros)`
+            : "";
+        const taxaFmt = formatCurrency(ctx.taxaPlataforma);
+        const valorLiquidoFmt = formatCurrency(ctx.valorLiquido);
+
+        const lines = [
+            `💸 <b>Repasse Pix Realizado!</b>\n`,
+            `<b>Motorista:</b> ${motoristaDisplay}`,
+            `<b>Aluno:</b> ${alunoCurto}`,
+            `<b>Quem pagou:</b> ${pagadorDisplay}`,
+            `<b>Parcela:</b> ${ctx.parcela}\n`,
+            `<b>Valor Pago:</b> ${valorBrutoFmt}${multaJurosTexto}`,
+            `<b>Taxa Van360:</b> ${taxaFmt}`,
+            `<b>Valor Repassado:</b> ${valorLiquidoFmt}\n`,
+            `<b>Data do Repasse:</b> ${ctx.dataRepasse}`,
+            `<b>ID Repasse:</b> <code>${ctx.repasseId}</code>`
+        ];
+
+        if (ctx.endToEndIdSaque) {
+            lines.push(`<b>End-to-End (Saque):</b> <code>${ctx.endToEndIdSaque}</code>`);
+        }
+        if (ctx.endToEndIdEntrada) {
+            lines.push(`<b>End-to-End (Entrada):</b> <code>${ctx.endToEndIdEntrada}</code>`);
+        }
+
+        return [
+            {
+                type: "text",
+                content: lines.join("\n")
             }
         ];
     }

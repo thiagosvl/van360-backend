@@ -699,7 +699,7 @@ export const cobrancaService = {
     const motoristaConfig = await motoristaFinanceiroRepository.getByUsuarioId(motoristaId);
     const passageiro = cobranca.passageiro as Record<string, unknown> | undefined;
     const veiculoPassageiro = passageiro?.veiculo as Record<string, unknown> | undefined;
-    const chavePixRepasseEfetiva = (veiculoPassageiro?.chave_pix as string) || motoristaConfig.chave_pix_repasse || null;
+    const chavePixRepasseEfetiva = (passageiro?.chave_pix as string) || (veiculoPassageiro?.chave_pix as string) || motoristaConfig.chave_pix_repasse || null;
 
     const elegivel = cobrancaCalculoService.verificarElegibilidadeCobrancaAutomatica({
       motoristaConfig,
@@ -1038,10 +1038,14 @@ export const cobrancaService = {
               usuarioId: c.usuario_id,
               passageiroId: passageiro.id,
               chavePix: isModoLembrete
-                ? ((passageiro?.veiculo as Record<string, unknown> | undefined)?.chave_pix as string || motoristaConfigFin?.chave_pix_repasse)
+                ? ((passageiro?.chave_pix as string) || (passageiro?.veiculo as Record<string, unknown> | undefined)?.chave_pix as string || motoristaConfigFin?.chave_pix_repasse)
                 : undefined,
               tipoChavePix: isModoLembrete
-                ? ((passageiro?.veiculo as Record<string, unknown> | undefined)?.tipo_chave_pix as string || motoristaConfigFin?.tipo_chave_pix)
+                ? ((passageiro?.chave_pix as string)
+                    ? (passageiro?.tipo_chave_pix as string)
+                    : ((passageiro?.veiculo as Record<string, unknown> | undefined)?.chave_pix as string
+                        ? (passageiro?.veiculo as Record<string, unknown> | undefined)?.tipo_chave_pix as string
+                        : motoristaConfigFin?.tipo_chave_pix))
                 : undefined,
               pixCopiaCola: pixInfo?.pixCopiaCola,
               pixQrCodeUrl: pixInfo?.pixQrCodeUrl,

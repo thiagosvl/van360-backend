@@ -62,8 +62,8 @@ export interface DadosContrato {
   // Dados do veículo
   placaVeiculo: string;
   modeloVeiculo: string;
+  exibirVeiculo?: boolean;
 
-  // Configurações personalizadas
   clausulas?: string[];
   secoes?: ContractSectionDto[];
   assinaturaCondutorUrl?: string;

@@ -21,6 +21,7 @@ const passageiroRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     app.get("/responsavel/lookup", { preHandler: [requirePermission("passageiros.visualizar")] }, passageiroController.lookupResponsavel);
 
     // Ações Específicas
+    app.patch("/:id/pix", { preHandler: [requirePermission("passageiros.gerenciar")] }, passageiroController.atualizarPix);
     app.patch("/:id/toggle-ativo", { preHandler: [requirePermission("passageiros.gerenciar")] }, passageiroController.toggleAtivo);
     app.post("/finalizar-pre-cadastro/:prePassageiroId", { preHandler: [requirePermission("passageiros.gerenciar")] }, passageiroController.finalizePreCadastro);
     app.post("/:id/reset-pin", { preHandler: [requirePermission("passageiros.gerenciar")] }, portalResponsavelController.resetPinByDriver);

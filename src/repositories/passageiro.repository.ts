@@ -345,7 +345,15 @@ export const passageiroRepository = {
     }
 
     const { data, count, error } = await query;
-    if (error || !data) return { data: null, count: 0, error };
+    if (error) {
+      if (error.code === "PGRST103") {
+        const match = (error.details || error.message || "").match(/only (\d+) rows/i);
+        const totalRows = match ? Number(match[1]) : 0;
+        return { data: [], count: totalRows, error: null };
+      }
+      return { data: null, count: 0, error };
+    }
+    if (!data) return { data: null, count: 0, error: null };
 
     const mapped = (data as Record<string, any>[]).map((p) => {
       const matList = (p.matriculas as Record<string, any>[]) || [];

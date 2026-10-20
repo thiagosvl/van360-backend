@@ -25,6 +25,7 @@ import { withRetry } from "../utils/retry.utils.js";
 import { errorAlertService } from "../services/error-alert.service.js";
 import { subscriptionRevenueCatService } from "../services/subscriptions/subscription-revenuecat.service.js";
 import { RevenueCatWebhookPayload } from "../types/dtos/revenuecat.dto.js";
+import { PG_ERROR_CODES } from "../config/constants.js";
 
 export const WebhookController = {
 
@@ -186,28 +187,77 @@ export const WebhookController = {
         });
         const valorLiquido = divisao.valorLiquidoMotorista;
 
-        let repasse = await cobrancaRepasseRepository.getByTransacaoProvedorId(event.providerRef);
+        const repasseExistente = await cobrancaRepasseRepository.getByTransacaoProvedorId(event.providerRef);
+        if (
+          repasseExistente &&
+          (repasseExistente.status_repasse === StatusRepasseEnum.SUCESSO ||
+            repasseExistente.status_repasse === StatusRepasseEnum.PROCESSANDO ||
+            repasseExistente.saque_provedor_id ||
+            repasseExistente.end_to_end_id_out)
+        ) {
+          logger.info(
+            { cobrancaId, transacaoProvedorId: event.providerRef, statusRepasse: repasseExistente.status_repasse },
+            "[WebhookController] Repasse já está em processamento ou concluído para esta transação"
+          );
+          return reply.code(200).send({ received: true, status: "already_processed" });
+        }
+
+        const rawPix = rawBody.pix as Record<string, unknown> | undefined;
+        const rawCharge = rawBody.charge as Record<string, unknown> | undefined;
+        const rawPixPayer = rawPix?.payer as Record<string, unknown> | undefined;
+        const rawChargePayer = rawCharge?.payer as Record<string, unknown> | undefined;
+        const rawCustomer = rawCharge?.customer as Record<string, unknown> | undefined;
+
+        const payerName = (rawPixPayer?.name as string) || (rawChargePayer?.name as string) || (rawCustomer?.name as string) || null;
+
+        const extractTaxId = (tax: unknown): string | null => {
+          if (!tax) return null;
+          if (typeof tax === "string") return tax;
+          if (typeof tax === "object" && tax !== null && "taxID" in tax) {
+            const inner = (tax as Record<string, unknown>).taxID;
+            return typeof inner === "string" ? inner : null;
+          }
+          return null;
+        };
+
+        const payerDoc = extractTaxId(rawPixPayer?.taxID) || extractTaxId(rawChargePayer?.taxID) || extractTaxId(rawCustomer?.taxID);
+        const payerBank = (rawPixPayer?.bank as string) || null;
+
+        let repasse = repasseExistente;
         if (!repasse) {
-          const rawPix = rawBody.pix as Record<string, unknown> | undefined;
-          const rawCharge = rawBody.charge as Record<string, unknown> | undefined;
           const endToEndIdIn = (rawPix?.endToEndId as string) || (rawCharge?.endToEndId as string) || null;
 
-          repasse = await cobrancaRepasseRepository.create({
-            cobranca_id: cobranca.id,
-            motorista_id: motoristaId,
-            passageiro_id: cobranca.passageiro_id,
-            provedor: ProvedorPagamentoEnum.WOOVI,
-            valor_bruto: valorRealPago,
-            taxa_plataforma: divisao.taxaPlataforma,
-            tarifa_gateway_pix_in: divisao.tarifaGatewayPixIn,
-            tarifa_gateway_saque: divisao.tarifaGatewaySaque,
-            valor_liquido_motorista: valorLiquido,
-            transacao_provedor_id: event.providerRef,
-            end_to_end_id_in: endToEndIdIn,
-            status_repasse: StatusRepasseEnum.PENDENTE,
-            data_pagamento_pai: event.paidAt ? event.paidAt.toISOString() : new Date().toISOString(),
-            chave_pix: chavePixRepasse
-          });
+          try {
+            repasse = await cobrancaRepasseRepository.create({
+              cobranca_id: cobranca.id,
+              motorista_id: motoristaId,
+              passageiro_id: cobranca.passageiro_id,
+              provedor: ProvedorPagamentoEnum.WOOVI,
+              valor_bruto: valorRealPago,
+              taxa_plataforma: divisao.taxaPlataforma,
+              tarifa_gateway_pix_in: divisao.tarifaGatewayPixIn,
+              tarifa_gateway_saque: divisao.tarifaGatewaySaque,
+              valor_liquido_motorista: valorLiquido,
+              transacao_provedor_id: event.providerRef,
+              end_to_end_id_in: endToEndIdIn,
+              pagador_nome: payerName,
+              pagador_documento: payerDoc,
+              pagador_banco: payerBank,
+              status_repasse: StatusRepasseEnum.PENDENTE,
+              data_pagamento_pai: event.paidAt ? event.paidAt.toISOString() : new Date().toISOString(),
+              chave_pix: chavePixRepasse
+            });
+          } catch (createErr: unknown) {
+            const pgErr = createErr as { code?: string; message?: string };
+            if (pgErr.code === PG_ERROR_CODES.UNIQUE_VIOLATION || pgErr.message?.includes("uk_transacao_provedor")) {
+              logger.warn(
+                { cobrancaId, transacaoProvedorId: event.providerRef },
+                "[WebhookController] Concorrência detectada: repasse já inserido por outra requisição"
+              );
+              return reply.code(200).send({ received: true, status: "already_processed" });
+            }
+            throw createErr;
+          }
         }
 
         await addToRepasseQueue({
@@ -224,6 +274,15 @@ export const WebhookController = {
 
       return reply.code(200).send({ received: true, status: "unhandled_event" });
     } catch (err: unknown) {
+      const pgErr = err as { code?: string; message?: string };
+      if (pgErr.code === PG_ERROR_CODES.UNIQUE_VIOLATION || pgErr.message?.includes("uk_transacao_provedor")) {
+        logger.warn(
+          { cobrancaId, error: pgErr.message },
+          "[WebhookController] Violação de chave única ignorada graciosamente (webhook concorrente)"
+        );
+        return reply.code(200).send({ received: true, status: "already_processed" });
+      }
+
       const errorMsg = err instanceof Error ? err.message : String(err);
       logger.error({ error: errorMsg, cobrancaId }, "[WebhookController] Erro ao processar webhook Woovi");
 

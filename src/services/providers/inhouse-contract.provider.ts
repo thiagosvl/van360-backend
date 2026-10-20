@@ -413,14 +413,16 @@ export class InHouseContractProvider implements ContractProvider {
 
     currentY -= sectionSpacing;
 
-    currentY = drawHeader('VEÍCULO', currentY);
-    currentY = drawTwoColumnRow(
-      `Modelo: ${dados.modeloVeiculo || ''}`,
-      `Placa: ${dados.placaVeiculo || ''}`,
-      currentY
-    );
+    if (dados.exibirVeiculo !== false) {
+      currentY = drawHeader('VEÍCULO', currentY);
+      currentY = drawTwoColumnRow(
+        `Modelo: ${dados.modeloVeiculo || ''}`,
+        `Placa: ${dados.placaVeiculo || ''}`,
+        currentY
+      );
 
-    currentY -= sectionSpacing;
+      currentY -= sectionSpacing;
+    }
 
     currentY = drawHeader('DO PERÍODO DO CONTRATO', currentY);
     const currentYear = getNowBR().getFullYear();

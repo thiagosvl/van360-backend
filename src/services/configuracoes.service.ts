@@ -40,6 +40,7 @@ export async function obterConfiguracoesUsuario(usuarioId: string): Promise<Conf
     formato_nome_responsavel: (config?.formato_nome_responsavel as "primeiro_nome" | "completo") ?? "primeiro_nome",
     formato_nome_aluno: (config?.formato_nome_aluno as "curto" | "completo") ?? "curto",
     exibir_telefone_lista_alunos: config?.exibir_telefone_lista_alunos ?? false,
+    contrato_exibir_dados_veiculo: config?.contrato_exibir_dados_veiculo ?? true,
     chave_pix: configFin?.chave_pix_repasse ?? null,
     tipo_chave_pix: configFin?.tipo_chave_pix ?? null,
   };

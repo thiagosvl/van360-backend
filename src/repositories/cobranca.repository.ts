@@ -4,7 +4,7 @@ import { getLastDayOfMonth } from "../utils/date.utils.js";
 import { isValidFilterValue } from "../utils/filter.utils.js";
 
 const COBRANCA_PASSAGEIRO_SELECT = `
-    nome, enviar_notificacoes, modo_cobranca, isento, veiculo_id,
+    nome, enviar_notificacoes, modo_cobranca, isento, veiculo_id, chave_pix, tipo_chave_pix,
     veiculo:veiculos (id, placa, modelo, marca, chave_pix, tipo_chave_pix),
     responsaveis:passageiro_responsaveis(
         tipo, parentesco,

@@ -18,6 +18,7 @@ export const updateConfiguracoesSchema = z.object({
   formato_nome_aluno: z.enum(["curto", "completo"]).optional(),
   formato_nome_responsavel: z.enum(["primeiro_nome", "completo"]).optional(),
   exibir_telefone_lista_alunos: z.boolean().optional(),
+  contrato_exibir_dados_veiculo: z.boolean().optional(),
 });
 
 

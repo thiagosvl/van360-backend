@@ -427,6 +427,9 @@ export type Database = {
           end_to_end_id_out: string | null
           id: string
           motorista_id: string | null
+          pagador_banco: string | null
+          pagador_documento: string | null
+          pagador_nome: string | null
           passageiro_id: string | null
           provedor: Database["public"]["Enums"]["provedor_pagamento_enum"]
           saque_provedor_id: string | null
@@ -451,6 +454,9 @@ export type Database = {
           end_to_end_id_out?: string | null
           id?: string
           motorista_id?: string | null
+          pagador_banco?: string | null
+          pagador_documento?: string | null
+          pagador_nome?: string | null
           passageiro_id?: string | null
           provedor?: Database["public"]["Enums"]["provedor_pagamento_enum"]
           saque_provedor_id?: string | null
@@ -475,6 +481,9 @@ export type Database = {
           end_to_end_id_out?: string | null
           id?: string
           motorista_id?: string | null
+          pagador_banco?: string | null
+          pagador_documento?: string | null
+          pagador_nome?: string | null
           passageiro_id?: string | null
           provedor?: Database["public"]["Enums"]["provedor_pagamento_enum"]
           saque_provedor_id?: string | null
@@ -1803,6 +1812,7 @@ export type Database = {
         Row: {
           ano_letivo: number
           ativo: boolean
+          chave_pix: string | null
           created_at: string
           data_fim_cobranca: string | null
           data_fim_transporte: string | null
@@ -1826,6 +1836,7 @@ export type Database = {
           observacoes: string | null
           periodo: string | null
           sala: string | null
+          tipo_chave_pix: string | null
           turma: string | null
           updated_at: string
           usuario_id: string
@@ -1835,6 +1846,7 @@ export type Database = {
         Insert: {
           ano_letivo?: number
           ativo?: boolean
+          chave_pix?: string | null
           created_at?: string
           data_fim_cobranca?: string | null
           data_fim_transporte?: string | null
@@ -1858,6 +1870,7 @@ export type Database = {
           observacoes?: string | null
           periodo?: string | null
           sala?: string | null
+          tipo_chave_pix?: string | null
           turma?: string | null
           updated_at?: string
           usuario_id: string
@@ -1867,6 +1880,7 @@ export type Database = {
         Update: {
           ano_letivo?: number
           ativo?: boolean
+          chave_pix?: string | null
           created_at?: string
           data_fim_cobranca?: string | null
           data_fim_transporte?: string | null
@@ -1890,6 +1904,7 @@ export type Database = {
           observacoes?: string | null
           periodo?: string | null
           sala?: string | null
+          tipo_chave_pix?: string | null
           turma?: string | null
           updated_at?: string
           usuario_id?: string
@@ -2425,6 +2440,7 @@ export type Database = {
           cobranca_aviso_previo_whatsapp_ativo: boolean
           cobranca_dias_aviso_previo: number | null
           cobranca_vencimento_hoje_ativo: boolean
+          contrato_exibir_dados_veiculo: boolean
           created_at: string
           exibir_telefone_lista_alunos: boolean
           formato_nome_aluno: string
@@ -2447,6 +2463,7 @@ export type Database = {
           cobranca_aviso_previo_whatsapp_ativo?: boolean
           cobranca_dias_aviso_previo?: number | null
           cobranca_vencimento_hoje_ativo?: boolean
+          contrato_exibir_dados_veiculo?: boolean
           created_at?: string
           exibir_telefone_lista_alunos?: boolean
           formato_nome_aluno?: string
@@ -2469,6 +2486,7 @@ export type Database = {
           cobranca_aviso_previo_whatsapp_ativo?: boolean
           cobranca_dias_aviso_previo?: number | null
           cobranca_vencimento_hoje_ativo?: boolean
+          contrato_exibir_dados_veiculo?: boolean
           created_at?: string
           exibir_telefone_lista_alunos?: boolean
           formato_nome_aluno?: string

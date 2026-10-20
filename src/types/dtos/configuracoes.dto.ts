@@ -19,6 +19,7 @@ export interface ConfiguracoesUsuarioDTO {
   formato_nome_aluno: "curto" | "completo";
   formato_nome_responsavel: "primeiro_nome" | "completo";
   exibir_telefone_lista_alunos: boolean;
+  contrato_exibir_dados_veiculo: boolean;
   chave_pix: string | null;
   tipo_chave_pix: string | null;
 }
@@ -40,6 +41,7 @@ export interface UpdateConfiguracoesDTO {
   formato_nome_aluno?: "curto" | "completo";
   formato_nome_responsavel?: "primeiro_nome" | "completo";
   exibir_telefone_lista_alunos?: boolean;
+  contrato_exibir_dados_veiculo?: boolean;
 }
 
 
