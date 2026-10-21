@@ -155,7 +155,7 @@ export const responsavelRepository = {
     return this.resetPinById(responsavelId);
   },
 
-  async getPassageiroCarteirinha(passageiroId: string, target?: ResponsavelPassageiroRecord) {
+  async getPassageiroCarteirinha(passageiroId: string, target?: ResponsavelPassageiroRecord, anoLetivo?: number) {
     const { data: passageiro, error: errPass } = await supabaseAdmin
       .from("passageiros")
       .select(`
@@ -241,10 +241,12 @@ export const responsavelRepository = {
 
     const contratosValidos = todosContratos || [];
     const currentYear = getNowBR().getFullYear();
+    const targetYear = (anoLetivo && !Number.isNaN(anoLetivo) && anoLetivo > 0) ? Number(anoLetivo) : currentYear;
     const rawMatriculas = ((passageiro as Record<string, unknown>).matriculas as Record<string, unknown>[]) || [];
     const activeMatricula =
-      rawMatriculas.find((m) => Number(m.ano_letivo) === currentYear) ||
-      [...rawMatriculas].sort((a, b) => Number(b.ano_letivo) - Number(a.ano_letivo))[0] ||
+      rawMatriculas.find((m) => Number(m.ano_letivo) === targetYear) ||
+      (anoLetivo ? null : rawMatriculas.find((m) => Number(m.ano_letivo) === currentYear)) ||
+      (anoLetivo ? null : [...rawMatriculas].sort((a, b) => Number(b.ano_letivo) - Number(a.ano_letivo))[0]) ||
       null;
 
     const matriculasEnriquecidas: Record<string, unknown>[] = rawMatriculas
@@ -263,12 +265,12 @@ export const responsavelRepository = {
       .sort((a, b) => Number(a.ano_letivo) - Number(b.ano_letivo));
 
     const anosMatriculados = Array.from(
-      new Set(matriculasEnriquecidas.map((m) => Number(m.ano_letivo)).filter((n) => !Number.isNaN(n)))
+      new Set(matriculasEnriquecidas.map((m) => Number(m.ano_letivo)).filter((n) => !Number.isNaN(n) && n > 0))
     ).sort((a, b) => a - b);
 
     const contrato =
       (activeMatricula && contratosValidos.find((c) => Number(c.ano) === Number(activeMatricula.ano_letivo))) ||
-      contratosValidos[0] ||
+      (anoLetivo ? null : contratosValidos[0]) ||
       null;
 
     const responsaveisAdicionais = links
@@ -346,7 +348,7 @@ export const responsavelRepository = {
         data_fim_cobranca: activeMatricula.data_fim_cobranca,
       } : {}),
       matriculas: matriculasEnriquecidas,
-      anos_matriculados: anosMatriculados.length > 0 ? anosMatriculados : (passageiro.ano_letivo ? [Number(passageiro.ano_letivo)] : []),
+      anos_matriculados: anosMatriculados.length > 0 ? anosMatriculados : (passageiro.ano_letivo && Number(passageiro.ano_letivo) > 0 ? [Number(passageiro.ano_letivo)] : []),
       responsavel_principal: principalResp?.id ? {
         id: principalResp.id,
         nome: principalResp.nome || null,

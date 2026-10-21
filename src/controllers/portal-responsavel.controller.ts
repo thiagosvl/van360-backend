@@ -55,8 +55,10 @@ export const portalResponsavelController = {
     }
     const token = authHeader.replace("Bearer ", "").trim();
     const { id } = request.params as { id: string };
+    const { ano } = request.query as { ano?: string };
+    const parsedAno = ano && !Number.isNaN(Number(ano)) ? Number(ano) : undefined;
 
-    const result = await portalResponsavelService.getPassageiroCarteirinha(token, id);
+    const result = await portalResponsavelService.getPassageiroCarteirinha(token, id, parsedAno);
     return reply.status(200).send(result);
   },
 

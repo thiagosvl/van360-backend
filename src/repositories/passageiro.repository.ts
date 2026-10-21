@@ -51,7 +51,7 @@ const overlayMatriculaOnPassageiro = <T extends Record<string, any>>(
 ): T & { matricula_id?: string; anos_matriculados: number[] } => {
   const listMatriculas = allMatriculas || (Array.isArray(data.matriculas) ? data.matriculas : []);
   const anosMatriculados = Array.from(
-    new Set(listMatriculas.map((m: Record<string, any>) => Number(m.ano_letivo)).filter((n: number) => !Number.isNaN(n)))
+    new Set(listMatriculas.map((m: Record<string, any>) => Number(m.ano_letivo)).filter((n: number) => !Number.isNaN(n) && n > 0))
   ).sort((a, b) => a - b);
 
   if (!matricula) {

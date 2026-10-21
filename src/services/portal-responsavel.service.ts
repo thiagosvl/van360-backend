@@ -152,10 +152,10 @@ export const portalResponsavelService = {
     return target;
   },
 
-  async getPassageiroCarteirinha(token: string, passageiroId: string) {
+  async getPassageiroCarteirinha(token: string, passageiroId: string, anoLetivo?: number) {
     const payload = await this.verifyResponsavelToken(token);
     const target = await this._authorizePassageiroAccess(payload.phone, passageiroId);
-    return responsavelRepository.getPassageiroCarteirinha(passageiroId, target);
+    return responsavelRepository.getPassageiroCarteirinha(passageiroId, target, anoLetivo);
   },
 
   async updateDadosComplementares(token: string, passageiroId: string, data: UpdateDadosComplementaresDTO) {
