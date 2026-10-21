@@ -80,14 +80,14 @@ export const fretamentoService = {
         fretamento_participantes (
           id,
           valor,
+          valor_pago,
           status_pagamento,
           data_pagamento
         )
       `)
       .eq("usuario_id", usuarioId)
       .gte("data_inicio", dataInicioMes)
-      .lte("data_inicio", dataFimMes)
-      .order("data_inicio", { ascending: true });
+      .lte("data_inicio", dataFimMes);
 
     if (tipo) {
       query = query.eq("tipo", tipo);
@@ -95,6 +95,10 @@ export const fretamentoService = {
     if (status) {
       query = query.eq("status", status);
     }
+
+    query = query
+      .order("data_inicio", { ascending: true })
+      .order("created_at", { ascending: true });
 
     const { data, error } = await query;
     if (error) throw new AppError(error.message, 500);
@@ -163,6 +167,7 @@ export const fretamentoService = {
           telefone,
           endereco,
           valor,
+          valor_pago,
           status_pagamento,
           tipo_pagamento,
           data_pagamento,
@@ -272,7 +277,7 @@ export const fretamentoService = {
         tipo: dados.tipo,
         titulo: dados.titulo.trim(),
         origem: dados.origem ? dados.origem.trim() : null,
-        destino: dados.destino.trim(),
+        destino: (dados.destino ? dados.destino.trim() : "") || dados.titulo.trim(),
         data_inicio: dados.data_inicio,
         data_fim: dados.data_fim || null,
         contratante_nome: dados.contratante_nome ? dados.contratante_nome.trim() : null,
@@ -325,7 +330,9 @@ export const fretamentoService = {
     const updatePayload: Record<string, unknown> = {};
     if (dados.titulo !== undefined) updatePayload.titulo = dados.titulo.trim();
     if (dados.origem !== undefined) updatePayload.origem = dados.origem ? dados.origem.trim() : null;
-    if (dados.destino !== undefined) updatePayload.destino = dados.destino.trim();
+    if (dados.destino !== undefined) {
+      updatePayload.destino = dados.destino ? dados.destino.trim() : (dados.titulo ? dados.titulo.trim() : fretamentoAtual.destino);
+    }
     if (dados.data_inicio !== undefined) updatePayload.data_inicio = dados.data_inicio;
     if (dados.data_fim !== undefined) updatePayload.data_fim = dados.data_fim || null;
     if (dados.contratante_nome !== undefined) updatePayload.contratante_nome = dados.contratante_nome ? dados.contratante_nome.trim() : null;
@@ -541,7 +548,20 @@ export const fretamentoService = {
 
     if (error) throw new AppError(error.message, 500);
 
-    return this.obterPorId(usuarioId, fretamentoId);
+    const fretamentoAtualizado = await this.obterPorId(usuarioId, fretamentoId);
+    const novoStatusPagamento = recalcularStatusPagamento(
+      fretamentoAtualizado.valor_total,
+      fretamentoAtualizado.total_pago
+    );
+    if (fretamentoAtualizado.status_pagamento !== novoStatusPagamento) {
+      await supabaseAdmin
+        .from("fretamentos")
+        .update({ status_pagamento: novoStatusPagamento })
+        .eq("id", fretamentoId);
+      fretamentoAtualizado.status_pagamento = novoStatusPagamento;
+    }
+
+    return fretamentoAtualizado;
   },
 
   async removerParticipante(usuarioId: string, fretamentoId: string, participanteId: string) {

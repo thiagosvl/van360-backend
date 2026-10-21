@@ -18,7 +18,7 @@ export interface CriarFretamentoDTO {
   tipo: FretamentoTipo;
   titulo: string;
   origem?: string | null;
-  destino: string;
+  destino?: string | null;
   data_inicio: string;
   data_fim?: string | null;
   contratante_nome?: string | null;
@@ -39,7 +39,7 @@ export interface CriarFretamentoDTO {
 export interface AtualizarFretamentoDTO {
   titulo?: string;
   origem?: string | null;
-  destino?: string;
+  destino?: string | null;
   data_inicio?: string;
   data_fim?: string | null;
   contratante_nome?: string | null;

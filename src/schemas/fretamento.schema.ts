@@ -17,7 +17,7 @@ export const criarFretamentoSchema = z.object({
   tipo: fretamentoTipoEnum,
   titulo: z.string().min(2, "Título deve ter no mínimo 2 caracteres").max(255),
   origem: z.string().max(255).optional().nullable(),
-  destino: z.string().min(2, "Destino é obrigatório").max(255),
+  destino: z.string().max(255).optional().nullable(),
   data_inicio: z.string().min(1, "Data de início é obrigatória"),
   data_fim: z.string().optional().nullable(),
   contratante_nome: z.string().max(255).optional().nullable(),
@@ -41,7 +41,7 @@ export const criarFretamentoSchema = z.object({
 export const atualizarFretamentoSchema = z.object({
   titulo: z.string().min(2).max(255).optional(),
   origem: z.string().max(255).optional().nullable(),
-  destino: z.string().min(2).max(255).optional(),
+  destino: z.string().max(255).optional().nullable(),
   data_inicio: z.string().optional(),
   data_fim: z.string().optional().nullable(),
   contratante_nome: z.string().max(255).optional().nullable(),
