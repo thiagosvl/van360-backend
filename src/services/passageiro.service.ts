@@ -9,6 +9,7 @@ import { cleanString, onlyDigits, normalizePhone } from "../utils/string.utils.j
 import { historicoService } from "./historico.service.js";
 import { parseLocalDate, toPersistenceString, getNowBR, getSafeDueDateString } from "../utils/date.utils.js";
 import { isValidPixKey } from "../utils/validators.js";
+import { pixValidationService } from "./pix-validation.service.js";
 import { notificationService } from "./notifications/notification.service.js";
 import { EVENTO_MOTORISTA_ANIVERSARIANTES_SEMANA } from "../config/constants.js";
 import { NotificationChannelEnum, CobrancaStatus } from "../types/enums.js";
@@ -1275,10 +1276,14 @@ const atualizarPixPassageiro = async (passageiroId: string, usuarioId: string, p
     };
 
     if (chave_pix && tipo_chave_pix) {
-        const isValid = isValidPixKey(tipo_chave_pix, chave_pix);
-        if (!isValid) {
-            throw new AppError("Formato de chave Pix inválido para o tipo selecionado.", 400);
-        }
+        await pixValidationService.validarDisponibilidadeChavePix({
+            chavePix: chave_pix,
+            tipoChavePix: tipo_chave_pix,
+            usuarioId,
+            escopo: "ALUNO",
+            entidadeId: passageiroId,
+            veiculoId: passageiro.veiculo_id || null
+        });
         updates.chave_pix = chave_pix;
         updates.tipo_chave_pix = tipo_chave_pix;
     }

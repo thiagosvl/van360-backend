@@ -70,7 +70,9 @@ export function isValidPixKey(tipo: string | TipoChavePix, chave: string): boole
 
   if (tipo === TipoChavePix.TELEFONE) {
     const cleanedPhone = chave.replace(/\D/g, "");
-    return cleanedPhone.length === 11;
+    if (cleanedPhone.length === 10 || cleanedPhone.length === 11) return true;
+    if (cleanedPhone.startsWith("55") && (cleanedPhone.length === 12 || cleanedPhone.length === 13)) return true;
+    return false;
   }
 
   if (tipo === TipoChavePix.ALEATORIA) {

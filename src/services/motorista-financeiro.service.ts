@@ -3,12 +3,14 @@ import { userRepository } from "../repositories/user.repository.js";
 import { UpdateMotoristaFinanceiroInput } from "../schemas/motorista-financeiro.schema.js";
 import { AppError } from "../errors/AppError.js";
 import { logger } from "../config/logger.js";
-import { ModoCobrancaEnum } from "../types/enums.js";
+import { ModoCobrancaEnum, TipoChavePix } from "../types/enums.js";
 import type { Tables } from "../types/database.types.js";
 
 import { supabaseAdmin } from "../config/supabase.js";
 import { cobrancaValidacaoService } from "./cobranca-validacao.service.js";
 import { CobrancaStatus } from "../types/enums.js";
+import { pixValidationService } from "./pix-validation.service.js";
+import { paymentService } from "./payments/payment.service.js";
 
 import type { ResumoExcecoesModoCobrancaDTO } from "../types/dtos/motorista-financeiro.dto.js";
 
@@ -42,6 +44,16 @@ export const motoristaFinanceiroService = {
     const configAtual = await motoristaFinanceiroRepository.getByUsuarioId(usuarioId);
 
     const chavePix = input.chave_pix_repasse !== undefined ? input.chave_pix_repasse : configAtual.chave_pix_repasse;
+    const tipoChavePix = input.tipo_chave_pix !== undefined ? input.tipo_chave_pix : configAtual.tipo_chave_pix;
+
+    if (input.chave_pix_repasse && (tipoChavePix as TipoChavePix)) {
+      await pixValidationService.validarDisponibilidadeChavePix({
+        chavePix: input.chave_pix_repasse,
+        tipoChavePix: tipoChavePix as TipoChavePix,
+        usuarioId,
+        escopo: "CONTA"
+      });
+    }
 
     let modoFinal: ModoCobrancaEnum = (configAtual.modo_cobranca as ModoCobrancaEnum) || ModoCobrancaEnum.DESATIVADO;
 
@@ -51,6 +63,14 @@ export const motoristaFinanceiroService = {
 
     if (modoFinal === ModoCobrancaEnum.AUTOMATICA && !chavePix) {
       throw new AppError("Para ativar a cobrança automática, é obrigatório cadastrar uma chave Pix para repasse.", 400);
+    }
+
+    if (modoFinal === ModoCobrancaEnum.AUTOMATICA && chavePix) {
+      try {
+        await paymentService.ensureSubaccount(chavePix);
+      } catch (err: unknown) {
+        logger.warn({ error: err, chavePix }, "[MotoristaFinanceiroService] Aviso ao registrar subconta na Woovi");
+      }
     }
 
     if (input.aplicar_a_todos === true) {

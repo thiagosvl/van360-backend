@@ -7,6 +7,7 @@ import { historicoService } from "./historico.service.js";
 import { AppError } from "../errors/AppError.js";
 import { calculateAuditDiff } from "../utils/audit-diff.util.js";
 import { isValidPixKey } from "../utils/validators.js";
+import { pixValidationService } from "./pix-validation.service.js";
 
 // Helper Methods
 const _prepareVeiculoData = (data: Partial<CreateVeiculoDTO>, usuarioId?: string, isUpdate: boolean = false): Record<string, unknown> => {
@@ -180,10 +181,13 @@ export const veiculoService = {
         };
 
         if (chave_pix && tipo_chave_pix) {
-            const isValid = isValidPixKey(tipo_chave_pix, chave_pix);
-            if (!isValid) {
-                throw new AppError("Formato de chave Pix inválido para o tipo selecionado.", 400);
-            }
+            await pixValidationService.validarDisponibilidadeChavePix({
+                chavePix: chave_pix,
+                tipoChavePix: tipo_chave_pix,
+                usuarioId,
+                escopo: "VEICULO",
+                entidadeId: id
+            });
             updates.chave_pix = chave_pix;
             updates.tipo_chave_pix = tipo_chave_pix;
         }

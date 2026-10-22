@@ -44,13 +44,57 @@ export class WooviProvider implements PaymentProviderAdapter {
 
     private sanitizePixKey(pixKey: string): string {
         const trimmed = pixKey.trim();
-        if (!trimmed.includes("@") && /[.\-/() ]/.test(trimmed)) {
+        if (trimmed.startsWith("+55")) {
+            const digits = trimmed.replace(/\D/g, "");
+            return `+${digits}`;
+        }
+        if (trimmed.includes("(") || trimmed.includes(")")) {
+            const digits = trimmed.replace(/\D/g, "");
+            if (digits.length >= 10 && digits.length <= 11) {
+                return `+55${digits}`;
+            }
+        }
+        if (!trimmed.includes("@") && /[.\-/ ]/.test(trimmed)) {
             const digits = trimmed.replace(/\D/g, "");
             if (digits.length >= 10 && digits.length <= 14) {
                 return digits;
             }
         }
         return trimmed;
+    }
+
+    private matchesPixKey(keyA: string, keyB: string): boolean {
+        if (!keyA || !keyB) return false;
+        const cleanA = keyA.trim().toLowerCase();
+        const cleanB = keyB.trim().toLowerCase();
+        if (cleanA === cleanB) return true;
+
+        if (cleanA.includes("@") || cleanB.includes("@")) {
+            return cleanA === cleanB;
+        }
+
+        const digitsA = cleanA.replace(/\D/g, "");
+        const digitsB = cleanB.replace(/\D/g, "");
+        if (!digitsA || !digitsB) return false;
+        if (digitsA === digitsB) return true;
+
+        if ((digitsA.length === 10 || digitsA.length === 11) && digitsB === `55${digitsA}`) return true;
+        if ((digitsB.length === 10 || digitsB.length === 11) && digitsA === `55${digitsB}`) return true;
+
+        return false;
+    }
+
+    private async findWooviSubaccount(pixKey: string): Promise<WooviSubaccount | null> {
+        try {
+            const response = await this.client.get("/subaccount");
+            const subAccounts: WooviSubaccount[] = response.data?.subAccounts || [];
+            const found = subAccounts.find((s) => this.matchesPixKey(s.pixKey, pixKey));
+            return found || null;
+        } catch (error: unknown) {
+            const err = error as { message?: string };
+            logger.warn({ error: err.message, pixKey }, "[WooviProvider] Falha ao listar subcontas para busca");
+            return null;
+        }
     }
 
     async createCharge(request: CreateChargeRequest): Promise<ChargeResponse> {
@@ -112,6 +156,15 @@ export class WooviProvider implements PaymentProviderAdapter {
             }
 
             if (splitsPayload && splitsPayload.length > 0) {
+                for (const split of splitsPayload) {
+                    if (split.pixKey) {
+                        try {
+                            await this.createOrEnsureSubaccount(split.pixKey);
+                        } catch (subErr: unknown) {
+                            logger.warn({ error: subErr, pixKey: split.pixKey }, "[WooviProvider] Aviso ao assegurar subconta durante criação de split");
+                        }
+                    }
+                }
                 payload.splits = splitsPayload;
             }
 
@@ -170,24 +223,13 @@ export class WooviProvider implements PaymentProviderAdapter {
     }
 
     async createOrEnsureSubaccount(pixKey: string, name?: string): Promise<boolean> {
-        const sanitizedKey = this.sanitizePixKey(pixKey);
         try {
-            try {
-                const directCheck = await this.client.get(`/subaccount/${encodeURIComponent(sanitizedKey)}`);
-                if (directCheck.status === 200 && directCheck.data) {
-                    return true;
-                }
-            } catch {
-            }
-
-            const listResponse = await this.client.get("/subaccount");
-            const subAccounts: WooviSubaccount[] = listResponse.data?.subAccounts || [];
-            const exists = subAccounts.some((sub) => sub.pixKey === sanitizedKey || sub.pixKey === pixKey);
-
-            if (exists) {
+            const existing = await this.findWooviSubaccount(pixKey);
+            if (existing) {
                 return true;
             }
 
+            const sanitizedKey = this.sanitizePixKey(pixKey);
             const subaccountName = (name && name.trim()) || `Motorista ${sanitizedKey}`;
             await this.client.post("/subaccount", {
                 name: subaccountName.substring(0, 100),
@@ -203,29 +245,27 @@ export class WooviProvider implements PaymentProviderAdapter {
             if (lowerMsg.includes("already exists") || lowerMsg.includes("já existe") || lowerMsg.includes("já cadastrada")) {
                 return true;
             }
-            logger.error({ status: err.response?.status, responseData: err.response?.data, error: msg, pixKey: sanitizedKey }, "[WooviProvider] Falha ao criar subconta");
+            logger.error({ status: err.response?.status, responseData: err.response?.data, error: msg, pixKey }, "[WooviProvider] Falha ao criar subconta");
             throw new AppError(`Não foi possível registrar a chave Pix na instituição financeira: ${msg}`, 400);
         }
     }
 
     async getSubaccountBalance(pixKey: string): Promise<number> {
-        const sanitizedKey = this.sanitizePixKey(pixKey);
         try {
-            const response = await this.client.get("/subaccount");
-            const subAccounts: WooviSubaccount[] = response.data?.subAccounts || [];
-            const sub = subAccounts.find((s) => s.pixKey === sanitizedKey || s.pixKey === pixKey);
+            const sub = await this.findWooviSubaccount(pixKey);
             return sub ? sub.balance / 100 : 0;
         } catch (error: unknown) {
             const err = error as { message?: string };
-            logger.error({ error: err.message, pixKey: sanitizedKey }, "[WooviProvider] Falha ao consultar saldo da subconta");
+            logger.error({ error: err.message, pixKey }, "[WooviProvider] Falha ao consultar saldo da subconta");
             return 0;
         }
     }
 
     async withdrawFromSubaccount(pixKey: string, amountInCents: number): Promise<WooviWithdrawResponse> {
-        const sanitizedKey = this.sanitizePixKey(pixKey);
         try {
-            const encodedPixKey = encodeURIComponent(sanitizedKey);
+            const sub = await this.findWooviSubaccount(pixKey);
+            const targetKey = sub ? sub.pixKey : this.sanitizePixKey(pixKey);
+            const encodedPixKey = encodeURIComponent(targetKey);
             const response = await this.client.post(`/subaccount/${encodedPixKey}/withdraw`, {
                 value: amountInCents
             });
@@ -240,7 +280,7 @@ export class WooviProvider implements PaymentProviderAdapter {
         } catch (error: unknown) {
             const err = error as { response?: { data?: { error?: string; message?: string } }; message?: string };
             const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || "Erro no saque";
-            logger.error({ error: errorMsg, pixKey: sanitizedKey, amountInCents }, "[WooviProvider] Falha ao executar saque da subconta");
+            logger.error({ error: errorMsg, pixKey, amountInCents }, "[WooviProvider] Falha ao executar saque da subconta");
             return {
                 success: false,
                 error: errorMsg
@@ -249,9 +289,10 @@ export class WooviProvider implements PaymentProviderAdapter {
     }
 
     async creditSubaccount(pixKey: string, amountInCents: number): Promise<{ success: boolean; error?: string }> {
-        const sanitizedKey = this.sanitizePixKey(pixKey);
         try {
-            const encodedPixKey = encodeURIComponent(sanitizedKey);
+            const sub = await this.findWooviSubaccount(pixKey);
+            const targetKey = sub ? sub.pixKey : this.sanitizePixKey(pixKey);
+            const encodedPixKey = encodeURIComponent(targetKey);
             await this.client.post(`/subaccount/${encodedPixKey}/credit`, {
                 value: amountInCents
             });
@@ -259,7 +300,7 @@ export class WooviProvider implements PaymentProviderAdapter {
         } catch (error: unknown) {
             const err = error as { response?: { data?: { error?: string; message?: string } }; message?: string };
             const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || "Erro no crédito da subconta";
-            logger.error({ error: errorMsg, pixKey: sanitizedKey, amountInCents }, "[WooviProvider] Falha ao creditar subconta");
+            logger.error({ error: errorMsg, pixKey, amountInCents }, "[WooviProvider] Falha ao creditar subconta");
             return {
                 success: false,
                 error: errorMsg

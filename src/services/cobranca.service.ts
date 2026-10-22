@@ -145,6 +145,34 @@ export const cobrancaService = {
     const valorNumerico = typeof data.valor === "string" ? moneyToNumber(data.valor) : data.valor;
 
     const statusVal = data.status || CobrancaStatus.PENDENTE;
+    const cobrancaAno = Number(data.ano);
+
+    let resolvedAnoLetivo: number;
+    if (data.ano_letivo !== undefined && data.ano_letivo !== null) {
+      resolvedAnoLetivo = Number(data.ano_letivo);
+    } else {
+      const { data: matriculas } = await passageiroRepository.getMatriculasByPassageiro(data.passageiro_id);
+      const listMatriculas = matriculas || [];
+      const exactMatricula = listMatriculas.find((m) => Number(m.ano_letivo) === cobrancaAno);
+
+      if (exactMatricula) {
+        resolvedAnoLetivo = Number(exactMatricula.ano_letivo);
+      } else {
+        const coveringMatricula = listMatriculas.find((m) => {
+          if (!m.data_inicio_cobranca || !m.data_fim_cobranca) return false;
+          const inicio = new Date(m.data_inicio_cobranca);
+          const fim = new Date(m.data_fim_cobranca);
+          const venc = new Date(data.data_vencimento);
+          return venc >= inicio && venc <= fim;
+        });
+
+        if (coveringMatricula) {
+          resolvedAnoLetivo = Number(coveringMatricula.ano_letivo);
+        } else {
+          resolvedAnoLetivo = cobrancaAno || Number(passageiro.ano_letivo) || getNowBR().getFullYear();
+        }
+      }
+    }
 
     const { data: existingCobranca } = await cobrancaRepository.getByPassageiroMesAno(
       data.passageiro_id,
@@ -170,6 +198,8 @@ export const cobrancaService = {
       }
       if (data.ano_letivo !== undefined) {
         updateData.ano_letivo = Number(data.ano_letivo);
+      } else if (existingCobranca.ano_letivo === null || existingCobranca.ano_letivo !== resolvedAnoLetivo) {
+        updateData.ano_letivo = resolvedAnoLetivo;
       }
       if (data.observacao !== undefined) {
         updateData.observacao = (data.observacao && data.observacao.trim()) ? data.observacao.trim() : null;
@@ -186,7 +216,7 @@ export const cobrancaService = {
         usuario_id: data.usuario_id,
         mes: Number(data.mes),
         ano: Number(data.ano),
-        ano_letivo: data.ano_letivo !== undefined ? Number(data.ano_letivo) : (passageiro.ano_letivo || Number(data.ano)),
+        ano_letivo: resolvedAnoLetivo,
         valor: valorNumerico,
         data_vencimento: data.data_vencimento,
         status: statusVal,
@@ -698,8 +728,11 @@ export const cobrancaService = {
 
     const motoristaConfig = await motoristaFinanceiroRepository.getByUsuarioId(motoristaId);
     const passageiro = cobranca.passageiro as Record<string, unknown> | undefined;
-    const veiculoPassageiro = passageiro?.veiculo as Record<string, unknown> | undefined;
-    const chavePixRepasseEfetiva = (passageiro?.chave_pix as string) || (veiculoPassageiro?.chave_pix as string) || motoristaConfig.chave_pix_repasse || null;
+    const pixResolvido = cobrancaCalculoService.resolverPixEfetivo({
+      passageiro,
+      motoristaConfig
+    });
+    const chavePixRepasseEfetiva = pixResolvido.chave;
 
     const elegivel = cobrancaCalculoService.verificarElegibilidadeCobrancaAutomatica({
       motoristaConfig,
@@ -1025,6 +1058,13 @@ export const cobrancaService = {
             const valorFinal = pixInfo ? pixInfo.valorTotalPix : Number(c.valor);
             const isModoLembrete = modoEfetivo === ModoCobrancaEnum.LEMBRETES;
 
+            const pixResolvidoLembrete = isModoLembrete
+              ? cobrancaCalculoService.resolverPixEfetivo({
+                  passageiro,
+                  motoristaConfig: motoristaConfigFin
+                })
+              : null;
+
             const context = {
               nomeResponsavel: resp.nome,
               nomePassageiro: passageiro.nome,
@@ -1037,16 +1077,8 @@ export const cobrancaService = {
               diasAtraso: eventType === EVENTO_PASSAGEIRO_ATRASADO ? diffInDays(dataVencimentoStr, todayStr) : undefined,
               usuarioId: c.usuario_id,
               passageiroId: passageiro.id,
-              chavePix: isModoLembrete
-                ? ((passageiro?.chave_pix as string) || (passageiro?.veiculo as Record<string, unknown> | undefined)?.chave_pix as string || motoristaConfigFin?.chave_pix_repasse)
-                : undefined,
-              tipoChavePix: isModoLembrete
-                ? ((passageiro?.chave_pix as string)
-                    ? (passageiro?.tipo_chave_pix as string)
-                    : ((passageiro?.veiculo as Record<string, unknown> | undefined)?.chave_pix as string
-                        ? (passageiro?.veiculo as Record<string, unknown> | undefined)?.tipo_chave_pix as string
-                        : motoristaConfigFin?.tipo_chave_pix))
-                : undefined,
+              chavePix: isModoLembrete ? (pixResolvidoLembrete?.chave || undefined) : undefined,
+              tipoChavePix: isModoLembrete ? (pixResolvidoLembrete?.tipo || undefined) : undefined,
               pixCopiaCola: pixInfo?.pixCopiaCola,
               pixQrCodeUrl: pixInfo?.pixQrCodeUrl,
               mes: c.mes,
@@ -1511,5 +1543,180 @@ export const cobrancaService = {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error({ err: msg }, "[CobrancaService] Erro geral no lembrete noturno de conferência para motoristas");
     }
+  },
+
+  async isentarEncargos(cobrancaId: string, motoristaId: string) {
+    const { data: cobranca, error: cobrancaErr } = await cobrancaRepository.getById(cobrancaId);
+    if (cobrancaErr || !cobranca) {
+      throw new AppError("Cobrança não encontrada", 404);
+    }
+
+    if (cobranca.usuario_id && cobranca.usuario_id !== motoristaId) {
+      throw new AppError("Acesso não autorizado a esta cobrança", 403);
+    }
+
+    if (cobranca.status === CobrancaStatus.PAGO) {
+      throw new AppError("Esta cobrança já consta como paga", 400);
+    }
+
+    if (cobranca.status === CobrancaStatus.CANCELADA) {
+      throw new AppError("Esta cobrança está cancelada", 400);
+    }
+
+    if (!cobranca.pix_copia_cola || !cobranca.provedor_cobranca_id) {
+      throw new AppError("Esta cobrança não possui código Pix de baixa automática", 400);
+    }
+
+    const todayStr = toPersistenceString(getNowBR());
+    if (cobranca.data_vencimento >= todayStr) {
+      throw new AppError("Esta cobrança não está em atraso", 400);
+    }
+
+    await cobrancaValidacaoService.cancelarPixCobrancaSeExistir(cobranca.id, cobranca.provedor_cobranca_id);
+
+    const motoristaConfig = await motoristaFinanceiroRepository.getByUsuarioId(motoristaId);
+    if (!motoristaConfig) {
+      throw new AppError("Configurações financeiras do motorista não encontradas", 400);
+    }
+
+    const { data: passageiro } = await passageiroRepository.getById(cobranca.passageiro_id);
+    const passageiroNome = (passageiro?.nome as string) || "Aluno";
+    const links = (passageiro?.responsaveis as Array<{
+      tipo?: string;
+      responsavel?: { id?: string; nome?: string; telefone?: string; cpf?: string; email?: string } | Array<{ id?: string; nome?: string; telefone?: string; cpf?: string; email?: string }>;
+    }>) || [];
+    const respLink = links.find((r) => r.tipo === TipoResponsavel.PRINCIPAL) || links[0];
+    const respObj = Array.isArray(respLink?.responsavel) ? respLink.responsavel[0] : respLink?.responsavel;
+    const cleanTaxId = respObj?.cpf?.replace(/\D/g, "");
+
+    const taxaGlobal = await motoristaFinanceiroRepository.getTaxaPadraoGlobal();
+    const taxaPlataforma = cobrancaCalculoService.resolverTaxaPlataforma(
+      motoristaConfig.taxa_personalizada,
+      taxaGlobal
+    );
+
+    const valorOriginal = Number(cobranca.valor);
+    const divisao = cobrancaCalculoService.calcularDivisaoCobranca({
+      valorMensalidade: valorOriginal,
+      taxaPlataforma
+    });
+
+    const valorTotalPix = divisao.valorCobrancaPai;
+    const valorRepasseMotorista = divisao.valorLiquidoMotorista;
+    const pixResolvido = cobrancaCalculoService.resolverPixEfetivo({
+      passageiro,
+      motoristaConfig,
+      cobrancaSnapshotPix: cobranca.chave_pix_repasse
+    });
+    const chavePixSplit = pixResolvido.chave;
+
+    if (!chavePixSplit) {
+      throw new AppError("Chave Pix de repasse do motorista não configurada", 400);
+    }
+
+    const externalCorrelationId = `${cobranca.id}_${Date.now()}`;
+
+    const chargeRes = await paymentService.createCharge(
+      {
+        externalId: externalCorrelationId,
+        amount: valorTotalPix,
+        description: `Parcela ${cobranca.mes}/${cobranca.ano} - ${passageiroNome}`,
+        paymentMethod: CheckoutPaymentMethod.PIX,
+        dueDate: todayStr,
+        daysAfterDueDate: 30,
+        customer: {
+          name: respObj?.nome || passageiroNome,
+          document: cleanTaxId || "",
+          phone: respObj?.telefone || undefined,
+          email: respObj?.email || undefined
+        },
+        splits: [
+          {
+            pix_chave: chavePixSplit,
+            amount: valorRepasseMotorista
+          }
+        ]
+      },
+      PaymentProvider.WOOVI
+    );
+
+    if (!chargeRes.success || !chargeRes.pixCopyPaste) {
+      throw new AppError(`Falha ao gerar novo Pix na Woovi: ${chargeRes.error || "Erro desconhecido"}`, 500);
+    }
+
+    const expiracao = new Date(getNowBR());
+    expiracao.setDate(expiracao.getDate() + 30);
+
+    const { data: cobrancaAtualizada, error: updateErr } = await cobrancaRepository.update(cobranca.id, {
+      data_vencimento: todayStr,
+      provedor: ProvedorPagamentoEnum.WOOVI,
+      provedor_cobranca_id: chargeRes.providerId || externalCorrelationId,
+      pix_copia_cola: chargeRes.pixCopyPaste,
+      pix_qrcode_url: chargeRes.pixQrCodeUrl || null,
+      pix_expiracao: expiracao.toISOString(),
+      valor_taxa_plataforma: taxaPlataforma,
+      chave_pix_repasse: chavePixSplit,
+      data_envio_ultima_notificacao: todayStr
+    });
+
+    if (updateErr) {
+      throw updateErr;
+    }
+
+    const telefoneResp = respObj?.telefone?.trim();
+    if (telefoneResp) {
+      try {
+        const { data: motoristaProfile } = await userRepository.getById(motoristaId);
+        await notificationService.notifyPassenger(
+          telefoneResp,
+          EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
+          {
+            nomeResponsavel: respObj?.nome || "Responsável",
+            nomePassageiro: passageiroNome,
+            nomeMotorista: motoristaProfile?.apelido || motoristaProfile?.nome || "Motorista",
+            apelidoMotorista: motoristaProfile?.apelido || undefined,
+            telefoneMotorista: motoristaProfile?.telefone || undefined,
+            valor: valorTotalPix,
+            dataVencimento: todayStr,
+            usuarioId: motoristaId,
+            passageiroId: cobranca.passageiro_id,
+            pixCopiaCola: chargeRes.pixCopyPaste,
+            pixQrCodeUrl: chargeRes.pixQrCodeUrl || undefined,
+            mes: cobranca.mes,
+            ano: cobranca.ano,
+            cobrancaId: cobranca.id
+          },
+          {
+            channels: [NotificationChannelEnum.WABA],
+            usuarioId: motoristaId,
+            passageiroId: cobranca.passageiro_id,
+            email: respObj?.email?.trim() || undefined,
+            metadata: {
+              cobrancaId: cobranca.id,
+              isencaoEncargos: true
+            }
+          }
+        );
+      } catch (notifErr) {
+        logger.error({ error: notifErr, cobrancaId }, "[CobrancaService] Falha ao enviar notificação WABA de isenção");
+      }
+    }
+
+    await historicoService.log({
+      usuario_id: motoristaId,
+      entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
+      entidade_id: cobranca.id,
+      acao: AtividadeAcao.COBRANCA_EDITADA,
+      descricao: `Isenção de juros e multa concedida para a parcela (${cobranca.mes}/${cobranca.ano}) do aluno ${passageiroNome}. Novo Pix gerado e enviado via WhatsApp.`,
+      meta: {
+        cobranca_id: cobranca.id,
+        passageiro_id: cobranca.passageiro_id,
+        novo_vencimento: todayStr,
+        pix_copia_cola: chargeRes.pixCopyPaste
+      }
+    });
+
+    return cobrancaAtualizada;
   }
 };
+

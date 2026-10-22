@@ -4,6 +4,37 @@ import type { Tables, Database } from "../types/database.types.js";
 
 export type ModoCobrancaTipo = ModoCobrancaEnum | Database["public"]["Enums"]["modo_cobranca_enum"];
 
+export type PixOrigem = "ALUNO" | "VEICULO" | "MOTORISTA" | "NENHUMA";
+
+export interface PixResolvido {
+  chave: string | null;
+  tipo: string | null;
+  origem: PixOrigem;
+}
+
+export interface ParametrosResolucaoPix {
+  passageiro?: {
+    chave_pix?: string | null;
+    tipo_chave_pix?: string | null;
+    veiculo?: {
+      chave_pix?: string | null;
+      tipo_chave_pix?: string | null;
+    } | Array<{
+      chave_pix?: string | null;
+      tipo_chave_pix?: string | null;
+    }> | null;
+  } | Record<string, unknown> | null;
+  veiculo?: {
+    chave_pix?: string | null;
+    tipo_chave_pix?: string | null;
+  } | Record<string, unknown> | null;
+  motoristaConfig?: {
+    chave_pix_repasse?: string | null;
+    tipo_chave_pix?: string | null;
+  } | Record<string, unknown> | null;
+  cobrancaSnapshotPix?: string | null;
+}
+
 export interface RegraEncargoResolvido {
   value: number;
   tipo: ContractMultaTipo;
@@ -161,6 +192,69 @@ export const cobrancaCalculoService = {
       interests,
       daysAfterDueDate,
       hasOverdueRules: hasMulta || hasJuros
+    };
+  },
+
+  resolverPixEfetivo({
+    passageiro,
+    veiculo,
+    motoristaConfig,
+    cobrancaSnapshotPix
+  }: ParametrosResolucaoPix): PixResolvido {
+    if (cobrancaSnapshotPix && typeof cobrancaSnapshotPix === "string" && cobrancaSnapshotPix.trim().length > 0) {
+      const snapChave = cobrancaSnapshotPix.trim();
+      const snapTipo = (passageiro as Record<string, unknown> | null | undefined)?.tipo_chave_pix as string | null
+        || (veiculo as Record<string, unknown> | null | undefined)?.tipo_chave_pix as string | null
+        || (motoristaConfig as Record<string, unknown> | null | undefined)?.tipo_chave_pix as string | null
+        || null;
+      return {
+        chave: snapChave,
+        tipo: snapTipo,
+        origem: "MOTORISTA"
+      };
+    }
+
+    const passageiroRecord = passageiro as Record<string, unknown> | null | undefined;
+    const chavePassageiro = passageiroRecord?.chave_pix;
+    if (typeof chavePassageiro === "string" && chavePassageiro.trim().length > 0) {
+      return {
+        chave: chavePassageiro.trim(),
+        tipo: (passageiroRecord?.tipo_chave_pix as string) || null,
+        origem: "ALUNO"
+      };
+    }
+
+    const rawVeiculoDireto = Array.isArray(veiculo) ? veiculo[0] : veiculo;
+    const veiculoDireto = rawVeiculoDireto as Record<string, unknown> | null | undefined;
+    const veiculoDoPassageiroRaw = passageiroRecord?.veiculo;
+    const veiculoDoPassageiro = Array.isArray(veiculoDoPassageiroRaw)
+      ? (veiculoDoPassageiroRaw[0] as Record<string, unknown> | undefined)
+      : (veiculoDoPassageiroRaw as Record<string, unknown> | undefined);
+
+    const veiculoEfetivo = veiculoDireto || veiculoDoPassageiro;
+    const chaveVeiculo = veiculoEfetivo?.chave_pix;
+    if (typeof chaveVeiculo === "string" && chaveVeiculo.trim().length > 0) {
+      return {
+        chave: chaveVeiculo.trim(),
+        tipo: (veiculoEfetivo?.tipo_chave_pix as string) || null,
+        origem: "VEICULO"
+      };
+    }
+
+    const motoristaRecord = motoristaConfig as Record<string, unknown> | null | undefined;
+    const chaveMotorista = motoristaRecord?.chave_pix_repasse;
+    if (typeof chaveMotorista === "string" && chaveMotorista.trim().length > 0) {
+      return {
+        chave: chaveMotorista.trim(),
+        tipo: (motoristaRecord?.tipo_chave_pix as string) || null,
+        origem: "MOTORISTA"
+      };
+    }
+
+    return {
+      chave: null,
+      tipo: null,
+      origem: "NENHUMA"
     };
   },
 

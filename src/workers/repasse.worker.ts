@@ -56,6 +56,12 @@ export const repasseWorker = new Worker<RepasseJobData>(
             tentativas: (repasse.tentativas || 0) + 1
         });
 
+        try {
+            await paymentService.ensureSubaccount(chavePixEfetiva);
+        } catch (subErr: unknown) {
+            logger.warn({ error: subErr, chavePix: chavePixEfetiva }, "[RepasseWorker] Aviso ao assegurar subconta antes do repasse");
+        }
+
         const valorEmCentavos = Math.round(valorLiquido * 100);
 
         const { data: cobranca } = await cobrancaRepository.getByIdWithPassageiroAndMotorista(cobrancaId);

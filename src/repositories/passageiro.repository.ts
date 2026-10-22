@@ -200,7 +200,7 @@ export const passageiroRepository = {
       .select(`
         *,
         escola:escolas(id, nome),
-        veiculo:veiculos(id, placa, modelo)
+        veiculo:veiculos(id, placa, modelo, chave_pix, tipo_chave_pix)
       `)
       .eq("passageiro_id", passageiroId)
       .order("ano_letivo", { ascending: true });
@@ -263,11 +263,11 @@ export const passageiroRepository = {
       .select(`
         *,
         escola:escolas(id, nome),
-        veiculo:veiculos(id, placa, modelo),
+        veiculo:veiculos(id, placa, modelo, chave_pix, tipo_chave_pix),
         matriculas:passageiro_matriculas(
           *,
           escola:escolas(id, nome),
-          veiculo:veiculos(id, placa, modelo)
+          veiculo:veiculos(id, placa, modelo, chave_pix, tipo_chave_pix)
         ),
         contratos(id, ano, status, provider, created_at, minuta_url, contrato_final_url, token_acesso),
         renovacoes:passageiro_renovacoes(id, ano_origem, ano_destino, status),
@@ -303,11 +303,11 @@ export const passageiroRepository = {
     let query = supabaseAdmin
       .from("passageiros")
       .select(`
-        id, usuario_id, nome, ativo, isento, data_nascimento, genero, modalidade, periodo, turma, sala, nome_professor, observacoes, valor_cobranca, dia_vencimento, data_inicio_cobranca, data_fim_cobranca, data_inicio_transporte, data_fim_transporte, horario_entrada, horario_saida, enviar_notificacoes, modo_cobranca, escola_id, veiculo_id, ano_letivo, created_at, updated_at,
+        id, usuario_id, nome, ativo, isento, data_nascimento, genero, modalidade, periodo, turma, sala, nome_professor, observacoes, valor_cobranca, dia_vencimento, data_inicio_cobranca, data_fim_cobranca, data_inicio_transporte, data_fim_transporte, horario_entrada, horario_saida, enviar_notificacoes, modo_cobranca, escola_id, veiculo_id, chave_pix, tipo_chave_pix, ano_letivo, created_at, updated_at,
         matriculas:passageiro_matriculas!inner(
           id, ano_letivo, ativo, isento, modalidade, periodo, turma, sala, nome_professor, valor_cobranca, dia_vencimento, data_inicio_cobranca, data_fim_cobranca, data_inicio_transporte, data_fim_transporte, horario_entrada, horario_saida, modo_cobranca, escola_id, veiculo_id, created_at, updated_at,
           escola:escolas(id, nome),
-          veiculo:veiculos(id, placa, modelo)
+          veiculo:veiculos(id, placa, modelo, chave_pix, tipo_chave_pix)
         ),
         todas_matriculas:passageiro_matriculas(ano_letivo),
         contratos(id, ano, status, provider, token_acesso, created_at),
@@ -652,7 +652,7 @@ export const passageiroRepository = {
       .from("passageiro_matriculas")
       .select(`
         passageiro_id,
-        veiculo:veiculos(id, placa, modelo),
+        veiculo:veiculos(id, placa, modelo, chave_pix, tipo_chave_pix),
         escola:escolas(id, nome),
         passageiro:passageiros!inner(
           id,

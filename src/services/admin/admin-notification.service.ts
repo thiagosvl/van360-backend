@@ -523,20 +523,10 @@ export const adminNotificationService = {
 
     const isModoLembrete = modoEfetivo === ModoCobrancaEnum.LEMBRETES;
 
-    const rawVeiculo = passageiro.veiculo;
-    const veiculoPassageiro = (Array.isArray(rawVeiculo) ? rawVeiculo[0] : rawVeiculo) as Record<string, unknown> | undefined;
-    const passageiroRecord = passageiro as Record<string, unknown>;
-    const chavePixPassageiro = passageiroRecord.chave_pix as string | undefined;
-    const tipoChavePixPassageiro = passageiroRecord.tipo_chave_pix as string | undefined;
-    const chavePixVeiculo = veiculoPassageiro?.chave_pix as string | undefined;
-    const tipoChavePixVeiculo = veiculoPassageiro?.tipo_chave_pix as string | undefined;
-
-    const chavePixResolvida = chavePixPassageiro || chavePixVeiculo || motoristaConfig?.chave_pix_repasse || null;
-    const tipoChavePixResolvido = chavePixPassageiro
-      ? tipoChavePixPassageiro
-      : (chavePixVeiculo
-          ? tipoChavePixVeiculo
-          : (motoristaConfig?.tipo_chave_pix || null));
+    const pixResolvido = cobrancaCalculoService.resolverPixEfetivo({
+      passageiro,
+      motoristaConfig,
+    });
 
     const contextData = {
       nomeResponsavel: nomeResp,
@@ -550,8 +540,8 @@ export const adminNotificationService = {
       diasAtraso,
       usuarioId: passageiro.usuario_id,
       passageiroId: passageiro.id,
-      chavePix: isModoLembrete ? (chavePixResolvida || undefined) : undefined,
-      tipoChavePix: isModoLembrete ? (tipoChavePixResolvido || undefined) : undefined,
+      chavePix: isModoLembrete ? (pixResolvido.chave || undefined) : undefined,
+      tipoChavePix: isModoLembrete ? (pixResolvido.tipo || undefined) : undefined,
       pixCopiaCola: pixInfo?.pixCopiaCola,
       pixQrCodeUrl: pixInfo?.pixQrCodeUrl,
       mes: cobranca.mes,
@@ -631,21 +621,20 @@ export const adminNotificationService = {
     const nomeExibicaoMotorista = user.apelido || user.nome;
 
     const motoristaConfig = await motoristaFinanceiroRepository.getByUsuarioId(driverId);
-    let chavePixResolvida = motoristaConfig?.chave_pix_repasse || null;
-    let tipoChavePixResolvido = motoristaConfig?.tipo_chave_pix || null;
+    const { data: veiculos } = await supabaseAdmin
+      .from("veiculos")
+      .select("id, ativo, chave_pix, tipo_chave_pix")
+      .eq("usuario_id", driverId);
 
-    if (!chavePixResolvida) {
-      const { data: veiculos } = await supabaseAdmin
-        .from("veiculos")
-        .select("id, ativo, chave_pix, tipo_chave_pix")
-        .eq("usuario_id", driverId);
+    const veiculoComChave = veiculos?.find((v) => v.ativo && v.chave_pix && v.chave_pix.trim() !== "");
 
-      const veiculoComChave = veiculos?.find((v) => v.ativo && v.chave_pix && v.chave_pix.trim() !== "");
-      if (veiculoComChave) {
-        chavePixResolvida = veiculoComChave.chave_pix;
-        tipoChavePixResolvido = veiculoComChave.tipo_chave_pix || null;
-      }
-    }
+    const pixResolvido = cobrancaCalculoService.resolverPixEfetivo({
+      veiculo: veiculoComChave,
+      motoristaConfig
+    });
+
+    const chavePixResolvida = pixResolvido.chave;
+    const tipoChavePixResolvido = pixResolvido.tipo;
 
     const contextData = {
       nomeResponsavel: user.nome,

@@ -27,6 +27,7 @@ const cobrancaRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     app.post("/:id/restaurar", cobrancaController.restaurar);
     app.post("/:id/gerar-recibo", cobrancaController.gerarRecibo);
     app.get("/:id/pix", cobrancaController.obterPix);
+    app.post("/:id/isentar-encargos", cobrancaController.isentarEncargos);
 };
 
 export default cobrancaRoute;

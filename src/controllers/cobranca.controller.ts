@@ -137,5 +137,12 @@ export const cobrancaController = {
     logger.info({ cobrancaId: id }, "CobrancaController.obterPix - Starting");
     const pixData = await cobrancaService.obterOuGerarPixCobranca(id);
     return reply.status(200).send(pixData);
+  },
+
+  isentarEncargos: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    logger.info({ cobrancaId: id }, "CobrancaController.isentarEncargos - Starting");
+    const cobranca = await cobrancaService.isentarEncargos(id, request.data_owner_id!);
+    return reply.status(200).send(cobranca);
   }
 };
