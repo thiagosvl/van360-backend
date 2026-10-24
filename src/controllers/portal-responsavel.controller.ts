@@ -9,7 +9,7 @@ import {
   updateDadosComplementaresSchema
 } from "../types/dtos/responsavel.dto.js";
 import { createResponsavelAusenciaSchema } from "../types/dtos/responsavel-ausencia.dto.js";
-import { registerPushTokenSchema } from "../schemas/notification.schema.js";
+import { registerPushTokenSchema, revokePushTokenSchema } from "../schemas/notification.schema.js";
 
 function getResponsavelToken(request: FastifyRequest) {
   const authHeader = request.headers.authorization;
@@ -177,6 +177,21 @@ export const portalResponsavelController = {
     const body = registerPushTokenSchema.parse(request.body);
 
     const result = await portalResponsavelService.registerPushToken(payload.phone, body.token, body.platform);
+    return reply.status(200).send(result);
+  },
+
+  revokePushToken: async (request: FastifyRequest, reply: FastifyReply) => {
+    const authHeader = request.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      try {
+        const token = authHeader.replace("Bearer ", "").trim();
+        await portalResponsavelService.verifyResponsavelToken(token);
+      } catch {
+      }
+    }
+    const body = revokePushTokenSchema.parse(request.body);
+
+    const result = await portalResponsavelService.revokePushToken(body.token);
     return reply.status(200).send(result);
   },
 

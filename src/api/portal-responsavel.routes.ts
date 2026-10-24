@@ -21,4 +21,5 @@ export async function portalResponsavelPublicRoutes(app: FastifyInstance) {
   app.post("/forgot-pin/validate-otp", portalResponsavelController.validateResetOtp);
   app.post("/forgot-pin/execute-reset", portalResponsavelController.executePinReset);
   app.post("/push-token", portalResponsavelController.registerPushToken);
+  app.post("/push-token/revoke", portalResponsavelController.revokePushToken);
 }

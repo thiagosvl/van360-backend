@@ -512,5 +512,11 @@ export const portalResponsavelService = {
 
     await notificationService.registerPushToken(targetUserId || phoneDigits, pushToken, platform);
     return { success: true };
+  },
+
+  async revokePushToken(pushToken: string) {
+    if (!pushToken) throw new AppError("Token inválido para revogação.", 400);
+    await notificationService.unregisterPushToken(pushToken);
+    return { success: true };
   }
 };

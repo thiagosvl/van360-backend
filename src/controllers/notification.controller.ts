@@ -1,5 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { registerPushTokenSchema } from '../schemas/notification.schema.js';
+import { registerPushTokenSchema, revokePushTokenSchema } from '../schemas/notification.schema.js';
 import { notificationService } from '../services/notifications/notification.service.js';
 
 export class NotificationController {
@@ -19,6 +19,20 @@ export class NotificationController {
       );
 
       return reply.status(200).send({ message: 'Token registered successfully' });
+    } catch (error) {
+      if (error instanceof Error && error.name === 'ZodError') {
+        return reply.status(400).send({ error: 'Validation error', details: error });
+      }
+      request.log.error(error);
+      return reply.status(500).send({ error: 'Internal Server Error' });
+    }
+  }
+
+  async revokeToken(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const body = revokePushTokenSchema.parse(request.body);
+      await notificationService.unregisterPushToken(body.token);
+      return reply.status(200).send({ message: 'Token revoked successfully' });
     } catch (error) {
       if (error instanceof Error && error.name === 'ZodError') {
         return reply.status(400).send({ error: 'Validation error', details: error });

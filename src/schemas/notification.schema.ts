@@ -6,3 +6,9 @@ export const registerPushTokenSchema = z.object({
 });
 
 export type RegisterPushTokenSchema = z.infer<typeof registerPushTokenSchema>;
+
+export const revokePushTokenSchema = z.object({
+  token: z.string().min(1, "Token is required"),
+});
+
+export type RevokePushTokenSchema = z.infer<typeof revokePushTokenSchema>;
