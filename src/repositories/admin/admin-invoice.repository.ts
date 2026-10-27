@@ -87,19 +87,28 @@ export const adminInvoiceRepository = {
       const st = params.status.trim().toLowerCase();
       if (st === "open") {
         q = q.in("status", [SubscriptionInvoiceStatus.PENDING, SubscriptionInvoiceStatus.FAILED]);
-      } else if (st === "vencidas") {
-        q = q
-          .in("status", [SubscriptionInvoiceStatus.PENDING, SubscriptionInvoiceStatus.FAILED])
-          .lt("data_vencimento", params.todayIso);
-      } else if (st === "hoje") {
-        q = q
-          .in("status", [SubscriptionInvoiceStatus.PENDING, SubscriptionInvoiceStatus.FAILED])
-          .eq("data_vencimento", params.todayIso);
-      } else if (st === "proximos7dias") {
-        q = q
-          .in("status", [SubscriptionInvoiceStatus.PENDING, SubscriptionInvoiceStatus.FAILED])
-          .gte("data_vencimento", params.todayIso)
-          .lte("data_vencimento", params.next7DaysIso);
+      } else if (st === "vencidas" || st === "hoje" || st === "proximos7dias") {
+        q = q.in("status", [SubscriptionInvoiceStatus.PENDING, SubscriptionInvoiceStatus.FAILED]);
+
+        let subQuery = supabaseAdmin.from("assinaturas").select("id");
+        if (st === "vencidas") {
+          subQuery = subQuery.lt("data_vencimento", `${params.todayIso}T00:00:00-03:00`);
+        } else if (st === "hoje") {
+          subQuery = subQuery
+            .gte("data_vencimento", `${params.todayIso}T00:00:00-03:00`)
+            .lte("data_vencimento", `${params.todayIso}T23:59:59.999-03:00`);
+        } else if (st === "proximos7dias") {
+          subQuery = subQuery
+            .gte("data_vencimento", `${params.todayIso}T00:00:00-03:00`)
+            .lte("data_vencimento", `${params.next7DaysIso}T23:59:59.999-03:00`);
+        }
+
+        const { data: matchedSubs } = await subQuery;
+        const subIds = (matchedSubs || []).map((s: { id: string }) => s.id);
+        if (subIds.length === 0) {
+          return { data: [], total: 0 };
+        }
+        q = q.in("assinatura_id", subIds);
       } else {
         q = q.eq("status", params.status.trim().toUpperCase());
       }
@@ -109,12 +118,20 @@ export const adminInvoiceRepository = {
       q = q.eq("metodo_pagamento", params.metodo.trim().toLowerCase());
     }
 
-    if (params.vencimento_de) {
-      q = q.gte("data_vencimento", params.vencimento_de.trim());
-    }
-
-    if (params.vencimento_ate) {
-      q = q.lte("data_vencimento", params.vencimento_ate.trim());
+    if (params.vencimento_de || params.vencimento_ate) {
+      let subQuery = supabaseAdmin.from("assinaturas").select("id");
+      if (params.vencimento_de) {
+        subQuery = subQuery.gte("data_vencimento", `${params.vencimento_de.trim()}T00:00:00-03:00`);
+      }
+      if (params.vencimento_ate) {
+        subQuery = subQuery.lte("data_vencimento", `${params.vencimento_ate.trim()}T23:59:59.999-03:00`);
+      }
+      const { data: matchedSubs } = await subQuery;
+      const subIds = (matchedSubs || []).map((s: { id: string }) => s.id);
+      if (subIds.length === 0) {
+        return { data: [], total: 0 };
+      }
+      q = q.in("assinatura_id", subIds);
     }
 
     q = q
@@ -138,7 +155,7 @@ export const adminInvoiceRepository = {
     return Promise.all([
       supabaseAdmin
         .from("assinatura_faturas")
-        .select("id, valor, status, data_vencimento")
+        .select("id, valor, status, data_vencimento, assinaturas(id, data_vencimento, trial_ends_at)")
         .in("status", [SubscriptionInvoiceStatus.PENDING, SubscriptionInvoiceStatus.FAILED]),
       supabaseAdmin
         .from("assinatura_faturas")

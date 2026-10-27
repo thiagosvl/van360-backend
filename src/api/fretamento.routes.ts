@@ -17,6 +17,7 @@ const fretamentoRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
     privateApp.delete("/:id", fretamentoController.deletar);
 
     privateApp.post("/:id/pagamentos", fretamentoController.registrarPagamento);
+    privateApp.patch("/:id/pagamentos/:pagamentoId", fretamentoController.atualizarPagamento);
     privateApp.delete("/:id/pagamentos/:pagamentoId", fretamentoController.deletarPagamento);
 
     privateApp.post("/:id/participantes", fretamentoController.adicionarParticipante);

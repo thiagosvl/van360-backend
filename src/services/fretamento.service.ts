@@ -5,6 +5,7 @@ import type {
   CriarFretamentoDTO,
   AtualizarFretamentoDTO,
   RegistrarPagamentoFretamentoDTO,
+  AtualizarPagamentoFretamentoDTO,
   AdicionarParticipanteDTO,
   AtualizarStatusParticipanteDTO,
   FretamentoDetalhesDTO,
@@ -402,6 +403,50 @@ export const fretamentoService = {
     if (insertError) throw new AppError(insertError.message, 500);
 
     const novoTotalPago = fretamento.total_pago + dados.valor;
+    const novoStatus = recalcularStatusPagamento(Number(fretamento.valor_total || 0), novoTotalPago);
+
+    await supabaseAdmin
+      .from("fretamentos")
+      .update({ status_pagamento: novoStatus })
+      .eq("id", fretamentoId);
+
+    return this.obterPorId(usuarioId, fretamentoId);
+  },
+
+  async atualizarPagamento(
+    usuarioId: string,
+    fretamentoId: string,
+    pagamentoId: string,
+    dados: AtualizarPagamentoFretamentoDTO
+  ) {
+    const fretamento = await this.obterPorId(usuarioId, fretamentoId);
+    if (fretamento.tipo !== "fretamento") {
+      throw new AppError("Pagamentos avulsos são aplicáveis apenas à modalidade de fretamento", 400);
+    }
+
+    const pagamentoAlvo = fretamento.pagamentos.find((p) => p.id === pagamentoId);
+    if (!pagamentoAlvo) throw new AppError("Pagamento não encontrado", 404);
+
+    const updatePayload: Record<string, unknown> = {};
+    if (dados.valor !== undefined) updatePayload.valor = dados.valor;
+    if (dados.tipo_pagamento !== undefined) updatePayload.tipo_pagamento = dados.tipo_pagamento;
+    if (dados.data_pagamento !== undefined) updatePayload.data_pagamento = dados.data_pagamento;
+    if (dados.descricao !== undefined) updatePayload.descricao = dados.descricao ? dados.descricao.trim() : null;
+
+    if (Object.keys(updatePayload).length > 0) {
+      const { error: updateError } = await supabaseAdmin
+        .from("fretamento_pagamentos")
+        .update(updatePayload)
+        .eq("id", pagamentoId)
+        .eq("fretamento_id", fretamentoId);
+
+      if (updateError) throw new AppError(updateError.message, 500);
+    }
+
+    const valorAntigo = Number(pagamentoAlvo.valor || 0);
+    const novoValor = dados.valor !== undefined ? dados.valor : valorAntigo;
+    const diferenca = novoValor - valorAntigo;
+    const novoTotalPago = Math.max(0, fretamento.total_pago + diferenca);
     const novoStatus = recalcularStatusPagamento(Number(fretamento.valor_total || 0), novoTotalPago);
 
     await supabaseAdmin

@@ -60,6 +60,13 @@ export interface RegistrarPagamentoFretamentoDTO {
   descricao?: string | null;
 }
 
+export interface AtualizarPagamentoFretamentoDTO {
+  valor?: number;
+  tipo_pagamento?: TipoPagamento;
+  data_pagamento?: string;
+  descricao?: string | null;
+}
+
 export interface AdicionarParticipanteDTO {
   passageiro_id?: string | null;
   nome: string;

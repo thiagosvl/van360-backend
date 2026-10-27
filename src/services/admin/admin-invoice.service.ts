@@ -99,9 +99,18 @@ export const adminInvoiceService = {
       };
     });
 
-    const filteredItems = query.tipo
+    let filteredItems = query.tipo
       ? items.filter((item) => item.tipo_fatura === query.tipo)
       : items;
+
+    const isAbertoQuery = !query.status || ["open", "hoje", "vencidas", "proximos7dias"].includes(query.status.toLowerCase());
+    if (isAbertoQuery) {
+      filteredItems.sort((a, b) => {
+        const dateA = a.assinatura?.data_vencimento || a.assinatura?.trial_ends_at || a.data_vencimento || "";
+        const dateB = b.assinatura?.data_vencimento || b.assinatura?.trial_ends_at || b.data_vencimento || "";
+        return dateA.localeCompare(dateB);
+      });
+    }
 
     const total = query.tipo ? filteredItems.length : result.total;
     const totalPages = Math.ceil(total / limit) || 1;
@@ -143,7 +152,12 @@ export const adminInvoiceService = {
       totalAbertoValor += v;
       totalAbertoQtd += 1;
 
-      const vencimento = String(f.data_vencimento || "").slice(0, 10);
+      const sub = (f as Record<string, unknown>).assinaturas as
+        | { data_vencimento?: string | null; trial_ends_at?: string | null }
+        | null;
+      const refDateRaw = sub?.data_vencimento || sub?.trial_ends_at || f.data_vencimento;
+      const vencimento = refDateRaw ? String(refDateRaw).slice(0, 10) : "";
+
       if (vencimento < todayIso) {
         totalVencidasValor += v;
         totalVencidasQtd += 1;

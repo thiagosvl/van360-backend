@@ -62,6 +62,13 @@ export const registrarPagamentoSchema = z.object({
   descricao: z.string().max(255).optional().nullable(),
 });
 
+export const atualizarPagamentoSchema = z.object({
+  valor: z.coerce.number().positive("Valor deve ser maior que zero").optional(),
+  tipo_pagamento: tipoPagamentoEnum.optional(),
+  data_pagamento: z.string().optional(),
+  descricao: z.string().max(255).optional().nullable(),
+});
+
 export const adicionarParticipanteSchema = z.object({
   passageiro_id: z.string().uuid().optional().nullable(),
   nome: z.string().min(2, "Nome é obrigatório").max(255),

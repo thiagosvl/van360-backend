@@ -6,6 +6,7 @@ import {
   criarFretamentoSchema,
   atualizarFretamentoSchema,
   registrarPagamentoSchema,
+  atualizarPagamentoSchema,
   adicionarParticipanteSchema,
   atualizarStatusParticipanteSchema,
   listarFretamentosQuerySchema,
@@ -84,6 +85,19 @@ export const fretamentoController = {
     const dados = registrarPagamentoSchema.parse(request.body);
     const atualizado = await fretamentoService.registrarPagamento(ownerId, id, dados);
     return reply.status(201).send(atualizado);
+  },
+
+  async atualizarPagamento(request: FastifyRequest, reply: FastifyReply) {
+    const ownerId = getOwnerId(request);
+    const { id, pagamentoId } = z
+      .object({
+        id: z.string().uuid(),
+        pagamentoId: z.string().uuid(),
+      })
+      .parse(request.params);
+    const dados = atualizarPagamentoSchema.parse(request.body);
+    const atualizado = await fretamentoService.atualizarPagamento(ownerId, id, pagamentoId, dados);
+    return reply.status(200).send(atualizado);
   },
 
   async deletarPagamento(request: FastifyRequest, reply: FastifyReply) {
