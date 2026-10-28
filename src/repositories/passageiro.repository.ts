@@ -324,7 +324,27 @@ export const passageiroRepository = {
     if (isValidFilterValue(filtros?.search)) {
       const sanitizedSearch = filtros.search.replace(/[,()%\\]/g, "").trim();
       if (sanitizedSearch) {
-        query = query.or(`nome.ilike.%${sanitizedSearch}%`);
+        const { data: respData } = await supabaseAdmin
+          .from("passageiro_responsaveis")
+          .select("passageiro_id, passageiros!inner(usuario_id), responsaveis!inner(nome)")
+          .eq("passageiros.usuario_id", usuarioId)
+          .ilike("responsaveis.nome", `%${sanitizedSearch}%`);
+
+        const passageiroIdsFromResp = Array.from(
+          new Set(
+            (respData || [])
+              .map((r) => r.passageiro_id)
+              .filter(Boolean)
+          )
+        );
+
+        if (passageiroIdsFromResp.length > 0) {
+          query = query.or(
+            `nome.ilike.%${sanitizedSearch}%,id.in.(${passageiroIdsFromResp.join(",")})`
+          );
+        } else {
+          query = query.or(`nome.ilike.%${sanitizedSearch}%`);
+        }
       }
     }
 
