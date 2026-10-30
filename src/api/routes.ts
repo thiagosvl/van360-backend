@@ -79,6 +79,9 @@ const routes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post("/api/webhooks/woovi", { config: { rateLimit: false } }, WebhookController.handleWoovi);
   app.post("/api/webhooks/pagamentos", { config: { rateLimit: false } }, WebhookController.handleWoovi);
 
+  // Webhook de Cobrança e Baixa Operacional (Banco do Brasil)
+  app.post("/api/webhooks/banco-do-brasil", { config: { rateLimit: false } }, WebhookController.handleBancoDoBrasil);
+
   // Webhook da Meta WABA (WhatsApp Cloud API)
   app.get("/api/webhooks/waba", { config: { rateLimit: false } }, wabaWebhookController.verify);
   app.post("/api/webhooks/waba", { config: { rateLimit: false } }, wabaWebhookController.handle);

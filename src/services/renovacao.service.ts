@@ -404,6 +404,7 @@ export const renovacaoService = {
 
     let faturamentoAtual = 0;
     let faturamentoProjetado = 0;
+    let faturamentoConfirmado = 0;
     let countAtivos = 0;
     let countConfirmados = 0;
     let countPendentes = 0;
@@ -451,6 +452,7 @@ export const renovacaoService = {
 
       if (statusReserva === RenovacaoStatus.CONFIRMADO) {
         countConfirmados++;
+        faturamentoConfirmado += novoValor;
         faturamentoProjetado += novoValor;
       } else if (statusReserva === RenovacaoStatus.RECUSADO) {
         countSaidas++;
@@ -559,6 +561,7 @@ export const renovacaoService = {
       kpis: {
         faturamento_atual: faturamentoAtual,
         faturamento_projetado: faturamentoProjetado,
+        faturamento_confirmado: faturamentoConfirmado,
         percentual_crescimento: percentualCrescimento,
         contadores: {
           total_ativos: countAtivos,

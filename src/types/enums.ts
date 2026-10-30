@@ -80,12 +80,15 @@ export type NotificationEventEnum = import("../config/constants.js").Notificatio
 export enum WabaTemplateNameEnum {
   PAIS_VENCIMENTO_PROXIMO = "van360_pais_vencimento_proximo",
   PAIS_VENCIMENTO_PROXIMO_PIX = "van360_pais_vencimento_proximo_pix",
+  PAIS_VENCIMENTO_PROXIMO_BOLETO = "van360_pais_vencimento_proximo_boleto",
   PAIS_VENCIMENTO_PROXIMO_SEM_PIX = "van360_pais_vencimento_proximo_sem_pix",
   PAIS_VENCIMENTO_HOJE = "van360_pais_vencimento_hoje",
   PAIS_VENCIMENTO_HOJE_PIX = "van360_pais_vencimento_hoje_pix",
+  PAIS_VENCIMENTO_HOJE_BOLETO = "van360_pais_vencimento_hoje_boleto",
   PAIS_VENCIMENTO_HOJE_SEM_PIX = "van360_pais_vencimento_hoje_sem_pix",
   PAIS_ATRASADO = "van360_pais_atrasado",
   PAIS_ATRASADO_PIX = "van360_pais_atrasado_pix",
+  PAIS_ATRASADO_BOLETO = "van360_pais_atrasado_boleto",
   PAIS_ATRASADO_SEM_PIX = "van360_pais_atrasado_sem_pix",
   PAIS_RECIBO = "van360_pais_recibo",
   PAIS_CONTRATO = "van360_pais_contrato",
@@ -119,7 +122,8 @@ export enum WabaParameterTypeEnum {
 
 export enum WabaPaymentTypeEnum {
   PIX_DYNAMIC_CODE = "pix_dynamic_code",
-  PIX_STATIC_CODE = "pix_static_code"
+  PIX_STATIC_CODE = "pix_static_code",
+  BOLETO = "boleto"
 }
 
 export enum WabaPixKeyTypeEnum {
@@ -282,13 +286,15 @@ export enum IndicacaoStatus {
 
 export enum CheckoutPaymentMethod {
   PIX = "pix",
+  BOLETO = "boleto",
   CREDIT_CARD = "credit_card",
   APPLE_IAP = "apple_iap"
 }
 
 export enum PaymentProvider {
   EFIPAY = "efipay",
-  WOOVI = "woovi"
+  WOOVI = "woovi",
+  BANCO_DO_BRASIL = "banco_do_brasil"
 }
 
 export enum NormalizedPaymentEventType {
@@ -345,6 +351,7 @@ export enum AtividadeAcao {
   COBRANCA_CRIADA = "COBRANCA_CRIADA",
   COBRANCA_EDITADA = "COBRANCA_EDITADA",
   COBRANCA_EXCLUIDA = "COBRANCA_EXCLUIDA",
+  COBRANCA_PAGA = "COBRANCA_PAGA",
   PAGAMENTO_MANUAL = "PAGAMENTO_MANUAL",
   PAGAMENTO_COMPLEMENTAR = "PAGAMENTO_COMPLEMENTAR",
   PAGAMENTO_REVERTIDO = "PAGAMENTO_REVERTIDO",
@@ -591,7 +598,20 @@ export enum StatusRepasseEnum {
 
 export enum ProvedorPagamentoEnum {
   WOOVI = "WOOVI",
-  ASAAS = "ASAAS",
   EFIPAY = "EFIPAY",
+  BANCO_DO_BRASIL = "BANCO_DO_BRASIL"
 }
 
+
+export enum BancoDoBrasilCanalLiquidacaoEnum {
+  AGENCIA = 1,
+  TERMINAL_AUTOATENDIMENTO = 2,
+  INTERNET_BANKING = 3,
+  PIX = 4,
+  CORRESPONDENTE_BANCARIO = 5,
+  CALL_CENTER = 6,
+  ARQUIVO_ELETRONICO = 7,
+  DDA = 8,
+  CORRESPONDENTE_DIGITAL = 9,
+  PIX_MOVIMENTO = 61
+}

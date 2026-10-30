@@ -6,16 +6,100 @@ import {
   AtividadeAcao,
   AtividadeEntidadeTipo,
   CheckoutPaymentMethod,
+  NotificationChannelEnum,
 } from "../../types/enums.js";
+import {
+  EVENTO_ADMIN_NOVA_ASSINATURA,
+  EVENTO_MOTORISTA_ASSINATURA_PAGO,
+} from "../../config/constants.js";
 import { historicoService } from "../historico.service.js";
 import { planRepository } from "../../repositories/plan.repository.js";
 import { invoiceRepository } from "../../repositories/invoice.repository.js";
+import { userRepository } from "../../repositories/user.repository.js";
 import { subscriptionService } from "./subscription.service.js";
+import { notificationService } from "../notifications/notification.service.js";
+import { MetaCapiService } from "../meta-capi.service.js";
 import {
   RevenueCatWebhookPayload,
   RevenueCatEventType,
   IAP_PRODUCTS,
 } from "../../types/dtos/revenuecat.dto.js";
+
+async function dispatchSubscriptionPaymentNotifications(params: {
+  userId: string;
+  targetPlanName?: string;
+  targetPlanValor?: number;
+  priceInPurchasedCurrency?: number;
+  expiryDate: string;
+  transactionId?: string;
+  isFirstSubscription: boolean;
+}) {
+  const { data: usuario } = await userRepository.getById(params.userId);
+  if (!usuario) {
+    return;
+  }
+
+  const valorNumerico = params.priceInPurchasedCurrency || params.targetPlanValor || 0;
+  const planoNome = params.targetPlanName || "Plano Mensal";
+  const transactionId = params.transactionId || `apple-${Date.now()}`;
+
+  if (usuario.telefone) {
+    notificationService.notifyDriver(
+      usuario.telefone,
+      EVENTO_MOTORISTA_ASSINATURA_PAGO,
+      {
+        nomeMotorista: usuario.nome,
+        valor: valorNumerico,
+        dataVencimento: params.expiryDate,
+        planoNome: planoNome,
+        isFirstSubscription: params.isFirstSubscription,
+      },
+      {
+        channels: [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND],
+        usuarioId: params.userId,
+      }
+    ).catch((err: unknown) =>
+      logger.error({ err }, "[RevenueCatService] Falha ao notificar pagamento confirmado")
+    );
+  }
+
+  notificationService.notifyAdmin(
+    EVENTO_ADMIN_NOVA_ASSINATURA,
+    {
+      nomeMotorista: usuario.nome,
+      apelidoMotorista: usuario.apelido || null,
+      telefone: usuario.telefone,
+      nomePlano: planoNome,
+      valor: `R$ ${valorNumerico.toFixed(2).replace(".", ",")}`,
+      dataVencimento: new Date(params.expiryDate).toLocaleDateString("pt-BR"),
+      usuarioId: params.userId,
+    },
+    {
+      channels: [NotificationChannelEnum.TELEGRAM],
+      jobId: `admin-nova-assinatura-${params.userId}-${transactionId}`,
+      usuarioId: params.userId,
+    }
+  ).catch((err: unknown) =>
+    logger.error(
+      { err: err instanceof Error ? err.message : String(err) },
+      "[RevenueCatService] Falha ao notificar admin sobre assinatura paga"
+    )
+  );
+
+  void MetaCapiService.sendPurchaseEvent({
+    userId: params.userId,
+    email: usuario.email || "",
+    phone: usuario.telefone,
+    value: valorNumerico,
+    planName: planoNome,
+    transactionId: transactionId,
+  }).catch((err: unknown) =>
+    logger.error(
+      { err: err instanceof Error ? err.message : String(err) },
+      "[RevenueCatService] Falha ao enviar evento Purchase para Meta CAPI"
+    )
+  );
+}
 
 export const subscriptionRevenueCatService = {
   async processWebhook(payload: RevenueCatWebhookPayload): Promise<{ handled: boolean; message: string }> {
@@ -117,6 +201,16 @@ export const subscriptionRevenueCatService = {
           descricao: `Assinatura ativada via Apple In-App Purchase (${productId}). Vencimento: ${expiryDate}.`,
         });
 
+        await dispatchSubscriptionPaymentNotifications({
+          userId,
+          targetPlanName: targetPlan?.nome,
+          targetPlanValor: targetPlan?.valor,
+          priceInPurchasedCurrency: event.price_in_purchased_currency,
+          expiryDate,
+          transactionId: originalTxId || txId,
+          isFirstSubscription: true,
+        });
+
         logger.info({ userId, subId: sub.id, productId }, "[RevenueCatService] Assinatura Apple IAP ativada com sucesso");
         return { handled: true, message: "Assinatura ativada com sucesso" };
       }
@@ -146,6 +240,16 @@ export const subscriptionRevenueCatService = {
           entidade_id: sub.id,
           acao: AtividadeAcao.SAAS_ASSINATURA_ATIVA,
           descricao: `Assinatura renovada pela Apple. Novo vencimento: ${expiryDate}.`,
+        });
+
+        await dispatchSubscriptionPaymentNotifications({
+          userId,
+          targetPlanName: targetPlan?.nome,
+          targetPlanValor: targetPlan?.valor,
+          priceInPurchasedCurrency: event.price_in_purchased_currency,
+          expiryDate,
+          transactionId: originalTxId || txId,
+          isFirstSubscription: false,
         });
 
         logger.info({ userId, subId: sub.id, expiryDate }, "[RevenueCatService] Renovacao Apple IAP processada com sucesso");

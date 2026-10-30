@@ -1,8 +1,10 @@
 import { z } from "zod";
-import { ModoCobrancaEnum, ContractMultaTipo } from "../types/enums.js";
+import { ModoCobrancaEnum, ContractMultaTipo, ProvedorPagamentoEnum } from "../types/enums.js";
 
 export const updateMotoristaFinanceiroSchema = z.object({
   modo_cobranca: z.nativeEnum(ModoCobrancaEnum).optional(),
+  provedor_ativo: z.nativeEnum(ProvedorPagamentoEnum).optional(),
+  provedor_config: z.record(z.string(), z.unknown()).optional(),
   enviar_recibo_automatico: z.boolean().optional(),
   chave_pix_repasse: z.string().trim().min(1, "Chave Pix é obrigatória").nullable().optional(),
   tipo_chave_pix: z.enum(["CPF", "CNPJ", "EMAIL", "TELEFONE", "ALEATORIA"]).nullable().optional(),

@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "../config/supabase.js";
+﻿import { supabaseAdmin } from "../config/supabase.js";
 import { CobrancaStatus, ModoCobrancaEnum, STATUS_ASSINATURA_LIBERADA } from "../types/enums.js";
 import { getLastDayOfMonth } from "../utils/date.utils.js";
 import { isValidFilterValue } from "../utils/filter.utils.js";
@@ -233,10 +233,6 @@ export const cobrancaRepository = {
                 tipo_pagamento: null,
                 pagamento_manual: false,
                 recibo_url: null,
-                pix_copia_cola: null,
-                pix_qrcode_url: null,
-                pix_expiracao: null,
-                provedor_cobranca_id: null,
                 repasse_em_processamento: false
             })
             .eq("id", id)
@@ -366,6 +362,11 @@ export const cobrancaRepository = {
                 pix_qrcode_url: null,
                 pix_expiracao: null,
                 provedor_cobranca_id: null,
+                provedor: null,
+                boleto_linha_digitavel: null,
+                boleto_codigo_barras: null,
+                boleto_url: null,
+                boleto_nosso_numero: null,
                 repasse_em_processamento: false
             })
             .eq("id", id);
@@ -380,6 +381,11 @@ export const cobrancaRepository = {
                 pix_qrcode_url: null,
                 pix_expiracao: null,
                 provedor_cobranca_id: null,
+                provedor: null,
+                boleto_linha_digitavel: null,
+                boleto_codigo_barras: null,
+                boleto_url: null,
+                boleto_nosso_numero: null,
                 repasse_em_processamento: false
             })
             .in("id", ids);
@@ -400,6 +406,14 @@ export const cobrancaRepository = {
             .from("cobrancas")
             .select("*")
             .eq("provedor_cobranca_id", provedorCobrancaId)
+            .maybeSingle();
+    },
+
+    async getByBoletoNossoNumero(nossoNumero: string) {
+        return supabaseAdmin
+            .from("cobrancas")
+            .select("*")
+            .eq("boleto_nosso_numero", nossoNumero)
             .maybeSingle();
     },
 

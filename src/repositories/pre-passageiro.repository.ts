@@ -39,7 +39,7 @@ export const prePassageiroRepository = {
             .select("*")
             .eq("id", id)
             .eq("usuario_id", usuarioId)
-            .single();
+            .maybeSingle();
     },
 
   async delete(id: string) {

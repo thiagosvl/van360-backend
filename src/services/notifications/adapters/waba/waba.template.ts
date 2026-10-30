@@ -33,6 +33,53 @@ export interface WabaTemplatePayload {
 
 export class WabaTemplates {
 
+    
+    private static buildBoletoButtonComponent(ctx: Record<string, unknown>, index: string = "1"): WabaComponent | null {
+        const linha = (ctx.boletoLinhaDigitavel || ctx.linhaDigitavel) as string | undefined;
+        if (!linha || !linha.trim()) return null;
+
+        return {
+            type: WabaComponentTypeEnum.BUTTON,
+            sub_type: WabaButtonSubTypeEnum.PAYMENT_REQUEST,
+            index: index,
+            parameters: [
+                {
+                    type: WabaParameterTypeEnum.ACTION,
+                    action: {
+                        payment_request: {
+                            payment_setting: {
+                                type: WabaPaymentTypeEnum.BOLETO,
+                                boleto: {
+                                    digitable_line: linha.trim()
+                                }
+                            }
+                        }
+                    }
+                }
+            ]
+        };
+    }
+
+    private static buildBoletoUrlButtonComponent(ctx: Record<string, unknown>, index: string = "2"): WabaComponent | null {
+        const url = (ctx.boletoUrl || ctx.urlBoleto) as string | undefined;
+        if (!url || !url.trim()) return null;
+
+        const suffix = url.replace(/^https?:\/\/boleto\.apps\.bb\.com\.br\/segunda-via\/?/, "").trim();
+        if (!suffix) return null;
+
+        return {
+            type: WabaComponentTypeEnum.BUTTON,
+            sub_type: WabaButtonSubTypeEnum.URL,
+            index: index,
+            parameters: [
+                {
+                    type: WabaParameterTypeEnum.TEXT,
+                    text: suffix
+                }
+            ]
+        };
+    }
+
     private static buildPixButtonComponent(ctx: Record<string, unknown>, index: string = "0"): WabaComponent | null {
         const rawPixKey = (ctx.pixCopiaCola || ctx.chavePix) as string | undefined;
         if (!rawPixKey || !rawPixKey.trim()) return null;
@@ -78,7 +125,31 @@ export class WabaTemplates {
             ]
         };
         
-        const pixButton = this.buildPixButtonComponent(ctx);
+        const pixButton = this.buildPixButtonComponent(ctx, "0");
+        const boletoButton = this.buildBoletoButtonComponent(ctx, "1");
+        const boletoUrlButton = this.buildBoletoUrlButtonComponent(ctx, "2");
+
+        if (pixButton && boletoButton && boletoUrlButton) {
+            return {
+                templateName: WabaTemplateNameEnum.PAIS_VENCIMENTO_PROXIMO_BOLETO,
+                languageCode: "pt_BR",
+                components: [
+                    headerComponent,
+                    {
+                        type: WabaComponentTypeEnum.BODY,
+                        parameters: [
+                            { type: WabaParameterTypeEnum.TEXT, text: respName },
+                            { type: WabaParameterTypeEnum.TEXT, text: passName },
+                            { type: WabaParameterTypeEnum.TEXT, text: valorStr },
+                            { type: WabaParameterTypeEnum.TEXT, text: dataStr }
+                        ]
+                    },
+                    pixButton,
+                    boletoButton,
+                    boletoUrlButton
+                ]
+            };
+        }
 
         if (!pixButton) {
             return {
@@ -132,7 +203,30 @@ export class WabaTemplates {
             ]
         };
 
-        const pixButton = this.buildPixButtonComponent(ctx);
+        const pixButton = this.buildPixButtonComponent(ctx, "0");
+        const boletoButton = this.buildBoletoButtonComponent(ctx, "1");
+        const boletoUrlButton = this.buildBoletoUrlButtonComponent(ctx, "2");
+
+        if (pixButton && boletoButton && boletoUrlButton) {
+            return {
+                templateName: WabaTemplateNameEnum.PAIS_VENCIMENTO_HOJE_BOLETO,
+                languageCode: "pt_BR",
+                components: [
+                    headerComponent,
+                    {
+                        type: WabaComponentTypeEnum.BODY,
+                        parameters: [
+                            { type: WabaParameterTypeEnum.TEXT, text: respName },
+                            { type: WabaParameterTypeEnum.TEXT, text: passName },
+                            { type: WabaParameterTypeEnum.TEXT, text: valorStr }
+                        ]
+                    },
+                    pixButton,
+                    boletoButton,
+                    boletoUrlButton
+                ]
+            };
+        }
 
         if (!pixButton) {
             return {
@@ -185,7 +279,31 @@ export class WabaTemplates {
             ]
         };
 
-        const pixButton = this.buildPixButtonComponent(ctx);
+        const pixButton = this.buildPixButtonComponent(ctx, "0");
+        const boletoButton = this.buildBoletoButtonComponent(ctx, "1");
+        const boletoUrlButton = this.buildBoletoUrlButtonComponent(ctx, "2");
+
+        if (pixButton && boletoButton && boletoUrlButton) {
+            return {
+                templateName: WabaTemplateNameEnum.PAIS_ATRASADO_BOLETO,
+                languageCode: "pt_BR",
+                components: [
+                    headerComponent,
+                    {
+                        type: WabaComponentTypeEnum.BODY,
+                        parameters: [
+                            { type: WabaParameterTypeEnum.TEXT, text: respName },
+                            { type: WabaParameterTypeEnum.TEXT, text: passName },
+                            { type: WabaParameterTypeEnum.TEXT, text: mesLabel },
+                            { type: WabaParameterTypeEnum.TEXT, text: valorStr }
+                        ]
+                    },
+                    pixButton,
+                    boletoButton,
+                    boletoUrlButton
+                ]
+            };
+        }
 
         if (!pixButton) {
             return {

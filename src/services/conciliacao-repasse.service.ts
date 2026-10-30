@@ -1,4 +1,4 @@
-import { logger } from "../config/logger.js";
+﻿import { logger } from "../config/logger.js";
 import { cobrancaRepasseRepository } from "../repositories/cobranca-repasse.repository.js";
 import { cobrancaRepository } from "../repositories/cobranca.repository.js";
 import { motoristaFinanceiroRepository } from "../repositories/motorista-financeiro.repository.js";
@@ -63,6 +63,10 @@ export async function conciliarRepassesPendentes(): Promise<void> {
                 Number(repasseExistente.valor_bruto)
               );
             }
+            continue;
+          }
+
+          if (cobranca.provedor === ProvedorPagamentoEnum.BANCO_DO_BRASIL) {
             continue;
           }
 

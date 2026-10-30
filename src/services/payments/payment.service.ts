@@ -2,6 +2,7 @@ import { CreateChargeRequest, ChargeResponse, NormalizedPaymentEvent, PaymentPro
 import { PaymentProvider } from "../../types/enums.js";
 import { EfipayProvider } from "./providers/efipay.provider.js";
 import { WooviProvider, WooviWithdrawResponse } from "./providers/woovi.provider.js";
+import { BancoDoBrasilProvider } from "./providers/banco-do-brasil.provider.js";
 import { AppError } from "../../errors/AppError.js";
 import { logger } from "../../config/logger.js";
 
@@ -13,6 +14,7 @@ class PaymentService {
         this.register(new EfipayProvider());
         this.wooviProviderInstance = new WooviProvider();
         this.register(this.wooviProviderInstance);
+        this.register(new BancoDoBrasilProvider());
     }
 
     private register(provider: PaymentProviderAdapter): void {
@@ -34,13 +36,13 @@ class PaymentService {
         return p.createCharge(request);
     }
 
-    async cancelCharge(providerId: string, provider: PaymentProvider): Promise<boolean> {
+    async cancelCharge(providerId: string, provider: PaymentProvider, options?: Record<string, unknown>): Promise<boolean> {
         if (!providerId) return true;
-        return this.getProvider(provider).cancelCharge(providerId);
+        return this.getProvider(provider).cancelCharge(providerId, options);
     }
 
-    async getChargeStatus(providerId: string, provider: PaymentProvider): Promise<string> {
-        return this.getProvider(provider).getChargeStatus(providerId);
+    async getChargeStatus(providerId: string, provider: PaymentProvider, options?: Record<string, unknown>): Promise<string> {
+        return this.getProvider(provider).getChargeStatus(providerId, options);
     }
 
     async processWebhook(provider: PaymentProvider, rawBody: Record<string, unknown>): Promise<NormalizedPaymentEvent | null> {

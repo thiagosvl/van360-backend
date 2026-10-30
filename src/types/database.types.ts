@@ -297,6 +297,10 @@ export type Database = {
         Row: {
           ano: number
           ano_letivo: number | null
+          boleto_codigo_barras: string | null
+          boleto_linha_digitavel: string | null
+          boleto_nosso_numero: string | null
+          boleto_url: string | null
           chave_pix_repasse: string | null
           created_at: string
           data_envio_ultima_notificacao: string | null
@@ -312,15 +316,15 @@ export type Database = {
           pix_expiracao: string | null
           pix_qrcode_url: string | null
           provedor:
-            | Database["public"]["Enums"]["provedor_pagamento_enum"]
-            | null
+          | Database["public"]["Enums"]["provedor_pagamento_enum"]
+          | null
           provedor_cobranca_id: string | null
           recibo_url: string | null
           repasse_em_processamento: boolean | null
           status: string
           tipo_pagamento:
-            | Database["public"]["Enums"]["tipo_pagamento_enum"]
-            | null
+          | Database["public"]["Enums"]["tipo_pagamento_enum"]
+          | null
           updated_at: string
           usuario_id: string | null
           valor: number
@@ -332,6 +336,10 @@ export type Database = {
         Insert: {
           ano: number
           ano_letivo?: number | null
+          boleto_codigo_barras?: string | null
+          boleto_linha_digitavel?: string | null
+          boleto_nosso_numero?: string | null
+          boleto_url?: string | null
           chave_pix_repasse?: string | null
           created_at?: string
           data_envio_ultima_notificacao?: string | null
@@ -347,15 +355,15 @@ export type Database = {
           pix_expiracao?: string | null
           pix_qrcode_url?: string | null
           provedor?:
-            | Database["public"]["Enums"]["provedor_pagamento_enum"]
-            | null
+          | Database["public"]["Enums"]["provedor_pagamento_enum"]
+          | null
           provedor_cobranca_id?: string | null
           recibo_url?: string | null
           repasse_em_processamento?: boolean | null
           status?: string
           tipo_pagamento?:
-            | Database["public"]["Enums"]["tipo_pagamento_enum"]
-            | null
+          | Database["public"]["Enums"]["tipo_pagamento_enum"]
+          | null
           updated_at?: string
           usuario_id?: string | null
           valor: number
@@ -367,6 +375,10 @@ export type Database = {
         Update: {
           ano?: number
           ano_letivo?: number | null
+          boleto_codigo_barras?: string | null
+          boleto_linha_digitavel?: string | null
+          boleto_nosso_numero?: string | null
+          boleto_url?: string | null
           chave_pix_repasse?: string | null
           created_at?: string
           data_envio_ultima_notificacao?: string | null
@@ -382,15 +394,15 @@ export type Database = {
           pix_expiracao?: string | null
           pix_qrcode_url?: string | null
           provedor?:
-            | Database["public"]["Enums"]["provedor_pagamento_enum"]
-            | null
+          | Database["public"]["Enums"]["provedor_pagamento_enum"]
+          | null
           provedor_cobranca_id?: string | null
           recibo_url?: string | null
           repasse_em_processamento?: boolean | null
           status?: string
           tipo_pagamento?:
-            | Database["public"]["Enums"]["tipo_pagamento_enum"]
-            | null
+          | Database["public"]["Enums"]["tipo_pagamento_enum"]
+          | null
           updated_at?: string
           usuario_id?: string | null
           valor?: number
@@ -971,8 +983,8 @@ export type Database = {
           status_pagamento: Database["public"]["Enums"]["participante_pagamento_status_enum"]
           telefone: string | null
           tipo_pagamento:
-            | Database["public"]["Enums"]["tipo_pagamento_enum"]
-            | null
+          | Database["public"]["Enums"]["tipo_pagamento_enum"]
+          | null
           updated_at: string
           valor: number
           valor_pago: number
@@ -991,8 +1003,8 @@ export type Database = {
           status_pagamento?: Database["public"]["Enums"]["participante_pagamento_status_enum"]
           telefone?: string | null
           tipo_pagamento?:
-            | Database["public"]["Enums"]["tipo_pagamento_enum"]
-            | null
+          | Database["public"]["Enums"]["tipo_pagamento_enum"]
+          | null
           updated_at?: string
           valor?: number
           valor_pago?: number
@@ -1011,8 +1023,8 @@ export type Database = {
           status_pagamento?: Database["public"]["Enums"]["participante_pagamento_status_enum"]
           telefone?: string | null
           tipo_pagamento?:
-            | Database["public"]["Enums"]["tipo_pagamento_enum"]
-            | null
+          | Database["public"]["Enums"]["tipo_pagamento_enum"]
+          | null
           updated_at?: string
           valor?: number
           valor_pago?: number
@@ -1402,6 +1414,10 @@ export type Database = {
           modo_cobranca: Database["public"]["Enums"]["modo_cobranca_enum"]
           multa_atraso_tipo: string | null
           multa_atraso_valor: number | null
+          provedor_ativo:
+          | Database["public"]["Enums"]["provedor_pagamento_enum"]
+          | null
+          provedor_config: Json | null
           taxa_personalizada: number | null
           tipo_chave_pix: string | null
           updated_at: string
@@ -1421,6 +1437,10 @@ export type Database = {
           modo_cobranca?: Database["public"]["Enums"]["modo_cobranca_enum"]
           multa_atraso_tipo?: string | null
           multa_atraso_valor?: number | null
+          provedor_ativo?:
+          | Database["public"]["Enums"]["provedor_pagamento_enum"]
+          | null
+          provedor_config?: Json | null
           taxa_personalizada?: number | null
           tipo_chave_pix?: string | null
           updated_at?: string
@@ -1440,6 +1460,10 @@ export type Database = {
           modo_cobranca?: Database["public"]["Enums"]["modo_cobranca_enum"]
           multa_atraso_tipo?: string | null
           multa_atraso_valor?: number | null
+          provedor_ativo?:
+          | Database["public"]["Enums"]["provedor_pagamento_enum"]
+          | null
+          provedor_config?: Json | null
           taxa_personalizada?: number | null
           tipo_chave_pix?: string | null
           updated_at?: string
@@ -1450,6 +1474,47 @@ export type Database = {
             foreignKeyName: "motorista_configuracoes_financeiras_usuario_id_fkey"
             columns: ["usuario_id"]
             isOneToOne: true
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      motorista_integracoes_cobranca: {
+        Row: {
+          ambiente: string
+          ativo: boolean
+          configuracoes: Json
+          created_at: string
+          id: string
+          provedor: Database["public"]["Enums"]["provedor_pagamento_enum"]
+          updated_at: string
+          usuario_id: string
+        }
+        Insert: {
+          ambiente?: string
+          ativo?: boolean
+          configuracoes?: Json
+          created_at?: string
+          id?: string
+          provedor: Database["public"]["Enums"]["provedor_pagamento_enum"]
+          updated_at?: string
+          usuario_id: string
+        }
+        Update: {
+          ambiente?: string
+          ativo?: boolean
+          configuracoes?: Json
+          created_at?: string
+          id?: string
+          provedor?: Database["public"]["Enums"]["provedor_pagamento_enum"]
+          updated_at?: string
+          usuario_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "motorista_integracoes_cobranca_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
             referencedRelation: "usuarios"
             referencedColumns: ["id"]
           },
@@ -1520,8 +1585,8 @@ export type Database = {
           isento: boolean
           modalidade: Database["public"]["Enums"]["modalidade_enum"] | null
           modo_cobranca:
-            | Database["public"]["Enums"]["modo_cobranca_enum"]
-            | null
+          | Database["public"]["Enums"]["modo_cobranca_enum"]
+          | null
           nome_professor: string | null
           passageiro_id: string
           periodo: string | null
@@ -1548,8 +1613,8 @@ export type Database = {
           isento?: boolean
           modalidade?: Database["public"]["Enums"]["modalidade_enum"] | null
           modo_cobranca?:
-            | Database["public"]["Enums"]["modo_cobranca_enum"]
-            | null
+          | Database["public"]["Enums"]["modo_cobranca_enum"]
+          | null
           nome_professor?: string | null
           passageiro_id: string
           periodo?: string | null
@@ -1576,8 +1641,8 @@ export type Database = {
           isento?: boolean
           modalidade?: Database["public"]["Enums"]["modalidade_enum"] | null
           modo_cobranca?:
-            | Database["public"]["Enums"]["modo_cobranca_enum"]
-            | null
+          | Database["public"]["Enums"]["modo_cobranca_enum"]
+          | null
           nome_professor?: string | null
           passageiro_id?: string
           periodo?: string | null
@@ -1672,8 +1737,8 @@ export type Database = {
           nova_data_inicio_transporte?: string | null
           nova_escola_id?: string | null
           nova_modalidade?:
-            | Database["public"]["Enums"]["modalidade_enum"]
-            | null
+          | Database["public"]["Enums"]["modalidade_enum"]
+          | null
           nova_sala?: string | null
           nova_turma?: string | null
           novo_dia_vencimento?: number | null
@@ -1709,8 +1774,8 @@ export type Database = {
           nova_data_inicio_transporte?: string | null
           nova_escola_id?: string | null
           nova_modalidade?:
-            | Database["public"]["Enums"]["modalidade_enum"]
-            | null
+          | Database["public"]["Enums"]["modalidade_enum"]
+          | null
           nova_sala?: string | null
           nova_turma?: string | null
           novo_dia_vencimento?: number | null
@@ -1829,8 +1894,8 @@ export type Database = {
           isento: boolean
           modalidade: Database["public"]["Enums"]["modalidade_enum"] | null
           modo_cobranca:
-            | Database["public"]["Enums"]["modo_cobranca_enum"]
-            | null
+          | Database["public"]["Enums"]["modo_cobranca_enum"]
+          | null
           nome: string
           nome_professor: string | null
           observacoes: string | null
@@ -1863,8 +1928,8 @@ export type Database = {
           isento?: boolean
           modalidade?: Database["public"]["Enums"]["modalidade_enum"] | null
           modo_cobranca?:
-            | Database["public"]["Enums"]["modo_cobranca_enum"]
-            | null
+          | Database["public"]["Enums"]["modo_cobranca_enum"]
+          | null
           nome: string
           nome_professor?: string | null
           observacoes?: string | null
@@ -1897,8 +1962,8 @@ export type Database = {
           isento?: boolean
           modalidade?: Database["public"]["Enums"]["modalidade_enum"] | null
           modo_cobranca?:
-            | Database["public"]["Enums"]["modo_cobranca_enum"]
-            | null
+          | Database["public"]["Enums"]["modo_cobranca_enum"]
+          | null
           nome?: string
           nome_professor?: string | null
           observacoes?: string | null
@@ -1998,8 +2063,8 @@ export type Database = {
           numero: string | null
           observacoes: string | null
           parentesco_responsavel:
-            | Database["public"]["Enums"]["parentesco_enum"]
-            | null
+          | Database["public"]["Enums"]["parentesco_enum"]
+          | null
           periodo: string | null
           referencia: string | null
           sala: string | null
@@ -2038,8 +2103,8 @@ export type Database = {
           numero?: string | null
           observacoes?: string | null
           parentesco_responsavel?:
-            | Database["public"]["Enums"]["parentesco_enum"]
-            | null
+          | Database["public"]["Enums"]["parentesco_enum"]
+          | null
           periodo?: string | null
           referencia?: string | null
           sala?: string | null
@@ -2078,8 +2143,8 @@ export type Database = {
           numero?: string | null
           observacoes?: string | null
           parentesco_responsavel?:
-            | Database["public"]["Enums"]["parentesco_enum"]
-            | null
+          | Database["public"]["Enums"]["parentesco_enum"]
+          | null
           periodo?: string | null
           referencia?: string | null
           sala?: string | null
@@ -2923,47 +2988,47 @@ export type Database = {
         }
       }
       http_delete:
-        | {
-            Args: { uri: string }
-            Returns: Database["public"]["CompositeTypes"]["http_response"]
-            SetofOptions: {
-              from: "*"
-              to: "http_response"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: { content: string; content_type: string; uri: string }
-            Returns: Database["public"]["CompositeTypes"]["http_response"]
-            SetofOptions: {
-              from: "*"
-              to: "http_response"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
+      | {
+        Args: { uri: string }
+        Returns: Database["public"]["CompositeTypes"]["http_response"]
+        SetofOptions: {
+          from: "*"
+          to: "http_response"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      | {
+        Args: { content: string; content_type: string; uri: string }
+        Returns: Database["public"]["CompositeTypes"]["http_response"]
+        SetofOptions: {
+          from: "*"
+          to: "http_response"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       http_get:
-        | {
-            Args: { uri: string }
-            Returns: Database["public"]["CompositeTypes"]["http_response"]
-            SetofOptions: {
-              from: "*"
-              to: "http_response"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: { data: Json; uri: string }
-            Returns: Database["public"]["CompositeTypes"]["http_response"]
-            SetofOptions: {
-              from: "*"
-              to: "http_response"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
+      | {
+        Args: { uri: string }
+        Returns: Database["public"]["CompositeTypes"]["http_response"]
+        SetofOptions: {
+          from: "*"
+          to: "http_response"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      | {
+        Args: { data: Json; uri: string }
+        Returns: Database["public"]["CompositeTypes"]["http_response"]
+        SetofOptions: {
+          from: "*"
+          to: "http_response"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       http_head: {
         Args: { uri: string }
         Returns: Database["public"]["CompositeTypes"]["http_response"]
@@ -3002,26 +3067,26 @@ export type Database = {
         }
       }
       http_post:
-        | {
-            Args: { content: string; content_type: string; uri: string }
-            Returns: Database["public"]["CompositeTypes"]["http_response"]
-            SetofOptions: {
-              from: "*"
-              to: "http_response"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: { data: Json; uri: string }
-            Returns: Database["public"]["CompositeTypes"]["http_response"]
-            SetofOptions: {
-              from: "*"
-              to: "http_response"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
+      | {
+        Args: { content: string; content_type: string; uri: string }
+        Returns: Database["public"]["CompositeTypes"]["http_response"]
+        SetofOptions: {
+          from: "*"
+          to: "http_response"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      | {
+        Args: { data: Json; uri: string }
+        Returns: Database["public"]["CompositeTypes"]["http_response"]
+        SetofOptions: {
+          from: "*"
+          to: "http_response"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       http_put: {
         Args: { content: string; content_type: string; uri: string }
         Returns: Database["public"]["CompositeTypes"]["http_response"]
@@ -3043,78 +3108,78 @@ export type Database = {
       text_to_bytea: { Args: { data: string }; Returns: string }
       unaccent: { Args: { "": string }; Returns: string }
       urlencode:
-        | { Args: { data: Json }; Returns: string }
-        | {
-            Args: { string: string }
-            Returns: {
-              error: true
-            } & "Could not choose the best candidate function between: public.urlencode(string => bytea), public.urlencode(string => varchar). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
-          }
-        | {
-            Args: { string: string }
-            Returns: {
-              error: true
-            } & "Could not choose the best candidate function between: public.urlencode(string => bytea), public.urlencode(string => varchar). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
-          }
+      | { Args: { data: Json }; Returns: string }
+      | {
+        Args: { string: string }
+        Returns: {
+          error: true
+        } & "Could not choose the best candidate function between: public.urlencode(string => bytea), public.urlencode(string => varchar). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
+      }
+      | {
+        Args: { string: string }
+        Returns: {
+          error: true
+        } & "Could not choose the best candidate function between: public.urlencode(string => bytea), public.urlencode(string => varchar). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
+      }
     }
     Enums: {
       execucao_passageiro_status_enum: "pendente" | "embarcado" | "ausente"
       execucao_rota_status_enum: "iniciada" | "concluida" | "cancelada"
       fretamento_pagamento_status_enum: "pendente" | "pago_parcial" | "quitado"
       fretamento_status_enum:
-        | "pendente"
-        | "confirmado"
-        | "concluido"
-        | "cancelado"
+      | "pendente"
+      | "confirmado"
+      | "concluido"
+      | "cancelado"
       fretamento_tipo_enum: "fretamento" | "passeio"
       genero_enum: "masculino" | "feminino" | "prefiro_nao_informar"
       modalidade_enum: "ida" | "volta" | "ida_volta"
       modo_cobranca_enum: "DESATIVADO" | "LEMBRETES" | "AUTOMATICA"
       parentesco_enum:
-        | "pai"
-        | "mae"
-        | "avo"
-        | "tio"
-        | "irmao"
-        | "primo"
-        | "padrastro"
-        | "madrasta"
-        | "responsavel_legal"
-        | "outro"
+      | "pai"
+      | "mae"
+      | "avo"
+      | "tio"
+      | "irmao"
+      | "primo"
+      | "padrastro"
+      | "madrasta"
+      | "responsavel_legal"
+      | "outro"
       participante_pagamento_status_enum: "pendente" | "pago" | "parcial"
-      provedor_pagamento_enum: "WOOVI" | "ASAAS" | "EFIPAY"
+      provedor_pagamento_enum: "WOOVI" | "EFIPAY" | "BANCO_DO_BRASIL"
       renovacao_status_enum:
-        | "pendente"
-        | "confirmado"
-        | "recusado"
-        | "concluido"
+      | "pendente"
+      | "confirmado"
+      | "recusado"
+      | "concluido"
       status_repasse_enum:
-        | "PENDENTE"
-        | "PROCESSANDO"
-        | "SUCESSO"
-        | "FALHA"
-        | "CANCELADO"
+      | "PENDENTE"
+      | "PROCESSANDO"
+      | "SUCESSO"
+      | "FALHA"
+      | "CANCELADO"
       tipo_no_rota_enum: "passageiro" | "escola"
       tipo_pagamento_enum:
-        | "dinheiro"
-        | "cartao-credito"
-        | "cartao-debito"
-        | "transferencia"
-        | "PIX"
-        | "boleto"
+      | "dinheiro"
+      | "cartao-credito"
+      | "cartao-debito"
+      | "transferencia"
+      | "PIX"
+      | "boleto"
       user_type_enum:
-        | "admin"
-        | "motorista"
-        | "motorista_auxiliar"
-        | "monitor"
-        | "responsavel"
+      | "admin"
+      | "motorista"
+      | "motorista_auxiliar"
+      | "monitor"
+      | "responsavel"
       whatsapp_purpose_enum: "TRANSACTIONAL" | "BULK"
       whatsapp_status_enum:
-        | "CONNECTED"
-        | "DISCONNECTED"
-        | "CONNECTING"
-        | "UNKNOWN"
-        | "NOT_FOUND"
+      | "CONNECTED"
+      | "DISCONNECTED"
+      | "CONNECTING"
+      | "UNKNOWN"
+      | "NOT_FOUND"
     }
     CompositeTypes: {
       http_header: {
@@ -3144,37 +3209,37 @@ type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
-    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+  | { schema: keyof DatabaseWithoutInternals },
   TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+    DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
-    ? R
-    : never
+  ? R
+  : never
   : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-        Row: infer R
-      }
-      ? R
-      : never
-    : never
+    DefaultSchema["Views"])
+  ? (DefaultSchema["Tables"] &
+    DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+      Row: infer R
+    }
+  ? R
+  : never
+  : never
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof DefaultSchema["Tables"]
+  | { schema: keyof DatabaseWithoutInternals },
   TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
@@ -3184,22 +3249,22 @@ export type TablesInsert<
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Insert: infer I
-    }
-    ? I
-    : never
+    Insert: infer I
+  }
+  ? I
+  : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Insert: infer I
-      }
-      ? I
-      : never
-    : never
+  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+    Insert: infer I
+  }
+  ? I
+  : never
+  : never
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof DefaultSchema["Tables"]
+  | { schema: keyof DatabaseWithoutInternals },
   TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
@@ -3209,22 +3274,22 @@ export type TablesUpdate<
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Update: infer U
-    }
-    ? U
-    : never
+    Update: infer U
+  }
+  ? U
+  : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Update: infer U
-      }
-      ? U
-      : never
-    : never
+  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+    Update: infer U
+  }
+  ? U
+  : never
+  : never
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof DefaultSchema["Enums"]
+  | { schema: keyof DatabaseWithoutInternals },
   EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
@@ -3235,13 +3300,13 @@ export type Enums<
 }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
-    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-    : never
+  ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+  : never
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof DefaultSchema["CompositeTypes"]
+  | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
@@ -3252,8 +3317,8 @@ export type CompositeTypes<
 }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never
+  ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+  : never
 
 export const Constants = {
   public: {
@@ -3284,7 +3349,7 @@ export const Constants = {
         "outro",
       ],
       participante_pagamento_status_enum: ["pendente", "pago", "parcial"],
-      provedor_pagamento_enum: ["WOOVI", "ASAAS", "EFIPAY"],
+      provedor_pagamento_enum: ["WOOVI", "EFIPAY", "BANCO_DO_BRASIL"],
       renovacao_status_enum: [
         "pendente",
         "confirmado",

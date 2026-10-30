@@ -1,4 +1,4 @@
-import { NotificationChannelEnum, TipoResponsavel } from '../types/enums.js';
+﻿import { NotificationChannelEnum, TipoResponsavel } from '../types/enums.js';
 import crypto from "node:crypto";
 import { cobrancaRepository } from "../repositories/cobranca.repository.js";
 import { passageiroRepository } from "../repositories/passageiro.repository.js";
@@ -24,6 +24,7 @@ import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaStatus, CobrancaTipoPagam
 import { paymentService } from "./payments/payment.service.js";
 import { cobrancaCalculoService } from "./cobranca-calculo.service.js";
 import { cobrancaValidacaoService } from "./cobranca-validacao.service.js";
+import { cobrancaPagamentoService } from "./cobranca-pagamento.service.js";
 import { motoristaFinanceiroRepository } from "../repositories/motorista-financeiro.repository.js";
 import { historicoService } from "./historico.service.js";
 import { receiptService } from "./receipt.service.js";
@@ -348,6 +349,11 @@ export const cobrancaService = {
       cobrancaData.pix_qrcode_url = null;
       cobrancaData.pix_expiracao = null;
       cobrancaData.provedor_cobranca_id = null;
+      cobrancaData.provedor = null;
+      cobrancaData.boleto_linha_digitavel = null;
+      cobrancaData.boleto_codigo_barras = null;
+      cobrancaData.boleto_url = null;
+      cobrancaData.boleto_nosso_numero = null;
       cobrancaData.repasse_em_processamento = false;
     }
 
@@ -412,16 +418,9 @@ export const cobrancaService = {
 
     await cobrancaValidacaoService.validarImpedimentoPorRepasse(id, cobranca, "cancelar parcela");
 
-    if (cobranca.provedor_cobranca_id) {
-      void cobrancaValidacaoService.cancelarPixCobrancaSeExistir(id, cobranca.provedor_cobranca_id);
-    }
 
     const { error: updateError } = await cobrancaRepository.update(id, {
       status: CobrancaStatus.CANCELADA,
-      provedor_cobranca_id: null,
-      pix_copia_cola: null,
-      pix_qrcode_url: null,
-      pix_expiracao: null,
       repasse_em_processamento: false
     });
     if (updateError) throw new AppError("Erro ao cancelar cobrança no banco de dados.", 500);
@@ -456,10 +455,6 @@ export const cobrancaService = {
 
     const { data: updated, error: updateError } = await cobrancaRepository.update(id, {
       status: CobrancaStatus.PENDENTE,
-      provedor_cobranca_id: null,
-      pix_copia_cola: null,
-      pix_qrcode_url: null,
-      pix_expiracao: null,
       repasse_em_processamento: false,
       updated_at: new Date().toISOString()
     });
@@ -717,6 +712,9 @@ export const cobrancaService = {
     pixCopiaCola: string;
     pixQrCodeUrl?: string | null;
     valorTotalPix: number;
+    boletoLinhaDigitavel?: string | null;
+    boletoUrl?: string | null;
+    boletoNossoNumero?: string | null;
   } | null> {
     const { data: cobranca } = await cobrancaRepository.getByIdWithPassageiroAndMotorista(cobrancaId);
     if (!cobranca || cobranca.status === CobrancaStatus.PAGO || cobranca.status === CobrancaStatus.CANCELADA) {
@@ -750,7 +748,12 @@ export const cobrancaService = {
           pix_copia_cola: null,
           pix_qrcode_url: null,
           pix_expiracao: null,
-          provedor_cobranca_id: null
+          provedor_cobranca_id: null,
+          provedor: null,
+          boleto_linha_digitavel: null,
+          boleto_codigo_barras: null,
+          boleto_url: null,
+          boleto_nosso_numero: null,
         });
       }
       return null;
@@ -762,20 +765,33 @@ export const cobrancaService = {
         pix_copia_cola: null,
         pix_qrcode_url: null,
         pix_expiracao: null,
-        provedor_cobranca_id: null
+        provedor_cobranca_id: null,
+        provedor: null,
+        boleto_linha_digitavel: null,
+        boleto_codigo_barras: null,
+        boleto_url: null,
+        boleto_nosso_numero: null,
       });
       cobranca.pix_copia_cola = null;
       cobranca.pix_qrcode_url = null;
       cobranca.pix_expiracao = null;
       cobranca.provedor_cobranca_id = null;
+      cobranca.provedor = null;
+      cobranca.boleto_linha_digitavel = null;
+      cobranca.boleto_codigo_barras = null;
+      cobranca.boleto_url = null;
+      cobranca.boleto_nosso_numero = null;
     }
 
     const agora = new Date();
-    if (!options?.force && cobranca.pix_copia_cola && cobranca.pix_expiracao && new Date(cobranca.pix_expiracao) > agora) {
+    if (!options?.force && ((cobranca.pix_copia_cola && cobranca.pix_expiracao && new Date(cobranca.pix_expiracao) > agora) || cobranca.boleto_linha_digitavel)) {
       return {
-        pixCopiaCola: cobranca.pix_copia_cola,
+        pixCopiaCola: cobranca.pix_copia_cola || "",
         pixQrCodeUrl: cobranca.pix_qrcode_url,
-        valorTotalPix: Number(cobranca.valor)
+        valorTotalPix: Number(cobranca.valor),
+        boletoLinhaDigitavel: cobranca.boleto_linha_digitavel,
+        boletoUrl: cobranca.boleto_url,
+        boletoNossoNumero: cobranca.boleto_nosso_numero
       };
     }
 
@@ -828,15 +844,43 @@ export const cobrancaService = {
       return null;
     }
 
+    const isBB = motoristaConfig?.provedor_ativo === ProvedorPagamentoEnum.BANCO_DO_BRASIL;
+    const providerToUse = isBB ? PaymentProvider.BANCO_DO_BRASIL : PaymentProvider.WOOVI;
+    const provedorEnumToUse = isBB ? ProvedorPagamentoEnum.BANCO_DO_BRASIL : ProvedorPagamentoEnum.WOOVI;
+
     const externalCorrelationId = `${cobranca.id}_${Date.now()}`;
     const chavePixSplit = chavePixRepasseEfetiva;
+
+    const respLogradouro = (respObj as { logradouro?: string })?.logradouro;
+    const respNumero = (respObj as { numero?: string })?.numero;
+    const respBairro = (respObj as { bairro?: string })?.bairro;
+    const respCidade = (respObj as { cidade?: string })?.cidade;
+    const respEstado = (respObj as { estado?: string })?.estado;
+    const respCep = (respObj as { cep?: string })?.cep;
+
+    const billingAddress = {
+      street: respLogradouro || "Não informado",
+      number: respNumero || "S/N",
+      neighborhood: respBairro || "Centro",
+      city: respCidade || "São Paulo",
+      state: respEstado || "SP",
+      zipcode: respCep || "01001-000"
+    };
+
+    const splitsBB = [
+      {
+        pix_chave: "",
+        amount: 0,
+        description: JSON.stringify(motoristaConfig?.provedor_config || {})
+      }
+    ];
 
     const chargeRes = await paymentService.createCharge(
       {
         externalId: externalCorrelationId,
         amount: valorTotalPix,
         description: `Parcela ${cobranca.mes}/${cobranca.ano} - ${passageiroNome}`,
-        paymentMethod: CheckoutPaymentMethod.PIX,
+        paymentMethod: isBB ? CheckoutPaymentMethod.BOLETO : CheckoutPaymentMethod.PIX,
         dueDate: cobranca.data_vencimento,
         daysAfterDueDate: encargos.daysAfterDueDate,
         fines: encargos.fines,
@@ -847,24 +891,25 @@ export const cobrancaService = {
           phone: respObj?.telefone || undefined,
           email: respObj?.email || undefined
         },
-        splits: [
+        billingAddress,
+        splits: isBB ? splitsBB : [
           {
             pix_chave: chavePixSplit,
             amount: valorRepasseMotorista
           }
         ]
       },
-      PaymentProvider.WOOVI
+      providerToUse
     );
 
-    if (!chargeRes.success || !chargeRes.pixCopyPaste) {
-      logger.error({ cobrancaId, error: chargeRes.error }, "[CobrancaService] Falha ao criar cobrança Pix na Woovi");
+    if (!chargeRes.success || (!chargeRes.pixCopyPaste && !chargeRes.boletoLinhaDigitavel)) {
+      logger.error({ cobrancaId, error: chargeRes.error }, `[CobrancaService] Falha ao criar cobrança no provedor ${providerToUse}`);
       historicoService.log({
         usuario_id: motoristaId,
         entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
         entidade_id: cobranca.id,
         acao: AtividadeAcao.COBRANCA_EDITADA,
-        descricao: `Falha na integração com a Woovi ao gerar Pix para o aluno ${passageiroNome}: ${chargeRes.error || "Erro desconhecido"}`,
+        descricao: `Falha na integração ao gerar cobrança para o aluno ${passageiroNome}: ${chargeRes.error || "Erro desconhecido"}`,
         meta: {
           erro_provedor: chargeRes.error,
           cobranca_id: cobranca.id,
@@ -878,19 +923,26 @@ export const cobrancaService = {
     expiracao.setDate(expiracao.getDate() + (encargos.hasOverdueRules ? encargos.daysAfterDueDate : 15));
 
     await cobrancaRepository.update(cobranca.id, {
-      provedor: ProvedorPagamentoEnum.WOOVI,
+      provedor: provedorEnumToUse,
       provedor_cobranca_id: chargeRes.providerId || externalCorrelationId,
-      pix_copia_cola: chargeRes.pixCopyPaste,
+      boleto_nosso_numero: chargeRes.boletoNossoNumero || null,
+      boleto_linha_digitavel: chargeRes.boletoLinhaDigitavel || null,
+      boleto_codigo_barras: chargeRes.boletoCodigoBarras || null,
+      boleto_url: chargeRes.invoiceUrl || null,
+      pix_copia_cola: chargeRes.pixCopyPaste || null,
       pix_qrcode_url: chargeRes.pixQrCodeUrl || null,
       pix_expiracao: expiracao.toISOString(),
-      valor_taxa_plataforma: taxaPlataforma,
-      chave_pix_repasse: chavePixSplit
+      valor_taxa_plataforma: isBB ? 0 : taxaPlataforma,
+      chave_pix_repasse: isBB ? null : chavePixSplit
     });
 
     return {
-      pixCopiaCola: chargeRes.pixCopyPaste,
+      pixCopiaCola: chargeRes.pixCopyPaste || "",
       pixQrCodeUrl: chargeRes.pixQrCodeUrl || null,
-      valorTotalPix
+      valorTotalPix,
+      boletoLinhaDigitavel: chargeRes.boletoLinhaDigitavel || null,
+      boletoUrl: chargeRes.invoiceUrl || null,
+      boletoNossoNumero: chargeRes.boletoNossoNumero || null
     };
   },
 
@@ -1081,6 +1133,9 @@ export const cobrancaService = {
               tipoChavePix: isModoLembrete ? (pixResolvidoLembrete?.tipo || undefined) : undefined,
               pixCopiaCola: pixInfo?.pixCopiaCola,
               pixQrCodeUrl: pixInfo?.pixQrCodeUrl,
+              boletoLinhaDigitavel: pixInfo?.boletoLinhaDigitavel,
+              boletoUrl: pixInfo?.boletoUrl,
+              boletoNossoNumero: pixInfo?.boletoNossoNumero,
               mes: c.mes,
               ano: c.ano,
               cobrancaId: c.id
@@ -1682,6 +1737,9 @@ export const cobrancaService = {
             passageiroId: cobranca.passageiro_id,
             pixCopiaCola: chargeRes.pixCopyPaste,
             pixQrCodeUrl: chargeRes.pixQrCodeUrl || undefined,
+            boletoLinhaDigitavel: chargeRes.boletoLinhaDigitavel,
+            boletoUrl: chargeRes.invoiceUrl,
+            boletoNossoNumero: chargeRes.boletoNossoNumero,
             mes: cobranca.mes,
             ano: cobranca.ano,
             cobrancaId: cobranca.id
@@ -1717,6 +1775,59 @@ export const cobrancaService = {
     });
 
     return cobrancaAtualizada;
-  }
-};
+  },
 
+  async processarLiquidacaoBancaria(params: {
+    nossoNumero: string;
+    valorPago: number;
+    dataPagamento: Date;
+    provedor: ProvedorPagamentoEnum;
+    tipoPagamento?: CobrancaTipoPagamento;
+    pagadorNome?: string | null;
+    pagadorDocumento?: string | null;
+    pagadorBanco?: string | null;
+  }): Promise<{ success: boolean; cobrancaId?: string; status: string }> {
+    const { nossoNumero, valorPago, dataPagamento, provedor, tipoPagamento, pagadorNome, pagadorDocumento, pagadorBanco } = params;
+
+    const { data: cobrancaPorNossoNumero } = await cobrancaRepository.getByBoletoNossoNumero(nossoNumero);
+    let cobranca = cobrancaPorNossoNumero;
+
+    if (!cobranca) {
+      const { data: cobrancaPorProvedor } = await cobrancaRepository.getByProvedorCobrancaId(nossoNumero);
+      cobranca = cobrancaPorProvedor;
+    }
+
+    if (!cobranca) {
+      const baseId = nossoNumero.split("_")[0];
+      const { data: cobrancaPorId } = await cobrancaRepository.getById(baseId);
+      cobranca = cobrancaPorId;
+    }
+
+    if (!cobranca) {
+      logger.warn({ nossoNumero }, "[CobrancaService] Cobrança não encontrada para liquidação bancária");
+      return { success: false, status: "cobranca_not_found" };
+    }
+
+    if (cobranca.status === CobrancaStatus.PAGO && !cobranca.pagamento_manual) {
+      logger.info({ cobrancaId: cobranca.id, nossoNumero }, "[CobrancaService] Cobrança já liquidada anteriormente");
+      return { success: true, cobrancaId: cobranca.id, status: "already_paid" };
+    }
+
+    const valorReal = valorPago > 0 ? valorPago : Number(cobranca.valor);
+
+    await cobrancaPagamentoService.registrarPagamentoAutomatico(
+      cobranca.id,
+      dataPagamento,
+      valorReal,
+      tipoPagamento || CobrancaTipoPagamento.BOLETO,
+      provedor,
+      {
+        pagadorNome,
+        pagadorDocumento,
+        pagadorBanco
+      }
+    );
+
+    return { success: true, cobrancaId: cobranca.id, status: "paid" };
+  },
+};

@@ -1,4 +1,4 @@
-import { CheckoutPaymentMethod, PaymentProvider, NormalizedPaymentEventType, ContractMultaTipo } from "./enums.js";
+import { CheckoutPaymentMethod, PaymentProvider, NormalizedPaymentEventType, ContractMultaTipo, CobrancaTipoPagamento } from "./enums.js";
 
 export interface CreateChargeRequest {
     externalId: string;
@@ -50,6 +50,9 @@ export interface ChargeResponse {
     pixQrCodeUrl?: string;
     paymentLink?: string;
     invoiceUrl?: string;
+    boletoLinhaDigitavel?: string;
+    boletoCodigoBarras?: string;
+    boletoNossoNumero?: string;
     error?: string;
     isUserFacing?: boolean;
 }
@@ -60,13 +63,14 @@ export interface NormalizedPaymentEvent {
     providerRef: string;
     amount?: number;
     paidAt?: Date;
+    paymentMethod?: CobrancaTipoPagamento;
     raw?: Record<string, unknown>;
 }
 
 export interface PaymentProviderAdapter {
     readonly providerName: PaymentProvider;
     createCharge(request: CreateChargeRequest): Promise<ChargeResponse>;
-    cancelCharge(providerId: string): Promise<boolean>;
-    getChargeStatus(providerId: string): Promise<string>;
+    cancelCharge(providerId: string, options?: Record<string, unknown>): Promise<boolean>;
+    getChargeStatus(providerId: string, options?: Record<string, unknown>): Promise<string>;
     normalizeWebhook(rawBody: Record<string, unknown>): Promise<NormalizedPaymentEvent | null> | NormalizedPaymentEvent | null;
 }

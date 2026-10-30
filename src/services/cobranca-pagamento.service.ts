@@ -5,7 +5,7 @@ import { motoristaFinanceiroRepository } from "../repositories/motorista-finance
 import { cobrancaValidacaoService } from "./cobranca-validacao.service.js";
 import { AppError } from "../errors/AppError.js";
 import { RegistrarPagamentoManualDTO, ComplementarPagamentoManualDTO } from "../types/dtos/cobranca.dto.js";
-import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaStatus, CobrancaTipoPagamento, TipoResponsavel } from "../types/enums.js";
+import { AtividadeAcao, AtividadeEntidadeTipo, CobrancaStatus, CobrancaTipoPagamento, TipoResponsavel, ProvedorPagamentoEnum } from "../types/enums.js";
 import { getNowBR, toPersistenceString } from "../utils/date.utils.js";
 import { getFirstAndSecondName } from "../utils/format.js";
 import { historicoService } from "./historico.service.js";
@@ -32,9 +32,6 @@ export const cobrancaPagamentoService = {
 
     await cobrancaValidacaoService.validarImpedimentoPorRepasse(cobrancaId, cobranca, "registrar pagamento manual");
 
-    if (cobranca.provedor_cobranca_id) {
-      void cobrancaValidacaoService.cancelarPixCobrancaSeExistir(cobrancaId, cobranca.provedor_cobranca_id);
-    }
 
     const dataPagamentoStr = data.data_pagamento ? toPersistenceString(data.data_pagamento) : toPersistenceString(getNowBR());
 
@@ -44,10 +41,6 @@ export const cobrancaPagamentoService = {
       tipo_pagamento: data.tipo_pagamento || CobrancaTipoPagamento.DINHEIRO,
       data_pagamento: dataPagamentoStr,
       valor_pago: data.valor_pago || cobranca.valor,
-      pix_copia_cola: null,
-      pix_qrcode_url: null,
-      pix_expiracao: null,
-      provedor_cobranca_id: null,
       repasse_em_processamento: false,
       ...(data.observacao !== undefined ? { observacao: (data.observacao && data.observacao.trim()) ? data.observacao.trim() : null } : {}),
     });
@@ -308,13 +301,20 @@ export const cobrancaPagamentoService = {
     return updated;
   },
 
-  async registrarPagamentoAutomatico(cobrancaId: string, dataPagamento?: string, valorPago?: number): Promise<CobrancaRow> {
+  async registrarPagamentoAutomatico(
+    cobrancaId: string,
+    dataPagamento?: string | Date,
+    valorPago?: number,
+    tipoPagamento?: CobrancaTipoPagamento,
+    provedor?: ProvedorPagamentoEnum,
+    pagadorInfo?: { pagadorNome?: string | null; pagadorDocumento?: string | null; pagadorBanco?: string | null }
+  ): Promise<CobrancaRow> {
     logger.info({ cobrancaId }, "[cobrancaPagamentoService.registrarPagamentoAutomatico] Baixando cobrança automática");
 
     const { data: cobranca, error: findError } = await cobrancaRepository.getById(cobrancaId);
 
     if (findError || !cobranca) throw new AppError("Cobrança não encontrada.", 404);
-    if (cobranca.status === CobrancaStatus.PAGO) return cobranca;
+    if (cobranca.status === CobrancaStatus.PAGO && !cobranca.pagamento_manual) return cobranca;
 
     const dataPagamentoStr = dataPagamento ? toPersistenceString(dataPagamento) : toPersistenceString(getNowBR());
     const valorPagoFinal = valorPago && valorPago > 0 ? valorPago : cobranca.valor;
@@ -322,7 +322,7 @@ export const cobrancaPagamentoService = {
     const { data: updated, error } = await cobrancaRepository.update(cobrancaId, {
       status: CobrancaStatus.PAGO,
       pagamento_manual: false,
-      tipo_pagamento: CobrancaTipoPagamento.PIX,
+      tipo_pagamento: tipoPagamento || CobrancaTipoPagamento.PIX,
       data_pagamento: dataPagamentoStr,
       valor_pago: valorPagoFinal,
       repasse_em_processamento: false
@@ -337,12 +337,15 @@ export const cobrancaPagamentoService = {
       entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
       entidade_id: cobrancaId,
       acao: AtividadeAcao.SAAS_PAGAMENTO_RECEBIDO,
-      descricao: `Pagamento automático via Pix de ${updated.mes}/${updated.ano} (${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(updated.valor_pago || updated.valor)}) confirmado com repasse liquidado.`,
+      descricao: `Pagamento automático via ${(tipoPagamento || CobrancaTipoPagamento.PIX) === CobrancaTipoPagamento.BOLETO ? "Boleto" : "Pix"} de ${updated.mes}/${updated.ano} (${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(updated.valor_pago || updated.valor)}) confirmado com repasse liquidado.`,
       meta: {
         valor_pago: updated.valor_pago,
         tipo_pagamento: updated.tipo_pagamento,
         data_pagamento: updated.data_pagamento,
-        passageiro: cobranca.passageiro?.nome || cobranca.passageiros?.nome
+        passageiro: cobranca.passageiro?.nome || cobranca.passageiros?.nome,
+        pagador_nome: pagadorInfo?.pagadorNome || null,
+        pagador_documento: pagadorInfo?.pagadorDocumento || null,
+        pagador_banco: pagadorInfo?.pagadorBanco || null
       }
     });
 

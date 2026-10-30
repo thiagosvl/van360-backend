@@ -1,5 +1,5 @@
 import { FINANCEIRO_CONFIG } from "../config/constants.js";
-import { ModoCobrancaEnum, ContractMultaTipo, CobrancaStatus } from "../types/enums.js";
+import { ModoCobrancaEnum, ContractMultaTipo, CobrancaStatus, ProvedorPagamentoEnum } from "../types/enums.js";
 import type { Tables, Database } from "../types/database.types.js";
 
 export type ModoCobrancaTipo = ModoCobrancaEnum | Database["public"]["Enums"]["modo_cobranca_enum"];
@@ -146,8 +146,11 @@ export const cobrancaCalculoService = {
     if (statusCobranca && (statusCobranca === CobrancaStatus.PAGO || statusCobranca === CobrancaStatus.CANCELADA)) return false;
     if (passageiroModoCobranca === ModoCobrancaEnum.DESATIVADO || passageiroModoCobranca === ModoCobrancaEnum.LEMBRETES) return false;
 
-    const chavePix = chavePixEfetiva || motoristaConfig.chave_pix_repasse;
-    if (!chavePix || !chavePix.trim()) return false;
+    const isBB = motoristaConfig.provedor_ativo === ProvedorPagamentoEnum.BANCO_DO_BRASIL;
+    if (!isBB) {
+      const chavePix = chavePixEfetiva || motoristaConfig.chave_pix_repasse;
+      if (!chavePix || !chavePix.trim()) return false;
+    }
 
     if (passageiroModoCobranca === ModoCobrancaEnum.AUTOMATICA) return true;
 
@@ -173,16 +176,16 @@ export const cobrancaCalculoService = {
 
     const fines: RegraEncargoResolvido | undefined = hasMulta
       ? {
-          value: Number(motoristaConfig.multa_atraso_valor),
-          tipo: (motoristaConfig.multa_atraso_tipo as ContractMultaTipo) || ContractMultaTipo.PERCENTUAL
-        }
+        value: Number(motoristaConfig.multa_atraso_valor),
+        tipo: (motoristaConfig.multa_atraso_tipo as ContractMultaTipo) || ContractMultaTipo.PERCENTUAL
+      }
       : undefined;
 
     const interests: RegraEncargoResolvido | undefined = hasJuros
       ? {
-          value: Number(motoristaConfig.juros_atraso_valor),
-          tipo: (motoristaConfig.juros_atraso_tipo as ContractMultaTipo) || ContractMultaTipo.PERCENTUAL
-        }
+        value: Number(motoristaConfig.juros_atraso_valor),
+        tipo: (motoristaConfig.juros_atraso_tipo as ContractMultaTipo) || ContractMultaTipo.PERCENTUAL
+      }
       : undefined;
 
     const daysAfterDueDate = motoristaConfig.dias_validade_apos_vencimento || FINANCEIRO_CONFIG.DIAS_VALIDADE_APOS_VENCIMENTO_PADRAO;

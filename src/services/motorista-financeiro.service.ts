@@ -1,3 +1,4 @@
+﻿import type { Json } from "../types/database.types.js";
 import { motoristaFinanceiroRepository } from "../repositories/motorista-financeiro.repository.js";
 import { userRepository } from "../repositories/user.repository.js";
 import { UpdateMotoristaFinanceiroInput } from "../schemas/motorista-financeiro.schema.js";
@@ -80,7 +81,7 @@ export const motoristaFinanceiroService = {
         .eq("usuario_id", usuarioId);
     }
 
-    const { aplicar_a_todos, ...updatePayload } = input;
+    const { aplicar_a_todos, provedor_config, ...updatePayload } = input;
 
     if (modoFinal === ModoCobrancaEnum.DESATIVADO) {
       updatePayload.chave_pix_repasse = null;
@@ -89,6 +90,7 @@ export const motoristaFinanceiroService = {
 
     const updated = await motoristaFinanceiroRepository.update(usuarioId, {
       ...updatePayload,
+      ...(provedor_config !== undefined ? { provedor_config: provedor_config as unknown as Json } : {}),
       modo_cobranca: modoFinal,
     });
 
@@ -122,6 +124,11 @@ export const motoristaFinanceiroService = {
                   pix_qrcode_url: null,
                   pix_expiracao: null,
                   provedor_cobranca_id: null,
+                  provedor: null,
+                  boleto_linha_digitavel: null,
+                  boleto_codigo_barras: null,
+                  boleto_url: null,
+                  boleto_nosso_numero: null,
                   repasse_em_processamento: false
                 })
                 .eq("id", cob.id);

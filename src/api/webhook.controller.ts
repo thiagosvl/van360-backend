@@ -1,3 +1,4 @@
+import { cobrancaService } from "../services/cobranca.service.js";
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
 import { env } from "../config/env.js";
@@ -8,7 +9,8 @@ import {
   NormalizedPaymentEventType,
   CobrancaStatus,
   StatusRepasseEnum,
-  ProvedorPagamentoEnum
+  ProvedorPagamentoEnum,
+  CobrancaTipoPagamento
 } from "../types/enums.js";
 import { paymentService } from "../services/payments/payment.service.js";
 import { cobrancaCalculoService } from "../services/cobranca-calculo.service.js";
@@ -318,5 +320,42 @@ export const WebhookController = {
       return reply.code(500).send({ error: "Internal Server Error" });
     }
   },
-};
 
+  async handleBancoDoBrasil(request: FastifyRequest, reply: FastifyReply) {
+    const rawBody = request.body;
+    logger.info({ body: rawBody }, "[WebhookController] Recebido webhook do Banco do Brasil");
+
+    try {
+      const items = Array.isArray(rawBody) ? rawBody : [rawBody];
+      const results: Array<Record<string, unknown>> = [];
+
+      for (const item of items) {
+        if (!item || typeof item !== "object") continue;
+
+        const event = await paymentService.processWebhook(PaymentProvider.BANCO_DO_BRASIL, item as Record<string, unknown>);
+        if (!event) continue;
+
+        if (event.type === NormalizedPaymentEventType.PAYMENT_RECEIVED) {
+          const raw = (event.raw || {}) as Record<string, unknown>;
+          const result = await cobrancaService.processarLiquidacaoBancaria({
+            nossoNumero: event.providerRef,
+            valorPago: event.amount || 0,
+            dataPagamento: event.paidAt || new Date(),
+            provedor: ProvedorPagamentoEnum.BANCO_DO_BRASIL,
+            tipoPagamento: event.paymentMethod || CobrancaTipoPagamento.BOLETO,
+            pagadorNome: (raw.nomePortador as string) || null,
+            pagadorDocumento: raw.identidadePortador ? String(raw.identidadePortador) : null,
+            pagadorBanco: raw.instituicaoLiquidacao ? String(raw.instituicaoLiquidacao) : null
+          });
+          results.push(result);
+        }
+      }
+
+      return reply.code(200).send({ received: true, processedCount: results.length, results });
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      logger.error({ error: errorMsg, body: rawBody }, "[WebhookController] Erro ao processar webhook Banco do Brasil");
+      return reply.code(500).send({ error: "Internal Server Error" });
+    }
+  },
+};

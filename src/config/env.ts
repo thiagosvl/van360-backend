@@ -36,6 +36,13 @@ export const env = {
   WOOVI_APP_ID: process.env.WOOVI_APP_ID || "",
   WOOVI_BASE_URL: process.env.WOOVI_BASE_URL || "https://api.woovi.com/api/v1",
 
+  // Banco do Brasil
+  BB_ENV: process.env.BB_ENV || "sandbox",
+  BB_CLIENT_ID: process.env.BB_CLIENT_ID || "",
+  BB_CLIENT_SECRET: process.env.BB_CLIENT_SECRET || "",
+  BB_DEVELOPER_KEY: process.env.BB_DEVELOPER_KEY || "",
+  BB_WEBHOOK_URL: process.env.BB_WEBHOOK_URL || "",
+
   PAYMENT_PROVIDER: process.env.PAYMENT_PROVIDER || "efipay",
 
   // WABA (WhatsApp Cloud API)

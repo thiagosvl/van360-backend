@@ -1,4 +1,4 @@
-import { passageiroRepository } from "../repositories/passageiro.repository.js";
+﻿import { passageiroRepository } from "../repositories/passageiro.repository.js";
 import { responsavelRepository } from "../repositories/responsavel.repository.js";
 import { prePassageiroRepository } from "../repositories/pre-passageiro.repository.js";
 import { AppError } from "../errors/AppError.js";
@@ -411,6 +411,11 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO, targetOwn
                                 pix_qrcode_url: null,
                                 pix_expiracao: null,
                                 provedor_cobranca_id: null,
+                                provedor: null,
+                                boleto_linha_digitavel: null,
+                                boleto_codigo_barras: null,
+                                boleto_url: null,
+                                boleto_nosso_numero: null,
                                 repasse_em_processamento: false
                             })
                             .eq("id", cob.id);
@@ -440,6 +445,11 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO, targetOwn
                             updateCobData.pix_qrcode_url = null;
                             updateCobData.pix_expiracao = null;
                             updateCobData.provedor_cobranca_id = null;
+                            updateCobData.provedor = null;
+                            updateCobData.boleto_linha_digitavel = null;
+                            updateCobData.boleto_codigo_barras = null;
+                            updateCobData.boleto_url = null;
+                            updateCobData.boleto_nosso_numero = null;
                             updateCobData.repasse_em_processamento = false;
                         }
 
@@ -563,6 +573,11 @@ const deleteMatricula = async (
                 pix_qrcode_url: null,
                 pix_expiracao: null,
                 provedor_cobranca_id: null,
+                provedor: null,
+                boleto_linha_digitavel: null,
+                boleto_codigo_barras: null,
+                boleto_url: null,
+                boleto_nosso_numero: null,
                 repasse_em_processamento: false,
             })
             .in("id", cobrancasPendentes.map((c) => c.id));
@@ -1022,6 +1037,11 @@ const updateResponsavelAdicional = async (responsavelId: string, data: UpdateRes
                                     pix_qrcode_url: null,
                                     pix_expiracao: null,
                                     provedor_cobranca_id: null,
+                                    provedor: null,
+                                    boleto_linha_digitavel: null,
+                                    boleto_codigo_barras: null,
+                                    boleto_url: null,
+                                    boleto_nosso_numero: null,
                                     repasse_em_processamento: false
                                 })
                                 .eq("id", cob.id);
