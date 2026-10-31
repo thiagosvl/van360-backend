@@ -193,6 +193,7 @@ export type ToggleNotificacoesRotaResponsavelDTO = z.infer<typeof toggleNotifica
 
 export const updatePassageiroBatchItemSchema = z.object({
   id: z.string().uuid("ID do passageiro inválido"),
+  nome: optionalString,
   ano_letivo: z.union([z.number(), z.string().transform(v => Number(v))]).optional(),
   escola_id: z.string().uuid().optional().nullable().or(z.literal("")).transform(v => (v === "" || v === "none") ? null : v),
   veiculo_id: z.string().uuid().optional().nullable().or(z.literal("")).transform(v => (v === "" || v === "none") ? null : v),
