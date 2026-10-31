@@ -1248,14 +1248,34 @@ const updatePassageirosBatch = async (
             if (item.dia_vencimento !== undefined) payload.dia_vencimento = item.dia_vencimento;
             if (item.ativo !== undefined) payload.ativo = item.ativo;
 
+            const passageiroPayload: Record<string, unknown> = {};
+
+            if (item.nome !== undefined) {
+                const cleanedNome = cleanString(item.nome, true);
+                if (cleanedNome) {
+                    passageiroPayload.nome = cleanedNome;
+                }
+            }
+
+            if (itemAno === currentYear && Object.keys(payload).length > 0) {
+                Object.assign(passageiroPayload, payload);
+            }
+
+            let alunoUpdated = false;
+
             if (Object.keys(payload).length > 0) {
                 const { error: updateMatError } = await passageiroRepository.updateMatricula(item.id, itemAno, payload);
                 if (updateMatError) throw updateMatError;
+                alunoUpdated = true;
+            }
 
-                if (itemAno === currentYear) {
-                    const { error: updateError } = await passageiroRepository.update(item.id, payload);
-                    if (updateError) throw updateError;
-                }
+            if (Object.keys(passageiroPayload).length > 0) {
+                const { error: updatePassError } = await passageiroRepository.update(item.id, passageiroPayload);
+                if (updatePassError) throw updatePassError;
+                alunoUpdated = true;
+            }
+
+            if (alunoUpdated) {
                 updatedCount++;
             }
         }));
