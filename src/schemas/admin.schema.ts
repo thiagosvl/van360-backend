@@ -107,6 +107,7 @@ export const listLogsByUserQuerySchema = z.object({
   acao: z.string().optional(),
   entidade: z.string().optional(),
   search_cpf: z.string().optional(),
+  segmento: z.string().optional(),
 });
 
 export type UpdateUserAdminDTO = z.infer<typeof updateUserAdminSchema>;

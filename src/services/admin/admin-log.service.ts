@@ -54,7 +54,7 @@ export const adminLogService = {
   },
 
   async getLogsByUser(query: ListLogsByUserQuery): Promise<AdminLogsByUserResponseDTO> {
-    const { page, limit, dataInicio, dataFim, acao, entidade, search_cpf } = query;
+    const { page, limit, dataInicio, dataFim, acao, entidade, search_cpf, segmento } = query;
     const offset = (page - 1) * limit;
 
     const { data, error } = await adminLogRepository.getLogsByUser({
@@ -63,6 +63,7 @@ export const adminLogService = {
       acao,
       entidade,
       search_cpf,
+      segmento,
       limit,
       offset,
     });

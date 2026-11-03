@@ -88,6 +88,7 @@ export const adminLogRepository = {
     acao?: string;
     entidade?: string;
     search_cpf?: string;
+    segmento?: string;
     limit: number;
     offset: number;
   }) {
@@ -100,6 +101,7 @@ export const adminLogRepository = {
       p_limit: params.limit,
       p_offset: params.offset,
       p_tz: "America/Sao_Paulo",
+      p_segmento: params.segmento || undefined,
     });
   },
 };
