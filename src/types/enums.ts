@@ -615,3 +615,14 @@ export enum BancoDoBrasilCanalLiquidacaoEnum {
   CORRESPONDENTE_DIGITAL = 9,
   PIX_MOVIMENTO = 61
 }
+
+export enum MetaEventName {
+  LEAD = "Lead",
+  PURCHASE = "Purchase",
+}
+
+export enum MetaActionSource {
+  WEBSITE = "website",
+  APP = "app",
+  SYSTEM_GENERATED = "system_generated",
+}

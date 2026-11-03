@@ -18,7 +18,8 @@ import { invoiceRepository } from "../../repositories/invoice.repository.js";
 import { userRepository } from "../../repositories/user.repository.js";
 import { subscriptionService } from "./subscription.service.js";
 import { notificationService } from "../notifications/notification.service.js";
-import { MetaCapiService } from "../meta-capi.service.js";
+import { metaConversionsService } from "../meta/meta-conversions.service.js";
+import { subscriptionAcquisitionService } from "./subscription-acquisition.service.js";
 import {
   RevenueCatWebhookPayload,
   RevenueCatEventType,
@@ -32,7 +33,7 @@ async function dispatchSubscriptionPaymentNotifications(params: {
   priceInPurchasedCurrency?: number;
   expiryDate: string;
   transactionId?: string;
-  isFirstSubscription: boolean;
+  isNewCustomer: boolean | null;
 }) {
   const { data: usuario } = await userRepository.getById(params.userId);
   if (!usuario) {
@@ -52,7 +53,7 @@ async function dispatchSubscriptionPaymentNotifications(params: {
         valor: valorNumerico,
         dataVencimento: params.expiryDate,
         planoNome: planoNome,
-        isFirstSubscription: params.isFirstSubscription,
+        isFirstSubscription: params.isNewCustomer ?? true,
       },
       {
         channels: [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND],
@@ -86,19 +87,13 @@ async function dispatchSubscriptionPaymentNotifications(params: {
     )
   );
 
-  void MetaCapiService.sendPurchaseEvent({
+  void metaConversionsService.trackSubscriptionPayment({
     userId: params.userId,
-    email: usuario.email || "",
-    phone: usuario.telefone,
+    isNewCustomer: params.isNewCustomer,
     value: valorNumerico,
     planName: planoNome,
-    transactionId: transactionId,
-  }).catch((err: unknown) =>
-    logger.error(
-      { err: err instanceof Error ? err.message : String(err) },
-      "[RevenueCatService] Falha ao enviar evento Purchase para Meta CAPI"
-    )
-  );
+    paymentMethod: CheckoutPaymentMethod.APPLE_IAP,
+  });
 }
 
 export const subscriptionRevenueCatService = {
@@ -165,6 +160,13 @@ export const subscriptionRevenueCatService = {
       case RevenueCatEventType.INITIAL_PURCHASE:
       case RevenueCatEventType.NON_RENEWING_PURCHASE:
       case RevenueCatEventType.PRODUCT_CHANGE: {
+        // Precisa rodar antes do update: depois dele a assinatura já fica como apple_iap e pareceria renovação.
+        const isNewCustomer = type === RevenueCatEventType.PRODUCT_CHANGE
+          ? false
+          : await subscriptionAcquisitionService.isFirstPaidActivation(userId, {
+              previousPaymentMethod: sub.metodo_pagamento,
+            });
+
         const updatePayload: Record<string, unknown> = {
           status: SubscriptionStatus.ACTIVE,
           data_vencimento: expiryDate,
@@ -208,7 +210,7 @@ export const subscriptionRevenueCatService = {
           priceInPurchasedCurrency: event.price_in_purchased_currency,
           expiryDate,
           transactionId: originalTxId || txId,
-          isFirstSubscription: true,
+          isNewCustomer,
         });
 
         logger.info({ userId, subId: sub.id, productId }, "[RevenueCatService] Assinatura Apple IAP ativada com sucesso");
@@ -249,7 +251,7 @@ export const subscriptionRevenueCatService = {
           priceInPurchasedCurrency: event.price_in_purchased_currency,
           expiryDate,
           transactionId: originalTxId || txId,
-          isFirstSubscription: false,
+          isNewCustomer: false,
         });
 
         logger.info({ userId, subId: sub.id, expiryDate }, "[RevenueCatService] Renovacao Apple IAP processada com sucesso");

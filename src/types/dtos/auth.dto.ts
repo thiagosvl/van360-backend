@@ -6,6 +6,13 @@ export interface MetadadosCadastroUtmDTO {
   campaign?: string;
   content?: string;
   term?: string;
+  fbclid?: string;
+  fbclid_at?: number;
+}
+
+export interface MetadadosCadastroMetaDTO {
+  fbp?: string;
+  fbc?: string;
 }
 
 export interface MetadadosCadastroDTO {
@@ -13,6 +20,7 @@ export interface MetadadosCadastroDTO {
   user_agent?: string;
   referrer?: string;
   utm?: MetadadosCadastroUtmDTO;
+  meta?: MetadadosCadastroMetaDTO;
   [key: string]: unknown;
 }
 

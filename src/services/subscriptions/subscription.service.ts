@@ -7,7 +7,7 @@ import {
     AtividadeAcao,
     AtividadeEntidadeTipo,
     ConfigKey,
-    SubscriptionInvoiceStatus
+    CheckoutPaymentMethod
 } from "../../types/enums.js";
 import { historicoService } from "../historico.service.js";
 import { getNowBR, getEndOfDayBR, addDays, parseLocalDate } from "../../utils/date.utils.js";
@@ -18,7 +18,8 @@ import { planRepository } from "../../repositories/plan.repository.js";
 import { invoiceRepository } from "../../repositories/invoice.repository.js";
 import { userRepository } from "../../repositories/user.repository.js";
 import { subscriptionReferralService } from "./subscription-referral.service.js";
-import { MetaCapiService } from "../meta-capi.service.js";
+import { metaConversionsService } from "../meta/meta-conversions.service.js";
+import { subscriptionAcquisitionService } from "./subscription-acquisition.service.js";
 import { AppError } from "../../errors/AppError.js";
 
 export const subscriptionService = {
@@ -255,14 +256,16 @@ export const subscriptionService = {
         await subscriptionReferralService.completeReferral(res.usuario_id!, res.fatura_id!);
         await invoiceRepository.cancelIncompleteInvoicesByUserId(res.usuario_id!, getNowBR().toISOString(), res.fatura_id || faturaId);
 
-        let isFirstSubscription = true;
-        try {
-            const { data: userInvoices } = await invoiceRepository.getInvoicesByUserId(res.usuario_id!);
-            const paidCount = userInvoices ? userInvoices.filter(i => i.status === SubscriptionInvoiceStatus.PAID).length : 1;
-            isFirstSubscription = paidCount <= 1;
-        } catch (err) {
-            logger.error({ err, userId: res.usuario_id }, "[SubscriptionService] Erro ao consultar histórico de faturas do usuário.");
-        }
+        const paidInvoiceId = res.fatura_id || faturaId;
+        const [{ data: currentSub }, { data: paidInvoice }] = await Promise.all([
+            subscriptionRepository.getSubscriptionByUserId(res.usuario_id!),
+            invoiceRepository.getById(paidInvoiceId),
+        ]);
+        const isNewCustomer = await subscriptionAcquisitionService.isFirstPaidActivation(res.usuario_id!, {
+            currentInvoiceId: paidInvoiceId,
+            previousPaymentMethod: currentSub?.metodo_pagamento,
+        });
+        const isFirstSubscription = isNewCustomer ?? true;
 
         if (res.usuario_telefone) {
             notificationService.notifyDriver(res.usuario_telefone, EVENTO_MOTORISTA_ASSINATURA_PAGO, {
@@ -299,14 +302,13 @@ export const subscriptionService = {
             usuarioId: res.usuario_id!
         }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "[SubscriptionService] Falha ao notificar admin sobre assinatura paga"));
 
-        void MetaCapiService.sendPurchaseEvent({
+        void metaConversionsService.trackSubscriptionPayment({
             userId: res.usuario_id!,
-            email: "",
-            phone: res.usuario_telefone,
+            isNewCustomer,
             value: valorNumerico,
             planName: res.plano_nome,
-            transactionId: res.fatura_id || faturaId,
-        }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "[SubscriptionService] Falha ao enviar evento Purchase para Meta CAPI"));
+            paymentMethod: paidInvoice?.metodo_pagamento as CheckoutPaymentMethod | null,
+        });
 
         return res;
     }

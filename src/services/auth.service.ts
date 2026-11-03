@@ -13,13 +13,12 @@ import { AtividadeAcao, AtividadeEntidadeTipo, UserType, DispositivoCadastro, Ca
 import { cleanString, onlyDigits } from "../utils/string.utils.js";
 import { historicoService } from "./historico.service.js";
 import { getNowBR, addMinutes, isBeforeNowBR, parseLocalDate, parseBrazilianDateToISO } from "../utils/date.utils.js";
-import { maskEmail, maskPhone } from "../utils/maskUtils.js";
+import { maskEmail } from "../utils/maskUtils.js";
 import { notificationService } from "./notifications/notification.service.js";
 import { EVENTO_AUTH_RECUPERACAO_SENHA, EVENTO_AUTH_SENHA_ALTERADA } from "../config/constants.js";
 import { loginAttemptsRepository } from "../repositories/login-attempts.repository.js";
-import { usuarioPushTokenRepository } from "../repositories/usuario-push-token.repository.js";
 import { withRetry } from "../utils/retry.utils.js";
-import { MetaCapiService } from "./meta-capi.service.js";
+import { metaConversionsService } from "./meta/meta-conversions.service.js";
 import { authCacheService } from "./auth-cache.service.js";
 import { isMotoristaTitular } from "../utils/user.utils.js";
 import { resolveOrigemAtribuicao } from "../utils/acquisition-channel.utils.js";
@@ -349,12 +348,17 @@ export async function registrarUsuario(
       email: payload.email
     }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao notificar admin sobre cadastro"));
 
-    void MetaCapiService.sendRegistrationLead({
-      userId: usuarioId as string,
-      email: payload.email,
-      phone: payload.telefone,
-      sourceUrl: "https://van360.com.br",
-    }).catch(err => logger.error({ err: err instanceof Error ? err.message : String(err) }, "Falha ao enviar evento CAPI à Meta"));
+    if (userTipo === UserType.MOTORISTA) {
+      void metaConversionsService.trackSignup({
+        id: usuarioId as string,
+        email,
+        telefone,
+        nome: payload.nome,
+        data_nascimento: payload.data_nascimento,
+        created_at: new Date().toISOString(),
+        metadados_cadastro: payload.metadados_cadastro,
+      });
+    }
 
     return { success: true, session };
   } catch (err: unknown) {
