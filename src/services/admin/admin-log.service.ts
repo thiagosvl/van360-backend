@@ -88,6 +88,7 @@ export const adminLogService = {
       ultima_atividade_em: string | null;
       ultimas_atividades: AdminLogItemDTO[];
       total_usuarios: number | string;
+      total_geral: number | string;
       total_novos: number | string;
       total_trial: number | string;
       total_ativos: number | string;
@@ -96,6 +97,7 @@ export const adminLogService = {
     }>;
 
     const total = rows.length > 0 ? Number(rows[0].total_usuarios) : 0;
+    const total_geral = rows.length > 0 ? Number(rows[0].total_geral) : 0;
     const total_novos = rows.length > 0 ? Number(rows[0].total_novos) : 0;
     const total_trial = rows.length > 0 ? Number(rows[0].total_trial) : 0;
     const total_ativos = rows.length > 0 ? Number(rows[0].total_ativos) : 0;
@@ -121,6 +123,7 @@ export const adminLogService = {
     return {
       data: mappedData,
       total,
+      total_geral,
       total_novos,
       total_trial,
       total_ativos,

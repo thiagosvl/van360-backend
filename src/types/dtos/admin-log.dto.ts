@@ -38,6 +38,7 @@ export interface AdminUserGroupLogItemDTO {
 export interface AdminLogsByUserResponseDTO {
   data: AdminUserGroupLogItemDTO[];
   total: number;
+  total_geral: number;
   total_novos: number;
   total_trial: number;
   total_ativos: number;
