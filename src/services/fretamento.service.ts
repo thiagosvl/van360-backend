@@ -697,12 +697,48 @@ export const fretamentoService = {
     const passeiosApenas = itens.filter((f) => f.tipo === "passeio");
 
     const fretamentosPrevisto = fretamentosApenas.reduce((acc, f) => acc + Number(f.valor_total || 0), 0);
-    const passeiosPrevisto = passeiosApenas.reduce((acc, f) => acc + Number(f.valor_total || 0), 0);
-    const totalFaturadoPrevisto = fretamentosPrevisto + passeiosPrevisto;
-
     const qtdFretamentos = fretamentosApenas.length;
     const qtdPasseios = passeiosApenas.length;
     const idsFretamentos = itens.map((f) => f.id);
+    const idsPasseios = passeiosApenas.map((f) => f.id);
+
+    let passeiosPrevisto = 0;
+    let passeiosPendente = 0;
+
+    if (idsPasseios.length > 0) {
+      const { data: todosParts } = await supabaseAdmin
+        .from("fretamento_participantes")
+        .select("valor, valor_pago, status_pagamento, fretamento_id")
+        .in("fretamento_id", idsPasseios);
+
+      const parts = todosParts || [];
+      const partsPorPasseio = new Map<string, typeof parts>();
+      parts.forEach((p) => {
+        const list = partsPorPasseio.get(p.fretamento_id) || [];
+        list.push(p);
+        partsPorPasseio.set(p.fretamento_id, list);
+      });
+
+      passeiosApenas.forEach((p) => {
+        const partsPasseio = partsPorPasseio.get(p.id) || [];
+        if (partsPasseio.length > 0) {
+          const somaParts = partsPasseio.reduce((acc, part) => acc + Number(part.valor || 0), 0);
+          const pendenteParts = partsPasseio.reduce((acc, part) => {
+            const v = Number(part.valor || 0);
+            const vp = Number(part.valor_pago ?? (part.status_pagamento === "pago" ? part.valor : 0));
+            return acc + Math.max(0, v - vp);
+          }, 0);
+          passeiosPrevisto += somaParts;
+          passeiosPendente += pendenteParts;
+        } else {
+          const vTotal = Number(p.valor_total || 0);
+          passeiosPrevisto += vTotal;
+          passeiosPendente += vTotal;
+        }
+      });
+    }
+
+    const totalFaturadoPrevisto = fretamentosPrevisto + passeiosPrevisto;
 
     let queryPagamentos = supabaseAdmin
       .from("fretamento_pagamentos")
@@ -743,7 +779,6 @@ export const fretamentoService = {
 
     const totalRecebido = totalPagamentosRecebidos + totalParticipantesRecebidos;
     const fretamentosPendente = Math.max(0, fretamentosPrevisto - totalPagamentosRecebidos);
-    const passeiosPendente = Math.max(0, passeiosPrevisto - totalParticipantesRecebidos);
     const totalAReceber = fretamentosPendente + passeiosPendente;
 
     let totalGastosMes = 0;
