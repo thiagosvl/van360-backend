@@ -19,9 +19,9 @@ export const usuarioConfiguracoesRepository = {
         .upsert(
           {
             usuario_id: usuarioId,
-            notificar_inicio_rota: false,
-            notificar_proxima_parada: false,
-            notificar_conclusao_parada: false,
+            notificar_inicio_rota: true,
+            notificar_proxima_parada: true,
+            notificar_conclusao_parada: true,
           },
           { onConflict: "usuario_id" }
         )

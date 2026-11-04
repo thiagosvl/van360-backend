@@ -486,9 +486,9 @@ const iniciarRota = async (rotaId: string, usuarioId: string, notificarPais: boo
   const targetOwnerId = dataOwnerId || route.usuario_id || usuarioId;
   const userConfig = await usuarioConfiguracoesRepository.getByUsuarioId(targetOwnerId);
   const snapshotConfig = {
-    notificar_inicio_rota: userConfig?.notificar_inicio_rota ?? false,
-    notificar_proxima_parada: userConfig?.notificar_proxima_parada ?? false,
-    notificar_conclusao_parada: userConfig?.notificar_conclusao_parada ?? false,
+    notificar_inicio_rota: userConfig?.notificar_inicio_rota ?? true,
+    notificar_proxima_parada: userConfig?.notificar_proxima_parada ?? true,
+    notificar_conclusao_parada: userConfig?.notificar_conclusao_parada ?? true,
     rastreamento_ativo: userConfig?.rastreamento_ativo ?? true,
     rastreamento_modo: userConfig?.rastreamento_modo ?? RastreamentoModo.COMPLETO,
   };
