@@ -1095,7 +1095,12 @@ const registrarAusenciaAntecipada = async (data: CreateAusenciaDTO & { registrad
         registrado_por: data.registrado_por || null
       });
 
-      if (error) throw error;
+      if (error) {
+        if ((error as { code?: string })?.code === "23503") {
+          throw new AppError("A rota ou o aluno selecionado não foi encontrado ou não está mais ativo.", 400);
+        }
+        throw error;
+      }
       if (inserted) {
         ausenciasCriadas.push(inserted);
         if (inserted.passageiro?.nome) {

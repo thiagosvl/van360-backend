@@ -222,6 +222,8 @@ export const portalResponsavelService = {
       ? data.rotas_ids
       : (data.rota_id ? [data.rota_id] : []);
 
+    const rotasDisponiveisIds = new Set(rotasDisponiveis.map((r: { id: string }) => r.id));
+
     if (rotasIds.length === 0) {
       if (rotasDisponiveis.length === 1) {
         rotasIds = [rotasDisponiveis[0].id];
@@ -229,6 +231,11 @@ export const portalResponsavelService = {
         throw new AppError("O aluno não está vinculado a nenhuma rota para registrar ausência.", 400);
       } else {
         throw new AppError("Selecione ao menos uma rota para registrar ausência.", 400);
+      }
+    } else {
+      const possuiRotaInvalida = rotasIds.some((id: string) => !rotasDisponiveisIds.has(id));
+      if (possuiRotaInvalida) {
+        throw new AppError("Uma ou mais rotas selecionadas não estão mais disponíveis para este aluno.", 400);
       }
     }
 
