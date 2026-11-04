@@ -2,11 +2,10 @@ import { z } from "zod";
 import { moneyToNumber } from "../../utils/currency.utils.js";
 import { GastoTipoCalculoParcela, GastoEscopoAcao } from "../enums.js";
 
-// === Schemas ===
-
 export const createGastoSchema = z.object({
   usuario_id: z.string().uuid(),
   veiculo_id: z.string().uuid().optional().nullable(),
+  fretamento_id: z.string().uuid().optional().nullable(),
   valor: z.union([z.number(), z.string()])
     .transform(v => typeof v === 'string' ? moneyToNumber(v) : v)
     .refine(v => typeof v === 'number' && !isNaN(v) && v >= 0, "Valor do gasto não pode ser negativo"),
@@ -20,10 +19,11 @@ export const createGastoSchema = z.object({
 
 export const updateGastoSchema = createGastoSchema.partial().omit({ usuario_id: true }).extend({
   escopo: z.nativeEnum(GastoEscopoAcao).optional(),
-}); // Usuario não muda
+});
 
 export const listGastosFiltersSchema = z.object({
-  veiculo_id: z.string().optional(), // Aceita UUID ou 'unspecified'
+  veiculo_id: z.string().optional(),
+  fretamento_id: z.string().optional(),
   categoria: z.string().optional(),
   data_inicio: z.string().optional(),
   data_fim: z.string().optional(),
@@ -31,7 +31,6 @@ export const listGastosFiltersSchema = z.object({
   offset: z.coerce.number().int().min(0).optional()
 });
 
-// === Types ===
 export type CreateGastoDTO = z.infer<typeof createGastoSchema>;
 export type UpdateGastoDTO = z.infer<typeof updateGastoSchema>;
 export type ListGastosFiltersDTO = z.infer<typeof listGastosFiltersSchema>;

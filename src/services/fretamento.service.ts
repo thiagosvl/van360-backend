@@ -84,6 +84,14 @@ export const fretamentoService = {
           valor_pago,
           status_pagamento,
           data_pagamento
+        ),
+        gastos (
+          id,
+          valor,
+          categoria,
+          descricao,
+          data,
+          veiculo_id
         )
       `)
       .eq("usuario_id", usuarioId)
@@ -117,6 +125,9 @@ export const fretamentoService = {
 
       const totalPago = item.tipo === "fretamento" ? totalPagoFretamento : totalPagoParticipantes;
       const valorTotal = Number(item.valor_total || 0);
+      const gastosRel = (item.gastos as unknown as Tables<"gastos">[]) || [];
+      const totalGastos = gastosRel.reduce((acc, g) => acc + Number(g.valor || 0), 0);
+      const lucroLiquido = valorTotal - totalGastos;
 
       return {
         ...item,
@@ -127,6 +138,9 @@ export const fretamentoService = {
           modelo: v.veiculos?.modelo,
           vagas_capacidade: v.vagas_capacidade,
         })),
+        gastos: gastosRel,
+        total_gastos: totalGastos,
+        lucro_liquido: lucroLiquido,
         total_pago: totalPago,
         saldo_restante: Math.max(0, valorTotal - totalPago),
         vagas_ocupadas: participantes.length,
@@ -175,6 +189,17 @@ export const fretamentoService = {
           observacoes,
           created_at,
           updated_at
+        ),
+        gastos (
+          id,
+          usuario_id,
+          fretamento_id,
+          veiculo_id,
+          valor,
+          categoria,
+          descricao,
+          data,
+          created_at
         )
       `)
       .eq("id", id)
@@ -195,6 +220,10 @@ export const fretamentoService = {
 
     const totalPago = data.tipo === "fretamento" ? totalPagoFretamento : totalPagoParticipantes;
     const valorTotal = Number(data.valor_total || 0);
+    const gastos = (data.gastos as unknown as Tables<"gastos">[]) || [];
+    const totalGastos = gastos.reduce((acc, g) => acc + Number(g.valor || 0), 0);
+    const lucroLiquido = valorTotal - totalGastos;
+    const margemLucro = valorTotal > 0 ? Math.round((lucroLiquido / valorTotal) * 100) : 0;
 
     return {
       ...(data as FretamentoRow),
@@ -207,6 +236,10 @@ export const fretamentoService = {
       })),
       pagamentos,
       participantes,
+      gastos,
+      total_gastos: totalGastos,
+      lucro_liquido: lucroLiquido,
+      margem_lucro: margemLucro,
       total_pago: totalPago,
       saldo_restante: Math.max(0, valorTotal - totalPago),
       vagas_ocupadas: participantes.length,
@@ -681,12 +714,24 @@ export const fretamentoService = {
     const totalRecebido = totalPagamentosRecebidos + totalParticipantesRecebidos;
     const totalAReceber = Math.max(0, totalFaturadoPrevisto - totalRecebido);
 
+    const idsFretamentos = itens.map((f) => f.id);
+    let totalGastosMes = 0;
+    if (idsFretamentos.length > 0) {
+      const { data: gastosDoMes } = await supabaseAdmin
+        .from("gastos")
+        .select("valor")
+        .in("fretamento_id", idsFretamentos);
+      totalGastosMes = (gastosDoMes || []).reduce((acc, g) => acc + Number(g.valor || 0), 0);
+    }
+
     return {
       mes,
       ano,
       total_faturado_previsto: totalFaturadoPrevisto,
       total_recebido: totalRecebido,
       total_a_receber: totalAReceber,
+      total_gastos: totalGastosMes,
+      lucro_total: totalFaturadoPrevisto - totalGastosMes,
       quantidade_fretamentos: qtdFretamentos,
       quantidade_passeios: qtdPasseios,
     };

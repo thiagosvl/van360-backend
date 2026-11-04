@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "../config/supabase.js";
+﻿import { supabaseAdmin } from "../config/supabase.js";
 import { ListGastosFiltersDTO } from "../types/dtos/gasto.dto.js";
 import { isValidFilterValue } from "../utils/filter.utils.js";
 
@@ -43,7 +43,7 @@ export const gastoRepository = {
     async getById(id: string, usuarioId?: string) {
         let query = supabaseAdmin
             .from("gastos")
-            .select("*")
+            .select("*, veiculo:veiculos(id, placa), fretamento:fretamentos(id, titulo, tipo)")
             .eq("id", id);
 
         if (isValidFilterValue(usuarioId)) {
@@ -56,7 +56,7 @@ export const gastoRepository = {
     async list(usuarioId: string, filtros?: ListGastosFiltersDTO) {
         let query = supabaseAdmin
             .from("gastos")
-            .select("*, veiculo:veiculos(id, placa)")
+            .select("*, veiculo:veiculos(id, placa), fretamento:fretamentos(id, titulo, tipo)")
             .eq("usuario_id", usuarioId)
             .order("data", { ascending: false })
             .order("categoria", { ascending: false });
@@ -69,6 +69,10 @@ export const gastoRepository = {
             query = query.is('veiculo_id', null);
         } else if (isValidFilterValue(filtros?.veiculo_id)) {
             query = query.eq('veiculo_id', filtros.veiculo_id);
+        }
+
+        if (isValidFilterValue(filtros?.fretamento_id)) {
+            query = query.eq('fretamento_id', filtros.fretamento_id);
         }
 
         if (isValidFilterValue(filtros?.data_inicio)) query = query.gte("data", filtros.data_inicio);

@@ -1206,6 +1206,7 @@ export type Database = {
           created_at: string | null
           data: string
           descricao: string | null
+          fretamento_id: string | null
           id: string
           numero_parcela: number | null
           parcelamento_id: string | null
@@ -1219,6 +1220,7 @@ export type Database = {
           created_at?: string | null
           data: string
           descricao?: string | null
+          fretamento_id?: string | null
           id?: string
           numero_parcela?: number | null
           parcelamento_id?: string | null
@@ -1232,6 +1234,7 @@ export type Database = {
           created_at?: string | null
           data?: string
           descricao?: string | null
+          fretamento_id?: string | null
           id?: string
           numero_parcela?: number | null
           parcelamento_id?: string | null
@@ -1241,6 +1244,13 @@ export type Database = {
           veiculo_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "gastos_fretamento_id_fkey"
+            columns: ["fretamento_id"]
+            isOneToOne: false
+            referencedRelation: "fretamentos"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "gastos_usuario_id_fkey"
             columns: ["usuario_id"]

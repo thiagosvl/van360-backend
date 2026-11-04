@@ -52,6 +52,10 @@ const _prepareGastoData = (data: Partial<CreateGastoDTO>, usuarioId?: string, is
         prepared.veiculo_id = (data.veiculo_id === "none" || !data.veiculo_id) ? null : data.veiculo_id;
     }
 
+    if (data.fretamento_id !== undefined) {
+        prepared.fretamento_id = (data.fretamento_id === "none" || !data.fretamento_id) ? null : data.fretamento_id;
+    }
+
     return prepared;
 };
 

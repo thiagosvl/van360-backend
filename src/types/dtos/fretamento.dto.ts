@@ -7,6 +7,7 @@ export type FretamentoUpdate = TablesUpdate<"fretamentos">;
 export type FretamentoVeiculoRow = Tables<"fretamento_veiculos">;
 export type FretamentoPagamentoRow = Tables<"fretamento_pagamentos">;
 export type FretamentoParticipanteRow = Tables<"fretamento_participantes">;
+export type GastoRow = Tables<"gastos">;
 
 export type FretamentoTipo = Enums<"fretamento_tipo_enum">;
 export type FretamentoStatus = Enums<"fretamento_status_enum">;
@@ -95,9 +96,13 @@ export interface FretamentoDetalhesDTO extends FretamentoRow {
   }>;
   pagamentos: FretamentoPagamentoRow[];
   participantes: FretamentoParticipanteRow[];
+  gastos: GastoRow[];
   total_pago: number;
   saldo_restante: number;
   vagas_ocupadas: number;
+  total_gastos: number;
+  lucro_liquido: number;
+  margem_lucro: number;
 }
 
 export interface ResumoFinanceiroFretamentosDTO {
@@ -106,6 +111,8 @@ export interface ResumoFinanceiroFretamentosDTO {
   total_faturado_previsto: number;
   total_recebido: number;
   total_a_receber: number;
+  total_gastos: number;
+  lucro_total: number;
   quantidade_fretamentos: number;
   quantidade_passeios: number;
 }
