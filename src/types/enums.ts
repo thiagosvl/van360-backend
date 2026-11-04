@@ -308,7 +308,8 @@ export enum NormalizedPaymentEventType {
 
 export enum ContractMultaTipo {
   PERCENTUAL = "percentual",
-  FIXO = "fixo"
+  FIXO = "fixo",
+  PARCELAS = "parcelas"
 }
 
 export enum PeriodoEnum {

@@ -501,8 +501,31 @@ export class InHouseContractProvider implements ContractProvider {
       ? `Multa por atraso de pagamento (${dados.multaAtraso.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}): ${formatMulta(dados.multaAtraso.tipo, dados.multaAtraso.valor)}`
       : 'Multa por atraso de pagamento:';
 
+    const formatMultaRescisao = (rescisao: { tipo: ContractMultaTipo | string; valor: number }, valorParcela?: number | null) => {
+      if (rescisao.tipo === ContractMultaTipo.PARCELAS || rescisao.tipo === 'parcelas') {
+        const total = (Number(rescisao.valor) || 0) * (Number(valorParcela) || 0);
+        const valorFormatado = total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+        const labelParcela = rescisao.valor === 1 ? 'parcela vigente' : 'parcelas vigentes';
+        return `${rescisao.valor} ${labelParcela} (${valorFormatado})`;
+      }
+      if (rescisao.tipo === ContractMultaTipo.PERCENTUAL || rescisao.tipo === 'percentual') {
+        return `${rescisao.valor.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%`;
+      }
+      return rescisao.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    };
+
+    const getMultaRescisaoRotulo = (tipo?: ContractMultaTipo | string | null) => {
+      if (tipo === ContractMultaTipo.PERCENTUAL || tipo === 'percentual') {
+        return 'Multa por rescisão de contrato (%)';
+      }
+      if (tipo === ContractMultaTipo.FIXO || tipo === 'fixo') {
+        return 'Multa por rescisão de contrato (R$)';
+      }
+      return 'Multa por rescisão de contrato';
+    };
+
     const multaRescisaoTexto = (dados.multaRescisao && dados.multaRescisao.valor > 0)
-      ? `Multa por rescisão de contrato (${dados.multaRescisao.tipo === ContractMultaTipo.PERCENTUAL ? '%' : 'R$'}): ${formatMulta(dados.multaRescisao.tipo, dados.multaRescisao.valor)}`
+      ? `${getMultaRescisaoRotulo(dados.multaRescisao.tipo)}: ${formatMultaRescisao(dados.multaRescisao, dados.valorParcela)}`
       : 'Multa por rescisão de contrato:';
 
     currentY = drawTwoColumnRow(multaAtrasoTexto, multaRescisaoTexto, currentY);
