@@ -115,4 +115,10 @@ export interface ResumoFinanceiroFretamentosDTO {
   lucro_total: number;
   quantidade_fretamentos: number;
   quantidade_passeios: number;
+  fretamentos_realizado: number;
+  fretamentos_previsto: number;
+  fretamentos_pendente: number;
+  passeios_realizado: number;
+  passeios_previsto: number;
+  passeios_pendente: number;
 }

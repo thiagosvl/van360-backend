@@ -88,7 +88,7 @@ export const gastoRepository = {
     async getGastosForPeriodForDashboard(usuarioId: string, start: string, end: string, veiculoId?: string) {
         let query = supabaseAdmin
             .from("gastos")
-            .select("id, valor, categoria")
+            .select("id, valor, categoria, fretamento_id")
             .eq("usuario_id", usuarioId)
             .gte("data", start)
             .lte("data", end);

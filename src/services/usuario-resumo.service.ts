@@ -4,6 +4,7 @@ import { passageiroRepository } from "../repositories/passageiro.repository.js";
 import { prePassageiroRepository } from "../repositories/pre-passageiro.repository.js";
 import { cobrancaRepository } from "../repositories/cobranca.repository.js";
 import { gastoRepository } from "../repositories/gasto.repository.js";
+import { fretamentoService } from "./fretamento.service.js";
 import { CobrancaStatus, GastoCategoria } from "../types/enums.js";
 import { getNowBR, toLocalDateString, getLastDayOfMonth, getSafeDueDateString } from "../utils/date.utils.js";
 import { getUsuarioData } from "./usuario.service.js";
@@ -11,7 +12,7 @@ import { isSubConta, getDonoContaId } from "../utils/user.utils.js";
 import type { Tables } from "../types/database.types.js";
 
 type DashboardCobranca = Pick<Tables<"cobrancas">, "status" | "valor" | "valor_pago" | "data_vencimento" | "passageiro_id">;
-type DashboardGasto = Pick<Tables<"gastos">, "valor" | "categoria">;
+type DashboardGasto = Pick<Tables<"gastos">, "valor" | "categoria" | "fretamento_id">;
 
 interface SystemSummary {
   usuario: {
@@ -47,6 +48,7 @@ interface SystemSummary {
     };
     saidas: {
       total: number;
+      despesas_escolares?: number;
       margem_operacional: number;
       detalhamento: Record<string, number>;
     };
@@ -55,6 +57,18 @@ interface SystemSummary {
       count: number;
     };
     ticket_medio: number;
+    custo_por_passageiro?: number;
+    viagens?: {
+      fretamentos_realizado: number;
+      fretamentos_previsto: number;
+      fretamentos_pendente: number;
+      passeios_realizado: number;
+      passeios_previsto: number;
+      passeios_pendente: number;
+      total_realizado: number;
+      total_previsto: number;
+      total_pendente: number;
+    };
   };
 }
 
@@ -136,16 +150,19 @@ export const usuarioResumoService = {
     const lastDay = getLastDayOfMonth(Number(targetAno), Number(targetMes));
     const end = `${targetAno}-${String(targetMes).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
-    const [cobrancasRes, gastosRes] = await Promise.all([
+    const [cobrancasRes, gastosRes, resumoViagens] = await Promise.all([
       cobrancaRepository.getForPeriodForDashboard(dataOwnerId, start, end, targetVeiculoId),
-      gastoRepository.getGastosForPeriodForDashboard(dataOwnerId, start, end, targetVeiculoId)
+      gastoRepository.getGastosForPeriodForDashboard(dataOwnerId, start, end, targetVeiculoId),
+      fretamentoService.obterResumoFinanceiro(dataOwnerId, Number(targetMes), Number(targetAno), targetVeiculoId)
     ]);
 
     const cobrancas = (cobrancasRes.data || []) as unknown as DashboardCobranca[];
     const gastos = (gastosRes.data || []) as unknown as DashboardGasto[];
 
     const cobrancasPagas = cobrancas.filter((c) => c.status === CobrancaStatus.PAGO);
-    const receitaRealizada = cobrancasPagas.reduce((acc: number, c) => acc + Number(c.valor_pago ?? c.valor ?? 0), 0);
+    const receitaRealizadaCobrancas = cobrancasPagas.reduce((acc: number, c) => acc + Number(c.valor_pago ?? c.valor ?? 0), 0);
+    const receitaViagensRealizada = resumoViagens?.total_recebido || 0;
+    const receitaRealizada = receitaRealizadaCobrancas + receitaViagensRealizada;
 
     const hoje = toLocalDateString(getNowBR());
     const isPastPeriod = targetAno < now.getFullYear() || (targetAno === now.getFullYear() && targetMes < (now.getMonth() + 1));
@@ -220,7 +237,8 @@ export const usuarioResumoService = {
       return acc + (pago < total ? total - pago : 0);
     }, 0);
 
-    const receitaPendente = valorPendenteReais + saldoParcialRecebidas + receitaProjetada;
+    const receitaViagensPendente = resumoViagens?.total_a_receber || 0;
+    const receitaPendente = valorPendenteReais + saldoParcialRecebidas + receitaProjetada + receitaViagensPendente;
     const receitaPrevista = receitaRealizada + receitaPendente;
     const taxaRecebimento = receitaPrevista > 0 ? (receitaRealizada / receitaPrevista) * 100 : 0;
 
@@ -257,7 +275,12 @@ export const usuarioResumoService = {
     const countAtrasos = cobrancasAtrasadas.length + atrasosProjetadosCount;
 
     const passageirosPagos = new Set(cobrancasPagas.map((c) => c.passageiro_id)).size;
-    const ticketMedio = passageirosPagos > 0 ? receitaRealizada / passageirosPagos : 0;
+    const ticketMedio = passageirosPagos > 0 ? receitaRealizadaCobrancas / passageirosPagos : 0;
+
+    const despesasEscolares = gastos
+      .filter((g) => !g.fretamento_id)
+      .reduce((acc: number, g) => acc + Number(g.valor || 0), 0);
+    const custoPorPassageiro = passAtivos > 0 ? despesasEscolares / passAtivos : 0;
 
     const financeiro = {
       receita: {
@@ -268,6 +291,7 @@ export const usuarioResumoService = {
       },
       saidas: {
         total: totalDespesas,
+        despesas_escolares: despesasEscolares,
         margem_operacional: Math.round(margemOperacional),
         detalhamento: detalhamentoGastos
       },
@@ -275,7 +299,19 @@ export const usuarioResumoService = {
         valor: valorAtrasos,
         count: countAtrasos
       },
-      ticket_medio: ticketMedio
+      ticket_medio: ticketMedio,
+      custo_por_passageiro: custoPorPassageiro,
+      viagens: {
+        fretamentos_realizado: resumoViagens?.fretamentos_realizado || 0,
+        fretamentos_previsto: resumoViagens?.fretamentos_previsto || 0,
+        fretamentos_pendente: resumoViagens?.fretamentos_pendente || 0,
+        passeios_realizado: resumoViagens?.passeios_realizado || 0,
+        passeios_previsto: resumoViagens?.passeios_previsto || 0,
+        passeios_pendente: resumoViagens?.passeios_pendente || 0,
+        total_realizado: resumoViagens?.total_recebido || 0,
+        total_previsto: resumoViagens?.total_faturado_previsto || 0,
+        total_pendente: resumoViagens?.total_a_receber || 0
+      }
     };
 
     return {

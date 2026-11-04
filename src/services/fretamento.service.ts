@@ -665,7 +665,12 @@ export const fretamentoService = {
     return this.obterPorId(usuarioId, fretamentoId);
   },
 
-  async obterResumoFinanceiro(usuarioId: string, mes: number, ano: number): Promise<ResumoFinanceiroFretamentosDTO> {
+  async obterResumoFinanceiro(
+    usuarioId: string,
+    mes: number,
+    ano: number,
+    veiculoId?: string
+  ): Promise<ResumoFinanceiroFretamentosDTO> {
     const dataInicioMesStr = `${ano}-${String(mes).padStart(2, "0")}-01`;
     const ultimoDia = new Date(ano, mes, 0).getDate();
     const dataFimMesStr = `${ano}-${String(mes).padStart(2, "0")}-${String(ultimoDia).padStart(2, "0")}`;
@@ -675,36 +680,61 @@ export const fretamentoService = {
 
     const { data: fretamentosDoMes } = await supabaseAdmin
       .from("fretamentos")
-      .select("id, tipo, valor_total, status")
+      .select("id, tipo, valor_total, status, fretamento_veiculos(veiculo_id)")
       .eq("usuario_id", usuarioId)
       .gte("data_inicio", dataInicioMesUtc)
       .lte("data_inicio", dataFimMesUtc)
       .neq("status", "cancelado");
 
-    const itens = fretamentosDoMes || [];
-    const totalFaturadoPrevisto = itens.reduce((acc, f) => acc + Number(f.valor_total || 0), 0);
-    const qtdFretamentos = itens.filter((f) => f.tipo === "fretamento").length;
-    const qtdPasseios = itens.filter((f) => f.tipo === "passeio").length;
+    let itens = fretamentosDoMes || [];
+    if (veiculoId) {
+      itens = itens.filter((f) =>
+        (f.fretamento_veiculos || []).some((fv: { veiculo_id: string }) => fv.veiculo_id === veiculoId)
+      );
+    }
 
-    const { data: pagamentosRecebidos } = await supabaseAdmin
+    const fretamentosApenas = itens.filter((f) => f.tipo === "fretamento");
+    const passeiosApenas = itens.filter((f) => f.tipo === "passeio");
+
+    const fretamentosPrevisto = fretamentosApenas.reduce((acc, f) => acc + Number(f.valor_total || 0), 0);
+    const passeiosPrevisto = passeiosApenas.reduce((acc, f) => acc + Number(f.valor_total || 0), 0);
+    const totalFaturadoPrevisto = fretamentosPrevisto + passeiosPrevisto;
+
+    const qtdFretamentos = fretamentosApenas.length;
+    const qtdPasseios = passeiosApenas.length;
+    const idsFretamentos = itens.map((f) => f.id);
+
+    let queryPagamentos = supabaseAdmin
       .from("fretamento_pagamentos")
-      .select("valor, fretamentos!inner(usuario_id)")
+      .select("valor, fretamento_id, fretamentos!inner(usuario_id)")
       .eq("fretamentos.usuario_id", usuarioId)
       .gte("data_pagamento", dataInicioMesStr)
       .lte("data_pagamento", dataFimMesStr);
+
+    if (veiculoId && idsFretamentos.length > 0) {
+      queryPagamentos = queryPagamentos.in("fretamento_id", idsFretamentos);
+    }
+
+    const { data: pagamentosRecebidos } = await queryPagamentos;
 
     const totalPagamentosRecebidos = (pagamentosRecebidos || []).reduce(
       (acc, p) => acc + Number(p.valor || 0),
       0
     );
 
-    const { data: participantesRecebidos } = await supabaseAdmin
+    let queryParticipantes = supabaseAdmin
       .from("fretamento_participantes")
-      .select("valor, valor_pago, status_pagamento, fretamentos!inner(usuario_id)")
+      .select("valor, valor_pago, status_pagamento, fretamento_id, fretamentos!inner(usuario_id)")
       .eq("fretamentos.usuario_id", usuarioId)
       .in("status_pagamento", ["pago", "parcial"])
       .gte("data_pagamento", dataInicioMesUtc)
       .lte("data_pagamento", dataFimMesUtc);
+
+    if (veiculoId && idsFretamentos.length > 0) {
+      queryParticipantes = queryParticipantes.in("fretamento_id", idsFretamentos);
+    }
+
+    const { data: participantesRecebidos } = await queryParticipantes;
 
     const totalParticipantesRecebidos = (participantesRecebidos || []).reduce(
       (acc, p) => acc + Number(p.valor_pago ?? (p.status_pagamento === "pago" ? p.valor : 0)),
@@ -712,9 +742,10 @@ export const fretamentoService = {
     );
 
     const totalRecebido = totalPagamentosRecebidos + totalParticipantesRecebidos;
-    const totalAReceber = Math.max(0, totalFaturadoPrevisto - totalRecebido);
+    const fretamentosPendente = Math.max(0, fretamentosPrevisto - totalPagamentosRecebidos);
+    const passeiosPendente = Math.max(0, passeiosPrevisto - totalParticipantesRecebidos);
+    const totalAReceber = fretamentosPendente + passeiosPendente;
 
-    const idsFretamentos = itens.map((f) => f.id);
     let totalGastosMes = 0;
     if (idsFretamentos.length > 0) {
       const { data: gastosDoMes } = await supabaseAdmin
@@ -734,6 +765,12 @@ export const fretamentoService = {
       lucro_total: totalFaturadoPrevisto - totalGastosMes,
       quantidade_fretamentos: qtdFretamentos,
       quantidade_passeios: qtdPasseios,
+      fretamentos_realizado: totalPagamentosRecebidos,
+      fretamentos_previsto: fretamentosPrevisto,
+      fretamentos_pendente: fretamentosPendente,
+      passeios_realizado: totalParticipantesRecebidos,
+      passeios_previsto: passeiosPrevisto,
+      passeios_pendente: passeiosPendente,
     };
   },
 };
