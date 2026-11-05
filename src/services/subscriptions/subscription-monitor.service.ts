@@ -8,7 +8,7 @@ import { monitorRepository } from "../../repositories/monitor.repository.js";
 import { notificationRepository } from "../../repositories/notification.repository.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { getConfigNumber, getConfig } from "../configuracao.service.js";
-import { getNowBR, getEndOfDayBR, addDays, diffInDays, toPersistenceString } from "../../utils/date.utils.js";
+import { getNowBR, getStartOfDayBR, getEndOfDayBR, addDays, diffInDays, toPersistenceString } from "../../utils/date.utils.js";
 import {
   EVENTO_MOTORISTA_ASSINATURA_ATRASADA,
   EVENTO_MOTORISTA_ASSINATURA_VENCEU,
@@ -50,6 +50,7 @@ export const subscriptionMonitorService = {
       await this.notifyTrialRecoveries();                 // D+16/+20/+25: recuperação pós-expiry
 
       // --- ASSINATURA PAGA ---
+      await this.notifyDueTodaySubscriptions();
       await this.checkOverduePayments();                  // D=venc: ACTIVE→PAST_DUE; D+carência: →EXPIRED
       await this.notifyOverdueReminders();                // D+1/+2: lembretes PAST_DUE
       await this.notifyRenewalRecoveries();               // D+5/+10: recuperação pós-EXPIRED
@@ -376,26 +377,114 @@ export const subscriptionMonitorService = {
   // ASSINATURA PAGA — métodos unitários e de lote
   // ---------------------------------------------------------------------------
 
-  async processarAssinaturaPastDue(sub: any, now: Date = getNowBR()): Promise<boolean> {
+  async processarAvisoVencimentoHoje(
+    sub: {
+      id: string;
+      usuario_id: string;
+      data_vencimento: string | null;
+      metodo_pagamento: string | null;
+      planos?: { nome?: string; valor?: number } | Array<{ nome?: string; valor?: number }> | null;
+      usuarios?: { nome?: string; telefone?: string | null; email?: string | null } | Array<{ nome?: string; telefone?: string | null; email?: string | null }> | null;
+    },
+    fatura?: {
+      id: string;
+      usuario_id: string;
+      valor: number;
+      pix_copy_paste: string | null;
+    },
+    notifiedSet?: Set<string>
+  ): Promise<{ tipo: string; cicloRef: string; subId: string; description: string } | null> {
+    if (
+      sub.metodo_pagamento === CheckoutPaymentMethod.APPLE_IAP ||
+      sub.metodo_pagamento === CheckoutPaymentMethod.CREDIT_CARD
+    ) {
+      return null;
+    }
+
+    const user = this.getUserObject(sub.usuarios);
+    const plan = this.getUserObject(sub.planos);
+    if (!user?.telefone || !sub.data_vencimento) return null;
+
+    const tipo = EVENTO_MOTORISTA_ASSINATURA_VENCEU;
+    const cicloRef = this.toCicloRef(sub.data_vencimento);
+
+    if (notifiedSet?.has(`${sub.usuario_id}:${tipo}:${cicloRef}`)) return null;
+    if (!notifiedSet && await this.hasNotified(sub.usuario_id, tipo, cicloRef)) return null;
+
+    const isPixWithCode = sub.metodo_pagamento === CheckoutPaymentMethod.PIX && Boolean(fatura?.pix_copy_paste);
+    const channels = isPixWithCode
+      ? [NotificationChannelEnum.WABA, NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND]
+      : [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND];
+
+    const valorNumerico = fatura?.valor
+      ? Number(fatura.valor)
+      : (plan?.valor ? Number(plan.valor) : undefined);
+
+    await notificationService.notifyDriver(user.telefone || "", tipo, {
+      nomeMotorista: user.nome,
+      email: user.email,
+      valor: valorNumerico,
+      pixCopiaCola: fatura?.pix_copy_paste ?? undefined,
+      metodoCobranca: sub.metodo_pagamento ?? undefined,
+      planoNome: plan?.nome,
+      dataVencimento: sub.data_vencimento,
+      usuarioId: sub.usuario_id,
+    }, { channels, email: user.email ?? undefined, usuarioId: sub.usuario_id });
+
+    if (!notifiedSet) {
+      await this.logNotification(sub.usuario_id, tipo, cicloRef);
+    }
+
+    return {
+      tipo,
+      cicloRef,
+      subId: sub.id,
+      description: "Aviso de vencimento hoje enviado."
+    };
+  },
+
+  async notifyDueTodaySubscriptions(): Promise<void> {
+    const now = getNowBR();
+    const startOfDayStr = getStartOfDayBR(now).toISOString();
+    const endOfDayStr = getEndOfDayBR(now).toISOString();
+
+    const { data: dueToday, error } = await monitorRepository.getDueTodaySubscriptions(startOfDayStr, endOfDayStr);
+    if (error) {
+      logger.error({ error: error.message }, "[SubscriptionMonitor] Erro ao buscar assinaturas que vencem hoje");
+      return;
+    }
+    if (!dueToday?.length) return;
+
+    const userIds = dueToday.map(sub => sub.usuario_id);
+    const notifiedSet = await this.getNotifiedSet(userIds, [EVENTO_MOTORISTA_ASSINATURA_VENCEU]);
+    const { data: pendingInvoices } = await monitorRepository.getPendingInvoicesByUsers(userIds);
+    const pendingUsersMap = new Map(pendingInvoices?.map(p => [p.usuario_id, p]) || []);
+    const logsToSave: { usuarioId: string; tipo: string; cicloRef: string }[] = [];
+
+    for (const sub of dueToday) {
+      const fatura = pendingUsersMap.get(sub.usuario_id);
+      const result = await this.processarAvisoVencimentoHoje(sub, fatura, notifiedSet);
+      if (result) {
+        logsToSave.push({
+          usuarioId: sub.usuario_id,
+          tipo: result.tipo,
+          cicloRef: result.cicloRef
+        });
+      }
+    }
+
+    await this.logNotificationsBulk(logsToSave);
+  },
+
+  async processarAssinaturaPastDue(
+    sub: { id: string; metodo_pagamento: string | null },
+    _now: Date = getNowBR()
+  ): Promise<boolean> {
     if (sub.metodo_pagamento === CheckoutPaymentMethod.APPLE_IAP) {
       return false;
     }
 
     await subscriptionService.updateStatus(sub.id, SubscriptionStatus.PAST_DUE, "Mensalidade não paga no dia do vencimento. Conta em carência.");
-
-    const user = this.getUserObject((sub as any).usuarios);
-    const daysSinceExpiry = sub.data_vencimento ? diffInDays(sub.data_vencimento, now) : 0;
-
-    if (user?.telefone && daysSinceExpiry === 0) {
-      await notificationService.notifyDriver(user.telefone || "", EVENTO_MOTORISTA_ASSINATURA_VENCEU, {
-        nomeMotorista: user.nome,
-        email: user.email,
-        planoNome: (sub as any).planos?.nome,
-        usuarioId: sub.usuario_id,
-      }, { channels: [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND], email: user.email, usuarioId: sub.usuario_id });
-      await this.logNotification(sub.usuario_id, EVENTO_MOTORISTA_ASSINATURA_VENCEU, this.toCicloRef(sub.data_vencimento || new Date()));
-      return true;
-    }
     return false;
   },
 
@@ -427,10 +516,10 @@ export const subscriptionMonitorService = {
     const now = getNowBR();
     const gracePeriod = await getConfigNumber(ConfigKey.SAAS_DIAS_CARENCIA, 3);
 
-    const nowStr = now.toISOString();
+    const startOfTodayStr = getStartOfDayBR(now).toISOString();
     const graceLimitDate = getEndOfDayBR(addDays(now, -gracePeriod)).toISOString();
 
-    const { data: pastDue, error: pdError } = await monitorRepository.getPastDueForGracePeriod(nowStr, graceLimitDate);
+    const { data: pastDue, error: pdError } = await monitorRepository.getPastDueForGracePeriod(startOfTodayStr, graceLimitDate);
     if (pdError) {
       logger.error({ error: pdError.message }, "[SubscriptionMonitor] Erro ao buscar assinaturas vencidas");
     } else if (pastDue?.length) {
@@ -475,15 +564,29 @@ export const subscriptionMonitorService = {
       if (notifiedSet?.has(`${sub.usuario_id}:${step.tipo}:${cicloRef}`)) continue;
       if (!notifiedSet && await this.hasNotified(sub.usuario_id, step.tipo, cicloRef)) continue;
 
+      const plan = this.getUserObject(sub.planos);
+      const isPixUrgencyWithCode =
+        step.tipo === EVENTO_MOTORISTA_RENOVACAO_URGENCIA &&
+        sub.metodo_pagamento === CheckoutPaymentMethod.PIX &&
+        Boolean(fatura?.pix_copy_paste);
+
+      const channels = isPixUrgencyWithCode
+        ? [NotificationChannelEnum.WABA, NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND]
+        : [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND];
+
+      const valorNumerico = fatura?.valor
+        ? Number(fatura.valor)
+        : (plan?.valor ? Number(plan.valor) : undefined);
+
       await notificationService.notifyDriver(user.telefone || "", step.tipo, {
         nomeMotorista: user.nome,
         email: user.email,
-        valor: fatura?.valor ? Number(fatura.valor) : undefined,
+        valor: valorNumerico,
         pixCopiaCola: fatura?.pix_copy_paste ?? undefined,
         metodoCobranca: sub.metodo_pagamento ?? undefined,
-        planoNome: (sub as any).planos?.nome,
+        planoNome: plan?.nome,
         usuarioId: sub.usuario_id,
-      }, { channels: [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND], email: user.email, usuarioId: sub.usuario_id });
+      }, { channels, email: user.email, usuarioId: sub.usuario_id });
 
       if (!notifiedSet) {
         await this.logNotification(sub.usuario_id, step.tipo, cicloRef);
@@ -706,7 +809,7 @@ export const subscriptionMonitorService = {
         origem: "AUTOMATICO",
       });
 
-      if (!isCard && user?.telefone && fatura.pix_copy_paste) {
+      if (!isCard && user?.telefone && fatura.pix_copy_paste && hojeStr < vencimentoStr) {
         const alreadyNotified = notifiedSet
           ? notifiedSet.has(`${sub.usuario_id}:${EVENTO_MOTORISTA_ASSINATURA_VENCENDO}:${cicloRef}`)
           : await this.hasNotified(sub.usuario_id, EVENTO_MOTORISTA_ASSINATURA_VENCENDO, cicloRef);

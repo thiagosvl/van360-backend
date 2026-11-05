@@ -7,6 +7,9 @@ import {
     EVENTO_PASSAGEIRO_CONTRATO_DISPONIVEL,
     EVENTO_PASSAGEIRO_RENOVACAO_DISPONIVEL,
     EVENTO_MOTORISTA_ASSINATURA_VENCENDO,
+    EVENTO_MOTORISTA_ASSINATURA_VENCEU,
+    EVENTO_MOTORISTA_RENOVACAO_URGENCIA,
+    EVENTO_MOTORISTA_ASSINATURA_ATRASADA,
     EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO
 } from "../../../../config/constants.js";
 import { WabaTemplates, WabaTemplatePayload } from "./waba.template.js";
@@ -36,6 +39,13 @@ export class WabaMapper {
                 case EVENTO_MOTORISTA_ASSINATURA_VENCENDO:
                     return await WabaTemplates.subscriptionDueSoon(contextData);
 
+                case EVENTO_MOTORISTA_ASSINATURA_VENCEU:
+                    return await WabaTemplates.subscriptionDueToday(contextData);
+
+                case EVENTO_MOTORISTA_RENOVACAO_URGENCIA:
+                case EVENTO_MOTORISTA_ASSINATURA_ATRASADA:
+                    return await WabaTemplates.subscriptionOverdue(contextData);
+
                 case EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO:
                     return await WabaTemplates.subscriptionFailedCC(contextData);
 
@@ -50,4 +60,3 @@ export class WabaMapper {
         }
     }
 }
-

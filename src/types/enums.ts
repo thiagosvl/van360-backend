@@ -96,6 +96,8 @@ export enum WabaTemplateNameEnum {
   PAIS_CONTRATO = "van360_pais_contrato",
   PAIS_RENOVACAO = "van360_pais_renovacao",
   MOTORISTA_RENOVACAO_PIX = "van360_motorista_renovacao_pix",
+  MOTORISTA_VENCIMENTO_HOJE_PIX = "van360_motorista_vencimento_hoje_pix",
+  MOTORISTA_ATRASADO_PIX = "van360_motorista_atrasado_pix",
   MOTORISTA_FALHA_CARTAO = "van360_motorista_falha_cartao",
 }
 

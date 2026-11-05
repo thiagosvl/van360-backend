@@ -67,12 +67,22 @@ export const monitorRepository = {
             .maybeSingle();
     },
 
+    async getDueTodaySubscriptions(startOfDayStr: string, endOfDayStr: string) {
+        return supabaseAdmin
+            .from("assinaturas")
+            .select("id, usuario_id, data_vencimento, metodo_pagamento, planos(nome, valor), usuarios(nome, telefone, email)")
+            .eq("status", SubscriptionStatus.ACTIVE)
+            .gte("data_vencimento", startOfDayStr)
+            .lte("data_vencimento", endOfDayStr)
+            .neq("metodo_pagamento", CheckoutPaymentMethod.APPLE_IAP);
+    },
+
     async getPastDueForGracePeriod(nowStr: string, graceLimitDate: string) {
         return supabaseAdmin
             .from("assinaturas")
-            .select("id, usuario_id, data_vencimento, metodo_pagamento, usuarios(nome, telefone)")
+            .select("id, usuario_id, data_vencimento, metodo_pagamento, planos(nome, valor), usuarios(nome, telefone, email)")
             .eq("status", SubscriptionStatus.ACTIVE)
-            .lte("data_vencimento", nowStr)
+            .lt("data_vencimento", nowStr)
             .gt("data_vencimento", graceLimitDate)
             .neq("metodo_pagamento", CheckoutPaymentMethod.APPLE_IAP);
     },
@@ -80,7 +90,7 @@ export const monitorRepository = {
     async getExpiredForGracePeriod(graceLimitDate: string) {
         return supabaseAdmin
             .from("assinaturas")
-            .select("id, usuario_id, data_vencimento, metodo_pagamento, planos(nome, valor), usuarios(nome, telefone)")
+            .select("id, usuario_id, data_vencimento, metodo_pagamento, planos(nome, valor), usuarios(nome, telefone, email)")
             .in("status", [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE])
             .lte("data_vencimento", graceLimitDate)
             .neq("metodo_pagamento", CheckoutPaymentMethod.APPLE_IAP);
@@ -89,7 +99,7 @@ export const monitorRepository = {
     async getPastDueForReminders(windows: {from: string, to: string}[]) {
         let query = supabaseAdmin
             .from("assinaturas")
-            .select("id, usuario_id, data_vencimento, metodo_pagamento, usuarios(nome, telefone)")
+            .select("id, usuario_id, data_vencimento, metodo_pagamento, planos(nome, valor), usuarios(nome, telefone, email)")
             .eq("status", SubscriptionStatus.PAST_DUE)
             .not("data_vencimento", "is", null)
             .neq("metodo_pagamento", CheckoutPaymentMethod.APPLE_IAP);
@@ -117,7 +127,7 @@ export const monitorRepository = {
     async getExpiredForRenewals(windows: {from: string, to: string}[]) {
         let query = supabaseAdmin
             .from("assinaturas")
-            .select("id, usuario_id, data_vencimento, metodo_pagamento, usuarios(nome, telefone)")
+            .select("id, usuario_id, data_vencimento, metodo_pagamento, planos(nome, valor), usuarios(nome, telefone, email)")
             .eq("status", SubscriptionStatus.EXPIRED)
             .not("data_vencimento", "is", null)
             .neq("metodo_pagamento", CheckoutPaymentMethod.APPLE_IAP);
@@ -133,7 +143,7 @@ export const monitorRepository = {
     async getExpiredForRecovery(windows: {from: string, to: string}[]) {
         let query = supabaseAdmin
             .from("assinaturas")
-            .select("id, usuario_id, data_vencimento, metodo_pagamento, usuarios(nome, telefone)")
+            .select("id, usuario_id, data_vencimento, metodo_pagamento, planos(nome, valor), usuarios(nome, telefone, email)")
             .eq("status", SubscriptionStatus.EXPIRED)
             .not("data_vencimento", "is", null)
             .neq("metodo_pagamento", CheckoutPaymentMethod.APPLE_IAP);
@@ -149,7 +159,7 @@ export const monitorRepository = {
     async getExpiringSubscriptions(thresholdStr: string) {
         return supabaseAdmin
             .from("assinaturas")
-            .select("*, planos(*), metodos_pagamento(last_4_digits), usuarios(nome, telefone)")
+            .select("*, planos(*), metodos_pagamento(last_4_digits), usuarios(nome, telefone, email)")
             .in("status", [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE])
             .lte("data_vencimento", thresholdStr)
             .neq("metodo_pagamento", CheckoutPaymentMethod.APPLE_IAP);
@@ -179,7 +189,8 @@ export const monitorRepository = {
             .from("assinatura_faturas")
             .select("id, usuario_id, valor, pix_copy_paste")
             .in("usuario_id", userIds)
-            .eq("status", SubscriptionInvoiceStatus.PENDING);
+            .eq("status", SubscriptionInvoiceStatus.PENDING)
+            .order("created_at", { ascending: true });
     },
 
     async getFailedCardInvoicesByUsers(userIds: string[], sinceStr: string) {

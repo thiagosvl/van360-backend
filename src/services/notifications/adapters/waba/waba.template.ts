@@ -462,11 +462,17 @@ export class WabaTemplates {
         };
     }
 
+    private static formatDriverPlanName(rawPlano: unknown): string {
+        const str = typeof rawPlano === "string" ? rawPlano.trim() : "";
+        const cleaned = str.replace(/^Plano\s+/i, "").trim();
+        return cleaned || "Mensal";
+    }
+
     static async subscriptionDueSoon(ctx: Record<string, unknown>): Promise<WabaTemplatePayload> {
         const driverName = NotificationContextFormatter.getFirstName(ctx.nomeMotorista as string, "Motorista");
         const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
         const dataStr = NotificationContextFormatter.formatDate(ctx.dataVencimento as string);
-        const planoStr = (ctx.planoNome as string) || "Plano Mensal";
+        const planoStr = this.formatDriverPlanName(ctx.planoNome);
         const email = (ctx.email || ctx.emailMotorista) as string | undefined;
 
         const pixButton = this.buildPixButtonComponent(ctx, "0");
@@ -508,6 +514,104 @@ export class WabaTemplates {
 
         return {
             templateName: WabaTemplateNameEnum.MOTORISTA_RENOVACAO_PIX,
+            languageCode: "pt_BR",
+            components
+        };
+    }
+
+    static async subscriptionDueToday(ctx: Record<string, unknown>): Promise<WabaTemplatePayload> {
+        const driverName = NotificationContextFormatter.getFirstName(ctx.nomeMotorista as string, "Motorista");
+        const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
+        const planoStr = this.formatDriverPlanName(ctx.planoNome);
+        const email = (ctx.email || ctx.emailMotorista) as string | undefined;
+
+        const pixButton = this.buildPixButtonComponent(ctx, "0");
+        const fullCheckoutUrl = await NotificationUrlBuilder.getSubscriptionCheckoutUrl({ autoOpen: true, email });
+        const dynamicSuffix = NotificationUrlBuilder.extractWabaDynamicToken(fullCheckoutUrl);
+
+        const components: WabaComponent[] = [
+            {
+                type: WabaComponentTypeEnum.BODY,
+                parameters: [
+                    { type: WabaParameterTypeEnum.TEXT, text: driverName },
+                    { type: WabaParameterTypeEnum.TEXT, text: valorStr },
+                    { type: WabaParameterTypeEnum.TEXT, text: planoStr }
+                ]
+            }
+        ];
+
+        if (pixButton) {
+            components.push(pixButton);
+            components.push({
+                type: WabaComponentTypeEnum.BUTTON,
+                sub_type: WabaButtonSubTypeEnum.URL,
+                index: "1",
+                parameters: [
+                    { type: WabaParameterTypeEnum.TEXT, text: dynamicSuffix }
+                ]
+            });
+        } else {
+            components.push({
+                type: WabaComponentTypeEnum.BUTTON,
+                sub_type: WabaButtonSubTypeEnum.URL,
+                index: "0",
+                parameters: [
+                    { type: WabaParameterTypeEnum.TEXT, text: dynamicSuffix }
+                ]
+            });
+        }
+
+        return {
+            templateName: WabaTemplateNameEnum.MOTORISTA_VENCIMENTO_HOJE_PIX,
+            languageCode: "pt_BR",
+            components
+        };
+    }
+
+    static async subscriptionOverdue(ctx: Record<string, unknown>): Promise<WabaTemplatePayload> {
+        const driverName = NotificationContextFormatter.getFirstName(ctx.nomeMotorista as string, "Motorista");
+        const valorStr = NotificationContextFormatter.formatRawValue(ctx.valor as number | string);
+        const planoStr = this.formatDriverPlanName(ctx.planoNome);
+        const email = (ctx.email || ctx.emailMotorista) as string | undefined;
+
+        const pixButton = this.buildPixButtonComponent(ctx, "0");
+        const fullCheckoutUrl = await NotificationUrlBuilder.getSubscriptionCheckoutUrl({ autoOpen: true, email });
+        const dynamicSuffix = NotificationUrlBuilder.extractWabaDynamicToken(fullCheckoutUrl);
+
+        const components: WabaComponent[] = [
+            {
+                type: WabaComponentTypeEnum.BODY,
+                parameters: [
+                    { type: WabaParameterTypeEnum.TEXT, text: driverName },
+                    { type: WabaParameterTypeEnum.TEXT, text: valorStr },
+                    { type: WabaParameterTypeEnum.TEXT, text: planoStr }
+                ]
+            }
+        ];
+
+        if (pixButton) {
+            components.push(pixButton);
+            components.push({
+                type: WabaComponentTypeEnum.BUTTON,
+                sub_type: WabaButtonSubTypeEnum.URL,
+                index: "1",
+                parameters: [
+                    { type: WabaParameterTypeEnum.TEXT, text: dynamicSuffix }
+                ]
+            });
+        } else {
+            components.push({
+                type: WabaComponentTypeEnum.BUTTON,
+                sub_type: WabaButtonSubTypeEnum.URL,
+                index: "0",
+                parameters: [
+                    { type: WabaParameterTypeEnum.TEXT, text: dynamicSuffix }
+                ]
+            });
+        }
+
+        return {
+            templateName: WabaTemplateNameEnum.MOTORISTA_ATRASADO_PIX,
             languageCode: "pt_BR",
             components
         };
