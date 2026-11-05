@@ -1,4 +1,4 @@
-﻿import { PushNotificationAction } from "../../../../../types/enums.js";
+import { PushNotificationAction } from "../../../../../types/enums.js";
 import { TRIAL_BONUS_INACTIVE_DAYS } from "../../../../../config/constants.js";
 import { NotificationContextFormatter } from "../../../utils/notification-context.formatter.js";
 import { NotificationUrlBuilder } from "../../../utils/notification-url.builder.js";
@@ -8,8 +8,8 @@ export class FirebaseDriverTemplates {
     static welcomeTrial(ctx: Record<string, unknown>): FirebaseMessagePayload {
         const driverName = NotificationContextFormatter.getFirstName(ctx.nomeMotorista as string, "Motorista");
         return {
-            title: "Bem-vindo ao Van360! ðŸŽ‰",
-            body: `OlÃ¡ ${driverName}, seu perÃ­odo de teste comeÃ§ou. Aproveite todas as funcionalidades!`,
+            title: "Bem-vindo ao Van360! 🎉",
+            body: `Olá ${driverName}, seu período de teste começou. Aproveite todas as funcionalidades!`,
             data: {
                 action: PushNotificationAction.OPEN_HOME,
                 userId: (ctx.usuarioId || ctx.userId || "") as string
@@ -25,8 +25,8 @@ export class FirebaseDriverTemplates {
         });
 
         return {
-            title: "Seu teste encerrou â°",
-            body: `OlÃ¡ ${driverName}, assine agora para manter o envio de lembretes aos pais e suas cobranÃ§as em dia!`,
+            title: "Seu teste encerrou ⏰",
+            body: `Olá ${driverName}, assine agora para manter o envio de lembretes aos pais e suas cobranças em dia!`,
             data: {
                 action: PushNotificationAction.OPEN_SUBSCRIPTION,
                 checkoutUrl
@@ -41,7 +41,7 @@ export class FirebaseDriverTemplates {
         });
 
         return {
-            title: "Ãšltimo dia de teste! âš ï¸",
+            title: "Último dia de teste! ⚠️",
             body: "Assine hoje para continuar enviando lembretes aos pais e manter o financeiro do transporte organizado.",
             data: {
                 action: PushNotificationAction.OPEN_SUBSCRIPTION,
@@ -55,8 +55,8 @@ export class FirebaseDriverTemplates {
         const bonusDays = (ctx.bonusDays as number) || TRIAL_BONUS_INACTIVE_DAYS;
 
         return {
-            title: "Mais tempo para vocÃª! ðŸŽ",
-            body: `OlÃ¡ ${driverName}, liberamos +${bonusDays} dias gratuitos para vocÃª testar o Van360 com calma. Aproveite para cadastrar seus alunos!`,
+            title: "Mais tempo para você! 🎁",
+            body: `Olá ${driverName}, liberamos +${bonusDays} dias gratuitos para você testar o Van360 com calma. Aproveite para cadastrar seus alunos!`,
             data: {
                 action: PushNotificationAction.OPEN_HOME,
                 userId: (ctx.usuarioId || ctx.userId || "") as string
@@ -71,8 +71,8 @@ export class FirebaseDriverTemplates {
         });
 
         return {
-            title: "Sentimos sua falta! ðŸ’™",
-            body: "Seus alunos continuam salvos. Reative sua conta e deixe as cobranÃ§as e rotas no automÃ¡tico!",
+            title: "Sentimos sua falta! 💙",
+            body: "Seus alunos continuam salvos. Reative sua conta e deixe as cobranças e rotas no automático!",
             data: {
                 action: PushNotificationAction.OPEN_SUBSCRIPTION,
                 checkoutUrl
@@ -83,7 +83,7 @@ export class FirebaseDriverTemplates {
     static trialRecovery2(ctx: Record<string, unknown>): FirebaseMessagePayload {
         const formattedValue = NotificationContextFormatter.formatValue(ctx.valorPromocional as number | string);
         const valorTexto = ctx.valorPromocional
-            ? `por apenas ${formattedValue}/mÃªs!`
+            ? `por apenas ${formattedValue}/mês!`
             : "agora mesmo!";
 
         const checkoutUrl = NotificationUrlBuilder.getExternalCheckoutBridgeUrl({
@@ -92,7 +92,7 @@ export class FirebaseDriverTemplates {
         });
 
         return {
-            title: "Oferta especial pra vocÃª! ðŸŽ",
+            title: "Oferta especial pra você! 🎁",
             body: `Reative seu Van360 ${valorTexto}`,
             data: {
                 action: PushNotificationAction.OPEN_SUBSCRIPTION,
@@ -108,10 +108,10 @@ export class FirebaseDriverTemplates {
         const parentName = ctx.nomeResponsavel ? NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string) : "";
         const body = parentName
             ? `${parentName} acabou de assinar o contrato de ${passName}.`
-            : `O responsÃ¡vel pelo(a) ${passName} acabou de assinar o contrato.`;
+            : `O responsável pelo(a) ${passName} acabou de assinar o contrato.`;
 
         return {
-            title: "Novo Contrato Assinado! ðŸ“",
+            title: "Novo Contrato Assinado! 📝",
             body,
             data: {
                 action: PushNotificationAction.OPEN_CONTRACTS,
@@ -122,7 +122,7 @@ export class FirebaseDriverTemplates {
 
     static subscriptionPaid(ctx: Record<string, unknown>): FirebaseMessagePayload {
         return {
-            title: "Assinatura Confirmada! âœ…",
+            title: "Assinatura Confirmada! ✅",
             body: "Seu pagamento foi aprovado. Obrigado por continuar com o Van360!",
             data: {
                 action: PushNotificationAction.OPEN_SUBSCRIPTION,
@@ -138,8 +138,8 @@ export class FirebaseDriverTemplates {
         });
 
         return {
-            title: "RenovaÃ§Ã£o se Aproximando âš ï¸",
-            body: "Sua assinatura do Van360 expira em breve. Garanta sua renovaÃ§Ã£o!",
+            title: "Renovação se Aproximando ⚠️",
+            body: "Sua assinatura do Van360 expira em breve. Garanta sua renovação!",
             data: {
                 action: PushNotificationAction.OPEN_SUBSCRIPTION,
                 checkoutUrl
@@ -154,8 +154,8 @@ export class FirebaseDriverTemplates {
         });
 
         return {
-            title: "Aviso de Vencimento ðŸš¨",
-            body: "Sua assinatura expira amanhÃ£. NÃ£o perca acesso ao sistema!",
+            title: "Aviso de Vencimento 🚨",
+            body: "Sua assinatura expira amanhã. Não perca acesso ao sistema!",
             data: {
                 action: PushNotificationAction.OPEN_SUBSCRIPTION,
                 checkoutUrl
@@ -170,8 +170,8 @@ export class FirebaseDriverTemplates {
         });
 
         return {
-            title: "Sua Assinatura Venceu! âŒ",
-            body: "Renove agora para continuar tendo acesso total Ã  sua frota.",
+            title: "Sua Assinatura Venceu! ❌",
+            body: "Renove agora para continuar tendo acesso total à sua frota.",
             data: {
                 action: PushNotificationAction.OPEN_SUBSCRIPTION,
                 checkoutUrl
@@ -186,8 +186,8 @@ export class FirebaseDriverTemplates {
         });
 
         return {
-            title: "Ãšltimo Aviso de SuspensÃ£o â›”",
-            body: "Sua conta serÃ¡ suspensa. Regularize sua assinatura imediatamente!",
+            title: "Último Aviso de Suspensão ⛔",
+            body: "Sua conta será suspensa. Regularize sua assinatura imediatamente!",
             data: {
                 action: PushNotificationAction.OPEN_SUBSCRIPTION,
                 checkoutUrl
@@ -201,22 +201,22 @@ export class FirebaseDriverTemplates {
         const qtdProximos = typeof ctx.qtdProximos === "number" ? ctx.qtdProximos : Number(ctx.qtdProximos) || 0;
         const qtdAtrasados = typeof ctx.qtdAtrasados === "number" ? ctx.qtdAtrasados : Number(ctx.qtdAtrasados) || 0;
 
-        let title = "Pagamentos da Semana ðŸ’µ";
+        let title = "Pagamentos da Semana 💵";
         let body = "Confira as parcelas dos seus alunos no app.";
 
         if (totalAtrasado > 0 && totalProximos > 0) {
             const atrasadosLabel = qtdAtrasados === 1 ? "1 parcela" : `${qtdAtrasados} parcelas`;
             const proximosLabel = qtdProximos === 1 ? "1 a vencer esta semana" : `${qtdProximos} a vencer esta semana`;
-            title = "Pagamentos da Semana ðŸ’µ";
-            body = `VocÃª tem ${atrasadosLabel} em atraso (${NotificationContextFormatter.formatValue(totalAtrasado)}) e ${proximosLabel} (${NotificationContextFormatter.formatValue(totalProximos)}). Confira se jÃ¡ recebeu e dÃª baixa no app.`;
+            title = "Pagamentos da Semana 💵";
+            body = `Você tem ${atrasadosLabel} em atraso (${NotificationContextFormatter.formatValue(totalAtrasado)}) e ${proximosLabel} (${NotificationContextFormatter.formatValue(totalProximos)}). Confira se já recebeu e dê baixa no app.`;
         } else if (totalAtrasado > 0) {
             const atrasadosLabel = qtdAtrasados === 1 ? "1 parcela" : `${qtdAtrasados} parcelas`;
-            title = "Parcelas em Aberto âš ï¸";
-            body = `VocÃª tem ${atrasadosLabel} em atraso (${NotificationContextFormatter.formatValue(totalAtrasado)}). Confira se jÃ¡ recebeu e dÃª baixa no app.`;
+            title = "Parcelas em Aberto ⚠️";
+            body = `Você tem ${atrasadosLabel} em atraso (${NotificationContextFormatter.formatValue(totalAtrasado)}). Confira se já recebeu e dê baixa no app.`;
         } else if (totalProximos > 0) {
             const proximosLabel = qtdProximos === 1 ? "1 parcela a vencer" : `${qtdProximos} parcelas a vencer`;
-            title = "Pagamentos da Semana ðŸ’µ";
-            body = `VocÃª tem ${proximosLabel} nos prÃ³ximos dias (${NotificationContextFormatter.formatValue(totalProximos)}). Confira os vencimentos no app.`;
+            title = "Pagamentos da Semana 💵";
+            body = `Você tem ${proximosLabel} nos próximos dias (${NotificationContextFormatter.formatValue(totalProximos)}). Confira os vencimentos no app.`;
         }
 
         return {
@@ -231,8 +231,8 @@ export class FirebaseDriverTemplates {
 
     static birthdayReminder(ctx: Record<string, unknown>): FirebaseMessagePayload {
         return {
-            title: "Aniversariantes da Semana ðŸŽ‚",
-            body: "Confira quem faz aniversÃ¡rio esta semana e dÃª os parabÃ©ns aos seus alunos!",
+            title: "Aniversariantes da Semana 🎂",
+            body: "Confira quem faz aniversário esta semana e dê os parabéns aos seus alunos!",
             data: {
                 action: PushNotificationAction.OPEN_BIRTHDAYS,
                 userId: (ctx.usuarioId || ctx.userId || "") as string
@@ -243,10 +243,10 @@ export class FirebaseDriverTemplates {
     static referralBonus(ctx: Record<string, unknown>): FirebaseMessagePayload {
         const isVitalicio = Boolean(ctx.isVitalicio);
         return {
-            title: isVitalicio ? "Sua indicaÃ§Ã£o assinou o Van360" : "VocÃª recebeu 1 mÃªs grÃ¡tis! ðŸŽ",
+            title: isVitalicio ? "Sua indicação assinou o Van360" : "Você recebeu 1 mês grátis! 🎁",
             body: isVitalicio
-                ? "O motorista que vocÃª indicou assinou o Van360. Agradecemos pela indicaÃ§Ã£o e pela confianÃ§a!"
-                : "O motorista que vocÃª indicou assinou o Van360. O seu bÃ´nus de 30 dias foi aplicado com sucesso.",
+                ? "O motorista que você indicou assinou o Van360. Agradecemos pela indicação e pela confiança!"
+                : "O motorista que você indicou assinou o Van360. O seu bônus de 30 dias foi aplicado com sucesso.",
             data: {
                 action: PushNotificationAction.OPEN_SUBSCRIPTION,
                 userId: (ctx.usuarioId || ctx.userId || "") as string
@@ -256,8 +256,8 @@ export class FirebaseDriverTemplates {
 
     static referralRegistered(ctx: Record<string, unknown>): FirebaseMessagePayload {
         return {
-            title: "AlguÃ©m se cadastrou usando o seu link de indicaÃ§Ã£o! ðŸŽ‰",
-            body: "VocÃª receberÃ¡ o bÃ´nus de indicaÃ§Ã£o assim que ele realizar a assinatura.",
+            title: "Alguém se cadastrou usando o seu link de indicação! 🎉",
+            body: "Você receberá o bônus de indicação assim que ele realizar a assinatura.",
             data: {
                 action: PushNotificationAction.OPEN_SUBSCRIPTION,
                 userId: (ctx.usuarioId || ctx.userId || "") as string
@@ -273,8 +273,8 @@ export class FirebaseDriverTemplates {
         });
 
         return {
-            title: "Sua Assinatura Vence Hoje! âš ï¸",
-            body: `OlÃ¡ ${driverName}, renove hoje seu acesso ao Van360 para evitar bloqueios.`,
+            title: "Sua Assinatura Vence Hoje! ⚠️",
+            body: `Olá ${driverName}, renove hoje seu acesso ao Van360 para evitar bloqueios.`,
             data: {
                 action: PushNotificationAction.OPEN_SUBSCRIPTION,
                 checkoutUrl
@@ -289,7 +289,7 @@ export class FirebaseDriverTemplates {
         });
 
         return {
-            title: "Assinatura Expirada â›”",
+            title: "Assinatura Expirada ⛔",
             body: "Sua assinatura do Van360 expirou por falta de pagamento. Regularize para reativar.",
             data: {
                 action: PushNotificationAction.OPEN_SUBSCRIPTION,
@@ -299,12 +299,12 @@ export class FirebaseDriverTemplates {
     }
 
     static newPassengerPreRegistration(ctx: Record<string, unknown>): FirebaseMessagePayload {
-        const parentName = NotificationContextFormatter.getFirstName((ctx.nomeResponsavel || ctx.nomePai || ctx.nome) as string, "ResponsÃ¡vel");
+        const parentName = NotificationContextFormatter.getFirstName((ctx.nomeResponsavel || ctx.nomePai || ctx.nome) as string, "Responsável");
         const studentName = (ctx.nomePassageiro || ctx.nomeAluno || "novo aluno") as string;
         const requestsUrl = NotificationUrlBuilder.getPassengerRequestsUrl();
 
         return {
-            title: "Novo cadastro na van! ðŸšŒ",
+            title: "Novo cadastro na van! 🚌",
             body: `${parentName} realizou o cadastro de ${studentName}. Toque para revisar.`,
             data: {
                 action: PushNotificationAction.OPEN_PASSENGER_REQUESTS,
@@ -320,12 +320,12 @@ export class FirebaseDriverTemplates {
         const routeName = (ctx.nomeRota || ctx.rota || "rota") as string;
         const formattedDate = (ctx.dataFormatada || ctx.data || "") as string;
         const parentName = ctx.nomeResponsavel ? NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string) : "";
-        const sujeito = parentName || "O responsÃ¡vel";
+        const sujeito = parentName || "O responsável";
         const dateSuffix = formattedDate.startsWith("no ") ? formattedDate : `no dia ${formattedDate}`;
 
         return {
-            title: "NotificaÃ§Ã£o de AusÃªncia ðŸš«",
-            body: `${sujeito} informou que ${studentName} estarÃ¡ ausente na ${routeName} ${dateSuffix}.`,
+            title: "Notificação de Ausência 🚫",
+            body: `${sujeito} informou que ${studentName} estará ausente na ${routeName} ${dateSuffix}.`,
             data: {
                 action: PushNotificationAction.OPEN_ROUTE,
                 passageiroId: (ctx.passageiroId || "") as string,
@@ -340,11 +340,11 @@ export class FirebaseDriverTemplates {
         const routeName = (ctx.nomeRota || ctx.rota || "rota") as string;
         const formattedDate = (ctx.dataFormatada || ctx.data || "") as string;
         const parentName = ctx.nomeResponsavel ? NotificationContextFormatter.getFirstName(ctx.nomeResponsavel as string) : "";
-        const sujeito = parentName || "O responsÃ¡vel";
+        const sujeito = parentName || "O responsável";
 
         return {
-            title: "AusÃªncia Cancelada! ðŸšŒ",
-            body: `${sujeito} cancelou a ausÃªncia de ${studentName} na ${routeName} do dia ${formattedDate}.`,
+            title: "Ausência Cancelada! 🚌",
+            body: `${sujeito} cancelou a ausência de ${studentName} na ${routeName} do dia ${formattedDate}.`,
             data: {
                 action: PushNotificationAction.OPEN_ROUTE,
                 passageiroId: (ctx.passageiroId || "") as string,
@@ -364,7 +364,7 @@ export class FirebaseDriverTemplates {
             if (!temAlunos) {
                 return {
                     title: "Nenhuma parcela vence hoje!",
-                    body: "Cadastre seus alunos para o app te avisar dos vencimentos todo dia. Diga adeus ao caderno e Ã s planilhas!",
+                    body: "Cadastre seus alunos para o app te avisar dos vencimentos todo dia. Diga adeus ao caderno e às planilhas!",
                     data: {
                         action: PushNotificationAction.OPEN_PASSENGERS,
                         userId
@@ -373,8 +373,8 @@ export class FirebaseDriverTemplates {
             }
 
             return {
-                title: "Sem Vencimentos Hoje ðŸŸ¢",
-                body: "NÃ£o hÃ¡ parcelas de alunos vencendo nesta data. Seu controle financeiro segue organizado!",
+                title: "Sem Vencimentos Hoje 🟢",
+                body: "Não há parcelas de alunos vencendo nesta data. Seu controle financeiro segue organizado!",
                 data: {
                     action: PushNotificationAction.OPEN_BILLING,
                     userId
@@ -394,11 +394,11 @@ export class FirebaseDriverTemplates {
             );
             const rawRespNome = (ctx.nomeResponsavel || "") as string;
             const respFirstName = rawRespNome ? NotificationContextFormatter.getFirstName(rawRespNome) : "";
-            const condicaoPagamento = respFirstName ? `Se ${respFirstName} jÃ¡ pagou` : "Se o responsÃ¡vel jÃ¡ pagou";
+            const condicaoPagamento = respFirstName ? `Se ${respFirstName} já pagou` : "Se o responsável já pagou";
 
             return {
-                title: "Vencimento de Hoje ðŸ’µ",
-                body: `A parcela ${prep} ${studentFirstName} (${formattedTotal}) vence hoje. ${condicaoPagamento}, dÃª baixa no app para emitir o recibo.`,
+                title: "Vencimento de Hoje 💵",
+                body: `A parcela ${prep} ${studentFirstName} (${formattedTotal}) vence hoje. ${condicaoPagamento}, dê baixa no app para emitir o recibo.`,
                 data: {
                     action: PushNotificationAction.OPEN_BILLING,
                     userId
@@ -407,8 +407,8 @@ export class FirebaseDriverTemplates {
         }
 
         return {
-            title: "Vencimentos de Hoje ðŸ’µ",
-            body: `VocÃª tem ${qtdCobrancas} parcelas (${formattedTotal}) para hoje. Se algum responsÃ¡vel jÃ¡ pagou, dÃª baixa no app para emitir o recibo.`,
+            title: "Vencimentos de Hoje 💵",
+            body: `Você tem ${qtdCobrancas} parcelas (${formattedTotal}) para hoje. Se algum responsável já pagou, dê baixa no app para emitir o recibo.`,
             data: {
                 action: PushNotificationAction.OPEN_BILLING,
                 userId
@@ -422,7 +422,7 @@ export class FirebaseDriverTemplates {
 
         if (isTrial) {
             return {
-                title: "Controle de Pagamentos ðŸ’µ",
+                title: "Controle de Pagamentos 💵",
                 body: "Recebeu pagamentos da van hoje? Cadastre seus alunos no Van360 para dar baixa nas parcelas com um toque e dar adeus ao caderninho!",
                 data: {
                     action: PushNotificationAction.OPEN_PASSENGERS,
@@ -432,8 +432,8 @@ export class FirebaseDriverTemplates {
         }
 
         return {
-            title: "ConferÃªncia do Dia ðŸ’µ",
-            body: "Recebeu pagamentos hoje? DÃª baixa nas cobranÃ§as no app para manter seu controle em dia e liberar os recibos.",
+            title: "Conferência do Dia 💵",
+            body: "Recebeu pagamentos hoje? Dê baixa nas cobranças no app para manter seu controle em dia e liberar os recibos.",
             data: {
                 action: PushNotificationAction.OPEN_BILLING,
                 userId
@@ -451,11 +451,11 @@ export class FirebaseDriverTemplates {
         const cobrancaId = (ctx.cobrancaId || "") as string;
 
         const respStr = parentName ? ` (${parentName})` : "";
-        const statusRecibo = reciboEnviado ? "Baixa concluÃ­da e recibo enviado!" : "Baixa automÃ¡tica concluÃ­da no app!";
+        const statusRecibo = reciboEnviado ? "Baixa concluída e recibo enviado!" : "Baixa automática concluída no app!";
         const body = `Parcela de ${monthYear}${respStr}. ${statusRecibo}`;
 
         return {
-            title: `Recebido: ${formattedValue} â€¢ ${studentName} ðŸ’°`,
+            title: `Recebido: ${formattedValue} • ${studentName} 💰`,
             body,
             data: {
                 action: PushNotificationAction.OPEN_BILLING,
@@ -467,8 +467,8 @@ export class FirebaseDriverTemplates {
 
     static renewalResponseReceivedDriver(ctx: Record<string, unknown>): FirebaseMessagePayload {
         const userId = (ctx.usuarioId || ctx.userId || "") as string;
-        const title = (ctx.titulo || "AtualizaÃ§Ã£o na RenovaÃ§Ã£o") as string;
-        const body = (ctx.corpo || "Um responsÃ¡vel respondeu Ã  proposta de renovaÃ§Ã£o.") as string;
+        const title = (ctx.titulo || "Atualização na Renovação") as string;
+        const body = (ctx.corpo || "Um responsável respondeu à proposta de renovação.") as string;
 
         return {
             title,
