@@ -13,7 +13,7 @@ export const createGastoSchema = z.object({
   categoria: z.string().min(2).max(50),
   descricao: z.string().optional(),
   parcelado: z.boolean().optional(),
-  parcelas: z.number().int().min(2).max(36).optional(),
+  parcelas: z.number().int().min(2).max(84).optional(),
   tipo_calculo_parcela: z.nativeEnum(GastoTipoCalculoParcela).optional(),
 });
 
