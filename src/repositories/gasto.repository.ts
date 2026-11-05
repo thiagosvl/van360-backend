@@ -1,4 +1,4 @@
-﻿import { supabaseAdmin } from "../config/supabase.js";
+import { supabaseAdmin } from "../config/supabase.js";
 import { ListGastosFiltersDTO } from "../types/dtos/gasto.dto.js";
 import { isValidFilterValue } from "../utils/filter.utils.js";
 
@@ -78,7 +78,6 @@ export const gastoRepository = {
         if (isValidFilterValue(filtros?.data_inicio)) query = query.gte("data", filtros.data_inicio);
         if (isValidFilterValue(filtros?.data_fim)) query = query.lte("data", filtros.data_fim);
 
-        // Pagination
         if (filtros?.limit) query = query.limit(filtros.limit);
         if (filtros?.offset) query = query.range(filtros.offset, filtros.offset + (filtros.limit || 10) - 1);
 
