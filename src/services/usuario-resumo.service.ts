@@ -97,11 +97,18 @@ export const usuarioResumoService = {
 
     const currentYear = getNowBR().getFullYear();
     const passageirosList = passData.data || [];
-    const currentYearMatriculas = passageirosList.filter(
-      (p: Record<string, any>) => Number(p.ano_letivo || currentYear) === currentYear
-    );
-    const passTotal = currentYearMatriculas.length;
-    const passAtivos = currentYearMatriculas.filter((p: Record<string, any>) => p.ativo).length;
+    const uniquePassageiroIds = new Set<string>();
+    const activePassageiroIds = new Set<string>();
+
+    for (const p of passageirosList) {
+      uniquePassageiroIds.add(p.id);
+      if (p.ativo && Number(p.ano_letivo || currentYear) >= currentYear) {
+        activePassageiroIds.add(p.id);
+      }
+    }
+
+    const passTotal = uniquePassageiroIds.size;
+    const passAtivos = activePassageiroIds.size;
     const passInativos = passTotal - passAtivos;
 
     const veicTotal = veiculosCount.data?.length || 0;

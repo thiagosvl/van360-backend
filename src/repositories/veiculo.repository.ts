@@ -49,7 +49,7 @@ export const veiculoRepository = {
         const selectStr = isSlim
             ? "id, usuario_id, placa, marca, modelo, ativo"
             : isComContagem
-            ? "*, passageiros:passageiro_matriculas(count)"
+            ? "*, passageiros:passageiro_matriculas(passageiro_id)"
             : "*";
 
         let query = supabaseAdmin
@@ -61,7 +61,7 @@ export const veiculoRepository = {
         if (isComContagem) {
             query = query
                 .eq("passageiros.ativo", true)
-                .eq("passageiros.ano_letivo", getNowBR().getFullYear());
+                .gte("passageiros.ano_letivo", getNowBR().getFullYear());
         }
 
         if (isValidFilterValue(filtros?.search)) {

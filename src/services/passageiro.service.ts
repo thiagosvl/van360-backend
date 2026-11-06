@@ -1,4 +1,4 @@
-﻿import { passageiroRepository } from "../repositories/passageiro.repository.js";
+import { passageiroRepository } from "../repositories/passageiro.repository.js";
 import { responsavelRepository } from "../repositories/responsavel.repository.js";
 import { prePassageiroRepository } from "../repositories/pre-passageiro.repository.js";
 import { AppError } from "../errors/AppError.js";
@@ -1257,7 +1257,11 @@ const updatePassageirosBatch = async (
                 }
             }
 
-            if (itemAno === currentYear && Object.keys(payload).length > 0) {
+            const existente = existentesMap.get(item.id);
+            const shouldMirrorLegacy =
+                itemAno === currentYear || Number(existente?.ano_letivo) === itemAno;
+
+            if (shouldMirrorLegacy && Object.keys(payload).length > 0) {
                 Object.assign(passageiroPayload, payload);
             }
 

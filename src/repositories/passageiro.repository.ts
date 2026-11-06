@@ -225,7 +225,7 @@ export const passageiroRepository = {
   async findByIds(ids: string[]) {
     return supabaseAdmin
       .from("passageiros")
-      .select("id, usuario_id, veiculo_id")
+      .select("id, usuario_id, veiculo_id, ano_letivo")
       .in("id", ids);
   },
 
@@ -389,17 +389,29 @@ export const passageiroRepository = {
   },
 
   async updateAtivo(id: string, ativo: boolean, anoLetivo?: number) {
-    const targetAno = anoLetivo || getNowBR().getFullYear();
+    const currentYear = getNowBR().getFullYear();
+    const targetAno = anoLetivo || currentYear;
     const res = await supabaseAdmin
       .from("passageiro_matriculas")
       .update({ ativo })
       .eq("passageiro_id", id)
       .eq("ano_letivo", targetAno);
 
-    if (targetAno === getNowBR().getFullYear()) {
+    if (targetAno >= currentYear) {
+      let legacyAtivo = ativo;
+      if (!ativo) {
+        const { count } = await supabaseAdmin
+          .from("passageiro_matriculas")
+          .select("id", { count: "exact", head: true })
+          .eq("passageiro_id", id)
+          .gte("ano_letivo", currentYear)
+          .eq("ativo", true);
+        legacyAtivo = (count ?? 0) > 0;
+      }
+
       await supabaseAdmin
         .from("passageiros")
-        .update({ ativo })
+        .update({ ativo: legacyAtivo })
         .eq("id", id);
     }
 
@@ -672,6 +684,7 @@ export const passageiroRepository = {
       .from("passageiro_matriculas")
       .select(`
         passageiro_id,
+        ano_letivo,
         veiculo:veiculos(id, placa, modelo, chave_pix, tipo_chave_pix),
         escola:escolas(id, nome),
         passageiro:passageiros!inner(
@@ -681,7 +694,7 @@ export const passageiroRepository = {
         )
       `)
       .eq("usuario_id", usuarioId)
-      .eq("ano_letivo", currentYear)
+      .gte("ano_letivo", currentYear)
       .eq("ativo", true);
 
     if (isValidFilterValue(veiculoId)) {
@@ -691,17 +704,43 @@ export const passageiroRepository = {
     const { data, error } = await query;
     if (error || !data) return { data: null, error };
 
-    const mapped = (data as Record<string, any>[])
-      .map((row) => {
-        const p = Array.isArray(row.passageiro) ? row.passageiro[0] : row.passageiro;
-        return {
-          id: row.passageiro_id,
+    const byPassageiro = new Map<
+      string,
+      {
+        id: string;
+        nome: string;
+        data_nascimento: string | null;
+        veiculo: unknown;
+        escola: unknown;
+        ano_letivo: number;
+      }
+    >();
+
+    for (const row of data as Array<Record<string, unknown>>) {
+      const passageiroId = String(row.passageiro_id || "");
+      if (!passageiroId) continue;
+
+      const rawPassageiro = row.passageiro;
+      const p = (Array.isArray(rawPassageiro) ? rawPassageiro[0] : rawPassageiro) as
+        | { id?: string; nome?: string; data_nascimento?: string | null }
+        | undefined;
+      const rowAno = Number(row.ano_letivo || currentYear);
+      const existing = byPassageiro.get(passageiroId);
+
+      if (!existing || (existing.ano_letivo !== currentYear && rowAno === currentYear)) {
+        byPassageiro.set(passageiroId, {
+          id: passageiroId,
           nome: p?.nome || "",
           data_nascimento: p?.data_nascimento || null,
           veiculo: row.veiculo,
           escola: row.escola,
-        };
-      })
+          ano_letivo: rowAno,
+        });
+      }
+    }
+
+    const mapped = Array.from(byPassageiro.values())
+      .map(({ ano_letivo: _ano, ...rest }) => rest)
       .sort((a, b) => a.nome.localeCompare(b.nome));
 
     return { data: mapped, error: null };

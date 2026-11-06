@@ -123,12 +123,24 @@ export const veiculoService = {
         const { data, error } = await veiculoRepository.list(usuarioId, filtros);
         if (error) throw error;
 
-        const list = data || [];
+        const list = (data || []) as unknown as Array<Record<string, unknown>>;
         if (filtros?.comContagem === "true") {
-            return list.map((veiculo: Record<string, any>) => ({
-                ...veiculo,
-                passageiros_ativos_count: veiculo.passageiros?.[0]?.count || 0,
-            }));
+            return list.map((veiculo) => {
+                const matriculas = Array.isArray(veiculo.passageiros)
+                    ? (veiculo.passageiros as Array<{ passageiro_id?: string }>)
+                    : [];
+                const uniquePassageiros = new Set<string>();
+                for (const m of matriculas) {
+                    if (m.passageiro_id) {
+                        uniquePassageiros.add(m.passageiro_id);
+                    }
+                }
+                const { passageiros: _ignored, ...rest } = veiculo;
+                return {
+                    ...rest,
+                    passageiros_ativos_count: uniquePassageiros.size,
+                };
+            });
         }
 
         return list;
