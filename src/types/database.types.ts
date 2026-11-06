@@ -2508,6 +2508,7 @@ export type Database = {
       }
       usuario_configuracoes: {
         Row: {
+          campos_formulario_externo: Json
           cobranca_atraso_3_dias_ativo: boolean
           cobranca_atraso_5_dias_ativo: boolean
           cobranca_atraso_7_dias_ativo: boolean
@@ -2531,6 +2532,7 @@ export type Database = {
           usuario_id: string
         }
         Insert: {
+          campos_formulario_externo?: Json
           cobranca_atraso_3_dias_ativo?: boolean
           cobranca_atraso_5_dias_ativo?: boolean
           cobranca_atraso_7_dias_ativo?: boolean
@@ -2554,6 +2556,7 @@ export type Database = {
           usuario_id: string
         }
         Update: {
+          campos_formulario_externo?: Json
           cobranca_atraso_3_dias_ativo?: boolean
           cobranca_atraso_5_dias_ativo?: boolean
           cobranca_atraso_7_dias_ativo?: boolean

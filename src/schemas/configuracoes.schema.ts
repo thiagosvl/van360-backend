@@ -1,6 +1,16 @@
 import { z } from "zod";
 import { RastreamentoModo } from "../types/enums.js";
 
+export const camposFormularioExternoSchema = z.object({
+  turma: z.boolean().optional(),
+  data_nascimento: z.boolean().optional(),
+  genero: z.boolean().optional(),
+  periodo: z.boolean().optional(),
+  modalidade: z.boolean().optional(),
+  parentesco_responsavel: z.boolean().optional(),
+  email_responsavel: z.boolean().optional(),
+});
+
 export const updateConfiguracoesSchema = z.object({
   cobranca_aviso_previo_ativo: z.boolean().optional(),
   cobranca_dias_aviso_previo: z.number().int().min(1).max(5).nullable().optional(),
@@ -19,8 +29,8 @@ export const updateConfiguracoesSchema = z.object({
   formato_nome_responsavel: z.enum(["primeiro_nome", "completo"]).optional(),
   exibir_telefone_lista_alunos: z.boolean().optional(),
   contrato_exibir_dados_veiculo: z.boolean().optional(),
+  campos_formulario_externo: camposFormularioExternoSchema.optional(),
 });
-
 
 export type UpdateConfiguracoesInput = z.infer<typeof updateConfiguracoesSchema>;
 
@@ -33,4 +43,3 @@ export const FINANCIAL_CONFIGURACAO_KEYS: readonly (keyof UpdateConfiguracoesInp
   "cobranca_atraso_7_dias_ativo",
   "notificar_motorista_parcelas",
 ] as const;
-

@@ -160,7 +160,6 @@ export const userRepository = {
         return { data: filtrados, error: null };
     },
 
-
     async getByEmail(email: string) {
         return supabaseAdmin
             .from("usuarios")
@@ -211,7 +210,7 @@ export const userRepository = {
     async getPublicData(id: string) {
         return supabaseAdmin
             .from("usuarios")
-            .select("id, nome, apelido, razao_social, cpfcnpj, logo_url")
+            .select("id, nome, apelido, razao_social, cpfcnpj, logo_url, usuario_configuracoes(campos_formulario_externo)")
             .eq("id", id)
             .single();
     },

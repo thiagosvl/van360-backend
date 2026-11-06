@@ -3,7 +3,12 @@ import { userRepository } from "../repositories/user.repository.js";
 import { usuarioConfiguracoesRepository } from "../repositories/usuario-configuracoes.repository.js";
 import { motoristaFinanceiroRepository } from "../repositories/motorista-financeiro.repository.js";
 import { historicoService } from "./historico.service.js";
-import { ConfiguracoesUsuarioDTO, UpdateConfiguracoesDTO } from "../types/dtos/configuracoes.dto.js";
+import {
+  ConfiguracoesUsuarioDTO,
+  UpdateConfiguracoesDTO,
+  DEFAULT_CAMPOS_FORMULARIO_EXTERNO,
+  CamposFormularioExternoDTO,
+} from "../types/dtos/configuracoes.dto.js";
 import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
 
 import { getConfigNumber } from "./configuracao.service.js";
@@ -20,6 +25,13 @@ export async function obterConfiguracoesUsuario(usuarioId: string): Promise<Conf
   const config = await usuarioConfiguracoesRepository.getByUsuarioId(usuarioId);
   const configFin = await motoristaFinanceiroRepository.getByUsuarioId(usuarioId);
   const diasPadrao = await getConfigNumber(ConfigKey.PASSAGEIRO_DIAS_AVISO_VENCIMENTO, 2);
+
+  const camposFormularioExterno: CamposFormularioExternoDTO = {
+    ...DEFAULT_CAMPOS_FORMULARIO_EXTERNO,
+    ...(typeof config?.campos_formulario_externo === "object" && config?.campos_formulario_externo !== null
+      ? (config.campos_formulario_externo as unknown as Partial<CamposFormularioExternoDTO>)
+      : {}),
+  };
 
   return {
     cobranca_aviso_previo_ativo: config?.cobranca_aviso_previo_ativo ?? true,
@@ -41,6 +53,7 @@ export async function obterConfiguracoesUsuario(usuarioId: string): Promise<Conf
     formato_nome_aluno: (config?.formato_nome_aluno as "curto" | "completo") ?? "curto",
     exibir_telefone_lista_alunos: config?.exibir_telefone_lista_alunos ?? false,
     contrato_exibir_dados_veiculo: config?.contrato_exibir_dados_veiculo ?? true,
+    campos_formulario_externo: camposFormularioExterno,
     chave_pix: configFin?.chave_pix_repasse ?? null,
     tipo_chave_pix: configFin?.tipo_chave_pix ?? null,
   };
@@ -52,11 +65,28 @@ export async function atualizarConfiguracoesUsuario(
 ): Promise<ConfiguracoesUsuarioDTO> {
   try {
     const configAnterior = await usuarioConfiguracoesRepository.getByUsuarioId(usuarioId);
-    await usuarioConfiguracoesRepository.update(usuarioId, payload);
+
+    let updateData: Record<string, unknown> = { ...payload };
+
+    if (payload.campos_formulario_externo) {
+      const camposAtuais: CamposFormularioExternoDTO = {
+        ...DEFAULT_CAMPOS_FORMULARIO_EXTERNO,
+        ...(typeof configAnterior?.campos_formulario_externo === "object" && configAnterior?.campos_formulario_externo !== null
+          ? (configAnterior.campos_formulario_externo as unknown as Partial<CamposFormularioExternoDTO>)
+          : {}),
+      };
+
+      updateData.campos_formulario_externo = {
+        ...camposAtuais,
+        ...payload.campos_formulario_externo,
+      };
+    }
+
+    await usuarioConfiguracoesRepository.update(usuarioId, updateData);
 
     const diff = calculateAuditDiff(
       configAnterior as Record<string, unknown> | null,
-      payload as Record<string, unknown>
+      updateData
     );
 
     if (diff.hasChanges) {
@@ -70,7 +100,7 @@ export async function atualizarConfiguracoesUsuario(
           campos_alterados: diff.campos,
           campos: diff.campos,
           alteracoes: diff.alteracoes,
-          ...payload,
+          ...updateData,
         },
       });
     }

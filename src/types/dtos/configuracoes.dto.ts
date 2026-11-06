@@ -1,5 +1,25 @@
 import { RastreamentoModo } from "../enums.js";
 
+export interface CamposFormularioExternoDTO {
+  turma: boolean;
+  data_nascimento: boolean;
+  genero: boolean;
+  periodo: boolean;
+  modalidade: boolean;
+  parentesco_responsavel: boolean;
+  email_responsavel: boolean;
+}
+
+export const DEFAULT_CAMPOS_FORMULARIO_EXTERNO: CamposFormularioExternoDTO = {
+  turma: false,
+  data_nascimento: true,
+  genero: true,
+  periodo: true,
+  modalidade: true,
+  parentesco_responsavel: true,
+  email_responsavel: true,
+};
+
 export interface ConfiguracoesUsuarioDTO {
   cobranca_aviso_previo_ativo: boolean;
   cobranca_aviso_previo_whatsapp_ativo: boolean;
@@ -20,6 +40,7 @@ export interface ConfiguracoesUsuarioDTO {
   formato_nome_responsavel: "primeiro_nome" | "completo";
   exibir_telefone_lista_alunos: boolean;
   contrato_exibir_dados_veiculo: boolean;
+  campos_formulario_externo: CamposFormularioExternoDTO;
   chave_pix: string | null;
   tipo_chave_pix: string | null;
 }
@@ -42,6 +63,5 @@ export interface UpdateConfiguracoesDTO {
   formato_nome_responsavel?: "primeiro_nome" | "completo";
   exibir_telefone_lista_alunos?: boolean;
   contrato_exibir_dados_veiculo?: boolean;
+  campos_formulario_externo?: Partial<CamposFormularioExternoDTO>;
 }
-
-
