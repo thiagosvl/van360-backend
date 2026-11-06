@@ -3,24 +3,17 @@ import { logger } from "../../config/logger.js";
 import { SubscriptionStatus, ConfigKey, CheckoutPaymentMethod } from "../../types/enums.js";
 import { subscriptionService } from "./subscription.service.js";
 import { subscriptionBillingService } from "./subscription-billing.service.js";
-import { subscriptionRepository } from "../../repositories/subscription.repository.js";
+import { subscriptionTrialMonitorService, TrialSubscriptionItem } from "./subscription-trial-monitor.service.js";
 import { monitorRepository } from "../../repositories/monitor.repository.js";
 import { notificationRepository } from "../../repositories/notification.repository.js";
 import { notificationService } from "../notifications/notification.service.js";
-import { getConfigNumber, getConfig } from "../configuracao.service.js";
+import { getConfigNumber } from "../configuracao.service.js";
 import { getNowBR, getStartOfDayBR, getEndOfDayBR, addDays, diffInDays, toPersistenceString } from "../../utils/date.utils.js";
 import {
   EVENTO_MOTORISTA_ASSINATURA_ATRASADA,
   EVENTO_MOTORISTA_ASSINATURA_VENCEU,
-  EVENTO_MOTORISTA_TESTE_ENCERRADO,
   EVENTO_MOTORISTA_ASSINATURA_VENCENDO,
   EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO,
-  EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO,
-  EVENTO_MOTORISTA_TRIAL_BONUS_INATIVO,
-  EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1,
-  EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2,
-  TRIAL_BONUS_INACTIVE_DAYS,
-  TRIAL_INACTIVE_PASSENGERS_THRESHOLD,
   EVENTO_MOTORISTA_RENOVACAO_LEMBRETE,
   EVENTO_MOTORISTA_RENOVACAO_URGENCIA,
   EVENTO_MOTORISTA_RENOVACAO_RECUPERACAO_1,
@@ -28,38 +21,27 @@ import {
   EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO
 } from "../../config/constants.js";
 
-/**
- * Monitor de Assinaturas (Job Logic)
- * Responsável por gerenciar transições automáticas de estado por tempo (Cron).
- */
 export const subscriptionMonitorService = {
-
-  // ---------------------------------------------------------------------------
-  // ORQUESTRADOR
-  // ---------------------------------------------------------------------------
 
   async runDailyCheck(): Promise<void> {
     logger.info("[SubscriptionMonitor] Iniciando verificação diária...");
 
     try {
-      const daysBeforeTrial = await getConfigNumber(ConfigKey.SAAS_DIAS_AVISO_TRIAL, 3);
+      await this.warnExpiringTrials();
+      await this.expireTrials();
+      await this.notifyTrialOnboardingMilestones();
+      await this.notifyTrialRecoveries();
 
-      // --- TRIAL ---
-      await this.warnExpiringTrials();                   // Avisos antes de expirar (1 dia)
-      await this.expireTrials();                          // D=trial_ends_at: expira + notifica
-      await this.notifyTrialRecoveries();                 // D+16/+20/+25: recuperação pós-expiry
-
-      // --- ASSINATURA PAGA ---
       await this.notifyDueTodaySubscriptions();
-      await this.checkOverduePayments();                  // D=venc: ACTIVE→PAST_DUE; D+carência: →EXPIRED
-      await this.notifyOverdueReminders();                // D+1/+2: lembretes PAST_DUE
-      await this.notifyRenewalRecoveries();               // D+5/+10: recuperação pós-EXPIRED
+      await this.checkOverduePayments();
+      await this.notifyOverdueReminders();
+      await this.notifyRenewalRecoveries();
 
-      // --- LIMPEZA ---
-      await this.cancelExpiredPendingInvoices();          // Cancela faturas PENDING vencidas
+      await this.cancelExpiredPendingInvoices();
 
-    } catch (error: any) {
-      logger.error({ error: error.message }, "[SubscriptionMonitor] Erro na verificação diária");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error({ error: message }, "[SubscriptionMonitor] Erro na verificação diária");
       throw error;
     }
   },
@@ -128,249 +110,54 @@ export const subscriptionMonitorService = {
     }
   },
 
-  // ---------------------------------------------------------------------------
-  // TRIAL — métodos unitários e de lote
-  // ---------------------------------------------------------------------------
+  async notifyTrialOnboardingMilestones(): Promise<void> {
+    return subscriptionTrialMonitorService.notifyTrialOnboardingMilestones();
+  },
 
-  async processarAvisoTrialUltimoDia(
-    sub: any,
+  async processarOnboardingTrial(
+    sub: TrialSubscriptionItem,
     now: Date = getNowBR(),
+    totalPassageiros: number = 0,
     notifiedSet?: Set<string>
   ): Promise<{ tipo: string; cicloRef: string } | null> {
-    const user = this.getUserObject((sub as any).usuarios);
-    if (!user?.telefone || !sub.trial_ends_at) return null;
+    return subscriptionTrialMonitorService.processarOnboardingTrial(sub, now, totalPassageiros, notifiedSet);
+  },
 
-    const daysLeft = diffInDays(now, sub.trial_ends_at);
-    if (daysLeft !== 1) return null;
-
-    const jaEstendeu = Boolean(sub.trial_estendido);
-    const { count } = await monitorRepository.getPassengerCount(sub.usuario_id);
-    const totalPassageiros = count ?? 0;
-
-    if (totalPassageiros < TRIAL_INACTIVE_PASSENGERS_THRESHOLD && !jaEstendeu) {
-      const tipo: string = EVENTO_MOTORISTA_TRIAL_BONUS_INATIVO;
-      const cicloRef = this.toCicloRef(sub.trial_ends_at);
-
-      if (notifiedSet?.has(`${sub.usuario_id}:${tipo}:${cicloRef}`)) return null;
-      if (!notifiedSet && await this.hasNotified(sub.usuario_id, tipo, cicloRef)) return null;
-
-      const novoTrialEnd = getEndOfDayBR(addDays(new Date(sub.trial_ends_at), TRIAL_BONUS_INACTIVE_DAYS)).toISOString();
-      await subscriptionRepository.extendTrialBonus(sub.id, novoTrialEnd);
-
-      logger.info({
-        usuarioId: sub.usuario_id,
-        totalPassageiros,
-        novoTrialEnd
-      }, "[SubscriptionMonitor] Bônus de trial (+7 dias) concedido para motorista inativo");
-
-      await notificationService.notifyDriver(user.telefone || "", tipo, {
-        nomeMotorista: user.nome,
-        email: user.email,
-        bonusDays: TRIAL_BONUS_INACTIVE_DAYS,
-        dataVencimento: novoTrialEnd,
-        usuarioId: sub.usuario_id,
-      }, { channels: [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND], email: user.email, usuarioId: sub.usuario_id });
-
-      if (!notifiedSet) {
-        await this.logNotification(sub.usuario_id, tipo, cicloRef);
-      }
-
-      return { tipo, cicloRef };
-    }
-
-    const tipo: string = EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO;
-    const cicloRef = this.toCicloRef(sub.trial_ends_at);
-
-    if (notifiedSet?.has(`${sub.usuario_id}:${tipo}:${cicloRef}`)) return null;
-    if (!notifiedSet && await this.hasNotified(sub.usuario_id, tipo, cicloRef)) return null;
-
-    await notificationService.notifyDriver(user.telefone || "", tipo, {
-      nomeMotorista: user.nome,
-      email: user.email,
-      trialDays: daysLeft,
-      dataVencimento: sub.trial_ends_at,
-      usuarioId: sub.usuario_id,
-    }, { channels: [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND], email: user.email, usuarioId: sub.usuario_id });
-
-    if (!notifiedSet) {
-      await this.logNotification(sub.usuario_id, tipo, cicloRef);
-    }
-
-    return { tipo, cicloRef };
+  async processarAvisoTrialUltimoDia(
+    sub: TrialSubscriptionItem,
+    now: Date = getNowBR(),
+    notifiedSet?: Set<string>,
+    totalPassageirosOverride?: number
+  ): Promise<{ tipo: string; cicloRef: string } | null> {
+    return subscriptionTrialMonitorService.processarAvisoTrialUltimoDia(sub, now, notifiedSet, totalPassageirosOverride);
   },
 
   async warnExpiringTrials(): Promise<void> {
-    const now = getNowBR();
-    const daysBeforeExpiry = 1;
-
-    const windowStart = now.toISOString();
-    const windowEnd = getEndOfDayBR(addDays(now, daysBeforeExpiry)).toISOString();
-
-    const { data: expiring, error } = await monitorRepository.getExpiringTrials(windowStart, windowEnd);
-    if (error || !expiring?.length) return;
-
-    const userIds = expiring.map((sub: any) => sub.usuario_id);
-    const tiposPossiveis = [EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO, EVENTO_MOTORISTA_TRIAL_BONUS_INATIVO];
-    const notifiedSet = await this.getNotifiedSet(userIds, tiposPossiveis);
-    const logsToSave: { usuarioId: string; tipo: string; cicloRef: string }[] = [];
-
-    for (const sub of expiring) {
-      const result = await this.processarAvisoTrialUltimoDia(sub, now, notifiedSet);
-      if (result) {
-        logsToSave.push({
-          usuarioId: sub.usuario_id,
-          tipo: result.tipo,
-          cicloRef: result.cicloRef
-        });
-      }
-    }
-
-    await this.logNotificationsBulk(logsToSave);
+    return subscriptionTrialMonitorService.warnExpiringTrials();
   },
 
-  async processarExpiracaoTrial(sub: any): Promise<boolean> {
-    const user = this.getUserObject((sub as any).usuarios);
-    const jaEstendeu = Boolean(sub.trial_estendido);
-    const { count } = await monitorRepository.getPassengerCount(sub.usuario_id);
-    const totalPassageiros = count ?? 0;
-
-    if (totalPassageiros < TRIAL_INACTIVE_PASSENGERS_THRESHOLD && !jaEstendeu) {
-      const tipo: string = EVENTO_MOTORISTA_TRIAL_BONUS_INATIVO;
-      const cicloRef = this.toCicloRef(sub.trial_ends_at || new Date());
-
-      const novoTrialEnd = getEndOfDayBR(addDays(getNowBR(), TRIAL_BONUS_INACTIVE_DAYS)).toISOString();
-      await subscriptionRepository.extendTrialBonus(sub.id, novoTrialEnd);
-
-      logger.info({
-        usuarioId: sub.usuario_id,
-        totalPassageiros,
-        novoTrialEnd
-      }, "[SubscriptionMonitor] Bônus de trial (+7 dias) concedido via fallback de expiração para motorista inativo");
-
-      if (user?.telefone) {
-        await notificationService.notifyDriver(user.telefone || "", tipo, {
-          nomeMotorista: user.nome,
-          email: user.email,
-          bonusDays: TRIAL_BONUS_INACTIVE_DAYS,
-          dataVencimento: novoTrialEnd,
-          usuarioId: sub.usuario_id,
-        }, { channels: [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND], email: user.email, usuarioId: sub.usuario_id });
-
-        await this.logNotification(sub.usuario_id, tipo, cicloRef);
-      }
-
-      return false;
-    }
-
-    await subscriptionService.updateStatus(sub.id, SubscriptionStatus.EXPIRED, "Período de teste encerrado.");
-
-    if (user?.telefone) {
-      await notificationService.notifyDriver(user.telefone || "", EVENTO_MOTORISTA_TESTE_ENCERRADO, {
-        nomeMotorista: user.nome,
-        email: user.email,
-        usuarioId: sub.usuario_id,
-      }, { channels: [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND], email: user.email, usuarioId: sub.usuario_id });
-      await this.logNotification(sub.usuario_id, EVENTO_MOTORISTA_TESTE_ENCERRADO, this.toCicloRef(sub.trial_ends_at || new Date()));
-      return true;
-    }
-    return false;
+  async processarExpiracaoTrial(
+    sub: TrialSubscriptionItem,
+    totalPassageirosOverride?: number
+  ): Promise<boolean> {
+    return subscriptionTrialMonitorService.processarExpiracaoTrial(sub, totalPassageirosOverride);
   },
 
   async expireTrials(): Promise<void> {
-    const now = getNowBR().toISOString();
-    const { data: expiredTrials, error } = await monitorRepository.getExpiredTrials(now);
-
-    if (error) {
-      logger.error({ error: error.message }, "[SubscriptionMonitor] Erro ao buscar trials expirados");
-      return;
-    }
-    if (!expiredTrials?.length) return;
-
-    logger.info({ count: expiredTrials.length }, "[SubscriptionMonitor] Expirando trials...");
-
-    for (const sub of expiredTrials) {
-      await this.processarExpiracaoTrial(sub);
-    }
+    return subscriptionTrialMonitorService.expireTrials();
   },
 
   async processarRecuperacaoTrial(
-    sub: any,
+    sub: TrialSubscriptionItem,
     now: Date = getNowBR(),
     valorPromocional?: number,
     notifiedSet?: Set<string>
   ): Promise<{ tipo: string; cicloRef: string } | null> {
-    const user = this.getUserObject((sub as any).usuarios);
-    if (!user?.telefone || !sub.trial_ends_at) return null;
-
-    const recoverySteps = [
-      { daysAgo: 7, tipo: EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1 },
-      { daysAgo: 15, tipo: EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2 },
-    ];
-
-    const cicloRef = this.toCicloRef(sub.trial_ends_at);
-    const daysSinceExpiry = diffInDays(sub.trial_ends_at, now);
-
-    for (const step of recoverySteps) {
-      const inWindow = daysSinceExpiry >= step.daysAgo - 1 && daysSinceExpiry <= step.daysAgo + 1;
-      if (!inWindow) continue;
-
-      if (notifiedSet?.has(`${sub.usuario_id}:${step.tipo}:${cicloRef}`)) continue;
-      if (!notifiedSet && await this.hasNotified(sub.usuario_id, step.tipo, cicloRef)) continue;
-
-      await notificationService.notifyDriver(user.telefone || "", step.tipo, {
-        nomeMotorista: user.nome,
-        email: user.email,
-        valorPromocional: step.tipo === EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2 ? valorPromocional : undefined,
-        usuarioId: sub.usuario_id,
-      }, { channels: [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.RESEND], email: user.email, usuarioId: sub.usuario_id });
-
-      if (!notifiedSet) {
-        await this.logNotification(sub.usuario_id, step.tipo, cicloRef);
-      }
-
-      return { tipo: step.tipo, cicloRef };
-    }
-
-    return null;
+    return subscriptionTrialMonitorService.processarRecuperacaoTrial(sub, now, valorPromocional, notifiedSet);
   },
 
   async notifyTrialRecoveries(): Promise<void> {
-    const now = getNowBR();
-
-    const recoverySteps = [
-      { daysAgo: 7, tipo: EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1 },
-      { daysAgo: 15, tipo: EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2 },
-    ];
-
-    const windows = recoverySteps.map(step => this.windowAround(now, step.daysAgo));
-    const { data: expired, error } = await monitorRepository.getExpiredTrialsForRecovery(windows);
-
-    if (error) {
-      logger.error({ error: error.message }, "[SubscriptionMonitor] Erro ao buscar trials expirados para recuperação");
-      return;
-    }
-    if (!expired?.length) return;
-
-    const isPromotionActive = (await getConfig(ConfigKey.SAAS_PROMOCAO_ATIVA, "false")) === "true";
-    let valorPromocional: number | undefined;
-    if (isPromotionActive) {
-      const { data: plano } = await monitorRepository.getPromotionValue();
-      valorPromocional = plano?.valor_promocional ?? undefined;
-    }
-
-    const userIds = expired.map((sub: any) => sub.usuario_id);
-    const tiposPossiveis = recoverySteps.map(s => s.tipo);
-    const notifiedSet = await this.getNotifiedSet(userIds, tiposPossiveis);
-    const logsToSave: { usuarioId: string; tipo: string; cicloRef: string }[] = [];
-
-    for (const sub of expired) {
-      const result = await this.processarRecuperacaoTrial(sub, now, valorPromocional, notifiedSet);
-      if (result) {
-        logsToSave.push({ usuarioId: sub.usuario_id, tipo: result.tipo, cicloRef: result.cicloRef });
-      }
-    }
-
-    await this.logNotificationsBulk(logsToSave);
+    return subscriptionTrialMonitorService.notifyTrialRecoveries();
   },
 
   // ---------------------------------------------------------------------------

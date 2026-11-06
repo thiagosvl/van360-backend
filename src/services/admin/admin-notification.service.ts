@@ -214,12 +214,16 @@ export const adminNotificationService = {
           throw new Error("Motorista não possui assinatura cadastrada.");
         }
 
+        const { count } = await monitorRepository.getPassengerCount(driverId);
+        const totalPassageiros = count ?? 0;
+
         await notificationService.notifyDriver(
-          user.telefone || "",
+          user.telefone || user.email || driverId,
           EVENTO_MOTORISTA_TESTE_ENCERRADO,
           {
             nomeMotorista: user.nome,
             email: user.email,
+            totalPassageiros,
             usuarioId: driverId,
           },
           {
@@ -255,15 +259,18 @@ export const adminNotificationService = {
         }
 
         const trialDays = sub.trial_ends_at ? Math.max(1, diffInDays(getNowBR(), sub.trial_ends_at)) : 1;
+        const { count } = await monitorRepository.getPassengerCount(driverId);
+        const totalPassageiros = count ?? 0;
 
         await notificationService.notifyDriver(
-          user.telefone || "",
+          user.telefone || user.email || driverId,
           EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO,
           {
             nomeMotorista: user.nome,
             email: user.email,
             trialDays,
             dataVencimento: sub.trial_ends_at,
+            totalPassageiros,
             usuarioId: driverId,
           },
           {

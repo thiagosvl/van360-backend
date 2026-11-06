@@ -13,7 +13,7 @@ export const monitorRepository = {
     async getExpiringTrials(windowStart: string, windowEnd: string) {
         return supabaseAdmin
             .from("assinaturas")
-            .select("id, usuario_id, trial_ends_at, trial_estendido, usuarios(nome, telefone, email)")
+            .select("id, usuario_id, trial_ends_at, trial_estendido, usuarios(nome, telefone, email, ativo)")
             .eq("status", SubscriptionStatus.TRIAL)
             .gte("trial_ends_at", windowStart)
             .lte("trial_ends_at", windowEnd);
@@ -38,7 +38,7 @@ export const monitorRepository = {
     async getExpiredTrials(now: string) {
         return supabaseAdmin
             .from("assinaturas")
-            .select("id, status, trial_ends_at, trial_estendido, usuario_id, usuarios(nome, telefone, email)")
+            .select("id, status, trial_ends_at, trial_estendido, usuario_id, usuarios(nome, telefone, email, ativo)")
             .eq("status", SubscriptionStatus.TRIAL)
             .lte("trial_ends_at", now);
     },
@@ -46,7 +46,7 @@ export const monitorRepository = {
     async getExpiredTrialsForRecovery(windows: {from: string, to: string}[]) {
         let query = supabaseAdmin
             .from("assinaturas")
-            .select("id, usuario_id, trial_ends_at, usuarios(nome, telefone)")
+            .select("id, usuario_id, trial_ends_at, usuarios(nome, telefone, email, ativo)")
             .eq("status", SubscriptionStatus.EXPIRED)
             .is("data_vencimento", null)
             .not("trial_ends_at", "is", null);
@@ -75,6 +75,14 @@ export const monitorRepository = {
             .gte("data_vencimento", startOfDayStr)
             .lte("data_vencimento", endOfDayStr)
             .neq("metodo_pagamento", CheckoutPaymentMethod.APPLE_IAP);
+    },
+
+    async getActiveTrialsForOnboarding(nowStr: string) {
+        return supabaseAdmin
+            .from("assinaturas")
+            .select("id, usuario_id, data_inicio, created_at, trial_ends_at, trial_estendido, usuarios(nome, telefone, email, ativo)")
+            .eq("status", SubscriptionStatus.TRIAL)
+            .gt("trial_ends_at", nowStr);
     },
 
     async getPastDueForGracePeriod(nowStr: string, graceLimitDate: string) {

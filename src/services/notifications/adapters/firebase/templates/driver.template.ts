@@ -19,14 +19,19 @@ export class FirebaseDriverTemplates {
 
     static trialEnded(ctx: Record<string, unknown>): FirebaseMessagePayload {
         const driverName = NotificationContextFormatter.getFirstName(ctx.nomeMotorista as string, "Motorista");
+        const totalPassageiros = Number(ctx.totalPassageiros) || 0;
         const checkoutUrl = NotificationUrlBuilder.getExternalCheckoutBridgeUrl({
             autoOpen: true,
             token: (ctx.tokenCheckout || ctx.token) as string
         });
 
+        const body = totalPassageiros > 0
+            ? `Olá ${driverName}, ${totalPassageiros === 1 ? "seu 1 aluno continua salvo" : `seus ${totalPassageiros} alunos continuam salvos`}! Assine agora para manter os lembretes aos pais e o controle da van em dia.`
+            : `Olá ${driverName}, assine agora para manter o envio de lembretes aos pais e suas cobranças em dia!`;
+
         return {
             title: "Seu teste encerrou ⏰",
-            body: `Olá ${driverName}, assine agora para manter o envio de lembretes aos pais e suas cobranças em dia!`,
+            body,
             data: {
                 action: PushNotificationAction.OPEN_SUBSCRIPTION,
                 checkoutUrl
@@ -35,17 +40,147 @@ export class FirebaseDriverTemplates {
     }
 
     static trialLastCall(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        const totalPassageiros = Number(ctx.totalPassageiros) || 0;
         const checkoutUrl = NotificationUrlBuilder.getExternalCheckoutBridgeUrl({
             autoOpen: true,
             token: (ctx.tokenCheckout || ctx.token) as string
         });
 
+        const body = totalPassageiros > 0
+            ? `Assine hoje para manter as carteirinhas e os lembretes de pagamento ${totalPassageiros === 1 ? "do seu aluno" : `dos seus ${totalPassageiros} alunos`} funcionando no automático.`
+            : "Assine hoje para continuar enviando lembretes aos pais e manter o financeiro do transporte organizado.";
+
         return {
             title: "Último dia de teste! ⚠️",
-            body: "Assine hoje para continuar enviando lembretes aos pais e manter o financeiro do transporte organizado.",
+            body,
             data: {
                 action: PushNotificationAction.OPEN_SUBSCRIPTION,
                 checkoutUrl
+            }
+        };
+    }
+
+    static trialActivationD1(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        const totalPassageiros = Number(ctx.totalPassageiros) || 0;
+        const userId = (ctx.usuarioId || ctx.userId || "") as string;
+
+        if (totalPassageiros === 0) {
+            return {
+                title: "📲 Sem tempo para digitar tudo?",
+                body: "Envie seu link exclusivo no WhatsApp dos pais e deixe que eles preencham a carteirinha dos filhos para você!",
+                data: {
+                    action: PushNotificationAction.OPEN_PASSENGER_REQUESTS,
+                    userId
+                }
+            };
+        }
+
+        return {
+            title: "🎉 Ótimo começo na sua van!",
+            body: "Dica rápida: envie seu link exclusivo no WhatsApp dos pais para eles preencherem o restante das carteirinhas sozinhos!",
+            data: {
+                action: PushNotificationAction.OPEN_PASSENGER_REQUESTS,
+                userId
+            }
+        };
+    }
+
+    static trialActivationD3(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        const totalPassageiros = Number(ctx.totalPassageiros) || 0;
+        const userId = (ctx.usuarioId || ctx.userId || "") as string;
+
+        if (totalPassageiros === 0) {
+            return {
+                title: "📇 Cadastre 1 aluno para testar!",
+                body: "Veja na prática como a carteirinha do aluno e as parcelas mensais ficam organizadas automaticamente no celular.",
+                data: {
+                    action: PushNotificationAction.OPEN_PASSENGERS,
+                    userId
+                }
+            };
+        }
+
+        return {
+            title: "💰 Chega de cobrar pais no WhatsApp!",
+            body: "Configure sua chave Pix no aplicativo. O Van360 avisa os pais antes do vencimento sem você precisar cobrar ninguém.",
+            data: {
+                action: PushNotificationAction.OPEN_SETTINGS,
+                userId
+            }
+        };
+    }
+
+    static trialActivationD5(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        const totalPassageiros = Number(ctx.totalPassageiros) || 0;
+        const userId = (ctx.usuarioId || ctx.userId || "") as string;
+
+        if (totalPassageiros === 0) {
+            return {
+                title: "🚌 Sua van organizada em 2 minutos",
+                body: "Compartilhe o link de cadastro no grupo dos pais hoje e receba as carteirinhas dos alunos prontas no aplicativo!",
+                data: {
+                    action: PushNotificationAction.OPEN_PASSENGER_REQUESTS,
+                    userId
+                }
+            };
+        }
+
+        return {
+            title: "📋 Chega de itinerário no papel!",
+            body: "Monte sua rota no aplicativo e marque embarque, desembarque ou ausência dos alunos com apenas um toque.",
+            data: {
+                action: PushNotificationAction.OPEN_ROUTE,
+                userId
+            }
+        };
+    }
+
+    static trialActivationD8(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        const totalPassageiros = Number(ctx.totalPassageiros) || 0;
+        const userId = (ctx.usuarioId || ctx.userId || "") as string;
+
+        if (totalPassageiros === 0) {
+            return {
+                title: "⏳ Metade do seu teste grátis passou!",
+                body: "Ainda dá tempo de dar adeus ao caderninho. Toque aqui para cadastrar seus alunos e testar o controle de mensalidades.",
+                data: {
+                    action: PushNotificationAction.OPEN_PASSENGERS,
+                    userId
+                }
+            };
+        }
+
+        return {
+            title: "✍️ Contratos digitais no WhatsApp!",
+            body: "Gere contratos para seus alunos em 1 clique e colha a assinatura dos responsáveis direto pelo celular, sem papelada.",
+            data: {
+                action: PushNotificationAction.OPEN_CONTRACTS,
+                userId
+            }
+        };
+    }
+
+    static trialActivationD11(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        const totalPassageiros = Number(ctx.totalPassageiros) || 0;
+        const userId = (ctx.usuarioId || ctx.userId || "") as string;
+
+        if (totalPassageiros === 0) {
+            return {
+                title: "⚠️ Restam 4 dias de teste grátis",
+                body: "Não deixe seu teste acabar em branco! Cadastre seus alunos agora para testar os lembretes automáticos de pagamento.",
+                data: {
+                    action: PushNotificationAction.OPEN_PASSENGERS,
+                    userId
+                }
+            };
+        }
+
+        return {
+            title: "📲 Já convidou os pais para o app?",
+            body: "Pela carteirinha do aluno, você libera o aplicativo dos pais para verem recibos, contratos e avisarem ausências!",
+            data: {
+                action: PushNotificationAction.OPEN_PASSENGERS,
+                userId
             }
         };
     }
@@ -417,10 +552,10 @@ export class FirebaseDriverTemplates {
     }
 
     static nightClosingDriver(ctx: Record<string, unknown>): FirebaseMessagePayload {
-        const isTrial = Boolean(ctx.isTrial);
+        const semAlunos = ctx.temAlunos !== undefined ? !Boolean(ctx.temAlunos) : Boolean(ctx.isTrial);
         const userId = (ctx.usuarioId || ctx.userId || "") as string;
 
-        if (isTrial) {
+        if (semAlunos) {
             return {
                 title: "Controle de Pagamentos 💵",
                 body: "Recebeu pagamentos da van hoje? Cadastre seus alunos no Van360 para dar baixa nas parcelas com um toque e dar adeus ao caderninho!",

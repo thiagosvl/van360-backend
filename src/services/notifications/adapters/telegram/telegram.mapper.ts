@@ -5,7 +5,8 @@ import {
     EVENTO_ADMIN_ASSINATURA_CANCELADA,
     EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO,
     EVENTO_ADMIN_SISTEMA_ALERTA,
-    EVENTO_ADMIN_REPASSE_SUCESSO
+    EVENTO_ADMIN_REPASSE_SUCESSO,
+    EVENTO_ADMIN_COBRANCA_AUTOMATICA_ALTERADA
 } from "../../../../config/constants.js";
 import { TelegramTemplates } from "./telegram.template.js";
 import { CompositeMessagePart } from "../../../../types/dtos/evolution.dto.js";
@@ -20,6 +21,7 @@ export class TelegramMapper {
                 case EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO: return TelegramTemplates.paymentFailed(contextData as never);
                 case EVENTO_ADMIN_SISTEMA_ALERTA: return TelegramTemplates.systemAlert(contextData as never);
                 case EVENTO_ADMIN_REPASSE_SUCESSO: return TelegramTemplates.repasseSuccess(contextData as never);
+                case EVENTO_ADMIN_COBRANCA_AUTOMATICA_ALTERADA: return TelegramTemplates.cobrancaAutomaticaAlterada(contextData as never);
                 default:
                     logger.warn({ eventName }, "[TelegramMapper] Template não encontrado para o evento.");
                     return null;

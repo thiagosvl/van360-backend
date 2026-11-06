@@ -33,6 +33,11 @@ import {
     EVENTO_MOTORISTA_TRIAL_BONUS_INATIVO,
     EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1,
     EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2,
+    EVENTO_MOTORISTA_TRIAL_ATIVACAO_D1,
+    EVENTO_MOTORISTA_TRIAL_ATIVACAO_D3,
+    EVENTO_MOTORISTA_TRIAL_ATIVACAO_D5,
+    EVENTO_MOTORISTA_TRIAL_ATIVACAO_D8,
+    EVENTO_MOTORISTA_TRIAL_ATIVACAO_D11,
     EVENTO_MOTORISTA_NOVO_PRE_CADASTRO,
     EVENTO_MOTORISTA_AUSENCIA_REGISTRADA,
     EVENTO_MOTORISTA_AUSENCIA_REMOVIDA,
@@ -47,13 +52,17 @@ export class FirebaseMapper {
     static getTemplate(eventName: string, contextData: Record<string, unknown>): FirebaseMessagePayload | null {
         try {
             switch (eventName) {
-                // MOTORISTA TEMPLATES
                 case EVENTO_MOTORISTA_TESTE_BOAS_VINDAS: return FirebaseDriverTemplates.welcomeTrial(contextData);
                 case EVENTO_MOTORISTA_TESTE_ENCERRADO: return FirebaseDriverTemplates.trialEnded(contextData);
                 case EVENTO_MOTORISTA_TRIAL_D14_ULTIMO_AVISO: return FirebaseDriverTemplates.trialLastCall(contextData);
                 case EVENTO_MOTORISTA_TRIAL_BONUS_INATIVO: return FirebaseDriverTemplates.trialBonusInactive(contextData);
                 case EVENTO_MOTORISTA_TRIAL_RECUPERACAO_1: return FirebaseDriverTemplates.trialRecovery1(contextData);
                 case EVENTO_MOTORISTA_TRIAL_RECUPERACAO_2: return FirebaseDriverTemplates.trialRecovery2(contextData);
+                case EVENTO_MOTORISTA_TRIAL_ATIVACAO_D1: return FirebaseDriverTemplates.trialActivationD1(contextData);
+                case EVENTO_MOTORISTA_TRIAL_ATIVACAO_D3: return FirebaseDriverTemplates.trialActivationD3(contextData);
+                case EVENTO_MOTORISTA_TRIAL_ATIVACAO_D5: return FirebaseDriverTemplates.trialActivationD5(contextData);
+                case EVENTO_MOTORISTA_TRIAL_ATIVACAO_D8: return FirebaseDriverTemplates.trialActivationD8(contextData);
+                case EVENTO_MOTORISTA_TRIAL_ATIVACAO_D11: return FirebaseDriverTemplates.trialActivationD11(contextData);
                 case EVENTO_MOTORISTA_NOVO_PRE_CADASTRO: return FirebaseDriverTemplates.newPassengerPreRegistration(contextData);
                 case EVENTO_MOTORISTA_AUSENCIA_REGISTRADA: return FirebaseDriverTemplates.absenceRegisteredByParent(contextData);
                 case EVENTO_MOTORISTA_AUSENCIA_REMOVIDA: return FirebaseDriverTemplates.absenceRemovedByParent(contextData);
@@ -74,7 +83,6 @@ export class FirebaseMapper {
                 case EVENTO_MOTORISTA_INDICACAO_BONUS: return FirebaseDriverTemplates.referralBonus(contextData);
                 case EVENTO_MOTORISTA_INDICACAO_CADASTRO: return FirebaseDriverTemplates.referralRegistered(contextData);
 
-                // PASSAGEIRO / RESPONSÁVEL TEMPLATES
                 case EVENTO_PASSAGEIRO_CONTRATO_ASSINADO: return FirebasePassengerTemplates.contractSignedParent(contextData);
                 case EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO: return FirebasePassengerTemplates.dueSoonParent(contextData);
                 case EVENTO_PASSAGEIRO_VENCIMENTO_HOJE: return FirebasePassengerTemplates.dueTodayParent(contextData);

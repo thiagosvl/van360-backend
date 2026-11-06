@@ -1,4 +1,4 @@
-﻿import { NotificationChannelEnum, TipoResponsavel } from '../types/enums.js';
+import { NotificationChannelEnum, TipoResponsavel } from '../types/enums.js';
 import crypto from "node:crypto";
 import { cobrancaRepository } from "../repositories/cobranca.repository.js";
 import { passageiroRepository } from "../repositories/passageiro.repository.js";
@@ -1499,6 +1499,12 @@ export const cobrancaService = {
             const lista = cobrancasPorMotorista.get(m.id) || [];
             const contagemAlunos = contagemMap.get(m.id) || 0;
             const temAlunos = contagemAlunos >= 2;
+            const assinaturaObj = Array.isArray(m.assinaturas) ? m.assinaturas[0] : m.assinaturas;
+            const isTrial = assinaturaObj?.status === SubscriptionStatus.TRIAL;
+
+            if (isTrial && lista.length === 0 && !temAlunos) {
+              return;
+            }
 
             try {
               const sent = await this.dispararPushAlertaHojeParaMotorista(m, lista, temAlunos);
@@ -1557,6 +1563,9 @@ export const cobrancaService = {
         return;
       }
 
+      const motoristaIds = motoristas.map(m => m.id);
+      const contagemMap = await passageiroRepository.getContagemPassageirosAtivosPorMotorista(motoristaIds);
+
       let sentCount = 0;
       const BATCH_SIZE = 10;
 
@@ -1565,15 +1574,21 @@ export const cobrancaService = {
 
         await Promise.all(
           chunk.map(async (m) => {
+            const contagemAlunos = contagemMap.get(m.id) || 0;
+            if (contagemAlunos === 0) {
+              return;
+            }
+
             const assinaturaObj = Array.isArray(m.assinaturas) ? m.assinaturas[0] : m.assinaturas;
             const isTrial = assinaturaObj?.status === SubscriptionStatus.TRIAL;
 
             try {
               const sent = await notificationService.notifyDriver(
-                m.telefone || "",
+                m.telefone || m.email || m.id,
                 EVENTO_MOTORISTA_CONFERENCIA_NOTURNA,
                 {
                   isTrial,
+                  temAlunos: contagemAlunos > 0,
                   nomeMotorista: m.nome,
                   usuarioId: m.id
                 },

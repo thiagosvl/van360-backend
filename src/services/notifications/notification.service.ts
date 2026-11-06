@@ -132,6 +132,10 @@ class NotificationService {
             return "";
         }
 
+        if (channel === NotificationChannelEnum.FIREBASE) {
+            return to || (options?.email as string) || (contextData?.email as string) || (options?.usuarioId as string) || (contextData?.usuarioId as string) || "";
+        }
+
         return to || (options?.email as string) || (contextData?.email as string) || "";
     }
 
