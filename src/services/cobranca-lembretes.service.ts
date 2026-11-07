@@ -58,7 +58,8 @@ function mapQueueItemToDTO(
     metadata?.isencaoEncargos === true ||
     optionsMetadata?.isencaoEncargos === true;
 
-  const enviadoEm = item.created_at || item.updated_at || new Date().toISOString();
+  const enviadoEm =
+    item.updated_at || item.created_at || new Date().toISOString();
   const dataEnvioStr = toPersistenceString(enviadoEm);
   const dataVencPayload =
     typeof payload.dataVencimento === "string" && payload.dataVencimento
@@ -120,48 +121,6 @@ function mapQueueItemToDTO(
   };
 }
 
-function buildFallbackFromUltimaNotificacao(
-  cobrancaId: string,
-  dataEnvioUltimaNotificacao: string,
-  dataVencimento: string
-): CobrancaLembreteEnviadoDTO {
-  const envioStr = toPersistenceString(dataEnvioUltimaNotificacao);
-  const vencStr = toPersistenceString(dataVencimento);
-
-  if (envioStr < vencStr) {
-    const diasAntecedencia = Math.max(1, diffInDays(envioStr, vencStr));
-    return {
-      id: `fallback_${cobrancaId}`,
-      evento: EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
-      tipo: CobrancaLembreteTipoEnum.ANTECIPADO,
-      dias_referencia: diasAntecedencia,
-      destinatario: null,
-      enviado_em: `${envioStr}T08:00:00.000-03:00`,
-    };
-  }
-
-  if (envioStr > vencStr) {
-    const diasAtraso = Math.max(1, diffInDays(vencStr, envioStr));
-    return {
-      id: `fallback_${cobrancaId}`,
-      evento: EVENTO_PASSAGEIRO_ATRASADO,
-      tipo: CobrancaLembreteTipoEnum.ATRASO,
-      dias_referencia: diasAtraso,
-      destinatario: null,
-      enviado_em: `${envioStr}T08:00:00.000-03:00`,
-    };
-  }
-
-  return {
-    id: `fallback_${cobrancaId}`,
-    evento: EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
-    tipo: CobrancaLembreteTipoEnum.VENCIMENTO_HOJE,
-    dias_referencia: 0,
-    destinatario: null,
-    enviado_em: `${envioStr}T08:00:00.000-03:00`,
-  };
-}
-
 export const cobrancaLembretesService = {
   async listarLembretesEnviados(
     cobrancaId: string,
@@ -181,26 +140,10 @@ export const cobrancaLembretesService = {
       EVENTOS_LEMBRETE_COBRANCA
     );
 
-    const matched = items
+    return items
       .filter((item) =>
         matchesCobranca(item, cobranca.id, cobranca.mes, cobranca.ano)
       )
       .map((item) => mapQueueItemToDTO(item, cobranca.data_vencimento));
-
-    if (matched.length > 0) {
-      return matched;
-    }
-
-    if (cobranca.data_envio_ultima_notificacao) {
-      return [
-        buildFallbackFromUltimaNotificacao(
-          cobranca.id,
-          cobranca.data_envio_ultima_notificacao,
-          cobranca.data_vencimento
-        ),
-      ];
-    }
-
-    return [];
   },
 };
