@@ -1,6 +1,16 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { SubscriptionStatus, SubscriptionInvoiceStatus, CheckoutPaymentMethod, SubscriptionIdentifer } from "../types/enums.js";
 
+/**
+ * Exclui assinaturas Apple IAP sem descartar as que ainda não têm método de pagamento.
+ *
+ * `.neq("metodo_pagamento", "apple_iap")` vira `metodo_pagamento <> 'apple_iap'` no SQL, e
+ * NULL <> 'x' não é verdadeiro: toda assinatura com metodo_pagamento NULL some da query.
+ * Assinaturas ACTIVE sem método existem de verdade (ex.: bônus de indicação concedido durante
+ * o trial, antes de o motorista assinar) e precisam continuar nos jobs de cobrança.
+ */
+const EXCLUDE_APPLE_IAP = `metodo_pagamento.is.null,metodo_pagamento.neq.${CheckoutPaymentMethod.APPLE_IAP}`;
+
 export const monitorRepository = {
     async cancelExpiredPendingInvoices(now: string) {
         return supabaseAdmin
@@ -74,7 +84,7 @@ export const monitorRepository = {
             .eq("status", SubscriptionStatus.ACTIVE)
             .gte("data_vencimento", startOfDayStr)
             .lte("data_vencimento", endOfDayStr)
-            .neq("metodo_pagamento", CheckoutPaymentMethod.APPLE_IAP);
+            .or(EXCLUDE_APPLE_IAP);
     },
 
     async getActiveTrialsForOnboarding(nowStr: string) {
@@ -92,7 +102,7 @@ export const monitorRepository = {
             .eq("status", SubscriptionStatus.ACTIVE)
             .lt("data_vencimento", nowStr)
             .gt("data_vencimento", graceLimitDate)
-            .neq("metodo_pagamento", CheckoutPaymentMethod.APPLE_IAP);
+            .or(EXCLUDE_APPLE_IAP);
     },
 
     async getExpiredForGracePeriod(graceLimitDate: string) {
@@ -101,7 +111,7 @@ export const monitorRepository = {
             .select("id, usuario_id, data_vencimento, metodo_pagamento, planos(nome, valor), usuarios(nome, telefone, email)")
             .in("status", [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE])
             .lte("data_vencimento", graceLimitDate)
-            .neq("metodo_pagamento", CheckoutPaymentMethod.APPLE_IAP);
+            .or(EXCLUDE_APPLE_IAP);
     },
 
     async getPastDueForReminders(windows: {from: string, to: string}[]) {
@@ -110,7 +120,7 @@ export const monitorRepository = {
             .select("id, usuario_id, data_vencimento, metodo_pagamento, planos(nome, valor), usuarios(nome, telefone, email)")
             .eq("status", SubscriptionStatus.PAST_DUE)
             .not("data_vencimento", "is", null)
-            .neq("metodo_pagamento", CheckoutPaymentMethod.APPLE_IAP);
+            .or(EXCLUDE_APPLE_IAP);
 
         if (windows.length > 0) {
             const orFilters = windows.map(w => `and(data_vencimento.gte.${w.from},data_vencimento.lte.${w.to})`);
@@ -170,7 +180,7 @@ export const monitorRepository = {
             .select("*, planos(*), metodos_pagamento(last_4_digits), usuarios(nome, telefone, email)")
             .in("status", [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE])
             .lte("data_vencimento", thresholdStr)
-            .neq("metodo_pagamento", CheckoutPaymentMethod.APPLE_IAP);
+            .or(EXCLUDE_APPLE_IAP);
     },
 
     async getFailedCardInvoicesCount(userId: string, sinceStr: string) {
