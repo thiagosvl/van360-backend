@@ -5,6 +5,13 @@ export enum CobrancaStatus {
   CANCELADA = "cancelada",
 }
 
+export enum CobrancaLembreteTipoEnum {
+  ANTECIPADO = "ANTECIPADO",
+  VENCIMENTO_HOJE = "VENCIMENTO_HOJE",
+  ATRASO = "ATRASO",
+  ISENCAO_ENCARGOS = "ISENCAO_ENCARGOS",
+}
+
 export enum CobrancaTipoPagamento {
   DINHEIRO = "dinheiro",
   CARTAO_CREDITO = "cartao-credito",

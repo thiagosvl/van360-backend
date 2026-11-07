@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { moneyToNumber } from "../../utils/currency.utils.js";
-import { CobrancaTipoPagamento } from "../enums.js";
+import { CobrancaLembreteTipoEnum, CobrancaTipoPagamento } from "../enums.js";
 
 export const createCobrancaSchema = z.object({
     usuario_id: z.string().uuid(),
@@ -101,4 +101,17 @@ export const obterReciboAnualQuerySchema = z.object({
 });
 
 export type ObterReciboAnualQueryDTO = z.infer<typeof obterReciboAnualQuerySchema>;
+
+export const listarLembretesEnviadosParamsSchema = z.object({
+    id: z.string().uuid("ID da cobrança inválido")
+});
+
+export interface CobrancaLembreteEnviadoDTO {
+    id: string;
+    evento: string;
+    tipo: CobrancaLembreteTipoEnum;
+    dias_referencia: number | null;
+    destinatario: string | null;
+    enviado_em: string;
+}
 

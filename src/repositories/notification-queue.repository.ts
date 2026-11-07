@@ -201,10 +201,25 @@ export const notificationQueueRepository = {
             .from("fila_notificacoes")
             .delete()
             .eq("status", NotificationQueueStatus.SENT)
+            .not("evento", "in", "(PASSAGEIRO_VENCIMENTO_PROXIMO,PASSAGEIRO_VENCIMENTO_HOJE,PASSAGEIRO_ATRASADO)")
             .lte("created_at", cutoffDate)
             .select("id");
 
         if (error) throw error;
         return data ? data.length : 0;
+    },
+
+    async findSentWabaByPassageiroEvents(passageiroId: string, eventos: readonly string[]): Promise<NotificationQueueItemPayload[]> {
+        const { data, error } = await supabaseAdmin
+            .from("fila_notificacoes")
+            .select("*")
+            .eq("passageiro_id", passageiroId)
+            .eq("canal", NotificationChannelEnum.WABA)
+            .in("status", [NotificationQueueStatus.SENT, NotificationQueueStatus.DELIVERED])
+            .in("evento", eventos)
+            .order("created_at", { ascending: true });
+
+        if (error) throw error;
+        return (data || []) as NotificationQueueItemPayload[];
     }
 };

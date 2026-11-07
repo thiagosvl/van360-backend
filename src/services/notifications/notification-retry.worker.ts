@@ -3,6 +3,13 @@ import { notificationQueueRepository, NotificationQueueItemPayload } from "../..
 import { notificationService } from "./notification.service.js";
 import { NotificationQueueService, notificationQueueService } from "./notification-queue.service.js";
 import { extractErrorMessage } from "../../utils/error.utils.js";
+import { cobrancaRepository } from "../../repositories/cobranca.repository.js";
+import { getNowBR, toPersistenceString } from "../../utils/date.utils.js";
+import {
+    EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO,
+    EVENTO_PASSAGEIRO_VENCIMENTO_HOJE,
+    EVENTO_PASSAGEIRO_ATRASADO
+} from "../../config/constants.js";
 
 export class NotificationRetryWorker {
 
@@ -47,6 +54,15 @@ export class NotificationRetryWorker {
 
                     if (sendResult.success) {
                         await notificationQueueRepository.markAsSent(item.id, sendResult.providerMessageId);
+                        const cobrancaId = (item.payload?.cobrancaId || (item.payload?.metadata as Record<string, unknown> | undefined)?.cobrancaId) as string | undefined;
+                        if (
+                            cobrancaId &&
+                            (item.evento === EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO ||
+                                item.evento === EVENTO_PASSAGEIRO_VENCIMENTO_HOJE ||
+                                item.evento === EVENTO_PASSAGEIRO_ATRASADO)
+                        ) {
+                            await cobrancaRepository.updateUltimaNotificacao(cobrancaId, toPersistenceString(getNowBR()));
+                        }
                         processedCount++;
                         logger.info({ id: item.id, canal: item.canal, tentativas: currentAttempts }, "[NotificationRetryWorker] Retentativa enviada com sucesso!");
                     } else {

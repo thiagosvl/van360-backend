@@ -1,12 +1,14 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { logger } from "../config/logger.js";
 import { cobrancaPagamentoService } from "../services/cobranca-pagamento.service.js";
+import { cobrancaLembretesService } from "../services/cobranca-lembretes.service.js";
 import { cobrancaService } from "../services/cobranca.service.js";
 import { receiptService } from "../services/receipt.service.js";
 import { reciboAnualService } from "../services/recibo-anual.service.js";
 import {
   createCobrancaSchema,
   listCobrancasFiltersSchema,
+  listarLembretesEnviadosParamsSchema,
   obterReciboAnualParamsSchema,
   obterReciboAnualQuerySchema,
   registrarPagamentoManualSchema,
@@ -144,5 +146,11 @@ export const cobrancaController = {
     logger.info({ cobrancaId: id }, "CobrancaController.isentarEncargos - Starting");
     const cobranca = await cobrancaService.isentarEncargos(id, request.data_owner_id!);
     return reply.status(200).send(cobranca);
+  },
+
+  listarLembretesEnviados: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = listarLembretesEnviadosParamsSchema.parse(request.params);
+    const lembretes = await cobrancaLembretesService.listarLembretesEnviados(id, request.data_owner_id);
+    return reply.status(200).send(lembretes);
   }
 };
