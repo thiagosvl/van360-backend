@@ -1,5 +1,5 @@
 import { AppError } from "../errors/AppError.js";
-import { CreateRouteDTO, UpdateRouteDTO, StepRouteExecutionDTO, ReorderExecucaoDTO, CreateAusenciaDTO, ChamadaEscolaDTO, DELETE_AUSENCIA_BY_QUERY_PARAM, ExecucaoResumidaDTO, ExecucaoParadaLeveDTO } from "../types/dtos/route.dto.js";
+import { CreateRouteDTO, UpdateRouteDTO, StepRouteExecutionDTO, ReorderExecucaoDTO, CreateAusenciaDTO, ChamadaEscolaDTO, DELETE_AUSENCIA_BY_QUERY_PARAM, ExecucaoResumidaDTO, ExecucaoParadaLeveDTO, ExecucaoUsuarioTimezoneDTO } from "../types/dtos/route.dto.js";
 import { RouteExecutionStatus, RouteStopStatus, RouteNodeType, RouteSentido, AtividadeAcao, AtividadeEntidadeTipo, UserType, RouteBroadcastEvent, NotificationChannelEnum, TipoResponsavel, RastreamentoModo } from "../types/enums.js";
 import { EVENTO_ROTA_INICIADA_IDA, EVENTO_ROTA_A_CAMINHO_IDA, EVENTO_ROTA_EMBARCOU_IDA, EVENTO_ROTA_DESFEITO_EMBARQUE_IDA, EVENTO_ROTA_INICIADA_VOLTA, EVENTO_ROTA_A_CAMINHO_VOLTA, EVENTO_ROTA_DESEMBARCOU_VOLTA, EVENTO_ROTA_DESFEITO_DESEMBARQUE_VOLTA, EVENTO_ROTA_REORDENADA } from "../config/constants.js";
 import { routeRepository } from "../repositories/route.repository.js";
@@ -12,6 +12,7 @@ import { NotificationContextFormatter } from "./notifications/utils/notification
 import { historicoService } from "./historico.service.js";
 import { logger } from "../config/logger.js";
 import { getNowBR, toPersistenceString } from "../utils/date.utils.js";
+import { resolveBrazilTimezone } from "../utils/timezone.utils.js";
 import { calculateAuditDiff } from "../utils/audit-diff.util.js";
 import { getDonoContaId, isSubConta } from "../utils/user.utils.js";
 
@@ -810,7 +811,12 @@ const notifyNextPendingPassengerStop = async (execucaoId: string) => {
   }
 };
 
-const notifyParentRouteEvent = async (passageiroId: string, eventType: string, execData: { rota_id: string; usuario_id?: string }, extraContext: Record<string, unknown> = {}) => {
+const notifyParentRouteEvent = async (
+  passageiroId: string,
+  eventType: string,
+  execData: { rota_id: string; usuario_id?: string; usuario?: ExecucaoUsuarioTimezoneDTO | ExecucaoUsuarioTimezoneDTO[] | null },
+  extraContext: Record<string, unknown> = {}
+) => {
   try {
     const passageiroInfo = await passageiroRepository.getResponsavelInfo(passageiroId);
     if (!passageiroInfo) return;
@@ -818,12 +824,19 @@ const notifyParentRouteEvent = async (passageiroId: string, eventType: string, e
     const responsaveisHabilitados = await passageiroRepository.getResponsaveisNotificacaoRota(passageiroId);
     if (!responsaveisHabilitados || responsaveisHabilitados.length === 0) return;
 
+    const rawUsuario = Array.isArray(execData.usuario) ? execData.usuario[0] : execData.usuario;
+    const resolvedTimeZone = resolveBrazilTimezone({
+      primary: rawUsuario,
+      fallback: passageiroInfo.responsavel_principal,
+    });
+
     const payload = {
       nomePassageiro: passageiroInfo.nome,
       passageiroId: passageiroInfo.id,
       rotaId: execData.rota_id,
       genero: passageiroInfo.genero || null,
-      horario: NotificationContextFormatter.formatTime(new Date()),
+      horario: NotificationContextFormatter.formatTime(new Date(), resolvedTimeZone),
+      timeZone: resolvedTimeZone,
       ...extraContext
     };
 

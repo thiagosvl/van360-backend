@@ -344,7 +344,7 @@ export const routeRepository = {
   async getExecucaoResumida(execucaoId: string) {
     return supabaseAdmin
       .from("execucoes_rota")
-      .select("id, rota_id, status, usuario_id, notificar_pais, notificar_inicio_rota, notificar_proxima_parada, notificar_conclusao_parada, rastreamento_ativo, rastreamento_modo")
+      .select("id, rota_id, status, usuario_id, notificar_pais, notificar_inicio_rota, notificar_proxima_parada, notificar_conclusao_parada, rastreamento_ativo, rastreamento_modo, usuario:usuarios!execucoes_rota_usuario_id_fkey(telefone, estado, metadados_cadastro)")
       .eq("id", execucaoId)
       .single();
   },

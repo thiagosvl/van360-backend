@@ -31,6 +31,12 @@ export type ChamadaEscolaDTO = z.infer<typeof chamadaEscolaSchema>;
 export type BuscarAlunosQueryDTO = z.infer<typeof buscarAlunosQuerySchema>;
 
 import { RouteExecutionStatus, RouteStopStatus, RouteNodeType, RouteSentido } from "../enums.js";
+import type { Tables } from "../database.types.js";
+
+export type ExecucaoUsuarioTimezoneDTO = Pick<
+  Tables<"usuarios">,
+  "telefone" | "estado" | "metadados_cadastro"
+>;
 
 export interface ExecucaoResumidaDTO {
   id: string;
@@ -43,6 +49,7 @@ export interface ExecucaoResumidaDTO {
   notificar_conclusao_parada?: boolean;
   rastreamento_ativo?: boolean;
   rastreamento_modo?: string;
+  usuario?: ExecucaoUsuarioTimezoneDTO | ExecucaoUsuarioTimezoneDTO[] | null;
 }
 
 export interface ExecucaoParadaLeveDTO {

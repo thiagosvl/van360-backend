@@ -5,7 +5,7 @@ import { FirebaseMessagePayload } from "../firebase.template.js";
 
 export class FirebasePassengerTemplates {
     static routeStartedIda(ctx: Record<string, unknown>): FirebaseMessagePayload {
-        const timeStr = NotificationContextFormatter.formatTime(ctx.horario as string | Date);
+        const timeStr = NotificationContextFormatter.formatTime(ctx.horario as string | Date, ctx.timeZone as string | undefined);
         return {
             title: "Rota Iniciada! 🚌",
             body: `A van iniciou a rota de ida para a escola às ${timeStr}. Avisaremos quando estiver a caminho da sua residência!`,
@@ -19,7 +19,7 @@ export class FirebasePassengerTemplates {
     static routeStartedVolta(ctx: Record<string, unknown>): FirebaseMessagePayload {
         const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         const article = NotificationContextFormatter.getStudentArticle(ctx.genero as PassageiroGenero | string | null);
-        const timeStr = NotificationContextFormatter.formatTime(ctx.horario as string | Date);
+        const timeStr = NotificationContextFormatter.formatTime(ctx.horario as string | Date, ctx.timeZone as string | undefined);
         return {
             title: "Voltando para Casa! 🏡",
             body: `A van saiu da escola com ${article} ${passName} às ${timeStr} e iniciou o trajeto de volta!`,
@@ -46,7 +46,7 @@ export class FirebasePassengerTemplates {
     static routeBoardedIda(ctx: Record<string, unknown>): FirebaseMessagePayload {
         const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         const capitalArticle = NotificationContextFormatter.getStudentArticle(ctx.genero as PassageiroGenero | string | null, true);
-        const timeStr = NotificationContextFormatter.formatTime(ctx.horario as string | Date);
+        const timeStr = NotificationContextFormatter.formatTime(ctx.horario as string | Date, ctx.timeZone as string | undefined);
         return {
             title: "Embarque Confirmado ✅",
             body: `${capitalArticle} ${passName} embarcou na van às ${timeStr} a caminho da escola!`,
@@ -86,7 +86,7 @@ export class FirebasePassengerTemplates {
     static routeDisembarkedVolta(ctx: Record<string, unknown>): FirebaseMessagePayload {
         const passName = NotificationContextFormatter.getFirstName(ctx.nomePassageiro as string, "Aluno");
         const capitalArticle = NotificationContextFormatter.getStudentArticle(ctx.genero as PassageiroGenero | string | null, true);
-        const timeStr = NotificationContextFormatter.formatTime(ctx.horario as string | Date);
+        const timeStr = NotificationContextFormatter.formatTime(ctx.horario as string | Date, ctx.timeZone as string | undefined);
         return {
             title: "Desembarque Confirmado ✅",
             body: `${capitalArticle} ${passName} desembarcou com segurança às ${timeStr}!`,

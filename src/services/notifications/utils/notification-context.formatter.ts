@@ -1,5 +1,6 @@
 import { formatToBrazilianDate, getMonthNameBR, getMonthShortBR } from "../../../utils/date.utils.js";
 import { formatCurrency, maskCpf, maskCnpj, maskPhone, formatCpfCnpj, getFirstName, getFirstAndSecondName } from "../../../utils/format.js";
+import { DEFAULT_BRAZIL_TIMEZONE, isValidIanaTimezone } from "../../../utils/timezone.utils.js";
 import { TipoChavePix, PassageiroGenero } from "../../../types/enums.js";
 import { WABA_MAX_HEADER_DRIVER_NAME_LENGTH } from "../../../config/constants.js";
 
@@ -146,20 +147,21 @@ export class NotificationContextFormatter {
         return "do(a)";
     }
 
-    static formatTime(timeOrDate?: string | Date | null): string {
+    static formatTime(timeOrDate?: string | Date | null, timeZone?: string | null): string {
+        const safeTimeZone = isValidIanaTimezone(timeZone) ? timeZone.trim() : DEFAULT_BRAZIL_TIMEZONE;
         if (!timeOrDate) {
-            return new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+            return new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: safeTimeZone });
         }
         if (timeOrDate instanceof Date) {
-            return timeOrDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+            return timeOrDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: safeTimeZone });
         }
         if (typeof timeOrDate === "string") {
             if (/^\d{2}:\d{2}$/.test(timeOrDate)) return timeOrDate;
             const parsed = new Date(timeOrDate);
             if (!isNaN(parsed.getTime())) {
-                return parsed.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+                return parsed.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: safeTimeZone });
             }
         }
-        return new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+        return new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: safeTimeZone });
     }
 }
