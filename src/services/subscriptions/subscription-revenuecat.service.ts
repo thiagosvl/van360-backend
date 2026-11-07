@@ -74,6 +74,8 @@ async function dispatchSubscriptionPaymentNotifications(params: {
       valor: `R$ ${valorNumerico.toFixed(2).replace(".", ",")}`,
       dataVencimento: new Date(params.expiryDate).toLocaleDateString("pt-BR"),
       usuarioId: params.userId,
+      isFirstSubscription: params.isNewCustomer ?? true,
+      metodoPagamento: CheckoutPaymentMethod.APPLE_IAP,
     },
     {
       channels: [NotificationChannelEnum.TELEGRAM],

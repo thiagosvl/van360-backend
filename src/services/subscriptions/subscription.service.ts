@@ -288,6 +288,7 @@ export const subscriptionService = {
         }
 
         const valorNumerico = typeof res.valor === "string" ? parseFloat(res.valor) : (res.valor || 0);
+        const metodoPagamento = (paidInvoice?.metodo_pagamento || currentSub?.metodo_pagamento || null) as CheckoutPaymentMethod | null;
         notificationService.notifyAdmin(EVENTO_ADMIN_NOVA_ASSINATURA, {
             nomeMotorista: res.usuario_nome!,
             apelidoMotorista,
@@ -295,7 +296,10 @@ export const subscriptionService = {
             nomePlano: res.plano_nome!,
             valor: `R$ ${valorNumerico.toFixed(2).replace('.', ',')}`,
             dataVencimento: new Date(res.new_expiry!).toLocaleDateString('pt-BR'),
-            usuarioId: res.usuario_id!
+            usuarioId: res.usuario_id!,
+            isFirstSubscription,
+            metodoPagamento,
+            parcelas: paidInvoice?.parcelas ?? null
         }, {
             channels: [NotificationChannelEnum.TELEGRAM],
             jobId: `admin-nova-assinatura-${res.usuario_id}-${res.fatura_id}`,

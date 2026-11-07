@@ -1,6 +1,27 @@
 import { CompositeMessagePart } from "../../../../types/dtos/evolution.dto.js";
+import { CheckoutPaymentMethod } from "../../../../types/enums.js";
 import { maskPhone, getFirstAndSecondName, formatCurrency } from "../../../../utils/format.js";
 import { extractErrorMessage } from "../../../../utils/string.utils.js";
+
+function formatSubscriptionPaymentMethod(
+    metodoPagamento?: CheckoutPaymentMethod | string | null,
+    parcelas?: number | null
+): string | null {
+    switch (metodoPagamento) {
+        case CheckoutPaymentMethod.PIX:
+            return "PIX";
+        case CheckoutPaymentMethod.CREDIT_CARD:
+            return parcelas && parcelas > 1
+                ? `Cartão de Crédito (${parcelas}x)`
+                : "Cartão de Crédito";
+        case CheckoutPaymentMethod.APPLE_IAP:
+            return "Apple (App Store)";
+        case CheckoutPaymentMethod.BOLETO:
+            return "Boleto";
+        default:
+            return null;
+    }
+}
 
 export interface AdminRegistrationContext {
     nome: string;
@@ -20,6 +41,9 @@ export interface AdminSubscriptionContext {
     valor: string;
     dataVencimento: string;
     usuarioId: string;
+    isFirstSubscription?: boolean;
+    metodoPagamento?: CheckoutPaymentMethod | string | null;
+    parcelas?: number | null;
 }
 
 export interface AdminPaymentFailedContext {
@@ -95,15 +119,23 @@ export class TelegramTemplates {
 
     static newSubscription(ctx: AdminSubscriptionContext): CompositeMessagePart[] {
         const motoristaDisplay = ctx.apelidoMotorista?.trim() || getFirstAndSecondName(ctx.nomeMotorista);
+        const isRenovacao = ctx.isFirstSubscription === false;
+        const titulo = isRenovacao
+            ? `🔄 <b>Renovação Paga</b>`
+            : `✅ <b>Novo Assinante</b>`;
+        const formaPagamentoLabel = formatSubscriptionPaymentMethod(ctx.metodoPagamento, ctx.parcelas);
 
         const lines = [
-            `✅ <b>Nova Assinatura Paga!</b>\n`,
+            `${titulo}\n`,
             `<b>Motorista:</b> ${motoristaDisplay}`
         ];
         if (ctx.telefone) {
             lines.push(`<b>Telefone:</b> ${maskPhone(ctx.telefone)}`);
         }
         lines.push(`<b>Plano:</b> ${ctx.nomePlano}`);
+        if (formaPagamentoLabel) {
+            lines.push(`<b>Pagamento:</b> ${formaPagamentoLabel}`);
+        }
         lines.push(`<b>Valor:</b> ${ctx.valor}`);
         lines.push(`<b>Vencimento:</b> ${ctx.dataVencimento}`);
         lines.push(`<b>ID:</b> ${ctx.usuarioId}`);
