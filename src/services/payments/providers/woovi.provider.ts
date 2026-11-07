@@ -1,8 +1,9 @@
-import axios, { AxiosInstance } from "axios";
+import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from "axios";
 import { PaymentProvider, NormalizedPaymentEventType, ContractMultaTipo } from "../../../types/enums.js";
 import { AppError } from "../../../errors/AppError.js";
 import { logger } from "../../../config/logger.js";
 import { env } from "../../../config/env.js";
+import { redisClient } from "../../../config/redis.js";
 import {
     ChargeResponse,
     CreateChargeRequest,
@@ -24,9 +25,19 @@ export interface WooviWithdrawResponse {
     error?: string;
 }
 
+interface RetryableAxiosConfig extends InternalAxiosRequestConfig {
+    _retryCount?: number;
+}
+
+const WOOVI_SUBACCOUNT_CACHE_PREFIX = "woovi:subaccount:verified:";
+const WOOVI_SUBACCOUNT_CACHE_TTL_SECONDS = 86400;
+const WOOVI_MAX_RETRIES = 3;
+const WOOVI_BASE_RETRY_DELAY_MS = 1500;
+
 export class WooviProvider implements PaymentProviderAdapter {
     readonly providerName = PaymentProvider.WOOVI;
     private client: AxiosInstance;
+    private inFlightSubaccountChecks = new Map<string, Promise<boolean>>();
 
     constructor() {
         const appId = env.WOOVI_APP_ID || process.env.WOOVI_APP_ID;
@@ -40,6 +51,57 @@ export class WooviProvider implements PaymentProviderAdapter {
             },
             timeout: 20000
         });
+
+        this.client.interceptors.response.use(
+            (response) => response,
+            async (error: AxiosError<{ error?: unknown; message?: unknown }>) => {
+                const config = error.config as RetryableAxiosConfig | undefined;
+                if (!config) {
+                    return Promise.reject(error);
+                }
+
+                const status = error.response?.status;
+                const errorText = this.extractErrorString(error, "").toLowerCase();
+                const isRateLimit = status === 429 || errorText.includes("muitas requisições") || errorText.includes("too many requests");
+                const isTransientGateway = status === 502 || status === 503 || status === 504;
+
+                const currentRetry = config._retryCount || 0;
+                if ((isRateLimit || isTransientGateway) && currentRetry < WOOVI_MAX_RETRIES) {
+                    config._retryCount = currentRetry + 1;
+                    const delayMs = WOOVI_BASE_RETRY_DELAY_MS * Math.pow(2, currentRetry);
+                    logger.warn(
+                        { url: config.url, status, attempt: config._retryCount, delayMs },
+                        "[WooviProvider] Rate limit ou falha transitória detectada, aguardando para retentar"
+                    );
+                    await new Promise((resolve) => setTimeout(resolve, delayMs));
+                    return this.client.request(config);
+                }
+
+                return Promise.reject(error);
+            }
+        );
+    }
+
+    private extractErrorString(error: unknown, fallback = "Erro desconhecido"): string {
+        const err = error as {
+            response?: { data?: { error?: unknown; message?: unknown; errors?: Array<{ message?: string }> } };
+            message?: string;
+        };
+        const rawError = err?.response?.data?.error ?? err?.response?.data?.message ?? err?.response?.data?.errors?.[0]?.message;
+        if (typeof rawError === "string" && rawError.trim().length > 0) {
+            return rawError;
+        }
+        if (rawError && typeof rawError === "object") {
+            const nestedMsg = (rawError as { message?: unknown; error?: unknown }).message ?? (rawError as { error?: unknown }).error;
+            if (typeof nestedMsg === "string" && nestedMsg.trim().length > 0) {
+                return nestedMsg;
+            }
+            return JSON.stringify(rawError);
+        }
+        if (typeof err?.message === "string" && err.message.trim().length > 0) {
+            return err.message;
+        }
+        return fallback;
     }
 
     private sanitizePixKey(pixKey: string): string {
@@ -84,17 +146,72 @@ export class WooviProvider implements PaymentProviderAdapter {
         return false;
     }
 
-    private async findWooviSubaccount(pixKey: string): Promise<WooviSubaccount | null> {
+    private async findWooviSubaccount(pixKey: string, throwOnError = false): Promise<WooviSubaccount | null> {
+        const sanitizedKey = this.sanitizePixKey(pixKey);
+        const cachedKey = await this.getCachedSubaccountKey(sanitizedKey);
+        const directCandidate = cachedKey || sanitizedKey;
+
         try {
-            const response = await this.client.get("/subaccount");
-            const subAccounts: WooviSubaccount[] = response.data?.subAccounts || [];
-            const found = subAccounts.find((s) => this.matchesPixKey(s.pixKey, pixKey));
-            return found || null;
+            const directRes = await this.client.get(`/subaccount/${encodeURIComponent(directCandidate)}`);
+            const directSub = directRes.data?.subAccount as WooviSubaccount | undefined;
+            if (directSub && directSub.pixKey) {
+                return directSub;
+            }
+        } catch (directErr: unknown) {
+            const status = (directErr as { response?: { status?: number } })?.response?.status;
+            if (status && status !== 404 && status !== 400 && throwOnError) {
+                throw directErr;
+            }
+        }
+
+        try {
+            let skip = 0;
+            const limit = 100;
+            for (let page = 0; page < 5; page++) {
+                const response = await this.client.get("/subaccount", { params: { skip, limit } });
+                const subAccounts: WooviSubaccount[] = response.data?.subAccounts || [];
+                const found = subAccounts.find((s) => this.matchesPixKey(s.pixKey, pixKey));
+                if (found) return found;
+                if (subAccounts.length < limit) break;
+                skip += limit;
+            }
+            return null;
         } catch (error: unknown) {
-            const err = error as { message?: string };
-            logger.warn({ error: err.message, pixKey }, "[WooviProvider] Falha ao listar subcontas para busca");
+            const errMsg = this.extractErrorString(error);
+            logger.warn({ error: errMsg, pixKey }, "[WooviProvider] Falha ao listar subcontas para busca");
+            if (throwOnError) {
+                throw error;
+            }
             return null;
         }
+    }
+
+    private async cacheVerifiedSubaccount(sanitizedKey: string, targetPixKey: string): Promise<void> {
+        try {
+            await redisClient.setex(`${WOOVI_SUBACCOUNT_CACHE_PREFIX}${sanitizedKey}`, WOOVI_SUBACCOUNT_CACHE_TTL_SECONDS, targetPixKey);
+        } catch (err: unknown) {
+            logger.warn({ error: err instanceof Error ? err.message : String(err), pixKey: sanitizedKey }, "[WooviProvider] Falha ao salvar subconta no cache Redis");
+        }
+    }
+
+    private async getCachedSubaccountKey(sanitizedKey: string): Promise<string | null> {
+        try {
+            return await redisClient.get(`${WOOVI_SUBACCOUNT_CACHE_PREFIX}${sanitizedKey}`);
+        } catch {
+            return null;
+        }
+    }
+
+    private async resolveSubaccountTargetKey(pixKey: string): Promise<string> {
+        const sanitizedKey = this.sanitizePixKey(pixKey);
+        const cachedTargetKey = await this.getCachedSubaccountKey(sanitizedKey);
+        if (cachedTargetKey) return cachedTargetKey;
+        const sub = await this.findWooviSubaccount(pixKey);
+        if (sub) {
+            await this.cacheVerifiedSubaccount(sanitizedKey, sub.pixKey);
+            return sub.pixKey;
+        }
+        return sanitizedKey;
     }
 
     async createCharge(request: CreateChargeRequest): Promise<ChargeResponse> {
@@ -143,58 +260,65 @@ export class WooviProvider implements PaymentProviderAdapter {
                         value: fineBasisPoints
                     };
                 }
+
                 if (request.interests) {
-                    const interestDailyBasisPoints = request.interests.tipo === ContractMultaTipo.PERCENTUAL
-                        ? Math.max(1, Math.round(request.interests.value * 100))
-                        : (request.amount > 0 ? Math.max(1, Math.round((request.interests.value / request.amount) * 10000)) : 1);
+                    const interestBasisPoints = request.interests.tipo === ContractMultaTipo.PERCENTUAL
+                        ? Math.round(request.interests.value * 100)
+                        : (request.amount > 0 ? Math.round((request.interests.value / request.amount) * 10000) : 0);
                     payload.interests = {
-                        value: interestDailyBasisPoints
+                        value: interestBasisPoints
                     };
                 }
             } else {
-                payload.expiresIn = Math.min(1296000, Math.max(86400, (request.daysAfterDueDate || 15) * 86400));
+                const diffInSeconds = Math.floor((targetDueDate.getTime() - now.getTime()) / 1000);
+                payload.expiresIn = Math.max(3600, diffInSeconds + 15 * 86400);
             }
 
             if (splitsPayload && splitsPayload.length > 0) {
-                for (const split of splitsPayload) {
-                    if (split.pixKey) {
-                        try {
-                            await this.createOrEnsureSubaccount(split.pixKey);
-                        } catch (subErr: unknown) {
-                            logger.warn({ error: subErr, pixKey: split.pixKey }, "[WooviProvider] Aviso ao assegurar subconta durante criação de split");
-                        }
-                    }
-                }
+                await Promise.all(
+                    splitsPayload.map((s) => this.createOrEnsureSubaccount(s.pixKey))
+                );
                 payload.splits = splitsPayload;
             }
 
             if (request.customer) {
-                payload.customer = {
+                const customerPayload: Record<string, unknown> = {
                     name: request.customer.name,
-                    taxID: hasValidTaxId ? cleanTaxId : undefined,
-                    email: request.customer.email,
-                    phone: request.customer.phone?.replace(/\D/g, "")
                 };
+                if (hasValidTaxId) {
+                    customerPayload.taxID = cleanTaxId;
+                }
+                if (request.customer.email) {
+                    customerPayload.email = request.customer.email;
+                }
+                if (request.customer.phone) {
+                    const cleanPhone = request.customer.phone.replace(/\D/g, "");
+                    if (cleanPhone.length >= 10) {
+                        customerPayload.phone = cleanPhone.startsWith("55") ? cleanPhone : `55${cleanPhone}`;
+                    }
+                }
+                payload.customer = customerPayload;
             }
 
             const response = await this.client.post("/charge", payload);
             const charge = response.data?.charge;
 
             if (!charge) {
-                throw new AppError("Resposta inválida da Woovi ao criar cobrança.", 502);
+                return {
+                    success: false,
+                    error: "Resposta inválida da Woovi ao criar cobrança."
+                };
             }
 
             return {
                 success: true,
-                providerId: charge.correlationID,
-                status: charge.status,
+                providerId: charge.correlationID || request.externalId,
                 pixCopyPaste: charge.brCode,
                 pixQrCodeUrl: charge.qrCodeImage,
-                paymentLink: charge.paymentLinkUrl
+                invoiceUrl: charge.paymentLinkUrl
             };
         } catch (error: unknown) {
-            const err = error as { response?: { data?: { error?: string; message?: string } }; message?: string };
-            const errorMessage = err.response?.data?.error || err.response?.data?.message || err.message || "Erro desconhecido";
+            const errorMessage = this.extractErrorString(error);
             logger.error({ error: errorMessage, externalId: request.externalId }, "[WooviProvider] Falha ao criar cobrança Pix");
             return {
                 success: false,
@@ -212,7 +336,7 @@ export class WooviProvider implements PaymentProviderAdapter {
             if (err.response?.status === 404) {
                 return true;
             }
-            logger.warn({ error: err.message, providerId }, "[WooviProvider] Falha ao cancelar cobrança");
+            logger.warn({ error: this.extractErrorString(error), providerId }, "[WooviProvider] Falha ao cancelar cobrança");
             return false;
         }
     }
@@ -223,53 +347,65 @@ export class WooviProvider implements PaymentProviderAdapter {
     }
 
     async createOrEnsureSubaccount(pixKey: string, name?: string): Promise<boolean> {
-        try {
-            const existing = await this.findWooviSubaccount(pixKey);
-            if (existing) {
-                return true;
-            }
-
-            const sanitizedKey = this.sanitizePixKey(pixKey);
-            const subaccountName = (name && name.trim()) || `Motorista ${sanitizedKey}`;
-            await this.client.post("/subaccount", {
-                name: subaccountName.substring(0, 100),
-                pixKey: sanitizedKey
-            });
-            logger.info({ pixKey: sanitizedKey, name: subaccountName }, "[WooviProvider] Subconta criada com sucesso");
+        const sanitizedKey = this.sanitizePixKey(pixKey);
+        const cached = await this.getCachedSubaccountKey(sanitizedKey);
+        if (cached) {
             return true;
-        } catch (error: unknown) {
-            const err = error as { response?: { status?: number; data?: { error?: string; message?: string } | Record<string, unknown> }; message?: string };
-            const errorData = err.response?.data as { error?: string; message?: string } | undefined;
-            const msg = errorData?.error || errorData?.message || err.message || "Erro desconhecido";
-            const lowerMsg = typeof msg === "string" ? msg.toLowerCase() : "";
-            if (lowerMsg.includes("already exists") || lowerMsg.includes("já existe") || lowerMsg.includes("já cadastrada")) {
-                return true;
-            }
-            logger.error({ status: err.response?.status, responseData: err.response?.data, error: msg, pixKey }, "[WooviProvider] Falha ao criar subconta");
-            throw new AppError(`Não foi possível registrar a chave Pix na instituição financeira: ${msg}`, 400);
         }
+
+        const inFlight = this.inFlightSubaccountChecks.get(sanitizedKey);
+        if (inFlight) {
+            return inFlight;
+        }
+
+        const checkPromise = (async (): Promise<boolean> => {
+            try {
+                const existing = await this.findWooviSubaccount(pixKey);
+                if (existing) {
+                    await this.cacheVerifiedSubaccount(sanitizedKey, existing.pixKey);
+                    return true;
+                }
+
+                const subaccountName = (name && name.trim()) || `Motorista ${sanitizedKey}`;
+                await this.client.post("/subaccount", {
+                    name: subaccountName.substring(0, 100),
+                    pixKey: sanitizedKey
+                });
+                await this.cacheVerifiedSubaccount(sanitizedKey, sanitizedKey);
+                logger.info({ pixKey: sanitizedKey, name: subaccountName }, "[WooviProvider] Subconta criada com sucesso");
+                return true;
+            } catch (error: unknown) {
+                const err = error as { response?: { status?: number; data?: unknown }; message?: string };
+                const msg = this.extractErrorString(error);
+                const lowerMsg = msg.toLowerCase();
+                if (lowerMsg.includes("already exists") || lowerMsg.includes("já existe") || lowerMsg.includes("já cadastrada")) {
+                    await this.cacheVerifiedSubaccount(sanitizedKey, sanitizedKey);
+                    return true;
+                }
+                logger.error({ status: err.response?.status, responseData: err.response?.data, error: msg, pixKey }, "[WooviProvider] Falha ao criar subconta");
+                throw new AppError(`Não foi possível registrar a chave Pix na instituição financeira: ${msg}`, 400);
+            } finally {
+                this.inFlightSubaccountChecks.delete(sanitizedKey);
+            }
+        })();
+
+        this.inFlightSubaccountChecks.set(sanitizedKey, checkPromise);
+        return checkPromise;
     }
 
     async getSubaccountBalance(pixKey: string): Promise<number> {
-        try {
-            const sub = await this.findWooviSubaccount(pixKey);
-            return sub ? sub.balance / 100 : 0;
-        } catch (error: unknown) {
-            const err = error as { message?: string };
-            logger.error({ error: err.message, pixKey }, "[WooviProvider] Falha ao consultar saldo da subconta");
-            return 0;
+        const sub = await this.findWooviSubaccount(pixKey, true);
+        if (sub) {
+            await this.cacheVerifiedSubaccount(this.sanitizePixKey(pixKey), sub.pixKey);
+            return sub.balance / 100;
         }
+        return 0;
     }
 
     async withdrawFromSubaccount(pixKey: string, amountInCents: number): Promise<WooviWithdrawResponse> {
         try {
-            const sub = await this.findWooviSubaccount(pixKey);
-            const targetKey = sub ? sub.pixKey : this.sanitizePixKey(pixKey);
-            const encodedPixKey = encodeURIComponent(targetKey);
-            const response = await this.client.post(`/subaccount/${encodedPixKey}/withdraw`, {
-                value: amountInCents
-            });
-
+            const targetKey = await this.resolveSubaccountTargetKey(pixKey);
+            const response = await this.client.post(`/subaccount/${encodeURIComponent(targetKey)}/withdraw`, { value: amountInCents });
             const data = response.data;
             const endToEndId = data?.endToEndId || data?.transaction?.endToEndId;
             return {
@@ -278,33 +414,21 @@ export class WooviProvider implements PaymentProviderAdapter {
                 transactionId: data?.transactionId || data?.id || data?.transaction?.correlationID || data?.transaction?.id || endToEndId
             };
         } catch (error: unknown) {
-            const err = error as { response?: { data?: { error?: string; message?: string } }; message?: string };
-            const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || "Erro no saque";
+            const errorMsg = this.extractErrorString(error, "Erro no saque");
             logger.error({ error: errorMsg, pixKey, amountInCents }, "[WooviProvider] Falha ao executar saque da subconta");
-            return {
-                success: false,
-                error: errorMsg
-            };
+            return { success: false, error: errorMsg };
         }
     }
 
     async creditSubaccount(pixKey: string, amountInCents: number): Promise<{ success: boolean; error?: string }> {
         try {
-            const sub = await this.findWooviSubaccount(pixKey);
-            const targetKey = sub ? sub.pixKey : this.sanitizePixKey(pixKey);
-            const encodedPixKey = encodeURIComponent(targetKey);
-            await this.client.post(`/subaccount/${encodedPixKey}/credit`, {
-                value: amountInCents
-            });
+            const targetKey = await this.resolveSubaccountTargetKey(pixKey);
+            await this.client.post(`/subaccount/${encodeURIComponent(targetKey)}/credit`, { value: amountInCents });
             return { success: true };
         } catch (error: unknown) {
-            const err = error as { response?: { data?: { error?: string; message?: string } }; message?: string };
-            const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || "Erro no crédito da subconta";
+            const errorMsg = this.extractErrorString(error, "Erro no crédito da subconta");
             logger.error({ error: errorMsg, pixKey, amountInCents }, "[WooviProvider] Falha ao creditar subconta");
-            return {
-                success: false,
-                error: errorMsg
-            };
+            return { success: false, error: errorMsg };
         }
     }
 

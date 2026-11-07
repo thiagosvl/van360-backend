@@ -31,5 +31,14 @@ export const historicoRepository = {
             .eq('usuario_id', usuarioId)
             .order('created_at', { ascending: true })
             .limit(limit);
+    },
+
+    async deleteFalhaIntegracaoByEntidadeId(entidadeId: string) {
+        return supabaseAdmin
+            .from('historico_atividades')
+            .delete()
+            .eq('entidade_tipo', AtividadeEntidadeTipo.COBRANCA)
+            .eq('entidade_id', entidadeId)
+            .or('descricao.ilike.Falha na integração ao gerar cobrança%,descricao.ilike.Falha ao gerar Pix da cobrança%');
     }
 };

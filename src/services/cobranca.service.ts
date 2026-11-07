@@ -26,13 +26,15 @@ import { cobrancaCalculoService } from "./cobranca-calculo.service.js";
 import { cobrancaValidacaoService } from "./cobranca-validacao.service.js";
 import { cobrancaPagamentoService } from "./cobranca-pagamento.service.js";
 import { motoristaFinanceiroRepository } from "../repositories/motorista-financeiro.repository.js";
+import { historicoRepository } from "../repositories/historico.repository.js";
 import { historicoService } from "./historico.service.js";
 import { receiptService } from "./receipt.service.js";
 import { getConfigNumber } from "./configuracao.service.js";
 import { notificationService } from "./notifications/notification.service.js";
 import { NotificationContextFormatter } from "./notifications/utils/notification-context.formatter.js";
-import { addToGenerationQueue } from "../queues/generation.queue.js";
+import { addToGenerationQueue, addPixWarmupToGenerationQueue } from "../queues/generation.queue.js";
 import { calculateAuditDiff } from "../utils/audit-diff.util.js";
+import { errorAlertService } from "./error-alert.service.js";
 
 interface ResponsavelLinkInfo {
   id?: string;
@@ -759,7 +761,12 @@ export const cobrancaService = {
       return null;
     }
 
-    if (options?.force && cobranca.provedor_cobranca_id) {
+    const chavePixMudou = Boolean(
+      cobranca.chave_pix_repasse &&
+      cobranca.chave_pix_repasse.trim() !== chavePixRepasseEfetiva.trim()
+    );
+
+    if ((options?.force || chavePixMudou) && cobranca.provedor_cobranca_id) {
       void cobrancaValidacaoService.cancelarPixCobrancaSeExistir(cobranca.id, cobranca.provedor_cobranca_id);
       await cobrancaRepository.update(cobranca.id, {
         pix_copia_cola: null,
@@ -771,6 +778,7 @@ export const cobrancaService = {
         boleto_codigo_barras: null,
         boleto_url: null,
         boleto_nosso_numero: null,
+        chave_pix_repasse: null,
       });
       cobranca.pix_copia_cola = null;
       cobranca.pix_qrcode_url = null;
@@ -781,10 +789,11 @@ export const cobrancaService = {
       cobranca.boleto_codigo_barras = null;
       cobranca.boleto_url = null;
       cobranca.boleto_nosso_numero = null;
+      cobranca.chave_pix_repasse = null;
     }
 
     const agora = new Date();
-    if (!options?.force && ((cobranca.pix_copia_cola && cobranca.pix_expiracao && new Date(cobranca.pix_expiracao) > agora) || cobranca.boleto_linha_digitavel)) {
+    if (!options?.force && !chavePixMudou && ((cobranca.pix_copia_cola && cobranca.pix_expiracao && new Date(cobranca.pix_expiracao) > agora) || cobranca.boleto_linha_digitavel)) {
       return {
         pixCopiaCola: cobranca.pix_copia_cola || "",
         pixQrCodeUrl: cobranca.pix_qrcode_url,
@@ -829,6 +838,17 @@ export const cobrancaService = {
         { cobrancaId, motoristaId, passageiroId: cobranca.passageiro_id },
         "[CobrancaService] Cobrança possui regras de multa/juros mas o responsável não possui CPF cadastrado"
       );
+      void errorAlertService.notifyPaymentError({
+        provider: motoristaConfig?.provedor_ativo === ProvedorPagamentoEnum.BANCO_DO_BRASIL ? PaymentProvider.BANCO_DO_BRASIL : PaymentProvider.WOOVI,
+        error: `Responsável do aluno ${passageiroNome} não possui CPF cadastrado (obrigatório para multa/juros)`,
+        externalId: cobranca.id,
+        amount: `R$ ${valorTotalPix.toFixed(2)}`,
+        details: {
+          motivo: "CPF_RESPONSAVEL_AUSENTE",
+          motoristaId,
+          passageiroId: cobranca.passageiro_id
+        }
+      });
       historicoService.log({
         usuario_id: motoristaId,
         entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
@@ -936,6 +956,8 @@ export const cobrancaService = {
       chave_pix_repasse: isBB ? null : chavePixSplit
     });
 
+    void historicoRepository.deleteFalhaIntegracaoByEntidadeId(cobranca.id);
+
     return {
       pixCopiaCola: chargeRes.pixCopyPaste || "",
       pixQrCodeUrl: chargeRes.pixQrCodeUrl || null,
@@ -988,12 +1010,13 @@ export const cobrancaService = {
 
       let sentCount = 0;
 
-      const BATCH_SIZE = 8;
+      const BATCH_SIZE = 3;
       for (let i = 0; i < cobrancas.length; i += BATCH_SIZE) {
         const chunk = cobrancas.slice(i, i + BATCH_SIZE);
         const successfulIdsInChunk: string[] = [];
+        let chunkExecutedExternalAction = false;
 
-        const chunkPromises = chunk.map(async (c: any) => {
+        const chunkPromises = chunk.map(async (c: Record<string, any>) => {
           const passageiro = c.passageiro;
           const motorista = c.motorista;
 
@@ -1046,7 +1069,7 @@ export const cobrancaService = {
           if (dataVencimentoStr > todayStr) {
             if (avisoPrevioAtivo) {
               const diasAntecedencia = diffInDays(todayStr, dataVencimentoStr);
-              if (diasAntecedencia === driverThresholdDays) {
+              if (diasAntecedencia <= driverThresholdDays && !lastNotifDateStr) {
                 eventType = EVENTO_PASSAGEIRO_VENCIMENTO_PROXIMO;
                 baseChannels = avisoPrevioWhatsappAtivo
                   ? [NotificationChannelEnum.WABA, NotificationChannelEnum.FIREBASE]
@@ -1080,7 +1103,23 @@ export const cobrancaService = {
             */
           }
 
-          if (!shouldSend || !eventType) return null;
+          if (!shouldSend || !eventType) {
+            if (dataVencimentoStr > todayStr && !c.pix_copia_cola && !c.boleto_linha_digitavel) {
+              const diasAntecedenciaRepescagem = diffInDays(todayStr, dataVencimentoStr);
+              const modoRepescagem = cobrancaCalculoService.resolverModoEfetivo({
+                motoristaModoCobranca: motoristaConfigFin?.modo_cobranca,
+                passageiroModoCobranca: passageiro?.modo_cobranca as ModoCobrancaEnum | null | undefined,
+              });
+              if (diasAntecedenciaRepescagem <= driverThresholdDays && modoRepescagem === ModoCobrancaEnum.AUTOMATICA) {
+                try {
+                  await addPixWarmupToGenerationQueue(c.id);
+                } catch (repErr: unknown) {
+                  logger.error({ error: repErr instanceof Error ? repErr.message : String(repErr), cobrancaId: c.id }, "[CobrancaService] Erro ao enfileirar repescagem de Pix");
+                }
+              }
+            }
+            return null;
+          }
 
           const activeChannels = baseChannels.filter((ch) => {
             if (ch === NotificationChannelEnum.WABA) {
@@ -1100,11 +1139,20 @@ export const cobrancaService = {
             if (modoEfetivo === ModoCobrancaEnum.DESATIVADO) return null;
 
             const diasAntecedencia = dataVencimentoStr > todayStr ? diffInDays(todayStr, dataVencimentoStr) : undefined;
-            const pixInfo = await this.obterOuGerarPixCobranca(c.id);
+            const requiresWaba = activeChannels.includes(NotificationChannelEnum.WABA);
 
-            if (modoEfetivo === ModoCobrancaEnum.AUTOMATICA && !pixInfo?.pixCopiaCola) {
-              logger.warn({ cobrancaId: c.id, passageiroId: passageiro.id }, "[CobrancaService] Notificação de cobrança automática suspensa: Pix não pôde ser gerado");
-              return null;
+            let pixInfo: Awaited<ReturnType<typeof cobrancaService.obterOuGerarPixCobranca>> = null;
+
+            if (requiresWaba) {
+              chunkExecutedExternalAction = true;
+              pixInfo = await this.obterOuGerarPixCobranca(c.id);
+
+              if (modoEfetivo === ModoCobrancaEnum.AUTOMATICA && !pixInfo?.pixCopiaCola && !pixInfo?.boletoLinhaDigitavel) {
+                logger.warn({ cobrancaId: c.id, passageiroId: passageiro.id }, "[CobrancaService] Notificação de cobrança automática suspensa: Pix não pôde ser gerado");
+                return null;
+              }
+            } else if (modoEfetivo === ModoCobrancaEnum.AUTOMATICA && !c.pix_copia_cola && !c.boleto_linha_digitavel) {
+              await addPixWarmupToGenerationQueue(c.id);
             }
 
             const valorFinal = pixInfo ? pixInfo.valorTotalPix : Number(c.valor);
@@ -1177,8 +1225,8 @@ export const cobrancaService = {
           await cobrancaRepository.updateBulkUltimaNotificacao(successfulIdsInChunk, todayStr);
         }
 
-        if (i + BATCH_SIZE < cobrancas.length) {
-          await new Promise((resolve) => setTimeout(resolve, 600));
+        if (chunkExecutedExternalAction && i + BATCH_SIZE < cobrancas.length) {
+          await new Promise((resolve) => setTimeout(resolve, 1200));
         }
       }
 

@@ -69,7 +69,19 @@ export const repasseWorker = new Worker<RepasseJobData>(
             ? Math.max(0, Math.round((Number(repasse.valor_bruto) - Number(cobranca.valor)) * 100))
             : 0;
 
-        const saldoSubcontaReais = await paymentService.getSubaccountBalance(chavePixEfetiva);
+        let saldoSubcontaReais = 0;
+        try {
+            saldoSubcontaReais = await paymentService.getSubaccountBalance(chavePixEfetiva);
+        } catch (balErr: unknown) {
+            const errorMsg = balErr instanceof Error ? balErr.message : "Falha ao consultar saldo da subconta";
+            const isLastAttempt = job.attemptsMade >= ((job.opts.attempts || FINANCEIRO_CONFIG.REPASSE_MAX_TENTATIVAS) - 1);
+            await cobrancaRepasseRepository.update(repasse.id, {
+                status_repasse: isLastAttempt ? StatusRepasseEnum.FALHA : StatusRepasseEnum.PENDENTE,
+                ultimo_erro: errorMsg
+            });
+            logger.error({ repasseId, error: errorMsg }, "[RepasseWorker] Falha ao consultar saldo da subconta antes do saque");
+            throw new Error(errorMsg);
+        }
         const saldoSubcontaCentavos = Math.round(saldoSubcontaReais * 100);
         const diferencaSaldoCentavos = Math.max(0, valorEmCentavos - saldoSubcontaCentavos);
 

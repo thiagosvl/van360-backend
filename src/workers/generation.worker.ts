@@ -11,7 +11,16 @@ import { cobrancaService } from '../services/cobranca.service.js';
 export const generationWorker = new Worker<GenerationJobData>(
     QUEUE_NAME_GENERATION,
     async (job: Job<GenerationJobData>) => {
+        if (job.name === 'warmup-pix' && job.data.cobrancaId) {
+            const res = await cobrancaService.obterOuGerarPixCobranca(job.data.cobrancaId);
+            return { cobrancaId: job.data.cobrancaId, generated: Boolean(res?.pixCopiaCola || res?.boletoLinhaDigitavel) };
+        }
+
         const { motoristaId, mes, ano } = job.data;
+        if (!motoristaId || !mes || !ano) {
+            return { skipped: true };
+        }
+
         logger.info({ jobId: job.id, motoristaId, mes, ano }, "[Worker] Iniciando geração mensal...");
 
         try {
@@ -20,17 +29,18 @@ export const generationWorker = new Worker<GenerationJobData>(
             logger.info({ jobId: job.id, stats }, "[Worker] Geração mensal concluída para motorista");
             return stats;
 
-        } catch (error: any) {
-            logger.error({ jobId: job.id, error: error.message }, "[Worker] Generation Job Failed");
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : String(error);
+            logger.error({ jobId: job.id, error: msg }, "[Worker] Generation Job Failed");
             throw error;
         }
     },
     {
         connection: redisConfig,
-        concurrency: 5, // Pode gerar para 5 motoristas simultaneamente (ajustar conforme DB load)
+        concurrency: 3,
         limiter: {
-            max: 20,
-            duration: 10000
+            max: 3,
+            duration: 1000
         }
     }
 );

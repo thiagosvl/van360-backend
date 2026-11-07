@@ -1,4 +1,4 @@
-﻿import { supabaseAdmin } from "../config/supabase.js";
+import { supabaseAdmin } from "../config/supabase.js";
 import { CobrancaStatus, ModoCobrancaEnum, STATUS_ASSINATURA_LIBERADA } from "../types/enums.js";
 import { getLastDayOfMonth } from "../utils/date.utils.js";
 import { isValidFilterValue } from "../utils/filter.utils.js";
@@ -171,30 +171,55 @@ export const cobrancaRepository = {
     },
 
     async getPendentesParaNotificacao(datasVencimento: string[]) {
-        return supabaseAdmin
-            .from("cobrancas")
-            .select(`
-                *,
-                passageiro:passageiros(${COBRANCA_PASSAGEIRO_SELECT}),
-                motorista:usuarios!cobrancas_usuario_id_fkey!inner(
-                    nome, apelido, telefone,
-                    assinaturas!inner(status),
-                    motorista_configuracoes_financeiras(modo_cobranca, chave_pix_repasse, tipo_chave_pix),
-                    usuario_configuracoes!inner(
-                        cobranca_aviso_previo_ativo,
-                        cobranca_aviso_previo_whatsapp_ativo,
-                        cobranca_dias_aviso_previo,
-                        cobranca_vencimento_hoje_ativo,
-                        cobranca_atraso_3_dias_ativo,
-                        cobranca_atraso_5_dias_ativo,
-                        cobranca_atraso_7_dias_ativo
+        const PAGE_SIZE = 500;
+        const allRows: Record<string, unknown>[] = [];
+        let offset = 0;
+
+        while (true) {
+            const { data, error } = await supabaseAdmin
+                .from("cobrancas")
+                .select(`
+                    *,
+                    passageiro:passageiros!inner(${COBRANCA_PASSAGEIRO_SELECT}),
+                    motorista:usuarios!cobrancas_usuario_id_fkey!inner(
+                        nome, apelido, telefone,
+                        assinaturas!inner(status),
+                        motorista_configuracoes_financeiras(modo_cobranca, chave_pix_repasse, tipo_chave_pix),
+                        usuario_configuracoes!inner(
+                            cobranca_aviso_previo_ativo,
+                            cobranca_aviso_previo_whatsapp_ativo,
+                            cobranca_dias_aviso_previo,
+                            cobranca_vencimento_hoje_ativo,
+                            cobranca_atraso_3_dias_ativo,
+                            cobranca_atraso_5_dias_ativo,
+                            cobranca_atraso_7_dias_ativo
+                        )
                     )
-                )
-            `)
-            .eq("status", CobrancaStatus.PENDENTE)
-            .eq("desativar_lembretes", false)
-            .in("motorista.assinaturas.status", STATUS_ASSINATURA_LIBERADA)
-            .in("data_vencimento", datasVencimento);
+                `)
+                .eq("status", CobrancaStatus.PENDENTE)
+                .eq("desativar_lembretes", false)
+                .eq("passageiro.isento", false)
+                .eq("passageiro.enviar_notificacoes", true)
+                .in("motorista.assinaturas.status", STATUS_ASSINATURA_LIBERADA)
+                .in("data_vencimento", datasVencimento)
+                .order("id", { ascending: true })
+                .range(offset, offset + PAGE_SIZE - 1);
+
+            if (error) {
+                return { data: null, error };
+            }
+
+            const batch = (data as unknown as Record<string, unknown>[]) || [];
+            allRows.push(...batch);
+
+            if (batch.length < PAGE_SIZE) {
+                break;
+            }
+
+            offset += PAGE_SIZE;
+        }
+
+        return { data: allRows, error: null };
     },
 
     async updateUltimaNotificacao(id: string, dataISO: string) {

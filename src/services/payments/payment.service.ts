@@ -5,6 +5,7 @@ import { WooviProvider, WooviWithdrawResponse } from "./providers/woovi.provider
 import { BancoDoBrasilProvider } from "./providers/banco-do-brasil.provider.js";
 import { AppError } from "../../errors/AppError.js";
 import { logger } from "../../config/logger.js";
+import { errorAlertService } from "../error-alert.service.js";
 
 class PaymentService {
     private providers: Map<PaymentProvider, PaymentProviderAdapter> = new Map();
@@ -33,7 +34,38 @@ class PaymentService {
     async createCharge(request: CreateChargeRequest, provider: PaymentProvider): Promise<ChargeResponse> {
         const p = this.getProvider(provider);
         logger.info({ externalId: request.externalId, provider: p.providerName }, "[PaymentService] Criando cobrança...");
-        return p.createCharge(request);
+        try {
+            const res = await p.createCharge(request);
+            if (!res.success) {
+                void errorAlertService.notifyPaymentError({
+                    provider,
+                    error: res.error || "Falha desconhecida ao criar cobrança",
+                    externalId: request.externalId,
+                    paymentMethod: request.paymentMethod,
+                    amount: `R$ ${request.amount.toFixed(2)}`,
+                    details: {
+                        operacao: "createCharge",
+                        descricao: request.description,
+                        pagador: request.customer?.name
+                    }
+                });
+            }
+            return res;
+        } catch (error: unknown) {
+            void errorAlertService.notifyPaymentError({
+                provider,
+                error,
+                externalId: request.externalId,
+                paymentMethod: request.paymentMethod,
+                amount: `R$ ${request.amount.toFixed(2)}`,
+                details: {
+                    operacao: "createCharge",
+                    descricao: request.description,
+                    pagador: request.customer?.name
+                }
+            });
+            throw error;
+        }
     }
 
     async cancelCharge(providerId: string, provider: PaymentProvider, options?: Record<string, unknown>): Promise<boolean> {
@@ -50,19 +82,68 @@ class PaymentService {
     }
 
     async ensureSubaccount(pixKey: string, name?: string): Promise<boolean> {
-        return this.wooviProviderInstance.createOrEnsureSubaccount(pixKey, name);
+        try {
+            return await this.wooviProviderInstance.createOrEnsureSubaccount(pixKey, name);
+        } catch (error: unknown) {
+            void errorAlertService.notifyPaymentError({
+                provider: PaymentProvider.WOOVI,
+                error,
+                details: {
+                    operacao: "ensureSubaccount",
+                    pixKey,
+                    nome: name
+                }
+            });
+            throw error;
+        }
     }
 
     async getSubaccountBalance(pixKey: string): Promise<number> {
-        return this.wooviProviderInstance.getSubaccountBalance(pixKey);
+        try {
+            return await this.wooviProviderInstance.getSubaccountBalance(pixKey);
+        } catch (error: unknown) {
+            void errorAlertService.notifyPaymentError({
+                provider: PaymentProvider.WOOVI,
+                error,
+                details: {
+                    operacao: "getSubaccountBalance",
+                    pixKey
+                }
+            });
+            throw error;
+        }
     }
 
     async withdrawFromSubaccount(pixKey: string, amountInCents: number): Promise<WooviWithdrawResponse> {
-        return this.wooviProviderInstance.withdrawFromSubaccount(pixKey, amountInCents);
+        const res = await this.wooviProviderInstance.withdrawFromSubaccount(pixKey, amountInCents);
+        if (!res.success) {
+            void errorAlertService.notifyPaymentError({
+                provider: PaymentProvider.WOOVI,
+                error: res.error || "Falha no saque da subconta",
+                amount: `R$ ${(amountInCents / 100).toFixed(2)}`,
+                details: {
+                    operacao: "withdrawFromSubaccount",
+                    pixKey
+                }
+            });
+        }
+        return res;
     }
 
     async creditSubaccount(pixKey: string, amountInCents: number): Promise<{ success: boolean; error?: string }> {
-        return this.wooviProviderInstance.creditSubaccount(pixKey, amountInCents);
+        const res = await this.wooviProviderInstance.creditSubaccount(pixKey, amountInCents);
+        if (!res.success) {
+            void errorAlertService.notifyPaymentError({
+                provider: PaymentProvider.WOOVI,
+                error: res.error || "Falha no crédito da subconta",
+                amount: `R$ ${(amountInCents / 100).toFixed(2)}`,
+                details: {
+                    operacao: "creditSubaccount",
+                    pixKey
+                }
+            });
+        }
+        return res;
     }
 }
 
