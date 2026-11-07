@@ -2,6 +2,7 @@ import { NotificationChannelEnum } from '../types/enums.js';
 import { logger } from "../config/logger.js";
 import { cobrancaRepository } from "../repositories/cobranca.repository.js";
 import { motoristaFinanceiroRepository } from "../repositories/motorista-financeiro.repository.js";
+import { historicoRepository } from "../repositories/historico.repository.js";
 import { cobrancaValidacaoService } from "./cobranca-validacao.service.js";
 import { AppError } from "../errors/AppError.js";
 import { RegistrarPagamentoManualDTO, ComplementarPagamentoManualDTO } from "../types/dtos/cobranca.dto.js";
@@ -80,6 +81,8 @@ export const cobrancaPagamentoService = {
       logger.error({ error: msg, cobrancaId }, "Erro ao gerar recibo - Pagamento revertido para manter consistencia");
       throw new AppError(msg || "Erro ao gerar recibo.", 500);
     }
+
+    void historicoRepository.deleteFalhaIntegracaoByEntidadeId(cobrancaId);
 
     if (updated.recibo_url) {
       try {
@@ -332,6 +335,8 @@ export const cobrancaPagamentoService = {
       throw new AppError(`Erro ao atualizar cobrança para pago: ${error?.message || "Erro desconhecido"}`, 500);
     }
 
+    void historicoRepository.deleteFalhaIntegracaoByEntidadeId(cobrancaId);
+
     historicoService.log({
       usuario_id: cobranca.usuario_id,
       entidade_tipo: AtividadeEntidadeTipo.COBRANCA,
@@ -456,4 +461,3 @@ export const cobrancaPagamentoService = {
     return updated;
   }
 };
-

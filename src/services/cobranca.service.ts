@@ -1230,6 +1230,7 @@ export const cobrancaService = {
         }
       }
 
+      await historicoRepository.deleteFalhasIntegracaoCobrancasResolvidas();
       logger.info({ sentCount }, "[CobrancaService] Envio diário de notificações de cobrança concluído.");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
