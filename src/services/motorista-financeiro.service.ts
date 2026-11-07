@@ -183,50 +183,29 @@ export const motoristaFinanceiroService = {
       void dispatchTelegramModoCobrancaChange(usuarioId, modoAnterior, modoFinal);
     }
 
+    const chavePixMudou =
+      input.chave_pix_repasse !== undefined &&
+      input.chave_pix_repasse !== configAtual.chave_pix_repasse;
+
+    const encargosMudaram =
+      (input.cobrar_multa_atraso !== undefined && input.cobrar_multa_atraso !== configAtual.cobrar_multa_atraso) ||
+      (input.multa_atraso_valor !== undefined && Number(input.multa_atraso_valor) !== Number(configAtual.multa_atraso_valor)) ||
+      (input.multa_atraso_tipo !== undefined && input.multa_atraso_tipo !== configAtual.multa_atraso_tipo) ||
+      (input.cobrar_juros_atraso !== undefined && input.cobrar_juros_atraso !== configAtual.cobrar_juros_atraso) ||
+      (input.juros_atraso_valor !== undefined && Number(input.juros_atraso_valor) !== Number(configAtual.juros_atraso_valor)) ||
+      (input.juros_atraso_tipo !== undefined && input.juros_atraso_tipo !== configAtual.juros_atraso_tipo) ||
+      (input.dias_validade_apos_vencimento !== undefined && Number(input.dias_validade_apos_vencimento) !== Number(configAtual.dias_validade_apos_vencimento));
+
     const deveLimparPix =
-      modoFinal !== ModoCobrancaEnum.AUTOMATICA &&
-      (modoAnterior === ModoCobrancaEnum.AUTOMATICA || input.aplicar_a_todos === true);
+      (modoFinal !== ModoCobrancaEnum.AUTOMATICA &&
+        (modoAnterior === ModoCobrancaEnum.AUTOMATICA || input.aplicar_a_todos === true)) ||
+      chavePixMudou ||
+      encargosMudaram;
 
     if (deveLimparPix) {
-      try {
-        let query = supabaseAdmin
-          .from("cobrancas")
-          .select("id, provedor_cobranca_id, passageiro:passageiros!inner(modo_cobranca)")
-          .eq("usuario_id", usuarioId)
-          .eq("status", CobrancaStatus.PENDENTE)
-          .not("provedor_cobranca_id", "is", null);
-
-        if (input.aplicar_a_todos !== true) {
-          query = query.is("passageiro.modo_cobranca", null);
-        }
-
-        const { data: cobrancasComPix } = await query;
-
-        if (cobrancasComPix && cobrancasComPix.length > 0) {
-          for (const cob of cobrancasComPix) {
-            if (cob.provedor_cobranca_id) {
-              void cobrancaValidacaoService.cancelarPixCobrancaSeExistir(cob.id, cob.provedor_cobranca_id);
-              await supabaseAdmin
-                .from("cobrancas")
-                .update({
-                  pix_copia_cola: null,
-                  pix_qrcode_url: null,
-                  pix_expiracao: null,
-                  provedor_cobranca_id: null,
-                  provedor: null,
-                  boleto_linha_digitavel: null,
-                  boleto_codigo_barras: null,
-                  boleto_url: null,
-                  boleto_nosso_numero: null,
-                  repasse_em_processamento: false
-                })
-                .eq("id", cob.id);
-            }
-          }
-        }
-      } catch (err: unknown) {
-        logger.error({ error: err, usuarioId }, "[MotoristaFinanceiroService] Erro ao cancelar Pix pendentes na troca de modo da van");
-      }
+      await cobrancaValidacaoService.invalidarPixCobrancasPendentesPorMotorista(usuarioId, {
+        apenasSemExcecaoModo: !chavePixMudou && !encargosMudaram && input.aplicar_a_todos !== true,
+      });
     }
 
     const taxaGlobal = await motoristaFinanceiroRepository.getTaxaPadraoGlobal();

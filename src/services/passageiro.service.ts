@@ -19,6 +19,7 @@ import { calculateAuditDiff } from "../utils/audit-diff.util.js";
 import { getFirstAndSecondName, getFirstName } from "../utils/format.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { cobrancaValidacaoService } from "./cobranca-validacao.service.js";
+import { paymentService } from "./payments/payment.service.js";
 import { logger } from "../config/logger.js";
 
 const MATRICULA_KEYS = [
@@ -468,7 +469,14 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO, targetOwn
     }
 
     if (data.responsavel_principal) {
+        const cpfAnterior = estadoAnterior.responsavel_principal?.cpf ? onlyDigits(String(estadoAnterior.responsavel_principal.cpf)) : null;
+        const cpfNovo = data.responsavel_principal.cpf !== undefined
+            ? (data.responsavel_principal.cpf ? onlyDigits(String(data.responsavel_principal.cpf)) : null)
+            : cpfAnterior;
         await _syncResponsavelPrincipal(id, data.responsavel_principal, estadoAnterior.responsavel_principal);
+        if (cpfNovo !== cpfAnterior && cpfNovo) {
+            await cobrancaValidacaoService.invalidarPixCobrancasPendentesPorPassageiro(id, true);
+        }
     }
 
     const fullPassageiro = await passageiroRepository.getByIdCompleto(id, undefined, effectiveAno);
@@ -505,6 +513,7 @@ const deletePassageiro = async (id: string, targetOwnerId?: string, assignedVeic
     const passageiro = await getPassageiro(id, targetOwnerId, assignedVeiculoId);
 
     if (passageiro?.id) {
+        await cobrancaValidacaoService.invalidarPixCobrancasPendentesPorPassageiro(id, true);
         const { error } = await passageiroRepository.delete(id);
         if (error) throw error;
 
@@ -1013,43 +1022,7 @@ const updateResponsavelAdicional = async (responsavelId: string, data: UpdateRes
             });
 
             if (diff.campos.includes("cpf") && prepared.cpf) {
-                try {
-                    const now = getNowBR();
-                    const anoAtual = now.getFullYear();
-
-                    const { data: cobrancasPendentes } = await supabaseAdmin
-                        .from("cobrancas")
-                        .select("id, provedor_cobranca_id, pix_copia_cola")
-                        .eq("passageiro_id", passageiroId)
-                        .eq("status", CobrancaStatus.PENDENTE)
-                        .gte("ano", anoAtual)
-                        .not("pix_copia_cola", "is", null);
-
-                    if (cobrancasPendentes && cobrancasPendentes.length > 0) {
-                        for (const cob of cobrancasPendentes) {
-                            if (cob.provedor_cobranca_id) {
-                                void cobrancaValidacaoService.cancelarPixCobrancaSeExistir(cob.id, cob.provedor_cobranca_id);
-                            }
-                            await supabaseAdmin
-                                .from("cobrancas")
-                                .update({
-                                    pix_copia_cola: null,
-                                    pix_qrcode_url: null,
-                                    pix_expiracao: null,
-                                    provedor_cobranca_id: null,
-                                    provedor: null,
-                                    boleto_linha_digitavel: null,
-                                    boleto_codigo_barras: null,
-                                    boleto_url: null,
-                                    boleto_nosso_numero: null,
-                                    repasse_em_processamento: false
-                                })
-                                .eq("id", cob.id);
-                        }
-                    }
-                } catch (cleanPixErr: unknown) {
-                    logger.error({ error: cleanPixErr, passageiroId }, "[PassageiroService] Erro ao invalidar Pix pendentes na atualização do CPF do responsável");
-                }
+                await cobrancaValidacaoService.invalidarPixCobrancasPendentesPorPassageiro(passageiroId, true);
             }
         }
     }
@@ -1281,6 +1254,49 @@ const updatePassageirosBatch = async (
 
             if (alunoUpdated) {
                 updatedCount++;
+                const temAlteracaoFinanceira = payload.valor_cobranca !== undefined || payload.dia_vencimento !== undefined;
+
+                if (temAlteracaoFinanceira) {
+                    const { data: cobsPendentes } = await supabaseAdmin
+                        .from("cobrancas")
+                        .select("id, mes, ano, valor, data_vencimento, provedor_cobranca_id, provedor")
+                        .eq("passageiro_id", item.id)
+                        .eq("status", CobrancaStatus.PENDENTE)
+                        .or(`ano_letivo.eq.${itemAno},and(ano_letivo.is.null,ano.eq.${itemAno})`);
+
+                    for (const cob of cobsPendentes || []) {
+                        const novoVenc = payload.dia_vencimento
+                            ? getSafeDueDateString(Number(payload.dia_vencimento), cob.mes, cob.ano)
+                            : cob.data_vencimento;
+                        const valorMudouCob = payload.valor_cobranca !== undefined && Number(payload.valor_cobranca) !== Number(cob.valor);
+                        const vencMudouCob = novoVenc !== cob.data_vencimento;
+
+                        if (!valorMudouCob && !vencMudouCob) continue;
+
+                        if (cob.provedor_cobranca_id) {
+                            void cobrancaValidacaoService.cancelarPixCobrancaSeExistir(cob.id, cob.provedor_cobranca_id, cob.provedor);
+                        }
+                        const updateCobData: Record<string, unknown> = {
+                            pix_copia_cola: null,
+                            pix_qrcode_url: null,
+                            pix_expiracao: null,
+                            provedor_cobranca_id: null,
+                            provedor: null,
+                            boleto_linha_digitavel: null,
+                            boleto_codigo_barras: null,
+                            boleto_url: null,
+                            boleto_nosso_numero: null,
+                            repasse_em_processamento: false,
+                        };
+                        if (valorMudouCob && payload.valor_cobranca !== undefined) {
+                            updateCobData.valor = payload.valor_cobranca;
+                        }
+                        if (vencMudouCob) {
+                            updateCobData.data_vencimento = novoVenc;
+                        }
+                        await supabaseAdmin.from("cobrancas").update(updateCobData).eq("id", cob.id);
+                    }
+                }
             }
         }));
     }
@@ -1343,6 +1359,15 @@ const atualizarPixPassageiro = async (passageiroId: string, usuarioId: string, p
     );
 
     if (pixDiff.hasChanges) {
+        if (updates.chave_pix) {
+            try {
+                await paymentService.ensureSubaccount(updates.chave_pix);
+            } catch (_err: unknown) {
+                void _err;
+            }
+        }
+        void cobrancaValidacaoService.invalidarPixCobrancasPendentesPorPassageiro(passageiroId);
+
         const descricaoPix = updates.chave_pix
             ? (passageiro.chave_pix ? `Chave Pix do aluno ${passageiro.nome} atualizada.` : `Chave Pix própria configurada para o aluno ${passageiro.nome}.`)
             : `Chave Pix própria removida do aluno ${passageiro.nome}.`;

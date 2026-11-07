@@ -8,6 +8,8 @@ import { AppError } from "../errors/AppError.js";
 import { calculateAuditDiff } from "../utils/audit-diff.util.js";
 import { isValidPixKey } from "../utils/validators.js";
 import { pixValidationService } from "./pix-validation.service.js";
+import { paymentService } from "./payments/payment.service.js";
+import { cobrancaValidacaoService } from "./cobranca-validacao.service.js";
 
 // Helper Methods
 const _prepareVeiculoData = (data: Partial<CreateVeiculoDTO>, usuarioId?: string, isUpdate: boolean = false): Record<string, unknown> => {
@@ -215,6 +217,15 @@ export const veiculoService = {
         );
 
         if (pixDiff.hasChanges) {
+            if (updates.chave_pix) {
+                try {
+                    await paymentService.ensureSubaccount(updates.chave_pix);
+                } catch (_err: unknown) {
+                    void _err;
+                }
+            }
+            void cobrancaValidacaoService.invalidarPixCobrancasPendentesPorVeiculo(id);
+
             const descricaoPix = updates.chave_pix
                 ? (veiculo.chave_pix ? `Chave Pix do veículo ${veiculo.placa} atualizada.` : `Chave Pix própria configurada para o veículo ${veiculo.placa}.`)
                 : `Chave Pix própria removida do veículo ${veiculo.placa}.`;

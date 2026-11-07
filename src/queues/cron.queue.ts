@@ -1,6 +1,7 @@
 import { createQueue } from "./index.js";
 import { CronJob } from "../types/enums.js";
 import { logger } from "../config/logger.js";
+import { getNowBR, toPersistenceString } from "../utils/date.utils.js";
 
 export const QUEUE_NAME_CRON = 'cron-queue';
 
@@ -58,6 +59,24 @@ export const setupCronJobs = async (maxAttempts = 3, delayMs = 3000): Promise<vo
 
             const verifiedJobs = await cronQueue.getRepeatableJobs();
             logger.info({ count: verifiedJobs.length }, "[CronQueue] Agendamentos recorrentes verificados e ativos no Redis.");
+
+            const nowBR = getNowBR();
+            const isAfterDailyChargeCron =
+                nowBR.getHours() > 13 || (nowBR.getHours() === 13 && nowBR.getMinutes() >= 35);
+
+            if (isAfterDailyChargeCron) {
+                const todayStr = toPersistenceString(nowBR);
+                await cronQueue.add(
+                    CronJob.DAILY_CHARGE_MONITOR,
+                    {},
+                    {
+                        jobId: `catchup-${CronJob.DAILY_CHARGE_MONITOR}-${todayStr}`,
+                        removeOnComplete: { age: 86400 },
+                        removeOnFail: true,
+                    }
+                );
+            }
+
             return;
         } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);
@@ -72,4 +91,3 @@ export const setupCronJobs = async (maxAttempts = 3, delayMs = 3000): Promise<vo
         }
     }
 };
-

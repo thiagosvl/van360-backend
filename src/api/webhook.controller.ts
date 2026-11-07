@@ -14,7 +14,6 @@ import {
 } from "../types/enums.js";
 import { paymentService } from "../services/payments/payment.service.js";
 import { cobrancaCalculoService } from "../services/cobranca-calculo.service.js";
-import { cobrancaPagamentoService } from "../services/cobranca-pagamento.service.js";
 import { subscriptionService } from "../services/subscriptions/subscription.service.js";
 import { invoiceRepository } from "../repositories/invoice.repository.js";
 import { subscriptionRepository } from "../repositories/subscription.repository.js";
@@ -149,14 +148,17 @@ export const WebhookController = {
 
       cobrancaId = cobranca.id;
 
-      if (cobranca.status === CobrancaStatus.PAGO) {
+      if (cobranca.status === CobrancaStatus.PAGO && !cobranca.pagamento_manual) {
         return reply.code(200).send({ received: true, status: "already_paid" });
       }
 
       if (event.type === NormalizedPaymentEventType.PAYMENT_RECEIVED) {
         const motoristaId = cobranca.usuario_id || "";
 
-        const motoristaConfig = await motoristaFinanceiroRepository.getByUsuarioId(motoristaId);
+        const [motoristaConfig, taxaGlobal] = await Promise.all([
+          motoristaFinanceiroRepository.getByUsuarioId(motoristaId),
+          motoristaFinanceiroRepository.getTaxaPadraoGlobal()
+        ]);
         const chavePixRepasse = cobranca.chave_pix_repasse || motoristaConfig.chave_pix_repasse;
 
         if (!chavePixRepasse) {
@@ -167,7 +169,8 @@ export const WebhookController = {
         const taxaPlataforma = cobrancaCalculoService.resolverTaxaPlataforma(
           cobranca.valor_taxa_plataforma !== null && cobranca.valor_taxa_plataforma !== undefined
             ? Number(cobranca.valor_taxa_plataforma)
-            : motoristaConfig.taxa_personalizada
+            : motoristaConfig.taxa_personalizada,
+          taxaGlobal
         );
         const valorRealPago = event.amount && event.amount > 0 ? event.amount : Number(cobranca.valor);
 

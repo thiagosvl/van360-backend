@@ -1,4 +1,4 @@
-﻿import { logger } from "../config/logger.js";
+import { logger } from "../config/logger.js";
 import { cobrancaRepasseRepository } from "../repositories/cobranca-repasse.repository.js";
 import { cobrancaRepository } from "../repositories/cobranca.repository.js";
 import { motoristaFinanceiroRepository } from "../repositories/motorista-financeiro.repository.js";
@@ -6,7 +6,7 @@ import { addToRepasseQueue } from "../queues/repasse.queue.js";
 import { paymentService } from "./payments/payment.service.js";
 import { cobrancaCalculoService } from "./cobranca-calculo.service.js";
 import { cobrancaPagamentoService } from "./cobranca-pagamento.service.js";
-import { PaymentProvider, StatusRepasseEnum, ProvedorPagamentoEnum } from "../types/enums.js";
+import { CobrancaTipoPagamento, PaymentProvider, StatusRepasseEnum, ProvedorPagamentoEnum } from "../types/enums.js";
 
 export async function conciliarRepassesPendentes(): Promise<void> {
   logger.info("[ConciliacaoRepasse] Iniciando varredura de repasses pendentes/falhos...");
@@ -50,6 +50,7 @@ export async function conciliarRepassesPendentes(): Promise<void> {
     const { data: cobrancasTravadas, error: cobrancasError } = await cobrancaRepository.getCobrancasTravadasEmProcessamento(10);
     if (!cobrancasError && cobrancasTravadas && cobrancasTravadas.length > 0) {
       logger.info({ count: cobrancasTravadas.length }, "[ConciliacaoRepasse] Cobranças em processamento encontradas para conciliação");
+      const taxaGlobal = await motoristaFinanceiroRepository.getTaxaPadraoGlobal();
 
       for (const cobranca of cobrancasTravadas) {
         try {
@@ -59,8 +60,15 @@ export async function conciliarRepassesPendentes(): Promise<void> {
             if (repasseExistente.status_repasse === StatusRepasseEnum.SUCESSO) {
               await cobrancaPagamentoService.registrarPagamentoAutomatico(
                 cobranca.id,
-                undefined,
-                Number(repasseExistente.valor_bruto)
+                repasseExistente.data_pagamento_pai || undefined,
+                Number(repasseExistente.valor_bruto),
+                CobrancaTipoPagamento.PIX,
+                ProvedorPagamentoEnum.WOOVI,
+                {
+                  pagadorNome: repasseExistente.pagador_nome,
+                  pagadorDocumento: repasseExistente.pagador_documento,
+                  pagadorBanco: repasseExistente.pagador_banco
+                }
               );
             }
             continue;
@@ -79,7 +87,10 @@ export async function conciliarRepassesPendentes(): Promise<void> {
 
               if (chavePix) {
                 const taxaPlataforma = cobrancaCalculoService.resolverTaxaPlataforma(
-                  cobranca.valor_taxa_plataforma ? Number(cobranca.valor_taxa_plataforma) : null
+                  cobranca.valor_taxa_plataforma !== null && cobranca.valor_taxa_plataforma !== undefined
+                    ? Number(cobranca.valor_taxa_plataforma)
+                    : motoristaConfig.taxa_personalizada,
+                  taxaGlobal
                 );
                 const divisao = cobrancaCalculoService.calcularDivisaoCobranca({
                   valorMensalidade: Number(cobranca.valor),
@@ -112,7 +123,7 @@ export async function conciliarRepassesPendentes(): Promise<void> {
                 });
                 continue;
               }
-            } else {
+            } else if (statusProvedor !== "UNKNOWN") {
               await cobrancaRepository.update(cobranca.id, {
                 repasse_em_processamento: false
               });
@@ -133,4 +144,3 @@ export async function conciliarRepassesPendentes(): Promise<void> {
     logger.error({ error: msg }, "[ConciliacaoRepasse] Falha geral no cron de conciliação de repasses");
   }
 }
-
