@@ -1493,6 +1493,8 @@ export const cobrancaService = {
 
       let sentCount = 0;
       const BATCH_SIZE = 10;
+      const isQuintaFeira = now.getDay() === 4;
+      const semanaMes = Math.ceil(now.getDate() / 7);
 
       for (let i = 0; i < motoristas.length; i += BATCH_SIZE) {
         const chunk = motoristas.slice(i, i + BATCH_SIZE);
@@ -1573,8 +1575,6 @@ export const cobrancaService = {
 
       let sentCount = 0;
       const BATCH_SIZE = 10;
-      const isQuintaFeira = now.getDay() === 4;
-      const semanaMes = Math.ceil(now.getDate() / 7);
 
       for (let i = 0; i < motoristas.length; i += BATCH_SIZE) {
         const chunk = motoristas.slice(i, i + BATCH_SIZE);
