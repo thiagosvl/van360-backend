@@ -6,9 +6,14 @@ import { cobrancaRepository } from "../repositories/cobranca.repository.js";
 import { cobrancaRepasseRepository } from "../repositories/cobranca-repasse.repository.js";
 import { motoristaFinanceiroRepository } from "../repositories/motorista-financeiro.repository.js";
 import { paymentService } from "../services/payments/payment.service.js";
-
-import { StatusRepasseEnum, NotificationChannelEnum } from "../types/enums.js";
-import { FINANCEIRO_CONFIG, EVENTO_ADMIN_REPASSE_SUCESSO } from "../config/constants.js";
+import {
+    CobrancaTipoPagamento,
+    NotificationChannelEnum,
+    ProvedorPagamentoEnum,
+    StatusRepasseEnum,
+} from "../types/enums.js";
+import { EVENTO_ADMIN_REPASSE_SUCESSO, FINANCEIRO_CONFIG } from "../config/constants.js";
+import { cobrancaPagamentoService } from "../services/cobranca-pagamento.service.js";
 import { notificationService } from "../services/notifications/notification.service.js";
 import { formatDateTime } from "../utils/format.js";
 
@@ -18,7 +23,10 @@ export const repasseWorker = new Worker<RepasseJobData>(
         const { repasseId, cobrancaId, chavePix: fallbackChavePix, valorLiquido } = job.data;
         logger.info({ jobId: job.id, repasseId, cobrancaId }, "[RepasseWorker] Iniciando saque do repasse...");
 
-        const repasse = await cobrancaRepasseRepository.getByCobrancaId(cobrancaId);
+        let repasse = await cobrancaRepasseRepository.getByCobrancaId(cobrancaId);
+        if (!repasse && repasseId) {
+            repasse = await cobrancaRepasseRepository.getById(repasseId);
+        }
         if (!repasse) {
             throw new Error(`Registro de repasse não encontrado para cobrança ${cobrancaId}`);
         }
@@ -30,13 +38,23 @@ export const repasseWorker = new Worker<RepasseJobData>(
 
         if (repasse.saque_provedor_id || repasse.end_to_end_id_out) {
             logger.info({ repasseId, cobrancaId }, "[RepasseWorker] Saque já emitido previamente no provedor. Pulando transferência e finalizando.");
+            await cobrancaPagamentoService.registrarPagamentoAutomatico(
+                cobrancaId,
+                repasse.data_pagamento_pai || undefined,
+                Number(repasse.valor_bruto),
+                CobrancaTipoPagamento.PIX,
+                ProvedorPagamentoEnum.WOOVI,
+                {
+                    pagadorNome: repasse.pagador_nome,
+                    pagadorDocumento: repasse.pagador_documento,
+                    pagadorBanco: repasse.pagador_banco,
+                }
+            );
             await cobrancaRepasseRepository.update(repasse.id, {
                 status_repasse: StatusRepasseEnum.SUCESSO,
                 data_repasse_motorista: repasse.data_repasse_motorista || new Date().toISOString(),
                 ultimo_erro: null
             });
-            const { cobrancaPagamentoService } = await import("../services/cobranca-pagamento.service.js");
-            await cobrancaPagamentoService.registrarPagamentoAutomatico(cobrancaId, undefined, Number(repasse.valor_bruto));
             return;
         }
 
@@ -152,16 +170,31 @@ export const repasseWorker = new Worker<RepasseJobData>(
             throw new Error(errorMsg);
         }
 
+        const dataRepasseMotorista = new Date().toISOString();
         await cobrancaRepasseRepository.update(repasse.id, {
-            status_repasse: StatusRepasseEnum.SUCESSO,
             saque_provedor_id: withdrawRes.transactionId || null,
             end_to_end_id_out: withdrawRes.endToEndId || null,
-            data_repasse_motorista: new Date().toISOString(),
+            data_repasse_motorista: dataRepasseMotorista,
             ultimo_erro: null
         });
 
-        const { cobrancaPagamentoService } = await import("../services/cobranca-pagamento.service.js");
-        await cobrancaPagamentoService.registrarPagamentoAutomatico(cobrancaId, undefined, Number(repasse.valor_bruto));
+        await cobrancaPagamentoService.registrarPagamentoAutomatico(
+            cobrancaId,
+            repasse.data_pagamento_pai || undefined,
+            Number(repasse.valor_bruto),
+            CobrancaTipoPagamento.PIX,
+            ProvedorPagamentoEnum.WOOVI,
+            {
+                pagadorNome: repasse.pagador_nome,
+                pagadorDocumento: repasse.pagador_documento,
+                pagadorBanco: repasse.pagador_banco,
+            }
+        );
+
+        await cobrancaRepasseRepository.update(repasse.id, {
+            status_repasse: StatusRepasseEnum.SUCESSO,
+            ultimo_erro: null
+        });
 
         const passageiro = cobranca?.passageiro as { nome?: string } | null | undefined;
         const motorista = cobranca?.motorista as { nome?: string; apelido?: string | null } | null | undefined;
@@ -202,7 +235,11 @@ export const repasseWorker = new Worker<RepasseJobData>(
     },
     {
         connection: redisConfig,
-        concurrency: 1
+        concurrency: 1,
+        limiter: {
+            max: 1,
+            duration: 1000,
+        },
     }
 );
 

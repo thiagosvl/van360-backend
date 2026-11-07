@@ -159,14 +159,14 @@ export const cobrancaPagamentoService = {
     }
 
     if (cobranca.provedor_cobranca_id) {
-      void cobrancaValidacaoService.cancelarPixCobrancaSeExistir(
+      await cobrancaValidacaoService.cancelarPixCobrancaSeExistir(
         cobrancaId,
         cobranca.provedor_cobranca_id,
         cobranca.provedor
       );
     }
 
-    void historicoRepository.deleteFalhaIntegracaoByEntidadeId(cobrancaId);
+    await historicoRepository.deleteFalhaIntegracaoByEntidadeId(cobrancaId);
 
     try {
       await notifyReciboPassageiro(cobrancaId, updated, [NotificationChannelEnum.FIREBASE]);

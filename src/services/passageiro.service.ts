@@ -1366,7 +1366,7 @@ const atualizarPixPassageiro = async (passageiroId: string, usuarioId: string, p
                 void _err;
             }
         }
-        void cobrancaValidacaoService.invalidarPixCobrancasPendentesPorPassageiro(passageiroId);
+        await cobrancaValidacaoService.invalidarPixCobrancasPendentesPorPassageiro(passageiroId);
 
         const descricaoPix = updates.chave_pix
             ? (passageiro.chave_pix ? `Chave Pix do aluno ${passageiro.nome} atualizada.` : `Chave Pix própria configurada para o aluno ${passageiro.nome}.`)

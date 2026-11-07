@@ -224,7 +224,7 @@ export const veiculoService = {
                     void _err;
                 }
             }
-            void cobrancaValidacaoService.invalidarPixCobrancasPendentesPorVeiculo(id);
+            await cobrancaValidacaoService.invalidarPixCobrancasPendentesPorVeiculo(id);
 
             const descricaoPix = updates.chave_pix
                 ? (veiculo.chave_pix ? `Chave Pix do veículo ${veiculo.placa} atualizada.` : `Chave Pix própria configurada para o veículo ${veiculo.placa}.`)

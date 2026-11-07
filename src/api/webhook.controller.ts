@@ -229,6 +229,11 @@ export const WebhookController = {
         const payerBank = (rawPixPayer?.bank as string) || null;
 
         let repasse = repasseExistente;
+        if (repasse && repasse.cobranca_id !== cobranca.id) {
+          repasse = await cobrancaRepasseRepository.update(repasse.id, {
+            cobranca_id: cobranca.id,
+          });
+        }
         if (!repasse) {
           const endToEndIdIn = (rawPix?.endToEndId as string) || (rawCharge?.endToEndId as string) || null;
 

@@ -67,7 +67,7 @@ export const cobrancaPixService = {
     if (!elegivel || !chavePixRepasseEfetiva) {
       if (cobranca.pix_copia_cola || cobranca.provedor_cobranca_id) {
         if (cobranca.provedor_cobranca_id) {
-          void cobrancaValidacaoService.cancelarPixCobrancaSeExistir(
+          await cobrancaValidacaoService.cancelarPixCobrancaSeExistir(
             cobranca.id,
             cobranca.provedor_cobranca_id,
             cobranca.provedor
@@ -84,7 +84,7 @@ export const cobrancaPixService = {
     );
 
     if ((options?.force || chavePixMudou) && cobranca.provedor_cobranca_id) {
-      void cobrancaValidacaoService.cancelarPixCobrancaSeExistir(
+      await cobrancaValidacaoService.cancelarPixCobrancaSeExistir(
         cobranca.id,
         cobranca.provedor_cobranca_id,
         cobranca.provedor

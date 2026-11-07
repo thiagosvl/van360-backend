@@ -21,6 +21,20 @@ export const cobrancaRepasseRepository = {
     return created;
   },
 
+  async getById(id: string): Promise<CobrancaRepasse | null> {
+    const { data, error } = await supabaseAdmin
+      .from("cobrancas_repasses")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    return data;
+  },
+
   async getByTransacaoProvedorId(transacaoProvedorId: string): Promise<CobrancaRepasse | null> {
     const { data, error } = await supabaseAdmin
       .from("cobrancas_repasses")

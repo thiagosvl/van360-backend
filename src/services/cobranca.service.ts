@@ -95,7 +95,7 @@ export const cobrancaService = {
       const vaiParaPago = statusVal === CobrancaStatus.PAGO;
 
       if ((valorMudou || vencimentoMudou || vaiParaPago) && existingCobranca.provedor_cobranca_id) {
-        void cobrancaValidacaoService.cancelarPixCobrancaSeExistir(
+        await cobrancaValidacaoService.cancelarPixCobrancaSeExistir(
           existingCobranca.id,
           existingCobranca.provedor_cobranca_id,
           existingCobranca.provedor
@@ -261,7 +261,7 @@ export const cobrancaService = {
     }
 
     if ((valorMudou || vencimentoMudou) && cobrancaOriginal?.provedor_cobranca_id) {
-      void cobrancaValidacaoService.cancelarPixCobrancaSeExistir(
+      await cobrancaValidacaoService.cancelarPixCobrancaSeExistir(
         id,
         String(cobrancaOriginal.provedor_cobranca_id),
         cobrancaOriginal.provedor as string | null | undefined
@@ -337,7 +337,7 @@ export const cobrancaService = {
     await cobrancaValidacaoService.validarImpedimentoPorRepasse(id, cobranca, "cancelar parcela");
 
     if (cobranca.provedor_cobranca_id) {
-      void cobrancaValidacaoService.cancelarPixCobrancaSeExistir(
+      await cobrancaValidacaoService.cancelarPixCobrancaSeExistir(
         id,
         cobranca.provedor_cobranca_id,
         cobranca.provedor
