@@ -1371,7 +1371,8 @@ export const cobrancaService = {
   async dispararPushAlertaHojeParaMotorista(
     motorista: { id: string; nome: string; telefone: string | null; email?: string | null },
     listaCobrancas: Array<{ valor: unknown; passageiro?: unknown }>,
-    temAlunos: boolean
+    temAlunos: boolean,
+    semanaMes = 1
   ): Promise<boolean> {
     const totalValor = listaCobrancas.reduce((acc, curr) => acc + (Number(curr.valor) || 0), 0);
     const primeiraCobranca = listaCobrancas[0];
@@ -1395,6 +1396,7 @@ export const cobrancaService = {
         generoPassageiro,
         nomeResponsavel,
         temAlunos,
+        semanaMes,
         usuarioId: motorista.id
       },
       {
@@ -1440,8 +1442,9 @@ export const cobrancaService = {
     const contagemAlunos = contagemMap.get(motoristaObj.id) || 0;
     const temAlunos = contagemAlunos >= 2;
     const totalValor = lista.reduce((acc, curr) => acc + (Number(curr.valor) || 0), 0);
+    const semanaMes = Math.ceil(now.getDate() / 7);
 
-    const sent = await this.dispararPushAlertaHojeParaMotorista(motoristaObj, lista, temAlunos);
+    const sent = await this.dispararPushAlertaHojeParaMotorista(motoristaObj, lista, temAlunos, semanaMes);
 
     return {
       sent,
@@ -1502,12 +1505,14 @@ export const cobrancaService = {
             const assinaturaObj = Array.isArray(m.assinaturas) ? m.assinaturas[0] : m.assinaturas;
             const isTrial = assinaturaObj?.status === SubscriptionStatus.TRIAL;
 
-            if (isTrial && lista.length === 0 && !temAlunos) {
-              return;
+            if (lista.length === 0) {
+              if (isTrial || !isQuintaFeira) {
+                return;
+              }
             }
 
             try {
-              const sent = await this.dispararPushAlertaHojeParaMotorista(m, lista, temAlunos);
+              const sent = await this.dispararPushAlertaHojeParaMotorista(m, lista, temAlunos, semanaMes);
               if (sent) sentCount++;
             } catch (notifErr: unknown) {
               const errorMsg = notifErr instanceof Error ? notifErr.message : String(notifErr);
@@ -1568,6 +1573,8 @@ export const cobrancaService = {
 
       let sentCount = 0;
       const BATCH_SIZE = 10;
+      const isQuintaFeira = now.getDay() === 4;
+      const semanaMes = Math.ceil(now.getDate() / 7);
 
       for (let i = 0; i < motoristas.length; i += BATCH_SIZE) {
         const chunk = motoristas.slice(i, i + BATCH_SIZE);

@@ -400,16 +400,43 @@ export class FirebaseDriverTemplates {
         };
     }
 
-    static subscriptionDueToday(ctx: Record<string, unknown>): FirebaseMessagePayload {
+    static subscriptionDueSoon(ctx: Record<string, unknown>): FirebaseMessagePayload {
         const driverName = NotificationContextFormatter.getFirstName(ctx.nomeMotorista as string, "Motorista");
+        const totalPassageiros = Number(ctx.totalPassageiros) || 0;
         const checkoutUrl = NotificationUrlBuilder.getExternalCheckoutBridgeUrl({
             autoOpen: true,
             token: (ctx.tokenCheckout || ctx.token) as string
         });
 
+        const body = totalPassageiros > 0
+            ? `Olá ${driverName}, renove seu plano para manter as carteirinhas e os lembretes automáticos ${totalPassageiros === 1 ? "do seu aluno" : `dos seus ${totalPassageiros} alunos`} funcionando sem interrupção.`
+            : `Olá ${driverName}, sua assinatura do Van360 vence em breve. Renove via Pix ou cartão para manter seu acesso ativo.`;
+
+        return {
+            title: "Sua assinatura vence em breve 📅",
+            body,
+            data: {
+                action: PushNotificationAction.OPEN_SUBSCRIPTION,
+                checkoutUrl
+            }
+        };
+    }
+
+    static subscriptionDueToday(ctx: Record<string, unknown>): FirebaseMessagePayload {
+        const driverName = NotificationContextFormatter.getFirstName(ctx.nomeMotorista as string, "Motorista");
+        const totalPassageiros = Number(ctx.totalPassageiros) || 0;
+        const checkoutUrl = NotificationUrlBuilder.getExternalCheckoutBridgeUrl({
+            autoOpen: true,
+            token: (ctx.tokenCheckout || ctx.token) as string
+        });
+
+        const body = totalPassageiros > 0
+            ? `Olá ${driverName}, renove hoje seu acesso para não interromper os lembretes automáticos ${totalPassageiros === 1 ? "do seu aluno" : `dos seus ${totalPassageiros} alunos`}.`
+            : `Olá ${driverName}, renove hoje seu acesso ao Van360 para evitar bloqueios.`;
+
         return {
             title: "Sua Assinatura Vence Hoje! ⚠️",
-            body: `Olá ${driverName}, renove hoje seu acesso ao Van360 para evitar bloqueios.`,
+            body,
             data: {
                 action: PushNotificationAction.OPEN_SUBSCRIPTION,
                 checkoutUrl
@@ -493,15 +520,49 @@ export class FirebaseDriverTemplates {
         const qtdCobrancas = typeof ctx.qtdCobrancas === "number" ? ctx.qtdCobrancas : Number(ctx.qtdCobrancas) || 0;
         const valorTotal = typeof ctx.valorTotal === "number" ? ctx.valorTotal : Number(ctx.valorTotal) || 0;
         const temAlunos = Boolean(ctx.temAlunos);
+        const semanaMes = typeof ctx.semanaMes === "number" ? ctx.semanaMes : Number(ctx.semanaMes) || 1;
         const userId = (ctx.usuarioId || ctx.userId || "") as string;
 
         if (qtdCobrancas === 0) {
             if (!temAlunos) {
                 return {
-                    title: "Nenhuma parcela vence hoje!",
-                    body: "Cadastre seus alunos para o app te avisar dos vencimentos todo dia. Diga adeus ao caderno e às planilhas!",
+                    title: "📲 Cadastre sua van sem digitar tudo!",
+                    body: "Envie seu link exclusivo no WhatsApp dos pais para eles preencherem as carteirinhas dos alunos e ativarem seus lembretes!",
                     data: {
-                        action: PushNotificationAction.OPEN_PASSENGERS,
+                        action: PushNotificationAction.OPEN_PASSENGER_REQUESTS,
+                        userId
+                    }
+                };
+            }
+
+            if (semanaMes === 2) {
+                return {
+                    title: "⛽ Como está o lucro líquido da van?",
+                    body: "Sem vencimentos hoje! Aproveite para lançar seus gastos com combustível ou manutenção e acompanhe seu saldo real no mês.",
+                    data: {
+                        action: PushNotificationAction.OPEN_EXPENSES,
+                        userId
+                    }
+                };
+            }
+
+            if (semanaMes === 3) {
+                return {
+                    title: "🚌 Fez algum frete ou passeio extra?",
+                    body: "Sem vencimentos hoje! Registre seus fretamentos e passeios no app para somar tudo no seu faturamento mensal.",
+                    data: {
+                        action: PushNotificationAction.OPEN_CHARTERS,
+                        userId
+                    }
+                };
+            }
+
+            if (semanaMes >= 4) {
+                return {
+                    title: "🎁 Ganhe 1 mês grátis no Van360!",
+                    body: "Conhece outro motorista de transporte escolar? Indique o Van360 pelo app e ganhe +30 dias grátis na sua assinatura!",
+                    data: {
+                        action: PushNotificationAction.OPEN_SUBSCRIPTION,
                         userId
                     }
                 };
@@ -509,7 +570,7 @@ export class FirebaseDriverTemplates {
 
             return {
                 title: "Sem Vencimentos Hoje 🟢",
-                body: "Não há parcelas de alunos vencendo nesta data. Seu controle financeiro segue organizado!",
+                body: "Nenhuma parcela vence hoje. Os lembretes automáticos dos seus alunos seguem ativos e seu financeiro está em dia!",
                 data: {
                     action: PushNotificationAction.OPEN_BILLING,
                     userId

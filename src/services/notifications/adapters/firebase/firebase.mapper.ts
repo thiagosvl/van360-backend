@@ -18,6 +18,7 @@ import {
     EVENTO_MOTORISTA_CONTRATO_ASSINADO,
 
     EVENTO_MOTORISTA_ASSINATURA_PAGO,
+    EVENTO_MOTORISTA_ASSINATURA_VENCENDO,
     EVENTO_MOTORISTA_ASSINATURA_VENCEU,
     EVENTO_MOTORISTA_ASSINATURA_ATRASADA,
     EVENTO_MOTORISTA_RENOVACAO_LEMBRETE,
@@ -69,6 +70,7 @@ export class FirebaseMapper {
                 case EVENTO_MOTORISTA_RENOVACAO_RESPOSTA_RECEBIDA: return FirebaseDriverTemplates.renewalResponseReceivedDriver(contextData);
                 case EVENTO_MOTORISTA_CONTRATO_ASSINADO: return FirebaseDriverTemplates.contractSignedDriver(contextData);
                 case EVENTO_MOTORISTA_ASSINATURA_PAGO: return FirebaseDriverTemplates.subscriptionPaid(contextData);
+                case EVENTO_MOTORISTA_ASSINATURA_VENCENDO: return FirebaseDriverTemplates.subscriptionDueSoon(contextData);
                 case EVENTO_MOTORISTA_ASSINATURA_VENCEU: return FirebaseDriverTemplates.subscriptionDueToday(contextData);
                 case EVENTO_MOTORISTA_ASSINATURA_ATRASADA: return FirebaseDriverTemplates.subscriptionOverdue(contextData);
                 case EVENTO_MOTORISTA_RENOVACAO_LEMBRETE: return FirebaseDriverTemplates.renewalReminder(contextData);

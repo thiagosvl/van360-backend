@@ -21,6 +21,17 @@ import {
   EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO
 } from "../../config/constants.js";
 
+interface RenewalSubscriptionItem {
+  id: string;
+  usuario_id: string;
+  plano_id: string;
+  data_vencimento: string | null;
+  metodo_pagamento: string | null;
+  metodo_pagamento_preferencial_id: string | null;
+  planos?: { nome?: string; valor?: number } | Array<{ nome?: string; valor?: number }> | null;
+  usuarios?: { nome?: string; telefone?: string | null; email?: string | null } | Array<{ nome?: string; telefone?: string | null; email?: string | null }> | null;
+}
+
 export const subscriptionMonitorService = {
 
   async runDailyCheck(): Promise<void> {
@@ -179,7 +190,8 @@ export const subscriptionMonitorService = {
       valor: number;
       pix_copy_paste: string | null;
     },
-    notifiedSet?: Set<string>
+    notifiedSet?: Set<string>,
+    totalPassageiros = 0
   ): Promise<{ tipo: string; cicloRef: string; subId: string; description: string } | null> {
     if (
       sub.metodo_pagamento === CheckoutPaymentMethod.APPLE_IAP ||
@@ -215,6 +227,7 @@ export const subscriptionMonitorService = {
       metodoCobranca: sub.metodo_pagamento ?? undefined,
       planoNome: plan?.nome,
       dataVencimento: sub.data_vencimento,
+      totalPassageiros,
       usuarioId: sub.usuario_id,
     }, { channels, email: user.email ?? undefined, usuarioId: sub.usuario_id });
 
@@ -243,14 +256,18 @@ export const subscriptionMonitorService = {
     if (!dueToday?.length) return;
 
     const userIds = dueToday.map(sub => sub.usuario_id);
-    const notifiedSet = await this.getNotifiedSet(userIds, [EVENTO_MOTORISTA_ASSINATURA_VENCEU]);
-    const { data: pendingInvoices } = await monitorRepository.getPendingInvoicesByUsers(userIds);
+    const [notifiedSet, { data: pendingInvoices }, passengerCountMap] = await Promise.all([
+      this.getNotifiedSet(userIds, [EVENTO_MOTORISTA_ASSINATURA_VENCEU]),
+      monitorRepository.getPendingInvoicesByUsers(userIds),
+      subscriptionTrialMonitorService.buildPassengerCountMap(userIds)
+    ]);
     const pendingUsersMap = new Map(pendingInvoices?.map(p => [p.usuario_id, p]) || []);
     const logsToSave: { usuarioId: string; tipo: string; cicloRef: string }[] = [];
 
     for (const sub of dueToday) {
       const fatura = pendingUsersMap.get(sub.usuario_id);
-      const result = await this.processarAvisoVencimentoHoje(sub, fatura, notifiedSet);
+      const totalPassageiros = passengerCountMap.get(sub.usuario_id) || 0;
+      const result = await this.processarAvisoVencimentoHoje(sub, fatura, notifiedSet, totalPassageiros);
       if (result) {
         logsToSave.push({
           usuarioId: sub.usuario_id,
@@ -514,17 +531,19 @@ export const subscriptionMonitorService = {
   },
 
   async processarGeracaoFaturaRenovacao(
-    sub: any,
+    sub: RenewalSubscriptionItem,
     maxRetries: number,
     failedCount: number,
     hasPendingInvoice: boolean,
-    notifiedSet?: Set<string>
+    notifiedSet?: Set<string>,
+    totalPassageiros = 0
   ): Promise<{ tipo?: string; cicloRef?: string; subId?: string; description?: string } | null> {
-    const user = this.getUserObject((sub as any).usuarios);
+    const user = this.getUserObject(sub.usuarios);
+    const plan = this.getUserObject(sub.planos);
     if (sub.metodo_pagamento === CheckoutPaymentMethod.APPLE_IAP) {
       return null;
     }
-    const isCard = sub.metodo_pagamento === "credit_card";
+    const isCard = sub.metodo_pagamento === CheckoutPaymentMethod.CREDIT_CARD;
 
     if (hasPendingInvoice) return null;
 
@@ -555,20 +574,20 @@ export const subscriptionMonitorService = {
             email: user.email,
             erro: "Número máximo de tentativas atingido.",
             usuarioId: sub.usuario_id,
-          }, { channels: [NotificationChannelEnum.WABA, NotificationChannelEnum.RESEND], email: user.email, usuarioId: sub.usuario_id });
+          }, { channels: [NotificationChannelEnum.WABA, NotificationChannelEnum.RESEND], email: user.email ?? undefined, usuarioId: sub.usuario_id });
 
           await notificationService.notifyAdmin(EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO, {
             nomeMotorista: user.nome,
             telefone: user.telefone,
             usuarioId: sub.usuario_id,
             erro: "Número máximo de tentativas atingido.",
-            planoNome: (sub as any).planos?.nome,
+            planoNome: plan?.nome,
             origem: "AUTOMATICO"
           }, {
             channels: [NotificationChannelEnum.TELEGRAM],
             jobId: `admin-falha-pagamento-${sub.usuario_id}-max-retries-${cicloRef}`,
             usuarioId: sub.usuario_id,
-            email: user.email
+            email: user.email ?? undefined
           });
 
           if (!notifiedSet) {
@@ -591,7 +610,7 @@ export const subscriptionMonitorService = {
     try {
       const fatura = await subscriptionBillingService.createInvoice(sub.usuario_id, {
         planId: sub.plano_id,
-        paymentMethod: sub.metodo_pagamento || CheckoutPaymentMethod.PIX,
+        paymentMethod: (sub.metodo_pagamento as CheckoutPaymentMethod | null) || CheckoutPaymentMethod.PIX,
         saveCard: false,
         origem: "AUTOMATICO",
       });
@@ -608,9 +627,14 @@ export const subscriptionMonitorService = {
             dataVencimento: sub.data_vencimento,
             pixCopiaCola: fatura.pix_copy_paste,
             valor: fatura.valor,
-            planoNome: (sub as any).planos?.nome,
+            planoNome: plan?.nome,
+            totalPassageiros,
             usuarioId: sub.usuario_id,
-          }, { channels: [NotificationChannelEnum.WABA, NotificationChannelEnum.RESEND], email: user.email, usuarioId: sub.usuario_id });
+          }, {
+            channels: [NotificationChannelEnum.FIREBASE, NotificationChannelEnum.WABA, NotificationChannelEnum.RESEND],
+            email: user.email ?? undefined,
+            usuarioId: sub.usuario_id
+          });
 
           if (!notifiedSet) {
             await this.logNotification(sub.usuario_id, EVENTO_MOTORISTA_ASSINATURA_VENCENDO, cicloRef);
@@ -626,29 +650,30 @@ export const subscriptionMonitorService = {
       } else if (isCard) {
         logger.info({ userId: sub.usuario_id }, "[SubscriptionMonitor] Cobrança de renovação no cartão gerada com sucesso.");
       }
-    } catch (e: any) {
-      logger.error({ subId: sub.id, error: e.message }, "[SubscriptionMonitor] Falha ao gerar fatura/cobrança automática");
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      logger.error({ subId: sub.id, error: errorMessage }, "[SubscriptionMonitor] Falha ao gerar fatura/cobrança automática");
 
       if (isCard && user?.telefone) {
         await notificationService.notifyDriver(user.telefone || "", EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO, {
           nomeMotorista: user.nome,
           email: user.email,
-          erro: e.message || "Cartão recusado",
+          erro: errorMessage || "Cartão recusado",
           usuarioId: sub.usuario_id,
-        }, { channels: [NotificationChannelEnum.WABA, NotificationChannelEnum.RESEND], email: user.email, usuarioId: sub.usuario_id });
+        }, { channels: [NotificationChannelEnum.WABA, NotificationChannelEnum.RESEND], email: user.email ?? undefined, usuarioId: sub.usuario_id });
 
         await notificationService.notifyAdmin(EVENTO_ADMIN_ASSINATURA_FALHA_PAGAMENTO, {
           nomeMotorista: user.nome,
           telefone: user.telefone,
           usuarioId: sub.usuario_id,
-          erro: e.message || "Cartão recusado",
-          planoNome: (sub as any).planos?.nome,
+          erro: errorMessage || "Cartão recusado",
+          planoNome: plan?.nome,
           origem: "AUTOMATICO"
         }, {
           channels: [NotificationChannelEnum.TELEGRAM],
           jobId: `admin-falha-pagamento-${sub.usuario_id}-recusado-${cicloRef}`,
           usuarioId: sub.usuario_id,
-          email: user.email
+          email: user.email ?? undefined
         });
 
         const alreadyNotified = notifiedSet
@@ -678,30 +703,47 @@ export const subscriptionMonitorService = {
     const { data: expiring, error } = await monitorRepository.getExpiringSubscriptions(getEndOfDayBR(threshold).toISOString());
     if (error || !expiring) return;
 
-    const userIds = expiring.map((e: any) => e.usuario_id);
-    const cardUserIds = expiring.filter((e: any) => e.metodo_pagamento === "credit_card").map((e: any) => e.usuario_id);
+    const userIds = expiring.map(e => e.usuario_id);
+    const cardUserIds = expiring.filter(e => e.metodo_pagamento === CheckoutPaymentMethod.CREDIT_CARD).map(e => e.usuario_id);
+    const tiposPossiveis = [EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO, EVENTO_MOTORISTA_ASSINATURA_VENCENDO];
 
-    const { data: pendingInvoices } = await monitorRepository.getPendingInvoicesByUsers(userIds);
-    const pendingUsersMap = new Map(pendingInvoices?.map((p: any) => [p.usuario_id, p]) || []);
+    const [
+      { data: pendingInvoices },
+      { data: failedNotifs },
+      notifiedSet,
+      passengerCountMap
+    ] = await Promise.all([
+      monitorRepository.getPendingInvoicesByUsers(userIds),
+      notificationRepository.getNotificationsForUsers(cardUserIds, [EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO]),
+      this.getNotifiedSet(userIds, tiposPossiveis),
+      subscriptionTrialMonitorService.buildPassengerCountMap(userIds)
+    ]);
 
-    const { data: failedNotifs } = await notificationRepository.getNotificationsForUsers(cardUserIds, [EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO]);
+    const pendingUsersMap = new Map(pendingInvoices?.map(p => [p.usuario_id, p]) || []);
+
     const failedCountsMap = new Map<string, number>();
-    failedNotifs?.forEach((f: any) => {
+    failedNotifs?.forEach(f => {
       const key = `${f.usuario_id}:${f.ciclo_referencia}`;
       failedCountsMap.set(key, (failedCountsMap.get(key) || 0) + 1);
     });
 
-    const tiposPossiveis = [EVENTO_MOTORISTA_ASSINATURA_FALHA_CARTAO, EVENTO_MOTORISTA_ASSINATURA_VENCENDO];
-    const notifiedSet = await this.getNotifiedSet(userIds, tiposPossiveis);
     const logsToSave: { usuarioId: string; tipo: string; cicloRef: string }[] = [];
 
     for (const sub of expiring) {
-      const isCard = sub.metodo_pagamento === "credit_card";
+      const isCard = sub.metodo_pagamento === CheckoutPaymentMethod.CREDIT_CARD;
       const cicloRef = this.toCicloRef(sub.data_vencimento || new Date());
       const failedCount = isCard ? (failedCountsMap.get(`${sub.usuario_id}:${cicloRef}`) || 0) : 0;
       const hasPendingInvoice = !!pendingUsersMap.get(sub.usuario_id);
+      const totalPassageiros = passengerCountMap.get(sub.usuario_id) || 0;
 
-      const result = await this.processarGeracaoFaturaRenovacao(sub, maxRetries, failedCount, hasPendingInvoice, notifiedSet);
+      const result = await this.processarGeracaoFaturaRenovacao(
+        sub,
+        maxRetries,
+        failedCount,
+        hasPendingInvoice,
+        notifiedSet,
+        totalPassageiros
+      );
       if (result?.tipo && result?.cicloRef) {
         logsToSave.push({
           usuarioId: sub.usuario_id,

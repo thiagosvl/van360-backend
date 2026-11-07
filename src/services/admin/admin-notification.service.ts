@@ -172,6 +172,9 @@ export const adminNotificationService = {
           valor = Number(fatura.valor) || 0;
         }
 
+        const { count } = await monitorRepository.getPassengerCount(driverId);
+        const totalPassageiros = count ?? 0;
+
         await notificationService.notifyDriver(
           user.telefone || "",
           EVENTO_MOTORISTA_ASSINATURA_VENCENDO,
@@ -182,10 +185,15 @@ export const adminNotificationService = {
             pixCopiaCola: pixCopyPaste,
             valor: valor,
             planoNome: sub.planos?.nome || "Plano Van360",
+            totalPassageiros,
             usuarioId: driverId,
           },
           {
-            channels: [NotificationChannelEnum.WABA, NotificationChannelEnum.RESEND],
+            channels: [
+              NotificationChannelEnum.FIREBASE,
+              NotificationChannelEnum.WABA,
+              NotificationChannelEnum.RESEND
+            ],
             email: user.email,
             usuarioId: driverId,
           }
