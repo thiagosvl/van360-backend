@@ -151,17 +151,17 @@ export const adminInvoiceRepository = {
     };
   },
 
-  async getInvoiceStatsRaw(primeiroDiaMesIso: string) {
+  async getInvoiceStatsRaw(janelaHistoricaIso: string) {
     return Promise.all([
       supabaseAdmin
         .from("assinatura_faturas")
-        .select("id, valor, status, data_vencimento, assinaturas(id, data_vencimento, trial_ends_at)")
+        .select("id, valor, status, metodo_pagamento, data_vencimento, assinaturas(id, data_vencimento, trial_ends_at)")
         .in("status", [SubscriptionInvoiceStatus.PENDING, SubscriptionInvoiceStatus.FAILED]),
       supabaseAdmin
         .from("assinatura_faturas")
-        .select("id, valor, status, data_pagamento, created_at")
+        .select("id, valor, status, metodo_pagamento, data_pagamento, created_at")
         .eq("status", SubscriptionInvoiceStatus.PAID)
-        .or(`data_pagamento.gte.${primeiroDiaMesIso},created_at.gte.${primeiroDiaMesIso}`),
+        .or(`data_pagamento.gte.${janelaHistoricaIso},created_at.gte.${janelaHistoricaIso}`),
     ]);
   },
 };

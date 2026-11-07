@@ -34,6 +34,7 @@ export interface AdminInvoiceItemDTO {
   metodo_pagamento: string;
   data_vencimento: string;
   data_pagamento: string | null;
+  data_liquidacao_prevista: string | null;
   pix_copy_paste: string | null;
   gateway_txid: string | null;
   created_at: string | null;
@@ -63,4 +64,7 @@ export interface AdminInvoiceStatsResponseDTO {
   proximos7DiasQtd: number;
   pagoMesValor: number;
   pagoMesQtd: number;
+  aguardandoRepasseValor: number;
+  aguardandoRepasseQtd: number;
+  diasRetencaoCartao: number;
 }

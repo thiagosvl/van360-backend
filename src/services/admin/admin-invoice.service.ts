@@ -1,4 +1,5 @@
 import { adminInvoiceRepository } from "../../repositories/admin/admin-invoice.repository.js";
+import { FINANCEIRO_CONFIG } from "../../config/constants.js";
 import { ListAdminInvoicesQuery } from "../../schemas/admin-invoice.schema.js";
 import {
   AdminInvoiceItemDTO,
@@ -6,15 +7,17 @@ import {
   AdminInvoiceTipo,
   AdminInvoicesListResponseDTO,
 } from "../../types/dtos/admin-invoice.dto.js";
-import { SubscriptionInvoiceStatus } from "../../types/enums.js";
-import { getNowBR, addDays } from "../../utils/date.utils.js";
+import { CheckoutPaymentMethod, SubscriptionInvoiceStatus } from "../../types/enums.js";
+import {
+  getNowBR,
+  getEndOfDayBR,
+  addDays,
+  parseLocalDate,
+  toPersistenceString,
+  calcularDataLiquidacaoCartao,
+} from "../../utils/date.utils.js";
 
-function formatDateYMD(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dia = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dia}`;
-}
+const DAYS_CARD_SETTLEMENT = FINANCEIRO_CONFIG.DIAS_RETENCAO_CARTAO;
 
 export const adminInvoiceService = {
   async listInvoices(query: ListAdminInvoicesQuery): Promise<AdminInvoicesListResponseDTO> {
@@ -24,8 +27,8 @@ export const adminInvoiceService = {
     const to = from + limit - 1;
 
     const now = getNowBR();
-    const todayIso = formatDateYMD(now);
-    const next7DaysIso = formatDateYMD(addDays(now, 7));
+    const todayIso = toPersistenceString(now);
+    const next7DaysIso = toPersistenceString(addDays(now, 7));
 
     const result = await adminInvoiceRepository.listInvoices({
       from,
@@ -58,16 +61,34 @@ export const adminInvoiceService = {
         tipoFatura = "conversao_trial";
       }
 
+      const statusFatura = (row.status as SubscriptionInvoiceStatus) || SubscriptionInvoiceStatus.PENDING;
+      const metodoPagamento = String(row.metodo_pagamento || CheckoutPaymentMethod.PIX);
+      const dataVencimento = String(row.data_vencimento || "");
+      const dataPagamento = row.data_pagamento ? String(row.data_pagamento) : null;
+      const isCartao = metodoPagamento === CheckoutPaymentMethod.CREDIT_CARD;
+      const baseRefDate = dataPagamento || dataVencimento || createdAt;
+      const isElegivelLiquidacao =
+        statusFatura === SubscriptionInvoiceStatus.PAID || statusFatura === SubscriptionInvoiceStatus.PENDING;
+
+      let dataLiquidacaoPrevista: string | null = null;
+      if (baseRefDate && isElegivelLiquidacao) {
+        const dtLiq = isCartao
+          ? calcularDataLiquidacaoCartao(baseRefDate, DAYS_CARD_SETTLEMENT)
+          : parseLocalDate(baseRefDate);
+        dataLiquidacaoPrevista = dtLiq.toISOString();
+      }
+
       return {
         id: String(row.id),
         usuario_id: String(row.usuario_id),
         assinatura_id: String(row.assinatura_id),
         plano_id: row.plano_id ? String(row.plano_id) : null,
-        status: (row.status as SubscriptionInvoiceStatus) || SubscriptionInvoiceStatus.PENDING,
+        status: statusFatura,
         valor: Number(row.valor || 0),
-        metodo_pagamento: String(row.metodo_pagamento || "pix"),
-        data_vencimento: String(row.data_vencimento || ""),
-        data_pagamento: row.data_pagamento ? String(row.data_pagamento) : null,
+        metodo_pagamento: metodoPagamento,
+        data_vencimento: dataVencimento,
+        data_pagamento: dataPagamento,
+        data_liquidacao_prevista: dataLiquidacaoPrevista,
         pix_copy_paste: row.pix_copy_paste ? String(row.pix_copy_paste) : null,
         gateway_txid: row.gateway_txid ? String(row.gateway_txid) : null,
         created_at: createdAt,
@@ -99,11 +120,12 @@ export const adminInvoiceService = {
       };
     });
 
-    let filteredItems = query.tipo
+    const filteredItems = query.tipo
       ? items.filter((item) => item.tipo_fatura === query.tipo)
       : items;
 
-    const isAbertoQuery = !query.status || ["open", "hoje", "vencidas", "proximos7dias"].includes(query.status.toLowerCase());
+    const isAbertoQuery =
+      !query.status || ["open", "hoje", "vencidas", "proximos7dias"].includes(query.status.toLowerCase());
     if (isAbertoQuery) {
       filteredItems.sort((a, b) => {
         const dateA = a.assinatura?.data_vencimento || a.assinatura?.trial_ends_at || a.data_vencimento || "";
@@ -126,17 +148,18 @@ export const adminInvoiceService = {
 
   async getInvoiceStats(): Promise<AdminInvoiceStatsResponseDTO> {
     const now = getNowBR();
-    const todayIso = formatDateYMD(now);
-    const next7DaysIso = formatDateYMD(addDays(now, 7));
+    const todayIso = toPersistenceString(now);
+    const next7DaysIso = toPersistenceString(addDays(now, 7));
+    const currentYearMonth = todayIso.slice(0, 7);
+    const endOfDayNow = getEndOfDayBR(now);
 
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, "0");
-    const primeiroDiaMesIso = `${y}-${m}-01T00:00:00-03:00`;
+    const janelaInicioDate = addDays(now, -65);
+    const janelaHistoricaIso = `${toPersistenceString(janelaInicioDate)}T00:00:00-03:00`;
 
-    const [abertasRes, pagasMesRes] = await adminInvoiceRepository.getInvoiceStatsRaw(primeiroDiaMesIso);
+    const [abertasRes, pagasRes] = await adminInvoiceRepository.getInvoiceStatsRaw(janelaHistoricaIso);
 
     const abertas = abertasRes.data || [];
-    const pagas = pagasMesRes.data || [];
+    const pagas = pagasRes.data || [];
 
     let totalAbertoValor = 0;
     let totalAbertoQtd = 0;
@@ -174,10 +197,29 @@ export const adminInvoiceService = {
 
     let pagoMesValor = 0;
     let pagoMesQtd = 0;
+    let aguardandoRepasseValor = 0;
+    let aguardandoRepasseQtd = 0;
 
     for (const f of pagas) {
-      pagoMesValor += Number(f.valor || 0);
-      pagoMesQtd += 1;
+      const dataRef = f.data_pagamento || f.created_at;
+      if (!dataRef) continue;
+
+      const v = Number(f.valor || 0);
+      const dtPagamento = parseLocalDate(dataRef);
+      const isCartao = f.metodo_pagamento === CheckoutPaymentMethod.CREDIT_CARD;
+      const dtLiquidacao = isCartao
+        ? calcularDataLiquidacaoCartao(dtPagamento, DAYS_CARD_SETTLEMENT)
+        : dtPagamento;
+
+      const ymLiquidacao = toPersistenceString(dtLiquidacao).slice(0, 7);
+
+      if (ymLiquidacao === currentYearMonth && dtLiquidacao.getTime() <= endOfDayNow.getTime()) {
+        pagoMesValor += v;
+        pagoMesQtd += 1;
+      } else if (isCartao && dtLiquidacao.getTime() > endOfDayNow.getTime()) {
+        aguardandoRepasseValor += v;
+        aguardandoRepasseQtd += 1;
+      }
     }
 
     return {
@@ -191,6 +233,9 @@ export const adminInvoiceService = {
       proximos7DiasQtd,
       pagoMesValor: Number(pagoMesValor.toFixed(2)),
       pagoMesQtd,
+      aguardandoRepasseValor: Number(aguardandoRepasseValor.toFixed(2)),
+      aguardandoRepasseQtd,
+      diasRetencaoCartao: DAYS_CARD_SETTLEMENT,
     };
   },
 };

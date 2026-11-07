@@ -248,3 +248,36 @@ export const parseMonthYearFromDateString = (dateStr?: string | null): { year: n
     month: d.getMonth() + 1,
   };
 };
+
+
+export const calcularDataLiquidacaoCartao = (
+  dateInput: Date | string,
+  diasRetencao = 30
+): Date => {
+  const ymd = toPersistenceString(dateInput);
+  const [year, month, day] = ymd.split("-").map(Number);
+  const cursor = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+
+  const startDayOfWeek = cursor.getUTCDay();
+  if (startDayOfWeek === 6 || startDayOfWeek === 0) {
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  cursor.setUTCDate(cursor.getUTCDate() + diasRetencao);
+
+  const endDayOfWeek = cursor.getUTCDay();
+  if (endDayOfWeek === 6) {
+    cursor.setUTCDate(cursor.getUTCDate() + 2);
+  } else if (endDayOfWeek === 0) {
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  return createLocalDateBR(
+    cursor.getUTCFullYear(),
+    cursor.getUTCMonth() + 1,
+    cursor.getUTCDate(),
+    12,
+    0,
+    0
+  );
+};

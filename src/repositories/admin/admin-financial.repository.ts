@@ -27,7 +27,7 @@ export const adminFinancialRepository = {
 
       supabaseAdmin
         .from("assinatura_faturas")
-        .select("id, valor, status, metodo_pagamento, data_vencimento, data_pagamento, created_at")
+        .select("id, usuario_id, assinatura_id, plano_id, valor, status, metodo_pagamento, data_vencimento, data_pagamento, created_at")
         .eq("status", SubscriptionInvoiceStatus.PAID),
 
       supabaseAdmin
