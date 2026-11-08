@@ -31,12 +31,24 @@ interface ResponsavelLinkJoin {
     telefone?: string;
     cpf?: string;
     email?: string;
+    logradouro?: string | null;
+    numero?: string | null;
+    complemento?: string | null;
+    bairro?: string | null;
+    cidade?: string | null;
+    estado?: string | null;
   } | {
     id?: string;
     nome?: string;
     telefone?: string;
     cpf?: string;
     email?: string;
+    logradouro?: string | null;
+    numero?: string | null;
+    complemento?: string | null;
+    bairro?: string | null;
+    cidade?: string | null;
+    estado?: string | null;
   }[];
 }
 
@@ -48,12 +60,18 @@ interface PassageiroWithResponsaveis {
     telefone?: string;
     cpf?: string;
     email?: string;
+    logradouro?: string | null;
+    numero?: string | null;
+    complemento?: string | null;
+    bairro?: string | null;
+    cidade?: string | null;
+    estado?: string | null;
     parentesco?: string;
   };
 }
 
 const _getResponsavelInfoFromPassageiro = (p?: PassageiroWithResponsaveis | null) => {
-  if (!p) return { id: '', nome: '', telefone: '', cpf: '', email: '', parentesco: '' };
+  if (!p) return { id: '', nome: '', telefone: '', cpf: '', email: '', parentesco: '', logradouro: undefined, numero: undefined, complemento: undefined, bairro: undefined, cidade: undefined, estado: undefined };
   const respLink = Array.isArray(p.responsaveis)
     ? (p.responsaveis.find((r) => r.tipo === TipoResponsavel.PRINCIPAL) || p.responsaveis[0])
     : null;
@@ -65,7 +83,13 @@ const _getResponsavelInfoFromPassageiro = (p?: PassageiroWithResponsaveis | null
     telefone: resp?.telefone || '',
     cpf: resp?.cpf || '',
     email: resp?.email || '',
-    parentesco: p.responsavel_principal?.parentesco || respLink?.parentesco || ''
+    parentesco: p.responsavel_principal?.parentesco || respLink?.parentesco || '',
+    logradouro: resp?.logradouro || undefined,
+    numero: resp?.numero || undefined,
+    complemento: resp?.complemento ?? undefined,
+    bairro: resp?.bairro || undefined,
+    cidade: resp?.cidade || undefined,
+    estado: resp?.estado || undefined,
   };
 };
 
@@ -243,7 +267,7 @@ class ContractService {
       telefoneResponsavel: respInfo.telefone,
 
       parentescoResponsavel: respInfo.parentesco,
-      enderecoCompleto: formatAddress(passageiro),
+      enderecoCompleto: formatAddress(respInfo) || formatAddress(passageiro),
       nomeEscola: customTerms.nomeEscola || passageiro.escola?.nome || '',
       enderecoEscola: passageiro.escola ? formatAddress(passageiro.escola) : '',
       periodo: customTerms.periodo || passageiro.periodo,

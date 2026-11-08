@@ -531,7 +531,7 @@ export class InHouseContractProvider implements ContractProvider {
     currentY = drawTwoColumnRow(multaAtrasoTexto, multaRescisaoTexto, currentY);
 
     const jurosAtrasoTexto = (dados.jurosAtraso && dados.jurosAtraso.valor > 0)
-      ? `${dados.jurosAtraso.tipo === ContractMultaTipo.PERCENTUAL ? 'Juros de mora (atraso):' : 'Juros de mora diário:'} ${formatMulta(dados.jurosAtraso.tipo, dados.jurosAtraso.valor)}${dados.jurosAtraso.tipo === ContractMultaTipo.PERCENTUAL ? ' ao mês' : ' / dia'}`
+      ? `Juros de mora (atraso): ${formatMulta(dados.jurosAtraso.tipo, dados.jurosAtraso.valor)} ao dia`
       : 'Juros de mora (atraso):';
 
     currentY = drawFullWidthRow(jurosAtrasoTexto, currentY);
