@@ -70,6 +70,21 @@ export function globalErrorHandler(error: FastifyError, request: FastifyRequest,
         });
     }
 
+    if (typeof error.statusCode === "number" && error.statusCode >= 400 && error.statusCode < 500) {
+        logger.warn({
+            msg: "Erro de Requisição (Fastify)",
+            code: error.code,
+            error: error.message,
+            statusCode: error.statusCode,
+            method,
+            url
+        });
+        return reply.status(error.statusCode).send({
+            status: "error",
+            message: error.message
+        });
+    }
+
     const errObj = error as unknown as Record<string, unknown>;
     if (errObj?.code === "PGRST103" || String(errObj?.message || "").includes("Requested range not satisfiable")) {
         logger.warn({
