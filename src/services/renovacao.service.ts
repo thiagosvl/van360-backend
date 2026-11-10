@@ -768,34 +768,40 @@ export const renovacaoService = {
           const masterConfig = configRenovacao.anos?.[String(dto.ano_destino)];
           const { contractService } = await import("./contract.service.js");
           for (const item of targetItens) {
-            const anoOrigem = Number(item.passageiro.ano_letivo || (dto.ano_destino - 1));
-            const contratoExistente = await contractRepository.getByPassageiroEAno(item.passageiro.id, dto.ano_destino);
-            if (!contratoExistente) {
-              const { dataInicio, dataFim } = _resolverDatasTransporteParaContrato(
-                item.renovacao?.nova_data_inicio_transporte,
-                item.renovacao?.nova_data_fim_transporte,
-                masterConfig,
-                dto.ano_destino
-              );
+            try {
+              const contratoExistente = await contractRepository.getByPassageiroEAno(item.passageiro.id, dto.ano_destino);
+              if (!contratoExistente) {
+                const { dataInicio, dataFim } = _resolverDatasTransporteParaContrato(
+                  item.renovacao?.nova_data_inicio_transporte,
+                  item.renovacao?.nova_data_fim_transporte,
+                  masterConfig,
+                  dto.ano_destino
+                );
 
-              await contractService.criarContrato(usuarioId, {
-                passageiroId: item.passageiro.id,
-                provider: ContratoProvider.INHOUSE,
-                ano: dto.ano_destino,
-                valorMensal: Number(item.renovacao?.novo_valor_cobranca ?? item.passageiro.valor_cobranca ?? 0),
-                diaVencimento: Number(item.renovacao?.novo_dia_vencimento ?? item.passageiro.dia_vencimento ?? 10),
-                dataInicio,
-                dataFim,
-                modalidade: item.renovacao?.nova_modalidade ? String(item.renovacao.nova_modalidade) : (item.passageiro.modalidade || undefined),
-                periodo: item.renovacao?.novo_periodo ? String(item.renovacao.novo_periodo) : (item.passageiro.periodo || undefined),
-                nomeEscola: item.renovacao?.nova_escola?.nome || item.passageiro.escola?.nome || undefined,
-                notificarResponsavel: false,
-              });
+                await contractService.criarContrato(usuarioId, {
+                  passageiroId: item.passageiro.id,
+                  provider: ContratoProvider.INHOUSE,
+                  ano: dto.ano_destino,
+                  valorMensal: Number(item.renovacao?.novo_valor_cobranca ?? item.passageiro.valor_cobranca ?? 0),
+                  diaVencimento: Number(item.renovacao?.novo_dia_vencimento ?? item.passageiro.dia_vencimento ?? 10),
+                  dataInicio,
+                  dataFim,
+                  modalidade: item.renovacao?.nova_modalidade ? String(item.renovacao.nova_modalidade) : (item.passageiro.modalidade || undefined),
+                  periodo: item.renovacao?.novo_periodo ? String(item.renovacao.novo_periodo) : (item.passageiro.periodo || undefined),
+                  nomeEscola: item.renovacao?.nova_escola?.nome || item.passageiro.escola?.nome || undefined,
+                  notificarResponsavel: false,
+                });
+              }
+            } catch (itemErr: unknown) {
+              logger.warn(
+                { error: itemErr instanceof Error ? itemErr.message : String(itemErr), passageiroId: item.passageiro.id },
+                "[Renovacao] Não foi possível gerar contrato automático para passageiro na confirmação em lote"
+              );
             }
           }
         }
       } catch (err: unknown) {
-        logger.error({ error: err }, "Falha ao gerar contratos em lote para renovações confirmadas");
+        logger.error({ error: err }, "Falha ao processar configuração de contratos em lote para renovações confirmadas");
       }
     } else if (dto.status === RenovacaoStatus.RECUSADO || dto.status === RenovacaoStatus.PENDENTE) {
       for (const item of targetItens) {
@@ -1007,6 +1013,7 @@ export const renovacaoService = {
     const modalidadeAtual = pEnriched.modalidade;
     const novaModalidade = data.nova_modalidade ?? modalidadeAtual;
 
+    const effectiveStatus = data.status === RenovacaoStatus.CONCLUIDO ? RenovacaoStatus.CONFIRMADO : data.status;
     const configContratoAno = resolveContractConfigForYear(motorista?.config_contrato as Record<string, any>, data.ano_destino);
     let contratoInfo: {
       usar_contratos: boolean;
@@ -1021,7 +1028,39 @@ export const renovacaoService = {
     };
 
     if (configContratoAno.usar_contratos) {
-      const contrato = await contractRepository.getByPassageiroEAno(passageiro.id, data.ano_destino);
+      let contrato = await contractRepository.getByPassageiroEAno(passageiro.id, data.ano_destino);
+      if (!contrato && effectiveStatus === RenovacaoStatus.CONFIRMADO && pEnriched.responsavel_principal?.cpf) {
+        try {
+          const configRenovacao = (motorista?.config_renovacao as ConfigRenovacaoStorage | null) || {};
+          const masterConfig = configRenovacao.anos?.[String(data.ano_destino)];
+          const { dataInicio, dataFim } = _resolverDatasTransporteParaContrato(
+            data.nova_data_inicio_transporte ? String(data.nova_data_inicio_transporte) : null,
+            data.nova_data_fim_transporte ? String(data.nova_data_fim_transporte) : null,
+            masterConfig,
+            data.ano_destino
+          );
+
+          const { contractService } = await import("./contract.service.js");
+          contrato = await contractService.criarContrato(motorista.id, {
+            passageiroId: passageiro.id,
+            provider: ContratoProvider.INHOUSE,
+            ano: data.ano_destino,
+            valorMensal: novoValor,
+            diaVencimento: Number(novoVencimento ?? 10),
+            dataInicio,
+            dataFim,
+            modalidade: novaModalidade || undefined,
+            nomeEscola: novaEscolaNome || undefined,
+            periodo: novoPeriodo || undefined,
+            notificarResponsavel: false,
+          });
+        } catch (contractErr: unknown) {
+          logger.warn(
+            { error: contractErr instanceof Error ? contractErr.message : String(contractErr), passageiroId: passageiro.id },
+            "[Renovacao] Não foi possível gerar contrato sob demanda na consulta pública"
+          );
+        }
+      }
       if (contrato) {
         contratoInfo.id = contrato.id;
         contratoInfo.status = contrato.status;
@@ -1067,8 +1106,6 @@ export const renovacaoService = {
     }
 
     const escolasMotorista = await escolaRepository.listAtivasByUsuario(data.usuario_id);
-
-    const effectiveStatus = data.status === RenovacaoStatus.CONCLUIDO ? RenovacaoStatus.CONFIRMADO : data.status;
 
     return {
       token_publico: data.token_publico,
@@ -1176,8 +1213,24 @@ export const renovacaoService = {
       throw new AppError("Proposta de renovação não encontrada ou expirada.", 404);
     }
 
-    if (data.status !== RenovacaoStatus.PENDENTE) {
-      throw new AppError("Os dados só podem ser atualizados pelo link de renovação enquanto a proposta estiver pendente.", 400);
+    const effectiveStatus = data.status === RenovacaoStatus.CONCLUIDO ? RenovacaoStatus.CONFIRMADO : data.status;
+
+    if (effectiveStatus !== RenovacaoStatus.PENDENTE) {
+      const configContratoAno = resolveContractConfigForYear(
+        data.motorista?.config_contrato as Record<string, unknown> | null | undefined,
+        data.ano_destino
+      );
+      const contratoExistente = configContratoAno.usar_contratos
+        ? await contractRepository.getByPassageiroEAno(data.passageiro.id, data.ano_destino)
+        : null;
+      const podeComplementarContrato =
+        effectiveStatus === RenovacaoStatus.CONFIRMADO &&
+        Boolean(configContratoAno.usar_contratos) &&
+        contratoExistente?.status !== ContratoStatus.ASSINADO;
+
+      if (!podeComplementarContrato) {
+        throw new AppError("Os dados só podem ser atualizados pelo link de renovação enquanto a proposta estiver pendente.", 400);
+      }
     }
 
     const { passageiro } = data;
@@ -1274,6 +1327,8 @@ export const renovacaoService = {
     if (salaVal !== undefined) dadosMatriculaDestino.sala = salaVal ? cleanString(salaVal, true) : null;
     if (profVal !== undefined) dadosMatriculaDestino.nome_professor = profVal ? cleanString(profVal, true) : null;
 
+    const isPendente = effectiveStatus === RenovacaoStatus.PENDENTE;
+
     await renovacaoRepository.atualizarDadosPublicos(
       data.id,
       passageiro.id,
@@ -1281,9 +1336,9 @@ export const renovacaoService = {
       responsavelId,
       parentescoResp,
       dadosResponsavel,
-      dadosPassageiro,
-      dadosReserva,
-      dadosMatriculaDestino
+      isPendente ? dadosPassageiro : {},
+      isPendente ? dadosReserva : {},
+      isPendente ? dadosMatriculaDestino : {}
     );
 
     return this.getPublicRenovacao(token);

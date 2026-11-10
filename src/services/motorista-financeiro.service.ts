@@ -1,107 +1,22 @@
 import type { Json, Tables } from "../types/database.types.js";
 import { motoristaFinanceiroRepository } from "../repositories/motorista-financeiro.repository.js";
-import { userRepository } from "../repositories/user.repository.js";
-import { subscriptionRepository } from "../repositories/subscription.repository.js";
 import { UpdateMotoristaFinanceiroInput } from "../schemas/motorista-financeiro.schema.js";
 import { AppError } from "../errors/AppError.js";
 import { logger } from "../config/logger.js";
 import {
-  CobrancaStatus,
   ModoCobrancaEnum,
-  NotificationChannelEnum,
-  SubscriptionStatus,
   TipoChavePix,
 } from "../types/enums.js";
-import { EVENTO_ADMIN_COBRANCA_AUTOMATICA_ALTERADA } from "../config/constants.js";
 import { supabaseAdmin } from "../config/supabase.js";
 import { cobrancaValidacaoService } from "./cobranca-validacao.service.js";
 import { pixValidationService } from "./pix-validation.service.js";
 import { paymentService } from "./payments/payment.service.js";
-import { notificationService } from "./notifications/notification.service.js";
-import { formatDateTime, getNowBR } from "../utils/date.utils.js";
 import type { ResumoExcecoesModoCobrancaDTO } from "../types/dtos/motorista-financeiro.dto.js";
 
 type MotoristaConfiguracaoFinanceira = Tables<"motorista_configuracoes_financeiras">;
 
 export interface MotoristaFinanceiroDetalhes extends MotoristaConfiguracaoFinanceira {
   taxa_efetiva: number;
-}
-
-const MODO_COBRANCA_LABELS: Record<ModoCobrancaEnum, string> = {
-  [ModoCobrancaEnum.DESATIVADO]: "Desativado (Manual)",
-  [ModoCobrancaEnum.LEMBRETES]: "Lembretes no WhatsApp",
-  [ModoCobrancaEnum.AUTOMATICA]: "Cobrança Automática",
-};
-
-const SUBSCRIPTION_STATUS_LABELS: Record<SubscriptionStatus, string> = {
-  [SubscriptionStatus.TRIAL]: "Período de Teste (Trial)",
-  [SubscriptionStatus.ACTIVE]: "Ativa",
-  [SubscriptionStatus.PAST_DUE]: "Pagamento Pendente (Atrasada)",
-  [SubscriptionStatus.EXPIRED]: "Expirada",
-  [SubscriptionStatus.CANCELED]: "Cancelada",
-};
-
-function resolveSubscriptionStatusLabel(
-  status?: string | null,
-  dataVencimento?: string | null
-): string {
-  if (dataVencimento) {
-    const year = new Date(dataVencimento).getFullYear();
-    if (!isNaN(year) && year >= 2090) {
-      return "Vitalícia (Ativa)";
-    }
-  }
-
-  if (!status) {
-    return "Sem assinatura";
-  }
-
-  return SUBSCRIPTION_STATUS_LABELS[status as SubscriptionStatus] || status;
-}
-
-async function dispatchTelegramModoCobrancaChange(
-  usuarioId: string,
-  modoAnterior: ModoCobrancaEnum,
-  modoFinal: ModoCobrancaEnum
-): Promise<void> {
-  try {
-    const [{ data: usuario }, { data: assinatura }] = await Promise.all([
-      userRepository.getById(usuarioId),
-      subscriptionRepository.getSubscriptionByUserId(usuarioId),
-    ]);
-
-    const statusAssinaturaLabel = resolveSubscriptionStatusLabel(
-      assinatura?.status,
-      assinatura?.data_vencimento
-    );
-
-    const ativou = modoFinal === ModoCobrancaEnum.AUTOMATICA;
-
-    await notificationService.notifyAdmin(
-      EVENTO_ADMIN_COBRANCA_AUTOMATICA_ALTERADA,
-      {
-        motoristaNome: usuario?.nome || "Motorista",
-        motoristaApelido: usuario?.apelido || null,
-        telefone: usuario?.telefone || null,
-        statusAssinaturaLabel,
-        ativou,
-        modoAnteriorLabel: MODO_COBRANCA_LABELS[modoAnterior] || modoAnterior,
-        modoNovoLabel: MODO_COBRANCA_LABELS[modoFinal] || modoFinal,
-        dataHora: formatDateTime(getNowBR()),
-        usuarioId,
-      },
-      {
-        channels: [NotificationChannelEnum.TELEGRAM],
-        jobId: `admin-cobranca-auto-${usuarioId}-${Date.now()}`,
-        usuarioId,
-      }
-    );
-  } catch (err: unknown) {
-    logger.error(
-      { err: err instanceof Error ? err.message : String(err), usuarioId },
-      "[MotoristaFinanceiroService] Falha ao notificar admin sobre mudança na cobrança automática"
-    );
-  }
 }
 
 export const motoristaFinanceiroService = {
@@ -174,14 +89,6 @@ export const motoristaFinanceiroService = {
       ...(provedor_config !== undefined ? { provedor_config: provedor_config as unknown as Json } : {}),
       modo_cobranca: modoFinal,
     });
-
-    const houveTransicaoCobrancaAutomatica =
-      modoAnterior !== modoFinal &&
-      (modoAnterior === ModoCobrancaEnum.AUTOMATICA || modoFinal === ModoCobrancaEnum.AUTOMATICA);
-
-    if (houveTransicaoCobrancaAutomatica) {
-      void dispatchTelegramModoCobrancaChange(usuarioId, modoAnterior, modoFinal);
-    }
 
     const chavePixMudou =
       input.chave_pix_repasse !== undefined &&

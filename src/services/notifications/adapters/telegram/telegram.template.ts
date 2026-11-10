@@ -77,18 +77,6 @@ export interface AdminRepasseSucessoContext {
     endToEndIdEntrada?: string | null;
 }
 
-export interface AdminCobrancaAutomaticaAlteradaContext {
-    motoristaNome: string;
-    motoristaApelido?: string | null;
-    telefone?: string | null;
-    statusAssinaturaLabel: string;
-    ativou: boolean;
-    modoAnteriorLabel: string;
-    modoNovoLabel: string;
-    dataHora: string;
-    usuarioId: string;
-}
-
 export class TelegramTemplates {
     static newRegistration(ctx: AdminRegistrationContext): CompositeMessagePart[] {
         const nomeCurto = getFirstAndSecondName(ctx.nome);
@@ -252,38 +240,6 @@ export class TelegramTemplates {
                 content: `🚨 <b>${ctx.titulo}</b>\n\n` +
                     `${ctx.mensagem}` +
                     detalhesText
-            }
-        ];
-    }
-
-    static cobrancaAutomaticaAlterada(ctx: AdminCobrancaAutomaticaAlteradaContext): CompositeMessagePart[] {
-        const nomeCurto = getFirstAndSecondName(ctx.motoristaNome);
-        const motoristaDisplay = ctx.motoristaApelido?.trim()
-            ? `${ctx.motoristaApelido.trim()} (${nomeCurto})`
-            : nomeCurto;
-
-        const cabecalho = ctx.ativou
-            ? `⚡ <b>Cobrança Automática Ativada!</b>`
-            : `🔄 <b>Cobrança Automática Desativada</b>`;
-
-        const lines = [
-            `${cabecalho}\n`,
-            `<b>Motorista:</b> ${motoristaDisplay}`
-        ];
-
-        if (ctx.telefone) {
-            lines.push(`<b>Telefone:</b> ${maskPhone(ctx.telefone)}`);
-        }
-
-        lines.push(`<b>Assinatura:</b> ${ctx.statusAssinaturaLabel}`);
-        lines.push(`<b>Mudança:</b> ${ctx.modoAnteriorLabel} ➡️ ${ctx.modoNovoLabel}`);
-        lines.push(`<b>Data:</b> ${ctx.dataHora}`);
-        lines.push(`<b>ID:</b> <code>${ctx.usuarioId}</code>`);
-
-        return [
-            {
-                type: "text",
-                content: lines.join("\n")
             }
         ];
     }
