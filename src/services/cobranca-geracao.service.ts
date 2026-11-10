@@ -90,23 +90,6 @@ export const cobrancaGeracaoService = {
       if (passageirosComCobranca.has(p.id)) continue;
       if (!p.valor_cobranca || Number(p.valor_cobranca) <= 0) continue;
 
-      const inicioStr = p.data_inicio_cobranca || p.created_at;
-      const inicio = parseMonthYearFromDateString(inicioStr);
-      if (inicio) {
-        if (targetYear < inicio.year || (targetYear === inicio.year && targetMonth < inicio.month)) {
-          continue;
-        }
-      }
-
-      if (p.data_fim_cobranca) {
-        const fim = parseMonthYearFromDateString(p.data_fim_cobranca);
-        if (fim) {
-          if (targetYear > fim.year || (targetYear === fim.year && targetMonth > fim.month)) {
-            continue;
-          }
-        }
-      }
-
       const dataVenc = getSafeDueDateString(p.dia_vencimento, targetMonth, targetYear);
       const enrichedPassageiro = enrichCobrancaWithResponsavelPrincipal({
         passageiro: p as unknown as Record<string, unknown>,

@@ -1,4 +1,4 @@
-import { passageiroRepository } from "../repositories/passageiro.repository.js";
+import { passageiroRepository, isMatriculaCoveringMonthYear } from "../repositories/passageiro.repository.js";
 import { responsavelRepository } from "../repositories/responsavel.repository.js";
 import { prePassageiroRepository } from "../repositories/pre-passageiro.repository.js";
 import { AppError } from "../errors/AppError.js";
@@ -388,8 +388,11 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO, targetOwn
     const vencimentoMudou = passageiroData.dia_vencimento !== undefined && passageiroData.dia_vencimento !== estadoAnterior.dia_vencimento;
     const modoMudou = passageiroData.modo_cobranca !== undefined && passageiroData.modo_cobranca !== estadoAnterior.modo_cobranca;
     const isentoMudou = passageiroData.isento !== undefined && passageiroData.isento !== estadoAnterior.isento;
+    const inicioCobrancaMudou = passageiroData.data_inicio_cobranca !== undefined && passageiroData.data_inicio_cobranca !== estadoAnterior.data_inicio_cobranca;
+    const fimCobrancaMudou = passageiroData.data_fim_cobranca !== undefined && passageiroData.data_fim_cobranca !== estadoAnterior.data_fim_cobranca;
+    const periodoCobrancaMudou = inicioCobrancaMudou || fimCobrancaMudou;
 
-    if (valorMudou || vencimentoMudou || modoMudou || isentoMudou) {
+    if (valorMudou || vencimentoMudou || modoMudou || isentoMudou || periodoCobrancaMudou) {
         try {
             const { data: cobrancasPendentes } = await supabaseAdmin
                 .from("cobrancas")
@@ -399,7 +402,29 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO, targetOwn
                 .or(`ano_letivo.eq.${effectiveAno},and(ano_letivo.is.null,ano.eq.${effectiveAno})`);
 
             if (cobrancasPendentes && cobrancasPendentes.length > 0) {
+                const matriculaAtualizadaParaCobertura: Record<string, unknown> = {
+                    ano_letivo: effectiveAno,
+                    data_inicio_cobranca: passageiroData.data_inicio_cobranca !== undefined ? passageiroData.data_inicio_cobranca : estadoAnterior.data_inicio_cobranca,
+                    data_fim_cobranca: passageiroData.data_fim_cobranca !== undefined ? passageiroData.data_fim_cobranca : estadoAnterior.data_fim_cobranca,
+                    created_at: estadoAnterior.created_at,
+                };
+
                 for (const cob of cobrancasPendentes) {
+                    const foraDoNovoPeriodo =
+                        periodoCobrancaMudou &&
+                        !isMatriculaCoveringMonthYear(matriculaAtualizadaParaCobertura, Number(cob.mes), Number(cob.ano));
+
+                    if (foraDoNovoPeriodo) {
+                        if (cob.provedor_cobranca_id) {
+                            void cobrancaValidacaoService.cancelarPixCobrancaSeExistir(cob.id, cob.provedor_cobranca_id);
+                        }
+                        await supabaseAdmin
+                            .from("cobrancas")
+                            .delete()
+                            .eq("id", cob.id);
+                        continue;
+                    }
+
                     if (passageiroData.isento === true) {
                         if (cob.provedor_cobranca_id) {
                             void cobrancaValidacaoService.cancelarPixCobrancaSeExistir(cob.id, cob.provedor_cobranca_id);

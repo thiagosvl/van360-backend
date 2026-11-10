@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { cobrancaRepository } from "../repositories/cobranca.repository.js";
-import { passageiroRepository } from "../repositories/passageiro.repository.js";
+import { passageiroRepository, isMatriculaCoveringMonthYear } from "../repositories/passageiro.repository.js";
 import { historicoRepository } from "../repositories/historico.repository.js";
 import { logger } from "../config/logger.js";
 import { AppError } from "../errors/AppError.js";
@@ -45,7 +45,8 @@ export const cobrancaService = {
       throw new AppError("Campos obrigatórios ausentes (passageiro_id, usuario_id).", 400);
     }
 
-    const passageiro = await passageiroRepository.getResponsavelInfo(data.passageiro_id);
+    const requestedAnoLetivo = data.ano_letivo !== undefined && data.ano_letivo !== null ? Number(data.ano_letivo) : undefined;
+    const passageiro = await passageiroRepository.getResponsavelInfo(data.passageiro_id, requestedAnoLetivo);
 
     if (!passageiro) throw new AppError("Aluno não encontrado para gerar cobrança.", 404);
     if (passageiro.isento === true) {
@@ -54,30 +55,29 @@ export const cobrancaService = {
 
     const valorNumerico = typeof data.valor === "string" ? moneyToNumber(data.valor) : data.valor;
     const statusVal = data.status || CobrancaStatus.PENDENTE;
+    const cobrancaMes = Number(data.mes);
     const cobrancaAno = Number(data.ano);
 
     let resolvedAnoLetivo: number;
-    if (data.ano_letivo !== undefined && data.ano_letivo !== null) {
-      resolvedAnoLetivo = Number(data.ano_letivo);
+    if (requestedAnoLetivo !== undefined) {
+      resolvedAnoLetivo = requestedAnoLetivo;
     } else {
       const { data: matriculas } = await passageiroRepository.getMatriculasByPassageiro(data.passageiro_id);
-      const listMatriculas = matriculas || [];
-      const exactMatricula = listMatriculas.find((m) => Number(m.ano_letivo) === cobrancaAno);
+      const listMatriculas = (matriculas || []) as Array<Record<string, unknown>>;
+      const exactCoveringMatricula = listMatriculas.find(
+        (m) => Number(m.ano_letivo) === cobrancaAno && isMatriculaCoveringMonthYear(m, cobrancaMes, cobrancaAno)
+      );
+      const anyCoveringMatricula =
+        exactCoveringMatricula ||
+        listMatriculas.find((m) => isMatriculaCoveringMonthYear(m, cobrancaMes, cobrancaAno));
+      const exactYearMatricula = listMatriculas.find((m) => Number(m.ano_letivo) === cobrancaAno);
 
-      if (exactMatricula) {
-        resolvedAnoLetivo = Number(exactMatricula.ano_letivo);
+      if (anyCoveringMatricula) {
+        resolvedAnoLetivo = Number(anyCoveringMatricula.ano_letivo);
+      } else if (exactYearMatricula) {
+        resolvedAnoLetivo = Number(exactYearMatricula.ano_letivo);
       } else {
-        const coveringMatricula = listMatriculas.find((m) => {
-          if (!m.data_inicio_cobranca || !m.data_fim_cobranca) return false;
-          const inicio = new Date(m.data_inicio_cobranca);
-          const fim = new Date(m.data_fim_cobranca);
-          const venc = new Date(data.data_vencimento);
-          return venc >= inicio && venc <= fim;
-        });
-
-        resolvedAnoLetivo = coveringMatricula
-          ? Number(coveringMatricula.ano_letivo)
-          : cobrancaAno || Number(passageiro.ano_letivo) || getNowBR().getFullYear();
+        resolvedAnoLetivo = cobrancaAno || Number(passageiro.ano_letivo) || getNowBR().getFullYear();
       }
     }
 

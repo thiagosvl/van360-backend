@@ -89,9 +89,14 @@ const overlayMatriculaOnPassageiro = <T extends Record<string, any>>(
   };
 };
 
-const isMatriculaCoveringMonthYear = (m: Record<string, any>, targetMonth: number, targetYear: number): boolean => {
+export const isMatriculaCoveringMonthYear = (
+  m: Record<string, unknown>,
+  targetMonth: number,
+  targetYear: number,
+  driverCreatedAt?: string | null
+): boolean => {
   const targetNum = targetYear * 12 + (targetMonth - 1);
-  const anoLetivo = Number(m.ano_letivo);
+  const anoLetivo = Number(m.ano_letivo || targetYear);
 
   let startYear = anoLetivo;
   let startMonth = 1;
@@ -101,8 +106,8 @@ const isMatriculaCoveringMonthYear = (m: Record<string, any>, targetMonth: numbe
       startYear = parsedStart.year;
       startMonth = parsedStart.month;
     }
-  } else if (m.created_at) {
-    const parsedCreated = parseMonthYearFromDateString(String(m.created_at));
+  } else if (m.created_at || driverCreatedAt) {
+    const parsedCreated = parseMonthYearFromDateString(String(m.created_at || driverCreatedAt));
     if (parsedCreated && parsedCreated.year === anoLetivo) {
       startYear = parsedCreated.year;
       startMonth = parsedCreated.month;

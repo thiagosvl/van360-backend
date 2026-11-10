@@ -1,6 +1,6 @@
 import { veiculoRepository } from "../repositories/veiculo.repository.js";
 import { escolaRepository } from "../repositories/escola.repository.js";
-import { passageiroRepository } from "../repositories/passageiro.repository.js";
+import { passageiroRepository, isMatriculaCoveringMonthYear } from "../repositories/passageiro.repository.js";
 import { prePassageiroRepository } from "../repositories/pre-passageiro.repository.js";
 import { cobrancaRepository } from "../repositories/cobranca.repository.js";
 import { gastoRepository } from "../repositories/gasto.repository.js";
@@ -179,55 +179,41 @@ export const usuarioResumoService = {
 
     if (!isPastPeriod) {
       const passageirosComCobranca = new Set(cobrancas.map((c) => c.passageiro_id));
-      const driverCreatedAt = (usuario as Record<string, any>)?.created_at;
-
-      const parseYearMonth = (dateStr?: string | null) => {
-        if (!dateStr) return null;
-        if (dateStr.includes("-")) {
-          const parts = dateStr.split("-");
-          if (parts.length >= 2) {
-            const year = Number(parts[0]);
-            const month = Number(parts[1]);
-            if (!isNaN(year) && !isNaN(month) && month >= 1 && month <= 12) {
-              return { year, month };
-            }
-          }
-        }
-        const d = new Date(dateStr);
-        if (isNaN(d.getTime())) return null;
-        return { year: d.getFullYear(), month: d.getMonth() + 1 };
-      };
+      const driverCreatedAt = (usuario as Record<string, unknown>)?.created_at as string | null | undefined;
 
       const candidateMatriculas = [...passageirosList]
-        .filter((p: Record<string, any>) => {
+        .filter((p: Record<string, unknown>) => {
           const anoMat = Number(p.ano_letivo || targetAno);
           return anoMat >= targetAno - 1 && anoMat <= targetAno + 1;
         })
-        .sort((a, b) => Number(b.ano_letivo || 0) - Number(a.ano_letivo || 0));
+        .sort((a, b) => {
+          const aIsTarget = Number(a.ano_letivo || 0) === Number(targetAno) ? 1 : 0;
+          const bIsTarget = Number(b.ano_letivo || 0) === Number(targetAno) ? 1 : 0;
+          if (aIsTarget !== bIsTarget) return bIsTarget - aIsTarget;
+          return Number(a.ano_letivo || 0) - Number(b.ano_letivo || 0);
+        });
 
-      candidateMatriculas.forEach((p: Record<string, any>) => {
-        if (!p.ativo || p.isento || passageirosComCobranca.has(p.id) || !p.valor_cobranca || Number(p.valor_cobranca) <= 0) {
+      candidateMatriculas.forEach((p: Record<string, unknown>) => {
+        const passageiroId = String(p.id || "");
+        if (
+          !passageiroId ||
+          !p.ativo ||
+          p.isento ||
+          passageirosComCobranca.has(passageiroId) ||
+          !p.valor_cobranca ||
+          Number(p.valor_cobranca) <= 0
+        ) {
           return;
         }
 
-        const anoMat = Number(p.ano_letivo || targetAno);
-        const inicioStr = p.data_inicio_cobranca || p.created_at || driverCreatedAt;
-        const inicio = parseYearMonth(inicioStr) || { year: anoMat, month: 1 };
-        if (targetAno < inicio.year || (targetAno === inicio.year && targetMes < inicio.month)) {
+        if (!isMatriculaCoveringMonthYear(p, Number(targetMes), Number(targetAno), driverCreatedAt)) {
           return;
         }
 
-        const fim = p.data_fim_cobranca
-          ? (parseYearMonth(p.data_fim_cobranca) || { year: anoMat, month: 12 })
-          : { year: anoMat, month: 12 };
-        if (targetAno > fim.year || (targetAno === fim.year && targetMes > fim.month)) {
-          return;
-        }
-
-        passageirosComCobranca.add(p.id);
+        passageirosComCobranca.add(passageiroId);
         receitaProjetada += Number(p.valor_cobranca);
 
-        const dataVencProj = getSafeDueDateString(p.dia_vencimento, targetMes, targetAno);
+        const dataVencProj = getSafeDueDateString(p.dia_vencimento as number | null | undefined, Number(targetMes), Number(targetAno));
 
         if (dataVencProj < hoje) {
           atrasosProjetadosValor += Number(p.valor_cobranca);
