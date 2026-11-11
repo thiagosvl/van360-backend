@@ -193,8 +193,8 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO> | UpdatePassa
 
 const _syncResponsavelPrincipal = async (
     passageiroId: string,
-    respData: Record<string, any>,
-    currentResp?: Record<string, any> | null
+    respData: Record<string, unknown>,
+    currentResp?: Record<string, unknown> | null
 ) => {
     const rawPhone = respData.telefone || currentResp?.telefone;
     if (!rawPhone) return null;
@@ -202,25 +202,75 @@ const _syncResponsavelPrincipal = async (
     const targetPhone = normalizePhone(String(rawPhone));
     if (!targetPhone) return null;
 
+    if (typeof currentResp?.id === "string" && currentResp.id) {
+        const prepared: Record<string, unknown> = {
+            telefone: targetPhone,
+            garantir_principal: true,
+        };
+        if (respData.nome !== undefined && respData.nome) {
+            prepared.nome = cleanString(String(respData.nome), true);
+        }
+        if (respData.cpf !== undefined) {
+            prepared.cpf = respData.cpf ? onlyDigits(String(respData.cpf)) : null;
+        }
+        if (respData.email !== undefined) {
+            prepared.email = respData.email ? cleanString(String(respData.email).trim().toLowerCase()) : null;
+        }
+        if (respData.parentesco !== undefined) {
+            prepared.parentesco = respData.parentesco || null;
+        }
+        if (respData.logradouro !== undefined) {
+            prepared.logradouro = respData.logradouro ? cleanString(String(respData.logradouro), true) : null;
+        }
+        if (respData.numero !== undefined) {
+            prepared.numero = respData.numero ? String(respData.numero).trim() : null;
+        }
+        if (respData.bairro !== undefined) {
+            prepared.bairro = respData.bairro ? cleanString(String(respData.bairro), true) : null;
+        }
+        if (respData.cidade !== undefined) {
+            prepared.cidade = respData.cidade ? cleanString(String(respData.cidade), true) : null;
+        }
+        if (respData.estado !== undefined) {
+            prepared.estado = respData.estado ? String(respData.estado).toUpperCase() : null;
+        }
+        if (respData.cep !== undefined) {
+            prepared.cep = respData.cep ? onlyDigits(String(respData.cep)) : null;
+        }
+        if (respData.referencia !== undefined) {
+            prepared.referencia = respData.referencia ? cleanString(String(respData.referencia), true) : null;
+        }
+        if (respData.complemento !== undefined) {
+            prepared.complemento = respData.complemento ? cleanString(String(respData.complemento), true) : null;
+        }
+        if (respData.notificacoes_rota_habilitadas !== undefined) {
+            prepared.notificacoes_rota_habilitadas = Boolean(respData.notificacoes_rota_habilitadas);
+        }
+
+        return responsavelRepository.updateResponsavelAdicional(currentResp.id, prepared, passageiroId);
+    }
+
     const respObj = await passageiroRepository.upsertResponsavel({
         telefone: targetPhone,
-        nome: cleanString(respData.nome || currentResp?.nome || "Responsável", true),
-        cpf: respData.cpf !== undefined ? (respData.cpf ? onlyDigits(String(respData.cpf)) : null) : (currentResp?.cpf || null),
-        email: respData.email !== undefined ? (respData.email ? cleanString(String(respData.email).trim().toLowerCase()) : null) : (currentResp?.email || null),
-        logradouro: respData.logradouro !== undefined ? (respData.logradouro ? cleanString(String(respData.logradouro), true) : null) : (currentResp?.logradouro || null),
-        numero: respData.numero !== undefined ? (respData.numero ? String(respData.numero) : null) : (currentResp?.numero || null),
-        bairro: respData.bairro !== undefined ? (respData.bairro ? cleanString(String(respData.bairro), true) : null) : (currentResp?.bairro || null),
-        cidade: respData.cidade !== undefined ? (respData.cidade ? cleanString(String(respData.cidade), true) : null) : (currentResp?.cidade || null),
-        estado: respData.estado !== undefined ? (respData.estado ? String(respData.estado).toUpperCase() : null) : (currentResp?.estado || null),
-        cep: respData.cep !== undefined ? (respData.cep ? onlyDigits(String(respData.cep)) : null) : (currentResp?.cep || null),
-        referencia: respData.referencia !== undefined ? (respData.referencia ? cleanString(String(respData.referencia), true) : null) : (currentResp?.referencia || null),
-        complemento: respData.complemento !== undefined ? (respData.complemento ? cleanString(String(respData.complemento), true) : null) : (currentResp?.complemento || null),
+        nome: cleanString(String(respData.nome || currentResp?.nome || "Responsável"), true),
+        cpf: respData.cpf !== undefined ? (respData.cpf ? onlyDigits(String(respData.cpf)) : null) : (currentResp?.cpf ? String(currentResp.cpf) : null),
+        email: respData.email !== undefined ? (respData.email ? cleanString(String(respData.email).trim().toLowerCase()) : null) : (currentResp?.email ? String(currentResp.email) : null),
+        logradouro: respData.logradouro !== undefined ? (respData.logradouro ? cleanString(String(respData.logradouro), true) : null) : (currentResp?.logradouro ? String(currentResp.logradouro) : null),
+        numero: respData.numero !== undefined ? (respData.numero ? String(respData.numero) : null) : (currentResp?.numero ? String(currentResp.numero) : null),
+        bairro: respData.bairro !== undefined ? (respData.bairro ? cleanString(String(respData.bairro), true) : null) : (currentResp?.bairro ? String(currentResp.bairro) : null),
+        cidade: respData.cidade !== undefined ? (respData.cidade ? cleanString(String(respData.cidade), true) : null) : (currentResp?.cidade ? String(currentResp.cidade) : null),
+        estado: respData.estado !== undefined ? (respData.estado ? String(respData.estado).toUpperCase() : null) : (currentResp?.estado ? String(currentResp.estado) : null),
+        cep: respData.cep !== undefined ? (respData.cep ? onlyDigits(String(respData.cep)) : null) : (currentResp?.cep ? String(currentResp.cep) : null),
+        referencia: respData.referencia !== undefined ? (respData.referencia ? cleanString(String(respData.referencia), true) : null) : (currentResp?.referencia ? String(currentResp.referencia) : null),
+        complemento: respData.complemento !== undefined ? (respData.complemento ? cleanString(String(respData.complemento), true) : null) : (currentResp?.complemento ? String(currentResp.complemento) : null),
     });
 
-    const parentesco = respData.parentesco !== undefined ? respData.parentesco : (currentResp?.parentesco || null);
+    const parentesco = respData.parentesco !== undefined
+        ? (respData.parentesco ? String(respData.parentesco) : null)
+        : (currentResp?.parentesco ? String(currentResp.parentesco) : null);
     const notificacoesRota = respData.notificacoes_rota_habilitadas !== undefined
-        ? respData.notificacoes_rota_habilitadas
-        : (currentResp?.notificacoes_rota_habilitadas !== undefined ? currentResp.notificacoes_rota_habilitadas : true);
+        ? Boolean(respData.notificacoes_rota_habilitadas)
+        : (currentResp?.notificacoes_rota_habilitadas !== undefined ? Boolean(currentResp.notificacoes_rota_habilitadas) : true);
 
     await passageiroRepository.linkPassageiroResponsavel(
         passageiroId,
@@ -505,9 +555,24 @@ const updatePassageiro = async (id: string, data: UpdatePassageiroDTO, targetOwn
     }
 
     const fullPassageiro = await passageiroRepository.getByIdCompleto(id, undefined, effectiveAno);
-    const enriched = _enrichPassageiroWithResponsavel(fullPassageiro as Record<string, any>);
+    const enriched = _enrichPassageiroWithResponsavel(fullPassageiro as Record<string, unknown>);
 
     const diff = calculateAuditDiff(estadoAnterior, passageiroData);
+    if (data.responsavel_principal && enriched.responsavel_principal) {
+        const respDiff = calculateAuditDiff(
+            estadoAnterior.responsavel_principal || {},
+            enriched.responsavel_principal as Record<string, unknown>
+        );
+        if (respDiff.hasChanges) {
+            diff.hasChanges = true;
+            for (const campo of respDiff.campos) {
+                if (!diff.campos.includes(campo)) {
+                    diff.campos.push(campo);
+                }
+            }
+            Object.assign(diff.alteracoes, respDiff.alteracoes);
+        }
+    }
 
     if (diff.hasChanges && fullPassageiro) {
         historicoService.log({

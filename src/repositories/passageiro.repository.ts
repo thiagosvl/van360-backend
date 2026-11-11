@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "../config/supabase.js";
+import type { TablesUpdate } from "../types/database.types.js";
 import { isValidFilterValue } from "../utils/filter.utils.js";
 import { TipoResponsavel } from "../types/enums.js";
 import { ListPassageirosFiltersDTO } from "../types/dtos/passageiro.dto.js";
@@ -775,7 +776,7 @@ export const passageiroRepository = {
       .maybeSingle();
 
     if (existing) {
-      const updatePayload: Record<string, any> = { updated_at: new Date().toISOString() };
+      const updatePayload: TablesUpdate<"responsaveis"> = { updated_at: new Date().toISOString() };
       if (!existing.nome && data.nome) updatePayload.nome = data.nome;
       if (!existing.cpf && data.cpf) updatePayload.cpf = data.cpf;
       if (!existing.email && data.email) updatePayload.email = data.email;

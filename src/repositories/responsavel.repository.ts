@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "../config/supabase.js";
+import type { Tables, TablesUpdate } from "../types/database.types.js";
 import { TipoResponsavel, RouteSentido } from "../types/enums.js";
 import { AppError } from "../errors/AppError.js";
 import { toPersistenceString, getNowBR } from "../utils/date.utils.js";
@@ -483,8 +484,7 @@ export const responsavelRepository = {
 
     if (existing) {
       responsavelId = existing.id;
-      const updatePayload: Record<string, any> = { updated_at: new Date().toISOString() };
-      // Só preenche se o campo estivesse nulo anteriormente para não sobrescrever dados existentes
+      const updatePayload: TablesUpdate<"responsaveis"> = { updated_at: new Date().toISOString() };
       if (!existing.nome && data.nome) updatePayload.nome = data.nome;
       if (!existing.cpf && data.cpf) updatePayload.cpf = data.cpf;
       if (!existing.email && data.email) updatePayload.email = data.email;
@@ -622,7 +622,7 @@ export const responsavelRepository = {
         mergedIntoExisting = true;
         targetResponsavelId = existingResp.id;
 
-        const fillPayload: Record<string, any> = { updated_at: new Date().toISOString() };
+        const fillPayload: TablesUpdate<"responsaveis"> = { updated_at: new Date().toISOString() };
         if (!existingResp.nome && data.nome) fillPayload.nome = data.nome;
         if (!existingResp.cpf && data.cpf) fillPayload.cpf = data.cpf;
         if (!existingResp.email && data.email) fillPayload.email = data.email;
@@ -643,16 +643,31 @@ export const responsavelRepository = {
         }
 
         if (effectivePassageiroId) {
-          await supabaseAdmin
+          const { data: existingTargetLink } = await supabaseAdmin
             .from("passageiro_responsaveis")
-            .update({ responsavel_id: targetResponsavelId, updated_at: new Date().toISOString() })
+            .select("id")
             .eq("passageiro_id", effectivePassageiroId)
-            .eq("responsavel_id", responsavelId);
+            .eq("responsavel_id", targetResponsavelId)
+            .maybeSingle();
+
+          if (existingTargetLink) {
+            await supabaseAdmin
+              .from("passageiro_responsaveis")
+              .delete()
+              .eq("passageiro_id", effectivePassageiroId)
+              .eq("responsavel_id", responsavelId);
+          } else {
+            await supabaseAdmin
+              .from("passageiro_responsaveis")
+              .update({ responsavel_id: targetResponsavelId, updated_at: new Date().toISOString() })
+              .eq("passageiro_id", effectivePassageiroId)
+              .eq("responsavel_id", responsavelId);
+          }
         }
       }
     }
 
-    let updated: any;
+    let updated: Tables<"responsaveis">;
     if (mergedIntoExisting) {
       const { data: currentTargetResp, error } = await supabaseAdmin
         .from("responsaveis")
@@ -662,7 +677,7 @@ export const responsavelRepository = {
       if (error) throw error;
       updated = currentTargetResp;
     } else {
-      const respPayload: Record<string, any> = { updated_at: new Date().toISOString() };
+      const respPayload: TablesUpdate<"responsaveis"> = { updated_at: new Date().toISOString() };
       if (data.nome !== undefined && data.nome !== null) respPayload.nome = data.nome;
       if (data.cpf !== undefined) respPayload.cpf = data.cpf;
       if (data.email !== undefined) respPayload.email = data.email;
@@ -688,11 +703,11 @@ export const responsavelRepository = {
     }
 
     if (effectivePassageiroId) {
-      const linkPayload: Record<string, any> = { updated_at: new Date().toISOString() };
+      const linkPayload: TablesUpdate<"passageiro_responsaveis"> = { updated_at: new Date().toISOString() };
       if (data.parentesco !== undefined) linkPayload.parentesco = data.parentesco || null;
       if (data.notificacoes_rota_habilitadas !== undefined) linkPayload.notificacoes_rota_habilitadas = data.notificacoes_rota_habilitadas;
 
-      if (data.tornar_principal === true) {
+      if (data.tornar_principal === true || data.garantir_principal === true) {
         await supabaseAdmin
           .from("passageiro_responsaveis")
           .update({ tipo: TipoResponsavel.ADICIONAL, updated_at: new Date().toISOString() })

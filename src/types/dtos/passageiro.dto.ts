@@ -42,7 +42,7 @@ export const responsavelPrincipalInputSchema = z.object({
   cep: optionalString,
   referencia: optionalString,
   complemento: optionalString,
-  notificacoes_rota_habilitadas: z.boolean().optional().default(true),
+  notificacoes_rota_habilitadas: z.boolean().optional(),
 });
 
 export const createPassageiroSchema = z.object({
@@ -178,7 +178,7 @@ export const createResponsavelAdicionalSchema = z.object({
   complemento: optionalString,
   passageiroId: optionalString,
   tornar_principal: z.boolean().optional(),
-  notificacoes_rota_habilitadas: z.boolean().optional().default(true),
+  notificacoes_rota_habilitadas: z.boolean().optional(),
 });
 
 export type CreateResponsavelAdicionalDTO = z.infer<typeof createResponsavelAdicionalSchema>;
