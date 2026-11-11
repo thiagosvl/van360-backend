@@ -14,7 +14,7 @@ const optionalString = z.union([z.string(), z.null(), z.undefined()]).transform(
   if (v === undefined) return undefined;
   if (v === null || v === "") return null;
   return v;
-});
+}).optional();
 const optionalNumber = z.union([z.number(), z.string().length(0).transform(() => undefined), z.string().min(1).transform(val => Number(val))]).optional();
 
 const optionalEmail = z.union([
@@ -26,7 +26,7 @@ const optionalEmail = z.union([
   if (v === undefined) return undefined;
   if (v === null || v === "") return null;
   return v;
-});
+}).optional();
 
 export const responsavelPrincipalInputSchema = z.object({
   nome: z.string().min(1, "Nome do responsável é obrigatório"),
@@ -76,7 +76,7 @@ export const createPassageiroSchema = z.object({
     if (v === undefined) return undefined;
     if (v === null || v === "") return null;
     return v.toLowerCase();
-  }),
+  }).optional(),
   genero: optionalString,
 
   // Novos Campos
@@ -84,7 +84,7 @@ export const createPassageiroSchema = z.object({
     if (v === undefined) return undefined;
     if (v === null || v === "") return null;
     return v;
-  }),
+  }).optional(),
   data_nascimento: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
     if (v === undefined) return undefined;
     if (v === null || v === "") return null;
@@ -92,7 +92,7 @@ export const createPassageiroSchema = z.object({
   }).refine(v => {
     if (!v) return true;
     return v.getTime() <= getNowBR().getTime();
-  }, { message: "Data de nascimento não pode ser no futuro" }),
+  }, { message: "Data de nascimento não pode ser no futuro" }).optional(),
   turma: optionalString,
   sala: optionalString,
   nome_professor: optionalString,
@@ -102,22 +102,22 @@ export const createPassageiroSchema = z.object({
     if (v === undefined) return undefined;
     if (v === null || v === "") return null;
     return parseLocalDate(v);
-  }),
+  }).optional(),
   data_fim_transporte: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
     if (v === undefined) return undefined;
     if (v === null || v === "") return null;
     return parseLocalDate(v);
-  }),
+  }).optional(),
   data_inicio_cobranca: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
     if (v === undefined) return undefined;
     if (v === null || v === "") return null;
     return parseLocalDate(v);
-  }),
+  }).optional(),
   data_fim_cobranca: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
     if (v === undefined) return undefined;
     if (v === null || v === "") return null;
     return parseLocalDate(v);
-  }),
+  }).optional(),
   ano_letivo: z.union([z.number(), z.string().transform(v => parseInt(v, 10))]).optional().default(2026),
 }).passthrough();
 
@@ -204,7 +204,7 @@ export const updatePassageiroBatchItemSchema = z.object({
     if (v === undefined) return undefined;
     if (v === null || v === "") return null;
     return v.toLowerCase();
-  }),
+  }).optional(),
   valor_cobranca: z.union([z.number(), z.string(), z.null(), z.undefined()]).transform(val => {
     if (val === undefined) return undefined;
     if (val === "" || val === null) return null;
