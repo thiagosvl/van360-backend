@@ -6,10 +6,10 @@ export const createPrePassageiroSchema = z.object({
   nome: z.string().min(2, 'Nome do aluno é obrigatório'),
   nome_responsavel: z.string().min(2, 'Nome do responsável é obrigatório'),
 
-  cpf_responsavel: z.string().optional().or(z.literal('')),
-  telefone_responsavel: z.string().optional().or(z.literal('')),
+  cpf_responsavel: z.string().optional().nullable().or(z.literal('')),
+  telefone_responsavel: z.string().optional().nullable().or(z.literal('')),
   email_responsavel: z.string().email("E-mail inválido").optional().nullable().or(z.literal('')),
-  escola_id: z.string().uuid().optional().nullable().or(z.literal('')),
+  escola_id: z.string().uuid().optional().nullable().or(z.literal('')).or(z.literal('none')).transform(v => (v === '' || v === 'none') ? null : v),
   periodo: z.nativeEnum(PeriodoEnum).optional().nullable().or(z.literal('')),
   valor_cobranca: z.union([z.string(), z.number()]).optional().nullable(),
   dia_vencimento: z.union([z.string(), z.number()]).optional().nullable(),

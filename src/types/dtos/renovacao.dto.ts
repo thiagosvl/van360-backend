@@ -50,7 +50,7 @@ export const updateRenovacaoSchema = z.object({
   status: z.nativeEnum(RenovacaoStatus).optional(),
   novo_valor_cobranca: z.union([z.number(), z.string().transform(v => moneyToNumber(v)), z.null()]).optional(),
   novo_dia_vencimento: z.union([z.number(), z.string().transform(v => Number(v)), z.null()]).optional(),
-  nova_escola_id: z.string().uuid().optional().nullable().or(z.literal("")).transform(v => (v === "" || v === "none") ? null : v),
+  nova_escola_id: z.string().uuid().optional().nullable().or(z.literal("")).or(z.literal("none")).transform(v => (v === "" || v === "none") ? null : v),
   novo_periodo: optionalString,
   nova_modalidade: optionalString,
   nova_turma: optionalString,
@@ -60,7 +60,7 @@ export const updateRenovacaoSchema = z.object({
   nova_data_fim_transporte: z.union([z.string(), z.null(), z.undefined()]).transform(v => v ? parseLocalDate(v) : undefined).optional(),
   nova_data_inicio_cobranca: z.union([z.string(), z.null(), z.undefined()]).transform(v => v ? parseLocalDate(v) : undefined).optional(),
   nova_data_fim_cobranca: z.union([z.string(), z.null(), z.undefined()]).transform(v => v ? parseLocalDate(v) : undefined).optional(),
-  novo_veiculo_id: z.string().uuid().optional().nullable().or(z.literal("")).transform(v => (v === "" || v === "none") ? null : v),
+  novo_veiculo_id: z.string().uuid().optional().nullable().or(z.literal("")).or(z.literal("none")).transform(v => (v === "" || v === "none") ? null : v),
 });
 
 export type UpdateRenovacaoDTO = z.infer<typeof updateRenovacaoSchema>;

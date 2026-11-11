@@ -48,8 +48,8 @@ export const responsavelPrincipalInputSchema = z.object({
 export const createPassageiroSchema = z.object({
   nome: z.string().min(1, "Nome é obrigatório"),
   usuario_id: z.string().uuid("ID do usuário inválido"),
-  escola_id: z.string().uuid().optional().nullable().or(z.literal("")).transform(v => (v === "" || v === "none") ? null : v),
-  veiculo_id: z.string().uuid().optional().nullable().or(z.literal("")).transform(v => (v === "" || v === "none") ? null : v),
+  escola_id: z.string().uuid().optional().nullable().or(z.literal("")).or(z.literal("none")).transform(v => (v === "" || v === "none") ? null : v),
+  veiculo_id: z.string().uuid().optional().nullable().or(z.literal("")).or(z.literal("none")).transform(v => (v === "" || v === "none") ? null : v),
   responsavel_principal: responsavelPrincipalInputSchema.optional().nullable(),
 
 
@@ -74,7 +74,7 @@ export const createPassageiroSchema = z.object({
 
   periodo: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
     if (v === undefined) return undefined;
-    if (v === null || v === "") return null;
+    if (v === null || v === "" || v === "none") return null;
     return v.toLowerCase();
   }).optional(),
   genero: optionalString,
@@ -195,14 +195,14 @@ export const updatePassageiroBatchItemSchema = z.object({
   id: z.string().uuid("ID do passageiro inválido"),
   nome: optionalString,
   ano_letivo: z.union([z.number(), z.string().transform(v => Number(v))]).optional(),
-  escola_id: z.string().uuid().optional().nullable().or(z.literal("")).transform(v => (v === "" || v === "none") ? null : v),
-  veiculo_id: z.string().uuid().optional().nullable().or(z.literal("")).transform(v => (v === "" || v === "none") ? null : v),
+  escola_id: z.string().uuid().optional().nullable().or(z.literal("")).or(z.literal("none")).transform(v => (v === "" || v === "none") ? null : v),
+  veiculo_id: z.string().uuid().optional().nullable().or(z.literal("")).or(z.literal("none")).transform(v => (v === "" || v === "none") ? null : v),
   turma: optionalString,
   sala: optionalString,
   nome_professor: optionalString,
   periodo: z.union([z.string(), z.null(), z.undefined()]).transform(v => {
     if (v === undefined) return undefined;
-    if (v === null || v === "") return null;
+    if (v === null || v === "" || v === "none") return null;
     return v.toLowerCase();
   }).optional(),
   valor_cobranca: z.union([z.number(), z.string(), z.null(), z.undefined()]).transform(val => {

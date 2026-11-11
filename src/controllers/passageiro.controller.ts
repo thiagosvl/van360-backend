@@ -22,10 +22,15 @@ import {
 export const passageiroController = {
   create: async (request: FastifyRequest, reply: FastifyReply) => {
     logger.info("PassageiroController.create - Starting");
-    const data = createPassageiroSchema.parse(request.body);
-    if (request.data_owner_id) {
-      data.usuario_id = request.data_owner_id;
-    }
+    const bodyObj = (request.body && typeof request.body === "object")
+      ? (request.body as Record<string, unknown>)
+      : {};
+    const fallbackOwnerId = request.data_owner_id || request.user?.id;
+    const payload = {
+      ...bodyObj,
+      usuario_id: fallbackOwnerId || bodyObj.usuario_id,
+    };
+    const data = createPassageiroSchema.parse(payload);
 
     const result = await passageiroService.createPassageiro(data);
     return reply.status(201).send(result);
@@ -112,7 +117,13 @@ export const passageiroController = {
 
   finalizePreCadastro: async (request: FastifyRequest, reply: FastifyReply) => {
     const { prePassageiroId } = request.params as { prePassageiroId: string };
-    const { data, usuarioId } = finalizePreCadastroSchema.parse(request.body);
+    const bodyObj = (request.body && typeof request.body === "object") ? (request.body as Record<string, unknown>) : {};
+    const fallbackOwnerId = request.data_owner_id || request.user?.id;
+    const payload = {
+      ...bodyObj,
+      usuarioId: fallbackOwnerId || bodyObj.usuarioId,
+    };
+    const { data, usuarioId } = finalizePreCadastroSchema.parse(payload);
     const result = await passageiroService.finalizePreCadastro(prePassageiroId, data, usuarioId);
     return reply.status(200).send({ success: true, passageiro: result });
   },

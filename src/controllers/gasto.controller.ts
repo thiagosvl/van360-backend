@@ -6,14 +6,14 @@ import { GastoEscopoAcao } from "../types/enums.js";
 
 export const gastoController = {
     async create(request: FastifyRequest, reply: FastifyReply) {
-        const data = createGastoSchema.parse(request.body);
-
-        if (request.data_owner_id) {
-            data.usuario_id = request.data_owner_id;
-        }
-        if (request.assigned_veiculo_id) {
-            data.veiculo_id = request.assigned_veiculo_id;
-        }
+        const bodyObj = (request.body && typeof request.body === "object") ? (request.body as Record<string, unknown>) : {};
+        const fallbackOwnerId = request.data_owner_id || request.user?.id;
+        const payload = {
+            ...bodyObj,
+            usuario_id: fallbackOwnerId || bodyObj.usuario_id,
+            ...(request.assigned_veiculo_id ? { veiculo_id: request.assigned_veiculo_id } : {}),
+        };
+        const data = createGastoSchema.parse(payload);
 
         const result = await gastoService.createGasto(data);
         return reply.status(201).send(result);

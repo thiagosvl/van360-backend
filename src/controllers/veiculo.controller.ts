@@ -15,10 +15,14 @@ export const veiculoController = {
   create: async (request: FastifyRequest, reply: FastifyReply) => {
     logger.info("VeiculoController.create - Starting");
     try {
-        const data = createVeiculoSchema.parse(request.body);
-        if (request.data_owner_id) {
-            data.usuario_id = request.data_owner_id;
-        }
+        const bodyObj = (request.body && typeof request.body === "object")
+            ? (request.body as Record<string, unknown>)
+            : {};
+        const fallbackOwnerId = request.data_owner_id || request.user?.id;
+        const data = createVeiculoSchema.parse({
+            ...bodyObj,
+            usuario_id: fallbackOwnerId || bodyObj.usuario_id,
+        });
 
         const result = await veiculoService.createVeiculo(data);
         return reply.status(201).send(result);

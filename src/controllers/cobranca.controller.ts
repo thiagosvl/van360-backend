@@ -20,10 +20,13 @@ import {
 export const cobrancaController = {
   create: async (request: FastifyRequest, reply: FastifyReply) => {
     logger.info("CobrancaController.create - Starting");
-    const data = createCobrancaSchema.parse(request.body);
-    if (request.data_owner_id) {
-      data.usuario_id = request.data_owner_id;
-    }
+    const bodyObj = (request.body && typeof request.body === "object") ? (request.body as Record<string, unknown>) : {};
+    const fallbackOwnerId = request.data_owner_id || request.user?.id;
+    const payload = {
+      ...bodyObj,
+      usuario_id: fallbackOwnerId || bodyObj.usuario_id,
+    };
+    const data = createCobrancaSchema.parse(payload);
     const cobranca = await cobrancaService.createCobranca(data);
     return reply.status(201).send(cobranca);
   },

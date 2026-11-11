@@ -17,14 +17,14 @@ import {
 export const routeController = {
   create: async (request: FastifyRequest, reply: FastifyReply) => {
     logger.info("RouteController.create - Starting");
-    const data = createRouteSchema.parse(request.body);
-
-    if (request.data_owner_id) {
-      data.usuario_id = request.data_owner_id;
-    }
-    if (request.assigned_veiculo_id) {
-      data.veiculo_id = request.assigned_veiculo_id;
-    }
+    const bodyObj = (request.body && typeof request.body === "object") ? (request.body as Record<string, unknown>) : {};
+    const fallbackOwnerId = request.data_owner_id || request.user?.id;
+    const payload = {
+      ...bodyObj,
+      usuario_id: fallbackOwnerId || bodyObj.usuario_id,
+      ...(request.assigned_veiculo_id ? { veiculo_id: request.assigned_veiculo_id } : {}),
+    };
+    const data = createRouteSchema.parse(payload);
 
     const result = await routeService.createRoute(data);
     return reply.status(201).send(result);

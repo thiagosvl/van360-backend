@@ -16,10 +16,14 @@ export const escolaController = {
   create: async (request: FastifyRequest, reply: FastifyReply) => {
     logger.info("EscolaController.create - Starting");
     try {
-        const data = createEscolaSchema.parse(request.body);
-        if (request.data_owner_id) {
-            data.usuario_id = request.data_owner_id;
-        }
+        const bodyObj = (request.body && typeof request.body === "object")
+            ? (request.body as Record<string, unknown>)
+            : {};
+        const fallbackOwnerId = request.data_owner_id || request.user?.id;
+        const data = createEscolaSchema.parse({
+            ...bodyObj,
+            usuario_id: fallbackOwnerId || bodyObj.usuario_id,
+        });
 
         const result = await escolaService.createEscola(data);
         return reply.status(201).send(result);
