@@ -26,6 +26,7 @@ import { historicoService } from "./historico.service.js";
 import { receiptService } from "./receipt.service.js";
 import { reciboAnualService } from "./recibo-anual.service.js";
 import { notificationService } from "./notifications/notification.service.js";
+import { authCacheService } from "./auth-cache.service.js";
 import { getResponsavelFromPassageiro, PassageiroCobrancaInfo } from "./cobranca-helpers.js";
 import type { Tables } from "../types/database.types.js";
 
@@ -175,6 +176,8 @@ export const cobrancaPagamentoService = {
       logger.error({ error: msg, cobrancaId }, "Erro ao enviar recibo pós-pagamento manual");
     }
 
+    await authCacheService.invalidateUserResumo(cobranca.usuario_id);
+
     return updated;
   },
 
@@ -222,6 +225,8 @@ export const cobrancaPagamentoService = {
     if (cobranca.passageiro_id && cobranca.ano) {
       await reciboAnualService.removerReciboAnualSeExistir(cobranca.passageiro_id, cobranca.ano);
     }
+
+    await authCacheService.invalidateUserResumo(cobranca.usuario_id);
 
     return data;
   },
@@ -311,6 +316,8 @@ export const cobrancaPagamentoService = {
       logger.error({ error: msg, cobrancaId }, "Erro ao enviar recibo pós-complementação");
     }
 
+    await authCacheService.invalidateUserResumo(cobranca.usuario_id);
+
     return updated;
   },
 
@@ -343,6 +350,8 @@ export const cobrancaPagamentoService = {
     if (error || !updated) {
       throw new AppError(`Erro ao atualizar cobrança para pago: ${error?.message || "Erro desconhecido"}`, 500);
     }
+
+    await authCacheService.invalidateUserResumo(cobranca.usuario_id);
 
     void historicoRepository.deleteFalhaIntegracaoByEntidadeId(cobrancaId);
 

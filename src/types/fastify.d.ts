@@ -15,6 +15,11 @@ declare module "fastify" {
     profile?: {
       id: string;
       tipo?: UserType;
+      ativo?: boolean | null;
+      conta_pai_id?: string | null;
+      veiculo_id?: string | null;
+      config_contrato?: { usar_contratos?: boolean } | null;
+      created_at?: string | null;
       nome?: string;
       email?: string;
       data_owner_id?: string;

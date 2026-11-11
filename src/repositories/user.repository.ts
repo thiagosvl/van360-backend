@@ -201,10 +201,12 @@ export const userRepository = {
     },
 
     async delete(id: string) {
-        return supabaseAdmin
+        const result = await supabaseAdmin
             .from("usuarios")
             .delete()
             .eq("id", id);
+        await authCacheService.invalidateUserAuth(id);
+        return result;
     },
 
     async getPublicData(id: string) {
@@ -216,16 +218,20 @@ export const userRepository = {
     },
 
     async updateContractConfig(usuarioId: string, configContrato: unknown) {
-        return supabaseAdmin
+        const result = await supabaseAdmin
             .from("usuarios")
             .update({ config_contrato: configContrato as import("../types/database.types.js").Json })
             .eq("id", usuarioId);
+        await authCacheService.invalidateUserAuth(usuarioId);
+        return result;
     },
 
     async updateRenovacaoConfig(usuarioId: string, configRenovacao: unknown) {
-        return supabaseAdmin
+        const result = await supabaseAdmin
             .from("usuarios")
             .update({ config_renovacao: configRenovacao as import("../types/database.types.js").Json })
             .eq("id", usuarioId);
+        await authCacheService.invalidateUserAuth(usuarioId);
+        return result;
     }
 };

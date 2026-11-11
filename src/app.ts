@@ -14,6 +14,7 @@ import { setupBullBoard } from "./queues/bull-board.js";
 import { initializeFirebase } from "./config/firebase.js";
 import { getClientIp } from "./utils/request-client.utils.js";
 import { errorAlertService } from "./services/error-alert.service.js";
+import { authCacheService } from "./services/auth-cache.service.js";
 
 export { };
 declare module "@fastify/request-context" {
@@ -89,6 +90,21 @@ export async function createApp(): Promise<FastifyInstance> {
     app.setErrorHandler(globalErrorHandler);
 
     app.addHook("onSend", async (request, reply, payload) => {
+      if (
+        reply.statusCode >= 200 &&
+        reply.statusCode < 300 &&
+        request.data_owner_id &&
+        (request.method === "POST" ||
+          request.method === "PUT" ||
+          request.method === "PATCH" ||
+          request.method === "DELETE") &&
+        !request.url.startsWith("/api/auth") &&
+        !request.url.startsWith("/api/historico") &&
+        !request.url.startsWith("/api/notifications")
+      ) {
+        await authCacheService.invalidateUserResumo(request.data_owner_id);
+      }
+
       const isServerError = reply.statusCode >= 500;
       const reqWithFlag = request as FastifyRequest & { __errorAlertDispatched?: boolean; user?: { id?: string } };
 

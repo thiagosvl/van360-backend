@@ -943,6 +943,8 @@ export const adminUserService = {
           });
           await usuarioPushTokenRepository.deleteTokensByUsuarioId(sub.id);
           await supabaseAdmin.from("usuarios").delete().eq("id", sub.id);
+          const { authCacheService } = await import("../auth-cache.service.js");
+          await authCacheService.invalidateUserAuth(sub.id);
         }
       }
     }
@@ -956,6 +958,9 @@ export const adminUserService = {
 
     await usuarioPushTokenRepository.deleteTokensByUsuarioId(userId);
     await supabaseAdmin.from("usuarios").delete().eq("id", userId);
+    const { authCacheService } = await import("../auth-cache.service.js");
+    await authCacheService.invalidateUserAuth(userId);
+    await authCacheService.invalidateSubscription(userId);
 
     return { success: true };
   },

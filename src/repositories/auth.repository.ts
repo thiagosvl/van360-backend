@@ -93,7 +93,7 @@ export const authRepository = {
     async getAuthProfile(userId: string) {
         return supabaseAdmin
             .from("usuarios")
-            .select("id, ativo, tipo, conta_pai_id, veiculo_id")
+            .select("id, ativo, tipo, conta_pai_id, veiculo_id, config_contrato, created_at")
             .eq("id", userId)
             .maybeSingle();
     },

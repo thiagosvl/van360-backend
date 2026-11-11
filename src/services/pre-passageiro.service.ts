@@ -80,6 +80,8 @@ export const prePassageiroService = {
     };
 
     const inserted = await prePassageiroRepository.insert(prePassageiroData);
+    const { authCacheService } = await import("./auth-cache.service.js");
+    await authCacheService.invalidateUserResumo(targetOwnerId);
 
     // --- NOTIFICAÇÃO PUSH (FIREBASE SOMENTE) AO MOTORISTA ---
     const { notificationService } = await import("./notifications/notification.service.js");

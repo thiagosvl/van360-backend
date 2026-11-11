@@ -9,6 +9,7 @@ import { CobrancaStatus, GastoCategoria } from "../types/enums.js";
 import { getNowBR, toLocalDateString, getLastDayOfMonth, getSafeDueDateString } from "../utils/date.utils.js";
 import { getUsuarioData } from "./usuario.service.js";
 import { isSubConta, getDonoContaId } from "../utils/user.utils.js";
+import { authCacheService, type AuthProfileData } from "./auth-cache.service.js";
 import type { Tables } from "../types/database.types.js";
 
 type DashboardCobranca = Pick<Tables<"cobrancas">, "status" | "valor" | "valor_pago" | "data_vencimento" | "passageiro_id">;
@@ -27,6 +28,7 @@ interface SystemSummary {
       ativos: number;
       inativos: number;
       solicitacoes_pendentes: number;
+      sem_valor_cobranca: number;
     };
     veiculos: {
       total: number;
@@ -73,89 +75,128 @@ interface SystemSummary {
 }
 
 export const usuarioResumoService = {
-  getResumo: async (usuarioId: string, mes?: number, ano?: number, veiculoId?: string, canViewFinancials: boolean = true): Promise<SystemSummary> => {
-    // 1. Fetch User
-    const usuario = await getUsuarioData(usuarioId);
-    if (!usuario) throw new Error("Usuário não encontrado");
-
-    const isSubAccount = isSubConta(usuario);
-    const dataOwnerId = getDonoContaId(usuario) || usuarioId;
-    const targetVeiculoId = veiculoId || usuario.veiculo_id;
-
-    // 2. Parallel Fetching for Counters & Status
-    const [
-      veiculosCount,
-      escolasCount,
-      passData,
-      prePassageirosCount,
-    ] = await Promise.all([
-      veiculoRepository.getSummaryForDashboard(dataOwnerId),
-      escolaRepository.getSummaryForDashboard(dataOwnerId),
-      passageiroRepository.getSummaryForDashboard(dataOwnerId, targetVeiculoId),
-      prePassageiroRepository.getCountForDashboard(dataOwnerId),
-    ]);
-
-    const currentYear = getNowBR().getFullYear();
-    const passageirosList = passData.data || [];
-    const uniquePassageiroIds = new Set<string>();
-    const activePassageiroIds = new Set<string>();
-
-    for (const p of passageirosList) {
-      uniquePassageiroIds.add(p.id);
-      if (p.ativo && Number(p.ano_letivo || currentYear) >= currentYear) {
-        activePassageiroIds.add(p.id);
-      }
-    }
-
-    const passTotal = uniquePassageiroIds.size;
-    const passAtivos = activePassageiroIds.size;
-    const passInativos = passTotal - passAtivos;
-
-    const veicTotal = veiculosCount.data?.length || 0;
-    const veicAtivos = veiculosCount.data?.filter((v: Record<string, any>) => v.ativo).length || 0;
-    const veicInativos = veicTotal - veicAtivos;
-
-    const escTotal = escolasCount.data?.length || 0;
-    const escAtivos = escolasCount.data?.filter((e: Record<string, any>) => e.ativo).length || 0;
-    const escInativos = escTotal - escAtivos;
-
-    if (!canViewFinancials || isSubAccount) {
-      return {
-        usuario: {
-          ativo: (usuario as Record<string, any>).ativo,
-          flags: {
-            usar_contratos: !!usuario.config_contrato?.usar_contratos,
-          }
-        },
-        contadores: {
-          passageiros: {
-            total: passTotal,
-            ativos: passAtivos,
-            inativos: passInativos,
-            solicitacoes_pendentes: prePassageirosCount.count || 0
-          },
-          veiculos: {
-            total: veicTotal,
-            ativos: veicAtivos,
-            inativos: veicInativos
-          },
-          escolas: {
-            total: escTotal,
-            ativos: escAtivos,
-            inativos: escInativos
-          }
-        },
-        financeiro: undefined
-      };
-    }
-
+  getResumo: async (
+    usuarioId: string,
+    mes?: number,
+    ano?: number,
+    veiculoId?: string,
+    canViewFinancials: boolean = true,
+    cachedProfile?: AuthProfileData
+  ): Promise<SystemSummary> => {
     const now = getNowBR();
     const targetMes = mes ?? (now.getMonth() + 1);
     const targetAno = ano ?? now.getFullYear();
 
-    const start = `${targetAno}-${String(targetMes).padStart(2, '0')}-01`;
-    const lastDay = getLastDayOfMonth(Number(targetAno), Number(targetMes));
-    const end = `${targetAno}-${String(targetMes).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    const initialOwnerId = cachedProfile ? (getDonoContaId(cachedProfile) || usuarioId) : usuarioId;
+    const initialVeiculoId = veiculoId || cachedProfile?.veiculo_id || undefined;
+    const cacheSubKey = `${targetMes}:${targetAno}:${initialVeiculoId || "all"}:${canViewFinancials ? "fin" : "nofin"}`;
+
+    const cachedResumo = await authCacheService.getCachedResumo<SystemSummary>(initialOwnerId, cacheSubKey);
+    if (cachedResumo) {
+      return cachedResumo;
+    }
+
+    return authCacheService.resolveResumoSingleflight(initialOwnerId, cacheSubKey, async () => {
+      const recheck = await authCacheService.getCachedResumo<SystemSummary>(initialOwnerId, cacheSubKey);
+      if (recheck) {
+        return recheck;
+      }
+
+      const usuario =
+        cachedProfile && cachedProfile.id === usuarioId && cachedProfile.created_at !== undefined
+          ? cachedProfile
+          : await getUsuarioData(usuarioId);
+      if (!usuario) throw new Error("Usuário não encontrado");
+
+      const isSubAccount = isSubConta(usuario);
+      const dataOwnerId = getDonoContaId(usuario) || usuarioId;
+      const targetVeiculoId = veiculoId || (usuario.veiculo_id as string | undefined);
+
+      const [
+        veiculosCount,
+        escolasCount,
+        passData,
+        prePassageirosCount,
+      ] = await Promise.all([
+        veiculoRepository.getSummaryForDashboard(dataOwnerId),
+        escolaRepository.getSummaryForDashboard(dataOwnerId),
+        passageiroRepository.getSummaryForDashboard(dataOwnerId, targetVeiculoId),
+        prePassageiroRepository.getCountForDashboard(dataOwnerId),
+      ]);
+
+      const currentYear = now.getFullYear();
+      const passageirosList = passData.data || [];
+      const uniquePassageiroIds = new Set<string>();
+      const activePassageiroIds = new Set<string>();
+      const semValorPassageiroIds = new Set<string>();
+
+      for (const p of passageirosList) {
+        uniquePassageiroIds.add(p.id);
+        if (p.ativo && Number(p.ano_letivo || currentYear) >= currentYear) {
+          activePassageiroIds.add(p.id);
+        }
+        if (
+          p.ativo &&
+          Number(p.ano_letivo || currentYear) === Number(targetAno) &&
+          !p.isento &&
+          (!p.valor_cobranca || Number(p.valor_cobranca) <= 0)
+        ) {
+          semValorPassageiroIds.add(p.id);
+        }
+      }
+
+      const passTotal = uniquePassageiroIds.size;
+      const passAtivos = activePassageiroIds.size;
+      const passInativos = passTotal - passAtivos;
+      const passSemValor = semValorPassageiroIds.size;
+
+      const veicTotal = veiculosCount.data?.length || 0;
+      const veicAtivos = veiculosCount.data?.filter((v: { ativo: boolean | null }) => v.ativo).length || 0;
+      const veicInativos = veicTotal - veicAtivos;
+
+      const escTotal = escolasCount.data?.length || 0;
+      const escAtivos = escolasCount.data?.filter((e: { ativo: boolean | null }) => e.ativo).length || 0;
+      const escInativos = escTotal - escAtivos;
+
+      const configContrato = (usuario as { config_contrato?: { usar_contratos?: boolean } | null }).config_contrato;
+
+      if (!canViewFinancials || isSubAccount) {
+        const partialSummary: SystemSummary = {
+          usuario: {
+            ativo: Boolean((usuario as Record<string, unknown>).ativo),
+            flags: {
+              usar_contratos: Boolean(configContrato?.usar_contratos),
+            }
+          },
+          contadores: {
+            passageiros: {
+              total: passTotal,
+              ativos: passAtivos,
+              inativos: passInativos,
+              solicitacoes_pendentes: prePassageirosCount.count || 0,
+              sem_valor_cobranca: passSemValor
+            },
+            veiculos: {
+              total: veicTotal,
+              ativos: veicAtivos,
+              inativos: veicInativos
+            },
+            escolas: {
+              total: escTotal,
+              ativos: escAtivos,
+              inativos: escInativos
+            }
+          },
+          financeiro: undefined
+        };
+
+        await authCacheService.setCachedResumo(dataOwnerId, cacheSubKey, partialSummary);
+        return partialSummary;
+      }
+
+      const start = `${targetAno}-${String(targetMes).padStart(2, '0')}-01`;
+      const lastDay = getLastDayOfMonth(Number(targetAno), Number(targetMes));
+      const end = `${targetAno}-${String(targetMes).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
     const [cobrancasRes, gastosRes, resumoViagens] = await Promise.all([
       cobrancaRepository.getForPeriodForDashboard(dataOwnerId, start, end, targetVeiculoId),
@@ -307,32 +348,37 @@ export const usuarioResumoService = {
       }
     };
 
-    return {
-      usuario: {
-        ativo: (usuario as Record<string, any>).ativo,
-        flags: {
-          usar_contratos: !!usuario.config_contrato?.usar_contratos,
-        }
-      },
-      contadores: {
-        passageiros: {
-          total: passTotal,
-          ativos: passAtivos,
-          inativos: passInativos,
-          solicitacoes_pendentes: prePassageirosCount.count || 0
+      const fullSummary: SystemSummary = {
+        usuario: {
+          ativo: Boolean((usuario as Record<string, unknown>).ativo),
+          flags: {
+            usar_contratos: Boolean(configContrato?.usar_contratos),
+          }
         },
-        veiculos: {
-          total: veicTotal,
-          ativos: veicAtivos,
-          inativos: veicInativos
+        contadores: {
+          passageiros: {
+            total: passTotal,
+            ativos: passAtivos,
+            inativos: passInativos,
+            solicitacoes_pendentes: prePassageirosCount.count || 0,
+            sem_valor_cobranca: passSemValor
+          },
+          veiculos: {
+            total: veicTotal,
+            ativos: veicAtivos,
+            inativos: veicInativos
+          },
+          escolas: {
+            total: escTotal,
+            ativos: escAtivos,
+            inativos: escInativos
+          }
         },
-        escolas: {
-          total: escTotal,
-          ativos: escAtivos,
-          inativos: escInativos
-        }
-      },
-      financeiro: isSubAccount ? undefined : financeiro
-    };
+        financeiro: isSubAccount ? undefined : financeiro
+      };
+
+      await authCacheService.setCachedResumo(dataOwnerId, cacheSubKey, fullSummary);
+      return fullSummary;
+    });
   }
 };

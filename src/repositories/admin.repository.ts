@@ -243,9 +243,12 @@ export const adminRepository = {
     },
 
     async updateConfig(chave: string, valor: string) {
-        return supabaseAdmin
+        const res = await supabaseAdmin
             .from("configuracao_interna")
             .upsert({ chave, valor }, { onConflict: "chave" });
+        const { configuracaoRepository } = await import("./configuracao.repository.js");
+        await configuracaoRepository.invalidateCache();
+        return res;
     },
 
     async listPlanos() {
@@ -273,10 +276,19 @@ export const adminRepository = {
     },
 
     async updateSubscription(id: string, data: Record<string, unknown>) {
-        return supabaseAdmin
+        const res = await supabaseAdmin
             .from("assinaturas")
             .update(data)
-            .eq("id", id);
+            .eq("id", id)
+            .select("usuario_id")
+            .maybeSingle();
+
+        if (res.data?.usuario_id) {
+            const { authCacheService } = await import("../services/auth-cache.service.js");
+            await authCacheService.invalidateSubscription(res.data.usuario_id);
+        }
+
+        return res;
     },
 
     async getEvolutionInstances() {

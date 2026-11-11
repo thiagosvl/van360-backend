@@ -226,6 +226,11 @@ export const cobrancaGeracaoService = {
       }
     }
 
+    if (created > 0) {
+      const { authCacheService } = await import("./auth-cache.service.js");
+      await authCacheService.invalidateUserResumo(motoristaId);
+    }
+
     return { created, skipped };
   },
 

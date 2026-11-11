@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "../../config/supabase.js";
+import { configuracaoRepository } from "../configuracao.repository.js";
 
 export const adminConfigRepository = {
   async listConfigs() {
@@ -9,8 +10,11 @@ export const adminConfigRepository = {
   },
 
   async updateConfig(chave: string, valor: string) {
-    return supabaseAdmin
+    const res = await supabaseAdmin
       .from("configuracao_interna")
       .upsert({ chave, valor }, { onConflict: "chave" });
+
+    await configuracaoRepository.invalidateCache();
+    return res;
   },
 };

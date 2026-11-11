@@ -518,7 +518,7 @@ export const fretamentoService = {
   async adicionarParticipante(fretamentoId: string, dados: AdicionarParticipanteDTO, isPublico: boolean = false) {
     const { data: fretamento, error } = await supabaseAdmin
       .from("fretamentos")
-      .select("id, tipo, status, vagas_totais, valor_por_pessoa, valor_total")
+      .select("id, usuario_id, tipo, status, vagas_totais, valor_por_pessoa, valor_total")
       .eq("id", fretamentoId)
       .single();
 
@@ -562,6 +562,11 @@ export const fretamentoService = {
       .from("fretamentos")
       .update({ valor_total: novoValorTotal })
       .eq("id", fretamentoId);
+
+    if (fretamento.usuario_id) {
+      const { authCacheService } = await import("./auth-cache.service.js");
+      await authCacheService.invalidateUserResumo(fretamento.usuario_id);
+    }
 
     return participante;
   },
@@ -678,15 +683,35 @@ export const fretamentoService = {
     const dataInicioMesUtc = new Date(Date.UTC(ano, mes - 1, 1, 0, 0, 0)).toISOString();
     const dataFimMesUtc = new Date(Date.UTC(ano, mes, 0, 23, 59, 59, 999)).toISOString();
 
-    const { data: fretamentosDoMes } = await supabaseAdmin
+    const { data: todosFretamentos } = await supabaseAdmin
       .from("fretamentos")
-      .select("id, tipo, valor_total, status, fretamento_veiculos(veiculo_id)")
+      .select("id, tipo, valor_total, status, data_inicio, fretamento_veiculos(veiculo_id)")
       .eq("usuario_id", usuarioId)
-      .gte("data_inicio", dataInicioMesUtc)
-      .lte("data_inicio", dataFimMesUtc)
       .neq("status", "cancelado");
 
-    let itens = fretamentosDoMes || [];
+    if (!todosFretamentos || todosFretamentos.length === 0) {
+      return {
+        mes,
+        ano,
+        total_faturado_previsto: 0,
+        total_recebido: 0,
+        total_a_receber: 0,
+        total_gastos: 0,
+        lucro_total: 0,
+        quantidade_fretamentos: 0,
+        quantidade_passeios: 0,
+        fretamentos_realizado: 0,
+        fretamentos_previsto: 0,
+        fretamentos_pendente: 0,
+        passeios_realizado: 0,
+        passeios_previsto: 0,
+        passeios_pendente: 0,
+      };
+    }
+
+    let itens = todosFretamentos.filter(
+      (f) => f.data_inicio >= dataInicioMesUtc && f.data_inicio <= dataFimMesUtc
+    );
     if (veiculoId) {
       itens = itens.filter((f) =>
         (f.fretamento_veiculos || []).some((fv: { veiculo_id: string }) => fv.veiculo_id === veiculoId)

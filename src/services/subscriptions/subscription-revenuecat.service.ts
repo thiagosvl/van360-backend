@@ -17,6 +17,7 @@ import { planRepository } from "../../repositories/plan.repository.js";
 import { invoiceRepository } from "../../repositories/invoice.repository.js";
 import { userRepository } from "../../repositories/user.repository.js";
 import { subscriptionService } from "./subscription.service.js";
+import { authCacheService } from "../auth-cache.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { metaConversionsService } from "../meta/meta-conversions.service.js";
 import { subscriptionAcquisitionService } from "./subscription-acquisition.service.js";
@@ -195,6 +196,7 @@ export const subscriptionRevenueCatService = {
           throw updateError;
         }
 
+        await authCacheService.invalidateSubscription(userId);
         await invoiceRepository.cancelIncompleteInvoicesByUserId(userId, new Date().toISOString());
 
         await historicoService.log({
@@ -236,6 +238,7 @@ export const subscriptionRevenueCatService = {
           throw renewError;
         }
 
+        await authCacheService.invalidateSubscription(userId);
         await invoiceRepository.cancelIncompleteInvoicesByUserId(userId, new Date().toISOString());
 
         await historicoService.log({
@@ -277,6 +280,8 @@ export const subscriptionRevenueCatService = {
           })
           .eq("id", sub.id);
 
+        await authCacheService.invalidateSubscription(userId);
+
         await historicoService.log({
           usuario_id: userId,
           entidade_tipo: AtividadeEntidadeTipo.SAAS_ASSINATURA,
@@ -297,6 +302,8 @@ export const subscriptionRevenueCatService = {
             updated_at: new Date().toISOString(),
           })
           .eq("id", sub.id);
+
+        await authCacheService.invalidateSubscription(userId);
 
         await historicoService.log({
           usuario_id: userId,
@@ -319,6 +326,8 @@ export const subscriptionRevenueCatService = {
           })
           .eq("id", sub.id);
 
+        await authCacheService.invalidateSubscription(userId);
+
         await historicoService.log({
           usuario_id: userId,
           entidade_tipo: AtividadeEntidadeTipo.SAAS_ASSINATURA,
@@ -339,6 +348,8 @@ export const subscriptionRevenueCatService = {
             updated_at: new Date().toISOString(),
           })
           .eq("id", sub.id);
+
+        await authCacheService.invalidateSubscription(userId);
 
         logger.warn({ userId, subId: sub.id }, "[RevenueCatService] Problema de cobranca na conta Apple do motorista");
         return { handled: true, message: "Problema de cobranca registrado" };

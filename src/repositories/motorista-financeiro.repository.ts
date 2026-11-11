@@ -63,11 +63,8 @@ export const motoristaFinanceiroRepository = {
   },
 
   async getTaxaPadraoGlobal(): Promise<number> {
-    const { data } = await supabaseAdmin
-      .from("configuracao_interna")
-      .select("valor")
-      .eq("chave", ConfigKey.TAXA_COBRANCA_AUTOMATICA_PADRAO)
-      .maybeSingle();
+    const { configuracaoRepository } = await import("./configuracao.repository.js");
+    const { data } = await configuracaoRepository.getByKey(ConfigKey.TAXA_COBRANCA_AUTOMATICA_PADRAO);
 
     if (data && data.valor) {
       const parsed = parseFloat(data.valor);

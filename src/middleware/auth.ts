@@ -27,37 +27,59 @@ export async function verifySupabaseJWT(
       user = cached.user;
       profile = cached.profile;
     } else {
-      const { data: { user: fetchedUser }, error: authError } = await authProvider.getUser(token);
+      const resolved = await authCacheService.resolveAuthSingleflight(token, async () => {
+        const recheck = await authCacheService.getCachedAuth(token);
+        if (recheck) {
+          return { user: recheck.user, profile: recheck.profile };
+        }
 
-      if (authError || !fetchedUser) {
-        const isUserNotFound = authError?.message?.toLowerCase().includes("user not found");
+        const { data: { user: fetchedUser }, error: authError } = await authProvider.getUser(token);
 
-        return reply.status(401).send({
-          error: isUserNotFound ? "Usuário não encontrado no sistema de autenticação" : "Sessão inválida ou expirada",
-          code: isUserNotFound ? "AUTH_USER_NOT_FOUND" : "AUTH_JWT_INVALID"
+        if (authError || !fetchedUser) {
+          const isUserNotFound = authError?.message?.toLowerCase().includes("user not found");
+          return {
+            user: null,
+            profile: null,
+            status: 401,
+            errorMessage: isUserNotFound ? "Usuário não encontrado no sistema de autenticação" : "Sessão inválida ou expirada",
+            errorCode: isUserNotFound ? "AUTH_USER_NOT_FOUND" : "AUTH_JWT_INVALID",
+          };
+        }
+
+        const { data: fetchedProfile, error: profileError } = await authRepository.getAuthProfile(fetchedUser.id);
+
+        if (profileError) {
+          throw profileError;
+        }
+
+        if (!fetchedProfile) {
+          return {
+            user: null,
+            profile: null,
+            status: 401,
+            errorMessage: "Perfil não registrado no sistema",
+            errorCode: "AUTH_PROFILE_NOT_FOUND",
+          };
+        }
+
+        const typedProfile = fetchedProfile as AuthProfileData;
+
+        if (typedProfile.ativo !== false) {
+          await authCacheService.setCachedAuth(token, fetchedUser, typedProfile);
+        }
+
+        return { user: fetchedUser, profile: typedProfile };
+      });
+
+      if (resolved.errorCode) {
+        return reply.status(resolved.status || 401).send({
+          error: resolved.errorMessage,
+          code: resolved.errorCode,
         });
       }
 
-      user = fetchedUser;
-
-      const { data: fetchedProfile, error: profileError } = await authRepository.getAuthProfile(user.id);
-
-      if (profileError) {
-        throw profileError;
-      }
-
-      if (!fetchedProfile) {
-        return reply.status(401).send({
-          error: "Perfil não registrado no sistema",
-          code: "AUTH_PROFILE_NOT_FOUND"
-        });
-      }
-
-      profile = fetchedProfile as AuthProfileData;
-
-      if (profile.ativo !== false) {
-        await authCacheService.setCachedAuth(token, user, profile);
-      }
+      user = resolved.user;
+      profile = resolved.profile;
     }
 
     if (!user || !profile) {

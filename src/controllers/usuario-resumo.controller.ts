@@ -27,8 +27,16 @@ export const usuarioResumoController = {
 
     const userRole = (request.user?.app_metadata?.role || request.profile?.tipo || UserType.MOTORISTA) as UserType;
     const canViewFinancials = hasPermission(userRole, PERMISSIONS.FINANCEIRO_VISUALIZAR);
+    const cachedOwnerProfile = request.profile?.id === targetOwnerId ? request.profile : undefined;
 
-    const resumo = await usuarioResumoService.getResumo(targetOwnerId, mesNum, anoNum, targetVeiculoId, canViewFinancials);
+    const resumo = await usuarioResumoService.getResumo(
+      targetOwnerId,
+      mesNum,
+      anoNum,
+      targetVeiculoId,
+      canViewFinancials,
+      cachedOwnerProfile
+    );
 
     return reply.send(resumo);
   },

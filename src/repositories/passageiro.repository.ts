@@ -164,40 +164,62 @@ export const passageiroRepository = {
   },
 
   async insert(data: Record<string, unknown>) {
-    return supabaseAdmin
+    const res = await supabaseAdmin
       .from("passageiros")
       .insert([data as unknown as import("../types/database.types.js").TablesInsert<"passageiros">])
       .select()
       .single();
+    if (res.data?.usuario_id) {
+      const { authCacheService } = await import("../services/auth-cache.service.js");
+      await authCacheService.invalidateUserResumo(res.data.usuario_id);
+    }
+    return res;
   },
 
   async upsertMatricula(data: Record<string, unknown>) {
-    return supabaseAdmin
+    const res = await supabaseAdmin
       .from("passageiro_matriculas")
       .upsert(data as unknown as import("../types/database.types.js").TablesInsert<"passageiro_matriculas">, { onConflict: "passageiro_id,ano_letivo" })
       .select()
       .single();
+    if (res.data?.usuario_id) {
+      const { authCacheService } = await import("../services/auth-cache.service.js");
+      await authCacheService.invalidateUserResumo(res.data.usuario_id);
+    }
+    return res;
   },
 
   async updateMatricula(passageiroId: string, anoLetivo: number, data: Record<string, unknown>) {
     if (!data || Object.keys(data).length === 0) {
       return { data: null, error: null };
     }
-    return supabaseAdmin
+    const res = await supabaseAdmin
       .from("passageiro_matriculas")
       .update(data as unknown as import("../types/database.types.js").TablesUpdate<"passageiro_matriculas">)
       .eq("passageiro_id", passageiroId)
       .eq("ano_letivo", anoLetivo)
       .select()
       .maybeSingle();
+    if (res.data?.usuario_id) {
+      const { authCacheService } = await import("../services/auth-cache.service.js");
+      await authCacheService.invalidateUserResumo(res.data.usuario_id);
+    }
+    return res;
   },
 
   async deleteMatricula(passageiroId: string, anoLetivo: number) {
-    return supabaseAdmin
+    const res = await supabaseAdmin
       .from("passageiro_matriculas")
       .delete()
       .eq("passageiro_id", passageiroId)
-      .eq("ano_letivo", anoLetivo);
+      .eq("ano_letivo", anoLetivo)
+      .select("usuario_id")
+      .maybeSingle();
+    if (res.data?.usuario_id) {
+      const { authCacheService } = await import("../services/auth-cache.service.js");
+      await authCacheService.invalidateUserResumo(res.data.usuario_id);
+    }
+    return res;
   },
 
   async getMatriculasByPassageiro(passageiroId: string) {
@@ -216,16 +238,31 @@ export const passageiroRepository = {
     if (!data || Object.keys(data).length === 0) {
       return { data: null, error: null };
     }
-    return supabaseAdmin
+    const res = await supabaseAdmin
       .from("passageiros")
       .update(data)
       .eq("id", id)
       .select()
       .maybeSingle();
+    if (res.data?.usuario_id) {
+      const { authCacheService } = await import("../services/auth-cache.service.js");
+      await authCacheService.invalidateUserResumo(res.data.usuario_id);
+    }
+    return res;
   },
 
   async delete(id: string) {
-    return supabaseAdmin.from("passageiros").delete().eq("id", id);
+    const res = await supabaseAdmin
+      .from("passageiros")
+      .delete()
+      .eq("id", id)
+      .select("usuario_id")
+      .maybeSingle();
+    if (res.data?.usuario_id) {
+      const { authCacheService } = await import("../services/auth-cache.service.js");
+      await authCacheService.invalidateUserResumo(res.data.usuario_id);
+    }
+    return res;
   },
 
   async findByIds(ids: string[]) {
