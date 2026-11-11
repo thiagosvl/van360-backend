@@ -38,7 +38,6 @@
     "fastify": "^5.6.1",
     "fastify-cors": "^6.0.3",
     "firebase-admin": "^13.10.0",
-    "gn-api-sdk-typescript": "^2.0.1",
     "ioredis": "^5.9.1",
     "jsonwebtoken": "^9.0.3",
     "pdf-lib": "^1.17.1",
@@ -47,6 +46,7 @@
     "react": "^19.2.3",
     "resend": "^6.18.1",
     "satori": "^0.18.3",
+    "sdk-node-apis-efi": "^2.0.1",
     "xlsx": "^0.18.5",
     "zod": "^4.3.5"
   },

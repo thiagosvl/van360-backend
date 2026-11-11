@@ -1,9 +1,7 @@
 import "dotenv/config";
 import { getEfipayConfig } from "../src/config/efipay.js";
 import { env } from "../src/config/env.js";
-import EfiPayModule from "gn-api-sdk-typescript";
-
-const EfiPay = (EfiPayModule as any).default || EfiPayModule;
+import EfiPay from "sdk-node-apis-efi";
 
 async function register() {
   const webhookUrl = process.argv[2];
@@ -25,6 +23,7 @@ async function register() {
     client_id: config.client_id,
     client_secret: config.client_secret,
     certificate: config.certificate,
+    validateMtls: false,
   });
 
   try {

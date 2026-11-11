@@ -1,6 +1,8 @@
-import EfiPayModule from "gn-api-sdk-typescript";
-// Hack para contornar incompatibilidade ESM/CJS do SDK da Efí
-const EfiPay = (EfiPayModule as any).default || EfiPayModule;
+import EfiPay, {
+    type CreateOneStepChargeBody,
+    type CreditCardPayment,
+    type PixCreateImmediateChargeBody
+} from "sdk-node-apis-efi";
 import { logger } from "../../../config/logger.js";
 import { getEfipayConfig } from "../../../config/efipay.js";
 import { env } from "../../../config/env.js";
@@ -15,9 +17,13 @@ import { parseLocalDate } from "../../../utils/date.utils.js";
 import { onlyDigits, extractErrorMessage } from "../../../utils/string.utils.js";
 import { errorAlertService } from "../../error-alert.service.js";
 
+interface UserFacingError extends Error {
+    isUserFacing?: boolean;
+}
+
 export class EfipayProvider implements PaymentProviderAdapter {
     readonly providerName = PaymentProvider.EFIPAY;
-    private efipay: any; // SDK sem tipos confiáveis após workaround ESM/CJS
+    private readonly efipay: EfiPay;
 
     constructor() {
         const config = getEfipayConfig();
@@ -50,25 +56,24 @@ export class EfipayProvider implements PaymentProviderAdapter {
                     throw new Error("Data de nascimento é obrigatória para pagamento com cartão de pessoa física.");
                 }
 
-                const customerData: Record<string, unknown> = {
-                    email: request.customer.email,
-                    phone_number: onlyDigits(request.customer.phone || ""),
-                };
-
-                if (isCnpj) {
-                    customerData.juridical_person = {
-                        corporate_name: request.customer.name,
-                        cnpj: cleanDoc
-                    };
-                } else {
-                    customerData.name = request.customer.name;
-                    customerData.cpf = cleanDoc;
-                    if (request.customer.birth) {
-                        customerData.birth = request.customer.birth;
+                const customerData: CreditCardPayment["credit_card"]["customer"] = isCnpj
+                    ? {
+                        email: request.customer.email,
+                        phone_number: onlyDigits(request.customer.phone || ""),
+                        juridical_person: {
+                            corporate_name: request.customer.name,
+                            cnpj: cleanDoc
+                        }
                     }
-                }
+                    : {
+                        email: request.customer.email,
+                        phone_number: onlyDigits(request.customer.phone || ""),
+                        name: request.customer.name,
+                        cpf: cleanDoc,
+                        ...(request.customer.birth ? { birth: request.customer.birth } : {})
+                    };
 
-                const body = {
+                const body: CreateOneStepChargeBody = {
                     items: [
                         {
                             name: request.description.substring(0, 255),
@@ -104,16 +109,16 @@ export class EfipayProvider implements PaymentProviderAdapter {
                     }
                 };
 
-                const ccResponse = await this.efipay.createOneStepCharge([], body);
+                const ccResponse = await this.efipay.createOneStepCharge(body);
 
                 const status = ccResponse.data?.status;
                 const chargeId = ccResponse.data?.charge_id?.toString();
 
-                if (status === "declined" || status === "unpaid") {
-                    const refusalReason = ccResponse.data?.refusal?.reason;
+                if ((status as string) === "declined" || status === "unpaid") {
+                    const refusalReason = "refusal" in ccResponse.data ? ccResponse.data.refusal?.reason : undefined;
                     const reasonText = refusalReason ? `: ${refusalReason}` : "";
-                    const err = new Error(`Cartão recusado pela operadora${reasonText}`);
-                    (err as any).isUserFacing = true;
+                    const err: UserFacingError = new Error(`Cartão recusado pela operadora${reasonText}`);
+                    err.isUserFacing = true;
                     throw err;
                 }
 
@@ -135,14 +140,15 @@ export class EfipayProvider implements PaymentProviderAdapter {
                 }
 
                 const cleanDoc = onlyDigits(request.customer.document);
-                const body = {
+                const devedor = cleanDoc.length > 11
+                    ? { cnpj: cleanDoc, nome: request.customer.name }
+                    : { cpf: cleanDoc, nome: request.customer.name };
+
+                const body: PixCreateImmediateChargeBody = {
                     calendario: {
                         expiracao: expiracaoSegundos
                     },
-                    devedor: {
-                        [cleanDoc.length > 11 ? "cnpj" : "cpf"]: cleanDoc,
-                        nome: request.customer.name
-                    },
+                    devedor,
                     valor: {
                         original: request.amount.toFixed(2)
                     },
@@ -150,16 +156,10 @@ export class EfipayProvider implements PaymentProviderAdapter {
                     solicitacaoPagador: request.description.substring(0, 140),
                     infoAdicionais: [
                         { nome: "Fatura", valor: request.externalId }
-                    ],
-                    ...(request.splits?.length ? {
-                        split: request.splits.map(s => ({
-                            chave: s.pix_chave,
-                            valor: { original: s.amount.toFixed(2) }
-                        }))
-                    } : {})
+                    ]
                 };
 
-                const cobResponse = await this.efipay.pixCreateImmediateCharge([], body);
+                const cobResponse = await this.efipay.pixCreateImmediateCharge(body);
 
                 if (!cobResponse.txid) {
                     throw new Error("Falha ao gerar txid na Efí");
@@ -178,22 +178,25 @@ export class EfipayProvider implements PaymentProviderAdapter {
             }
         } catch (error: unknown) {
             const errorDetail = extractErrorMessage(error, "Erro desconhecido na Efí Pay");
-            const isUserFacing = Boolean((error as { isUserFacing?: boolean })?.isUserFacing) || (
-                typeof errorDetail === "string" && (
-                    errorDetail.toLowerCase().includes("recusado") ||
-                    errorDetail.toLowerCase().includes("saldo") ||
-                    errorDetail.toLowerCase().includes("expirado") ||
-                    errorDetail.toLowerCase().includes("bloqueado") ||
-                    errorDetail.toLowerCase().includes("autorizada") ||
-                    errorDetail.toLowerCase().includes("excedido") ||
-                    errorDetail.toLowerCase().includes("segurança") ||
-                    errorDetail.toLowerCase().includes("seguranca") ||
-                    errorDetail.toLowerCase().includes("inválid") ||
-                    errorDetail.toLowerCase().includes("invalid") ||
-                    errorDetail.toLowerCase().includes("limite") ||
-                    errorDetail.toLowerCase().includes("tentativa") ||
-                    errorDetail.toLowerCase().includes("cartão") ||
-                    errorDetail.toLowerCase().includes("cartao")
+            const lowerDetail = typeof errorDetail === "string" ? errorDetail.toLowerCase() : "";
+            const isGatewayProxyError = lowerDetail.includes("cloudflare") || lowerDetail.includes("gateway de pagamento");
+            const isUserFacing = Boolean((error as UserFacingError)?.isUserFacing) || (
+                !isGatewayProxyError &&
+                Boolean(lowerDetail) && (
+                    lowerDetail.includes("recusado") ||
+                    lowerDetail.includes("saldo") ||
+                    lowerDetail.includes("expirado") ||
+                    lowerDetail.includes("bloqueado") ||
+                    lowerDetail.includes("autorizada") ||
+                    lowerDetail.includes("excedido") ||
+                    lowerDetail.includes("segurança") ||
+                    lowerDetail.includes("seguranca") ||
+                    lowerDetail.includes("inválid") ||
+                    lowerDetail.includes("invalid") ||
+                    lowerDetail.includes("limite") ||
+                    lowerDetail.includes("tentativa") ||
+                    lowerDetail.includes("cartão") ||
+                    lowerDetail.includes("cartao")
                 )
             );
 
@@ -221,10 +224,10 @@ export class EfipayProvider implements PaymentProviderAdapter {
         const isCardCharge = /^\d+$/.test(providerId);
         if (isCardCharge) {
             try {
-                await this.efipay.chargeRefund({ id: parseInt(providerId, 10) }, {});
+                await this.efipay.refundCard({ id: parseInt(providerId, 10) }, {});
                 logger.info({ providerId }, "[EfipayProvider] Estorno de cartão solicitado.");
             } catch (error: unknown) {
-                logger.error({ error: (error as Error).message, providerId }, "[EfipayProvider] Erro ao estornar cartão.");
+                logger.error({ error: extractErrorMessage(error), providerId }, "[EfipayProvider] Erro ao estornar cartão.");
                 return false;
             }
         } else {
@@ -247,7 +250,7 @@ export class EfipayProvider implements PaymentProviderAdapter {
         }
     }
 
-    private async getNotification(token: string): Promise<unknown> {
+    private async getNotification(token: string) {
         return this.efipay.getNotification({ token });
     }
 
@@ -269,23 +272,25 @@ export class EfipayProvider implements PaymentProviderAdapter {
                 const token = rawBody.notification;
                 logger.info({ token }, "[EfipayProvider] Consultando notificação de cartão...");
 
-                const response = await this.getNotification(token) as { data?: Array<Record<string, unknown>> };
+                const response = await this.getNotification(token);
 
                 if (response?.data && response.data.length > 0) {
                     const history = response.data;
-                    const firstEntry = history[0] as Record<string, Record<string, unknown>>;
-                    const lastLog = history[history.length - 1] as Record<string, Record<string, unknown>>;
-                    const status = (lastLog.status as Record<string, unknown>)?.current as string;
-                    const chargeId = (firstEntry.identifiers as Record<string, unknown>)?.charge_id?.toString();
+                    const firstEntry = history[0] as unknown as Record<string, Record<string, unknown>>;
+                    const lastLog = history[history.length - 1];
+                    const status = lastLog.status?.current;
+                    const chargeId = "charge_id" in firstEntry.identifiers && firstEntry.identifiers.charge_id !== undefined
+                        ? String(firstEntry.identifiers.charge_id)
+                        : "";
                     const totalCents = (firstEntry.identifiers as Record<string, unknown>)?.total as number | undefined;
-                    const amount = totalCents ? totalCents / 100 : undefined;
-                    const paidAtRaw = lastLog.created_at as unknown as string | undefined;
+                    const amount = totalCents ? totalCents / 100 : (lastLog.value ? lastLog.value / 100 : undefined);
+                    const paidAtRaw = lastLog.created_at;
                     const paidAt = paidAtRaw ? parseLocalDate(paidAtRaw) : undefined;
 
                     if (status === "approved" || status === "paid") {
                         return {
                             type: NormalizedPaymentEventType.PAYMENT_RECEIVED,
-                            internalId: chargeId ?? "",
+                            internalId: chargeId,
                             providerRef: lastLog.id?.toString() ?? "",
                             amount,
                             paidAt,
@@ -294,14 +299,14 @@ export class EfipayProvider implements PaymentProviderAdapter {
                     } else if (status === "declined" || status === "unpaid" || status === "canceled") {
                         return {
                             type: NormalizedPaymentEventType.PAYMENT_FAILED,
-                            internalId: chargeId ?? "",
+                            internalId: chargeId,
                             providerRef: lastLog.id?.toString() ?? "",
                             raw: response.data as unknown as Record<string, unknown>
                         };
                     } else if (status === "refunded" || status === "contested" || status === "chargeback") {
                         return {
                             type: NormalizedPaymentEventType.PAYMENT_REFUNDED,
-                            internalId: chargeId ?? "",
+                            internalId: chargeId,
                             providerRef: lastLog.id?.toString() ?? "",
                             raw: response.data as unknown as Record<string, unknown>
                         };
@@ -311,7 +316,7 @@ export class EfipayProvider implements PaymentProviderAdapter {
 
             return null;
         } catch (error: unknown) {
-            logger.error({ error: (error as Error).message }, "[EfipayProvider] Erro ao normalizar webhook");
+            logger.error({ error: extractErrorMessage(error) }, "[EfipayProvider] Erro ao normalizar webhook");
             return null;
         }
     }

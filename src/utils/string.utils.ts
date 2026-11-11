@@ -78,21 +78,41 @@ export function getPhoneVariants(phoneNumber: string | null | undefined): string
   return Array.from(new Set([digits, phoneWithout55, phoneWith55].filter(Boolean)));
 }
 
+function sanitizeRawErrorString(raw: string, fallback: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed === "[object Object]") {
+    return fallback;
+  }
+  const lower = trimmed.toLowerCase();
+  if (
+    lower.startsWith("<!doctype html") ||
+    lower.startsWith("<html") ||
+    (lower.includes("cloudflare") && lower.includes("<body"))
+  ) {
+    if (lower.includes("cloudflare")) {
+      return "Falha de comunicação com o gateway de pagamento (acesso negado pelo proxy Cloudflare).";
+    }
+    return "Falha de comunicação com o servidor do gateway de pagamento (resposta HTML inesperada).";
+  }
+  return trimmed;
+}
+
 export function extractErrorMessage(error: unknown, fallback = "Erro desconhecido"): string {
   if (!error) return fallback;
   if (typeof error === "string") {
-    return error === "[object Object]" ? fallback : error;
+    return sanitizeRawErrorString(error, fallback);
   }
   if (typeof error === "object") {
     const errObj = error as Record<string, unknown>;
-    const rawMsg = errObj.error_description ?? errObj.message ?? errObj.error;
+    const rawMsg = errObj.error_description ?? errObj.detail ?? errObj.mensagem ?? errObj.message ?? errObj.error;
     if (typeof rawMsg === "string" && rawMsg !== "[object Object]") {
-      return rawMsg;
+      return sanitizeRawErrorString(rawMsg, fallback);
     }
     if (typeof rawMsg === "object" && rawMsg !== null) {
-      const nestedMsg = (rawMsg as Record<string, unknown>).message;
+      const nestedObj = rawMsg as Record<string, unknown>;
+      const nestedMsg = nestedObj.message ?? nestedObj.error_description ?? nestedObj.detail ?? nestedObj.mensagem;
       if (typeof nestedMsg === "string" && nestedMsg !== "[object Object]") {
-        return nestedMsg;
+        return sanitizeRawErrorString(nestedMsg, fallback);
       }
       try {
         return JSON.stringify(rawMsg);
@@ -110,5 +130,5 @@ export function extractErrorMessage(error: unknown, fallback = "Erro desconhecid
       return fallback;
     }
   }
-  return String(error);
+  return sanitizeRawErrorString(String(error), fallback);
 }
