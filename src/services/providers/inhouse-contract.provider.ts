@@ -426,11 +426,69 @@ export class InHouseContractProvider implements ContractProvider {
 
     currentY -= sectionSpacing;
 
+    const drawQuestionAnswerRow = (question: string, answer: string, y: number) => {
+      const cleanQuestion = sanitizePdfText(question).trim();
+      const cleanAnswer = sanitizePdfText(answer).trim();
+      const needsColon = !/[?:.]$/.test(cleanQuestion);
+      const prefix = `${cleanQuestion}${needsColon ? ':' : ''}`;
+
+      const tokens: Array<{ word: string; isBold: boolean }> = [
+        ...prefix.split(/\s+/).filter(Boolean).map((word) => ({ word, isBold: false })),
+        ...cleanAnswer.split(/\s+/).filter(Boolean).map((word) => ({ word, isBold: true })),
+      ];
+
+      const lines: Array<Array<{ word: string; isBold: boolean }>> = [];
+      let currentLine: Array<{ word: string; isBold: boolean }> = [];
+      let currentLineWidth = 0;
+      const spaceWidth = font.widthOfTextAtSize(' ', smallTextSize);
+
+      for (const token of tokens) {
+        const tokenFont = token.isBold ? fontBold : font;
+        const wordWidth = tokenFont.widthOfTextAtSize(token.word, smallTextSize);
+        const addedWidth = currentLine.length === 0 ? wordWidth : spaceWidth + wordWidth;
+
+        if (currentLine.length > 0 && currentLineWidth + addedWidth > width) {
+          lines.push(currentLine);
+          currentLine = [token];
+          currentLineWidth = wordWidth;
+        } else {
+          currentLine.push(token);
+          currentLineWidth += addedWidth;
+        }
+      }
+      if (currentLine.length > 0) {
+        lines.push(currentLine);
+      }
+
+      const rowGap = itemSpacing + 2.5;
+      ensureSpace(lines.length * rowLineHeight + rowGap);
+      let localY = currentY === 800 && y < 800 ? currentY : y;
+
+      for (const line of lines) {
+        let cursorX = margin;
+        for (let i = 0; i < line.length; i++) {
+          const seg = line[i];
+          const segFont = seg.isBold ? fontBold : font;
+          const textToDraw = i < line.length - 1 ? `${seg.word} ` : seg.word;
+          page.drawText(textToDraw, {
+            x: cursorX,
+            y: localY,
+            size: smallTextSize,
+            font: segFont,
+          });
+          cursorX += segFont.widthOfTextAtSize(textToDraw, smallTextSize);
+        }
+        localY -= rowLineHeight;
+      }
+
+      return localY - rowGap;
+    };
+
     if (dados.dadosComplementares && dados.dadosComplementares.length > 0) {
-      currentY = drawHeader('INFORMAÇÕES COMPLEMENTARES E DE SAÚDE', currentY);
+      currentY = drawHeader('INFORMAÇÕES COMPLEMENTARES', currentY);
       for (const item of dados.dadosComplementares) {
         const respostaTexto = formatRespostaComplementarParaContrato(item);
-        currentY = drawFullWidthRow(`${item.pergunta}: ${respostaTexto}`, currentY);
+        currentY = drawQuestionAnswerRow(item.pergunta, respostaTexto, currentY);
       }
       currentY -= sectionSpacing;
     }
