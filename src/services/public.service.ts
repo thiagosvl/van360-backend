@@ -4,10 +4,7 @@ import { AppError } from "../errors/AppError.js";
 import { getDriverDisplayName } from "../utils/format.js";
 import { PublicMotoristaDTO } from "../types/dtos/usuario.dto.js";
 import { ListEscolasFiltersDTO } from "../types/dtos/escola.dto.js";
-import {
-  CamposFormularioExternoDTO,
-  DEFAULT_CAMPOS_FORMULARIO_EXTERNO,
-} from "../types/dtos/configuracoes.dto.js";
+import { resolveCamposFormularioExterno } from "../utils/dados-complementares.utils.js";
 
 export async function validateMotoristaPublic(motoristaId: string): Promise<PublicMotoristaDTO> {
     const { data, error } = await userRepository.getPublicData(motoristaId);
@@ -21,12 +18,9 @@ export async function validateMotoristaPublic(motoristaId: string): Promise<Publ
       ? data.usuario_configuracoes[0]
       : data.usuario_configuracoes;
 
-    const camposFormularioExterno: CamposFormularioExternoDTO = {
-      ...DEFAULT_CAMPOS_FORMULARIO_EXTERNO,
-      ...(typeof rawConfig?.campos_formulario_externo === "object" && rawConfig?.campos_formulario_externo !== null
-        ? (rawConfig.campos_formulario_externo as unknown as Partial<CamposFormularioExternoDTO>)
-        : {}),
-    };
+    const camposFormularioExterno = resolveCamposFormularioExterno(
+      rawConfig?.campos_formulario_externo
+    );
 
     return {
         id: data.id,

@@ -6,14 +6,15 @@ import { historicoService } from "./historico.service.js";
 import {
   ConfiguracoesUsuarioDTO,
   UpdateConfiguracoesDTO,
-  DEFAULT_CAMPOS_FORMULARIO_EXTERNO,
   CamposFormularioExternoDTO,
 } from "../types/dtos/configuracoes.dto.js";
-import { AtividadeAcao, AtividadeEntidadeTipo } from "../types/enums.js";
-
+import { AtividadeAcao, AtividadeEntidadeTipo, ConfigKey } from "../types/enums.js";
 import { getConfigNumber } from "./configuracao.service.js";
-import { ConfigKey } from "../types/enums.js";
 import { calculateAuditDiff } from "../utils/audit-diff.util.js";
+import {
+  resolveCamposFormularioExterno,
+  resolvePerguntasPersonalizadas,
+} from "../utils/dados-complementares.utils.js";
 
 export async function obterConfiguracoesUsuario(usuarioId: string): Promise<ConfiguracoesUsuarioDTO> {
   const { data: usuario, error: userError } = await userRepository.getById(usuarioId);
@@ -26,12 +27,7 @@ export async function obterConfiguracoesUsuario(usuarioId: string): Promise<Conf
   const configFin = await motoristaFinanceiroRepository.getByUsuarioId(usuarioId);
   const diasPadrao = await getConfigNumber(ConfigKey.PASSAGEIRO_DIAS_AVISO_VENCIMENTO, 2);
 
-  const camposFormularioExterno: CamposFormularioExternoDTO = {
-    ...DEFAULT_CAMPOS_FORMULARIO_EXTERNO,
-    ...(typeof config?.campos_formulario_externo === "object" && config?.campos_formulario_externo !== null
-      ? (config.campos_formulario_externo as unknown as Partial<CamposFormularioExternoDTO>)
-      : {}),
-  };
+  const camposFormularioExterno = resolveCamposFormularioExterno(config?.campos_formulario_externo);
 
   return {
     cobranca_aviso_previo_ativo: config?.cobranca_aviso_previo_ativo ?? true,
@@ -66,20 +62,20 @@ export async function atualizarConfiguracoesUsuario(
   try {
     const configAnterior = await usuarioConfiguracoesRepository.getByUsuarioId(usuarioId);
 
-    let updateData: Record<string, unknown> = { ...payload };
+    const updateData: Record<string, unknown> = { ...payload };
 
     if (payload.campos_formulario_externo) {
-      const camposAtuais: CamposFormularioExternoDTO = {
-        ...DEFAULT_CAMPOS_FORMULARIO_EXTERNO,
-        ...(typeof configAnterior?.campos_formulario_externo === "object" && configAnterior?.campos_formulario_externo !== null
-          ? (configAnterior.campos_formulario_externo as unknown as Partial<CamposFormularioExternoDTO>)
-          : {}),
-      };
-
-      updateData.campos_formulario_externo = {
+      const camposAtuais = resolveCamposFormularioExterno(configAnterior?.campos_formulario_externo);
+      const merged: CamposFormularioExternoDTO = {
         ...camposAtuais,
         ...payload.campos_formulario_externo,
+        perguntas_personalizadas:
+          payload.campos_formulario_externo.perguntas_personalizadas !== undefined
+            ? resolvePerguntasPersonalizadas(payload.campos_formulario_externo.perguntas_personalizadas)
+            : camposAtuais.perguntas_personalizadas,
       };
+
+      updateData.campos_formulario_externo = merged;
     }
 
     await usuarioConfiguracoesRepository.update(usuarioId, updateData);
@@ -100,18 +96,13 @@ export async function atualizarConfiguracoesUsuario(
           campos_alterados: diff.campos,
           campos: diff.campos,
           alteracoes: diff.alteracoes,
-          ...updateData,
         },
       });
     }
 
-    return await obterConfiguracoesUsuario(usuarioId);
-  } catch (err: unknown) {
-    const errorObj = err as { message?: string; details?: string };
-    const msg =
-      err instanceof Error
-        ? err.message
-        : errorObj?.message || errorObj?.details || JSON.stringify(err);
-    throw new AppError(`Erro ao atualizar configurações: ${msg}`, 500);
+    return obterConfiguracoesUsuario(usuarioId);
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new AppError("Erro ao salvar as configurações.", 500);
   }
 }

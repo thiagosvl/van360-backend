@@ -163,7 +163,7 @@ export const responsavelRepository = {
         id, usuario_id, nome, genero, data_nascimento, periodo, modalidade, turma, sala, nome_professor,
         data_inicio_transporte, data_fim_transporte, horario_entrada, horario_saida,
         valor_cobranca, dia_vencimento, data_inicio_cobranca, data_fim_cobranca, created_at, ano_letivo,
-        observacoes,
+        observacoes, dados_complementares,
         ativo, isento,
         escola_id, veiculo_id,
         escola:escolas (id, nome),

@@ -3,6 +3,7 @@ import { cleanString, onlyDigits, normalizePhone } from "../utils/string.utils.j
 import { toPersistenceString } from "../utils/date.utils.js";
 import { CreatePrePassageiroDTO } from "../types/dtos/pre-passageiro.dto.js";
 import { prePassageiroRepository } from "../repositories/pre-passageiro.repository.js";
+import { sanitizeDadosComplementares } from "../utils/dados-complementares.utils.js";
 
 import { userRepository } from "../repositories/user.repository.js";
 import { supabaseAdmin } from "../config/supabase.js";
@@ -63,6 +64,7 @@ export const prePassageiroService = {
       referencia: payload.referencia || null,
       complemento: payload.complemento || null,
       observacoes: payload.observacoes || null,
+      dados_complementares: sanitizeDadosComplementares(payload.dados_complementares),
       modalidade: payload.modalidade || null,
       turma: payload.turma || null,
       sala: payload.sala || null,

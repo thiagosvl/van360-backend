@@ -21,6 +21,7 @@ import { supabaseAdmin } from "../config/supabase.js";
 import { cobrancaValidacaoService } from "./cobranca-validacao.service.js";
 import { paymentService } from "./payments/payment.service.js";
 import { logger } from "../config/logger.js";
+import { sanitizeDadosComplementares } from "../utils/dados-complementares.utils.js";
 
 const MATRICULA_KEYS = [
     "ano_letivo",
@@ -50,6 +51,7 @@ const PERMANENT_KEYS = [
     "data_nascimento",
     "genero",
     "observacoes",
+    "dados_complementares",
     "enviar_notificacoes",
 ] as const;
 
@@ -141,6 +143,9 @@ const _preparePassageiroData = (data: Partial<CreatePassageiroDTO> | UpdatePassa
     if (data.veiculo_id !== undefined) prepared.veiculo_id = (data.veiculo_id === "none" || data.veiculo_id === "") ? null : data.veiculo_id;
 
     if (data.observacoes !== undefined) prepared.observacoes = data.observacoes ? cleanString(data.observacoes, true) : null;
+    if (data.dados_complementares !== undefined) {
+        prepared.dados_complementares = sanitizeDadosComplementares(data.dados_complementares);
+    }
 
     if (data.periodo !== undefined) prepared.periodo = data.periodo ? cleanString(data.periodo.toLocaleLowerCase()) : null;
     if (data.genero !== undefined) prepared.genero = data.genero ? cleanString(data.genero) : null;

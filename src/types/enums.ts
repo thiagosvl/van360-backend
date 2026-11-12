@@ -638,3 +638,9 @@ export enum MetaActionSource {
   APP = "app",
   SYSTEM_GENERATED = "system_generated",
 }
+
+
+export enum TipoPerguntaPersonalizadaEnum {
+  SIM_NAO_TEXTO = "sim_nao_texto",
+  TEXTO_LIVRE = "texto_livre",
+}

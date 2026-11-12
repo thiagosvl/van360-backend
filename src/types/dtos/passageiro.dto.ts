@@ -2,6 +2,7 @@ import { z } from "zod";
 import { moneyToNumber } from "../../utils/currency.utils.js";
 import { parseLocalDate, getNowBR } from "../../utils/date.utils.js";
 import { ParentescoResponsavel, ModoCobrancaEnum, TipoChavePix } from "../enums.js";
+import { respostaComplementarItemSchema } from "../../schemas/configuracoes.schema.js";
 
 export const atualizarPixPassageiroSchema = z.object({
   chave_pix: z.string().trim().nullable(),
@@ -55,6 +56,7 @@ export const createPassageiroSchema = z.object({
 
   // Observações
   observacoes: optionalString,
+  dados_complementares: z.array(respostaComplementarItemSchema).optional().nullable(),
 
   // Financeiro
   dia_vencimento: z.union([z.number(), z.string(), z.null(), z.undefined()]).transform(val => {

@@ -20,6 +20,7 @@ import { contractRepository } from '../repositories/contract.repository.js';
 import { passageiroRepository } from '../repositories/passageiro.repository.js';
 import { userRepository } from '../repositories/user.repository.js';
 import { usuarioConfiguracoesRepository } from '../repositories/usuario-configuracoes.repository.js';
+import { buildMockDadosComplementaresForPreview, sanitizeDadosComplementares } from '../utils/dados-complementares.utils.js';
 
 interface ResponsavelLinkJoin {
   id?: string;
@@ -302,6 +303,7 @@ class ContractService {
       exibirVeiculo: configUser?.contrato_exibir_dados_veiculo ?? true,
       secoes: configContratoAno.secoes,
       clausulas: configContratoAno.clausulas,
+      dadosComplementares: sanitizeDadosComplementares(passageiro.dados_complementares),
       assinaturaCondutorUrl: usuario.assinatura_digital_url,
       logoCondutorUrl: usuario.logo_url,
       apelidoCondutor: usuario.apelido,
@@ -905,6 +907,7 @@ class ContractService {
 
       secoes: config.secoes !== undefined ? config.secoes : savedConfig.secoes,
       clausulas,
+      dadosComplementares: buildMockDadosComplementaresForPreview(configUser?.campos_formulario_externo),
 
       assinaturaCondutorUrl: config.assinaturaCondutorUrl || usuario.assinatura_digital_url,
       logoCondutorUrl: (config as Record<string, any>).logoCondutorUrl !== undefined ? (config as Record<string, any>).logoCondutorUrl : usuario.logo_url,

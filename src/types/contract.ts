@@ -1,4 +1,5 @@
 import { ContractMultaTipo } from "./enums.js";
+import { RespostaComplementarItemDTO } from "./dtos/configuracoes.dto.js";
 
 export interface ContractGenerationParams {
   contratoId: string;
@@ -66,6 +67,7 @@ export interface DadosContrato {
 
   clausulas?: string[];
   secoes?: ContractSectionDto[];
+  dadosComplementares?: RespostaComplementarItemDTO[];
   assinaturaCondutorUrl?: string;
   logoCondutorUrl?: string | null;
 }

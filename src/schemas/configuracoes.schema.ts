@@ -1,5 +1,23 @@
 import { z } from "zod";
-import { RastreamentoModo } from "../types/enums.js";
+import { RastreamentoModo, TipoPerguntaPersonalizadaEnum } from "../types/enums.js";
+
+export const perguntaPersonalizadaConfigSchema = z.object({
+  id: z.string().min(1),
+  pergunta: z.string().min(2).max(240),
+  tipo: z.nativeEnum(TipoPerguntaPersonalizadaEnum),
+  placeholder_detalhe: z.string().max(180).optional().nullable(),
+  obrigatorio: z.boolean(),
+  ativo: z.boolean(),
+  is_padrao: z.boolean().optional(),
+});
+
+export const respostaComplementarItemSchema = z.object({
+  id: z.string().min(1),
+  pergunta: z.string().min(1),
+  tipo: z.nativeEnum(TipoPerguntaPersonalizadaEnum),
+  resposta_booleana: z.boolean().optional().nullable(),
+  resposta_texto: z.string().optional().nullable(),
+});
 
 export const camposFormularioExternoSchema = z.object({
   turma: z.boolean().optional(),
@@ -9,6 +27,7 @@ export const camposFormularioExternoSchema = z.object({
   modalidade: z.boolean().optional(),
   parentesco_responsavel: z.boolean().optional(),
   email_responsavel: z.boolean().optional(),
+  perguntas_personalizadas: z.array(perguntaPersonalizadaConfigSchema).optional(),
 });
 
 export const updateConfiguracoesSchema = z.object({

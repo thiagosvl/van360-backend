@@ -5,6 +5,7 @@ import { PDFDocument, PDFImage, rgb, StandardFonts, PDFFont } from 'pdf-lib';
 import { formatToBrazilianDate, getNowBR, parseLocalDate } from '../../utils/date.utils.js';
 import { formatModalidade, formatParentesco, formatPeriodo, maskCnpj, maskCpf, maskPhone } from '../../utils/format.js';
 import { sanitizePdfText } from '../../utils/pdf-text.utils.js';
+import { formatRespostaComplementarParaContrato } from '../../utils/dados-complementares.utils.js';
 
 function isValidPng(buf: Buffer | Uint8Array): boolean {
   if (!buf || buf.length < 8) return false;
@@ -328,11 +329,20 @@ export class InHouseContractProvider implements ContractProvider {
       currentY = 730;
     }
 
+    const ensureSpace = (neededHeight: number) => {
+      if (currentY - neededHeight < 55) {
+        page = pdfDoc.addPage([595, 842]);
+        currentY = 800;
+      }
+    };
+
     const drawHeader = (title: string, y: number) => {
+      ensureSpace(30);
+      const localY = currentY < y && currentY === 800 ? currentY : y;
       const cleanTitle = sanitizePdfText(title);
-      page.drawText(cleanTitle, { x: margin, y, size: fontSizeHeader, font: fontBold });
-      page.drawLine({ start: { x: margin, y: y - 5 }, end: { x: 545, y: y - 5 }, thickness: 0.5, color: rgb(0, 0, 0) });
-      return y - 20;
+      page.drawText(cleanTitle, { x: margin, y: localY, size: fontSizeHeader, font: fontBold });
+      page.drawLine({ start: { x: margin, y: localY - 5 }, end: { x: 545, y: localY - 5 }, thickness: 0.5, color: rgb(0, 0, 0) });
+      return localY - 20;
     };
 
     const maskDoc = (doc?: string | null) => {
@@ -349,7 +359,8 @@ export class InHouseContractProvider implements ContractProvider {
     const drawFullWidthRow = (text: string, y: number, isBold = false) => {
       const fontToUse = isBold ? fontBold : font;
       const lines = this.splitTextToLines(text, fontToUse, smallTextSize, width);
-      let localY = y;
+      ensureSpace(lines.length * rowLineHeight + itemSpacing);
+      let localY = currentY === 800 && y < 800 ? currentY : y;
       for (const line of lines) {
         page.drawText(line, { x: margin, y: localY, size: smallTextSize, font: fontToUse });
         localY -= rowLineHeight;
@@ -361,16 +372,18 @@ export class InHouseContractProvider implements ContractProvider {
       const leftLines = leftText ? this.splitTextToLines(leftText, font, smallTextSize, 240) : [];
       const rightLines = rightText ? this.splitTextToLines(rightText, font, smallTextSize, 245) : [];
       const maxLines = Math.max(leftLines.length, rightLines.length, 1);
+      ensureSpace(maxLines * rowLineHeight + itemSpacing);
+      const baseRowY = currentY === 800 && y < 800 ? currentY : y;
 
       for (let i = 0; i < leftLines.length; i++) {
-        page.drawText(leftLines[i], { x: margin, y: y - (i * rowLineHeight), size: smallTextSize, font });
+        page.drawText(leftLines[i], { x: margin, y: baseRowY - (i * rowLineHeight), size: smallTextSize, font });
       }
 
       for (let i = 0; i < rightLines.length; i++) {
-        page.drawText(rightLines[i], { x: 300, y: y - (i * rowLineHeight), size: smallTextSize, font });
+        page.drawText(rightLines[i], { x: 300, y: baseRowY - (i * rowLineHeight), size: smallTextSize, font });
       }
 
-      return y - (maxLines * rowLineHeight) - itemSpacing;
+      return baseRowY - (maxLines * rowLineHeight) - itemSpacing;
     };
 
     currentY = drawHeader('DAS PARTES', currentY);
@@ -412,6 +425,15 @@ export class InHouseContractProvider implements ContractProvider {
     currentY = drawFullWidthRow(`Endereço: ${dados.enderecoCompleto || ''}`, currentY);
 
     currentY -= sectionSpacing;
+
+    if (dados.dadosComplementares && dados.dadosComplementares.length > 0) {
+      currentY = drawHeader('INFORMAÇÕES COMPLEMENTARES E DE SAÚDE', currentY);
+      for (const item of dados.dadosComplementares) {
+        const respostaTexto = formatRespostaComplementarParaContrato(item);
+        currentY = drawFullWidthRow(`${item.pergunta}: ${respostaTexto}`, currentY);
+      }
+      currentY -= sectionSpacing;
+    }
 
     if (dados.exibirVeiculo !== false) {
       currentY = drawHeader('VEÍCULO', currentY);

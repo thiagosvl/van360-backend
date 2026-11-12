@@ -1889,6 +1889,7 @@ export type Database = {
           ativo: boolean
           chave_pix: string | null
           created_at: string
+          dados_complementares: Json
           data_fim_cobranca: string | null
           data_fim_transporte: string | null
           data_inicio_cobranca: string | null
@@ -1923,6 +1924,7 @@ export type Database = {
           ativo?: boolean
           chave_pix?: string | null
           created_at?: string
+          dados_complementares?: Json
           data_fim_cobranca?: string | null
           data_fim_transporte?: string | null
           data_inicio_cobranca?: string | null
@@ -1957,6 +1959,7 @@ export type Database = {
           ativo?: boolean
           chave_pix?: string | null
           created_at?: string
+          dados_complementares?: Json
           data_fim_cobranca?: string | null
           data_fim_transporte?: string | null
           data_inicio_cobranca?: string | null
@@ -2052,6 +2055,7 @@ export type Database = {
           complemento: string | null
           cpf_responsavel: string | null
           created_at: string
+          dados_complementares: Json
           data_fim_transporte: string | null
           data_inicio_transporte: string | null
           data_nascimento: string | null
@@ -2092,6 +2096,7 @@ export type Database = {
           complemento?: string | null
           cpf_responsavel?: string | null
           created_at?: string
+          dados_complementares?: Json
           data_fim_transporte?: string | null
           data_inicio_transporte?: string | null
           data_nascimento?: string | null
@@ -2132,6 +2137,7 @@ export type Database = {
           complemento?: string | null
           cpf_responsavel?: string | null
           created_at?: string
+          dados_complementares?: Json
           data_fim_transporte?: string | null
           data_inicio_transporte?: string | null
           data_nascimento?: string | null

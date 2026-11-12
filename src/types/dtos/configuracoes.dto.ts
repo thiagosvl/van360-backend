@@ -1,4 +1,79 @@
-import { RastreamentoModo } from "../enums.js";
+import { RastreamentoModo, TipoPerguntaPersonalizadaEnum } from "../enums.js";
+
+export interface PerguntaPersonalizadaConfigDTO {
+  id: string;
+  pergunta: string;
+  tipo: TipoPerguntaPersonalizadaEnum;
+  placeholder_detalhe?: string | null;
+  obrigatorio: boolean;
+  ativo: boolean;
+  is_padrao?: boolean;
+}
+
+export interface RespostaComplementarItemDTO {
+  id: string;
+  pergunta: string;
+  tipo: TipoPerguntaPersonalizadaEnum;
+  resposta_booleana?: boolean | null;
+  resposta_texto?: string | null;
+}
+
+export const DEFAULT_PERGUNTAS_PERSONALIZADAS: PerguntaPersonalizadaConfigDTO[] = [
+  {
+    id: "saude_doenca",
+    pergunta: "A criança possui ou já teve alguma doença ou condição médica?",
+    tipo: TipoPerguntaPersonalizadaEnum.SIM_NAO_TEXTO,
+    placeholder_detalhe: "Informe qual doença ou condição médica",
+    obrigatorio: true,
+    ativo: false,
+    is_padrao: true,
+  },
+  {
+    id: "saude_medicamento",
+    pergunta: "Toma algum remédio regularmente?",
+    tipo: TipoPerguntaPersonalizadaEnum.SIM_NAO_TEXTO,
+    placeholder_detalhe: "Informe qual remédio e o horário",
+    obrigatorio: true,
+    ativo: false,
+    is_padrao: true,
+  },
+  {
+    id: "saude_alergia",
+    pergunta: "Sofre de algum tipo de alergia (medicamento, alimento, etc.)?",
+    tipo: TipoPerguntaPersonalizadaEnum.SIM_NAO_TEXTO,
+    placeholder_detalhe: "Informe qual alergia e os cuidados necessários",
+    obrigatorio: true,
+    ativo: false,
+    is_padrao: true,
+  },
+  {
+    id: "saude_convenio",
+    pergunta: "Possui convênio médico / plano de saúde?",
+    tipo: TipoPerguntaPersonalizadaEnum.SIM_NAO_TEXTO,
+    placeholder_detalhe: "Informe o nome do convênio e o nº do cartão",
+    obrigatorio: true,
+    ativo: false,
+    is_padrao: true,
+  },
+  {
+    id: "saude_tipo_sanguineo",
+    pergunta: "Qual é o tipo sanguíneo e fator RH da criança?",
+    tipo: TipoPerguntaPersonalizadaEnum.TEXTO_LIVRE,
+    placeholder_detalhe: "Ex: O+, A-, Não sei informar",
+    obrigatorio: false,
+    ativo: false,
+    is_padrao: true,
+  },
+  {
+    id: "autorizado_receber",
+    pergunta: "Se não tiver ninguém em casa, quem pode receber a criança?",
+    tipo: TipoPerguntaPersonalizadaEnum.TEXTO_LIVRE,
+    placeholder_detalhe: "Informe Nome, Parentesco e Telefone(s)",
+    obrigatorio: true,
+    ativo: false,
+    is_padrao: true,
+  },
+];
 
 export interface CamposFormularioExternoDTO {
   turma: boolean;
@@ -8,6 +83,7 @@ export interface CamposFormularioExternoDTO {
   modalidade: boolean;
   parentesco_responsavel: boolean;
   email_responsavel: boolean;
+  perguntas_personalizadas?: PerguntaPersonalizadaConfigDTO[];
 }
 
 export const DEFAULT_CAMPOS_FORMULARIO_EXTERNO: CamposFormularioExternoDTO = {
@@ -18,6 +94,7 @@ export const DEFAULT_CAMPOS_FORMULARIO_EXTERNO: CamposFormularioExternoDTO = {
   modalidade: true,
   parentesco_responsavel: true,
   email_responsavel: true,
+  perguntas_personalizadas: DEFAULT_PERGUNTAS_PERSONALIZADAS,
 };
 
 export interface ConfiguracoesUsuarioDTO {

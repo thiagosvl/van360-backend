@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { PassageiroGenero, PassageiroModalidade, PeriodoEnum } from '../enums.js';
+import { respostaComplementarItemSchema } from '../../schemas/configuracoes.schema.js';
 
 export const createPrePassageiroSchema = z.object({
   usuario_id: z.string().uuid('ID do motorista inválido'),
@@ -22,6 +23,7 @@ export const createPrePassageiroSchema = z.object({
   referencia: z.string().optional().nullable().or(z.literal('')),
   complemento: z.string().optional().nullable().or(z.literal('')),
   observacoes: z.string().optional().nullable().or(z.literal('')),
+  dados_complementares: z.array(respostaComplementarItemSchema).optional().nullable(),
   modalidade: z.nativeEnum(PassageiroModalidade).optional().nullable().or(z.literal('')),
   genero: z.nativeEnum(PassageiroGenero).optional().nullable().or(z.literal('')),
   parentesco_responsavel: z.string().optional().nullable().or(z.literal('')),
