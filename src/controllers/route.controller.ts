@@ -7,6 +7,8 @@ import { RouteStopStatus } from "../types/enums.js";
 import {
   createRouteSchema,
   updateRouteSchema,
+  listRoutesQuerySchema,
+  listExecucoesQuerySchema,
   stepRouteExecutionSchema,
   reorderExecucaoSchema,
   createAusenciaSchema,
@@ -56,25 +58,25 @@ export const routeController = {
 
   listByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {
     const { usuarioId } = request.params as { usuarioId: string };
+    const { ano_letivo } = listRoutesQuerySchema.parse(request.query || {});
     const targetOwnerId = request.data_owner_id || usuarioId;
     const assignedVeiculoId = request.assigned_veiculo_id;
 
-    logger.info({ usuarioId, targetOwnerId, assignedVeiculoId }, "RouteController.listByUsuario");
-    const routes = await routeService.listRoutesByUsuario(targetOwnerId, assignedVeiculoId || undefined);
+    logger.info({ usuarioId, targetOwnerId, assignedVeiculoId, ano_letivo }, "RouteController.listByUsuario");
+    const routes = await routeService.listRoutesByUsuario(targetOwnerId, assignedVeiculoId || undefined, ano_letivo);
     return reply.status(200).send(routes);
   },
 
   listExecucoesByUsuario: async (request: FastifyRequest, reply: FastifyReply) => {
     const { usuarioId } = request.params as { usuarioId: string };
-    const { limit, page } = request.query as { limit?: string; page?: string };
+    const { limit, page, ano_letivo } = listExecucoesQuerySchema.parse(request.query || {});
     const targetOwnerId = request.data_owner_id || usuarioId;
     const assignedVeiculoId = request.assigned_veiculo_id;
 
-    const parsedLimit = limit ? parseInt(limit, 10) : undefined;
-    const parsedPage = page ? parseInt(page, 10) : 1;
+    const parsedPage = page ?? 1;
 
-    logger.info({ usuarioId, targetOwnerId, assignedVeiculoId, limit: parsedLimit, page: parsedPage }, "RouteController.listExecucoesByUsuario");
-    const execs = await routeService.listExecucoesByUsuario(targetOwnerId, assignedVeiculoId || undefined, parsedLimit, parsedPage);
+    logger.info({ usuarioId, targetOwnerId, assignedVeiculoId, limit, page: parsedPage, ano_letivo }, "RouteController.listExecucoesByUsuario");
+    const execs = await routeService.listExecucoesByUsuario(targetOwnerId, assignedVeiculoId || undefined, limit, parsedPage, ano_letivo);
     return reply.status(200).send(execs);
   },
 

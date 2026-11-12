@@ -57,10 +57,13 @@ const notifyFleetRealtime = async (event: RouteBroadcastEvent | string, payload:
 const createRoute = async (data: CreateRouteDTO): Promise<any> => {
   if (!data.usuario_id) throw new AppError("Usuário obrigatório", 400);
 
+  const anoLetivo = data.ano_letivo || getNowBR().getFullYear();
+
   const { data: inserted, error } = await routeRepository.insert(
     data.usuario_id,
     data.nome,
-    data.veiculo_id || null
+    data.veiculo_id || null,
+    anoLetivo
   );
 
   if (error) throw error;
@@ -90,14 +93,13 @@ const createRoute = async (data: CreateRouteDTO): Promise<any> => {
 
   notifyFleetRealtime(RouteBroadcastEvent.ROUTE_DEFINITION_CHANGED, { action: "create", rotaId: inserted.id, veiculoId: inserted.veiculo_id });
 
-  // --- LOG DE AUDITORIA ---
   historicoService.log({
     usuario_id: data.usuario_id,
     entidade_tipo: AtividadeEntidadeTipo.ROTA,
     entidade_id: inserted.id,
     acao: AtividadeAcao.ROTA_CRIADA,
     descricao: `Nova rota "${createdRoute?.nome || data.nome}" cadastrada.`,
-    meta: { nome: createdRoute?.nome || data.nome, total_paradas: createdRoute?.paradas?.length || 0 }
+    meta: { nome: createdRoute?.nome || data.nome, ano_letivo: anoLetivo, total_paradas: createdRoute?.paradas?.length || 0 }
   });
 
   return createdRoute;
@@ -111,6 +113,7 @@ const updateRoute = async (id: string, data: UpdateRouteDTO): Promise<any> => {
   const updatePayload: any = {};
   if (data.nome !== undefined) updatePayload.nome = data.nome;
   if (data.veiculo_id !== undefined) updatePayload.veiculo_id = data.veiculo_id;
+  if (data.ano_letivo !== undefined) updatePayload.ano_letivo = data.ano_letivo;
 
   if (Object.keys(updatePayload).length > 0) {
     const { error } = await routeRepository.update(id, updatePayload);
@@ -204,7 +207,6 @@ const deleteRoute = async (id: string): Promise<void> => {
 
   notifyFleetRealtime(RouteBroadcastEvent.ROUTE_DEFINITION_CHANGED, { action: "delete", rotaId: id, veiculoId: oldRoute?.veiculo_id });
 
-  // --- LOG DE AUDITORIA ---
   if (oldRoute?.usuario_id) {
     historicoService.log({
       usuario_id: oldRoute.usuario_id,
@@ -221,8 +223,24 @@ const getTodayLocalDateStr = (): string => {
   return toPersistenceString(getNowBR());
 };
 
-const _enrichPassageiroNaParada = (pass: any) => {
+const _enrichPassageiroNaParada = (pass: any, anoLetivo?: number) => {
   if (!pass) return pass;
+  const matriculas = Array.isArray(pass.matriculas) ? pass.matriculas : [];
+  if (matriculas.length > 0) {
+    const targetYear = anoLetivo || getNowBR().getFullYear();
+    const matchedMat =
+      matriculas.find((m: any) => Number(m.ano_letivo) === Number(targetYear)) ||
+      [...matriculas].sort((a: any, b: any) => Number(b.ano_letivo) - Number(a.ano_letivo))[0];
+    if (matchedMat) {
+      if (matchedMat.ativo !== undefined) pass.ativo = matchedMat.ativo;
+      if (matchedMat.turma !== undefined) pass.turma = matchedMat.turma;
+      if (matchedMat.sala !== undefined) pass.sala = matchedMat.sala;
+      if (matchedMat.escola_id !== undefined) pass.escola_id = matchedMat.escola_id;
+      if (matchedMat.escola) pass.escola = matchedMat.escola;
+    }
+    delete pass.matriculas;
+  }
+
   const rawLinks = pass.responsaveis;
   if (rawLinks && Array.isArray(rawLinks)) {
     const links = [...rawLinks].sort((a: any, b: any) => {
@@ -307,7 +325,7 @@ const getRoute = async (id: string, dataAusencia?: string, targetOwnerId?: strin
       .map((rp: any) => {
         const isAusente = rp.passageiro_id && ausentesMap.has(rp.passageiro_id);
         const ausObj = isAusente ? ausentesMap.get(rp.passageiro_id) : null;
-        const pass = _enrichPassageiroNaParada(rp.passageiro);
+        const pass = _enrichPassageiroNaParada(rp.passageiro, route.ano_letivo);
 
         return {
           id: rp.id,
@@ -335,7 +353,7 @@ const getRoute = async (id: string, dataAusencia?: string, targetOwnerId?: strin
   return route;
 };
 
-const listRoutesByUsuario = async (usuarioId: string, veiculoId?: string): Promise<any[]> => {
+const listRoutesByUsuario = async (usuarioId: string, veiculoId?: string, anoLetivo?: number): Promise<any[]> => {
   if (!usuarioId) throw new AppError("ID do usuário é obrigatório", 400);
 
   const { dataOwnerId, veiculoId: userVeiculoId, contaPaiId } = await resolveDataOwnerId(usuarioId);
@@ -343,10 +361,10 @@ const listRoutesByUsuario = async (usuarioId: string, veiculoId?: string): Promi
   const targetVeiculoId = veiculoId || (isGestor ? undefined : userVeiculoId);
 
   try {
-    const { data: routes, error } = await routeRepository.listByUsuario(dataOwnerId, targetVeiculoId);
+    const { data: routes, error } = await routeRepository.listByUsuario(dataOwnerId, targetVeiculoId, anoLetivo);
 
     if (error) {
-      const { data: fallbackRoutes, error: fbError } = await routeRepository.listByUsuarioFallback(dataOwnerId, targetVeiculoId);
+      const { data: fallbackRoutes, error: fbError } = await routeRepository.listByUsuarioFallback(dataOwnerId, targetVeiculoId, anoLetivo);
 
       if (fbError) throw new AppError(`Erro ao buscar rotas: ${fbError.message}`, 500);
       return (fallbackRoutes || []).map(r => ({ ...r, numero_passageiros: 0 }));
@@ -367,7 +385,7 @@ const listRoutesByUsuario = async (usuarioId: string, veiculoId?: string): Promi
   }
 };
 
-const listExecucoesByUsuario = async (usuarioId: string, veiculoId?: string, limit?: number, page: number = 1): Promise<any[]> => {
+const listExecucoesByUsuario = async (usuarioId: string, veiculoId?: string, limit?: number, page: number = 1, anoLetivo?: number): Promise<any[]> => {
   if (!usuarioId) throw new AppError("ID do usuário é obrigatório", 400);
 
   const { dataOwnerId, veiculoId: userVeiculoId, contaPaiId } = await resolveDataOwnerId(usuarioId);
@@ -375,10 +393,10 @@ const listExecucoesByUsuario = async (usuarioId: string, veiculoId?: string, lim
   const targetVeiculoId = veiculoId || (isGestor ? undefined : userVeiculoId);
 
   try {
-    const { data: execs, error } = await routeRepository.listExecucoesByUsuario(dataOwnerId, targetVeiculoId, limit, page);
+    const { data: execs, error } = await routeRepository.listExecucoesByUsuario(dataOwnerId, targetVeiculoId, limit, page, anoLetivo);
 
     if (error) {
-      const { data: fallbackExecs, error: fbError } = await routeRepository.listExecucoesByUsuarioFallback(dataOwnerId, limit, page);
+      const { data: fallbackExecs, error: fbError } = await routeRepository.listExecucoesByUsuarioFallback(dataOwnerId, limit, page, anoLetivo);
       if (fbError) throw new AppError(`Erro ao buscar execuções: ${fbError.message}`, 500);
       return fallbackExecs || [];
     }
@@ -426,7 +444,7 @@ const getExecucaoDetail = async (id: string, targetOwnerId?: string, assignedVei
         passageiro_id: erp.passageiro_id,
         escola_id: erp.escola_id,
         sentido: erp.sentido,
-        passageiro: _enrichPassageiroNaParada(erp.passageiro),
+        passageiro: _enrichPassageiroNaParada(erp.passageiro, exec.rota?.ano_letivo),
         escola: erp.escola
       }))
       .sort((a: any, b: any) => a.ordem - b.ordem);

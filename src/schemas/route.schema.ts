@@ -15,6 +15,7 @@ export const createRouteSchema = z.object({
   usuario_id: z.string().uuid("ID do usuário inválido"),
   nome: z.string().min(1, "Nome é obrigatório"),
   veiculo_id: z.string().uuid().optional().nullable(),
+  ano_letivo: z.coerce.number().int().min(2020).max(2100).optional(),
   paradas: z.array(routeNodeSchema).optional(),
   horario_inicio: z.string().optional().nullable(),
   horario_fim: z.string().optional().nullable(),
@@ -33,7 +34,18 @@ export const createRouteSchema = z.object({
 export const updateRouteSchema = z.object({
   nome: z.string().min(1).optional(),
   veiculo_id: z.string().uuid().optional().nullable(),
+  ano_letivo: z.coerce.number().int().min(2020).max(2100).optional(),
   paradas: z.array(routeNodeSchema).optional(),
+});
+
+export const listRoutesQuerySchema = z.object({
+  ano_letivo: z.coerce.number().int().min(2020).max(2100).optional(),
+});
+
+export const listExecucoesQuerySchema = z.object({
+  limit: z.coerce.number().int().positive().optional(),
+  page: z.coerce.number().int().positive().optional(),
+  ano_letivo: z.coerce.number().int().min(2020).max(2100).optional(),
 });
 
 export const stepRouteExecutionSchema = z.object({

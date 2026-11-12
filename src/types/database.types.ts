@@ -2439,6 +2439,7 @@ export type Database = {
       }
       rotas: {
         Row: {
+          ano_letivo: number
           created_at: string
           id: string
           nome: string
@@ -2447,6 +2448,7 @@ export type Database = {
           veiculo_id: string | null
         }
         Insert: {
+          ano_letivo?: number
           created_at?: string
           id?: string
           nome: string
@@ -2455,6 +2457,7 @@ export type Database = {
           veiculo_id?: string | null
         }
         Update: {
+          ano_letivo?: number
           created_at?: string
           id?: string
           nome?: string

@@ -2,6 +2,8 @@ import { z } from "zod";
 import {
   createRouteSchema,
   updateRouteSchema,
+  listRoutesQuerySchema,
+  listExecucoesQuerySchema,
   stepRouteExecutionSchema,
   reorderExecucaoSchema,
   createAusenciaSchema,
@@ -14,6 +16,8 @@ export {
   routeNodeSchema,
   createRouteSchema,
   updateRouteSchema,
+  listRoutesQuerySchema,
+  listExecucoesQuerySchema,
   stepRouteExecutionSchema,
   reorderExecucaoSchema,
   createAusenciaSchema,
@@ -24,6 +28,8 @@ export {
 
 export type CreateRouteDTO = z.infer<typeof createRouteSchema>;
 export type UpdateRouteDTO = z.infer<typeof updateRouteSchema>;
+export type ListRoutesQueryDTO = z.infer<typeof listRoutesQuerySchema>;
+export type ListExecucoesQueryDTO = z.infer<typeof listExecucoesQuerySchema>;
 export type StepRouteExecutionDTO = z.infer<typeof stepRouteExecutionSchema>;
 export type ReorderExecucaoDTO = z.infer<typeof reorderExecucaoSchema>;
 export type CreateAusenciaDTO = z.infer<typeof createAusenciaSchema>;

@@ -4,13 +4,14 @@ import { isValidFilterValue } from "../utils/filter.utils.js";
 import { toPersistenceString, getNowBR } from "../utils/date.utils.js";
 
 export const routeRepository = {
-  async insert(usuarioId: string, nome: string, veiculoId: string | null) {
+  async insert(usuarioId: string, nome: string, veiculoId: string | null, anoLetivo: number) {
     return supabaseAdmin
       .from("rotas")
       .insert([{
         usuario_id: usuarioId,
         nome,
-        veiculo_id: veiculoId
+        veiculo_id: veiculoId,
+        ano_letivo: anoLetivo
       }])
       .select()
       .single();
@@ -72,6 +73,17 @@ export const routeRepository = {
               id,
               nome
             ),
+            matriculas:passageiro_matriculas (
+              ano_letivo,
+              ativo,
+              turma,
+              sala,
+              escola_id,
+              escola:escolas (
+                id,
+                nome
+              )
+            ),
             responsaveis:passageiro_responsaveis!passageiro_id (
               id,
               tipo,
@@ -112,7 +124,7 @@ export const routeRepository = {
     return query.maybeSingle();
   },
 
-  async listByUsuario(usuarioId: string, veiculoId?: string) {
+  async listByUsuario(usuarioId: string, veiculoId?: string, anoLetivo?: number) {
     let query = supabaseAdmin
       .from("rotas")
       .select(`
@@ -136,10 +148,14 @@ export const routeRepository = {
       query = query.eq("veiculo_id", veiculoId);
     }
 
+    if (isValidFilterValue(anoLetivo)) {
+      query = query.eq("ano_letivo", Number(anoLetivo));
+    }
+
     return query.order("created_at", { ascending: false });
   },
 
-  async listByUsuarioFallback(usuarioId: string, veiculoId?: string) {
+  async listByUsuarioFallback(usuarioId: string, veiculoId?: string, anoLetivo?: number) {
     let query = supabaseAdmin
       .from("rotas")
       .select("*")
@@ -149,10 +165,14 @@ export const routeRepository = {
       query = query.eq("veiculo_id", veiculoId);
     }
 
+    if (isValidFilterValue(anoLetivo)) {
+      query = query.eq("ano_letivo", Number(anoLetivo));
+    }
+
     return query.order("created_at", { ascending: false });
   },
 
-  async listExecucoesByUsuario(usuarioId: string, veiculoId?: string, limit?: number, page: number = 1) {
+  async listExecucoesByUsuario(usuarioId: string, veiculoId?: string, limit?: number, page: number = 1, anoLetivo?: number) {
     let query = supabaseAdmin
       .from("execucoes_rota")
       .select(`
@@ -160,6 +180,7 @@ export const routeRepository = {
         rota:rotas!inner (
           id,
           nome,
+          ano_letivo,
           veiculo_id,
           usuario_id,
           veiculo:veiculos (
@@ -176,6 +197,10 @@ export const routeRepository = {
       query = query.eq("rota.veiculo_id", veiculoId);
     }
 
+    if (isValidFilterValue(anoLetivo)) {
+      query = query.eq("rota.ano_letivo", Number(anoLetivo));
+    }
+
     query = query.order("iniciada_em", { ascending: false });
 
     if (limit && limit > 0) {
@@ -186,7 +211,7 @@ export const routeRepository = {
     return query;
   },
 
-  async listExecucoesByUsuarioFallback(usuarioId: string, limit?: number, page: number = 1) {
+  async listExecucoesByUsuarioFallback(usuarioId: string, limit?: number, page: number = 1, anoLetivo?: number) {
     let query = supabaseAdmin
       .from("execucoes_rota")
       .select(`
@@ -194,6 +219,7 @@ export const routeRepository = {
         rota:rotas!inner (
           id,
           nome,
+          ano_letivo,
           veiculo_id,
           usuario_id,
           veiculo:veiculos (
@@ -204,8 +230,13 @@ export const routeRepository = {
           )
         )
       `)
-      .eq("rota.usuario_id", usuarioId)
-      .order("iniciada_em", { ascending: false });
+      .eq("rota.usuario_id", usuarioId);
+
+    if (isValidFilterValue(anoLetivo)) {
+      query = query.eq("rota.ano_letivo", Number(anoLetivo));
+    }
+
+    query = query.order("iniciada_em", { ascending: false });
 
     if (limit && limit > 0) {
       const offset = (page - 1) * limit;
@@ -222,7 +253,10 @@ export const routeRepository = {
         *,
         rota:rotas (
           id,
-          nome
+          nome,
+          ano_letivo,
+          veiculo_id,
+          usuario_id
         ),
         execucoes_rota_passageiros (
           id,
@@ -243,6 +277,17 @@ export const routeRepository = {
             escola:escolas (
               id,
               nome
+            ),
+            matriculas:passageiro_matriculas (
+              ano_letivo,
+              ativo,
+              turma,
+              sala,
+              escola_id,
+              escola:escolas (
+                id,
+                nome
+              )
             ),
             responsaveis:passageiro_responsaveis!passageiro_id (
               id,
@@ -636,14 +681,14 @@ export const routeRepository = {
 
     const currentYear = getNowBR().getFullYear();
 
-    const formatAlunoItem = (p: any) => {
+    const formatAlunoItem = (p: any, targetYear: number = currentYear) => {
       const responsaveis = p?.responsaveis || [];
       const principalLink = Array.isArray(responsaveis)
         ? responsaveis.find((l: any) => l.tipo === TipoResponsavel.PRINCIPAL) || responsaveis[0]
         : null;
       const resp = Array.isArray(principalLink?.responsavel) ? principalLink.responsavel[0] : principalLink?.responsavel;
       const matriculas = Array.isArray(p?.matriculas) ? (p.matriculas as Array<{ ano_letivo?: number; turma?: string | null; escola?: unknown }>) : [];
-      const currentMat = matriculas.find((m) => Number(m.ano_letivo) === currentYear) || matriculas[0];
+      const currentMat = matriculas.find((m) => Number(m.ano_letivo) === targetYear) || matriculas[0];
       const rawEscola = currentMat?.escola ?? p?.escola;
       const escola = Array.isArray(rawEscola) ? rawEscola[0] : rawEscola;
 
@@ -660,6 +705,9 @@ export const routeRepository = {
       const { data, error } = await supabaseAdmin
         .from("rota_passageiros")
         .select(`
+          rota:rotas (
+            ano_letivo
+          ),
           passageiro:passageiros!inner (
             id,
             nome,
@@ -692,13 +740,17 @@ export const routeRepository = {
 
       const map = new Map<string, { id: string; nome: string; turma?: string | null; escola_nome?: string | null; responsavel_nome?: string | null }>();
       (data || []).forEach((item: Record<string, unknown>) => {
+        const rawRota = item.rota as { ano_letivo?: number } | Array<{ ano_letivo?: number }> | undefined;
+        const rotaObj = Array.isArray(rawRota) ? rawRota[0] : rawRota;
+        const targetYear = rotaObj?.ano_letivo ? Number(rotaObj.ano_letivo) : currentYear;
+
         const p = item.passageiro as { id?: string; nome?: string; ativo?: boolean; matriculas?: Array<{ ano_letivo?: number; ativo?: boolean }> } | undefined;
         if (!p || !p.id || !p.nome) return;
         const matriculas = Array.isArray(p.matriculas) ? p.matriculas : [];
-        const currentMat = matriculas.find((m) => Number(m.ano_letivo) === currentYear);
+        const currentMat = matriculas.find((m) => Number(m.ano_letivo) === targetYear);
         const isAtivo = currentMat ? Boolean(currentMat.ativo) : Boolean(p.ativo);
         if (isAtivo) {
-          map.set(p.id, formatAlunoItem(p));
+          map.set(p.id, formatAlunoItem(p, targetYear));
         }
       });
 
@@ -733,23 +785,34 @@ export const routeRepository = {
         )
       `)
       .eq("usuario_id", usuarioId)
-      .eq("ano_letivo", currentYear)
+      .gte("ano_letivo", currentYear)
       .eq("ativo", true)
       .ilike("passageiro.nome", `%${sanitizedSearch}%`)
-      .limit(25);
+      .order("ano_letivo", { ascending: true })
+      .limit(50);
 
     if (error) return { data: null, error };
 
-    const alunos = (data || [])
-      .map((row) => {
-        const p = Array.isArray(row.passageiro) ? row.passageiro[0] : row.passageiro;
-        if (!p) return null;
-        return formatAlunoItem({
-          ...p,
-          matriculas: [row],
-        });
-      })
-      .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    const mapByPassageiro = new Map<string, ReturnType<typeof formatAlunoItem>>();
+    (data || []).forEach((row) => {
+      const p = Array.isArray(row.passageiro) ? row.passageiro[0] : row.passageiro;
+      if (!p || !p.id) return;
+      if (!mapByPassageiro.has(p.id) || Number(row.ano_letivo) === currentYear) {
+        mapByPassageiro.set(
+          p.id,
+          formatAlunoItem(
+            {
+              ...p,
+              matriculas: [row],
+            },
+            Number(row.ano_letivo) || currentYear
+          )
+        );
+      }
+    });
+
+    const alunos = Array.from(mapByPassageiro.values())
+      .slice(0, 25)
       .sort((a, b) => a.nome.localeCompare(b.nome));
 
     return { data: alunos, error: null };
